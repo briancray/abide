@@ -1,0 +1,28 @@
+import { expect, test } from 'bun:test'
+
+import { flushSync } from '@abide/abide'
+import { mount } from '@abide/harness/abide'
+
+import { TEAM } from './TEAM.server.ts'
+import TeamTarget from './TeamTarget.abide'
+
+const shown = () => document.querySelector('strong')?.textContent
+
+test('the target one visitor sets is the one every next visit opens on', async () => {
+    {
+        using _first = await mount(TeamTarget({}))
+        await Bun.sleep(500)
+        expect(shown()).toBe('$500,000')
+        const input = document.querySelector('input')
+        if (!input) throw new Error('no target field')
+        input.value = '750000'
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        flushSync()
+        await Bun.sleep(100)
+        expect(TEAM.target).toBe(750_000)
+    }
+    // A fresh component, as another visitor's page builds one.
+    using _next = await mount(TeamTarget({}))
+    await Bun.sleep(500)
+    expect(shown()).toBe('$750,000')
+})

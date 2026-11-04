@@ -1,8 +1,8 @@
 <script>
 import { url } from '@abide/abide'
 import getForecastSource from 'crm-04/src/pipeline/getForecast.handler.ts' with { type: 'text' }
-import getPreferenceSource from 'crm-04/src/pipeline/getPreference.handler.ts' with { type: 'text' }
 import getStageSource from 'crm-04/src/pipeline/getStage.handler.ts' with { type: 'text' }
+import getTargetSource from 'crm-04/src/pipeline/getTarget.handler.ts' with { type: 'text' }
 import dealDetailSource from 'crm-04/src/pipeline/lib/DealDetail.abide' with { type: 'text' }
 import DealFeed from 'crm-04/src/pipeline/lib/DealFeed.abide'
 import dealFeedSource from 'crm-04/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
@@ -20,10 +20,7 @@ import dealSearchTestSource from 'crm-04/src/pipeline/lib/DealSearch.test.ts' wi
 import Forecast from 'crm-04/src/pipeline/lib/Forecast.abide'
 import forecastSource from 'crm-04/src/pipeline/lib/Forecast.abide' with { type: 'text' }
 import forecastTestSource from 'crm-04/src/pipeline/lib/Forecast.test.ts' with { type: 'text' }
-import PipelineView from 'crm-04/src/pipeline/lib/PipelineView.abide'
-import pipelineViewSource from 'crm-04/src/pipeline/lib/PipelineView.abide' with { type: 'text' }
-import pipelineViewTestSource from 'crm-04/src/pipeline/lib/PipelineView.test.ts' with { type: 'text' }
-import preferenceStoreSource from 'crm-04/src/pipeline/lib/preferenceStore.ts' with { type: 'text' }
+import stageAverageSource from 'crm-04/src/pipeline/lib/StageAverage.abide' with { type: 'text' }
 import StageBoard from 'crm-04/src/pipeline/lib/StageBoard.abide'
 import stageBoardSource from 'crm-04/src/pipeline/lib/StageBoard.abide' with { type: 'text' }
 import stageBoardTestSource from 'crm-04/src/pipeline/lib/StageBoard.test.ts' with { type: 'text' }
@@ -33,10 +30,14 @@ import StageTiles from 'crm-04/src/pipeline/lib/StageTiles.abide'
 import stageTilesSource from 'crm-04/src/pipeline/lib/StageTiles.abide' with { type: 'text' }
 import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
 import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
+import targetStoreSource from 'crm-04/src/pipeline/lib/targetStore.ts' with { type: 'text' }
+import TeamTarget from 'crm-04/src/pipeline/lib/TeamTarget.abide'
+import teamTargetSource from 'crm-04/src/pipeline/lib/TeamTarget.abide' with { type: 'text' }
+import teamTargetTestSource from 'crm-04/src/pipeline/lib/TeamTarget.test.ts' with { type: 'text' }
 import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
 import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
 import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
-import setPreferenceSource from 'crm-04/src/pipeline/setPreference.handler.ts' with { type: 'text' }
+import setTargetSource from 'crm-04/src/pipeline/setTarget.handler.ts' with { type: 'text' }
 import winDealSource from 'crm-04/src/pipeline/winDeal.handler.ts' with { type: 'text' }
 
 import Doc from '#src/lib/Doc.abide'
@@ -54,11 +55,12 @@ import Section from '#src/lib/Section.abide'
             id="crm-04-stage-shared"
             app="crm-04"
             title={'`getStage({ stage })` — one entry per set of arguments'}
-            summary="Two panels, each with its own stage picker. Put one on won, and then the other."
+            summary="Three panels, each with its own stage picker. Put one on won, and then the others."
             files={{
                 'src/pipeline/lib/StageTiles.abide': stageTilesSource,
                 'src/pipeline/lib/StageCount.abide': stageCountSource,
                 'src/pipeline/lib/StageValue.abide': stageValueSource,
+                'src/pipeline/lib/StageAverage.abide': stageAverageSource,
                 'src/pipeline/getStage.handler.ts': getStageSource,
                 'src/pipeline/lib/StageTiles.test.ts': stageTilesTestSource,
             }}
@@ -66,8 +68,8 @@ import Section from '#src/lib/Section.abide'
             <StageTiles />
         </Example>
 
-        <p>The two panels never speak to each other, and nothing is lifted into a parent. When
-            both ask for the same stage they get the same entry, so the second panel paints at once,
+        <p>The three panels never speak to each other, and nothing is lifted into a parent. When
+            they ask for the same stage they get the same entry, so the later panels paint at once,
             with no request. On two stages they are two entries, and each
             pays for its own.</p>
 
@@ -107,9 +109,8 @@ import Section from '#src/lib/Section.abide'
             lands. <code>invalidate()</code> loads nothing. It marks what is held as wrong, and the
             next read fetches.</p>
 
-        <p>Press Mark stale and then Reload now, and the forecast blanks between the two. The
-            reload has nothing trusted to serve, so it is a first load again. Reach for one or the
-            other, not both.</p>
+        <p>Reach for one or the other, not both. A reload over a value marked stale has nothing
+            trusted to serve, so the figure blanks until it lands.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
@@ -183,7 +184,8 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>debounce</code></td><td>changes once the changes stop for that many ms</td></tr>
                 <tr><td><code>throttle</code></td><td>changes at once, then at most once per window: a live deal count that updates every second, not every message</td></tr>
                 <tr><td><code>identity</code></td><td>what counts as the same value: a new value equal to the held one by it wakes nobody. The default is the reference</td></tr>
-                <tr><td><code>structural</code></td><td><code>{'{ identity: structural }'}</code> compares by content, so a forecast that reloads to the same record does not repaint</td></tr>
+                <tr><td><code>structural</code></td><td><code>{'{ identity: structural }'}</code> compares by content, so a stage whose <code>{'{ count, value }'}</code> reloads unchanged does not repaint</td></tr>
+                <tr><td><code>transform</code></td><td><code>{'{ transform: (names) => names.toSorted() }'}</code> reshapes the results once, as they land, rather than in every reader. The function is a <code>Transformer</code></td></tr>
             </tbody>
         </table>
     </Section>
@@ -210,16 +212,10 @@ import Section from '#src/lib/Section.abide'
         <p>The <code>by deal.id</code> on the loop keeps each row tied to its deal, so the row
             the update names is the only one that changes.</p>
 
-        <p>Change the held value without <code>patch</code> and nothing on the page moves, because
-            no reader was told. The change shows up on the next patch, attached to the wrong
-            update.</p>
-
-        <table>
-            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
-            <tbody>
-                <tr><td><code>transform</code></td><td><code>{'{ transform: (rows) => new Map(rows.map((deal) => [deal.id, deal])) }'}</code> reshapes the list once, as it lands, so an update by id is a lookup rather than a scan. The function is a <code>Transformer</code></td></tr>
-            </tbody>
-        </table>
+        <p><code>patch</code> changes the array it holds and copies nothing. A path write in a
+            <code>.abide</code> file, <code>{'deals[0].amount = 27_500'}</code>, also wakes the
+            readers, but copies the path it writes down first. In a <code>.ts</code> file, or where
+            the held value is not plain data, <code>patch</code> is the write that wakes them.</p>
     </Section>
 
     <Section title="Two components far apart share one value">
@@ -242,7 +238,7 @@ import Section from '#src/lib/Section.abide'
             panel ask for the same key, find that one on the way up, and never run their own build.
             No prop runs between them.</p>
 
-        <p>Use the value <code>reactive.share</code> returns, and no other name. A value lives in
+        <p>A value lives in
             the component that created it and below, so two pickers on one page each get their own.
             Where a value is one thing for the whole app, export it from a module instead.</p>
 
@@ -286,7 +282,9 @@ import Section from '#src/lib/Section.abide'
             </tbody>
         </table>
 
-        <p>Where a read subscribes depends on where it runs:</p>
+        <p>The effect is the one place in this card where a read subscribes. Its
+            <code>Disposer</code> does not, and nor does any function abide calls without rebuilding
+            it:</p>
 
         <table>
             <thead><tr><th>A read in</th><th>Subscribes</th></tr></thead>
@@ -298,39 +296,38 @@ import Section from '#src/lib/Section.abide'
         </table>
     </Section>
 
-    <Section title="A `store` keeps a preference between visits">
+    <Section title="A `store` keeps a value between visits">
         <Example
             id="crm-04-store"
             app="crm-04"
             title={'`{ store }` — where a value lives between visits'}
-            summary="The pipeline as a board or a list. Pick list, then reload the page."
+            summary="The quarter's target, which the whole team works to. Set a new one, then reload the page."
             files={{
-                'src/pipeline/lib/PipelineView.abide': pipelineViewSource,
-                'src/pipeline/lib/preferenceStore.ts': preferenceStoreSource,
-                'src/pipeline/getPreference.handler.ts': getPreferenceSource,
-                'src/pipeline/setPreference.handler.ts': setPreferenceSource,
-                'src/pipeline/lib/PipelineView.test.ts': pipelineViewTestSource,
+                'src/pipeline/lib/TeamTarget.abide': teamTargetSource,
+                'src/pipeline/lib/targetStore.ts': targetStoreSource,
+                'src/pipeline/getTarget.handler.ts': getTargetSource,
+                'src/pipeline/setTarget.handler.ts': setTargetSource,
+                'src/pipeline/lib/TeamTarget.test.ts': teamTargetTestSource,
             }}
         >
-            <PipelineView />
+            <TeamTarget />
         </Example>
 
         <p>A <code>Store</code> is a <code>get</code> and a <code>set</code>. The value reads the
-            store when it is built and falls back to <code>'board'</code> on a miss, and every change
+            store when it is built and falls back to <code>500_000</code> on a miss, and every change
             is written back. The reads and writes in the markup do not change.</p>
+
+        <p>This store goes through two handlers, so the target is one value on the server: the
+            next visit opens on it, and so does everyone else's, painted right the first time. After
+            a write, <code>set</code> invalidates the read it made, so the next read asks the server
+            rather than this tab's copy. A setting one visitor alone sees, such as a theme, belongs
+            in a cookie instead.</p>
 
         <p>Where the stored value can change from outside the app, such as a file another program
             edits, the store adds <code>watch</code>. It is handed a function to call when that
             happens, and returns the function that stops watching. The value reads <code>get</code>
             again, and the body does not run.</p>
-
-        <p>This store goes through two handlers, so the server and the browser read the same
-            preference and the first paint is already right. A store over
-            <code>localStorage</code> works too, but only in a browser, so the server paints the
-            fallback first. After a write, <code>set</code> invalidates the read it made, so the
-            next read asks the server rather than this tab's copy.</p>
     </Section>
-
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/make-it-live')}>Make it live</a> — every open tab sees a

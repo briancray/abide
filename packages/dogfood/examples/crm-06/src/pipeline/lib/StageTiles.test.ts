@@ -13,14 +13,15 @@ function pick(index: number, stage: string): void {
     select.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-test('two readers of one stage are one load', async () => {
+test('three readers of one stage are one load', async () => {
     // Nothing held from an earlier test, so the first read loads.
     getStage.invalidate()
     const before = LOADS.won ?? 0
     using _tiles = await mount(StageTiles({}))
     pick(0, 'won')
     pick(1, 'won')
+    pick(2, 'won')
     await Bun.sleep(600)
-    // Both panels on `won`: one load between them.
+    // All three panels on `won`: one load between them.
     expect((LOADS.won ?? 0) - before).toBe(1)
 })

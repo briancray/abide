@@ -1,4 +1,5 @@
 <script>
+import StageAverage from './StageAverage.abide'
 import StageCount from './StageCount.abide'
 import StageValue from './StageValue.abide'
 </script>
@@ -6,4 +7,5 @@ import StageValue from './StageValue.abide'
 <div class="row">
     <StageCount />
     <StageValue />
+    <StageAverage />
 </div>
