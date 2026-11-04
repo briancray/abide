@@ -1,8 +1,9 @@
 // AN APP BOOTED IN THIS PROCESS OVER MODULES THE TEST ALREADY HOLDS — `bootApp` and `appSources`, the
 // path `abide start`, a compiled app and `abide dev` all boot through, with no build ahead of it. What
 // the build would have supplied is the handler table, and that is derived here off each handler
-// file's default: the address and scope `handlersUnder` writes (16.2, 23.14), and no type-derived
-// `args` schema (19.9) unless a row passes one. So a test of what a handler's ANNOTATION does to the
+// file's default through the row `handlersUnder` builds (`handlerFileMount`) — at its file's route
+// (16.2, 23.14), with what the handler says of itself at run time and no type-derived `args` schema
+// (19.9) unless a row passes one. So a test of what a handler's ANNOTATION does to the
 // wire stays on `builtApp.ts`.
 //
 // No socket is bound — `App.fetch` answers (42.5) — so the DOM preload's `Response` never meets
@@ -10,10 +11,11 @@
 
 import type { Mount, MountRow } from '#server/answerRpc.ts'
 import { type App, bootApp } from '#server/createApp.ts'
+import { handlerFileMount } from '#server/handlerFileMount.ts'
 import { NO_MANIFEST } from '#server/manifestOf.ts'
 import { routeOf } from '#server/placement.ts'
 import { appSources } from '#server/servedApp.ts'
-import type { Method } from '#shared/rpc.ts'
+import type { Rpc } from '#shared/rpc.ts'
 
 /**
  * An `App` over `modules`, by the path below the app's root of each handler file —
@@ -27,24 +29,24 @@ export function inMemoryApp(
     const handlers: MountRow[] = []
     for (const [source, exported] of Object.entries(modules)) {
         const address = routeOf(source)
+        const handler = exported.default as Rpc<unknown, unknown>
         handlers.push({
+            ...handlerFileMount(
+                { address, source, scope: address, matchers: {} },
+                {
+                    method: handler.method,
+                    description: handler.description,
+                    // Every surface, as a declaration that names none is listed on (20.3, 20.4).
+                    ui: true,
+                    cli: true,
+                    mcp: true,
+                    copy: undefined,
+                    defaults: undefined,
+                    args: undefined,
+                    result: undefined,
+                },
+            ),
             load: async () => exported,
-            address,
-            method: (exported.default as { method: Method }).method,
-            source,
-            name: address.slice(address.lastIndexOf('/') + 1),
-            export: 'default',
-            scope: address,
-            matchers: {},
-            private: false,
-            ui: true,
-            cli: true,
-            mcp: true,
-            description: undefined,
-            copy: undefined,
-            defaults: undefined,
-            args: undefined,
-            result: undefined,
             ...rows.find((row) => row.address === address),
         })
     }
