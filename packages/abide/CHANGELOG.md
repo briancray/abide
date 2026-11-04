@@ -1,5 +1,14 @@
 # @abide/abide
 
+## 0.123.1
+
+### Patch Changes
+
+- the args-as-sent walk returns the args it does not copy, walks a cycle once, and keeps a parsed __proto__ a member (RULEBOOK 19.25) ([`ee02cac`](https://github.com/briancray/abide/commit/ee02cacbb64f00374ae98154e788c59c5a4ec49b))
+- bf77c28: `abide check` no longer fails when an inline component is passed to a component that sits inside another component's body: the outer close tag's read in the check's projection now ends with a `;`, so the braces that scope the passed component are not parsed as an arrow function.
+- 7c24094: A no-argument mutation behind `middleware` no longer starts its body before its rungs run. Dropping the previous call's answer built the request's instance of the handler, which started the body ahead of every rung, so a refusing rung (`signedIn`) answered after the body had already run. Calling the same mutation twice in one request now writes twice behind rungs as well (RULEBOOK 16.7, 16.11, 16.16).
+- 94fbea7: A handler's derived args schema reads a member left `undefined` as absent, so an in-process call like `getResearch({ home, topic: undefined })` is answered as the wire answers it rather than refused 422 (RULEBOOK 19.25, 15.8).
+
 ## 0.123.0
 
 ### Minor Changes
