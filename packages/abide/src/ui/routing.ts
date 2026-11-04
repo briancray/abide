@@ -16,4 +16,5 @@
 
 export { listenForRoutes } from './listenForRoutes.ts'
 export { registerWorker } from './registerWorker.ts'
-export { type PageMount, type Route, Router, startRouter } from './Router.ts'
+export { type PageMount } from './LevelChain.ts'
+export { type Route, Router, startRouter } from './Router.ts'
