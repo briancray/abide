@@ -25,7 +25,7 @@ import { refuse } from '#shared/refuse.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 
 import { handlerKey, type Mounted } from './answerRpc.ts'
-import { argsFor } from './argsFor.ts'
+import { argsFor } from './argsContract.ts'
 import { positiveSetting } from './config.ts'
 import { closedTo, crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
 import { failureOf } from './hooks.ts'
@@ -409,7 +409,7 @@ export class MuxConnection {
         const pending = (): void => {}
         try {
             // 18.3 — the args a `GET` over http is answered with, sent as JSON.
-            const args = argsFor(followed, frame.args, undefined)
+            const args = argsFor(followed.handler, frame.args, undefined)
             // 18.8 — A GUARDED `GET`'s RUNGS RUN ONCE, as the subscription opens, in this
             // connection's request: one they admit is fed the value, and one they refuse is sent its
             // triggers alone.

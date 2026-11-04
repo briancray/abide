@@ -6,12 +6,10 @@ import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
 import type { Mounted } from '#server/answerRpc.ts'
-import { argsFor } from '#server/argsFor.ts'
-import { collapsed } from '#server/coerceArgs.ts'
-import { derivedArgs } from '#server/derivedArgs.ts'
+import { argsFor, collapsed, derivedArgs } from '#server/argsContract.ts'
 import { isFailed } from '#shared/Failed.ts'
 
-const SCHEMA: Mounted['argsDocument'] & Mounted['args'] = {
+const SCHEMA = {
     type: 'object',
     properties: {
         id: { type: 'integer' },
@@ -20,15 +18,14 @@ const SCHEMA: Mounted['argsDocument'] & Mounted['args'] = {
     required: ['id'],
 }
 
-// The handler as the module it is loaded through leaves it: held to the schema its annotation derives.
-function heldTo(
-    schema: Mounted['args'],
-): Pick<Mounted, 'handler' | 'argsDocument'> {
+// The handler as the module it is loaded through leaves it: held to the schema its annotation
+// derives, which its text args are then coerced by too.
+function heldTo(schema: typeof SCHEMA): Mounted['handler'] {
     const handler = GET(
         (_args: { id: number; tags?: string[] }) => 1,
     ) as Mounted['handler']
-    derivedArgs(handler, schema as NonNullable<Mounted['args']>)
-    return { handler, argsDocument: SCHEMA }
+    derivedArgs(handler, schema)
+    return handler
 }
 
 const found = heldTo(SCHEMA)
@@ -79,4 +76,22 @@ test('a call that sends no args is held to the annotation — 19.9', () => {
     expect(
         argsFor(heldTo({ ...SCHEMA, required: [] }), undefined, ''),
     ).toBeUndefined()
+})
+
+// 16.65, 16.66, 19.7 — A PATH'S PARAMETERS ARE ARGS TOO, coerced to the declared types where the rest
+// of the args are a JSON body, and refused where the request names one as well. THE REVERT: lay the
+// path's text in uncoerced; `id` reaches the annotation as '4' and is refused.
+test("a path's parameters join the args, coerced, and are never named twice — 16.65, 16.66", () => {
+    expect(argsFor(found, { tags: ['a'] }, undefined, { id: '4' })).toEqual({
+        tags: ['a'],
+        id: 4,
+    })
+    expect(argsFor(found, undefined, '', { id: '4' })).toEqual({ id: 4 })
+    let refused: unknown
+    try {
+        argsFor(found, { id: 4 }, undefined, { id: '4' })
+    } catch (thrown) {
+        refused = thrown
+    }
+    expect(isFailed(refused) && refused.status).toBe(400)
 })

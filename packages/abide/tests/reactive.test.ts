@@ -24,7 +24,7 @@ import {
     watch,
     writePath,
 } from '#shared'
-import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
+import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { chunksOfStream, isKeyed } from '#shared/reactive/index.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'

@@ -7,7 +7,7 @@ import { applyPatch } from '#shared/applyPatch.ts'
 import { mounted } from '#shared/mount.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
-import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
+import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import {
     heldGenerationOf,
     loadOf,

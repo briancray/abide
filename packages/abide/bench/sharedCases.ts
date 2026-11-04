@@ -7,7 +7,7 @@
 import { jsonSchema, reactive, validateJson } from '@abide/abide'
 
 import { putOwn } from '#shared/putOwn.ts'
-import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
+import { canonicalKey } from '#shared/reactive/argsContract.ts'
 
 // Defeats dead-code elimination without allocating: every arm writes here.
 let sink: unknown
