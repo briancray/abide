@@ -1,10 +1,10 @@
 import { type AbideFile, parseAbide } from '#compiler'
 import type { CheckerAnswer } from '#compiler/CheckerAnswer.ts'
+import { Diagnostics } from '#compiler/Diagnostics.ts'
 import { emitSource } from '#compiler/emitSource.ts'
 import { Lowering } from '#compiler/Lowering.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import { parseSources, readSources } from '#compiler/readSources.ts'
-import { Refusals } from '#compiler/Refusals.ts'
 import { type Token, tokenize } from '#compiler/tokenize.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { placement } from '#server/placement.ts'
@@ -101,8 +101,8 @@ export async function typed(
     const declared = declare(source, names)
     const checker = await typedSession()
     // The pipeline a build runs, so a refusal throws here as it stops a build.
-    const refusals = new Refusals(TYPED_ROOT, false)
-    const { read } = await readSources(
+    const refusals = new Diagnostics(TYPED_ROOT, false)
+    const read = await readSources(
         checker,
         parseSources([{ path: PAGE, text: declared.source }], refusals),
         refusals,

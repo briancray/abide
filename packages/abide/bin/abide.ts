@@ -16,8 +16,8 @@ import {
     type CompiledApp,
 } from '#compiler/compileApp.ts'
 import { compiledEntry } from '#compiler/compiledEntry.ts'
+import { type Diagnosis, printDiagnoses } from '#compiler/Diagnostics.ts'
 import { formatAbide } from '#compiler/formatAbide.ts'
-import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { parseAbide } from '#compiler/parseAbide.ts'
 import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
@@ -118,8 +118,7 @@ async function writeBuild(
     // `--out` is a real flag rather than a constant because two test files each building into
     // one `.abide/` is the contention CLAUDE.md's "checks" section already records once.
     const app = await compileApp(root)
-    for (const warning of app.warnings)
-        console.warn(formatDiagnosis(warning, process.cwd()))
+    printDiagnoses(app.warnings, console.warn)
     if (
         Object.keys(app.files).length === 0 &&
         Object.keys(app.handlers).length === 0
@@ -722,24 +721,18 @@ async function check(
     { positionals }: Given,
 ): Promise<number> {
     const within = namedDirectories(positionals)
-    const found = await checkApp(root)
-    let errors = 0
-    let warnings = 0
-    for (const diagnosis of found) {
+    const found: Diagnosis[] = []
+    for (const diagnosis of await checkApp(root))
         if (
-            within.length > 0 &&
-            !within.some(
+            within.length === 0 ||
+            within.some(
                 (directory) =>
                     diagnosis.path === directory ||
                     diagnosis.path.startsWith(`${directory}/`),
             )
         )
-            continue
-        if (diagnosis.category === 'error') errors += 1
-        else if (diagnosis.category === 'warning') warnings += 1
-        else continue
-        console.log(formatDiagnosis(diagnosis, process.cwd()))
-    }
+            found.push(diagnosis)
+    const { errors, warnings } = printDiagnoses(found, console.log)
     console.log(
         `abide check: ${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${warnings === 1 ? '' : 's'}`,
     )
@@ -783,10 +776,7 @@ async function format(within: string[], { values }: Given): Promise<number> {
             next += 1
             const text = await Bun.file(path).text()
             const formatted = await formatAbide(path, text)
-            for (const finding of formatted.findings) {
-                errors += 1
-                console.log(formatDiagnosis(finding, process.cwd()))
-            }
+            errors += printDiagnoses(formatted.findings, console.log).errors
             if (formatted.text === text) continue
             changed += 1
             if (values.check)

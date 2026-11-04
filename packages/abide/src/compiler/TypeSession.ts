@@ -36,9 +36,13 @@ import {
     moduleConfigShadow,
 } from './checkedShadow.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
-import type { Finding } from './Finding.ts'
-import { isIgnored } from './isIgnored.ts'
-import { diagnosisAt, lineOf } from './lineOf.ts'
+import {
+    byPlace,
+    type Diagnosis,
+    type Finding,
+    placedFindings,
+} from './Diagnostics.ts'
+import { lineOf } from './lineOf.ts'
 import { CHECKED_VALUES } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow, type Span } from './projectShadow.ts'
@@ -104,9 +108,11 @@ export class TypeSession {
         api: API,
         tsconfig: string,
         keyOf: (path: string) => string,
+        root: string,
     ) {
         this.api = api
         this.tsconfig = tsconfig
+        this.root = root
         this.opened = `${dirname(tsconfig)}/${SESSION_CONFIG}`
         this.keyOf = keyOf
     }
@@ -152,8 +158,8 @@ export class TypeSession {
      */
     private stoodIn = new Set<string>()
 
-    /** The app's root, real — set by `openChecker`. */
-    root = ''
+    /** The app's root, real. */
+    readonly root: string
 
     /**
      * `path` below the app's root, where it lies under it.
@@ -228,8 +234,11 @@ export class TypeSession {
         return COMPONENT_MODULE
     }
 
-    /** Opens a session on the project `tsconfig` configures. */
-    static async open(tsconfig: string): Promise<TypeSession> {
+    /**
+     * Opens a session on the project `tsconfig` configures, for the app at `root` — real, and empty
+     * for a session asked about no app's routes.
+     */
+    static async open(tsconfig: string, root = ''): Promise<TypeSession> {
         const api = new API({
             cwd: dirname(tsconfig),
             fs: {
@@ -261,7 +270,7 @@ export class TypeSession {
             throw new Error(
                 'abide: the TypeScript API no longer keeps `toPath` where the type session reads it, so a path cannot be keyed as the checker keys it.',
             )
-        const session = new TypeSession(api, tsconfig, toPath)
+        const session = new TypeSession(api, tsconfig, toPath, root)
         return session
     }
 
@@ -757,27 +766,14 @@ export class TypeSession {
             )
             answers[at] = read.answer
             suspects[at] = read.suspects
-            const placed: Diagnosis[] = []
-            for (const warning of read.warnings) {
-                const offset = query.map.toSource(
-                    query.map.shadowPath,
-                    warning.at,
-                )
-                if (
-                    source.text === undefined ||
-                    !isIgnored(source.text, offset, warning.message)
-                )
-                    placed.push(
-                        diagnosisAt(
-                            source.path,
-                            source.text,
-                            offset,
-                            'warning',
-                            warning.message,
-                        ),
-                    )
-            }
-            warned[at] = placed
+            warned[at] = placedFindings(
+                source.path,
+                source.text,
+                read.warnings,
+                (offset) => query.map.toSource(query.map.shadowPath, offset),
+                'warning',
+                true,
+            )
         }
         const every = queries.map((_, at) => at)
         const first = project
@@ -868,11 +864,13 @@ export class TypeSession {
      * 11.30 — `unkeyed`: every `args` defaulting a member its body's parameter does not, as warnings.
      * Both over every `.ts` under `within` and each of `sources` as the shadow `readsFor` registered
      * for it, because a keyed value is declared in a `.ts` as often as in a `.abide` — one walk of
-     * the files for the two, each finding on its own line of the file an author wrote.
+     * the files for the two, each finding on its own line of the file an author wrote. `scripts`
+     * as `diagnose` reads it: an editor asking about one page does not walk the app's `.ts`.
      */
     async lints(
         within: string,
         sources: readonly Omit<ParsedSource, 'quiet'>[],
+        scripts = true,
     ): Promise<{ ambient: Diagnosis[]; unkeyed: Diagnosis[] }> {
         using _held = this.hold()
         const ambient: Diagnosis[] = []
@@ -905,10 +903,13 @@ export class TypeSession {
         // A file of this session's own is one of `sources`' shadows or not walked at all: a
         // checked module is the lowering's, and placed nowhere an author wrote.
         const files: string[] = []
-        for (const path of this.rootsUnder(project, within)) {
-            const key = this.keyOf(path)
-            if (authored.has(key) || !this.shadows.has(key)) files.push(path)
-        }
+        if (scripts)
+            for (const path of this.rootsUnder(project, within)) {
+                const key = this.keyOf(path)
+                if (authored.has(key) || !this.shadows.has(key))
+                    files.push(path)
+            }
+        else for (const { map } of authored.values()) files.push(map.shadowPath)
         await Promise.all(
             files.map(async (path) => {
                 const sourceFile = await project.program.getSourceFile(path)
@@ -928,26 +929,25 @@ export class TypeSession {
                         : source.text
                 const place = (at: number): number =>
                     shadow === undefined ? at : shadow.map.toSource(path, at)
+                const named = source?.path ?? path
+                const ambientReads: Finding[] = []
                 for (const read of reads)
-                    ambient.push(
-                        diagnosisAt(
-                            source?.path ?? path,
-                            text,
-                            place(read.at),
-                            'error',
-                            `abide: a \`global\` value's body reads \`${read.ambient}\`, which belongs to the request it was built in — every later request would be answered with this one's. Take it out of the body, or drop \`global\`. RULEBOOK 11.37.`,
-                        ),
-                    )
-                for (const finding of defaults)
-                    unkeyed.push(
-                        diagnosisAt(
-                            source?.path ?? path,
-                            text,
-                            place(finding.at),
-                            'warning',
-                            finding.message,
-                        ),
-                    )
+                    ambientReads.push({
+                        at: read.at,
+                        message: `abide: a \`global\` value's body reads \`${read.ambient}\`, which belongs to the request it was built in — every later request would be answered with this one's. Take it out of the body, or drop \`global\`. RULEBOOK 11.37.`,
+                    })
+                ambient.push(
+                    ...placedFindings(
+                        named,
+                        text,
+                        ambientReads,
+                        place,
+                        'error',
+                    ),
+                )
+                unkeyed.push(
+                    ...placedFindings(named, text, defaults, place, 'warning'),
+                )
             }),
         )
         ambient.sort(byPlace)
@@ -1081,16 +1081,15 @@ export class TypeSession {
             })
             if (source.quiet) continue
             // A refusal is at a projection offset (`Lowering.refusals`).
-            for (const refusal of refusals)
-                refused.push(
-                    diagnosisAt(
-                        source.path,
-                        source.text,
-                        map.toSource(map.shadowPath, refusal.at),
-                        'error',
-                        refusal.message,
-                    ),
-                )
+            refused.push(
+                ...placedFindings(
+                    source.path,
+                    source.text,
+                    refusals,
+                    (at) => map.toSource(map.shadowPath, at),
+                    'error',
+                ),
+            )
             reports.push(
                 report(map.checkedPath, source.path, (position) =>
                     lineOf(
@@ -1622,20 +1621,6 @@ declare module '*.md' {
 `
 
 /**
- * One thing the checker said, placed in the file the author wrote.
- *
- * 38.3 — line and column from 1.
- */
-export type Diagnosis = {
-    path: string
-    line: number
-    column: number
-    code: number
-    category: 'error' | 'warning' | 'suggestion' | 'message'
-    message: string
-}
-
-/**
  * Where something is in a file the author wrote, line and column from 1.
  *
  * 38.39.
@@ -1790,14 +1775,6 @@ async function describe(
                   : 'var'
     }
     return `${keyword} ${name}: ${spelled}`
-}
-
-function byPlace(one: Diagnosis, two: Diagnosis): number {
-    return (
-        one.path.localeCompare(two.path) ||
-        one.line - two.line ||
-        one.column - two.column
-    )
 }
 
 /** Indexed by the API's `DiagnosticCategory`. */

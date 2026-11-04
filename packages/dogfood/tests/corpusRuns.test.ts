@@ -21,8 +21,8 @@ import {
 } from '@abide/abide/compiler'
 import { render } from '@abide/abide/server'
 
+import { Diagnostics } from '../../abide/src/compiler/Diagnostics.ts'
 import { privateAddress } from '../../abide/src/compiler/handlersUnder.ts'
-import { Refusals } from '../../abide/src/compiler/Refusals.ts'
 import { resolverIn } from '../../abide/src/compiler/resolverIn.ts'
 import { appFiles } from '../../abide/src/server/appTree.ts'
 import { placement, routeOf } from '../../abide/src/server/placement.ts'
@@ -219,7 +219,7 @@ test('every example renders on the server and mounts on the client', async () =>
             }
             for (const belowRoot of appFiles(
                 `${APP}${root}`,
-                new Refusals(APP, true),
+                new Diagnostics(APP, true),
             ).handlers) {
                 const { default: handler } = await import(
                     `${dir}/${root}/${belowRoot}`

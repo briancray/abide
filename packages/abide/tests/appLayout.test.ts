@@ -9,7 +9,7 @@ import { realpathSync } from 'node:fs' // bun exposes no sync realpath of its ow
 import { appMap } from '#compiler/appMap.ts'
 import { checkApp, checkSource } from '#compiler/checkApp.ts'
 import { openChecker } from '#compiler/compileApp.ts'
-import type { Diagnosis } from '#compiler/TypeSession.ts'
+import type { Diagnosis } from '#compiler/Diagnostics.ts'
 
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'

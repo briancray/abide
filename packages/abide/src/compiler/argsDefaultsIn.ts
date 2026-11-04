@@ -17,7 +17,7 @@ import {
 } from 'typescript/unstable/ast/is'
 import { type Checker, SymbolFlags, type Type } from 'typescript/unstable/async'
 
-import type { Finding } from './Finding.ts'
+import type { Finding } from './Diagnostics.ts'
 import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
 
 // 11.30 — AN `args` SCHEMA DEFAULTING A MEMBER THE BODY'S PARAMETER DOES NOT. The key is taken before

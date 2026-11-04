@@ -43,7 +43,7 @@ import {
     resultSchemaOf,
     type Walk,
 } from './argsSchemaOf.ts'
-import { diagnosisAt } from './lineOf.ts'
+import { type Diagnosis, diagnosisAt, type Diagnostics } from './Diagnostics.ts'
 import { isReactiveCall, METHODS, optionNamed } from './reactiveOptions.ts'
 import {
     abideIn,
@@ -51,8 +51,6 @@ import {
     isReactiveMember,
     valueTypeOf,
 } from './reactiveTypes.ts'
-import type { Refusals } from './Refusals.ts'
-import type { Diagnosis } from './TypeSession.ts'
 
 /**
  * Every value each module exports, with the abide method that declares it.
@@ -73,7 +71,7 @@ export async function declaredExports(
     projectName: string,
     paths: readonly string[],
     named: readonly string[],
-    refusals: Refusals,
+    refusals: Diagnostics,
 ): Promise<(DeclaredExport[] | undefined)[]> {
     const checker = project.checker
     // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalizes a path to

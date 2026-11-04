@@ -1,5 +1,3 @@
-import type { Diagnosis } from './TypeSession.ts'
-
 /**
  * An offset into a file's text as the line and column an editor shows, both from 1.
  *
@@ -35,21 +33,4 @@ export function offsetOf(
         at = end + 1
     }
     return at + position.character
-}
-
-/** abide's own finding at `offset` into `text`, or at line 0 where the text was not handed in. */
-export function diagnosisAt(
-    path: string,
-    text: string | undefined,
-    offset: number,
-    category: Diagnosis['category'],
-    message: string,
-): Diagnosis {
-    return {
-        path,
-        ...(text === undefined ? { line: 0, column: 0 } : lineOf(text, offset)),
-        code: 0,
-        category,
-        message,
-    }
 }

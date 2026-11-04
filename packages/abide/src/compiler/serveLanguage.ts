@@ -1,18 +1,19 @@
-import { existsSync, type FSWatcher, watch } from 'node:fs' // bun exposes no file watcher or sync existence check of its own
+import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 
 import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 
 import { checkSource, lowerApp } from './checkApp.ts'
 import { citedClauses } from './citedClauses.ts'
-import { type AppChecker, openChecker } from './compileApp.ts'
+import type { AppChecker } from './compileApp.ts'
+import { type Diagnosis, formatDiagnosis } from './Diagnostics.ts'
 import { DOCS_SITE } from './DOCS_SITE.ts'
 import { formatAbide } from './formatAbide.ts'
-import { formatDiagnosis } from './formatDiagnosis.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
+import { KeptChecker } from './KeptChecker.ts'
 import { lineOf, offsetOf } from './lineOf.ts'
 import { nearest } from './nearest.ts'
-import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
+import type { Inspection, Place } from './TypeSession.ts'
 
 // 38.11 — `abide lsp`: THE `.abide` LANGUAGE SERVER, OVER STDIO. It is `abide check` (38.3) asked
 // about one open document at a time, so the squiggle an editor draws and the line CI fails on are
@@ -64,8 +65,7 @@ export async function serveLanguage(
 ): Promise<void> {
     const documents = new Map<string, Document>()
     const timers = new Map<string, ReturnType<typeof setTimeout>>()
-    const checkers = new Map<string, AppChecker>()
-    const watchers = new Map<string, FSWatcher>()
+    const checkers = new Map<string, KeptChecker>()
     // Each app's real root, to the root the editor reached it by.
     const links = new Map<string, string>()
     let queue: Promise<void> = Promise.resolve()
@@ -133,37 +133,19 @@ export async function serveLanguage(
     const held = (path: string): string | undefined =>
         documents.get(Bun.pathToFileURL(spelled(path)).href)?.text
 
-    // An app's checker, opened on first use and kept for the session — and TOLD WHAT MOVED ON DISK,
-    // or it answers every check from the text it read when it opened: an export added to a `lib`
-    // module the page imports is "no exported member" until the editor restarts this. A project whose
-    // tsconfig or package.json moved is opened again.
-    const checkerOf = async (app: string): Promise<AppChecker> => {
+    // An app's checker, kept for the session — and TOLD WHAT MOVED ON DISK, or it answers every
+    // check from the text it read when it opened: an export added to a `lib` module the page
+    // imports is "no exported member" until the editor restarts this (`KeptChecker`).
+    const checkerOf = (app: string): KeptChecker => {
         let checker = checkers.get(app)
-        if (checker !== undefined && !checker.current()) {
-            checkers.delete(app)
-            await checker.close().catch(() => {})
-            checker = undefined
-        }
         if (checker === undefined) {
-            checker = await openChecker(app)
+            checker = new KeptChecker(app, () => {
+                // What an open page says may be decided by the file that moved.
+                for (const uri of documents.keys())
+                    if (placed(uri)?.app === app) check(uri)
+            })
             checkers.set(app, checker)
         }
-        if (!watchers.has(app))
-            watchers.set(
-                app,
-                watch(app, { recursive: true }, (_event, filename) => {
-                    checkers
-                        .get(app)
-                        ?.saw(
-                            filename === null
-                                ? undefined
-                                : `${app}/${filename}`,
-                        )
-                    // What an open page says may be decided by the file that moved.
-                    for (const uri of documents.keys())
-                        if (placed(uri)?.app === app) check(uri)
-                }),
-            )
         return checker
     }
 
@@ -172,11 +154,9 @@ export async function serveLanguage(
     // keeps one for the session. Queued behind the checks, so none is in flight when it closes.
     const closeIfUnopened = async (app: string): Promise<void> => {
         for (const uri of documents.keys()) if (placed(uri)?.app === app) return
-        watchers.get(app)?.close()
-        watchers.delete(app)
         const checker = checkers.get(app)
         checkers.delete(app)
-        await checker?.close().catch(() => {})
+        await checker?.close()
     }
 
     const run = async (uri: string): Promise<void> => {
@@ -189,17 +169,11 @@ export async function serveLanguage(
         const { app, path } = at
         let found: Diagnosis[]
         try {
-            found = await checkSource(
-                await checkerOf(app),
-                path,
-                document.text,
-                held,
+            found = await checkerOf(app).run((checker) =>
+                checkSource(checker, path, document.text, held),
             )
         } catch (thrown) {
             // The checker's own failure, not the page's: the next check opens another.
-            const failed = checkers.get(app)
-            checkers.delete(app)
-            await failed?.close().catch(() => {})
             found = [
                 {
                     path,
@@ -269,7 +243,7 @@ export async function serveLanguage(
             const at = placed(uri)
             if (document === undefined || at === undefined) return undefined
             return question(
-                await checkerOf(at.app),
+                await checkerOf(at.app).live(),
                 at.path,
                 document.text,
                 offsetOf(document.text, position),
@@ -544,24 +518,16 @@ export async function serveLanguage(
             ) as Message
             buffer = buffer.slice(start + length)
             if (!(await handle(message))) {
-                await closeAll(checkers, watchers)
+                await closeAll(checkers)
                 return
             }
         }
     }
-    await closeAll(checkers, watchers)
+    await closeAll(checkers)
 }
 
-async function closeAll(
-    checkers: Map<string, AppChecker>,
-    watchers: Map<string, FSWatcher>,
-): Promise<void> {
-    for (const watcher of watchers.values()) watcher.close()
-    await Promise.all(
-        [...checkers.values()].map((checker) =>
-            checker.close().catch(() => {}),
-        ),
-    )
+async function closeAll(checkers: Map<string, KeptChecker>): Promise<void> {
+    await Promise.all([...checkers.values()].map((checker) => checker.close()))
 }
 
 /**

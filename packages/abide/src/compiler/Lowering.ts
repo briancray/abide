@@ -3,7 +3,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
 import { holdsSlot } from './classifyTemplate.ts'
-import type { Finding } from './Finding.ts'
+import type { Finding } from './Diagnostics.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import {
     type Origin,

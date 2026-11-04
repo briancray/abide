@@ -11,7 +11,7 @@ import { spawned } from '@abide/harness/gate'
 
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
-import type { Diagnosis } from '#compiler/TypeSession.ts'
+import type { Diagnosis } from '#compiler/Diagnostics.ts'
 
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -939,7 +939,7 @@ test('a check reports an emit refusal beside a parse refusal — 38.33, 16.73', 
 }, 60_000)
 
 // 38.33 — A TREE THE BUILD'S WALK REFUSES (23.18) is a finding at the file, beside every type error
-// the rest of the app has. THE REVERT: hand `appFiles` a throwing `Refusals` in `appLayout`; the
+// the rest of the app has. THE REVERT: hand `appFiles` a throwing `Diagnostics` in `appLayout`; the
 // check throws the 23.18 refusal and reports nothing else.
 test('a check reports a tree refusal at its file beside the type errors — 38.33, 23.18', async () => {
     const stray = appFixture({

@@ -11,7 +11,7 @@ import { realpathSync } from 'node:fs' // bun exposes no sync realpath of its ow
 import { relative } from 'node:path' // bun exposes no path helpers of its own
 
 import { checkApp } from '#compiler/checkApp.ts'
-import type { Diagnosis } from '#compiler/TypeSession.ts'
+import type { Diagnosis } from '#compiler/Diagnostics.ts'
 
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'

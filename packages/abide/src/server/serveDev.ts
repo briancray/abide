@@ -18,16 +18,11 @@
 // is also the whole of the reload protocol: the reload client reconnects and reloads, so nothing
 // here has a message to send.
 
-import { watch } from 'node:fs' // bun exposes no file watcher of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 
-import {
-    type AppChecker,
-    compilationOf,
-    compileApp,
-    openChecker,
-} from '#compiler/compileApp.ts'
-import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
+import { compilationOf, compileApp } from '#compiler/compileApp.ts'
+import { printDiagnoses } from '#compiler/Diagnostics.ts'
+import { KeptChecker } from '#compiler/KeptChecker.ts'
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 
 import type { Compilation } from './abideModules.ts'
@@ -100,9 +95,15 @@ export async function serveDev(
     let stale = false
 
     // THE CHECKER IS KEPT ACROSS SAVES, and what the watcher saw move since the last compile is
-    // what it is told (`AppChecker.saw`). On the docs app a save reached the next answer in 182 ms
+    // what it is told (`KeptChecker`). On the docs app a save reached the next answer in 182 ms
     // opening a checker per compile and 86 ms keeping one; kept, it re-reads only what moved.
-    let checker: AppChecker | undefined
+    //
+    // 38.4 — THE PROJECT, WATCHED, by the checker's own recursive watcher over the source root: the
+    // pages, the layouts, the stylesheets and every `public` directory are all under it, and every
+    // one of them is something the worker read at boot. IT IS NOT UNREFFED. It holds the process
+    // open, which is what a command that IS a server wants: the only ways out of `abide dev` are a
+    // signal and a throw, exactly as for `abide start`.
+    const checker = new KeptChecker(options.root, moved)
 
     async function reopen(): Promise<void> {
         let compiled: Compiled
@@ -115,19 +116,14 @@ export async function serveDev(
     }
 
     // A compile that threw is sent IN rather than thrown here: 38.4 keeps the app up, so what a
-    // failure changes is what the worker serves.
-    //
-    // A THROW DROPS THE CHECKER. Most are an author's typo, but the checker's own process dying is
-    // one too, and a session nobody can tell apart from a dead one is not one to keep.
+    // failure changes is what the worker serves. The throw drops the checker (`KeptChecker.run`).
     async function compile(): Promise<Compiled> {
         try {
-            if (checker !== undefined && !checker.current())
-                await closeChecker()
-            checker ??= await openChecker(options.root)
-            const compiled = await compileApp(options.root, checker)
+            const compiled = await checker.run((live) =>
+                compileApp(options.root, live),
+            )
             // 14 and 32.14 — what the compiler has to say, on every compile.
-            for (const warning of compiled.warnings)
-                console.warn(formatDiagnosis(warning, process.cwd()))
+            printDiagnoses(compiled.warnings, console.warn)
             watchDependencies(compiled.files)
             return {
                 compilation: compilationOf(compiled),
@@ -135,7 +131,6 @@ export async function serveDev(
                 failure: '',
             }
         } catch (thrown) {
-            await closeChecker()
             const failure =
                 thrown instanceof Error ? thrown.message : String(thrown)
             console.error(`abide dev: ${failure}`)
@@ -151,39 +146,19 @@ export async function serveDev(
         }
     }
 
-    async function closeChecker(): Promise<void> {
-        const closing = checker
-        checker = undefined
-        try {
-            await closing?.close()
-        } catch {
-            // Already gone, which is what closing it was for.
-        }
-    }
-
-    // A path a watcher saw move — or a move nobody could name — and the replacement it schedules.
+    // A move the checker's watchers heard, and the replacement it schedules.
     let settling: ReturnType<typeof setTimeout> | undefined
-    function moved(path: string | undefined): void {
-        checker?.saw(path)
+    function moved(): void {
         if (settling !== undefined) clearTimeout(settling)
         settling = setTimeout(replace, SETTLE_MILLISECONDS)
     }
 
     // 38.99 — A DEPENDENCY'S `.abide` IS THE APP'S TOO, and a linked package's lies outside the root's
     // watcher: each directory one was compiled from is watched once, for the session.
-    const watchedDependencies = new Set<string>()
     function watchDependencies(files: Compilation['files']): void {
-        for (const relative of Object.keys(files)) {
-            if (placeOf(relative) !== 'dependency') continue
-            const directory = dirname(resolve(options.root, relative))
-            if (watchedDependencies.has(directory)) continue
-            watchedDependencies.add(directory)
-            watch(directory, (_event, filename) =>
-                moved(
-                    filename === null ? undefined : `${directory}/${filename}`,
-                ),
-            )
-        }
+        for (const relative of Object.keys(files))
+            if (placeOf(relative) === 'dependency')
+                checker.watch(dirname(resolve(options.root, relative)))
     }
 
     // The worker, compiled and answering.
@@ -273,17 +248,6 @@ export async function serveDev(
     compiling = reopen()
     await compiling
 
-    // 38.4 — THE PROJECT, WATCHED. One recursive watcher over the source root: the pages, the
-    // layouts, the stylesheets and every `public` directory are all under it, and every one of them is something
-    // the worker read at boot.
-    //
-    // IT IS NOT UNREFFED. It holds the process open, which is what a command that IS a server
-    // wants: the only ways out of `abide dev` are a signal and a throw, exactly as for
-    // `abide start`.
-    watch(options.root, { recursive: true }, (_event, filename) =>
-        moved(filename === null ? undefined : `${options.root}/${filename}`),
-    )
-
     // THE CHECKER AND THE WORKER GO WITH THE COMMAND. Each is a process of its own, and an app with
     // no tsconfig holds a temporary project on disk for as long as the checker is open. The worker
     // is told directly rather than left to its `disconnect`, which a worker busy inside a build
@@ -292,7 +256,9 @@ export async function serveDev(
     for (const signal of ['SIGINT', 'SIGTERM'] as const)
         process.once(signal, () => {
             worker?.terminate()
-            void closeChecker().finally(() => process.kill(process.pid, signal))
+            void checker
+                .close()
+                .finally(() => process.kill(process.pid, signal))
         })
 
     // 18.28 — THE MUX'S LIMITS ARE THE APP'S CONFIGURATION, and so the worker's to resolve: each
