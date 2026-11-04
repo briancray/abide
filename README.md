@@ -18,8 +18,9 @@ those names are held to.
 
 The installed package carries its own documentation in `node_modules/@abide/abide/docs/`:
 `abide.md` (every docs page, in reading order), `REGISTRY.md` and `RULEBOOK.md`. A message ending
-in `RULEBOOK 23.16.` names a clause in that file. The scaffold's `AGENTS.md` points a coding agent
-at all three, and `bun run check` runs `abide check`, the type checker over `.abide` files — `tsc`
+in `RULEBOOK 23.16.` names a clause in that file. The scaffold's `CLAUDE.md` imports
+`node_modules/@abide/abide/ABIDE.md`, its `AGENTS.md` points any other coding agent at the same file,
+and `ABIDE.md` points at all three. `bun run check` runs `abide check`, the type checker over `.abide` files — `tsc`
 does not read them.
 
 ## Layout
@@ -27,11 +28,11 @@ does not read them.
     packages/abide      the framework
     packages/harness    @abide/harness: the measurement lanes everything is tested and measured with
     packages/dogfood    the documentation app, and the app abide is dogfooded on
-    packages/bridge     abide-bridge, the CLI that connects Claude Code to an abide site
+    packages/bridge     @abide/bridge: abide-bridge, the CLI that connects Claude Code to an abide site
 
 `abide` is split by seam — `#shared`, `#ui`, `#server` — and those seams are what
-framework-internal code imports through. An app resolves `@abide/abide`, `@abide/abide/runtime` and
-`@abide/abide/server` instead.
+framework-internal code imports through. An app resolves `@abide/abide`, `@abide/abide/server` and
+`@abide/abide/test` instead, and `@abide/abide/runtime` is what its compiled bundles import.
 
 `@abide/harness` measures anything, abide included: nothing it ships reaches abide, which is what
 lets the hand-written arm of a ratio be timed by the same clock and the same batch sizing as the
@@ -57,7 +58,7 @@ THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/d
 `abide dev`, built by `abide build`, and the one generated part of its source tree — the reference —
 is gated against the registry it is generated from.
 
-    bun run dev           abide dev on :3131
+    bun run dev           abide dev, on PORT or :3000
     bun run build         abide build
 
 - The docs are ONE STORY: ten chapters at `/guide/<chapter>` that build one CRM. Each is a
@@ -91,7 +92,8 @@ reading `SITE.ts`, each `index.abide`, and the pages and markdown the built app 
     bun run format        abide format over every .abide, then bun fmt over the rest
     bun run format:check  the same, writing nothing — fails where a file would change
     bun run e2e           playwright: abide's and the harness's browser specs in chromium and
-                          webkit, and the docs app at the root and under a sub-path
+                          webkit, the last chapter app's own spec against the docs' mount of
+                          it, and the docs app at the root and under a sub-path
     bun run knip          exports and files nothing resolves through
     bun run verify        typecheck, format:check, test
 
