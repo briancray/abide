@@ -1,21 +1,17 @@
 import { expect, test } from 'bun:test'
 
-import { createApp } from '@abide/abide/server'
+import { flushSync } from '@abide/abide'
+import { mount } from '@abide/harness/abide'
+
+import NewDeal from './NewDeal.abide'
 
 test('a deal that does not fit is refused, field by field', async () => {
-    await using app = await createApp()
-    const answer = await app.fetch(
-        new Request('http://crm.invalid/deals/createDeal', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-                name: 'Ledger audit',
-                company: '',
-                amount: 0,
-            }),
-        }),
+    using _form = await mount(NewDeal({}))
+    document.querySelector('button')?.click()
+    await Bun.sleep(50)
+    flushSync()
+    const fields = [...document.querySelectorAll('li span')].map(
+        (field) => field.textContent,
     )
-    expect(answer.status).toBe(422)
-    const { data } = await answer.json()
-    expect(Object.keys(data).sort()).toEqual(['amount', 'company'])
+    expect(fields.sort()).toEqual(['amount', 'company'])
 })

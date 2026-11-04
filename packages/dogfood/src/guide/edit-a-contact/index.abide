@@ -38,8 +38,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
-    <p>The profile lives in <code>src/profile</code>, at <code>/profile</code>. Each card is one
-        of its components, with the test the app runs on it.</p>
+    <p>The profile lives in <code>src/profile</code>, at <code>/profile</code>.</p>
 
     <Section title="A field and its value are one copy">
         <Example
@@ -60,6 +59,11 @@ import Section from '#src/lib/Section.abide'
             per field. A <code>&lt;textarea&gt;</code> and a <code>&lt;select&gt;</code> take the same
             binding.</p>
 
+        <p>A value that starts as a number binds as one, and so does an
+            <code>&lt;input type="number"&gt;</code> or a <code>type="range"</code>. Text that reads as
+            a number writes the number, blank text writes <code>undefined</code>, and any other text
+            writes nothing.</p>
+
         <table>
             <thead><tr><th>You write</th><th>What it binds</th></tr></thead>
             <tbody>
@@ -73,10 +77,9 @@ import Section from '#src/lib/Section.abide'
         </table>
     </Section>
 
-    <Section title="A reactive value is read and written by its name">
-        <p><code>reactive</code> holds a value. Inside a <code>.abide</code> file its name is the
-            value: <code>email</code> in an expression reads it, and <code>email = 'a@b.co'</code>
-            writes it. The sugar sits over two explicit members, <code>s</code> and
+    <Section title="Where a reactive value's name is written decides what it reaches">
+        <p><code>reactive</code> holds a value, and inside a <code>.abide</code> file its name
+            reads and writes it. The sugar sits over two explicit members, <code>s</code> and
             <code>s.set</code>, and a <code>.ts</code> file writes those out.</p>
 
         <table>
@@ -86,7 +89,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>const x: Reactive&lt;…&gt; = foo</code> / a <code>Reactive&lt;…&gt;</code>-typed parameter, return or <code>bind:</code> operand</td><td>the <code>Reactive</code> itself</td></tr>
                 <tr><td><code>const [a, b] = foo</code> / <code>...foo</code></td><td>one read, taken apart</td></tr>
                 <tr><td><code>foo = bar</code></td><td>a write</td></tr>
-                <tr><td><code>foo.bar</code></td><td>the value's <code>bar</code></td></tr>
+                <tr><td><code>foo.bar</code></td><td>the value's <code>bar</code>, or the <code>Reactive</code>'s own <code>bar</code> where it declares one the value does not</td></tr>
                 <tr><td><code>foo.bar(…)</code></td><td>the value's method where it has one, and otherwise a member of the <code>Reactive</code> such as <code>busy</code></td></tr>
                 <tr><td><code>foo()</code> / <code>foo.set(v)</code></td><td>the explicit read and write</td></tr>
                 <tr><td><code>await foo</code></td><td>the value, once it has settled</td></tr>
@@ -135,16 +138,16 @@ import Section from '#src/lib/Section.abide'
             read the phone.</p>
 
         <p>A body with a parameter, <code>reactive((args) =&gt; …)</code>, is a
-            <code>Keyed</code>: a factory holding one value per set of arguments. It is how a handler
-            is called per contact, in <a href={url('/guide/talk-to-the-server')}>Talk to the
-                server</a>.</p>
+            <code>Keyed</code>: a factory holding one value per set of arguments. See
+            <a href={url('/guide/keep-it-current')}>Keep it current</a>, where the pipeline keeps one
+            per stage.</p>
     </Section>
 
     <Section title="A write through a path copies down the path">
         <Example
             id="crm-02-path-write"
             app="crm-02"
-            title="`contact.address.city = v` — a write two levels down"
+            title={'`bind:value={contact.address.city}` — a write two levels down'}
             summary="A contact's city, inside its address. Type a new city."
             files={{
                 'src/profile/lib/AddressField.abide': addressFieldSource,
@@ -154,19 +157,21 @@ import Section from '#src/lib/Section.abide'
             <AddressField />
         </Example>
 
-        <p><code>foo.bar = v</code> copies <code>contact</code>, copies its
-            <code>address</code>, sets <code>city</code>, and writes the new record back. The copy is
-            what wakes the readers: a record changed in place is the object it already was, and nothing
-            downstream has a reason to read it again.</p>
+        <p>The binding writes through the path, the way <code>contact.address.city = city</code>
+            would: it copies <code>contact</code>, copies its <code>address</code>, sets
+            <code>city</code>, and writes the new record back. The copy wakes the readers. A record
+            changed in place is the object it already was, and nothing downstream has a reason to
+            read it again.</p>
 
-        <p><code>foo.push(v)</code> is the same write reached through an array's mutator, once the
-            compiler lifts it (31.9). Until then, write the new array:
+        <p><code>foo.bar = v</code> is that write wherever you spell it. <code>foo.push(v)</code> is
+            not one yet: <code>tags.push(tag)</code> is the array's own <code>push</code>, which changes
+            the array in place and wakes nothing. Write the new array instead:
             <code>tags = [...tags, tag]</code>.</p>
     </Section>
 
-    <Section title="A hole in the markup follows what it reads">
-        <p>A hole is <code>{'{}'}</code> around an expression, and it updates the one thing it
-            names and nothing around it.</p>
+    <Section title="An expression in the markup follows what it reads">
+        <p>Put <code>{'{}'}</code> around an expression and it updates the one thing it lands
+            on, and nothing around it.</p>
 
         <table>
             <thead><tr><th>You write</th><th>Where it lands</th></tr></thead>
@@ -246,6 +251,13 @@ import Section from '#src/lib/Section.abide'
             <code>props</code> hands back each prop as a live read of what the caller passed, so the
             avatar follows the field and nothing is rebuilt: the test counts no node made or moved.</p>
 
+        <p>A prop the child only reads holds the caller's <code>Reactive</code> wherever a name
+            would: handed on to a <code>bind:</code> or a <code>Reactive</code>-typed parameter, it
+            passes the <code>Reactive</code> itself. Its probes answer for everything the caller's expression read, so
+            <code>busy(rows)</code> in a table component is busy while the list its page passed
+            loads. <a href={url('/guide/talk-to-the-server')}>Talk to the server</a> introduces the
+            probes.</p>
+
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
@@ -311,8 +323,8 @@ import Section from '#src/lib/Section.abide'
 
     <Section title="Next">
         <ul>
-            <li><a href={url('/guide/talk-to-the-server')}>Talk to the server</a> — load a contact
-                from a handler, and save it back</li>
+            <li><a href={url('/guide/talk-to-the-server')}>Talk to the server</a> — read deals from
+                the server, change them, refuse a bad request, and say why</li>
         </ul>
     </Section>
 </Doc>

@@ -1,14 +1,20 @@
 import { expect, test } from 'bun:test'
 
-import { reactive, refresh } from '@abide/abide'
+import { flushSync } from '@abide/abide'
+import { mount } from '@abide/harness/abide'
 
-import listDeals from '../listDeals.handler.ts'
+import Pipeline from './Pipeline.abide'
+
+const status = () => document.querySelector('.status')?.textContent?.trim()
+const total = () => document.querySelector('strong')?.textContent
 
 test('a refresh is busy and still ready; a first load is not', async () => {
-    const deals = reactive(() => listDeals())
-    expect([deals.busy(), deals.ready()]).toEqual([true, false])
-    await deals
-    refresh(deals)
-    // The figures already on screen stay there.
-    expect([deals.busy(), deals.ready()]).toEqual([true, true])
+    using _pipeline = await mount(Pipeline({}))
+    expect(status()).toBe('loading…')
+    await Bun.sleep(500)
+    expect([status(), total()]).toEqual(['', '$16,800'])
+    document.querySelector('button')?.click()
+    flushSync()
+    // Busy and still ready: the figure on screen stays until the new one lands.
+    expect([status(), total()]).toEqual(['refreshing…', '$16,800'])
 })

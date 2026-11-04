@@ -1,8 +1,16 @@
 import { expect, test } from 'bun:test'
 
-import exportDeals from '../exportDeals.handler.ts'
+import { createApp } from '@abide/abide/server'
+import { mount } from '@abide/harness/abide'
 
-test('the export answers a CSV file', async () => {
-    const file = await exportDeals()
-    expect(file.type).toBe('text/csv')
+import ExportDeals from './ExportDeals.abide'
+
+test('the link downloads a CSV file', async () => {
+    await using app = await createApp()
+    using _link = await mount(ExportDeals({}))
+    const href = document.querySelector('a')?.getAttribute('href') ?? ''
+    const answer = await app.fetch(
+        new Request(new URL(href, 'http://crm.invalid')),
+    )
+    expect(answer.headers.get('content-type')).toStartWith('text/csv')
 })

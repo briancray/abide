@@ -1,9 +1,17 @@
 <script>
-import { url } from '@abide/abide'
+import { type RouteLiteral, url } from '@abide/abide'
 
 import Doc from '#src/lib/Doc.abide'
 import Lead from '#src/lib/Lead.abide'
 import Section from '#src/lib/Section.abide'
+import { SITE } from '#src/lib/SITE.ts'
+import { pageAt } from '#src/lib/sitePages.ts'
+
+// The chapters, as `SITE` lists them (40.31).
+const chapters = SITE.flatMap(({ pages }) =>
+    pages.filter((page) => page.route.startsWith('/guide/')),
+)
+const reference = pageAt('/reference')
 </script>
 
 <Doc>
@@ -15,58 +23,23 @@ import Section from '#src/lib/Section.abide'
         and ends with the CRM as an app you can download and run. Every card is a file from that app,
         with the tests and the bench the app runs on it.</p>
 
-    <Section title="1. Start an app">
-        <Lead of="/guide/start-an-app" />
-        <p>Read on: <a href={url('/guide/start-an-app')}>Start an app</a></p>
+    <p>The handler a page calls is also an OpenAPI operation, an MCP tool and a CLI command: one
+        handler, four surfaces, so a model reaches the CRM through the same code a person does. See
+        <a href={url('/guide/open-it-to-machines')}>{pageAt('/guide/open-it-to-machines').nav}</a>.</p>
+
+    <Section title="The guide, chapter by chapter">
+        <ol>
+            {#for chapter of chapters by chapter.route}
+                <li>
+                    <p><a href={url(chapter.route as RouteLiteral)}>{chapter.nav}</a></p>
+                    <Lead of={chapter.route} />
+                </li>
+            {/for}
+        </ol>
     </Section>
 
-    <Section title="2. Edit a contact">
-        <Lead of="/guide/edit-a-contact" />
-        <p>Read on: <a href={url('/guide/edit-a-contact')}>Edit a contact</a></p>
-    </Section>
-
-    <Section title="3. Talk to the server">
-        <Lead of="/guide/talk-to-the-server" />
-        <p>Read on: <a href={url('/guide/talk-to-the-server')}>Talk to the server</a></p>
-    </Section>
-
-    <Section title="4. Keep it current">
-        <Lead of="/guide/keep-it-current" />
-        <p>Read on: <a href={url('/guide/keep-it-current')}>Keep it current</a></p>
-    </Section>
-
-    <Section title="5. Make it live">
-        <Lead of="/guide/make-it-live" />
-        <p>Read on: <a href={url('/guide/make-it-live')}>Make it live</a></p>
-    </Section>
-
-    <Section title="6. Add pages">
-        <Lead of="/guide/add-pages" />
-        <p>Read on: <a href={url('/guide/add-pages')}>Add pages</a></p>
-    </Section>
-
-    <Section title="7. Decide who sees what">
-        <Lead of="/guide/decide-who-sees-what" />
-        <p>Read on: <a href={url('/guide/decide-who-sees-what')}>Who sees what</a></p>
-    </Section>
-
-    <Section title="8. Run the CRM">
-        <Lead of="/guide/run-it" />
-        <p>Read on: <a href={url('/guide/run-it')}>Run it</a></p>
-    </Section>
-
-    <Section title="9. Open it to machines">
-        <Lead of="/guide/open-it-to-machines" />
-        <p>Read on: <a href={url('/guide/open-it-to-machines')}>Open it to machines</a></p>
-    </Section>
-
-    <Section title="10. Test, measure and ship">
-        <Lead of="/guide/test-measure-and-ship" />
-        <p>Read on: <a href={url('/guide/test-measure-and-ship')}>Test, measure, ship</a></p>
-    </Section>
-
-    <Section title="Reference">
+    <Section title={reference.title}>
         <Lead of="/reference" />
-        <p>Read on: <a href={url('/reference')}>Overview</a></p>
+        <p>Read on: <a href={url(reference.route as RouteLiteral)}>{reference.title}</a></p>
     </Section>
 </Doc>
