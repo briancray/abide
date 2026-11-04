@@ -236,7 +236,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                     title: 'Make it live',
                     nav: 'Make it live',
                     intent: 'An activity feed every open tab sees as it happens.',
-                    lead: 'Activity on an account is something every open tab should see as it happens. This chapter makes a feed anything can write to and everyone reads, and streams answers as they arrive.',
+                    lead: 'Activity on an account is something every open tab should see as it happens. This chapter makes a channel anything can write to and everyone reads, and streams answers as they arrive.',
                     covers: [
                         '`for await (… of s)`',
                         '`s[Symbol.asyncIterator]`',

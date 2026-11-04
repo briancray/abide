@@ -65,7 +65,7 @@ import Section from '#src/lib/Section.abide'
             written.</p>
     </Section>
 
-    <Section title="A feed keeps its last few entries">
+    <Section title="A channel keeps its last few entries">
         <Example
             id="crm-05-recent"
             app="crm-05"
@@ -92,7 +92,7 @@ import Section from '#src/lib/Section.abide'
             pushes into.</p>
     </Section>
 
-    <Section title="A feed on the server reaches every open tab">
+    <Section title="A channel on the server reaches every open tab">
         <Example
             id="crm-05-live-feed"
             app="crm-05"
@@ -112,23 +112,26 @@ import Section from '#src/lib/Section.abide'
         <table>
             <thead><tr><th>You write</th><th>What it is</th></tr></thead>
             <tbody>
-                <tr><td><code>{'reactive(fn, { global: true })'}</code></td><td>the feeds, one per account, shared by every caller</td></tr>
+                <tr><td><code>{'reactive(fn, { global: true })'}</code></td><td>the channels, one per account, shared by every caller</td></tr>
                 <tr><td><code>GET(feeds)</code></td><td>its address: a tab reading it follows it</td></tr>
-                <tr><td><code>POST(…)</code></td><td>the way in: a handler that patches a feed</td></tr>
+                <tr><td><code>POST(…)</code></td><td>the way in: a handler that patches a channel</td></tr>
             </tbody>
         </table>
 
-        <p><code>global: true</code> puts the feeds in one cache for the whole process. Leave it
-            out and a value on the server belongs to one request, so every caller gets a feed of their
-            own and nobody sees anybody's calls. The body takes <code>account</code>, so there is one
-            feed per account, and <code>ttl</code> lets one nobody has written to for an hour go.</p>
+        <p><code>global: true</code> puts the channels in one cache for the whole process. Leave it
+            out and a value on the server belongs to one request, so every caller gets a channel of
+            their own and nobody sees anybody's calls. The body takes <code>account</code>, so there
+            is one channel per account, and <code>ttl</code> lets one nobody has written to for an
+            hour go. <code>{"by: 'id'"}</code> tells one entry from another, and every tab's copy
+            carries it, so <code>{'{#for entry of entries}'}</code> keys its rows by id with no key
+            of its own.</p>
 
         <p>A tab reading <code>feed</code> is subscribed to it, over one web socket that every
             followed <code>GET</code> on the page shares. The button does not paint its own entry. It
-            calls <code>logToFeed</code>, the handler patches the feed, and what the patch wrote goes
+            calls <code>logToFeed</code>, the handler patches the channel, and what the patch wrote goes
             to every tab following it, this one included. Each write travels as a
             <code>PatchOp</code>, so a new entry is one <code>add</code> rather than the whole
-            feed.</p>
+            channel.</p>
 
         <p>The server writes each entry: its id, its kind and its time. A caller can only pick a
             kind the server knows, so nobody forges an entry, and who may log at all is the
@@ -136,7 +139,7 @@ import Section from '#src/lib/Section.abide'
             the handler had, its <code>Produced</code> type included, so <code>entries.length</code>
             and <code>{'{#for entry of entries}'}</code> read it like any array.</p>
 
-        <p>The feed lives in memory. A restart starts it empty, and each instance of the app holds
+        <p>The channel lives in memory. A restart starts it empty, and each instance of the app holds
             its own. Activity anyone must scroll back past that belongs in your database, behind an
             ordinary handler.</p>
     </Section>
@@ -186,7 +189,7 @@ import Section from '#src/lib/Section.abide'
             id="crm-05-csv"
             app="crm-05"
             title="`bytes(values)` — a CSV written as the cursor reaches each row"
-            summary="An account's activity as a CSV download. Each line goes into the file as its row is read."
+            summary="A rep takes an account's activity into a spreadsheet. The preview above the link is the file it downloads."
             files={{
                 'src/activity/lib/CsvExport.abide': csvExportSource,
                 'src/activity/exportCsv.handler.ts': exportCsvSource,
@@ -220,7 +223,7 @@ import Section from '#src/lib/Section.abide'
             id="crm-05-ticker"
             app="crm-05"
             title="`sse(values)` — events, whoever asks"
-            summary="A wallboard by the sales floor reads today's deal moves. It sends no Accept header, and what comes back is events anyway."
+            summary="A wallboard by the sales floor reads today's deal moves with the plain request its script has always sent."
             files={{
                 'src/activity/lib/Wallboard.abide': wallboardSource,
                 'src/activity/ticker.handler.ts': tickerSource,
@@ -237,7 +240,7 @@ import Section from '#src/lib/Section.abide'
             and gets them from any streaming handler without the helper.</p>
     </Section>
 
-    <Section title="Watch a feed from the terminal">
+    <Section title="Watch a channel from the terminal">
         <Code code={`abide watch activity/feed account=hopper-co --url http://localhost:3000`} />
 
         <p><code>abide watch &lt;address&gt; [args]</code> follows a <code>GET</code> and prints
