@@ -179,7 +179,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>{'style:prop={value}'}</code></td><td>one style property</td></tr>
                 <tr><td><code>{'{...expr}'}</code></td><td>every attribute on an element, or every prop on a component</td></tr>
                 <tr><td><code>{'on<event>={fn}'}</code></td><td>a native listener, removed with its element</td></tr>
-                <tr><td><code>{    'bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}'}</code></td><td>the element itself, to focus or measure</td></tr>
+                <tr><td><code>{'bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}'}</code></td><td>the element itself, to focus or measure</td></tr>
             </tbody>
         </table>
     </Section>

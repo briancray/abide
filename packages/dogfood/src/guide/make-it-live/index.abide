@@ -238,7 +238,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="Watch a feed from the terminal">
-        <Code code={    `abide watch activity/feed account=hopper-co --url http://localhost:3000`} />
+        <Code code={`abide watch activity/feed account=hopper-co --url http://localhost:3000`} />
 
         <p><code>abide watch &lt;address&gt; [args]</code> follows a <code>GET</code> and prints
             its value, then the value again after each patch. The address is the handler's route

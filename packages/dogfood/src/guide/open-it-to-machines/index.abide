@@ -156,7 +156,7 @@ import Section from '#src/lib/Section.abide'
         <Example
             id="crm-09-assistant-tools"
             app="crm-09"
-            title={    "`assistant(messages, provider, { mcp: true })` — the CRM's handlers as its tools"}
+            title={"`assistant(messages, provider, { mcp: true })` — the CRM's handlers as its tools"}
             summary="A rep asks the CRM's assistant where Ada works. The model here is a recording with fixed lines; the tool call it makes runs the CRM's own search handler."
             files={{
                 'src/assistant/lib/AssistantChat.abide': assistantChatSource,
