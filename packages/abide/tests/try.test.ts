@@ -10,7 +10,7 @@ import { parseAbide } from '#compiler'
 import { flushSync, NotLanded } from '#shared'
 import { Mismatch } from '#ui/Mismatch.ts'
 import { markupNodes } from '#ui/parseMarkup.ts'
-import { BOUNDARY, Scope } from '#ui/Scope.ts'
+import { Scope, underBoundary } from '#ui/Scope.ts'
 import { TryRegion } from '#ui/TryRegion.ts'
 
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -170,9 +170,7 @@ test('a mismatch or an unlanded value passes through the boundary — 2.12, 41.1
     expect(mounting.failure.peek()).toBeUndefined()
 
     const binding = tryRegion()
-    BOUNDARY.current = binding
-    const scope = new Scope()
-    BOUNDARY.current = undefined
+    const scope = underBoundary(binding, () => new Scope())
     const mismatched = () => {
         throw new Mismatch('shape')
     }
