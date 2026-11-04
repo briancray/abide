@@ -7,7 +7,7 @@ import { readdir } from 'node:fs/promises' // bun exposes no directory listing o
 
 import { spawned } from '@abide/harness/gate'
 
-import { sharedBuild, sourceHash } from '#server/testBuild.ts'
+import { sharedBuild, sourceHash } from '#server/appBuild.ts'
 
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 

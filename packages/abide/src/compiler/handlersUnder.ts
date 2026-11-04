@@ -11,6 +11,7 @@
 
 import type { Mount } from '#server/answerRpc.ts'
 import { frameworkRouteRefusal } from '#server/appTree.ts'
+import { handlerFileMount } from '#server/handlerFileMount.ts'
 import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
 import { surfaceName } from '#server/surfaceOf.ts'
 import { PRIVATE_HANDLERS_ADDRESS } from '#shared/ADDRESSES.ts'
@@ -114,24 +115,12 @@ export async function handlersUnder(
                     `abide: ${named} and ${relative} are both named ${surface} on the generated surfaces. RULEBOOK 20.13.`,
                 )
             names.set(surface, relative)
-            mounts.push({
-                address,
-                method: handler.method,
-                source: relative,
-                name: address.slice(address.lastIndexOf('/') + 1),
-                export: 'default',
-                scope,
-                matchers,
-                private: false,
-                ui: handler.ui,
-                cli: handler.cli,
-                mcp: handler.mcp,
-                description: handler.description,
-                copy: handler.copy,
-                defaults: handler.defaults,
-                args: handler.args,
-                result: handler.result,
-            })
+            mounts.push(
+                handlerFileMount(
+                    { address, source: relative, scope, matchers },
+                    { ...handler, method: handler.method },
+                ),
+            )
             warnings.push(...handler.unread)
         } catch (thrown) {
             refusals.at(relative, thrown)

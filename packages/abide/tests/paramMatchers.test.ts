@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { Glob } from 'bun'
 
 import { checkApp } from '#compiler/checkApp.ts'
+import { buildFiles } from '#server/appBuild.ts'
 import { url } from '#shared'
 
 import { appFixture, buildApp, serveApp } from './builtApp.ts'
@@ -71,10 +72,14 @@ test('a part a matcher refuses falls through to the next route — 30.37', async
 // client table names `[symbol=TICKER]` with nothing to resolve it in.
 test("the client's route table carries each row's matcher — 23.26", async () => {
     let carried = false
-    for await (const file of new Glob('*.js').scan(`${app}/.abide/client`))
+    for await (const file of new Glob('*.js').scan(
+        buildFiles(`${app}/.abide`).client,
+    ))
         if (
             /matchers:\{"?TICKER"?:/.test(
-                await Bun.file(`${app}/.abide/client/${file}`).text(),
+                await Bun.file(
+                    `${buildFiles(`${app}/.abide`).client}/${file}`,
+                ).text(),
             )
         )
             carried = true

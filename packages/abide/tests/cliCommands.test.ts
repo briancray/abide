@@ -5,6 +5,8 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
+import { buildFiles } from '#server/appBuild.ts'
+
 import { builtStylesheet, handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -291,7 +293,7 @@ test('call coerces a word against the schema the app holds the call to — 38.61
 })
 
 // 38.7, 38.8 — A CALL AIMED AT `--url` BUILDS NOTHING HERE, run from inside an app that would refuse to
-// build. THE REVERT: read the handler table through `serveBuild`'s build; the local refusal (34.3)
+// build. THE REVERT: read the handler table through `servedBuild` with the boot's builder; the local refusal (34.3)
 // aborts the call with exit 1 before the remote app sees a request, and no build is left beside it.
 test('a call to --url builds nothing where it is run — 38.7, 38.8', async () => {
     const here = temporaryModule({
@@ -304,9 +306,9 @@ test('a call to --url builds nothing where it is run — 38.7, 38.8', async () =
     )
     expect(answered.stderr).toBe('')
     expect(answered.stdout).toBe('5\n')
-    expect(await Bun.file(`${here}/.abide/compilation.json`).exists()).toBe(
-        false,
-    )
+    expect(
+        await Bun.file(buildFiles(`${here}/.abide`).compilation).exists(),
+    ).toBe(false)
 })
 
 // 38.9, 38.111 — the document from the running app, printed rather than served.

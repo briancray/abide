@@ -36,7 +36,7 @@ import { randomToken } from './randomToken.ts'
 import { type Component, renderDocument } from './render.ts'
 import { LISTENING } from './requestScope.ts'
 import { runCompiled } from './runCompiled.ts'
-import { type BuildParts, builtSources } from './serveBuild.ts'
+import { type BuildParts, builtSources } from './servedApp.ts'
 
 /** What the launcher did last, and what its forms held, kept across launches. 38.73. */
 type Remembered = {

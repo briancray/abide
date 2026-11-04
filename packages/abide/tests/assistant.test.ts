@@ -807,11 +807,11 @@ test('Claude Code is sent a transcript image in its place in the one message —
 test('a tool is called through the app answering the conversation — 44.6, 42.12', async () => {
     await Bun.write(
         `${app}/host.ts`,
-        `import { bootApp, originUnder } from '${SERVER}/createApp.ts'
-import { loadBuild, serveBuild } from '${SERVER}/serveBuild.ts'
+        `import { servedBuild } from '${SERVER}/appBuild.ts'
+import { bootApp } from '${SERVER}/createApp.ts'
 
-await serveBuild('${app}', '${app}/.abide')
-const boot = () => bootApp(originUnder('${app}'), () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
+const served = await servedBuild('${app}', '${app}/.abide', undefined)
+const boot = () => bootApp(served.origin, served.load)
 const first = await boot()
 const second = await boot()
 await second.stop()

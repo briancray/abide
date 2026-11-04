@@ -3,6 +3,8 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
+import { buildFiles } from '#server/appBuild.ts'
+
 import { appFixture, buildApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -14,7 +16,7 @@ const SCHEMA_VALIDATOR = 'does not implement the JSON Schema keyword'
 // The static closure a page's document loads — the entry, then each chunk the manifest names for
 // the page, and every chunk those import.
 async function closureText(out: string, page: string): Promise<string> {
-    const manifest = (await Bun.file(`${out}/manifest.json`).json()) as {
+    const manifest = (await Bun.file(buildFiles(out).manifest).json()) as {
         entry: string
         chunks: Record<string, string[]>
     }

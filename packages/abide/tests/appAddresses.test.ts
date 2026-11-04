@@ -10,6 +10,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
+import { buildFiles } from '#server/appBuild.ts'
 import { surfaceName } from '#server/surfaceOf.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 
@@ -369,15 +370,17 @@ test('an app with a page under a rest directory builds — 23.5', async () => {
     expect(built.stderr).not.toContain('must be absolute')
     expect(built.exitCode).toBe(0)
     const manifest = (await Bun.file(
-        `${fixture}/.abide/manifest.json`,
+        buildFiles(`${fixture}/.abide`).manifest,
     ).json()) as {
         chunks: Record<string, string[]>
     }
     const own = manifest.chunks['docs/[...rest]/index.abide']?.[0]
     expect(own).toBeDefined()
-    expect(await Bun.file(`${fixture}/.abide/client/${own}`).text()).toContain(
-        'rest-page',
-    )
+    expect(
+        await Bun.file(
+            `${buildFiles(`${fixture}/.abide`).client}/${own}`,
+        ).text(),
+    ).toContain('rest-page')
 }, 60_000)
 
 // 16.29 — A DEPENDENCY'S SERVER FILE IS FENCED AS THE APP'S OWN IS, its name saying it wherever it

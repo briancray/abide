@@ -6,11 +6,11 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
+import { buildDirectory, servedBuild } from '#server/appBuild.ts'
 import { HOOKS } from '#server/hooks.ts'
 import { iconAccent, inkOn } from '#server/iconAccent.ts'
 import { launcherOf } from '#server/launcherOptions.ts'
 import { type Launch, launcherPage } from '#server/launcherPage.ts'
-import { serveBuild } from '#server/serveBuild.ts'
 import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
 
 import { appFixture, buildApp } from './builtApp.ts'
@@ -71,7 +71,7 @@ onLauncher(() => ({ width: 1200 }))
     const built = await buildApp(app)
     expect(built.exitCode, built.stderr).toBe(0)
     const before = HOOKS.launcher.length
-    await serveBuild(app, `${app}/.abide`)
+    await servedBuild(app, buildDirectory(app), undefined)
     await import(`${app}/${LAUNCHER_PAGE}`)
     expect(HOOKS.launcher.length).toBe(before + 1)
     expect(launcherOf(HOOKS.launcher.at(-1)?.item())).toMatchObject({

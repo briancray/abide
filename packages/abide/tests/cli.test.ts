@@ -11,6 +11,8 @@ import { afterAll, expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
+import { buildFiles } from '#server/appBuild.ts'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -41,13 +43,19 @@ test('an app is found at src/ where the command is run — 38.25, 38.27', async 
 
     // BESIDE THE APP, which is the other half of saying nothing: a build whose output lands
     // wherever the shell happened to stand is one `abide start` cannot find twice running.
-    expect(await Bun.file(`${app}/.abide/compilation.json`).exists()).toBe(true)
+    expect(
+        await Bun.file(buildFiles(`${app}/.abide`).compilation).exists(),
+    ).toBe(true)
     // THE ENTRY UNDER THE NAME THE MANIFEST GIVES IT, which a build hashes (38.5).
-    const manifest = (await Bun.file(`${app}/.abide/manifest.json`).json()) as {
+    const manifest = (await Bun.file(
+        buildFiles(`${app}/.abide`).manifest,
+    ).json()) as {
         entry: string
     }
     expect(
-        await Bun.file(`${app}/.abide/client/${manifest.entry}`).exists(),
+        await Bun.file(
+            `${buildFiles(`${app}/.abide`).client}/${manifest.entry}`,
+        ).exists(),
     ).toBe(true)
 })
 
@@ -57,7 +65,9 @@ test('an app is found where the command is run, when ui/ is right there — 38.2
     expect(built.exitCode).toBe(0)
     // `dirname(root)` again, and the root here IS `src` — so the build goes beside it rather
     // than inside the tree it compiled.
-    expect(await Bun.file(`${app}/.abide/compilation.json`).exists()).toBe(true)
+    expect(
+        await Bun.file(buildFiles(`${app}/.abide`).compilation).exists(),
+    ).toBe(true)
 })
 
 test('a directory with no app is a refusal naming where it looked — 38.26', async () => {

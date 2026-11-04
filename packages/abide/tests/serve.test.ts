@@ -16,6 +16,8 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
 
+import { buildFiles } from '#server/appBuild.ts'
+
 import { buildApp, serveApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -704,7 +706,7 @@ test('a build that fails leaves no build for start to boot — 38.100', async ()
     expect((await buildApp(app)).exitCode).toBe(0)
     await Bun.write(`${app}/public/about`, 'the file that shadows the page')
     expect((await buildApp(app)).exitCode).not.toBe(0)
-    expect(await Bun.file(`${app}/.abide/compilation.json`).exists()).toBe(
-        false,
-    )
+    expect(
+        await Bun.file(buildFiles(`${app}/.abide`).compilation).exists(),
+    ).toBe(false)
 }, 30_000)

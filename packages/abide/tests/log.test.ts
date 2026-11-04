@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 
-import { clientTags } from '#server/answerRequest.ts'
 import { assistant, type AssistantEvent } from '#server/assistant.ts'
 import { inScope } from '#server/requestScope.ts'
+import { clientTags } from '#server/servedApp.ts'
 import { log } from '#shared'
 import { APP_META } from '#shared/APP_META.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'

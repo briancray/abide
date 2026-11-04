@@ -92,7 +92,7 @@
     "packages/harness/tests/gate.test.ts": 520,
     "packages/abide/tests/argsDefaults.test.ts": 492,
     "packages/abide/tests/chosenComponent.test.ts": 491,
-    "packages/abide/tests/testBuild.test.ts": 486,
+    "packages/abide/tests/appBuild.test.ts": 486,
     "packages/abide/tests/handlerImports.test.ts": 471,
     "packages/abide/tests/configModules.test.ts": 452,
     "packages/harness/tests/report.test.ts": 424,

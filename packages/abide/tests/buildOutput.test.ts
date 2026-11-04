@@ -5,6 +5,8 @@
 import { afterAll, expect, test } from 'bun:test'
 import { rmSync, utimesSync } from 'node:fs' // bun exposes no sync removal, nor a way to set a file's times, of its own
 
+import { buildFiles } from '#server/appBuild.ts'
+
 import { appFixture, buildApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -19,7 +21,7 @@ let count = reactive(0)
 <button onclick={() => { count = count + 1 }}>{count}</button>`
 
 async function manifestNamesExist(out: string): Promise<boolean> {
-    const manifest = (await Bun.file(`${out}/manifest.json`).json()) as {
+    const manifest = (await Bun.file(buildFiles(out).manifest).json()) as {
         entry: string
         chunks: Record<string, string[]>
     }

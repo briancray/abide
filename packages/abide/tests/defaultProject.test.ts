@@ -13,6 +13,8 @@ import { dirname } from 'node:path' // bun exposes no path helpers of its own
 
 import { spawned } from '@abide/harness/gate'
 
+import { buildFiles } from '#server/appBuild.ts'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -43,7 +45,7 @@ test('an app with no tsconfig.json is typed against a default project — 38.30'
     ])
     expect(built.exitCode).toBe(0)
     const { files } = (await Bun.file(
-        `${app}/.abide/compilation.json`,
+        buildFiles(`${app}/.abide`).compilation,
     ).json()) as { files: Record<string, { server: string; client: string }> }
     const server = files['index.abide']?.server ?? ''
     const client = files['index.abide']?.client ?? ''

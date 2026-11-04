@@ -6,9 +6,14 @@ import { expect } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
-import { type Compilation, servedTable } from '#server/abideModules.ts'
-import { COMPILATION } from '#server/CLIENT_BUILD.ts'
-import { serveBuild } from '#server/serveBuild.ts'
+import type { Compilation } from '#server/abideModules.ts'
+import type { MountRow } from '#server/answerRpc.ts'
+import {
+    buildDirectory,
+    buildFiles,
+    servedBuild,
+    spawnedBuild,
+} from '#server/appBuild.ts'
 
 import { temporaryModule } from './temporaryModule.ts'
 
@@ -29,14 +34,15 @@ export function appFixture(files: Record<string, string>): string {
 
 /** The one stylesheet a build of `app` wrote, as text. */
 export async function builtStylesheet(app: string): Promise<string> {
-    const sheets = [...new Bun.Glob('*.css').scanSync(`${app}/.abide/client`)]
+    const { client } = buildFiles(buildDirectory(app))
+    const sheets = [...new Bun.Glob('*.css').scanSync(client)]
     expect(sheets.length).toBe(1)
-    return Bun.file(`${app}/.abide/client/${sheets[0]}`).text()
+    return Bun.file(`${client}/${sheets[0]}`).text()
 }
 
 export function buildApp(
     app: string,
-    out = `${app}/.abide`,
+    out = buildDirectory(app),
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return spawned(['bun', BIN, 'build', '--root', app, '--out', out])
 }
@@ -45,7 +51,7 @@ export function buildApp(
 export async function startApp(
     app: string,
     env: Record<string, string | undefined> = process.env,
-    out = `${app}/.abide`,
+    out = buildDirectory(app),
 ): Promise<{ base: string; stop: () => void }> {
     const server = Bun.spawn(
         ['bun', BIN, 'start', '--root', app, '--out', out, '--port', '0'],
@@ -112,18 +118,17 @@ export async function serveApp(
 // face, by its path below the app.
 export async function builtCompilation(
     app: string,
-    out = `${app}/.abide`,
+    out = buildDirectory(app),
 ): Promise<Compilation> {
-    return (await Bun.file(`${out}/${COMPILATION}`).json()) as Compilation
+    return (await Bun.file(buildFiles(out).compilation).json()) as Compilation
 }
 
 // The handler table a build wrote, served to this process as `abide start` serves it.
 export async function builtHandlers(
     app: string,
-    out = `${app}/.abide`,
-): Promise<Awaited<ReturnType<typeof servedTable>>['handlers']> {
-    await serveBuild(app, out)
-    return (await servedTable(app)).handlers
+    out = buildDirectory(app),
+): Promise<MountRow[]> {
+    return (await servedBuild(app, out, spawnedBuild))?.table.handlers ?? []
 }
 
 // 16.2 — a module of handlers sharing state, as handler files: the module under the directory's
