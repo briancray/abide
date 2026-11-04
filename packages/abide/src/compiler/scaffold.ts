@@ -40,7 +40,7 @@ const SOURCE_ALIAS = { '#src/*': ['./src/*', './src/*.ts'] }
  * lands first on the PATH inside `bun run`, shadowing the bun that runs everything else.
  */
 export const BUNFIG =
-    '# 38.122 — a peer is not installed: an installed `bun` would shadow this one inside `bun run`.\n[install]\npeer = false\n\n# 38.43, 38.131 — the plugin that builds the stylesheet `src/lib/app.css` opens.\n[serve.static]\nplugins = ["bun-plugin-tailwind"]\n\n# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n\n# What `bun fmt` and `abide format` print.\n[fmt]\ntabWidth = 4\nsemi = false\nsingleQuote = true\nsortImports = true\n'
+    '# 38.122 — no peers: an installed `bun` would shadow this one in `bun run`.\n[install]\npeer = false\n\n# 38.43, 38.131 — the plugin building the stylesheet `src/lib/app.css` opens.\n[serve.static]\nplugins = ["bun-plugin-tailwind"]\n\n# 38.109, 38.119 — a DOM to measure in, then the `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n\n# What `bun fmt` and `abide format` print.\n[fmt]\ntabWidth = 4\nsemi = false\nsingleQuote = true\nsortImports = true\n'
 
 // WRITTEN, NOT COPIED, beside the manifests: a packer drops a `bunfig.toml` or a `.gitignore` from
 // the tarball (`bun pm pack` both, `npm pack` the second), so neither survives as a starter file —
