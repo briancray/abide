@@ -1,13 +1,23 @@
 import { expect, test } from 'bun:test'
 
-import moveDeal from '../moveDeal.handler.ts'
+import { flushSync } from '@abide/abide'
+import { mount } from '@abide/harness/abide'
 
-test('a closed deal is refused by name, with its stage as data', async () => {
-    try {
-        await moveDeal({ id: 'd3', stage: 'lead' })
-        throw new Error('expected a refusal')
-    } catch (error) {
-        if (!moveDeal.isError(error, 'DealClosed')) throw error
-        expect(error.data).toEqual({ stage: 'won' })
-    }
+import DealStage from './DealStage.abide'
+
+function press(label: string) {
+    for (const button of document.querySelectorAll('button'))
+        if (button.textContent === label) button.click()
+    flushSync()
+}
+
+test('a closed deal is refused by name, and the page says why', async () => {
+    using _stage = await mount(DealStage({}))
+    press('d3')
+    await Bun.sleep(400)
+    press('lead')
+    await Bun.sleep(50)
+    expect(document.querySelector('.status')?.textContent).toBe(
+        'Already won: A closed deal does not move.',
+    )
 })

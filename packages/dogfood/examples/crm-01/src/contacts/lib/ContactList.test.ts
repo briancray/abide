@@ -1,10 +1,17 @@
 import { expect, test } from 'bun:test'
 
-import listContacts from '../listContacts.handler.ts'
+import { mount } from '@abide/harness/abide'
 
-test('the handler the list reads answers with every contact', async () => {
-    const contacts = await listContacts()
-    expect(contacts.map((contact) => contact.name)).toEqual([
+import ContactList from './ContactList.abide'
+
+const names = () =>
+    [...document.querySelectorAll('strong')].map((name) => name.textContent)
+
+test('the list is empty until the handler answers, then fills in', async () => {
+    using _list = await mount(ContactList({}))
+    expect(names()).toEqual([])
+    await Bun.sleep(500)
+    expect(names()).toEqual([
         'Ada Lovelace',
         'Grace Hopper',
         'Katherine Johnson',
