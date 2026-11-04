@@ -16,8 +16,9 @@ export type SitePage = {
     /** Title and intent decided, prose not written. */
     stub?: boolean
     /**
-     * 40.35, 40.36 — a teaching page with no card: what it teaches is done by a `command` run in a terminal,
-     * or decided by the `deployment` an app is served from, and no component running on it can show it.
+     * 40.35, 40.36 — a teaching page with no card at all: what it teaches is done by a `command` run in a
+     * terminal, or decided by the `deployment` an app is served from, and no component running on it can
+     * show it. A section with no card on a page that has one is marked by nothing.
      */
     cardless?: 'command' | 'deployment'
 }

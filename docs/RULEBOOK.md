@@ -2973,7 +2973,8 @@ NOT be answered by a fixture.
 
 40.16 Instrumentation the documentation adds to an `<Example>` MUST sit outside the render.
 
-40.17 A page MUST embed one `<Example>` per behavior it teaches, save a page 40.35 exempts.
+40.17 A page MUST embed one `<Example>` per behavior it teaches, save a page or a section 40.35
+exempts.
 
 40.18 An `<Example>` MUST demonstrate exactly one behavior.
 
@@ -3019,11 +3020,11 @@ about.
 40.34 The documentation site MUST serve `docs/RULEBOOK.md` at `/rulebook`, read from the file as the
 site builds, with each clause and each group anchored by its own number.
 
-40.35 A page whose every behavior is performed by a command, or decided by the deployment an app is
-served from, MAY embed no `<Example>`.
+40.35 A page, or a section of one, whose every behavior is performed by a command, or decided by the
+deployment an app is served from, MAY embed no `<Example>`.
 
-40.36 A page embedding no `<Example>` under 40.35 MUST name which of the two in its `SITE` entry's
-`cardless`.
+40.36 A page embedding no `<Example>` at all under 40.35 MUST name which of the two in its `SITE`
+entry's `cardless`.
 
 40.37 The documentation site MUST serve each chapter's feature directory at the address the chapter
 app serves it at, with none of the site's chrome around its pages.

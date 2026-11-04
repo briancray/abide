@@ -319,7 +319,8 @@ test("every card on a chapter names that chapter's own app", async () => {
 
 // 40.17, 40.35, 40.36 — A TEACHING PAGE RUNS WHAT IT TEACHES, or its `SITE` entry says why nothing can: a
 // command run in a terminal, or a deployment's setting. An overview routes (40.11) and a reference
-// page is generated (40.42), so neither is held to it. A `cardless` page that grew a card is a stale mark.
+// page is generated (40.42), so neither is held to it. A `cardless` page that grew a card is a stale mark,
+// and a section with no card on a page that has one is no page this reads.
 // THE REVERT: drop the card from `/pages/add-a-page`, and the page is named.
 test('every teaching page embeds an example, or is marked cardless', async () => {
     const overviews = new Set<string>()
