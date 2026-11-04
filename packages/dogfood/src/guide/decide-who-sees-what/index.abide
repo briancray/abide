@@ -397,8 +397,10 @@ import Snippet from '#src/lib/Snippet.abide'
             refuses it before a request is made. The docs app serves this page under the same
             baseline.</p>
 
-        <p>Name a directive to replace it, such as <code>{`csp({ 'img-src': ["'self'", 'https://cdn.example'] })`}</code>
-            for avatars on a CDN. The rest stay the baseline's.</p>
+        <p>Name a directive to replace it, and the rest stay the baseline's. The companies pages
+            frame the CRM's own pages, so the layout lets this site, and no other, frame them:</p>
+
+        <Snippet source={rootLayoutSource} path="src/layout.abide" from={['middleware(csp(']} />
 
         <p>An inline script of your own reads <code>csp.nonce()</code>, the nonce this response
             carries. The account page starts an analytics queue that way:</p>
