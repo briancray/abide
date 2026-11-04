@@ -24,7 +24,6 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
 import listDealsSource from 'crm-03/src/deals/listDeals.handler.ts' with { type: 'text' }
 import moveDealSource from 'crm-03/src/deals/moveDeal.handler.ts' with { type: 'text' }
 
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
@@ -33,7 +32,7 @@ import Section from '#src/lib/Section.abide'
 <Doc>
     <p>Every server call in this chapter is a handler: a function wrapped in <code>GET</code>,
         <code>POST</code>, <code>PATCH</code> or one of their siblings. A page imports it and calls it
-        like any function. There is no route table, no <code>fetch</code> and no client to keep in step
+        like any function. There is no route to register, no <code>fetch</code> and no client to keep in step
         with the server.</p>
 
     <Section title="A handler file answers at its own path">
@@ -81,11 +80,49 @@ import Section from '#src/lib/Section.abide'
             the page reads <code>deal.name</code> by name and the probes are on the result.</p>
 
         <p>Reading <code>deal</code> starts the load. The page renders with a hole where each
-            field goes, and the holes fill when the deal lands. A read outside the markup, in a click
-            handler, throws <code>NotLanded</code> until then.</p>
+            field goes, and the holes fill when the deal lands.</p>
 
         <p>The <code>description</code> is the sentence every surface shows for the handler:
             OpenAPI, MCP and the CLI. <code>refuse(404)</code> answers a deal that does not exist.</p>
+    </Section>
+
+    <Section title="A refresh keeps the figures on screen">
+        <Example
+            id="crm-03-pipeline"
+            app="crm-03"
+            title="`busy()` and `ready()` — a first load and a refresh, told apart"
+            summary="The pipeline's total. Wait for it, then press Refresh: the old figure stays until the new one lands."
+            files={{
+                'src/deals/lib/Pipeline.abide': pipelineSource,
+                'src/deals/listDeals.handler.ts': listDealsSource,
+                'src/deals/lib/Pipeline.test.ts': pipelineTestSource,
+            }}
+        >
+            <Pipeline />
+        </Example>
+
+        <p>A first load is <code>busy()</code> with nothing <code>ready()</code>. A refresh is
+            <code>busy()</code> and still <code>ready()</code>, so the tile keeps the figure it has
+            while the new one loads. One loading flag cannot tell the two apart, and blanks the page on
+            every refresh. <code>refresh(deals)</code> loads the value again, and
+            <a href={url('/guide/keep-it-current')}>Keep it current</a> is the chapter on reloading.</p>
+
+        <table>
+            <thead><tr><th>Probe</th><th>Answers</th></tr></thead>
+            <tbody>
+                <tr><td><code>s.busy</code></td><td>whether work is in flight for the value</td></tr>
+                <tr><td><code>s.ready</code></td><td>whether there is a value to show</td></tr>
+                <tr><td><code>s.error</code></td><td>the standing failure, handed back rather than thrown</td></tr>
+                <tr><td><code>busy</code></td><td>whether anything in a selection is in flight: an app-wide progress bar</td></tr>
+                <tr><td><code>ready</code></td><td>whether everything in a selection has a value</td></tr>
+            </tbody>
+        </table>
+
+        <p>A probe never throws and never starts a load, so it is safe to read before anything has
+            landed. A read of the value itself outside the markup, in a click handler, throws
+            <code>NotLanded</code> until it lands. The value is also a promise, for a handler or a test: <code>await deals</code>
+            waits for it, and <code>s.then</code>, <code>s.catch</code> and <code>s.finally</code> reach the same
+            settling.</p>
     </Section>
 
     <Section title="A handler only one file calls stays in that file">
@@ -104,7 +141,7 @@ import Section from '#src/lib/Section.abide'
 
         <p>A <code>&lt;script server&gt;</code> runs on the server alone. It declares
             <code>getNotes</code> as a <code>const</code>, and the same file's script and markup call it
-            by name. A <code>.abide</code> exports nothing, so no other file can reach it.</p>
+            by name. A <code>.abide</code> exports nothing, so no other file can import it.</p>
 
         <p>It still answers over http, below <code>/__abide/handlers</code> at its file's path and
             then its name. That address is listed on no surface, and the test calls it to show it is
@@ -125,7 +162,7 @@ import Section from '#src/lib/Section.abide'
 
         <p><code>POST</code> / <code>PUT</code> / <code>PATCH</code> / <code>DELETE</code> each take
             what <code>GET</code> takes and are called the way it is. The page never names the method;
-            the declaration carries it. A <code>GET</code> must not write, because a link on another
+            the handler carries it. A <code>GET</code> must not write, because a link on another
             site can reach it with your user's cookie attached.</p>
     </Section>
 
@@ -149,8 +186,8 @@ import Section from '#src/lib/Section.abide'
             <code>Issues&lt;T&gt;</code>: the messages, keyed by the field's path. The card lists each
             field with its first message, and <code>issues.company</code> is the company's.</p>
 
-        <p>Two presses of Add inside one flight send one request and write one deal, and both get
-            its answer.</p>
+        <p><code>amount</code> starts as a number, so its field binds as one and the handler is
+            handed a number.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -194,15 +231,20 @@ import Section from '#src/lib/Section.abide'
             schema. <code>s.isError</code> is the same check on any reactive value, for a refusal the
             page made itself.</p>
 
-        <p><code>refuse(status)</code> is for where the status is the whole answer. It has no name a
-            caller can narrow to.</p>
+        <p><code>refuse(status)</code> is for where the status is the whole answer. Every one is
+            named <code>HttpError</code>, so <code>moveDeal.isError(error, 'HttpError')</code> narrows to
+            it, and the status is the only thing a caller can tell apart.</p>
+
+        <p>A move that lands writes the server's answer over <code>deal</code>, a derived value, so
+            the page shows the new stage without loading the deal again. The write stands until the
+            body reruns, when <code>id</code> changes.</p>
 
         <table>
             <thead><tr><th>abide's own refusal</th><th>Status</th><th>When</th></tr></thead>
             <tbody>
                 <tr><td><code>notFound</code></td><td>404</td><td>nothing answers the address, with the path and method as data</td></tr>
                 <tr><td><code>validationError</code></td><td>422</td><td>a schema or an <code>args</code> gate refused, with the issues as data</td></tr>
-                <tr><td><code>aborted</code></td><td>499</td><td>every caller waiting on a load passed a <code>signal</code>, and every one aborted</td></tr>
+                <tr><td><code>aborted</code></td><td>499</td><td>every caller waiting on a load passed a <code>signal</code> and every one aborted, or the client left</td></tr>
             </tbody>
         </table>
     </Section>
@@ -260,54 +302,27 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="`abide routes` prints every address">
-        <Code code={`abide routes
-GET    /deals                       deals/index.abide
-POST   /deals/createDeal            deals/createDeal.handler.ts
-GET    /deals/exportDeals           deals/exportDeals.handler.ts
-GET    /deals/getDeal               deals/getDeal.handler.ts
-GET    /deals/listDeals             deals/listDeals.handler.ts
-PATCH  /deals/moveDeal              deals/moveDeal.handler.ts`} />
-
         <p><code>abide routes [--json]</code> prints each address, its method and the file
             answering it, with every private handler marked <code>(private)</code>. With
-            <code>--json</code> it prints the same as one document.</p>
-    </Section>
-
-    <Section title="A refresh keeps the figures on screen">
-        <Example
-            id="crm-03-pipeline"
-            app="crm-03"
-            title="`busy()` and `ready()` — a first load and a refresh, told apart"
-            summary="The pipeline's total. Wait for it, add a deal, then press Refresh: the old figure stays until the new one lands."
-            files={{
-                'src/deals/lib/Pipeline.abide': pipelineSource,
-                'src/deals/listDeals.handler.ts': listDealsSource,
-                'src/deals/lib/Pipeline.test.ts': pipelineTestSource,
-            }}
-        >
-            <Pipeline />
-        </Example>
-
-        <p>A first load is <code>busy()</code> with nothing <code>ready()</code>. A refresh is
-            <code>busy()</code> and still <code>ready()</code>, so the tile keeps the figure it has
-            while the new one loads. One loading flag cannot tell the two apart, and blanks the page on
-            every refresh.</p>
+            <code>--json</code> it prints the same as one document. In the CRM as this chapter
+            leaves it, <code>bun run routes</code> prints:</p>
 
         <table>
-            <thead><tr><th>Probe</th><th>Answers</th></tr></thead>
+            <thead><tr><th>Method</th><th>Address</th><th>File below <code>src</code></th></tr></thead>
             <tbody>
-                <tr><td><code>s.busy</code></td><td>whether work is in flight for the value</td></tr>
-                <tr><td><code>s.ready</code></td><td>whether there is a value to show</td></tr>
-                <tr><td><code>s.error</code></td><td>the standing failure, handed back rather than thrown</td></tr>
-                <tr><td><code>busy</code></td><td>whether anything in a selection is in flight: an app-wide progress bar</td></tr>
-                <tr><td><code>ready</code></td><td>whether everything in a selection has a value</td></tr>
+                <tr><td><code>GET</code></td><td><code>/</code></td><td><code>index.abide</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/__abide/handlers/deals/lib/DealNotes/getNotes</code></td><td><code>deals/lib/DealNotes.abide</code> <code>(private)</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/contacts</code></td><td><code>contacts/index.abide</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/contacts/listContacts</code></td><td><code>contacts/listContacts.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/deals</code></td><td><code>deals/index.abide</code></td></tr>
+                <tr><td><code>POST</code></td><td><code>/deals/createDeal</code></td><td><code>deals/createDeal.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/deals/exportDeals</code></td><td><code>deals/exportDeals.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/deals/getDeal</code></td><td><code>deals/getDeal.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/deals/listDeals</code></td><td><code>deals/listDeals.handler.ts</code></td></tr>
+                <tr><td><code>PATCH</code></td><td><code>/deals/moveDeal</code></td><td><code>deals/moveDeal.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/profile</code></td><td><code>profile/index.abide</code></td></tr>
             </tbody>
         </table>
-
-        <p>A probe never throws and never starts a load, so it is safe to read before anything has
-            landed. The value is also a promise, for a handler or a test: <code>await deals</code>
-            waits for it, and <code>s.then</code>, <code>s.catch</code> and <code>s.finally</code> reach the same
-            settling.</p>
     </Section>
 
     <Section title="Next">
