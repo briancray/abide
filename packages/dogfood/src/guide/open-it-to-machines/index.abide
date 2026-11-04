@@ -192,7 +192,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>Toolbox</code></td><td>What a provider is handed: <code>list</code> of the tools, and <code>call</code> to run one as the asker.</td></tr>
                 <tr><td><code>ToolAnswer</code></td><td>What <code>call</code> answers: its <code>content</code>, the same pieces as a turn — the tool's text, or the image a handler drew, which the model is shown as a picture — and whether it failed.</td></tr>
                 <tr><td><code>ToolDefinition</code></td><td>One tool in <code>list</code>: its name, description and input schema.</td></tr>
-                <tr><td><code>abide:assistant</code></td><td>The log namespace that writes one <code>debug</code> line per conversation once it ends: the stop reason, the transcript's length, the tool calls, the tokens and the time.</td></tr>
+                <tr><td><code>abide:assistant</code></td><td>The log namespace that writes one <code>debug</code> line per conversation once it ends: the stop reason, the transcript's length, the tool calls, the tokens and the time. A conversation that ended without <code>done</code> is <code>unfinished</code>, then why: <code>aborted</code> when the request was, <code>failed</code> with the provider's message when it threw, or <code>stopped</code> when the page stopped reading.</td></tr>
             </tbody>
         </table>
     </Section>
@@ -253,6 +253,12 @@ import Section from '#src/lib/Section.abide'
 
         <Code code={`bunx @abide/bridge <site> <code> -- --tools WebSearch,WebFetch`} />
 
+        <p><code>bunx @abide/bridge</code> runs <code>abide-bridge &lt;site&gt; &lt;code&gt;</code>.
+            <code>--claude &lt;path&gt;</code> names the Claude Code to run where
+            <code>claude</code> is not on the <code>PATH</code>, and each
+            <code>--env NAME=VALUE</code> sets a variable for it, such as a proxy or an API key of
+            the visitor's own.</p>
+
         <p>Pass the same <code>tools</code> to <code>claudeCode.bridge</code> or
             <code>claudeCode.bridgeCommand</code> and the command it mints carries that grant, so a
             visitor who runs it as shown gives the tools. One minted without them grants none.</p>
@@ -267,10 +273,17 @@ import Section from '#src/lib/Section.abide'
         <Code code={`bunx @abide/bridge install`} />
 
         <p>That builds a small app under their own Application Support folder, nowhere in
-            Applications, and registers it for the scheme. Opening a link asks them every time, naming
-            the site, the tools and the bridge release it asks for, and then runs that release, as
-            the command would. A link only proves the site minted its code, never that this visitor
-            asked for it, so no answer is kept for a site. <code>bunx @abide/bridge uninstall</code> takes it away.</p>
+            Applications, and registers it for the scheme. <code>abide-bridge install</code> takes
+            the same <code>--claude</code>, <code>--env</code> and options after <code>--</code> as
+            the command, and keeps them: every link it opens runs Claude Code with them, and no link
+            can set either. Opening a link asks them every time, naming the site, the tools and the
+            bridge release it asks for, and the options and variable names install kept, and then
+            runs that release, as the command would. A link only proves the site minted its code,
+            never that this visitor asked for it, so no answer is kept for a site.
+            <code>abide-bridge uninstall</code> takes away everything install wrote.</p>
+
+        <p>A bridge that loses the site says so once, and not again until the site takes a report.
+            A turn whose report the site did not take is ended, and reported failed.</p>
 
         <p>The tools the conversation calls run as the visitor, on the sign-in their ask carried,
             so a tool reads <code>principal</code> as any handler does. The pairing belongs to that
