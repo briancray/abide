@@ -5,13 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { GET } from '#server'
-import {
-    answerBridge,
-    mintCode,
-    openTurn,
-    pairedBridge,
-    type TurnItem,
-} from '#server/bridgeRelay.ts'
+import { answerBridge, mintCode, runTurn } from '#server/bridgeRelay.ts'
 import { config } from '#server/config.ts'
 import type { BootedApp } from '#server/createApp.ts'
 
@@ -60,6 +54,22 @@ function standIn(sent: number) {
     }
 }
 
+/** The `data:` frames an event stream carries, parsed, as they land. */
+async function* framesOf(answer: Response): AsyncGenerator<unknown> {
+    let buffered = ''
+    for await (const chunk of answer.body as ReadableStream<Uint8Array>) {
+        buffered += new TextDecoder().decode(chunk)
+        let newline = buffered.indexOf('\n')
+        while (newline !== -1) {
+            const line = buffered.slice(0, newline)
+            buffered = buffered.slice(newline + 1)
+            if (line.startsWith('data: '))
+                yield JSON.parse(line.slice('data: '.length))
+            newline = buffered.indexOf('\n')
+        }
+    }
+}
+
 const subscribe = (id: number) =>
     JSON.stringify({ op: 'sub', id, address: '/shelf/book', args: { id } })
 
@@ -90,34 +100,45 @@ test('an MCP body over ABIDE_MAX_REQUEST_BODY_SIZE is refused 413 — 16.78', as
 // relay with its first line already in the turn.
 test('the bridge relay bounds its body and refuses a line that is not JSON whole — 16.78, 44.23', async () => {
     const { code } = mintCode('bounds', SIGNED_OUT)
-    await answerBridge(
+    const paired = (await answerBridge(
         new Request(`http://app.test/__abide/bridge?code=${code}`),
-    )
-    const bridge = pairedBridge('bounds', SIGNED_OUT)
-    if (bridge === undefined) throw new Error('the bridge did not pair')
-    const turn = openTurn(bridge)
+    )) as Response
+    const frames = framesOf(paired)
+    const { token } = (await frames.next()).value as { token: string }
+    const turn = runTurn({
+        caller: 'bounds',
+        signedIn: SIGNED_OUT,
+        prompt: [],
+        config: {},
+        maxTurns: 1,
+        answer: async () => undefined,
+        signal: new AbortController().signal,
+    })
+    const heard = turn.next()
+    const { id } = (await frames.next()).value as { id: string }
     const post = (body: string) =>
         answerBridge(
             new Request('http://app.test/__abide/bridge', {
                 method: 'POST',
-                headers: { authorization: `Bearer ${bridge.token}` },
+                headers: { authorization: `Bearer ${token}` },
                 body,
             }),
         ) as Promise<Response>
-    const event = JSON.stringify({ type: 'event', turn: turn.id, event: 1 })
+    const event = JSON.stringify({ type: 'event', turn: id, event: 1 })
     let malformed: number | string
     try {
         malformed = (await post(`${event}\n{not json\n`)).status
     } catch {
         malformed = 'threw'
     }
-    turn.inbox.close()
-    const relayed: TurnItem[] = []
-    for await (const item of turn.inbox) relayed.push(item)
+    await post(JSON.stringify({ type: 'end', turn: id }))
+    // The turn's first answer is its end, unless the malformed post's event got through.
+    const relayed = (await heard).done ? 0 : 1
     await withSetting('ABIDE_MAX_REQUEST_BODY_SIZE', '16')
     const oversized = (await post(event)).status
-    turn.close()
-    expect({ malformed, relayed: relayed.length, oversized }).toEqual({
+    await turn.return(undefined)
+    await frames.return(undefined)
+    expect({ malformed, relayed, oversized }).toEqual({
         malformed: 400,
         relayed: 0,
         oversized: 413,

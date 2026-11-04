@@ -12,6 +12,9 @@
 // in there when its code was minted (44.33), for as long as the bridge's stream is open, or
 // resumable. HELD IN THIS PROCESS: an app served by several needs a visitor's requests to reach the
 // one its bridge dialed.
+//
+// Every frame on that stream is written here; what the rest of the server sees is a turn run, a
+// pairing's status as it changes, and a pairing code.
 
 import { isFailed } from '#shared/Failed.ts'
 import { refuse } from '#shared/refuse.ts'
@@ -19,14 +22,17 @@ import { refuse } from '#shared/refuse.ts'
 import { answered } from './answerFailure.ts'
 import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
+import type { AssistantEvent } from './assistant.ts'
 import { Inbox } from './Inbox.ts'
 import { randomToken } from './randomToken.ts'
+import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
+import { onSignInChanged } from './signInChanged.ts'
 
 /**
  * What a turn hears from the bridge, in the order the bridge posted it: an event, an MCP request, the
  * end, or a failure. ONE SHAPE for all four, every field set, since one is built per streamed chunk.
  */
-export type TurnItem = {
+type TurnItem = {
     kind: 'event' | 'mcp' | 'end' | 'fail'
     event: unknown
     id: number
@@ -36,7 +42,7 @@ export type TurnItem = {
 }
 
 /** One paired bridge: what it is sent, and the turns it is answering. */
-export type Bridge = {
+type Bridge = {
     /** The browser and the sign-in it is paired to (`pairingKey`). 44.33. */
     key: string
     token: string
@@ -53,8 +59,6 @@ export type Bridge = {
 const CODE_LIFETIME = 10 * 60_000
 // How long a bridge outlives the last page watching it, so a reload does not end it.
 const IDLE_GRACE = 30_000
-/** How long a pairing whose stream dropped waits to be resumed. 44.26. */
-export const RESUME_MILLISECONDS = 60_000
 
 const CODES = new Map<string, { key: string; expires: number }>()
 const BY_KEY = new Map<string, Bridge>()
@@ -64,6 +68,13 @@ const FOLLOWERS = new Map<
     string,
     Set<(caller: string, signedIn: string) => void>
 >()
+
+// 44.34 — A STATUS STREAM OPENED BEFORE A SIGN-IN carries the cookies it was opened with, so it hears
+// of the new one, or of the caller a sign-out rotated it to (26.9), here rather than off its own
+// request.
+onSignInChanged((caller, now, signedIn) => {
+    for (const follow of FOLLOWERS.get(caller) ?? []) follow(now, signedIn)
+})
 
 /**
  * What a pairing is filed under: the browser, and who was signed in there (`signedInAs`).
@@ -75,7 +86,7 @@ function pairingKey(caller: string, signedIn: string): string {
     return `${caller}\n${signedIn}`
 }
 
-// 44.19 — the relay answers once the app has handed out a pairing command, and never before.
+// 44.19 — the relay answers once the app has handed out a pairing code, and never before.
 let minted = false
 
 /** A single-use pairing code for `caller` signed in as `signedIn`, and when it stops standing. 44.14. */
@@ -93,24 +104,135 @@ export function mintCode(
     return { code, expires }
 }
 
-/** The bridge paired to `caller` signed in as `signedIn`, if its stream is open. 44.33. */
-export function pairedBridge(
-    caller: string,
-    signedIn: string,
-): Bridge | undefined {
-    return BY_KEY.get(pairingKey(caller, signedIn))
+/**
+ * One turn on the bridge paired to `caller` signed in as `signedIn`: sent `prompt` under `config`,
+ * yielding the events its Claude Code reports, each MCP request it makes handed to `answer` and the
+ * reply sent back. 44.13, 44.17, 44.21.
+ */
+export async function* runTurn({
+    caller,
+    signedIn,
+    prompt,
+    config,
+    maxTurns,
+    answer,
+    signal,
+}: {
+    caller: string
+    signedIn: string
+    prompt: unknown[]
+    config: unknown
+    maxTurns: number
+    /** Never rejects: its failure is a reply too. */
+    answer: (method: string, params: unknown) => Promise<unknown>
+    signal: AbortSignal
+}): AsyncGenerator<AssistantEvent> {
+    const bridge = BY_KEY.get(pairingKey(caller, signedIn))
+    // 44.13, 44.33 — nothing paired by this sign-in is the page's cue to show the command.
+    if (bridge === undefined)
+        throw refuse(
+            409,
+            'No Claude Code is paired with this browser as the one signed in. claudeCode.bridgeCommand() is the command that pairs one.',
+        )
+    const turn = randomToken(9, 'base64url')
+    const inbox = new Inbox<TurnItem>()
+    bridge.turns.set(turn, inbox)
+    // `bridge.frames` is read at each push: a resumed stream (44.26) replaces it.
+    bridge.frames.push({ type: 'turn', id: turn, prompt, config, maxTurns })
+    // 44.18 — a caller hanging up ends the run on the bridge.
+    const cancel = (): void => {
+        bridge.frames.push({ type: 'cancel', turn })
+    }
+    signal.addEventListener('abort', cancel)
+    try {
+        for await (const item of inbox) {
+            if (item.kind === 'event') yield item.event as AssistantEvent
+            else if (item.kind === 'mcp')
+                void answer(item.method, item.params).then((reply) => {
+                    bridge.frames.push({
+                        type: 'reply',
+                        turn,
+                        id: item.id,
+                        reply,
+                    })
+                })
+            else if (item.kind === 'end') return
+            else throw refuse(502, `Claude Code failed: ${item.message}`)
+        }
+    } finally {
+        signal.removeEventListener('abort', cancel)
+        bridge.turns.delete(turn)
+        if (!WATCHERS.has(bridge.key)) armIdle(bridge.key)
+    }
 }
 
 /**
- * Registers `wake` to run whenever the pairing of `caller` signed in as `signedIn` changes; the
- * returned function undoes it.
+ * The pairing of `caller` signed in as `signedIn` as it changes, until `signal` aborts: unpaired with
+ * the code that pairs it, then paired the moment a bridge connects, and unpaired again if it goes. A
+ * code that expires while nothing is paired is replaced with a fresh one. 44.20.
+ *
+ * 44.34 — IT FOLLOWS WHOEVER SIGNS IN AT THE BROWSER: a sign-in or a sign-out made since is the
+ * pairing it watches from then on, and the code it offers is that sign-in's.
  */
-export function watchPairing(
+export async function* pairingStatus(
     caller: string,
     signedIn: string,
-    wake: () => void,
-): () => void {
-    const key = pairingKey(caller, signedIn)
+    signal: AbortSignal,
+): AsyncGenerator<{ paired: boolean; code: string | undefined }> {
+    // A change landing while the loop was not waiting — paused at its `yield` — stays queued, so it
+    // looks again; a look that finds nothing new yields nothing.
+    const changes = new Inbox<undefined>()
+    const waiting = changes[Symbol.asyncIterator]()
+    const rouse = (): void => changes.push(undefined)
+    const follow = (now: string, next: string): void => {
+        caller = now
+        signedIn = next
+        rouse()
+    }
+    let watchingKey = ''
+    let unwatch = (): void => {}
+    let unfollow = (): void => {}
+    let pairing: { code: string; expires: number } | undefined
+    let said: string | undefined
+    signal.addEventListener('abort', rouse)
+    try {
+        while (!signal.aborted) {
+            const key = pairingKey(caller, signedIn)
+            if (key !== watchingKey) {
+                unwatch()
+                unfollow()
+                unwatch = watchPairing(key, rouse)
+                unfollow = followSignIn(caller, follow)
+                watchingKey = key
+                pairing = undefined
+            }
+            const paired = BY_KEY.has(key)
+            if (
+                !paired &&
+                (pairing === undefined || pairing.expires <= Date.now())
+            )
+                pairing = mintCode(caller, signedIn)
+            const code = paired ? undefined : pairing?.code
+            // A code is never empty, so `''` says paired.
+            if ((code ?? '') !== said) {
+                said = code ?? ''
+                yield { paired, code }
+            }
+            const renew = paired
+                ? undefined
+                : setTimeout(rouse, (pairing?.expires ?? 0) - Date.now())
+            await waiting.next()
+            clearTimeout(renew)
+        }
+    } finally {
+        signal.removeEventListener('abort', rouse)
+        unwatch()
+        unfollow()
+    }
+}
+
+/** Registers `wake` to run whenever the pairing filed under `key` changes; the returned function undoes it. */
+function watchPairing(key: string, wake: () => void): () => void {
     let watchers = WATCHERS.get(key)
     if (watchers === undefined) {
         watchers = new Set()
@@ -131,22 +253,20 @@ export function watchPairing(
     }
 }
 
-/** A new turn on `bridge`, the inbox its events arrive in, and the undo that closes it. */
-export function openTurn(bridge: Bridge): {
-    id: string
-    inbox: Inbox<TurnItem>
-    close: () => void
-} {
-    const id = randomToken(9, 'base64url')
-    const inbox = new Inbox<TurnItem>()
-    bridge.turns.set(id, inbox)
-    return {
-        id,
-        inbox,
-        close: () => {
-            bridge.turns.delete(id)
-            if (!WATCHERS.has(bridge.key)) armIdle(bridge.key)
-        },
+/** Registers `follow` to hear who signs in at `caller` from here on; the returned function undoes it. */
+function followSignIn(
+    caller: string,
+    follow: (caller: string, signedIn: string) => void,
+): () => void {
+    let followers = FOLLOWERS.get(caller)
+    if (followers === undefined) {
+        followers = new Set()
+        FOLLOWERS.set(caller, followers)
+    }
+    followers.add(follow)
+    return () => {
+        followers.delete(follow)
+        if (followers.size === 0) FOLLOWERS.delete(caller)
     }
 }
 
@@ -169,38 +289,6 @@ function armIdle(key: string): void {
 
 function wakeWatchers(key: string): void {
     for (const wake of WATCHERS.get(key) ?? []) wake()
-}
-
-/**
- * Registers `follow` to hear who signs in at `caller` from here on, and the caller a sign-out rotates
- * it to (26.9); the returned function undoes it.
- *
- * 44.34 — A STATUS STREAM OPENED BEFORE A SIGN-IN carries the cookies it was opened with, so it hears
- * of the new one here rather than off its own request.
- */
-export function followSignIn(
-    caller: string,
-    follow: (caller: string, signedIn: string) => void,
-): () => void {
-    let followers = FOLLOWERS.get(caller)
-    if (followers === undefined) {
-        followers = new Set()
-        FOLLOWERS.set(caller, followers)
-    }
-    followers.add(follow)
-    return () => {
-        followers.delete(follow)
-        if (followers.size === 0) FOLLOWERS.delete(caller)
-    }
-}
-
-/** Tells every status stream at `caller` that the browser is `now`, signed in as `signedIn`. 44.34. */
-export function signedInAt(
-    caller: string,
-    now: string,
-    signedIn: string,
-): void {
-    for (const follow of FOLLOWERS.get(caller) ?? []) follow(now, signedIn)
 }
 
 function item(

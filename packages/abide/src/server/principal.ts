@@ -19,11 +19,11 @@ import { refuse } from '#shared/refuse.ts'
 import { declare } from '#shared/rpc.ts'
 
 import { mountedOwn } from './answerRpc.ts'
-import { signedInAt } from './bridgeRelay.ts'
 import { callerOf, callerOrMint, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
 import { HOOKS, inOrder } from './hooks.ts'
 import { type RequestScope, type Sealed, within } from './requestScope.ts'
+import { signInChanged } from './signInChanged.ts'
 
 // 26.18.
 const PRINCIPAL_COOKIE = 'abide-principal'
@@ -268,7 +268,7 @@ async function set(claims: Record<string, unknown>): Promise<void> {
     // 44.34 — a status stream opened before this sign-in follows it.
     const caller = callerOf()
     if (caller !== undefined)
-        signedInAt(caller, caller, identityOf(scope.opened))
+        signInChanged(caller, caller, identityOf(scope.opened))
     principalMembers().document.set(await resolved)
     PRINCIPAL_LOG.debug('set')
 }
@@ -288,7 +288,8 @@ function clear(): void {
     scope.principal = Promise.resolve(ANONYMOUS)
     scope.opened = null
     // 44.34 — and one opened before this sign-out follows it to the caller it rotated to.
-    if (signedOut !== undefined) signedInAt(signedOut, minted, identityOf(null))
+    if (signedOut !== undefined)
+        signInChanged(signedOut, minted, identityOf(null))
     principalMembers().document.set(ANONYMOUS)
     principalMembers().caller.set(minted)
     PRINCIPAL_LOG.debug('clear')
