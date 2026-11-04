@@ -323,9 +323,9 @@ test('a call in process is held to the annotation as the wire holds it — 15.8,
 // 15.8, 19.25 — AN `undefined` MEMBER IS AN ABSENT ONE, in process as on the wire: a URL omits it
 // (30.28) and JSON drops it, so a `?:` member and a `| undefined` one, at the top of the args or inside
 // a record a body carries, are answered as the wire answers them, and a required member left
-// `undefined` is refused as the wire refuses it. THE REVERT: hand `validateJson` the args as given in
-// `derivedArgs`; the wire still answers, and each of the first three calls in process is refused 422
-// `must be string, was undefined`.
+// `undefined` is refused as the wire refuses it. THE REVERT: `holds` in `validateJson` answering
+// `Object.hasOwn(value, key)` alone; the wire still answers, and each of the first three calls in
+// process is refused 422 `must be string, was undefined`.
 test('an undefined member is held as the wire holds it, absent — 15.8, 19.25, 30.28', async () => {
     const wired = async (
         method: 'GET' | 'POST',

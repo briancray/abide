@@ -486,6 +486,17 @@ function checkArray(
         check(items, value[index], join(path, String(index)), found)
 }
 
+/**
+ * Whether `value` carries `key` as JSON would: an own member, and not one left `undefined`.
+ *
+ * 19.25 — `undefined` IS NOT A JSON VALUE, so a member holding it is the member the wire leaves out:
+ * JSON drops it and a URL omits it (30.28). Read as present, `note?: string` refused a call in process
+ * passing `note: undefined` at 422 that the same call over the wire was answered for.
+ */
+function holds(value: Record<string, unknown>, key: string): boolean {
+    return value[key] !== undefined && Object.hasOwn(value, key)
+}
+
 function checkObject(
     node: Node,
     value: Record<string, unknown>,
@@ -504,7 +515,7 @@ function checkObject(
             // `required: ['toString']` was satisfied by `{}`, and — the one that matters —
             // `'__proto__' in declared` answered true, so `additionalProperties: false` accepted
             // `{"__proto__": …}` as a declared member and handed the object on unchecked.
-            if (!Object.hasOwn(value, key))
+            if (!holds(value, key))
                 noteOr(found, join(path, key), 'is required')
         }
     }
@@ -515,7 +526,7 @@ function checkObject(
             if (!Object.hasOwn(declared, key)) continue
             // An absent member is `required`'s business, not its schema's — checking it
             // here would report every optional member as the wrong type.
-            if (!Object.hasOwn(value, key)) continue
+            if (!holds(value, key)) continue
             check(
                 declared[key] as JsonValue,
                 value[key],
@@ -527,7 +538,7 @@ function checkObject(
     const extra = node.additionalProperties
     if (extra === undefined) return
     for (const key in value) {
-        if (!Object.hasOwn(value, key)) continue
+        if (!holds(value, key)) continue
         if (declared !== null && Object.hasOwn(declared, key)) continue
         if (extra === false) {
             noteOr(found, join(path, key), 'is not a known member')
