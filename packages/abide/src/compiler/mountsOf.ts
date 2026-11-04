@@ -14,9 +14,9 @@ import { dirname, relative, resolve } from 'node:path' // bun exposes no path he
 import { appFiles } from '#server/appTree.ts'
 import { placeOf } from '#server/placement.ts'
 
+import { Diagnostics } from './Diagnostics.ts'
 import { nearest } from './nearest.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
-import { Refusals } from './Refusals.ts'
 import { attributedImports } from './splitImports.ts'
 
 /** A `.abide` on disk, and the position it takes in the app. */
@@ -49,7 +49,7 @@ export function mountsOf(
     path: string,
     position: string,
     file: AbideFile,
-    refusals: Refusals,
+    refusals: Diagnostics,
 ): DirectoryMount[] {
     const mounts: DirectoryMount[] = []
     const at = position.includes('/')
@@ -78,7 +78,7 @@ export function mountsOf(
                 return []
             }
             // The package's tree is the package's to refuse; a mount places what it finds.
-            const found = appFiles(directory, new Refusals(directory, true))
+            const found = appFiles(directory, new Diagnostics(directory, true))
             const placed = (below: string): Placed => ({
                 path: `${directory}/${below}`,
                 position: `${at}${below}`,

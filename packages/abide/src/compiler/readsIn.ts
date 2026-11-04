@@ -45,7 +45,7 @@ import {
     type Read,
     TRANSPARENT,
 } from './classifyRead.ts'
-import type { Finding } from './Finding.ts'
+import type { Finding } from './Diagnostics.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
     holdsReactive,

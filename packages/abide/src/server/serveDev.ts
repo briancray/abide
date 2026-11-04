@@ -21,7 +21,7 @@
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 
 import { compilationOf, compileApp } from '#compiler/compileApp.ts'
-import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
+import { printDiagnoses } from '#compiler/Diagnostics.ts'
 import { KeptChecker } from '#compiler/KeptChecker.ts'
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 
@@ -123,8 +123,7 @@ export async function serveDev(
                 compileApp(options.root, live),
             )
             // 14 and 32.14 — what the compiler has to say, on every compile.
-            for (const warning of compiled.warnings)
-                console.warn(formatDiagnosis(warning, process.cwd()))
+            printDiagnoses(compiled.warnings, console.warn)
             watchDependencies(compiled.files)
             return {
                 compilation: compilationOf(compiled),

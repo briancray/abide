@@ -12,7 +12,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { checkApp, checkSource } from '#compiler/checkApp.ts'
 import { type AppChecker, openChecker } from '#compiler/compileApp.ts'
-import type { Diagnosis } from '#compiler/TypeSession.ts'
+import type { Diagnosis } from '#compiler/Diagnostics.ts'
 
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'

@@ -9,7 +9,7 @@ import type {
 } from 'typescript/unstable/async'
 
 import { classifyRead, FUNCTIONS } from './classifyRead.ts'
-import type { Finding } from './Finding.ts'
+import type { Finding } from './Diagnostics.ts'
 import type { Span } from './projectShadow.ts'
 
 // 34.18 — A PLAIN `let` IN A `<script module>` THAT A `<script>` WRITES AS IT SETS UP. The block is

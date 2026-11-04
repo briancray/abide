@@ -1,8 +1,8 @@
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
 import { isComponentTag } from './classifyTemplate.ts'
+import { type Diagnosis, diagnosisAt } from './Diagnostics.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
-import { diagnosisAt } from './lineOf.ts'
 import { Lowering } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
@@ -12,7 +12,6 @@ import {
     type TemplateNode,
     visitBodies,
 } from './TemplateNode.ts'
-import type { Diagnosis } from './TypeSession.ts'
 
 // 32.14 — A `{#for}` WITH NO KEY OVER A BODY THAT HOLDS STATE. Unkeyed, a row is matched to the
 // item at its index, so a reorder hands one row's state — a component's own values, a field's text,

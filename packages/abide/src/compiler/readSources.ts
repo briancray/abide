@@ -1,11 +1,11 @@
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
+import type { Diagnostics } from './Diagnostics.ts'
 import { type AbideFile, parseAbide } from './parseAbide.ts'
-import type { Refusals } from './Refusals.ts'
-import type { Diagnosis, TypeSession } from './TypeSession.ts'
+import type { TypeSession } from './TypeSession.ts'
 
 // EVERY COMPILE OF A `.abide` STARTS THE SAME WAY: the text parsed, then every file read by the
 // checker in one snapshot. `abide build`, `abide check` and an editor's one file differ only in
-// what a refusal does (`Refusals`) — the build stops at it, and a check reports it and goes on with
+// what a refusal does (`Diagnostics`) — the build stops at it, and a check reports it and goes on with
 // the rest.
 
 /** One `.abide`, parsed. `quiet` is read for its props alone and reported on by nobody (33.4). */
@@ -28,7 +28,7 @@ export function parseSources(
         text: string
         quiet?: boolean
     }[],
-    refusals: Refusals,
+    refusals: Diagnostics,
 ): ParsedSource[] {
     const parsed: ParsedSource[] = []
     for (const source of sources) {
@@ -51,37 +51,35 @@ export function parseSources(
 }
 
 /**
- * Each parsed source with the checker's answer, and the compiler's warnings — in one snapshot.
+ * Each parsed source with the checker's answer — in one snapshot — the compiler's warnings kept in
+ * `diagnostics`.
  *
  * ONE SNAPSHOT FOR THE LOT, which is the whole of the compiler's build time (`readsFor`). Where
- * `refusals` collects, a batch that refuses is asked again a file at a time, so which file it was is
- * known and the others still answer; where it throws, so does the batch.
+ * `diagnostics` collects, a batch that refuses is asked again a file at a time, so which file it was
+ * is known and the others still answer; where it throws, so does the batch.
  */
 export async function readSources<Source extends ParsedSource>(
     session: TypeSession,
     parsed: readonly Source[],
-    refusals: Refusals,
-): Promise<{
-    read: ReadSource<Source>[]
-    warnings: Diagnosis[]
-}> {
+    diagnostics: Diagnostics,
+): Promise<ReadSource<Source>[]> {
     try {
         const { answers, warnings } = await session.readsFor(parsed)
-        return { read: answered(parsed, answers), warnings }
+        diagnostics.warn(warnings)
+        return answered(parsed, answers)
     } catch (thrown) {
-        if (!refusals.collecting) throw thrown
+        if (!diagnostics.collecting) throw thrown
     }
     const read: ReadSource<Source>[] = []
-    const warnings: Diagnosis[] = []
     for (const source of parsed)
         try {
             const alone = await session.readsFor([source])
             read.push(...answered([source], alone.answers))
-            warnings.push(...alone.warnings)
+            diagnostics.warn(alone.warnings)
         } catch (thrown) {
-            if (!source.quiet) refusals.at(source.path, thrown)
+            if (!source.quiet) diagnostics.at(source.path, thrown)
         }
-    return { read, warnings }
+    return read
 }
 
 function answered<Source extends ParsedSource>(

@@ -18,8 +18,8 @@ import { parseRoutePattern } from '#shared/routePattern.ts'
 
 import type { PlacedHandler, PlacedSource } from './appLayout.ts'
 import { declaredExports } from './declaredExports.ts'
-import type { Refusals } from './Refusals.ts'
-import type { Diagnosis, TypeSession } from './TypeSession.ts'
+import type { Diagnostics } from './Diagnostics.ts'
+import type { TypeSession } from './TypeSession.ts'
 
 /** A handler file, by its path and its path below the app's root. */
 export type HandlerFile = {
@@ -36,7 +36,7 @@ type Source = Pick<
 >
 
 /**
- * The app's handler mounts, with the warnings the build raised reading them.
+ * The app's handler mounts, the warnings the build raised reading them kept in `diagnostics`.
  *
  * Off one read of the checker. 18.15 — with what the build could not read of a copy's options.
  * 19.1's one owner per route and method is `compileApp`'s, which holds the pages as well.
@@ -48,8 +48,8 @@ export async function handlersUnder(
         PlacedHandler,
         'path' | 'relative' | 'route' | 'scope' | 'matchers'
     >[],
-    refusals: Refusals,
-): Promise<{ mounts: Mount[]; warnings: Diagnosis[] }> {
+    diagnostics: Diagnostics,
+): Promise<Mount[]> {
     const serving: Source[] = []
     for (const source of sources)
         if (source.file.servers.length > 0) serving.push(source)
@@ -75,10 +75,9 @@ export async function handlersUnder(
                   session.tsconfig,
                   paths,
                   named,
-                  refusals,
+                  diagnostics,
               )
     const mounts: Mount[] = []
-    const warnings: Diagnosis[] = []
     const names = new Map<string, string>()
     for (let at = 0; at < files.length; at += 1) {
         const {
@@ -132,9 +131,9 @@ export async function handlersUnder(
                 args: handler.args,
                 result: handler.result,
             })
-            warnings.push(...handler.unread)
+            diagnostics.warn(handler.unread)
         } catch (thrown) {
-            refusals.at(relative, thrown)
+            diagnostics.at(relative, thrown)
         }
     }
     for (let at = 0; at < serving.length; at += 1) {
@@ -164,10 +163,10 @@ export async function handlersUnder(
                 args: each.args,
                 result: each.result,
             })
-            warnings.push(...each.unread)
+            diagnostics.warn(each.unread)
         }
     }
-    return { mounts, warnings }
+    return mounts
 }
 
 /**

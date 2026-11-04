@@ -16,7 +16,7 @@ import {
 } from 'typescript/unstable/ast/is'
 
 import { FUNCTIONS, TRANSPARENT } from './classifyRead.ts'
-import type { Finding } from './Finding.ts'
+import type { Finding } from './Diagnostics.ts'
 import type { PositionKind, PositionTable } from './PositionTable.ts'
 
 // 14.14, 14.15, 14.16 — WHERE A READ STANDS IN A BODY THAT TRACKS, and the three ways it can stand

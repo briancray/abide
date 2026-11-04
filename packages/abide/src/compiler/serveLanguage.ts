@@ -6,14 +6,14 @@ import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 import { checkSource, lowerApp } from './checkApp.ts'
 import { citedClauses } from './citedClauses.ts'
 import type { AppChecker } from './compileApp.ts'
+import { type Diagnosis, formatDiagnosis } from './Diagnostics.ts'
 import { DOCS_SITE } from './DOCS_SITE.ts'
 import { formatAbide } from './formatAbide.ts'
-import { formatDiagnosis } from './formatDiagnosis.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import { KeptChecker } from './KeptChecker.ts'
 import { lineOf, offsetOf } from './lineOf.ts'
 import { nearest } from './nearest.ts'
-import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
+import type { Inspection, Place } from './TypeSession.ts'
 
 // 38.11 — `abide lsp`: THE `.abide` LANGUAGE SERVER, OVER STDIO. It is `abide check` (38.3) asked
 // about one open document at a time, so the squiggle an editor draws and the line CI fails on are

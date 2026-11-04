@@ -1,7 +1,7 @@
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import type { CheckerAnswer } from './CheckerAnswer.ts'
-import type { Finding } from './Finding.ts'
+import type { Finding } from './Diagnostics.ts'
 import { hookCalls } from './hookCalls.ts'
 import {
     CHECKED_CONFIG,

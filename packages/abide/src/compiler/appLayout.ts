@@ -16,16 +16,15 @@ import {
 } from '#shared/routePattern.ts'
 
 import { abideImportsOf, componentGraph } from './componentGraph.ts'
+import { type Diagnosis, Diagnostics } from './Diagnostics.ts'
 import type { HandlerFile } from './handlersUnder.ts'
 import { hookCalls, hooksIn } from './hookCalls.ts'
 import { matchersOf, type MountedTree } from './matchersOf.ts'
 import { mountsOf } from './mountsOf.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { type ParsedSource, parseSources } from './readSources.ts'
-import { Refusals } from './Refusals.ts'
 import { resolverIn } from './resolverIn.ts'
 import { attributedImports } from './splitImports.ts'
-import type { Diagnosis } from './TypeSession.ts'
 
 // THE APP, LAID OUT ONCE PER COMPILE OR CHECK: every `.abide` and handler file it holds — its own, a
 // dependency's it imports, a package's it mounts — each with where it sits and what that makes it
@@ -110,15 +109,15 @@ export type AppLayout = {
  */
 export async function appLayout(root: string): Promise<AppLayout> {
     // COLLECTED, whoever asks: a layout is kept across checks (`AppChecker`), and a build adopts
-    // what it found (`Refusals.adopt`).
-    const refusals = new Refusals(root, true)
+    // what it found (`Diagnostics.adopt`).
+    const refusals = new Diagnostics(root, true)
     const { abide, handlers, params, modules, published } = appFiles(
         root,
         refusals,
     )
     await refuseModuleHooks(root, modules, refusals)
     const resolve = resolverIn()
-    const unparsed = new Refusals(root, true)
+    const unparsed = new Diagnostics(root, true)
     const own = parseSources(
         await textsAt(abide.map((path) => `${root}/${path}`)),
         unparsed,
@@ -209,8 +208,8 @@ export async function appLayout(root: string): Promise<AppLayout> {
         errors,
         published,
         addresses: [...addresses].sort(),
-        refused: refusals.found,
-        unparsed: unparsed.found,
+        refused: refusals.refused,
+        unparsed: unparsed.refused,
         resolve,
     }
 }
@@ -250,9 +249,9 @@ export async function withDependencies(
     parsed: readonly ParsedSource[],
     own: readonly string[],
     resolve: (specifier: string, from: string) => string | undefined,
-    refusals: Refusals,
+    refusals: Diagnostics,
     /** Where what the parser refuses of a file reached here goes, where apart from `refusals`. */
-    unparsed: Refusals = refusals,
+    unparsed: Diagnostics = refusals,
 ): Promise<{
     sources: ParsedSource[]
     handlers: HandlerFile[]
@@ -362,7 +361,7 @@ function refusePlace(
     source: ParsedSource,
     placed: Placement,
     resolve: (specifier: string, from: string) => string | undefined,
-    refusals: Refusals,
+    refusals: Diagnostics,
 ): void {
     const { relative, place, kind } = placed
     if (source.file.servers.length > 0 && place === 'public')
@@ -404,7 +403,7 @@ function refusePlace(
 async function refuseModuleHooks(
     root: string,
     modules: readonly string[],
-    refusals: Refusals,
+    refusals: Diagnostics,
 ): Promise<void> {
     const texts = await textsAt(modules.map((module) => `${root}/${module}`))
     for (let at = 0; at < modules.length; at += 1) {
@@ -428,7 +427,7 @@ async function refuseModuleHooks(
 function refuseStrayLauncher(
     sources: readonly PlacedSource[],
     handlers: readonly PlacedHandler[],
-    refusals: Refusals,
+    refusals: Diagnostics,
 ): void {
     const stray = (relative: string): void =>
         refusals.at(
@@ -457,7 +456,7 @@ function refuseStrayLauncher(
  */
 function routesOf(
     sources: readonly PlacedSource[],
-    refusals: Refusals,
+    refusals: Diagnostics,
 ): { routes: AppRoute[]; errors: AppRoute[] } {
     const layouts: { source: string; segments: Segment[] }[] = []
     const layoutAt = new Map<string, string>()

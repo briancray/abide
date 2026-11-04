@@ -36,9 +36,13 @@ import {
     moduleConfigShadow,
 } from './checkedShadow.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
-import type { Finding } from './Finding.ts'
-import { isIgnored } from './isIgnored.ts'
-import { diagnosisAt, lineOf } from './lineOf.ts'
+import {
+    byPlace,
+    type Diagnosis,
+    type Finding,
+    placedFindings,
+} from './Diagnostics.ts'
+import { lineOf } from './lineOf.ts'
 import { CHECKED_VALUES } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow, type Span } from './projectShadow.ts'
@@ -762,27 +766,14 @@ export class TypeSession {
             )
             answers[at] = read.answer
             suspects[at] = read.suspects
-            const placed: Diagnosis[] = []
-            for (const warning of read.warnings) {
-                const offset = query.map.toSource(
-                    query.map.shadowPath,
-                    warning.at,
-                )
-                if (
-                    source.text === undefined ||
-                    !isIgnored(source.text, offset, warning.message)
-                )
-                    placed.push(
-                        diagnosisAt(
-                            source.path,
-                            source.text,
-                            offset,
-                            'warning',
-                            warning.message,
-                        ),
-                    )
-            }
-            warned[at] = placed
+            warned[at] = placedFindings(
+                source.path,
+                source.text,
+                read.warnings,
+                (offset) => query.map.toSource(query.map.shadowPath, offset),
+                'warning',
+                true,
+            )
         }
         const every = queries.map((_, at) => at)
         const first = project
@@ -938,26 +929,25 @@ export class TypeSession {
                         : source.text
                 const place = (at: number): number =>
                     shadow === undefined ? at : shadow.map.toSource(path, at)
+                const named = source?.path ?? path
+                const ambientReads: Finding[] = []
                 for (const read of reads)
-                    ambient.push(
-                        diagnosisAt(
-                            source?.path ?? path,
-                            text,
-                            place(read.at),
-                            'error',
-                            `abide: a \`global\` value's body reads \`${read.ambient}\`, which belongs to the request it was built in — every later request would be answered with this one's. Take it out of the body, or drop \`global\`. RULEBOOK 11.37.`,
-                        ),
-                    )
-                for (const finding of defaults)
-                    unkeyed.push(
-                        diagnosisAt(
-                            source?.path ?? path,
-                            text,
-                            place(finding.at),
-                            'warning',
-                            finding.message,
-                        ),
-                    )
+                    ambientReads.push({
+                        at: read.at,
+                        message: `abide: a \`global\` value's body reads \`${read.ambient}\`, which belongs to the request it was built in — every later request would be answered with this one's. Take it out of the body, or drop \`global\`. RULEBOOK 11.37.`,
+                    })
+                ambient.push(
+                    ...placedFindings(
+                        named,
+                        text,
+                        ambientReads,
+                        place,
+                        'error',
+                    ),
+                )
+                unkeyed.push(
+                    ...placedFindings(named, text, defaults, place, 'warning'),
+                )
             }),
         )
         ambient.sort(byPlace)
@@ -1091,16 +1081,15 @@ export class TypeSession {
             })
             if (source.quiet) continue
             // A refusal is at a projection offset (`Lowering.refusals`).
-            for (const refusal of refusals)
-                refused.push(
-                    diagnosisAt(
-                        source.path,
-                        source.text,
-                        map.toSource(map.shadowPath, refusal.at),
-                        'error',
-                        refusal.message,
-                    ),
-                )
+            refused.push(
+                ...placedFindings(
+                    source.path,
+                    source.text,
+                    refusals,
+                    (at) => map.toSource(map.shadowPath, at),
+                    'error',
+                ),
+            )
             reports.push(
                 report(map.checkedPath, source.path, (position) =>
                     lineOf(
@@ -1632,20 +1621,6 @@ declare module '*.md' {
 `
 
 /**
- * One thing the checker said, placed in the file the author wrote.
- *
- * 38.3 — line and column from 1.
- */
-export type Diagnosis = {
-    path: string
-    line: number
-    column: number
-    code: number
-    category: 'error' | 'warning' | 'suggestion' | 'message'
-    message: string
-}
-
-/**
  * Where something is in a file the author wrote, line and column from 1.
  *
  * 38.39.
@@ -1800,14 +1775,6 @@ async function describe(
                   : 'var'
     }
     return `${keyword} ${name}: ${spelled}`
-}
-
-function byPlace(one: Diagnosis, two: Diagnosis): number {
-    return (
-        one.path.localeCompare(two.path) ||
-        one.line - two.line ||
-        one.column - two.column
-    )
 }
 
 /** Indexed by the API's `DiagnosticCategory`. */

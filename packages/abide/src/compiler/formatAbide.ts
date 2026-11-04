@@ -2,7 +2,8 @@ import { dirname } from 'node:path' // bun exposes no path helpers of its own
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { diagnosisAt, offsetOf } from './lineOf.ts'
+import { type Diagnosis, diagnosisAt } from './Diagnostics.ts'
+import { offsetOf } from './lineOf.ts'
 import { nearest } from './nearest.ts'
 import {
     type AbideFile,
@@ -13,7 +14,6 @@ import {
 } from './parseAbide.ts'
 import { sameTemplate } from './sameTemplate.ts'
 import { isSpace, slotEnd, tokenize } from './tokenize.ts'
-import type { Diagnosis } from './TypeSession.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 // 38.125, 38.126 — A `.abide` IS FORMATTED AS PIECES, and `bun fmt` formats every piece that is code: a

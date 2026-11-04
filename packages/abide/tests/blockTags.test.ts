@@ -6,9 +6,9 @@
 
 import { expect, test } from 'bun:test'
 
+import { Diagnostics } from '#compiler/Diagnostics.ts'
 import { parseAbide } from '#compiler/parseAbide.ts'
 import { parseSources } from '#compiler/readSources.ts'
-import { Refusals } from '#compiler/Refusals.ts'
 
 const refusalOf = (source: string): string => {
     try {
@@ -65,23 +65,23 @@ test('a well-formed template and a regular expression slot still parse', () => {
         expect(refusalOf(source), source).toBe('parsed')
 })
 
-// THE REVERT: hand `Refusals.at` no text in `parseSources`; the finding lands at line 0.
+// THE REVERT: hand `Diagnostics.at` no text in `parseSources`; the finding lands at line 0.
 test('a block refusal is reported on the line and column of its tag', () => {
-    const refusals = new Refusals('/app', true)
+    const refusals = new Diagnostics('/app', true)
     parseSources(
         [{ path: 'page.abide', text: '<main>\n  <p>{:else}</p>\n</main>' }],
         refusals,
     )
-    const [found] = refusals.found
+    const [found] = refusals.refused
     expect(found?.line).toBe(2)
     expect(found?.column).toBe(6)
     expect(found?.message).toContain('RULEBOOK 32.64')
 
-    const throwing = new Refusals('/app', false)
+    const throwing = new Diagnostics('/app', false)
     expect(refusalOfSink(throwing)).toContain('page.abide:1:1 - error')
 })
 
-const refusalOfSink = (refusals: Refusals): string => {
+const refusalOfSink = (refusals: Diagnostics): string => {
     try {
         parseSources([{ path: '/app/page.abide', text: '{#if a}x' }], refusals)
     } catch (thrown) {

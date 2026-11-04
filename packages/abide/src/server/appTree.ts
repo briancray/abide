@@ -14,7 +14,7 @@
 
 import { type Dirent, existsSync, readdirSync } from 'node:fs' // bun has no directory listing or sync existence check of its own
 
-import type { Refusals } from '#compiler/Refusals.ts'
+import type { Diagnostics } from '#compiler/Diagnostics.ts'
 import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
     PUBLIC_DIRECTORY,
@@ -54,7 +54,7 @@ type AppFiles = {
  *
  * A missing root is an app with nothing in it, not a fault.
  */
-export function appFiles(root: string, refusals: Refusals): AppFiles {
+export function appFiles(root: string, refusals: Diagnostics): AppFiles {
     const files: AppFiles = {
         abide: [],
         handlers: [],
@@ -81,7 +81,7 @@ function walk(
     relative: string,
     reserved: { path: string; name: string } | undefined,
     files: AppFiles,
-    refusals: Refusals,
+    refusals: Diagnostics,
     packaged = false,
 ): void {
     let entries: Dirent[]

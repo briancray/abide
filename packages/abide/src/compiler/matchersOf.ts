@@ -10,8 +10,8 @@
 
 import { parseRoutePattern } from '#shared/routePattern.ts'
 
+import type { Diagnostics } from './Diagnostics.ts'
 import { matcherOf } from './paramFile.ts'
-import type { Refusals } from './Refusals.ts'
 
 /** A directory a file mounts (23.19), where it mounts, and the param files under it, by path. */
 export type MountedTree = { directory: string; at: string; params: string[] }
@@ -28,7 +28,7 @@ type Routed = {
  * Each routed file's matchers, by its path: every name its route's segments give, to the anchored
  * source of the param file it resolves to — empty where its route names none.
  *
- * `params` is every param file of the app's own, by path. Refusals land at the file the fault is in:
+ * `params` is every param file of the app's own, by path. Diagnostics land at the file the fault is in:
  * a param file that declares no matcher at itself, a name that resolves to none at the segment's file.
  */
 export async function matchersOf(
@@ -36,7 +36,7 @@ export async function matchersOf(
     routed: readonly Routed[],
     params: readonly string[],
     trees: readonly MountedTree[],
-    refusals: Refusals,
+    refusals: Diagnostics,
 ): Promise<Map<string, Record<string, string>>> {
     // Every param file's matcher, read once whichever routes name it; `undefined` where 23.24 or
     // 23.25 refused the file, so a segment naming it refuses nothing more.
