@@ -7,12 +7,12 @@ type NewDeal = { name: string; company: string; amount: number }
 
 let name = reactive('Ledger audit')
 let company = reactive('')
-let amount = reactive('0')
+let amount = reactive(0)
 let issues = reactive<Issues<NewDeal>>({})
 
 async function add() {
     try {
-        await createDeal({ name, company, amount: Number(amount) })
+        await createDeal({ name, company, amount })
         issues = {}
     } catch (error) {
         if (!createDeal.isError(error, 'ValidationError')) throw error
