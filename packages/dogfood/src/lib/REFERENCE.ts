@@ -17,6 +17,13 @@ export const REFERENCE: readonly {
         typeOnly: true,
     },
     {
+        route: '/reference/isReactive',
+        names: ['isReactive'],
+        entry: '@abide/abide',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
         route: '/reference/types/Keyed',
         names: ['Keyed'],
         entry: '@abide/abide',
@@ -456,6 +463,13 @@ export const REFERENCE: readonly {
         entry: '@abide/abide',
         group: 'Ambient values',
         typeOnly: false,
+    },
+    {
+        route: '/reference/types/Cookies',
+        names: ['Cookies'],
+        entry: '@abide/abide',
+        group: 'Ambient values',
+        typeOnly: true,
     },
     {
         route: '/reference/request',
