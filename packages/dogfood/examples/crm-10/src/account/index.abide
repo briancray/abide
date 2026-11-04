@@ -1,5 +1,8 @@
 <script>
+import { csp } from '@abide/abide'
+
 import AddContact from './lib/AddContact.abide'
+import AdminSection from './lib/AdminSection.abide'
 import Badge from './lib/Badge.abide'
 import ContactCard from './lib/ContactCard.abide'
 import Density from './lib/Density.abide'
@@ -11,7 +14,10 @@ import SyncContact from './lib/SyncContact.abide'
 import Widget from './lib/Widget.abide'
 </script>
 
-<head><title>Account — CRM</title></head>
+<head>
+    <title>Account — CRM</title>
+    <script nonce={csp.nonce()}>window.dataLayer = []</script>
+</head>
 
 <main>
     <h1>Account</h1>
@@ -25,6 +31,8 @@ import Widget from './lib/Widget.abide'
     <ContactCard />
     <h2>Export</h2>
     <ExportContacts />
+    <h2>Admin section</h2>
+    <AdminSection />
     <h2>Partner statement</h2>
     <PartnerStatement />
     <h2>Sales by region</h2>

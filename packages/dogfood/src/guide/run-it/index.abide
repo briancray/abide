@@ -3,6 +3,7 @@ import { url } from '@abide/abide'
 import envSource from 'crm-08/.env' with { type: 'text' }
 import getPoolSource from 'crm-08/src/ops/getPool.handler.ts' with { type: 'text' }
 import getRetriesSource from 'crm-08/src/ops/getRetries.handler.ts' with { type: 'text' }
+import opsPageSource from 'crm-08/src/ops/index.abide' with { type: 'text' }
 import billingSource from 'crm-08/src/ops/lib/billing.ts' with { type: 'text' }
 import CallLog from 'crm-08/src/ops/lib/CallLog.abide'
 import callLogSource from 'crm-08/src/ops/lib/CallLog.abide' with { type: 'text' }
@@ -28,10 +29,10 @@ import syncTestSource from 'crm-08/src/ops/lib/Sync.test.ts' with { type: 'text'
 import logCallSource from 'crm-08/src/ops/logCall.handler.ts' with { type: 'text' }
 import syncContactSource from 'crm-08/src/ops/syncContact.handler.ts' with { type: 'text' }
 
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
@@ -90,15 +91,10 @@ import Section from '#src/lib/Section.abide'
         </table>
 
         <p>A setting that has to be right gets a schema. <code>config</code>'s <code>schema</code>
-            is checked last, over the whole document, so it can relate two settings. Keep it loose, or
-            every setting it does not name is dropped:</p>
+            is checked last, over the whole document, so it can relate two settings, and what it
+            accepts is merged back over the document. The operations page caps the retries:</p>
 
-        <Code language="ts" caption="server" code={`onConfig(() => ({ RETRIES: 3 }), {
-    schema: z.looseObject({
-        RETRIES: z.number().int().min(0).max(10),
-        STRIPE_KEY: z.string().min(1),
-    }),
-})`} />
+        <Snippet source={opsPageSource} path="src/ops/index.abide" from={['onConfig(null']} />
 
         <p><code>config()</code> throws what <code>onConfig</code> threw, so a configuration that
             cannot resolve stops the app from starting. <code>config</code> is a server name: a page
@@ -129,7 +125,9 @@ import Section from '#src/lib/Section.abide'
         <p><code>onStop</code> is the mirror: <code>await stop()</code> first, then close what you
             opened, so the pool outlives the last request that could use it. It runs on
             <code>SIGTERM</code>, <code>Ctrl-C</code> or a crash, and a second signal ends the process
-            at once.</p>
+            at once. A request still being answered after <code>ABIDE_STOP_TIMEOUT</code>
+            milliseconds, 5000 unless you set it, has its connection closed, and the stop goes on
+            without it.</p>
 
         <p>A hook is called in a page, a layout or a handler file, and returns a function that
             removes it. The ones for the whole app go in <code>src/layout.abide</code>, the root layout,
@@ -155,12 +153,6 @@ import Section from '#src/lib/Section.abide'
             <code>dogfood:billing</code> on this page. <code>DEBUG</code> takes the comma and
             wildcard list you already know: <code>DEBUG=crm-08:billing,abide:*</code>. It is read from
             the environment on the server, and the browser gets it from the document.</p>
-
-        <Code language="ts" caption="shared" code={`log('sending')
-log.debug('cache table', { entries: cache.size })
-log.info('invoice paid', { id: '4310' })
-log.warning('retrying', { attempt: 2 })
-log.error('mailer refused', { error })`} />
 
         <p><code>log</code>, <code>log.warning</code> and <code>log.error</code> always write.
             <code>log.info</code> and <code>log.debug</code> write when <code>DEBUG</code> names their
@@ -204,8 +196,8 @@ log.error('mailer refused', { error })`} />
         <Example
             id="crm-08-trace"
             app="crm-08"
-            title="`trace()` — one id for everything one request did"
-            summary="Syncing a contact logs in the handler and again in the billing module it calls. Sync, and both lines carry the request's trace; sync again for a new one."
+            title="`trace()` — the id on every line a request writes"
+            summary="Syncing a contact logs in the handler, and the billing module it calls times its work and logs again. Sync, and every line carries the request's trace; sync again for a new one."
             files={{
                 'src/ops/lib/Sync.abide': syncSource,
                 'src/ops/syncContact.handler.ts': syncContactSource,
@@ -231,13 +223,13 @@ log.error('mailer refused', { error })`} />
             </tbody>
         </table>
 
-        <Code language="ts" caption="server" code={`const rows = await trace.span('search', () => search(query), {
-    timing: true,
-})
-const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
+        <p>The billing module's span is the line with a duration in it:</p>
+
+        <Snippet source={billingSource} path="src/ops/lib/billing.ts" from={['await trace.span(']} />
 
         <p>With <code>timing</code>, a span joins <code>server-timing</code> under its name, so the
-            name has to be a plain token.</p>
+            name has to be a plain token. A call to another service carries the trace on with
+            <code>{'fetch(url, { headers: trace.headers() })'}</code>.</p>
     </Section>
 
     <Section title="A load balancer reads the health check">
@@ -294,13 +286,9 @@ const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
 
         <p><code>false</code> is certain and <code>true</code> is a guess: a dead server reads as
             online. Use it to explain a failed load, not to decide whether to try one. To catch up when
-            the connection returns, refresh what is on screen from the root layout:</p>
+            the connection returns, refresh what is on screen. The operations page does:</p>
 
-        <Code language="abide" caption="abide" code={`<script>
-import { online, refresh, watch } from '@abide/abide'
-
-watch(() => { if (online) refresh() })
-</script>`} />
+        <Snippet source={opsPageSource} path="src/ops/index.abide" from={['watch(']} />
     </Section>
 
     <Section title="A call logged offline is sent when the network is back">

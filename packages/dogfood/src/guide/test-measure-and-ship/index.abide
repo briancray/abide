@@ -2,6 +2,7 @@
 import { url } from '@abide/abide'
 import bunfigSource from 'crm-10/bunfig.toml' with { type: 'text' }
 import topDealsSpecSource from 'crm-10/e2e/TopDeals.test.ts' with { type: 'text' }
+import testRowsSource from 'crm-10/scripts/testRows.ts' with { type: 'text' }
 import launcherSource from 'crm-10/src/launcher.abide' with { type: 'text' }
 import getSummarySource from 'crm-10/src/reports/getSummary.handler.ts' with { type: 'text' }
 import reportsPageSource from 'crm-10/src/reports/index.abide' with { type: 'text' }
@@ -72,7 +73,7 @@ import Snippet from '#src/lib/Snippet.abide'
                 <tr><td><code>App.fetch</code></td><td>one request, through the whole app, in this process</td></tr>
                 <tr><td><code>App.run</code></td><td>runs a function inside one request's scope, so two reads of one key load once, signed in as the <code>principal</code> claims you give it</td></tr>
                 <tr><td><code>App.listen</code></td><td>binds the socket, for a test that needs a real <code>WebSocket</code></td></tr>
-                <tr><td><code>App.stop</code></td><td>drains what is in flight, then runs <code>onStop</code></td></tr>
+                <tr><td><code>App.stop</code></td><td>stops the app: every <code>onStop</code>, wrapped around draining what is in flight</td></tr>
                 <tr><td><code>App[Symbol.asyncDispose]</code></td><td><code>stop</code>, under the name <code>await using</code> calls</td></tr>
             </tbody>
         </table>
@@ -126,10 +127,10 @@ import Snippet from '#src/lib/Snippet.abide'
         <p>A DOM member the harness does not count throws while a case is open, rather than
             reading as zero. <code>patchSet()</code> lists every member it does count.</p>
 
-        <p>The DOM under <code>bun test</code> comes from one line in <code>bunfig.toml</code>,
-            which the scaffold writes:</p>
+        <p>The DOM under <code>bun test</code> comes from the <code>preload</code> line in
+            <code>bunfig.toml</code>, which the scaffold writes:</p>
 
-        <Snippet source={bunfigSource} path="bunfig.toml" />
+        <Snippet source={bunfigSource} path="bunfig.toml" from={['[test]', 'preload =']} />
 
         <table>
             <thead><tr><th>Preload</th><th>What it gives a test</th></tr></thead>
@@ -333,13 +334,16 @@ import Snippet from '#src/lib/Snippet.abide'
             <code>inAFreshProcess</code>.</p>
     </Section>
 
-    <Section title="Test and bench results on a page">
+    <Section title="Report the CRM's test results one file at a time">
+        <Snippet source={testRowsSource} path="scripts/testRows.ts" from={['await testRows(']} />
+
         <Code code={`bun scripts/testRows.ts --list
 bun scripts/testRows.ts --scope all --filter reports`} />
 
         <p><code>testRows</code> runs each test file of a <code>TestSuite</code> in a process of its
             own, and prints one <code>TestRow</code> per line as each file finishes, with a
-            <code>TestCase</code> per test. The cards in this chapter read their results from those
+            <code>TestCase</code> per test. A dashboard reads the rows as they land, rather than
+            waiting on the whole run. The cards in this chapter read their results from those
             rows.</p>
 
         <table>
@@ -358,7 +362,7 @@ bun scripts/testRows.ts --scope all --filter reports`} />
     </Section>
 
     <Section title="Check, build and start the CRM">
-        <Code code={`abide check && abide build && bun test
+        <Code code={`abide check && abide format --check && abide build && bun test
 abide start --port 8080`} />
 
         <p><code>abide check [dir…]</code> type-checks the <code>.abide</code> files as well as
@@ -369,7 +373,9 @@ abide start --port 8080`} />
             <code>bun fmt</code> formats everything else: its scripts, styles and expressions under
             the <code>[fmt]</code> options in <code>bunfig.toml</code>, and its markup indented by its
             nesting. <code>--check</code> writes nothing and fails where a file would change, and
-            <code>abide lsp</code> formats on save the same way.</p>
+            <code>abide lsp</code> formats on save the same way. The scaffold's options:</p>
+
+        <Snippet source={bunfigSource} path="bunfig.toml" from={['[fmt]', 'tabWidth', 'semi', 'singleQuote', 'sortImports']} />
 
         <p><code>abide build</code> writes content-hashed chunks and a manifest naming them.
             <code>abide start [--port &lt;n&gt;]</code> serves what was built, and builds first where
@@ -401,6 +407,18 @@ abide compile --platforms linux-x64,darwin-arm64`} />
             the file. The executable is <code>abide</code> for this one app:
             <code>./crm-10 start</code> serves it, and <code>config()</code> still reads the
             environment.</p>
+
+        <p>The <code>Dockerfile</code> the scaffold writes, which the CRM carries, has two
+            stages. The first installs and runs <code>abide compile</code> in
+            <code>oven/bun</code>. The second copies the executable alone onto
+            <code>gcr.io/distroless/cc-debian12</code> and runs <code>/server start</code>, so the
+            image holds no Bun, no source and no <code>node_modules</code>.</p>
+
+        <Code code={`docker build -t crm .
+docker run -p 3000:3000 -e ABIDE_PRINCIPAL_SECRET crm`} />
+
+        <p><code>.dockerignore</code> keeps <code>.env</code> out of the build, so the deployment
+            sets the principal secret and every other setting itself.</p>
     </Section>
 
     <Section title="Ship the CRM as a desktop app">
@@ -425,7 +443,7 @@ abide bundle --out ~/Applications/CRM.app`} />
         <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['const printReport', 'onMenu(', 'watch(']} />
 
         <p>The reports page adds a Reports menu while it is showing. <code>onMenu</code> is read
-            the way markup is, so the menus follow the page's state. Each entry is a
+            the way markup is, so the menus follow the page's values. Each entry is a
             <code>MenuItem</code>: <code>'separator'</code>, an item with an <code>href</code>, one
             with a <code>MenuRole</code> the platform performs, or a <code>MenuEntry</code> made by
             <code>menuItem</code>. <code>MenuEntry.on</code> files what runs when it is picked, and

@@ -1,0 +1,8 @@
+<script>
+import { type Failed, props } from '@abide/abide'
+
+const { failure } = props<{ failure: Failed<string, unknown> }>()
+</script>
+
+<h2 class="text-heading font-semibold">Not for you</h2>
+<p>{failure.message}</p>

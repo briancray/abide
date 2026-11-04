@@ -1,12 +1,19 @@
 <script>
 import { url } from '@abide/abide'
 import addContactSource from 'crm-07/src/account/addContact.handler.ts' with { type: 'text' }
+import adminErrorSource from 'crm-07/src/account/admin/error.abide' with { type: 'text' }
+import getTeamSource from 'crm-07/src/account/admin/getTeam.handler.ts' with { type: 'text' }
+import adminLayoutSource from 'crm-07/src/account/admin/layout.abide' with { type: 'text' }
 import exportContactsSource from 'crm-07/src/account/exportContacts.handler.ts' with { type: 'text' }
 import getContactSource from 'crm-07/src/account/getContact.handler.ts' with { type: 'text' }
 import getStatementSource from 'crm-07/src/account/getStatement.handler.ts' with { type: 'text' }
+import accountPageSource from 'crm-07/src/account/index.abide' with { type: 'text' }
 import AddContact from 'crm-07/src/account/lib/AddContact.abide'
 import addContactComponentSource from 'crm-07/src/account/lib/AddContact.abide' with { type: 'text' }
 import addContactTestSource from 'crm-07/src/account/lib/AddContact.test.ts' with { type: 'text' }
+import AdminSection from 'crm-07/src/account/lib/AdminSection.abide'
+import adminSectionSource from 'crm-07/src/account/lib/AdminSection.abide' with { type: 'text' }
+import adminSectionTestSource from 'crm-07/src/account/lib/AdminSection.test.ts' with { type: 'text' }
 import adminsOnlySource from 'crm-07/src/account/lib/adminsOnly.ts' with { type: 'text' }
 import Badge from 'crm-07/src/account/lib/Badge.abide'
 import badgeSource from 'crm-07/src/account/lib/Badge.abide' with { type: 'text' }
@@ -41,10 +48,10 @@ import signOutSource from 'crm-07/src/account/signOut.handler.ts' with { type: '
 import syncContactSource from 'crm-07/src/account/syncContact.handler.ts' with { type: 'text' }
 import rootLayoutSource from 'crm-07/src/layout.abide' with { type: 'text' }
 
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
@@ -150,7 +157,8 @@ import Section from '#src/lib/Section.abide'
         </Example>
 
         <p><code>cookies()</code> is the request's cookies on the server and the document's in
-            the browser, as a <code>CookieMap</code>. Reading a cookie by name follows it, so the
+            the browser, as a <code>Cookies</code>: a jar shaped like Bun's <code>CookieMap</code>,
+            with <code>get</code>, <code>set</code> and <code>delete</code>. Reading a cookie by name follows it, so the
             list changes on the click. The server render reads the same cookie off the request, so a
             reload paints compact rather than flashing comfortable first.</p>
 
@@ -201,27 +209,38 @@ import Section from '#src/lib/Section.abide'
         <p>A rung is a <code>Middleware</code>: it is handed <code>next</code> and the call's
             context, and either returns <code>next()</code> or answers in the handler's place.
             Returning <code>refuse(403, …)</code> refuses, and neither the handler nor any rung after
-            it runs. A throw escapes every rung rather than unwinding through them.</p>
+            it runs. A rung outside it is handed the answer from <code>next()</code>, the
+            <code>403</code> response the caller gets, and never the refusal itself. A throw escapes
+            every rung rather than unwinding through them.</p>
 
         <p>The rung sits on the handler, so it runs on every call: from a browser, from another
             handler, and from a page rendering on the server. It reads arguments through
             <code>ctx.args()</code>, which parses the body on its first call. So a rung that never asks
             refuses a signed-out caller before their body is parsed or checked.</p>
+    </Section>
 
-        <p>To guard a whole section, call <code>middleware(…)</code> in its
-            <code>layout.abide</code>, such as <code>src/account/admin/layout.abide</code>. That rung
-            runs over every page and handler below it, and it has the request and nothing else. The
-            same <code>adminsOnly</code> fits there, and its refusal is painted by the section's
-            <code>error.abide</code> over a page and answered as Problem Details over a handler:</p>
+    <Section title="A layout's rung guards a whole section">
+        <Example
+            id="crm-07-admin-section"
+            app="crm-07"
+            title="`middleware(rung)` in a layout — one refusal, answered in each lane"
+            summary="Everything under the admin section is for admins, and its handler names no rung of its own. Open the section as Theo, then as Maya."
+            files={{
+                'src/account/lib/AdminSection.abide': adminSectionSource,
+                'src/account/admin/layout.abide': adminLayoutSource,
+                'src/account/admin/getTeam.handler.ts': getTeamSource,
+                'src/account/admin/error.abide': adminErrorSource,
+                'src/account/lib/AdminSection.test.ts': adminSectionTestSource,
+            }}
+        >
+            <AdminSection />
+        </Example>
 
-        <Code language="abide" caption="abide" code={`<script server>
-import { middleware } from '@abide/abide/server'
-import { adminsOnly } from '#src/account/lib/adminsOnly.ts'
-
-middleware(adminsOnly)
-</script>
-
-<slot/>`} />
+        <p>The same <code>adminsOnly</code> fits a layout, and there it runs over every page and
+            handler below it. Its refusal is answered in the lane the request was in: the section's
+            <code>error.abide</code> paints it over a page, and a handler answers it as Problem
+            Details. A layout's rung has the request and nothing else, so it cannot read a handler's
+            arguments.</p>
 
         <p>Filed in the root <code>src/layout.abide</code>, a rung runs before routing, over
             every request the app answers. <code>abide routes</code> lists each rung beside the route
@@ -295,7 +314,6 @@ middleware(adminsOnly)
                 <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td>none</td><td>the <code>maxBodySize</code> of a handler that names none</td></tr>
                 <tr><td><code>ABIDE_MAX_SOCKET_MESSAGE_SIZE</code></td><td>1 MiB</td><td>one message a browser sends over the socket</td></tr>
                 <tr><td><code>ABIDE_MAX_SOCKET_SUBSCRIPTIONS</code></td><td>1024</td><td>the values one connection may follow at once</td></tr>
-                <tr><td><code>ABIDE_STOP_TIMEOUT</code></td><td>5000 ms</td><td>how long a stop waits on requests still being answered</td></tr>
             </tbody>
         </table>
 
@@ -383,15 +401,9 @@ middleware(adminsOnly)
             for avatars on a CDN. The rest stay the baseline's.</p>
 
         <p>An inline script of your own reads <code>csp.nonce()</code>, the nonce this response
-            carries, in the root layout:</p>
+            carries. The account page starts an analytics queue that way:</p>
 
-        <Code language="abide" caption="abide" code={`<script>
-import { csp } from '@abide/abide'
-</script>
-
-<head>
-    <script nonce={csp.nonce()}>window.dataLayer = []</script>
-</head>`} />
+        <Snippet source={accountPageSource} path="src/account/index.abide" from={['<head>']} />
 
         <p>Without <code>csp()</code>, a page is still served
             <code>content-security-policy: frame-ancestors 'none'</code>, so no other site can frame
