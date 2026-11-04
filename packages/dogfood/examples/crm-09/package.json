@@ -2,14 +2,16 @@
     "name": "crm-09",
     "private": true,
     "type": "module",
-    "description": "The CRM at the end of chapter 9, Run it",
+    "description": "The CRM at the end of chapter 9, Open it to machines",
     "scripts": {
         "check": "abide check",
+        "format": "abide format && bun fmt",
         "dev": "abide dev",
         "build": "abide build",
         "start": "abide start",
         "routes": "abide routes",
-        "test": "bun test"
+        "test": "bun test",
+        "bench": "harness-bench"
     },
     "imports": {
         "#src/*": [
@@ -22,6 +24,8 @@
     },
     "devDependencies": {
         "@abide/harness": "workspace:*",
-        "@types/bun": "latest"
+        "@types/bun": "latest",
+        "bun-plugin-tailwind": "^0.1.2",
+        "tailwindcss": "^4.3.3"
     }
 }
