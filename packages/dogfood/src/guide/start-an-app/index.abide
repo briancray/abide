@@ -2,6 +2,7 @@
 import { url } from '@abide/abide'
 import ContactList from 'crm-01/src/contacts/lib/ContactList.abide'
 import contactListSource from 'crm-01/src/contacts/lib/ContactList.abide' with { type: 'text' }
+import contactListBenchSource from 'crm-01/src/contacts/lib/ContactList.bench.ts' with { type: 'text' }
 import contactListTestSource from 'crm-01/src/contacts/lib/ContactList.test.ts' with { type: 'text' }
 import ContactNote from 'crm-01/src/contacts/lib/ContactNote.abide'
 import contactNoteSource from 'crm-01/src/contacts/lib/ContactNote.abide' with { type: 'text' }
@@ -26,13 +27,27 @@ cd crm
 bun install
 bun run dev`} />
 
-    <p>The scaffold writes a root layout, a page, a handler file the page calls, and a test of
-        each. <code>bun run dev</code> runs <code>abide dev</code>, which serves the app on
+    <p><code>bun run dev</code> runs <code>abide dev</code>, which serves the app on
         <code>localhost:3000</code> and restarts it on every save, with the open tab reloading behind
         it.</p>
 
-    <p>Every chapter ends with the CRM it built, as an app you can download and run. Each card
-        below is a file from that app, with the test the app runs on it.</p>
+    <table>
+        <thead><tr><th>The scaffold writes</th><th>What it is</th></tr></thead>
+        <tbody>
+            <tr><td><code>src/layout.abide</code></td><td>the root layout, around every page</td></tr>
+            <tr><td><code>src/index.abide</code></td><td>a page with a greeting and a click counter</td></tr>
+            <tr><td><code>src/getGreeting.handler.ts</code></td><td>the handler the page reads its greeting from</td></tr>
+            <tr><td><code>src/getGreeting.test.ts</code></td><td>a test that calls the handler</td></tr>
+            <tr><td><code>src/index.test.ts</code></td><td>a test that mounts the page, clicks it, and counts the work the click did</td></tr>
+            <tr><td><code>src/lib/app.css</code></td><td>the stylesheet the layout imports: Tailwind, built by the plugin <code>bunfig.toml</code> declares</td></tr>
+            <tr><td><code>CLAUDE.md</code> · <code>AGENTS.md</code></td><td>notes for a coding agent, importing the <code>ABIDE.md</code> the installed package holds: where its docs, as one markdown file, and its registry and rulebook are</td></tr>
+            <tr><td><code>Dockerfile</code> · <code>.dockerignore</code></td><td>an image holding the compiled server and nothing else of the app. See <a href={url('/guide/test-measure-and-ship')}>Test, measure, ship</a></td></tr>
+            <tr><td><code>package.json</code></td><td>the scripts <code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>format</code>, <code>bench</code> and <code>routes</code></td></tr>
+        </tbody>
+    </table>
+
+    <p>The CRM replaces the starter's page with a contacts page, and keeps the rest. Every card
+        on this page offers the CRM as this chapter leaves it, at <code>/examples/crm-01.tar.gz</code>.</p>
 
     <Section title="A file's path is the address it answers">
         <p>A file's path below <code>src</code> is its address. Nothing else names a route.</p>
@@ -59,6 +74,8 @@ bun run dev`} />
                 <tr><td><code>**/lib/**</code></td><td>components and modules</td><td>wherever they are imported</td></tr>
                 <tr><td><code>**/lib/**/&lt;name&gt;.server.&lt;extension&gt;</code></td><td>the database, secrets, anything the browser never loads</td><td>the server alone; a page importing it is a compile error</td></tr>
                 <tr><td><code>**/&lt;name&gt;.test.ts</code></td><td>tests, beside what they test</td><td><code>bun test</code>, never served</td></tr>
+                <tr><td><code>**/&lt;name&gt;.bench.ts</code></td><td>benches, beside what they time. See <a href={url('/guide/test-measure-and-ship')}>Test, measure, ship</a></td><td><code>bun run bench</code>, never served</td></tr>
+                <tr><td><code>**/&lt;NAME&gt;.param.ts</code></td><td>what a segment named <code>NAME</code> takes. See <a href={url('/guide/add-pages')}>Add pages</a></td><td>wherever an address is matched</td></tr>
                 <tr><td><code>**/&lt;name&gt;.d.ts</code></td><td>types, beside what they type</td><td>nowhere; the checker reads them</td></tr>
                 <tr><td><code>**/public/**</code></td><td>files answered as they are</td><td>nowhere; each is sent at its path</td></tr>
             </tbody>
@@ -79,17 +96,22 @@ bun run dev`} />
                 'src/contacts/lib/ContactList.abide': contactListSource,
                 'src/contacts/listContacts.handler.ts': listContactsSource,
                 'src/contacts/lib/ContactList.test.ts': contactListTestSource,
+                'src/contacts/lib/ContactList.bench.ts': contactListBenchSource,
             }}
         >
             <ContactList />
         </Example>
 
+        <p>The bench reads the list once the handler has answered, among 100 contacts and among
+            1,000. Its ratio is what a read costs as the list grows: a read hands back what the
+            handler answered, and copies nothing.</p>
+
         <p><code>listContacts.handler.ts</code> runs on the server. The list imports it like any module,
             and the browser is sent a call under the same name in its place, so there is no
             <code>fetch</code>, no route to register, and no second copy of the contact type.</p>
 
-        <p>The test imports the same handler and calls it, in process. A handler only one page
-            calls can live in that page's <code>&lt;script server&gt;</code> instead. See
+        <p>The test mounts the list, and the handler runs in process. A handler only one file
+            calls can live in that file's <code>&lt;script server&gt;</code> instead. See
             <a href={url('/guide/talk-to-the-server')}>Talk to the server</a>.</p>
     </Section>
 
@@ -125,7 +147,7 @@ bun run dev`} />
             id="crm-01-star"
             app="crm-01"
             title="`starred` — read by name, written by name"
-            summary="Star a contact. The button reads the value, and the click writes it."
+            summary="Grace Hopper is the contact you call most. Star her, then take the star off."
             files={{
                 'src/contacts/lib/StarButton.abide': starButtonSource,
                 'src/contacts/lib/StarButton.test.ts': starButtonTestSource,
@@ -135,10 +157,8 @@ bun run dev`} />
         </Example>
 
         <p>Naming <code>starred</code> in the markup reads it and follows it from then on.
-            Assigning to it writes it and wakes everything that read it. There is no store to declare
-            and no re-render to ask for. A <code>.ts</code> file has no markup around it, so it writes
-            the same value as <code>starred()</code> and <code>starred.set(true)</code>.</p>
-
+            Assigning to it writes it and wakes everything that read it, with no re-render to ask
+            for. <a href={url('/guide/edit-a-contact')}>Edit a contact</a> has every spelling of it.</p>
     </Section>
 
     <Section title="Every value is a `Reactive`">
@@ -162,6 +182,9 @@ bun run dev`} />
 
         <p>Swapping a local value for a loaded one changes how it is declared and nothing that
             reads it.</p>
+
+        <p>A <code>Reactive</code> can also be awaited, so code that takes a promise for a load asks
+            <code>isReactive</code> first. A <code>Reactive</code> is a value, even while it loads.</p>
     </Section>
 
     <Section title="The `abide` command">
