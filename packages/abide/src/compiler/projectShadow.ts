@@ -391,11 +391,13 @@ function project(file: AbideFile): Projection {
         }
         text += '}))\n'
         // 38.116 — a close tag of its own is a second read of the name, so it is renamed with it.
+        // Ended by its `;`: the braces a passed component is scoped in (32.51) can follow, and
+        // `(Name)\n{` parses as an arrow function's head.
         const closed = file.origins.closes.get(node)
         if (closed !== undefined) {
             text += ';('
             copied(node.tag, closed)
-            text += ')\n'
+            text += ');\n'
         }
         for (const attribute of refused)
             slots.set(

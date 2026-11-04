@@ -1335,6 +1335,9 @@ to, and MUST NOT change the type of the value that slot gates.
 19.24 The value a body produces MUST be typed from the body alone, and a `schema` declared beside it
 MUST NOT change that type.
 
+19.25 `validateJson` MUST read a member left `undefined`, at any depth of a record, as absent to
+`required`, `properties` and `additionalProperties` — in process as the wire carries it (30.28).
+
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored

@@ -678,3 +678,47 @@ test('a bare jsonSchema leaves a value typed by its initial — 19.23', () => {
     totals.set({ seats: 2 })
     expect(totals().seats).toBe(2)
 })
+
+// 19.25 — A MEMBER LEFT `undefined` IS AN ABSENT ONE to `required`, `properties` and
+// `additionalProperties`, at any depth of a record: JSON drops it and a URL omits it (30.28), so a call
+// in process is answered as the wire answers it — through an explicit `args` gate as much as a derived
+// one. An `undefined` in a list is still a value the schema reads. THE REVERT: `holds` answering
+// `Object.hasOwn(value, key)` alone; the optional members report `must be string, was undefined`, the
+// required one `must be string` rather than `is required`, the closed record `is not a known member`,
+// and the keyed call is refused 422.
+test('a member left undefined is absent — 19.25', async () => {
+    const schema: JsonValue = {
+        type: 'object',
+        properties: {
+            title: { type: 'string' },
+            note: { type: 'string' },
+            deal: {
+                type: 'object',
+                properties: { hint: { type: 'string' } },
+                additionalProperties: false,
+            },
+            tags: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['title'],
+    }
+    expect(
+        validateJson<Anywhere>(schema, {
+            title: 't',
+            note: undefined,
+            deal: { hint: undefined, extra: undefined },
+        }),
+    ).toBeNull()
+    expect(
+        validateJson<Anywhere>(schema, { title: undefined, note: 'n' }),
+    ).toEqual({ title: ['is required'] })
+    expect(
+        validateJson<Anywhere>(schema, { title: 't', tags: ['a', undefined] }),
+    ).not.toBeNull()
+
+    const noted = reactive(
+        ({ title, note }: { title: string; note?: string | undefined }) =>
+            `${title}:${note ?? '-'}`,
+        { args: jsonSchema(schema) },
+    )
+    expect(await noted({ title: 't', note: undefined })).toBe('t:-')
+})

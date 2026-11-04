@@ -41,43 +41,44 @@ test('a load that goes its timeout without settling refuses 504 — 16.59', asyn
     expect(value.error()).toMatchObject({ name: 'HttpError', status: 504 })
 })
 
-// PER CHUNK, NOT PER RUN: four chunks 25 ms apart run 100 ms under a 60 ms timeout. THE REVERT: drop
-// the `arm()` in the cursor loop; the clock runs from the first call and the run is ended at 60 ms.
+// PER CHUNK, NOT PER RUN: six chunks 40 ms apart run 240 ms under a 150 ms timeout — each gap clears it
+// by 110 ms, which a loaded `--parallel` worker does not eat. THE REVERT: drop the `arm()` in the cursor
+// loop; the clock runs from the first call and the run is ended at 150 ms.
 test('a stream that keeps producing outlives its timeout — 16.59', async () => {
     const rows = GET(
         async function* () {
-            for (let row = 0; row < 4; row += 1) {
-                await Bun.sleep(25)
+            for (let row = 0; row < 6; row += 1) {
+                await Bun.sleep(40)
                 yield row
             }
         },
-        { timeout: 60 },
+        { timeout: 150 },
     ) as unknown as () => Loading
     const value = rows()
     await settled(value)
     expect(value.error()).toBeUndefined()
-    expect(value.peek()).toEqual([0, 1, 2, 3])
+    expect(value.peek()).toEqual([0, 1, 2, 3, 4, 5])
 })
 
 // AND BEHIND A RUNG, where the value only turns out to stream once the onion resolves (9.6). THE
-// REVERT: ask `isStreaming` once, synchronously, in `timeLoad`; the run is ended 504 at 60 ms.
+// REVERT: ask `isStreaming` once, synchronously, in `timeLoad`; the run is ended 504 at 150 ms.
 test('a stream behind a rung that keeps producing outlives its timeout — 16.59, 9.6', async () => {
     const outside = RPC_SERVER.request
     RPC_SERVER.request = () => new Request('http://timeout.example/')
     try {
         const rows = GET(
             async function* () {
-                for (let row = 0; row < 4; row += 1) {
-                    await Bun.sleep(25)
+                for (let row = 0; row < 6; row += 1) {
+                    await Bun.sleep(40)
                     yield row
                 }
             },
-            { timeout: 60, middleware: [(next) => next()] },
+            { timeout: 150, middleware: [(next) => next()] },
         ) as unknown as () => Loading
         const value = rows()
         await settled(value)
         expect(value.error()).toBeUndefined()
-        expect(value.peek()).toEqual([0, 1, 2, 3])
+        expect(value.peek()).toEqual([0, 1, 2, 3, 4, 5])
     } finally {
         RPC_SERVER.request = outside
     }

@@ -631,3 +631,69 @@ test('a rung that caught the args refusal and asks again is refused again — 16
     })
     expect(refusals).toEqual(['ValidationError', 'ValidationError'])
 })
+
+// 16.11, 16.16 — A NO-ARGUMENT MUTATION BEHIND RUNGS STARTS ITS BODY ONLY WHEN THE RUNGS LET IT
+// THROUGH. A rung that refuses short-circuits, and the body never runs. THE REVERT: drop the
+// handler's own spent answer in `call` rather than in the onion's center; reading its cell builds
+// the request's instance, which starts the body (1.7) ahead of every rung — for a plain and a
+// streamed body alike, 1 run where 0 is due.
+for (const shape of ['plain', 'streamed'] as const)
+    test(`a refusing rung keeps a no-argument ${shape} mutation's body from starting — 16.11, 16.16`, async () => {
+        const order: string[] = []
+        const body =
+            shape === 'plain'
+                ? async () => {
+                      order.push('body')
+                      return 'swept'
+                  }
+                : async function* () {
+                      order.push('body')
+                      yield 'swept'
+                  }
+        const sweep = POST(body as () => Promise<string>, {
+            middleware: [
+                async () => {
+                    order.push('rung')
+                    return 'refused'
+                },
+            ],
+        })
+        await inScope(new Request('http://app/', { method: 'POST' }), () =>
+            sweep(),
+        )
+        expect(order).toEqual(['rung'])
+    })
+
+// 16.7, 16.11 — AND EACH CALL THE RUNGS LET THROUGH IS A WRITE, twice in one request as anywhere.
+// THE REVERT: leave the handler's own spent answer undropped inside the onion; the second call
+// joins the first answer — 1 body run where 2 are due.
+for (const shape of ['plain', 'streamed'] as const)
+    test(`a no-argument ${shape} mutation behind rungs writes on every call in one request — 16.7, 16.11`, async () => {
+        const order: string[] = []
+        const body =
+            shape === 'plain'
+                ? async () => {
+                      order.push('body')
+                      return 'swept'
+                  }
+                : async function* () {
+                      order.push('body')
+                      yield 'swept'
+                  }
+        const sweep = POST(body as () => Promise<string>, {
+            middleware: [
+                async (next) => {
+                    order.push('rung')
+                    return next()
+                },
+            ],
+        })
+        await inScope(
+            new Request('http://app/', { method: 'POST' }),
+            async () => {
+                await sweep()
+                await sweep()
+            },
+        )
+        expect(order).toEqual(['rung', 'body', 'rung', 'body'])
+    })

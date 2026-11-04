@@ -279,7 +279,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.5 |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.14 |
 | `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 19.23, 20.11 |
-| `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | 19.13 |
+| `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | 19.13, 19.25 |
 
 ## Headers abide generates
 
