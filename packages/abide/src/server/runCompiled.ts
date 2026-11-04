@@ -4,7 +4,7 @@
 
 import { type Host, runCommands } from './commands.ts'
 import { type AppHandle, type AppOrigin, bootApp } from './createApp.ts'
-import { type BuildParts, builtSources } from './serveBuild.ts'
+import { type BuildParts, builtSources } from './servedApp.ts'
 
 export async function runCompiled(
     origin: AppOrigin,

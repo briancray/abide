@@ -8,11 +8,11 @@
 // No socket is bound — `App.fetch` answers (42.5) — so the DOM preload's `Response` never meets
 // `Bun.serve` (see `serve.test.ts`).
 
-import { appSources } from '#server/answerRequest.ts'
 import type { Mount, MountRow } from '#server/answerRpc.ts'
 import { type App, bootApp } from '#server/createApp.ts'
 import { NO_MANIFEST } from '#server/manifestOf.ts'
 import { routeOf } from '#server/placement.ts'
+import { appSources } from '#server/servedApp.ts'
 import type { Method } from '#shared/rpc.ts'
 
 /**

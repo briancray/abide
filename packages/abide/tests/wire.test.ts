@@ -6,6 +6,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
+import { buildFiles } from '#server/appBuild.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { wire } from '#ui/wire.ts'
 
@@ -245,9 +246,11 @@ test('a handler reads its request and writes its response — 22.1, 22.9', async
 async function clientBundle(): Promise<string> {
     let bundle = ''
     for (const chunk of new Bun.Glob('**/*.js').scanSync({
-        cwd: `${app}/.abide/client`,
+        cwd: buildFiles(`${app}/.abide`).client,
     }))
-        bundle += await Bun.file(`${app}/.abide/client/${chunk}`).text()
+        bundle += await Bun.file(
+            `${buildFiles(`${app}/.abide`).client}/${chunk}`,
+        ).text()
     return bundle
 }
 

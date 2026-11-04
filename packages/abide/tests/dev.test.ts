@@ -246,7 +246,7 @@ test('a server block importing an extensionless relative module answers — 38.4
 })
 
 // 38.97 — A FRAME IN A COMPILED MODULE NAMES THE `.abide`, at the line and column the `new Error` is
-// written on. THE REVERT: `installSourceMaps` out of `originUnder`; the frame names
+// written on. THE REVERT: `installSourceMaps` out of `serveCompilation`; the frame names
 // `__abide/mapped/index.ts`. Read a call site's column as counting from 0 and it names `:4:30`.
 test('a stack read on the server names the .abide line — 38.97', async () => {
     const stack = await (

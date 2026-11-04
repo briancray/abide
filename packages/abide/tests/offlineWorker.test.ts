@@ -6,6 +6,7 @@
 import { afterAll, expect, spyOn, test } from 'bun:test'
 
 import { answerWorker } from '#server/answerWorker.ts'
+import { buildFiles } from '#server/appBuild.ts'
 import { appManifest } from '#server/appManifest.ts'
 import type { Manifest } from '#server/manifestOf.ts'
 import { framingOf } from '#shared/framing.ts'
@@ -807,11 +808,15 @@ test('ABIDE_OFFLINE decides the worker abide start answers, whether a page regis
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     let registers = false
-    for (const name of new Bun.Glob('*.js').scanSync(`${app}/.abide/client`))
+    for (const name of new Bun.Glob('*.js').scanSync(
+        buildFiles(`${app}/.abide`).client,
+    ))
         if (
-            (await Bun.file(`${app}/.abide/client/${name}`).text()).includes(
-                'did not register',
-            )
+            (
+                await Bun.file(
+                    `${buildFiles(`${app}/.abide`).client}/${name}`,
+                ).text()
+            ).includes('did not register')
         )
             registers = true
     expect(`registers: ${registers}`).toBe('registers: true')

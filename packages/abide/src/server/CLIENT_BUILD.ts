@@ -1,12 +1,8 @@
-// WHERE THE BROWSER BUNDLE LANDS, named once for the commands that have to agree about it:
-// `abide build` writes it, `abide start` answers it, and `abide dev` builds it into memory
-// (38.16, 38.20). A leaf, with no imports of its own, for the reason every constant crossing a
-// seam is one — the build is in `bin/` and the server is in `src/server/`, and a string spelled out
-// in both is a build that silently serves nothing. The addresses it is answered at are
+// WHAT THE BROWSER BUNDLE IS NAMED, once for the seams that have to agree about it: the compiler
+// writes the entry, `abide build` precompresses every file, and the server answers both (38.5,
+// 38.20). A leaf, with no imports of its own, for the reason every constant crossing a seam is one.
+// Where the bundle lands in a build is `appBuild.ts`'s; the addresses it is answered at are
 // `#shared/ADDRESSES.ts`.
-
-/** The directory the bundle lands in, below the build's own output directory. */
-export const CLIENT_DIRECTORY = 'client'
 
 /**
  * The module that mounts the app — the one bundle file whose name the shell writes out.
@@ -20,21 +16,6 @@ export const CLIENT_DIRECTORY = 'client'
 export const CLIENT_ENTRY = 'entry'
 
 /**
- * The manifest file `abide build` writes beside the client directory.
- *
- * 38.5 — the manifest `manifestOf` reads off the bundle, below the build's own output directory
- * and BESIDE the client directory rather than in it: everything in there is answered under
- * `CLIENT_ADDRESS` (38.20), and the manifest is the server's, not the browser's.
- */
-export const MANIFEST = 'manifest.json'
-
-/**
- * The compilation `abide build` keeps beside the client directory: every `.abide` compiled, and
- * the build's own tables (`Compilation`), which `abide start` serves without the compiler.
- */
-export const COMPILATION = 'compilation.json'
-
-/**
  * The encodings a response can be compressed in, each with its precompressed file's suffix.
  *
  * 38.5 — in the order a tie is broken. Brotli first: it is the smaller of the two on the bundle,
@@ -43,12 +24,3 @@ export const COMPILATION = 'compilation.json'
  * a build that precompresses into files nothing ever serves.
  */
 export const ENCODING_SUFFIX = { br: '.br', gzip: '.gz' } as const
-
-/**
- * Where `abide build` copies every `public` directory, each file at its address, below its own
- * output directory. The source's own name for one is `#shared/RESERVED_DIRECTORIES.ts`'s.
- *
- * 38.18 — a directory rather than the source tree: `abide start` boots what the build produced and
- * reaches for nothing an app might have moved since.
- */
-export const PUBLIC_DIRECTORY = 'public'

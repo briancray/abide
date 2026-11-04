@@ -16,14 +16,17 @@ import { MOUNT, unmounted } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
-import { servedTable } from './abideModules.ts'
 import { laneFailure } from './answerFailure.ts'
 import { answerRequest, type AppSources } from './answerRequest.ts'
 import type { Mount } from './answerRpc.ts'
 import { Mux, type MuxConnection } from './answerSocket.ts'
-import { appDirectories } from './appDirectories.ts'
+import {
+    type Builder,
+    processBuild,
+    servedBuild,
+    spawnedBuild,
+} from './appBuild.ts'
 import { holdsApp } from './appTree.ts'
-import { buildDirectory } from './buildDirectory.ts'
 import {
     APP_PACKAGE,
     type AppPackage,
@@ -36,6 +39,7 @@ import { HOOKS, inOrder, reportUnexpected, rootRungs } from './hooks.ts'
 import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { installServer } from './installServer.ts'
 import { admitsMux, muxSocketOptions, upgraded } from './muxUpgrade.ts'
+import { packageDirectory } from './packageDirectory.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { presumePrincipal } from './principal.ts'
 import { realOrAsGiven } from './realOrAsGiven.ts'
@@ -50,7 +54,6 @@ import {
     serverTiming,
 } from './requestScope.ts'
 import { heldBody } from './streamEvent.ts'
-import { testBuild } from './testBuild.ts'
 import { traceResponse } from './trace.ts'
 
 // 28.8 — one line per request.
@@ -80,13 +83,16 @@ export interface App {
 /**
  * The app this process was started in, booted off what `abide build` left beside it.
  *
- * 42.1 — found where the CLI finds it (38.25), and booted off the build (38.27).
+ * 42.1 — found where the CLI finds it (38.25), and booted off the build (38.27) — under `bun test`,
+ * the build of its sources as they stand (42.16), which the test preload served already (38.109).
  */
 export async function createApp(): Promise<App> {
     const root = appRoot(undefined)
     const app = await appOnDisk(
-        root === undefined ? undefined : { root, out: buildDirectory(root) },
-        (root) => servedBuild(root),
+        root === undefined
+            ? undefined
+            : { root, out: await processBuild(root) },
+        spawnedBuild,
     ).boot()
     if (typeof app === 'string')
         throw new Error(`abide: createApp found ${app}`)
@@ -117,13 +123,11 @@ export function noAppHere(): string {
 
 /**
  * The app on disk at `found` — its source root and build directory, both absolute — or the
- * refusal where nothing was found. `built` makes its build this process's (`serveBuild`, which
- * builds one nobody built — 38.100) and answers the directory it is in, or `undefined` where
- * nothing under the root builds.
+ * refusal where nothing was found. Its boot builds it with `build` where nobody has (38.100).
  */
 export function appOnDisk(
     found: { root: string; out: string } | undefined,
-    built: (root: string, out: string) => Promise<string | undefined>,
+    build: Builder,
 ): AppHandle {
     if (found === undefined)
         return {
@@ -132,49 +136,25 @@ export function appOnDisk(
             boot: async () => noAppHere(),
         }
     const { root, out } = found
-    const origin = originUnder(root)
     return {
-        package: origin.package,
-        handlers: async () => {
-            const { serveBuild } = await import('./serveBuild.ts')
-            if (!(await serveBuild(root, out, async () => undefined))) return []
-            return (await servedTable(root)).handlers
-        },
+        package: packageUnder(root),
+        handlers: async () =>
+            (await servedBuild(root, out, undefined))?.table.handlers ?? [],
         boot: async () => {
-            const served = await built(root, out)
+            const served = await servedBuild(root, out, build)
             if (served === undefined) return `nothing under ${root} to build.`
-            const { loadBuild } = await import('./serveBuild.ts')
-            return bootApp(origin, () => loadBuild({ root, out: served }))
+            return bootApp(served.origin, served.load)
         },
     }
-}
-
-/**
- * The build of the app under `root`, served to this process's imports — or `undefined` where
- * nothing under it builds. `fresh` builds it for its sources as they stand.
- *
- * 42.16 — under `bun test` the app is built for its sources as they stand rather than read off
- * whatever `abide build` last left, which a test run would otherwise need first and could find
- * stale. One answer for `createApp` and the test preload (38.109), so a test that boots the app
- * reuses the build its imports were served from.
- */
-export async function servedBuild(
-    root: string,
-    fresh = process.env.NODE_ENV === 'test',
-): Promise<string | undefined> {
-    const out = fresh ? await testBuild(root) : buildDirectory(root)
-    const { serveBuild } = await import('./serveBuild.ts')
-    return (await serveBuild(root, out)) ? out : undefined
 }
 
 /**
  * The app's root — `--root`, else `src` where the working directory holds one, else the working
  * directory — or `undefined` where it is no app's.
  *
- * 38.25 and 38.26 — `undefined` is a refusal and not a guess. An app's root is in a package — it or
- * the directory above it holds the `package.json` (`appDirectories`) — and holds a `.abide`
- * file; the package is asked first, so a command run from `/` answers at once rather than
- * walking the disk.
+ * 38.25 and 38.26 — `undefined` is a refusal and not a guess. An app's root is in a package
+ * (`packageDirectory`) and holds a `.abide` file; the package is asked first, so a command run from
+ * `/` answers at once rather than walking the disk.
  *
  * ITS REAL PATH, as the bundler and the resolver name every file under it: an app under `/tmp` is
  * `/private/tmp` to both, and one spelling here is one fewer at every reader downstream.
@@ -183,18 +163,18 @@ export function appRoot(given: string | undefined): string | undefined {
     if (given !== undefined) return realOrAsGiven(resolve(given))
     const under = resolve('src')
     const root = realOrAsGiven(existsSync(under) ? under : process.cwd())
-    let packaged = false
-    for (const directory of appDirectories(root))
-        packaged ||= existsSync(`${directory}/package.json`)
-    return packaged && holdsApp(root) ? root : undefined
+    return existsSync(`${packageDirectory(root)}/package.json`) &&
+        holdsApp(root)
+        ? root
+        : undefined
 }
 
 /**
  * What an app is booted as besides its sources: its hooks module and its `package.json`.
  *
- * The two things `bootApp` reads before the boot and not through it. Found under the source root
- * for an app on disk (`originUnder`), and handed over by a compiled app, which has no root to look
- * under.
+ * The two things `bootApp` reads before the boot and not through it — off the server's table of
+ * the compilation this process serves (`serveApp`), or handed over by a compiled app's entry, which
+ * holds the table itself.
  */
 export type AppOrigin = {
     /**
@@ -205,20 +185,6 @@ export type AppOrigin = {
     hooks: (() => Promise<unknown>) | undefined
     /** 27.3's name and version. */
     package: AppPackage
-}
-
-/**
- * The `AppOrigin` of an app on disk: its package under `root`, and its server blocks, out of the
- * compilation this process serves (`serveCompilation`) — the build's, or `abide dev`'s.
- */
-export function originUnder(root: string): AppOrigin {
-    return {
-        hooks: async () => {
-            const table = await servedTable(root)
-            await Promise.all(table.servers.map((load) => load()))
-        },
-        package: packageUnder(root),
-    }
 }
 
 /**

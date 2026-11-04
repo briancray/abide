@@ -13,6 +13,7 @@ import { measure } from '@abide/harness/abide'
 import { spawned } from '@abide/harness/gate'
 
 import { emitComponent, parseAbide } from '#compiler'
+import { buildFiles } from '#server/appBuild.ts'
 import { flushSync } from '#shared'
 
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -360,7 +361,7 @@ let count = reactive(0)
     ])
     expect(built.exitCode).toBe(0)
 
-    const { files } = (await Bun.file(`${out}/compilation.json`).json()) as {
+    const { files } = (await Bun.file(buildFiles(out).compilation).json()) as {
         files: Record<string, { client: string }>
     }
     const client = files['lib/Static.abide']?.client ?? ''

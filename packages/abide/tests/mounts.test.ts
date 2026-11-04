@@ -9,6 +9,7 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { compileApp } from '#compiler/compileApp.ts'
+import { buildFiles } from '#server/appBuild.ts'
 
 import { appFixture, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -206,9 +207,11 @@ const names = list()
     expect(built.exitCode, built.stderr).toBe(0)
     let bundle = ''
     for (const chunk of new Bun.Glob('**/*.js').scanSync({
-        cwd: `${app}/.abide/client`,
+        cwd: buildFiles(`${app}/.abide`).client,
     }))
-        bundle += await Bun.file(`${app}/.abide/client/${chunk}`).text()
+        bundle += await Bun.file(
+            `${buildFiles(`${app}/.abide`).client}/${chunk}`,
+        ).text()
     expect(bundle).toContain('tools/users/list')
     expect(bundle.split('handler-body-marker').length - 1).toBe(0)
 }, 30_000)

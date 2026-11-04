@@ -21,12 +21,8 @@
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
 
-import {
-    type Compilation,
-    serveCompilation,
-    servedTable,
-} from './abideModules.ts'
-import { type AppSources, appSources } from './answerRequest.ts'
+import type { Compilation } from './abideModules.ts'
+import type { AppSources } from './answerRequest.ts'
 import type { Mux, MuxConnection } from './answerSocket.ts'
 import { publishedUnder } from './appTree.ts'
 import {
@@ -35,7 +31,7 @@ import {
     clientBundle,
     type ServedFile,
 } from './clientBundle.ts'
-import { bootApp, type BootedApp, originUnder } from './createApp.ts'
+import { bootApp, type BootedApp } from './createApp.ts'
 import { keepServing } from './faultPolicy.ts'
 import { type Manifest, NO_MANIFEST } from './manifestOf.ts'
 import { admitsMux, muxSocketOptions } from './muxUpgrade.ts'
@@ -46,6 +42,7 @@ import {
     serveOver,
     type ToRelay,
 } from './responseRelay.ts'
+import { appSources, serveApp } from './servedApp.ts'
 import { withAbideSources } from './withAbideSources.ts'
 
 // The reload client, which the worker serves and every document it answers loads.
@@ -211,31 +208,30 @@ async function open(
         // the bundler resolves the browser's graph through it, so the two lanes cannot disagree
         // about what a specifier means. Registering it is process-wide — which is a worker rather
         // than the command, so a reload is a new registry rather than a cache to bust.
-        serveCompilation(root, compilation)
+        const serving = serveApp(root, compilation)
 
         // ASKED FOR TOGETHER. The bundle, the public directory and the server's own
-        // tables depend on none of each other — the plugin is registered above, before any of
-        // them asks it anything — and on a reload every one of them is latency the author waits on,
-        // so the bundle is handed over still building (`SourceParts.client`).
+        // tables depend on none of each other — `serveApp` registered the plugin as it was called,
+        // before any of them asks it anything — and on a reload every one of them is latency the
+        // author waits on, so the bundle is handed over still building (`SourceParts.client`).
         //
         // ONE LISTING of the public directories — the compile's — for the bundle's externals and for
         // what is served. 38.19 — OUT OF THE SOURCE TREE. `abide build` copies these into its output
         // and dev has no output, so the address answers where the author's file actually is.
         const published = publishedUnder(root, start.published)
         const bundling = bundleInMemory(root, compilation, start.published)
-        const table = await servedTable(root)
-        const handlers = table.handlers
+        const { origin, table } = await serving
 
         // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too — and its
         // sources are read INSIDE the boot, as `abide start` reads them: a document's head carries
         // what the resolved configuration says (28.4's app name), which is not resolved before it.
-        app = await bootApp(originUnder(root), async () => {
+        app = await bootApp(origin, async () => {
             // 38.17 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in whether or
             // not there is an entry beside it: a bundle that failed is exactly when a reader needs the
             // next save to reach them. `clientTags` writes nothing for a manifest with no entry.
             const sources = await appSources({
                 table,
-                handlers,
+                handlers: table.handlers,
                 published,
                 client: bundling.then((bundle) => ({
                     manifest: bundle.manifest,

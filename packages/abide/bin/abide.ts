@@ -26,15 +26,17 @@ import {
     type Compilation,
     serverMapsOf,
 } from '#server/abideModules.ts'
-import { banner } from '#server/banner.ts'
-import { buildDirectory } from '#server/buildDirectory.ts'
 import {
-    CLIENT_DIRECTORY,
-    COMPILATION,
-    ENCODING_SUFFIX,
-    MANIFEST,
-    PUBLIC_DIRECTORY,
-} from '#server/CLIENT_BUILD.ts'
+    buildDirectory,
+    type BuildFiles,
+    buildFiles,
+    builtFiles,
+    markBuild,
+    unmarkedBuild,
+    writeWhole,
+} from '#server/appBuild.ts'
+import { banner } from '#server/banner.ts'
+import { ENCODING_SUFFIX } from '#server/CLIENT_BUILD.ts'
 import { type ClientBundle, clientBundle } from '#server/clientBundle.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
 import { type AppPackage, packageUnder } from '#server/config.ts'
@@ -45,7 +47,6 @@ import { namesUnder } from '#server/namesUnder.ts'
 import { skipped } from '#server/placement.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
-import { pathsUnder, serveBuild } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
@@ -72,12 +73,8 @@ const DISK: Host = {
     // 38.100 — built in this process rather than a child, where nobody built it, and said on
     // stderr: the command's stdout is its own — `openapi`'s document, `mcp`'s messages.
     app: ({ values }) => {
-        const handle = appOnDisk(directoriesOf(values), async (root, out) =>
-            (await serveBuild(root, out, (root, out) =>
-                writeBuild({ root, out }, console.error),
-            ))
-                ? out
-                : undefined,
+        const handle = appOnDisk(directoriesOf(values), (root, out) =>
+            writeBuild({ root, out }, console.error),
         )
         return RUNTIME_REFUSAL === undefined
             ? handle
@@ -116,10 +113,8 @@ async function writeBuild(
     process.env.NODE_ENV ??= 'production'
     // 38.66 — what this build may remove is only what was written before it began.
     const began = Date.now()
-    // 38.100 — a build that fails leaves no build: the previous one's marker goes before anything
-    // can fail, so `abide start` builds again and says why rather than booting what is left.
-    const marker = `${out}/${COMPILATION}`
-    await rm(marker, { force: true })
+    // 38.100 — before anything can fail, so a build that fails leaves no build.
+    const files = await unmarkedBuild(out)
     // `--out` is a real flag rather than a constant because two test files each building into
     // one `.abide/` is the contention CLAUDE.md's "checks" section already records once.
     const app = await compileApp(root)
@@ -138,14 +133,13 @@ async function writeBuild(
     // 36.11 — the directories above `public` and the path below it ARE the address.
     // `src/public/favicon.ico` answers at `/favicon.ico`, and nothing declares that anywhere.
     await writeClient(
-        out,
+        files,
         await clientBundle(root, compilation, app.published, 'build'),
         began,
     )
     // An app's static files are its own whether or not it has a page yet.
-    const copied = await copyPublic(root, out, app.published, began)
-    // LAST, because its presence is what `serveBuild` reads as a finished build (38.100).
-    await writeWhole(marker, JSON.stringify(compilation))
+    const copied = await copyPublic(root, files, app.published, began)
+    await markBuild(files, compilation)
     say(
         `abide build: ${app.sources} source(s), ${copied} public file(s) -> ${out}`,
     )
@@ -299,9 +293,7 @@ async function writtenEntry(
             root,
             sourceMaps: serverMapsOf(app, root),
             package: packageUnder(root),
-            manifest: await Bun.file(`${out}/${MANIFEST}`).json(),
-            client: pathsUnder(`${out}/${CLIENT_DIRECTORY}`),
-            published: pathsUnder(`${out}/${PUBLIC_DIRECTORY}`),
+            ...(await builtFiles(out)),
         }),
     )
     return { entry, compilation: app }
@@ -443,7 +435,7 @@ async function writeIcon(root: string, resources: string): Promise<boolean> {
 
 /** 38.79 — the public file the app's icon is drawn from: `/icon.icns`, else `/icon.png`. */
 async function publishedIcon(root: string): Promise<string | undefined> {
-    const published = `${buildDirectory(root)}/${PUBLIC_DIRECTORY}`
+    const { published } = buildFiles(buildDirectory(root))
     for (const address of [ICON_ADDRESSES.icns, ICON_ADDRESSES.png])
         if (await Bun.file(`${published}${address}`).exists())
             return `${published}${address}`
@@ -517,7 +509,7 @@ ${body}</dict>
  */
 async function copyPublic(
     root: string,
-    out: string,
+    files: BuildFiles,
     published: Map<string, string>,
     began: number,
 ): Promise<number> {
@@ -528,35 +520,35 @@ async function copyPublic(
         produced.add(address.slice(1))
         copies.push(
             writeWhole(
-                `${out}/${PUBLIC_DIRECTORY}${address}`,
+                `${files.published}${address}`,
                 Bun.file(`${root}/${source}`),
             ),
         )
     }
     await Promise.all(copies)
     // 38.66 — a public file the app no longer has is no longer answered.
-    await pruneStale(`${out}/${PUBLIC_DIRECTORY}`, produced, began)
+    await pruneStale(files.published, produced, began)
     return published.size
 }
 
 /**
- * Writes the client bundle (`clientBundle`) into `out`, with its manifest and precompressed copies.
+ * Writes the client bundle (`clientBundle`) into the build, with its manifest and precompressed copies.
  *
  * 38.5 — the manifest beside the bundle, and every file in each encoding (`precompressed`). AN APP
  * OF HANDLERS ALONE is written no client, and its manifest anyway, so `abide start` reads one shape
  * whatever the app holds.
  */
 async function writeClient(
-    out: string,
+    files: BuildFiles,
     bundle: ClientBundle,
     began: number,
 ): Promise<void> {
-    const client = `${out}/${CLIENT_DIRECTORY}`
+    const { client } = files
     // 38.66 — STAGED, THEN MOVED IN FILE BY FILE. A second build into the same `out` — or `abide
     // start` serving it — read a chunk half written, and emptying `client/` first took the one it
     // was serving away. Every name but the manifest's is a hash of what it holds, so two builds of
     // one tree move in the same bytes under the same names.
-    const staging = `${out}/.staging-${crypto.randomUUID()}`
+    const staging = `${dirname(client)}/.staging-${crypto.randomUUID()}`
     try {
         const written: Promise<void>[] = []
         for (const [name, { bytes }] of bundle.files)
@@ -574,7 +566,7 @@ async function writeClient(
         }
         await Promise.all(moves)
         await pruneStale(client, produced, began)
-        await writeWhole(`${out}/${MANIFEST}`, JSON.stringify(bundle.manifest))
+        await writeWhole(files.manifest, JSON.stringify(bundle.manifest))
     } finally {
         await rm(staging, { recursive: true, force: true })
     }
@@ -640,17 +632,6 @@ async function pruneStale(
         )
             stale.push(rm(`${directory}/${name}`, { force: true }))
     await Promise.all(stale)
-}
-
-/**
- * Writes `path` whole: to a name of its own beside it, then renamed over it.
- *
- * 38.66 — a reader, or a second build, finds the last complete file there and never a partial one.
- */
-async function writeWhole(path: string, content: string | Blob): Promise<void> {
-    const partial = `${path}.${crypto.randomUUID()}.partial`
-    await Bun.write(partial, content)
-    await rename(partial, path)
 }
 
 /**

@@ -5,8 +5,9 @@
 // one place that runs first. The build is `createApp`'s own under `bun test` (42.16), so a test that
 // boots the app afterwards reuses it rather than building twice.
 
+import { processBuild, servedBuild, spawnedBuild } from './appBuild.ts'
 import { addDerived } from './config.ts'
-import { appRoot, servedBuild } from './createApp.ts'
+import { appRoot } from './createApp.ts'
 
 // 38.120 — a sign-in seals under test where the app declared no secret: derived, so the app's
 // `onConfig` default and the env both still win (27.2), where an env value would beat the default.
@@ -17,7 +18,7 @@ const root = appRoot(undefined)
 // packages' `.abide` files are each their own app's rather than one app laid out across them.
 // Fresh whatever `NODE_ENV` says: `bun test` sets it only where nothing else has.
 if (root !== undefined && !(await isWorkspaceRoot(root)))
-    await servedBuild(root, true)
+    await servedBuild(root, await processBuild(root, true), spawnedBuild)
 
 async function isWorkspaceRoot(directory: string): Promise<boolean> {
     const manifest = Bun.file(`${directory}/package.json`)

@@ -245,7 +245,7 @@ test('boots', async () => {
 }, 90_000)
 
 // 38.100 — AN APP NOBODY BUILT IS BUILT, by `abide start` and by `createApp` outside a test. THE
-// REVERT: drop the `build` call from `serveBuild`, and `abide start` reports nothing to serve while
+// REVERT: drop the `build` call from `servedBuild`, and `abide start` reports nothing to serve while
 // `createApp` throws that it found nothing to build.
 test('abide start and createApp build an app nobody built — 38.100', async () => {
     const fresh = temporaryModule({

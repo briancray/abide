@@ -12,8 +12,8 @@ import { reactive } from '#shared/reactive/index.ts'
 import { validationError } from '#shared/refuse.ts'
 import { runSchema } from '#shared/Schema.ts'
 
-import { appDirectories } from './appDirectories.ts'
 import { type Env, HOOKS, inOrder } from './hooks.ts'
+import { packageDirectory } from './packageDirectory.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** The fields of an app's `package.json` 27.3 derives from. */
@@ -27,14 +27,13 @@ export type AppPackage = { name?: string; version?: string }
  */
 export const APP_PACKAGE: { current: AppPackage } = { current: {} }
 
-/** The `package.json` beside an app on disk, in the first of `appDirectories` that has one. */
+/** The `package.json` of an app on disk (`packageDirectory`), or nothing where it has none. */
 export function packageUnder(root: string): AppPackage {
-    for (const directory of appDirectories(root)) {
-        try {
-            return require(`${directory}/package.json`) as AppPackage
-        } catch {}
+    try {
+        return require(`${packageDirectory(root)}/package.json`) as AppPackage
+    } catch {
+        return {}
     }
-    return {}
 }
 
 /**
