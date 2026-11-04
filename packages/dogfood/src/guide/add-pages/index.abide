@@ -74,6 +74,35 @@ import Section from '#src/lib/Section.abide'
         </table>
     </Section>
 
+    <Section title="A link names a route, and `url` fills it in">
+        <p>The list links each company with
+            <code>url('/companies/[id=SLUG]', &#123; id: company.id &#125;)</code>. You write the pattern a
+            page is filed under, matcher and all, rather than the address, and <code>url</code> fills in
+            the segments.
+            Leaving out a required one is a compile error, and a pattern no page is filed under is
+            refused by <code>abide check</code>. A query goes last:
+            <code>url('/companies', &#123;&#125;, &#123; city: 'London' &#125;)</code>.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>Routes</code></td><td>every pattern the CRM files a page under, and every public file's address, declared by <code>abide check</code></td></tr>
+                <tr><td><code>RouteLiteral</code></td><td>one of those patterns: what <code>url</code> takes</td></tr>
+                <tr><td><code>Query</code></td><td>the query argument, a record or a <code>URLSearchParams</code></td></tr>
+                <tr><td><code>ParamsOf&lt;P&gt;</code></td><td>the params object pattern <code>P</code> takes</td></tr>
+                <tr><td><code>HasParams&lt;P&gt;</code></td><td>whether <code>P</code> requires one</td></tr>
+                <tr><td><code>HasSegments&lt;P&gt;</code></td><td>whether <code>P</code> has any bracketed segment</td></tr>
+                <tr><td><code>RequiredNames&lt;P&gt;</code></td><td>its <code>[name]</code> segments</td></tr>
+                <tr><td><code>OptionalNames&lt;P&gt;</code></td><td>its <code>[[name]]</code> segments</td></tr>
+                <tr><td><code>RestNames&lt;P&gt;</code></td><td>its <code>[...name]</code> segments</td></tr>
+            </tbody>
+        </table>
+
+        <p>You never write the last six. They are how <code>url</code>'s signature is read off the
+            pattern, and a compile error naming <code>RequiredNames</code> is naming the segment you
+            left out.</p>
+    </Section>
+
     <Section title="`[id=SLUG].abide` answers for every company">
         <Example
             id="crm-06-company-page"
@@ -89,9 +118,8 @@ import Section from '#src/lib/Section.abide'
             <CompanyPages />
         </Example>
 
-        <p><code>route.params.id</code> is the segment the address matched. It is a reactive value
-            like any other, so moving from one company to the next reloads the company rather than
-            rebuilding the page.</p>
+        <p><code>route.params.id</code> is the segment the address matched, read like any
+            reactive value, so the company the page loads is the one its address names.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -175,35 +203,6 @@ import Section from '#src/lib/Section.abide'
             file's directory, and moving the line moves them.</p>
     </Section>
 
-    <Section title="A link names a route, and `url` fills it in">
-        <p>The list links each company with
-            <code>url('/companies/[id=SLUG]', &#123; id: company.id &#125;)</code>. You write the pattern a
-            page is filed under, matcher and all, rather than the address, and <code>url</code> fills in
-            the segments.
-            Leaving out a required one is a compile error, and a pattern no page is filed under is
-            refused by <code>abide check</code>. A query goes last:
-            <code>url('/companies', &#123;&#125;, &#123; city: 'London' &#125;)</code>.</p>
-
-        <table>
-            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
-            <tbody>
-                <tr><td><code>Routes</code></td><td>every pattern the CRM files a page under, declared by <code>abide check</code></td></tr>
-                <tr><td><code>RouteLiteral</code></td><td>one of those patterns: what <code>url</code> takes</td></tr>
-                <tr><td><code>Query</code></td><td>the query argument, a record or a <code>URLSearchParams</code></td></tr>
-                <tr><td><code>ParamsOf&lt;P&gt;</code></td><td>the params object pattern <code>P</code> takes</td></tr>
-                <tr><td><code>HasParams&lt;P&gt;</code></td><td>whether <code>P</code> requires one</td></tr>
-                <tr><td><code>HasSegments&lt;P&gt;</code></td><td>whether <code>P</code> has any bracketed segment</td></tr>
-                <tr><td><code>RequiredNames&lt;P&gt;</code></td><td>its <code>[name]</code> segments</td></tr>
-                <tr><td><code>OptionalNames&lt;P&gt;</code></td><td>its <code>[[name]]</code> segments</td></tr>
-                <tr><td><code>RestNames&lt;P&gt;</code></td><td>its <code>[...name]</code> segments</td></tr>
-            </tbody>
-        </table>
-
-        <p>You never write the last six. They are how <code>url</code>'s signature is read off the
-            pattern, and a compile error naming <code>RequiredNames</code> is naming the segment you
-            left out.</p>
-    </Section>
-
     <Section title="`navigate` moves the address from code">
         <Example
             id="crm-06-navigate"
@@ -218,8 +217,8 @@ import Section from '#src/lib/Section.abide'
             <CompanyTabs />
         </Example>
 
-        <p>An address the page already shown matches moves <code>route.url</code> and keeps the
-            page mounted. Another page's address mounts that page in place, without reloading the
+        <p>An address that matches the page already shown moves <code>route.url</code> and keeps
+            the page mounted. Another page's address mounts that page in place, without reloading the
             document. <code>replace: true</code> writes over the history entry, so Back leaves the
             company rather than stepping through every tab.</p>
 
@@ -233,7 +232,7 @@ import Section from '#src/lib/Section.abide'
             id="crm-06-view-transition"
             app="crm-06"
             title="`view-transition-name` — a company name that moves to where it lands"
-            summary="The list row and the company page give the company's name the same view-transition-name. Open a company: the name travels from its row to the heading."
+            summary="A rep opens a company from the list, and the name they clicked becomes the heading they land on. Open one and watch it travel."
             files={{
                 'src/companies/lib/TransitionFrame.abide': transitionFrameSource,
                 'src/companies/index.abide': indexPageSource,
@@ -251,12 +250,12 @@ import Section from '#src/lib/Section.abide'
             transitions navigates as it otherwise would.</p>
     </Section>
 
-    <Section title="`<head>` in a page replaces its layout's">
+    <Section title="A page's `<head>` wins over its layout's, key by key">
         <Example
             id="crm-06-head"
             app="crm-06"
             title="`<head>` in a page and its layout — the deepest title wins"
-            summary="The companies layout titles every page, and a company page titles itself. Open the list, then a company: the tab takes the company's name."
+            summary="The companies layout titles every page, and a company page titles itself. Open each in a tab of its own: the company's tab takes its name."
             files={{
                 'src/companies/lib/TabTitle.abide': tabTitleSource,
                 'src/companies/layout.abide': layoutSource,
@@ -268,7 +267,8 @@ import Section from '#src/lib/Section.abide'
         </Example>
 
         <p>A <code>&lt;head&gt;</code> sits at the top level of a file, never inside a block. A
-            <code>&lt;title&gt;</code>, a <code>&lt;meta&gt;</code> by its name and a
+            <code>&lt;title&gt;</code> and a <code>&lt;base&gt;</code> by their tag, a
+            <code>&lt;meta&gt;</code> by its <code>name</code> or <code>property</code>, and a
             <code>&lt;link&gt;</code> by its <code>rel</code> and <code>href</code> each have a key,
             and the deepest contribution for a key wins. One with no key is appended. Leaving a page puts its layout's
             title back.</p>
@@ -331,6 +331,10 @@ import Section from '#src/lib/Section.abide'
         <p>The refusal has to come in the page's first turn to set the status. That is why
             <code>getCompany</code> refuses before it waits. An error page that fails itself hands
             off to the next one up.</p>
+
+        <p>A request for a page that is neither a navigation nor a <code>fetch</code>, such as an
+            <code>&lt;img&gt;</code> pointed at <code>/companies/initech</code>, gets a 404 with no
+            body, and the page is never set up for it.</p>
     </Section>
 
     <Section title="`onError` reports what the caller is not told">
@@ -352,6 +356,10 @@ import Section from '#src/lib/Section.abide'
         <p><code>onError</code> runs on an unexpected error in any request below the file that
             called it. Send the error to a tracker there. The caller gets a 500 with nothing about the
             cause, so a stack trace never reaches a browser.</p>
+
+        <p>The button's <code>catch</code> gets whatever was thrown. <code>isFailed</code> says
+            whether that is a refusal, which carries a <code>status</code> and a
+            <code>message</code>, before the button reads either.</p>
     </Section>
 
     <Section title="`render` builds a document from a component">
@@ -387,13 +395,15 @@ import Section from '#src/lib/Section.abide'
             resolved when they are read, never baked into the build. An address you write out by hand
             is not, which is one more reason to build them with <code>url</code>.</p>
 
-        <p>Everything abide serves for itself, from handler calls to the health check, is below
-            <code>/__abide/**</code>, so a proxy in front of the CRM forwards one path family.</p>
+        <p>A handler file answers at its own route, as <code>/companies/getCompany</code> does, so
+            it moves below the path with the pages. What abide serves for itself is below
+            <code>/__abide/**</code>: the client bundle, the health report, the OpenAPI document, the
+            MCP endpoint, and a private handler.</p>
     </Section>
 
     <Section title="Next">
         <ul>
-            <li><a href={url('/guide/decide-who-sees-what')}>Who sees what</a> — sign a user in,
+            <li><a href={url('/guide/decide-who-sees-what')}>Decide who sees what</a> — sign a user in,
                 and decide what each caller may read</li>
         </ul>
     </Section>
