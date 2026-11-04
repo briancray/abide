@@ -3381,7 +3381,9 @@ before it exits.
 
 44.31 A conversation MUST write one `debug` line on `abide:assistant` when its events end, naming
 its stop reason, the transcript's length, the tool calls it made, its usage and how long it took,
-and naming it `unfinished` where it ended without a `done`.
+and naming it `unfinished` where it ended without a `done`, followed by why — `aborted` where the
+request's signal aborted, else `failed` where its provider threw, with the throw's message ending the
+line, else `stopped` where its caller stopped reading.
 
 44.32 A command `claudeCode.bridgeCommand` or `claudeCode.bridge` mints with `tools` MUST grant
 those built-in tools after its `--` as `--tools`, and one minted without `tools` MUST carry no `--`.

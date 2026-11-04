@@ -193,9 +193,10 @@ test("a browser's log.named prefixes the app name the document carries — 28.4"
     expect(log.records().at(-1)?.namespace).toBe('ledger:billing')
 })
 
-// 44.31 — A CONVERSATION WRITES ONE LINE ON `abide:assistant` WHEN ITS EVENTS END, and one its caller
-// stopped reading reads `unfinished`. THE REVERT: yield the provider's events untraced in `assistant`;
-// neither conversation writes a line.
+// 44.31 — A CONVERSATION WRITES ONE LINE ON `abide:assistant` WHEN ITS EVENTS END, and one that ended
+// without a `done` reads `unfinished` and why: its caller stopped reading, its provider threw, or its
+// request aborted. THE REVERT: yield the provider's events untraced in `assistant` and no conversation
+// writes a line; log `unfinished` alone and the three read the same.
 test('a conversation writes one debug line on abide:assistant when it ends — 44.31', async () => {
     process.env.DEBUG = 'abide:assistant'
     const played: AssistantEvent[] = [
@@ -220,12 +221,47 @@ test('a conversation writes one debug line on abide:assistant when it ends — 4
         for await (const _ of conversation());
         for await (const _ of conversation()) break
     })
+    const failing = {
+        async *run(): AsyncGenerator<AssistantEvent> {
+            yield { type: 'tool', id: 't1', name: 'get_contacts' }
+            throw new Error('claude exited 1 with no result')
+        },
+    }
+    await inScope(new Request('http://crm.test/ask'), async () => {
+        try {
+            for await (const _ of assistant(
+                [{ role: 'user', content: 'who?' }],
+                failing,
+            ));
+        } catch {}
+    })
+    const hangUp = new AbortController()
+    const hungUp = {
+        async *run(): AsyncGenerator<AssistantEvent> {
+            hangUp.abort()
+        },
+    }
+    await inScope(
+        new Request('http://crm.test/ask', { signal: hangUp.signal }),
+        async () => {
+            for await (const _ of assistant(
+                [{ role: 'user', content: 'who?' }],
+                hungUp,
+            ));
+        },
+    )
     const written = lines().slice(before)
-    expect(written.length).toBe(2)
+    expect(written.length).toBe(4)
     expect(written[0]).toMatch(
         /^end_turn 1 messages 1 tool calls 12\/3 tokens \d+\.\dms$/,
     )
     expect(written[1]).toMatch(
-        /^unfinished 1 messages 1 tool calls no usage \d+\.\dms$/,
+        /^unfinished stopped 1 messages 1 tool calls no usage \d+\.\dms$/,
+    )
+    expect(written[2]).toMatch(
+        /^unfinished failed 1 messages 1 tool calls no usage \d+\.\dms claude exited 1 with no result$/,
+    )
+    expect(written[3]).toMatch(
+        /^unfinished aborted 1 messages 0 tool calls no usage \d+\.\dms$/,
     )
 })

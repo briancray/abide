@@ -122,37 +122,58 @@ export async function* assistant(
         options.mcp === true ? appSurface() : NO_SURFACE,
         askerOf(request()),
     )
+    const signal = request().signal
     const events = provider.run(turns, tools, {
         maxTurns: options.maxTurns ?? MAX_TURNS,
-        signal: request().signal,
+        signal,
     })
     // 28.7 — a closed namespace runs the provider's stream untouched.
-    yield* ASSISTANT_LOG.enabled() ? traced(events, messages.length) : events
+    yield* ASSISTANT_LOG.enabled()
+        ? traced(events, messages.length, signal)
+        : events
 }
 
-/** `events`, and one line on `abide:assistant` once they end, however they end. 44.31. */
+/**
+ * `events`, and one line on `abide:assistant` once they end, however they end. 44.31.
+ *
+ * AN UNFINISHED CONVERSATION SAYS WHY, an abort read ahead of a throw: an aborted provider may throw
+ * as it unwinds, and the abort is what ended it.
+ */
 async function* traced(
     events: AsyncGenerator<AssistantEvent>,
     messageCount: number,
+    signal: AbortSignal,
 ): AsyncGenerator<AssistantEvent> {
     const started = performance.now()
     let calls = 0
     let done: Extract<AssistantEvent, { type: 'done' }> | undefined
+    let failure: string | undefined
     try {
         for await (const event of events) {
             if (event.type === 'tool') calls += 1
             else if (event.type === 'done') done = event
             yield event
         }
+    } catch (thrown) {
+        failure = thrown instanceof Error ? thrown.message : String(thrown)
+        throw thrown
     } finally {
+        const ending =
+            done?.stop ??
+            (signal.aborted
+                ? 'unfinished aborted'
+                : failure === undefined
+                  ? 'unfinished stopped'
+                  : 'unfinished failed')
         ASSISTANT_LOG.debug(
-            done === undefined ? 'unfinished' : done.stop,
+            ending,
             `${messageCount} messages`,
             `${calls} tool calls`,
             done === undefined
                 ? 'no usage'
                 : `${done.usage.input}/${done.usage.output} tokens`,
             `${(performance.now() - started).toFixed(1)}ms`,
+            ...(ending === 'unfinished failed' ? [failure] : []),
         )
     }
 }
