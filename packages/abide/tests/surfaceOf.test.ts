@@ -6,6 +6,7 @@ import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
 import type { Mount, Mounted } from '#server/answerRpc.ts'
+import { derivedArgs } from '#server/argsContract.ts'
 import {
     argsText,
     cliListing,
@@ -88,8 +89,8 @@ test('a mounted handler is projected off the handler, a row off the build — 20
         method: 'GET',
         handler: hidden as Mounted['handler'],
         rungs: [],
-        argsDocument: { type: 'object' },
     }
+    derivedArgs(mounted.handler, { type: 'object' })
     expect(surfaceOf(mounted, 'mcp')).toBeUndefined()
     expect(surfaceOf(mounted, 'openapi')).toEqual({
         address: '/invoices/hidden',
@@ -117,7 +118,6 @@ test("a Response handler's row keeps it off MCP unless its clients puts it back 
         method: 'GET',
         handler: GET(() => new Response(''), { clients }) as Mounted['handler'],
         rungs: [],
-        argsDocument: undefined,
     })
     expect(surfaceOf(mountedAs({}), 'mcp')).toBeUndefined()
     expect(surfaceOf(mountedAs({ mcp: true }), 'mcp')?.path).toBe(

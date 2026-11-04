@@ -5,7 +5,8 @@
 import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
-import type { Mounted } from '#server/answerRpc.ts'
+import { type Mounted, mountHandlers } from '#server/answerRpc.ts'
+import { handlerFileMount } from '#server/handlerFileMount.ts'
 import { argsFor, collapsed, derivedArgs } from '#server/argsContract.ts'
 import { isFailed } from '#shared/Failed.ts'
 
@@ -94,4 +95,37 @@ test("a path's parameters join the args, coerced, and are never named twice — 
         refused = thrown
     }
     expect(isFailed(refused) && refused.status).toBe(400)
+})
+
+// 19.9 — A ROW'S DERIVED SCHEMA REACHES A HANDLER ITS MODULE NEVER HELD TO IT: a bundled
+// executable's handler faces file no `derivedArgs`, so the row the build wrote is what the mount
+// holds it to. THE REVERT: drop the `derivedArgs` call from `mountHandlers`; `id` arrives as '42'.
+test("a mounted row holds its handler to the schema the build derived — 19.9", async () => {
+    const loose = GET((_args: { id: number }) => 1)
+    const { handlers } = await mountHandlers([
+        {
+            ...handlerFileMount(
+                {
+                    address: '/bundled',
+                    source: 'bundled.ts',
+                    scope: '/',
+                    matchers: {},
+                },
+                {
+                    method: 'GET',
+                    ui: false,
+                    cli: false,
+                    mcp: false,
+                    description: undefined,
+                    copy: undefined,
+                    defaults: undefined,
+                    args: SCHEMA,
+                    result: undefined,
+                },
+            ),
+            load: async () => ({ default: loose }),
+        },
+    ])
+    const mounted = handlers.get('GET /bundled') as Mounted
+    expect(argsFor(mounted.handler, { id: '42' }, '?id=42')).toEqual({ id: 42 })
 })

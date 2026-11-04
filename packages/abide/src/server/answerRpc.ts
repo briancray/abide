@@ -29,12 +29,7 @@ import {
 } from './answerFailure.ts'
 import { followAsEvents } from './answerSocket.ts'
 import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
-import {
-    argsDocumentOf,
-    argsFor,
-    collapsed,
-    type Document,
-} from './argsContract.ts'
+import { argsFor, collapsed, derivedArgs } from './argsContract.ts'
 import { callerOf } from './callerOf.ts'
 import { positiveSetting } from './config.ts'
 import {
@@ -121,12 +116,6 @@ export type Mounted = Mount & {
      */
     rungs: LaneRung[]
     handler: Rpc<unknown, unknown> & Gated<unknown> & HeldToAnnotation
-    /**
-     * The args' JSON Schema, probed once at mount.
-     *
-     * 19.7, 20.11 — a third-party schema converts itself on every probe.
-     */
-    argsDocument: Document | undefined
 }
 
 /**
@@ -167,7 +156,6 @@ export function mountedOwn(
             args: undefined,
             result: undefined,
             handler: handler as Mounted['handler'],
-            argsDocument: undefined,
         },
     ]
 }
@@ -197,6 +185,9 @@ export async function mountHandlers(
         // 16.9, 16.10 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
         // page's render turns a call it made into the browser's request by (41.20).
         handler.address = underMount(mount.address)
+        // 19.9 — the schema the build derived off its annotation, for a handler whose module did not
+        // file it on load: a bundled executable's faces carry no `derivedArgs` call.
+        if (mount.args !== undefined) derivedArgs(handler, mount.args)
         handlers.set(handlerKey(mount.method, mount.address), {
             ...mount,
             // 37.1, 16.72 — the route its file's hooks are filed at, which the build read off
@@ -204,7 +195,6 @@ export async function mountHandlers(
             // 37.14 — a handler's lane answers a refusal as Problem Details (15.1).
             rungs: rungsOver(mount.scope, answered),
             handler,
-            argsDocument: argsDocumentOf(handler),
         })
     }
     return { handlers }

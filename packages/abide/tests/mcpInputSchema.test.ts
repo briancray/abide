@@ -4,7 +4,9 @@
 import { expect, test } from 'bun:test'
 
 import type { Mounted } from '../src/server/answerRpc.ts'
+import { derivedArgs } from '../src/server/argsContract.ts'
 import { McpSurface } from '../src/server/generatedSurfaces.ts'
+import type { JsonValue } from '../src/shared/JsonValue.ts'
 
 const BY_MEDIA = {
     type: 'object',
@@ -25,8 +27,8 @@ function surfaceOver(args: unknown): McpSurface {
         mcp: true,
         result: undefined,
         handler: { clients: {}, keyed: false, description: 'Match.' },
-        argsDocument: args,
     } as unknown as Mounted
+    if (args !== undefined) derivedArgs(mounted.handler, args as JsonValue)
     return new McpSurface(
         new Map([['POST /match', mounted]]),
         async () => new Response(null),
