@@ -28,6 +28,7 @@ import stageCountSource from 'crm-04/src/pipeline/lib/StageCount.abide' with { t
 import stageTileSource from 'crm-04/src/pipeline/lib/StageTile.abide' with { type: 'text' }
 import StageTiles from 'crm-04/src/pipeline/lib/StageTiles.abide'
 import stageTilesSource from 'crm-04/src/pipeline/lib/StageTiles.abide' with { type: 'text' }
+import stageTilesBenchSource from 'crm-04/src/pipeline/lib/StageTiles.bench.ts' with { type: 'text' }
 import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
 import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
 import targetStoreSource from 'crm-04/src/pipeline/lib/targetStore.ts' with { type: 'text' }
@@ -63,10 +64,15 @@ import Section from '#src/lib/Section.abide'
                 'src/pipeline/lib/StageAverage.abide': stageAverageSource,
                 'src/pipeline/getStage.handler.ts': getStageSource,
                 'src/pipeline/lib/StageTiles.test.ts': stageTilesTestSource,
+                'src/pipeline/lib/StageTiles.bench.ts': stageTilesBenchSource,
             }}
         >
             <StageTiles />
         </Example>
+
+        <p>The bench puts all three panels on one stage once each entry has been answered, among 100
+            deals and among 1,000. Its ratio is what a pick costs as the pipeline grows: the panels
+            read the entry the server summed, and never the deals.</p>
 
         <p>The three panels never speak to each other, and nothing is lifted into a parent. When
             they ask for the same stage they get the same entry, so the later panels paint at once,

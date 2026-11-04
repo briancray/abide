@@ -13,6 +13,7 @@ import contactCardSource from 'crm-02/src/profile/lib/ContactCard.abide' with { 
 import contactCardTestSource from 'crm-02/src/profile/lib/ContactCard.test.ts' with { type: 'text' }
 import ContactFields from 'crm-02/src/profile/lib/ContactFields.abide'
 import contactFieldsSource from 'crm-02/src/profile/lib/ContactFields.abide' with { type: 'text' }
+import contactFieldsBenchSource from 'crm-02/src/profile/lib/ContactFields.bench.ts' with { type: 'text' }
 import contactFieldsTestSource from 'crm-02/src/profile/lib/ContactFields.test.ts' with { type: 'text' }
 import customerBadgeSource from 'crm-02/src/profile/lib/CustomerBadge.abide' with { type: 'text' }
 import FollowUp from 'crm-02/src/profile/lib/FollowUp.abide'
@@ -49,10 +50,15 @@ import Section from '#src/lib/Section.abide'
             files={{
                 'src/profile/lib/ContactFields.abide': contactFieldsSource,
                 'src/profile/lib/ContactFields.test.ts': contactFieldsTestSource,
+                'src/profile/lib/ContactFields.bench.ts': contactFieldsBenchSource,
             }}
         >
             <ContactFields />
         </Example>
+
+        <p>The bench types into the field once it holds 100 characters, and once it holds 1,000.
+            Its ratio is what a keystroke costs as the value grows: a keystroke writes the value once, and
+            copies nothing.</p>
 
         <p><code>bind:value</code> sets the field from the value, and writes the value back on
             <code>input</code> or <code>change</code>. There is no form model beside it and no handler

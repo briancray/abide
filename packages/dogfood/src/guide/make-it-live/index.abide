@@ -16,6 +16,7 @@ import feedsSource from 'crm-05/src/activity/lib/feeds.ts' with { type: 'text' }
 import lastActivitySource from 'crm-05/src/activity/lib/LastActivity.abide' with { type: 'text' }
 import QuickLog from 'crm-05/src/activity/lib/QuickLog.abide'
 import quickLogSource from 'crm-05/src/activity/lib/QuickLog.abide' with { type: 'text' }
+import quickLogBenchSource from 'crm-05/src/activity/lib/QuickLog.bench.ts' with { type: 'text' }
 import quickLogTestSource from 'crm-05/src/activity/lib/QuickLog.test.ts' with { type: 'text' }
 import RecentActivity from 'crm-05/src/activity/lib/RecentActivity.abide'
 import recentActivitySource from 'crm-05/src/activity/lib/RecentActivity.abide' with { type: 'text' }
@@ -50,10 +51,15 @@ import Section from '#src/lib/Section.abide'
                 'src/activity/lib/QuickLog.abide': quickLogSource,
                 'src/activity/lib/LastActivity.abide': lastActivitySource,
                 'src/activity/lib/QuickLog.test.ts': quickLogTestSource,
+                'src/activity/lib/QuickLog.bench.ts': quickLogBenchSource,
             }}
         >
             <QuickLog />
         </Example>
+
+        <p>The bench logs a call to a channel of 100 entries, and of 1,000, letting the oldest go
+            each time. Its ratio is what a log costs as the channel grows: the patch changes the
+            entries in place, and the channel is never copied.</p>
 
         <p><code>activity.ts</code> holds the channel and the one function that writes it. The bar
             imports the function, the readout imports the channel, and neither imports the other. No
