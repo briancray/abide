@@ -8,7 +8,7 @@ import AccountFeed from './AccountFeed.abide'
 const kinds = () =>
     [...document.querySelectorAll('strong')].map((each) => each.textContent)
 
-test('the button paints nothing itself: the patch it sends is what lists the call', async () => {
+test('the patch the button sends is what lists the call', async () => {
     using _feed = await mount(AccountFeed({}))
     await Bun.sleep(100)
     const before = kinds().length

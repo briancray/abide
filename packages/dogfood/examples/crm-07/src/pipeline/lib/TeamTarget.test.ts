@@ -8,7 +8,7 @@ import TeamTarget from './TeamTarget.abide'
 
 const shown = () => document.querySelector('strong')?.textContent
 
-test('the target one visitor sets is the one every next visit opens on', async () => {
+test('a target set once is what every later visit opens on', async () => {
     {
         using _first = await mount(TeamTarget({}))
         await Bun.sleep(500)

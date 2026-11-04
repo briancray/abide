@@ -403,7 +403,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section title="Next">
         <ul>
-            <li><a href={url('/guide/decide-who-sees-what')}>Decide who sees what</a> — sign a user in,
+            <li><a href={url('/guide/decide-who-sees-what')}>Who sees what</a> — sign a user in,
                 and decide what each caller may read</li>
         </ul>
     </Section>

@@ -14,8 +14,8 @@ test('the list shows each entry as it is read', async () => {
     // One entry in, and the archive still being read.
     expect(listed()).toBeLessThan(3)
     expect(reading()).toBe(true)
-    while (reading()) await Bun.sleep(20)
-    expect(listed()).toBe(3)
+    // The rest arrive on their own; the test times out where they never do.
+    while (listed() < 3) await Bun.sleep(20)
 })
 
 test('the first entry is in hand while the rest are still read', async () => {
