@@ -5,12 +5,19 @@ import { csp, middleware } from '@abide/abide/server'
 middleware(csp())
 </script>
 
+<script>
+import '#src/lib/app.css'
+</script>
+
 <html lang="en">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
     </head>
-<body>
+    <body
+        class="flex flex-col gap-flow bg-paper p-5 font-sans text-prose/6
+        text-ink antialiased"
+    >
         <slot />
     </body>
 </html>

@@ -1,3 +1,19 @@
-# 38.109, 38.119 — a DOM to mount into and measure, then the app's `.abide` files as modules.
+# 38.122 — no peers: an installed `bun` would shadow this one in `bun run`.
+[install]
+peer = false
+
+# 38.43, 38.131 — the plugin building the stylesheet `src/lib/app.css` opens.
+[serve.static]
+plugins = ["bun-plugin-tailwind"]
+
+# 38.109, 38.119 — a DOM to measure in, then the `.abide` files as modules.
 [test]
+root = "src"
 preload = ["@abide/harness/abide/preload"]
+
+# What `bun fmt` and `abide format` print.
+[fmt]
+tabWidth = 4
+semi = false
+singleQuote = true
+sortImports = true

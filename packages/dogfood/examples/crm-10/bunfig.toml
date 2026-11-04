@@ -1,5 +1,19 @@
-# A DOM to mount into and measure, and `.abide` files as components.
+# 38.122 — no peers: an installed `bun` would shadow this one in `bun run`.
+[install]
+peer = false
+
+# 38.43, 38.131 — the plugin building the stylesheet `src/lib/app.css` opens.
+[serve.static]
+plugins = ["bun-plugin-tailwind"]
+
+# 38.109, 38.119 — a DOM to measure in, then the `.abide` files as modules.
 [test]
-# Bun's tests are under src; e2e holds the browser's, which playwright runs.
 root = "src"
 preload = ["@abide/harness/abide/preload"]
+
+# What `bun fmt` and `abide format` print.
+[fmt]
+tabWidth = 4
+semi = false
+singleQuote = true
+sortImports = true

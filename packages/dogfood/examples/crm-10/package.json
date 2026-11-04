@@ -2,9 +2,10 @@
     "name": "crm-10",
     "private": true,
     "type": "module",
-    "description": "The CRM at the end of chapter 10, Open it to machines",
+    "description": "The CRM at the end of chapter 10, Test, measure and ship",
     "scripts": {
         "check": "abide check",
+        "format": "abide format && bun fmt",
         "dev": "abide dev",
         "build": "abide build",
         "start": "abide start",
@@ -23,6 +24,8 @@
     },
     "devDependencies": {
         "@abide/harness": "workspace:*",
-        "@types/bun": "latest"
+        "@types/bun": "latest",
+        "bun-plugin-tailwind": "^0.1.2",
+        "tailwindcss": "^4.3.3"
     }
 }
