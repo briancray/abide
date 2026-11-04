@@ -49,6 +49,20 @@ middleware((next, { request: asked }) =>
 )
 `
 
+// 11.67 — A MODULE ONLY A PAGE IMPORTS is first evaluated when a request renders that page.
+const VISITS = `import { reactive } from '@abide/abide'
+
+export const visits = reactive(0)
+`
+
+const COUNTED = `<script>
+import { visits } from '#src/lib/visits.ts'
+
+visits.set(visits() + 1)
+</script>
+
+<main id="visits">{visits}</main>`
+
 let base = ''
 let stop = (): void => {}
 let listed: string[] = []
@@ -68,6 +82,8 @@ beforeAll(async () => {
         'src/identity/fail.handler.ts': FAIL,
         'src/untouched/untouched.handler.ts': UNTOUCHED,
         'src/layout.abide': `<script server>\n${HOOKS}</script>\n`,
+        'src/lib/visits.ts': VISITS,
+        'src/visits/index.abide': COUNTED,
     })
     where = temporaryModule({})
     const compiled = await spawned(
@@ -128,6 +144,21 @@ test('the executable runs the app hooks and handlers it was compiled with — 38
     )
     const name = await Bun.fetch(`${base}/identity/name`)
     expect(await name.json()).toBe('@acme/ledger')
+})
+
+// 11.67 — A MODULE'S `reactive` IS BUILT AFRESH IN EVERY REQUEST, even where the first request to
+// reach the page is what evaluated the module: an executable's `import()` carries the request's
+// async context into the evaluation, where `abide start`'s plugin-loaded module happened to lose it.
+// THE REVERT: in `render.ts`'s `boundPage`, call `loadedModules(page)` without `runInScope`; the
+// value is built as the first request's own and the counts read 1, 2, 3 — a refusal one signed-out
+// render left stood for every caller after it.
+test("a module's reactive is built afresh in each request that renders it — 11.67", async () => {
+    const counts: string[] = []
+    for (let visit = 0; visit < 3; visit += 1) {
+        const page = await (await Bun.fetch(`${base}/visits/`)).text()
+        counts.push(/<main id="visits">(\d+)/.exec(page)?.[1] ?? page)
+    }
+    expect(counts).toEqual(['1', '1', '1'])
 })
 
 test('--target and --platforms together are refused — 38.10', async () => {

@@ -7,6 +7,7 @@ import { regionMarkup } from '#shared/anchorMarkup.ts'
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
+import { runInScope } from '#shared/reactive/scoping.ts'
 import type { ShareScope } from '#shared/reactive/share.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
 
@@ -265,21 +266,40 @@ function dropAtHeadTop(
  * is bound the same way, with the failure where a page has its params.
  */
 export function boundPage(
-    page: {
-        load: () => Promise<{ default: Component }>
-        layouts: (() => Promise<{ default: Component }>)[]
-    },
+    page: PageModules,
     props: Record<string, () => unknown>,
 ): () => Promise<unknown> {
     return async () => {
-        const [loadedPage, loadedLayouts] = await Promise.all([
-            page.load(),
-            Promise.all(page.layouts.map((layout) => layout())),
-        ])
+        const [loadedPage, loadedLayouts] = await runInScope(
+            undefined,
+            loadedModules,
+            page,
+        )
         const layouts: Component[] = []
         for (const module of loadedLayouts) layouts.push(module.default)
         return composePage(layouts, loadedPage.default, props)
     }
+}
+
+type PageModules = {
+    load: () => Promise<{ default: Component }>
+    layouts: (() => Promise<{ default: Component }>)[]
+}
+
+/**
+ * A page's module and its layouts', imported OUTSIDE EVERY REQUEST — 11.67. A module is evaluated in
+ * the async context its `import()` was called from, so the first request to reach a page evaluated
+ * it, and every module it imports, inside that request's scope: a module's `reactive` saw a scope at
+ * construction, was built as that request's own rather than as a forwarder (`scoped.ts`), and every
+ * later request read what the first one left.
+ */
+function loadedModules(
+    page: PageModules,
+): Promise<[{ default: Component }, { default: Component }[]]> {
+    return Promise.all([
+        page.load(),
+        Promise.all(page.layouts.map((layout) => layout())),
+    ])
 }
 
 /**
