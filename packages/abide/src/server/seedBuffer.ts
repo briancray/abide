@@ -23,7 +23,7 @@
 // refresh, and says nothing.
 
 import { namedLogger } from '#shared/log.ts'
-import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
+import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import {
     chunksOfStream,
     isReactive,

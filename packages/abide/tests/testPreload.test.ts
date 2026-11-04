@@ -253,7 +253,7 @@ test('each click is answered by the handler', async () => {
 // 15.8, 19.9 — A CALL MADE IN THE TEST'S PROCESS IS HELD TO THE ANNOTATION, with no app booted: a
 // handler file the test imports, and a private handler a mounted component calls (38.121), each
 // refused 422 with the `Issues` the wire answers with, its body never run, and good args answered.
-// THE REVERT: drop the `DERIVED_ARGS` check from the `Rpc`'s call in `rpc.ts`; the handler file's body
+// THE REVERT: `normalized` for `acceptedArgs` in the `Rpc`'s call in `rpc.ts`; the handler file's body
 // runs on `n: 'x'` and nothing is refused ("undefined undefined undefined runs 1"), and the private
 // handler's click reads "1x" — exit 1, `0 pass`.
 test('a call in a test is held to the handler annotation — 15.8, 19.9, 38.121', async () => {

@@ -11,11 +11,11 @@ import { checkArgs } from '../refuse.ts'
 import type { Schema } from '../Schema.ts'
 import {
     ARGS_GATE,
+    canonicalKey,
     type Gated,
     normalized,
     PARAMETER_DEFAULTS,
 } from './argsContract.ts'
-import { canonicalKey } from './canonicalKey.ts'
 import { CELL } from './CELL.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer } from './Expiry.ts'

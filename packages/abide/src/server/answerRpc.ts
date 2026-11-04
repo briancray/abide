@@ -11,11 +11,11 @@ import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { mounted as underMount } from '#shared/mount.ts'
-import type { Gated } from '#shared/reactive/argsContract.ts'
+import type { Gated, HeldToAnnotation } from '#shared/reactive/argsContract.ts'
 import { deadlineOf, heldGenerationOf } from '#shared/reactive/index.ts'
 import type { Defaults } from '#shared/reactive/parameterDefaults.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
-import type { HeldToAnnotation, Method, Rpc } from '#shared/rpc.ts'
+import type { Method, Rpc } from '#shared/rpc.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
@@ -29,14 +29,13 @@ import {
 } from './answerFailure.ts'
 import { followAsEvents } from './answerSocket.ts'
 import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
-import { argsFor } from './argsFor.ts'
-import { callerOf } from './callerOf.ts'
 import {
     argsDocumentOf,
-    coerceArgs,
+    argsFor,
     collapsed,
     type Document,
-} from './coerceArgs.ts'
+} from './argsContract.ts'
+import { callerOf } from './callerOf.ts'
 import { positiveSetting } from './config.ts'
 import {
     allows,
@@ -195,7 +194,6 @@ export async function mountHandlers(
         const mount = table[at] as Mount
         const exported = (modules[at] as Record<string, unknown>)[mount.export]
         const handler = exported as Mounted['handler']
-        const declared = argsDocumentOf(handler)
         // 16.9, 16.10 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
         // page's render turns a call it made into the browser's request by (41.20).
         handler.address = underMount(mount.address)
@@ -206,7 +204,7 @@ export async function mountHandlers(
             // 37.14 — a handler's lane answers a refusal as Problem Details (15.1).
             rungs: rungsOver(mount.scope, answered),
             handler,
-            argsDocument: declared ?? (mount.args as Document | undefined),
+            argsDocument: argsDocumentOf(handler),
         })
     }
     return { handlers }
@@ -254,12 +252,15 @@ export async function answerRpc(
         return answered(crossingRefusal(crossing, found.method))
     const raw = await argsOf(request, url, inUrl, form, handler.maxBodySize)
     if (isFailed(raw)) return answered(raw)
-    const sent = withParameters(raw, params, inUrl || form, found)
-    if (isFailed(sent)) return answered(sent)
     let args: unknown
     try {
         // A URL's and a form's args are text, and the query tells a bare name from `name=` (19.7).
-        args = argsFor(found, sent, inUrl ? url.search : form ? '' : undefined)
+        args = argsFor(
+            handler,
+            raw,
+            inUrl ? url.search : form ? '' : undefined,
+            params,
+        )
     } catch (refused) {
         if (isFailed(refused)) return answered(refused)
         throw refused
@@ -476,39 +477,6 @@ async function argsOf(
     if (!isRecord(parsed))
         return refuse(400, 'The request body is not an object of args.')
     return parsed
-}
-
-/**
- * The args a request sent, with the parameters its route matched laid in.
- *
- * 16.65 — the path's, whatever the method. 16.66 — a parameter the query or the body names as
- * well is refused rather than one of the two chosen. A JSON body's members are typed already, so the
- * path's text is coerced to the declared types before it joins them (19.7); text args are coerced
- * with the rest of the text.
- */
-function withParameters(
-    sent: unknown,
-    params: Record<string, string | string[]>,
-    text: boolean,
-    found: Mounted,
-): unknown | Failed<'HttpError', undefined> {
-    let none = true
-    for (const name in params) {
-        none = false
-        if (isRecord(sent) && name in sent)
-            return refuse(
-                400,
-                `The parameter '${name}' is in the path and in the request as well.`,
-            )
-    }
-    if (none) return sent
-    const fromPath = text
-        ? params
-        : (coerceArgs(params, found.argsDocument, '') as Record<
-              string,
-              unknown
-          >)
-    return isRecord(sent) ? { ...sent, ...fromPath } : { ...fromPath }
 }
 
 /**

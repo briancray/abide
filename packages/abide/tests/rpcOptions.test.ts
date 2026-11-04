@@ -265,8 +265,8 @@ test('a mutation body is held to its annotation — 19.9', async () => {
 })
 
 // 15.8, 19.9 — THE ANNOTATION HOLDS A CALL MADE IN PROCESS AS IT HOLDS ONE OVER THE WIRE: refused 422
-// before the body runs, with the wire's `Issues`, and good args still answered. THE REVERT: drop the
-// `DERIVED_ARGS` check from the `Rpc`'s call in `rpc.ts`; the wire still answers 422, but the call in
+// before the body runs, with the wire's `Issues`, and good args still answered. THE REVERT: `normalized`
+// for `acceptedArgs` in the `Rpc`'s call in `rpc.ts`; the wire still answers 422, but the call in
 // process runs the body with `n = 'x'` — `runsAfterRefused` 1 rather than 0, `runs` 2 rather than 1,
 // and no refusal caught.
 test('a call in process is held to the annotation as the wire holds it — 15.8, 19.9', async () => {

@@ -54,7 +54,7 @@ export { type App, createApp } from './createApp.ts'
 export { callsInRender } from './deferredBuilds.ts'
 // 19.9's run-time half: what the module a handler is loaded through calls to hold it to the schema
 // its annotation derives (15.8). Not an app's name.
-export { derivedArgs } from './derivedArgs.ts'
+export { derivedArgs } from './argsContract.ts'
 // 37.1's run-time half: what a compiled server module calls around its `<script server>`, so the
 // hooks it makes are filed at its route.
 export {

@@ -14,7 +14,7 @@
 // handler's own.
 
 import { DERIVED_ARGS } from './DERIVED_ARGS.ts'
-import { type Failed, isFailedNamed } from './Failed.ts'
+import { type Failed, isFailed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
@@ -23,11 +23,12 @@ import { compose, type Rung } from './Middleware.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
 import {
+    acceptedArgs,
     contractOf,
     type Gated,
     gateOf,
+    type HeldToAnnotation,
     keyOf,
-    normalized,
 } from './reactive/argsContract.ts'
 import { callLoad } from './reactive/callLoad.ts'
 import {
@@ -52,7 +53,7 @@ import { MUTATION } from './reactive/MUTATION.ts'
 import { dropAnswered } from './reactive/Reactive.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
-import { checkArgs, validationError } from './refuse.ts'
+import { checkArgs } from './refuse.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
 import { rpcRequest } from './rpcRequest.ts'
 import type { Schema } from './Schema.ts'
@@ -161,16 +162,6 @@ type Derived<Member, Whole = Member> = Member extends
               : Failed<'ValidationError', Issues<Whole>>
           : never
       : never
-
-/**
- * 19.9 — the issues an `Rpc`'s args leave against the schema its annotation derives, `null` where
- * they hold: `undefined` until the module its handler is loaded through stamps it (`derivedArgs`),
- * and so in a browser always. A function rather than the schema, so this seam never carries the
- * validator (19.13).
- */
-export type HeldToAnnotation = {
-    [DERIVED_ARGS]: ((args: unknown) => Issues<unknown> | null) | undefined
-}
 
 /** Which generated surfaces carry a handler (20.1). */
 export type Clients = {
@@ -447,12 +438,14 @@ export function declare(method: Method): Declare {
             return route
         }
         const call = (given?: unknown, options?: CallOptions): unknown => {
-            const args = normalized(contract, given)
-            // 15.8, 19.9 — AND HELD TO ITS ANNOTATION, where the build derived a schema off it: a
-            // type an in-process caller wrote holds nothing at run time (`as never`, a value off
-            // JSON), so the call is refused as the wire refuses it rather than handed to the body.
-            const issues = rpc[DERIVED_ARGS]?.(args) ?? null
-            if (issues !== null) return reactive(() => validationError(issues))
+            // 15.8, 19.9 — the args every way of calling the handler is held to.
+            let args: unknown
+            try {
+                args = acceptedArgs(rpc, given)
+            } catch (refused) {
+                if (!isFailed(refused)) throw refused
+                return reactive(() => refused)
+            }
             const route =
                 rpc.address === undefined ? undefined : routeAt(rpc.address)
             if (route?.segments !== undefined) {
