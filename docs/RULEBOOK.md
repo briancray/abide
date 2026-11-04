@@ -2863,6 +2863,9 @@ editor holds.
 38.131 The project `abide scaffold` writes MUST carry Tailwind wired: `bun-plugin-tailwind` declared
 in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its root layout imports.
 
+38.132 The project `abide scaffold` writes MUST carry a Dockerfile whose image holds the executable
+`abide compile` writes and nothing else of the app.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

@@ -43,11 +43,16 @@ export const BUNFIG =
     '# 38.122 — a peer is not installed: an installed `bun` would shadow this one inside `bun run`.\n[install]\npeer = false\n\n# 38.43, 38.131 — the plugin that builds the stylesheet `src/lib/app.css` opens.\n[serve.static]\nplugins = ["bun-plugin-tailwind"]\n\n# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n\n# What `bun fmt` and `abide format` print.\n[fmt]\ntabWidth = 4\nsemi = false\nsingleQuote = true\nsortImports = true\n'
 
 // WRITTEN, NOT COPIED, beside the manifests: a packer drops a `bunfig.toml` or a `.gitignore` from
-// the tarball (`bun pm pack` both, `npm pack` the second), so neither survives as a starter file.
+// the tarball (`bun pm pack` both, `npm pack` the second), so neither survives as a starter file —
+// and the Dockerfile names the bun that is running, which no file can.
 function filesFor(name: string): Record<string, string> {
     return {
         'bunfig.toml': BUNFIG,
         '.gitignore': 'node_modules\n.abide\n',
+        // 38.132 — the build stage on the bun that scaffolded the project, the image on nothing but
+        // the executable it compiles.
+        Dockerfile: `FROM oven/bun:${Bun.version} AS build\nWORKDIR /app\nCOPY package.json bun.lock bunfig.toml ./\nRUN bun install --frozen-lockfile\nCOPY . .\nRUN bun x abide compile --out /app/server\n\nFROM gcr.io/distroless/cc-debian12\nCOPY --from=build /app/server /server\nENV NODE_ENV=production\nEXPOSE 3000\nCMD ["/server", "start"]\n`,
+        '.dockerignore': 'node_modules\n.abide\n.git\n.env\n.env.*\n',
         'package.json': `${JSON.stringify(
             {
                 name,

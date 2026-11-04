@@ -62,7 +62,7 @@ afterAll(() => {
 
 // 38.1 — THE LAYOUT, WRITTEN, and a step already done is skipped rather than overwritten. The
 // scaffolded app then builds, which is what "a starter project" has to mean.
-test('scaffold writes a starter project, skips what is there, builds and passes its tests — 38.1, 38.42, 38.103, 38.104, 38.112, 38.119, 38.122, 38.131', async () => {
+test('scaffold writes a starter project, skips what is there, builds and passes its tests — 38.1, 38.42, 38.103, 38.104, 38.112, 38.119, 38.122, 38.131, 38.132', async () => {
     const into = temporaryModule({ 'readme.md': 'here\n' })
     const first = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
@@ -83,6 +83,8 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
         // Written rather than copied: a packer drops both from the tarball.
         'bunfig.toml',
         '.gitignore',
+        'Dockerfile',
+        '.dockerignore',
     ])
         expect(`${path} ${Bun.file(`${app}/${path}`).size > 0}`).toBe(
             `${path} true`,
@@ -124,6 +126,15 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
         expect(instructions).toContain(
             `node_modules/@abide/abide/docs/${shipped}`,
         )
+    // 38.132 — the last stage starts from nothing of the build and takes the executable alone.
+    // THE REVERT: serve with `bun run start` on the build stage, and no stage copies an executable.
+    const dockerfile = await Bun.file(`${app}/Dockerfile`).text()
+    expect(dockerfile).toContain('RUN bun x abide compile --out /app/server\n')
+    const image = dockerfile.slice(dockerfile.lastIndexOf('FROM '))
+    expect(image.match(/^(COPY|ADD) .*$/gm)).toEqual([
+        'COPY --from=build /app/server /server',
+    ])
+    expect(image).toContain('CMD ["/server", "start"]')
     // 38.122 — THE REVERT: drop `[install]` from the bunfig, and `peer` is undefined.
     expect(
         Bun.TOML.parse(await Bun.file(`${app}/bunfig.toml`).text()),
