@@ -1,5 +1,7 @@
 <script>
 import { url } from '@abide/abide'
+import companyTabsSpecSource from 'crm-06/e2e/CompanyTabs.test.ts' with { type: 'text' }
+import layoutSpecSource from 'crm-06/e2e/Layout.test.ts' with { type: 'text' }
 import idPageSource from 'crm-06/src/companies/[id=SLUG].abide' with { type: 'text' }
 import companyPageTestSource from 'crm-06/src/companies/CompanyPage.test.ts' with { type: 'text' }
 import errorPageSource from 'crm-06/src/companies/error.abide' with { type: 'text' }
@@ -185,6 +187,7 @@ import Section from '#src/lib/Section.abide'
                 'src/companies/lib/CompaniesFrame.abide': companiesFrameSource,
                 'src/companies/layout.abide': layoutSource,
                 'src/companies/Layout.test.ts': layoutTestSource,
+                'e2e/Layout.test.ts': layoutSpecSource,
             }}
         >
             <CompaniesFrame />
@@ -212,6 +215,7 @@ import Section from '#src/lib/Section.abide'
             files={{
                 'src/companies/lib/CompanyTabs.abide': companyTabsSource,
                 'src/companies/lib/CompanyTabs.test.ts': companyTabsTestSource,
+                'e2e/CompanyTabs.test.ts': companyTabsSpecSource,
             }}
         >
             <CompanyTabs />

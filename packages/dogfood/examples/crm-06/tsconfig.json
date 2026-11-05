@@ -12,5 +12,5 @@
             "#src/*": ["./src/*", "./src/*.ts"]
         }
     },
-    "include": ["src"]
+    "include": ["src", "e2e"]
 }
