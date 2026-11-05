@@ -560,7 +560,11 @@ function markReaders(cell: Cell, wanted: number): void {
         const cap = below.cap
         if (cap !== null && below.body !== null) {
             if (windowHolds(below, cap)) {
-                cap.owed = true
+                // 5.15: the held run is a production held back, so `busy` moves as it is owed.
+                if (!cap.owed) {
+                    cap.owed = true
+                    probesMoved(below)
+                }
                 // BACK TO CLEAN so the next source production marks it again and re-arms.
                 // Left marked it takes this walk's own `state >= wanted` short-circuit,
                 // and the changes after the first become invisible to the window.
@@ -1174,6 +1178,8 @@ function openWindow(cell: Cell, cap: Cap): void {
             cell.state = DIRTY
             cell.direct = false
             cascade(cell)
+            // The close is a `busy` edge, as a held production's is.
+            probesMoved(cell)
             return
         }
         // A throttle's window ending with nothing held is the window simply over: the
@@ -2465,6 +2471,11 @@ let PROBE_PASS = 0
  */
 function walkBusy(cell: Cell, pass: number): boolean {
     if (cell.loading) return true
+    // 5.15 over a body: a run the window owes. Read here rather than written into `loading`,
+    // which a load ending inside the window clears while the run is still owed. Only a value with
+    // sources is ever owed, so `busyNow`'s leaf answer never needs it.
+    const cap = cell.cap
+    if (cap !== null && cap.owed) return true
     const adoption = cell.adoption
     if (cell.sources.length === 0 && adoption === null) return false
     if (cell.probePass === pass) return false

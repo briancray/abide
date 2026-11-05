@@ -290,8 +290,8 @@ two is a comparator answering directly.
 
 5.14 Declaring both `throttle` and `debounce` MUST refuse at construction.
 
-5.15 Where a `throttle` or a `debounce` window is holding a production back, the held value MUST
-be served and `s.busy` MUST be true.
+5.15 Where a `throttle` or a `debounce` window is holding a production back, or a body's run under
+5.11, the value served before it MUST go on being served and `s.busy` MUST be true.
 
 5.16 A `bind:` read MUST NOT be capped.
 

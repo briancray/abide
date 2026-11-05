@@ -2624,7 +2624,7 @@ function searchRig(options: Record<string, number>): {
     keys: string[]
     wakes: () => number
     stop: () => void
-    orders: { peek(): string | undefined }
+    orders: Reactive<string>
 } {
     const keys: string[] = []
     let woken = 0
@@ -2671,6 +2671,32 @@ test('a throttled body runs the leading change and the trailing one', async () =
     // so the two calls are the first key and the last, and neither middle key was reached.
     expect(rig.keys).toEqual(['s', 'south'])
     expect(rig.wakes()).toBe(2)
+    rig.stop()
+})
+
+// 5.15 OVER A BODY: the run a window holds back is a production held back, so the value is busy
+// until the window closes and an await waits for the run rather than settling on the value it
+// replaces. THE REVERT is dropping the `cap.owed` arm from `walkBusy`: busy reads false inside the
+// window and the await answers 'n=s'.
+test('a throttled body is busy while its window holds a run, and an await waits for it', async () => {
+    const rig = searchRig({ throttle: 150 })
+    rig.region.set('s')
+    flushSync()
+    expect(rig.orders.peek()).toBe('n=s')
+    const orders = rig.orders
+    const asked: boolean[] = []
+    const guard = watch(() => {
+        asked.push(orders.busy())
+    })
+    rig.region.set('south')
+    flushSync()
+    expect(orders.busy()).toBe(true)
+    expect(await orders).toBe('n=south')
+    flushSync()
+    expect(orders.busy()).toBe(false)
+    // The guard heard the window open and close.
+    expect(asked).toEqual([false, true, false])
+    guard()
     rig.stop()
 })
 
