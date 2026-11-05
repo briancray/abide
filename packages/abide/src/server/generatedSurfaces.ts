@@ -22,12 +22,13 @@ import { parseRoutePattern, type Segment } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
 import { answered } from './answerFailure.ts'
-import { bodyWithin, type Mounted } from './answerRpc.ts'
+import { bodyWithin } from './answerRpc.ts'
 import type { ToolAnswer, ToolDefinition } from './assistant.ts'
 import { appIdentity } from './config.ts'
 import { crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
 import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
 import { MCP_PROTOCOL_VERSION } from './MCP_PROTOCOL_VERSION.ts'
+import type { Mounted } from './mountHandlers.ts'
 import { type Listed, surfaceOf } from './surfaceOf.ts'
 
 const OPENAPI_LOG = namedLogger('abide:openapi')

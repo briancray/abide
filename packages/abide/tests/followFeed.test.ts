@@ -6,17 +6,34 @@
 
 import { expect, test } from 'bun:test'
 
-import {
-    feedFromServed,
-    followAsEvents,
-    Mux,
-    type MuxConnection,
-} from '#server/answerSocket.ts'
+import { Mux, type MuxConnection } from '#server/answerSocket.ts'
+import { Followers } from '#server/Followers.ts'
+import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { flushSync, invalidate, reactive, refresh } from '#shared'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { GET } from '#shared/rpc.ts'
 
 const FOLLOWERS = 20
+
+/** `rpc`'s row as a browser follows it, with no rungs over its route. */
+function followedRow(rpc: { address: string }): FollowedHandler {
+    return {
+        address: rpc.address,
+        rungs: [],
+        copy: undefined,
+        handler: rpc as unknown as FollowedHandler['handler'],
+    }
+}
+
+/** A mux over `rpc` alone, with followers of its own. */
+function muxOver(rpc: { address: string }): Mux {
+    const row = followedRow(rpc)
+    return new Mux(
+        (address) => (address === rpc.address ? row : undefined),
+        new Followers(),
+        undefined,
+    )
+}
 
 test('a change is serialized once for every follower of a value, and each is sent it under its own id — 18.6', async () => {
     let serialized = 0
@@ -30,15 +47,7 @@ test('a change is serialized once for every follower of a value, and each is sen
     const value = reactive(shelf(['dune']), { global: true })
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/shelf'
-    const mux = new Mux(
-        new Map([
-            [
-                `GET ${rpc.address}`,
-                { handler: rpc, ui: true, scope: '/', rungs: [] } as never,
-            ],
-        ]),
-        undefined,
-    )
+    const mux = muxOver(rpc)
     const sent: {
         op: string
         id: number
@@ -105,15 +114,7 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
     })
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/stock'
-    const mux = new Mux(
-        new Map([
-            [
-                `GET ${rpc.address}`,
-                { handler: rpc, ui: true, scope: '/', rungs: [] } as never,
-            ],
-        ]),
-        undefined,
-    )
+    const mux = muxOver(rpc)
     const frames: { op: string; value?: unknown }[] = []
     const connection = mux.connect(
         new Request('http://app.test/__abide/socket'),
@@ -144,7 +145,7 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
 // 18.8 — AN ENTRY ANSWERED REACHES THE FOLLOWERS OF ITS OWN ARGS, and walks no other: an answer of a
 // keyed `global` GET nobody was fed from looks up the entry of each follower filed under its key,
 // and of none of the thousand following other keys. THE REVERT: walk every follower of the handler
-// in `feedFromServed`, as before the followers were filed by key — 1000 entry lookups an answer,
+// in `Followers.served`, as before the followers were filed by key — 1000 entry lookups an answer,
 // against 1, and a request that pays ~60 µs at 1000 followers and ~600 µs at 10000.
 test('an entry answered looks up the followers of its own key alone — 18.8', async () => {
     const KEYS = 1000
@@ -153,15 +154,7 @@ test('an entry answered looks up the followers of its own key alone — 18.8', a
     })
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/keyed'
-    const mux = new Mux(
-        new Map([
-            [
-                `GET ${rpc.address}`,
-                { handler: rpc, ui: true, scope: '/', rungs: [] } as never,
-            ],
-        ]),
-        undefined,
-    )
+    const mux = muxOver(rpc)
     const frames: {
         op: string
         id: number
@@ -202,7 +195,7 @@ test('an entry answered looks up the followers of its own key alone — 18.8', a
         return at(asked)
     }
     try {
-        feedFromServed(rpc, serving, key)
+        mux.followers.served(rpc, serving, key)
     } finally {
         global.at = at
     }
@@ -216,17 +209,18 @@ test('an entry answered looks up the followers of its own key alone — 18.8', a
 
 // 18.6, 18.20 — AN EVENT STREAM IS SENT THE BODY SERIALIZED FOR EVERY FOLLOWER, not one of its own:
 // a write to a value twenty event streams follow serializes it once and parses nothing. THE REVERT:
-// have `followAsEvents`'s peer write its event from `frame.body` parsed and stringified again — 20
+// have `Followers.events`' peer write its event from `frame.body` parsed and stringified again — 20
 // parses and 21 stringifies a write, against 0 and 1.
 test('a write reaches every event stream following a value with one serialization and no parse — 18.6, 18.20', async () => {
     const STREAMS = 20
     const value = reactive({ titles: ['dune'] }, { global: true })
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/events'
-    const mounted = { handler: rpc, ui: true, scope: '/', rungs: [] } as never
+    const row = followedRow(rpc)
+    const followers = new Followers()
     const readers: ReadableStreamDefaultReader<Uint8Array>[] = []
     for (let at = 0; at < STREAMS; at++)
-        readers.push(followAsEvents(mounted, undefined, undefined).getReader())
+        readers.push(followers.events(row, undefined, undefined).getReader())
     const { parse, stringify } = JSON
     let parsed = 0
     let stringified = 0

@@ -431,7 +431,7 @@ await until((frames) => frames.length > 0)
 })
 
 // 7.10, 13.12 — A TRIGGER ON THE SERVER REACHES THE FOLLOWERS ITS PATTERN NAMES, over a value built per
-// request, which is fed nothing. THE REVERT: drop the `RPC_SERVER.broadcast` call from `rpc.ts`; the
+// request, which is fed nothing. THE REVERT: drop the walk of `RPC_SERVER.following` from `rpc.ts`; the
 // follower of id 2 is sent 0 frames.
 test('an invalidate on the server reaches the followers its pattern names', async () => {
     const frames =
@@ -457,7 +457,7 @@ await until((frames) => frames.length > 0)
 
 // 13.15 — A SWEEP BY TAG ON THE SERVER REACHES EACH FOLLOWED COPY CARRYING THE TAG, as its own
 // trigger, over a plain-function `GET` the server holds no value of between requests — and no copy
-// without it. THE REVERT: drop the `RPC_SERVER.swept` call from `refresh` and `invalidate`; the
+// without it. THE REVERT: drop the walk of `RPC_SERVER.following` from `refresh` and `invalidate`; the
 // browser is sent 0 frames where 2 are due.
 test('a sweep by tag on the server reaches the followed copies carrying it — 13.15', async () => {
     const frames =
@@ -475,7 +475,7 @@ await until((frames) => frames.length >= 2)
 })
 
 // 13.15 — AND A BARE ONE REACHES EVERY FOLLOWED COPY, tagged or not. THE REVERT: return from
-// `swept` where `tags` is `null`; the browser is sent 0 frames where 4 are due.
+// `Followers.sweep` where `tags` is `null`; the browser is sent 0 frames where 4 are due.
 test('a bare sweep on the server reaches every followed copy — 13.15', async () => {
     const frames =
         await client(`send({ op: 'sub', id: 1, address: '/library/shows' })

@@ -16,10 +16,7 @@ import {
 } from '#shared/ADDRESSES.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { isFailed } from '#shared/Failed.ts'
-import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import { health } from '#shared/health.ts'
-import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
-import { KEEP_OPENED } from '#shared/KEEP_OPENED.ts'
 import { matchOf, type Params, partsOf } from '#shared/matchRoute.ts'
 import { compose } from '#shared/Middleware.ts'
 import { mounted } from '#shared/mount.ts'
@@ -27,35 +24,31 @@ import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import { notFound as refusedNotFound, refuse } from '#shared/refuse.ts'
 import { arrive } from '#shared/route.ts'
 import type { Segment } from '#shared/routePattern.ts'
-import type { Method, Rpc } from '#shared/rpc.ts'
-import { rpcRequest } from '#shared/rpcRequest.ts'
+import type { Method } from '#shared/rpc.ts'
 
 import { answerFailure, laneFailure } from './answerFailure.ts'
-import { answerRpc, type Mounted, mountedOwn } from './answerRpc.ts'
+import { answerRpc } from './answerRpc.ts'
 import { answerBlobTagged, answerValue } from './answerValue.ts'
 import { answerBridge } from './bridgeRelay.ts'
-import { callerOrMint } from './callerOf.ts'
 import { compressAnswer } from './compressAnswer.ts'
-import { noteCallInRender } from './deferredBuilds.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { answerMcp, openApi } from './generatedSurfaces.ts'
 import { failureOf, type LaneRung } from './hooks.ts'
+import { type Mounted, mountedOwn } from './mountHandlers.ts'
 import { muxAdmission } from './muxUpgrade.ts'
 import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
+import { beginPageRender } from './PageRender.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { PRINCIPAL_MOUNT } from './principal.ts'
 import { boundPage, type Component, renderDocument } from './render.ts'
 import {
     adoptRequest,
     type AnsweringApp,
-    beginRender,
     currentRequestScope,
-    type PageRender,
     type RequestScope,
     within,
     writtenStatus,
 } from './requestScope.ts'
-import { callsOnly, seedFor } from './seedBuffer.ts'
 
 // One row of the server's table the compiler writes (`SERVER_TABLE`). The loader is a dynamic import
 // so a page's markup is off the boot path until an address asks for it, which is the same reason
@@ -145,9 +138,6 @@ export type AppSources = {
      */
     explained: ((thrown: unknown) => Response) | undefined
 }
-
-// 41.29 — the seed sink of a render no page hydrates: every call is left to run when it is made.
-const SEEDS_NOTHING: PageRender['seed'] = () => false
 
 // 35.19 — what fetch calls a navigation request's destinations, and a script's `fetch`.
 const PAGE_DESTINATIONS = new Set([
@@ -336,9 +326,6 @@ async function answerMatched(
     // minted for a request that never becomes a page.
     if (request.method === 'HEAD')
         return new Response(null, { status: writtenStatus(), headers })
-    // 26.5 — the caller the seed buffer is keyed by, minted where the browser carries none: the same
-    // one `principal.caller` reads for the rest of the request.
-    const caller = callerOrMint()
     // 23.1 — WHERE THIS PAGE IS, for its setup to read, in the request's own instances (11.32).
     // 16.10 — AT THE ADDRESS IT IS SERVED AT, which is the one the browser's router arrives at: the
     // request reached here with the mount taken off, and a page reading `route.url()` on both sides
@@ -347,23 +334,8 @@ async function answerMatched(
     at.pathname = mounted(at.pathname)
     arrive(at.href, page.pattern, params)
     // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
-    // and 41.13, every call it makes is left for the browser's own call to be answered from.
-    // 41.29 — BUT NOT A PAGE A SCRIPT FETCHED, which nothing hydrates: its entries would answer the
-    // next call this caller makes with what the render saw, a sign-in since included — save the one
-    // the worker fetched for the navigation it answers, which is the page that hydrates (45.23).
-    const keep = request.headers.get(KEEP_HEADER)
-    const hydrated =
-        keep === KEEP_OPENED ||
-        request.headers.get('sec-fetch-dest') !== 'empty'
-    // 41.30 — SAVE ONE THE WORKER KEEPS, whose early calls are what a later open of it starts.
-    beginRender({
-        seed: hydrated
-            ? seedFor(caller)
-            : keep !== null
-              ? callsOnly()
-              : SEEDS_NOTHING,
-        calls: [],
-    })
+    // and 41.13, every call it makes is recorded into its render.
+    beginPageRender(request)
     // 41.1, 35.2 — THE DOCUMENT IS THE BUILT PAGE, read whole before there is a `Response` to commit a
     // status to: a refusal the page read, or a throw, is answered by the nearest error page at its own
     // status rather than as a 200 the stream then abandons.
@@ -410,42 +382,6 @@ const SURFACES = new Map<
     ],
     [BRIDGE_ADDRESS, (_app, request) => answerBridge(request)],
 ])
-
-// Each handler's route, compiled once rather than per render that calls it — as its `Rpc` keeps its
-// own; compiled again only where it was mounted at another address since.
-const ROUTE_OF = new WeakMap<object, HandlerRoute>()
-
-// What a call made in a page's render reports into: the seed buffer (41.13), and — where the handler
-// is mounted — the request the browser will make for it, for the early-call script (41.20). Once per
-// render, as the browser's `Rpc` makes it once, and the seed buffer is what says which is the once.
-export function reachedInRender(
-    rpc: object,
-    args: unknown,
-    reached: unknown,
-): void {
-    const page = currentRequestScope()?.page
-    if (page === undefined) return
-    noteCallInRender()
-    if (!page.seed(rpc, args, reached)) return
-    // 16.10 — the address the browser's own call is made at, stamped under the mount by
-    // `mountHandlers` — and `undefined` on a handler nothing mounted.
-    const { address, method } = rpc as Rpc<unknown, unknown>
-    if (address === undefined) return
-    let route = ROUTE_OF.get(rpc)
-    if (route?.address !== address) {
-        route = new HandlerRoute(address)
-        ROUTE_OF.set(rpc, route)
-    }
-    page.calls.push({
-        request: rpcRequest(
-            method,
-            route,
-            args as Record<string, unknown> | undefined,
-        ),
-        reached,
-        painted: undefined,
-    })
-}
 
 /**
  * The server's table the compiler writes (`SERVER_TABLE`): the routes and the error pages.

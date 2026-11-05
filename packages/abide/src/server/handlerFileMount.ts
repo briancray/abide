@@ -1,4 +1,4 @@
-import type { Mount } from './answerRpc.ts'
+import type { Mount } from './mountHandlers.ts'
 
 /**
  * The row of a handler file (16.73): its default, answered at the route the file is placed at and

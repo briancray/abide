@@ -40,7 +40,6 @@ import {
     type RouteRow,
     type ServerTable,
 } from './answerRequest.ts'
-import { mountHandlers, type MountRow } from './answerRpc.ts'
 import { contentEtag } from './answerValue.ts'
 import { answerWorker } from './answerWorker.ts'
 import { appManifest } from './appManifest.ts'
@@ -50,6 +49,7 @@ import { packageUnder, settingOn } from './config.ts'
 import type { AppOrigin } from './createApp.ts'
 import { rungsOver } from './hooks.ts'
 import { chunksOf, type Manifest } from './manifestOf.ts'
+import { mountHandlers, type MountRow } from './mountHandlers.ts'
 import { ENCODINGS } from './negotiateEncoding.ts'
 import { DEFAULT_DOCUMENT, intoHead } from './render.ts'
 

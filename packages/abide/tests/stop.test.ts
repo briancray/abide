@@ -7,6 +7,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import { GET } from '#server'
+import { Followers } from '#server/Followers.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
 import { seedFor, takeSeed } from '#server/seedBuffer.ts'
 
@@ -245,6 +246,7 @@ test('App.stop drops the seed entries its renders left — 42.11', async () => {
         answer: async () => new Response(),
         mcp: undefined as never,
         held,
+        followers: new Followers(),
     }
     const handler = {}
     const scope = scopeFor(new Request('http://app.internal/'), undefined, app)

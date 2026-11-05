@@ -4,7 +4,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { EARLY_CALL_RUNNER } from '#server/render.ts'
+import { EARLY_CALL_RUNNER } from '#server/PageRender.ts'
 import { type Answer, answered, answerOf } from '#shared/answerOf.ts'
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { answerChunks } from '#shared/framing.ts'

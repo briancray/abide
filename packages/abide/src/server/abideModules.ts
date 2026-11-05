@@ -22,7 +22,6 @@ import { basename, dirname, resolve } from 'node:path' // bun exposes no path he
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import type { ServerTable } from './answerRequest.ts'
-import type { MountRow } from './answerRpc.ts'
 import {
     type Asked,
     BOUND_NAMESPACE,
@@ -47,6 +46,7 @@ import {
     TEXT_SUFFIX,
 } from './MODULE_QUERIES.ts'
 import { MOUNTABLE } from './MOUNTABLE.ts'
+import type { MountRow } from './mountHandlers.ts'
 import { PRIVATE_EXPORT } from './PRIVATE_EXPORT.ts'
 import { realOrAsGiven } from './realOrAsGiven.ts'
 import { SERVER_TABLE } from './TABLES.ts'

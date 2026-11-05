@@ -10,9 +10,10 @@ import { coversRoute, parseRoutePattern } from '#shared/routePattern.ts'
 
 import type { AppSources } from './answerRequest.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
+import { leavePageRender } from './PageRender.ts'
 import { prefers } from './prefers.ts'
 import { boundPage, renderDocument } from './render.ts'
-import { beginRender, currentRequestScope } from './requestScope.ts'
+import { currentRequestScope } from './requestScope.ts'
 
 /** What a page's failure is painted from: the error pages, and the document they go into. */
 export type ErrorPages = Pick<AppSources, 'errors' | 'errorDocument'>
@@ -88,7 +89,7 @@ export async function answerFailure(
     for (const error of errorsFor(app.errors, pathname)) {
         try {
             const bound = boundPage(error, { failure: () => failure })
-            beginRender(undefined)
+            leavePageRender()
             const document = await renderDocument(bound, app.errorDocument)
             return new Response(document, { status, headers })
         } catch (thrown) {

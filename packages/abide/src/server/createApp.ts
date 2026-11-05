@@ -18,7 +18,6 @@ import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { laneFailure } from './answerFailure.ts'
 import { answerRequest, type AppSources } from './answerRequest.ts'
-import type { Mount } from './answerRpc.ts'
 import { Mux, type MuxConnection } from './answerSocket.ts'
 import {
     type Builder,
@@ -34,10 +33,12 @@ import {
     packageUnder,
     positiveSetting,
 } from './config.ts'
+import { Followers } from './Followers.ts'
 import { McpSurface } from './generatedSurfaces.ts'
 import { HOOKS, inOrder, reportUnexpected, rootRungs } from './hooks.ts'
 import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { installServer } from './installServer.ts'
+import { followedIn, type Mount } from './mountHandlers.ts'
 import { admitsMux, muxSocketOptions, upgraded } from './muxUpgrade.ts'
 import { packageDirectory } from './packageDirectory.ts'
 import { plainAnswer } from './plainAnswer.ts'
@@ -327,6 +328,7 @@ export async function bootEntered(
         answer: fetch,
         mcp: new McpSurface(booted.handlers, fetch),
         held: new Set(),
+        followers: new Followers(),
     }
 
     // 16.42, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
@@ -336,7 +338,11 @@ export async function bootEntered(
     RPC_SERVER.raw = answerRaw
 
     const openMux = (): Mux => {
-        mux = new Mux(booted.handlers, answering)
+        mux = new Mux(
+            followedIn(booted.handlers),
+            answering.followers,
+            answering,
+        )
         return mux
     }
 

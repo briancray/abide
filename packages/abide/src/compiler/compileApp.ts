@@ -6,9 +6,9 @@ import {
     type CompiledFile,
     resolvedFile,
 } from '#server/abideModules.ts'
-import type { Mount } from '#server/answerRpc.ts'
 import { CLIENT_ENTRY } from '#server/CLIENT_BUILD.ts'
 import { COMPONENT_QUERY } from '#server/MODULE_QUERIES.ts'
+import type { Mount } from '#server/mountHandlers.ts'
 import { ROUTES_TABLE, SERVER_TABLE } from '#server/TABLES.ts'
 import { VIRTUAL_DIRECTORY } from '#server/VIRTUAL_DIRECTORY.ts'
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
