@@ -26,6 +26,16 @@ export function highlight(code: string): string {
     return html + escapeAttribute(code.slice(last))
 }
 
+/**
+ * The language a file's path names, 40.9: its file name's extension, or where the name has none — a
+ * `Dockerfile`, a `Makefile` — the name itself, lowercased, as a fence spells either.
+ */
+export function languageOf(path: string): string {
+    const name = path.slice(path.lastIndexOf('/') + 1)
+    const dot = name.lastIndexOf('.')
+    return dot === -1 ? name.toLowerCase() : name.slice(dot + 1)
+}
+
 /** What a caption marks a slice of a file with, which is never part of its path. */
 export const EXCERPT = ' — excerpt'
 

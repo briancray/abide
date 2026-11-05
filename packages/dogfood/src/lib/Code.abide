@@ -17,9 +17,7 @@ const {
 const shown =
     caption.includes('/') || caption.startsWith('.') || language === ''
         ? caption
-        : language === caption
-          ? `.${caption}`
-          : `.${language} · ${caption}`
+        : `.${language} · ${caption}`
 </script>
 
 {#if caption}

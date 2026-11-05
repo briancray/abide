@@ -8,8 +8,12 @@ export const COMPONENT_QUERY = '?component'
 /** The file's scoped stylesheet, which its browser module imports. 34.4. */
 export const STYLE_QUERY = '?style'
 
-/** The file's text. 34.21. */
-export const TEXT_QUERY = '?text'
+/**
+ * The file's text, after its own path. 34.21. A SUFFIX WITH AN EXTENSION rather than a query: bun's
+ * runtime asks no plugin's `onResolve` of a specifier whose last segment has no extension, and
+ * `./Dockerfile?text` has none — bun loaded the file as JavaScript. The bundler asks either way.
+ */
+export const TEXT_SUFFIX = '.abide-text'
 
 /**
  * The file's browser module, asked for outside a browser bundle — a component's hydration tested

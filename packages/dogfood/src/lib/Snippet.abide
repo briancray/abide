@@ -5,7 +5,7 @@
 import { props } from '@abide/abide'
 
 import Code from './Code.abide'
-import { EXCERPT } from './highlight.ts'
+import { EXCERPT, languageOf } from './highlight.ts'
 import { slice } from './slice.ts'
 
 const {
@@ -22,6 +22,6 @@ const code =
 
 <Code
     code={code}
-    language={path.slice(path.lastIndexOf('.') + 1)}
+    language={languageOf(path)}
     caption={from.length === 0 ? path : `${path}${EXCERPT}`}
  />

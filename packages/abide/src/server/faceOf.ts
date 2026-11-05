@@ -34,7 +34,7 @@ export type Lane = { bundling: boolean; browser: boolean }
 export type Face = { path: string; namespace: string }
 
 /**
- * What an import asks of a file, by its spelling: its text (`?text`), a component's stylesheet
+ * What an import asks of a file, by its spelling: its text (`.abide-text`), a component's stylesheet
  * (`?style`), the module it compiles to (`?component`), its browser module (`?client`), its server
  * module (`?server`), a `.abide` named bare, or a module that may be a handler file.
  */
