@@ -261,7 +261,10 @@ three pages later.
 * **The opening card is the one to price.** The line after it says what it cost, from the card's
   own bench — a ratio between two sizes of the same structure, never a figure in prose. A page's opening card
   carries the claim the title made; the cards after it are already inside an argument the reader
-  has accepted, and pricing each of them turns the device into furniture.
+  has accepted, and pricing each of them turns the device into furniture. A card whose behavior
+  happens inside a request, or is one setting, has no two sizes to price, and carries no price line:
+  a bench written to have one prices nothing, and the line after it would be a claim with nothing
+  measured behind it.
 * **Second person, imperative.** What *you* write, what *it* does. "You write one instead", not
   "an author writes one instead".
 * **Say it plainly. The instruction is the shortest a claim comes in.** "Set `ttl` to keep it
