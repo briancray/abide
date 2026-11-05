@@ -40,7 +40,7 @@ export type CheckedShadow = {
 
 /**
  * What a checked module's default export is declared as. Scaffolding, so a jump to it is a jump to
- * the component's file (`TypeSession.inspect`).
+ * the component's file (`LoweredFile.inspect`).
  */
 export const COMPONENT_STAND_IN = '__component'
 

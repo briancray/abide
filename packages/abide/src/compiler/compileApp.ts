@@ -84,7 +84,7 @@ export type AppChecker = {
      * The same nearest tsconfig and package.json, neither touched since. Asked rather than heard,
      * because either can sit above the watched root — the dogfood's do — and either changes what
      * every file resolves to. Where it is, the session is told every move `saw` held
-     * (`TypeSession.edited`); where it is not, `KeptChecker` opens another.
+     * (`ShadowHost.edited`); where it is not, `KeptChecker` opens another.
      */
     current: () => boolean
     close: () => Promise<void>

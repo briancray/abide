@@ -12,8 +12,8 @@ import { formatAbide } from './formatAbide.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import { KeptChecker } from './KeptChecker.ts'
 import { lineOf, offsetOf } from './lineOf.ts'
+import type { Inspection, Place } from './LoweredFile.ts'
 import { nearest } from './nearest.ts'
-import type { Inspection, Place } from './TypeSession.ts'
 
 // 38.11 — `abide lsp`: THE `.abide` LANGUAGE SERVER, OVER STDIO. It is `abide check` (38.3) asked
 // about one open document at a time, so the squiggle an editor draws and the line CI fails on are
@@ -23,7 +23,7 @@ import type { Inspection, Place } from './TypeSession.ts'
 // changed and closed, and `publishDiagnostics` back. The document is synced whole (`Full`), so what
 // is checked is exactly the editor's text, saved or not. A hover, a jump to a definition, a
 // completion, the references to a name and a rename of it are asked of the program that check
-// registered (`TypeSession`), so they answer about the same text.
+// registered (`LoweredFile`), so they answer about the same text.
 //
 // THE APP IS THE DOCUMENT'S. An editor starts this at the root of whatever it has open, which in a
 // monorepo is not an app at all, so each document is checked against the root of the NEAREST

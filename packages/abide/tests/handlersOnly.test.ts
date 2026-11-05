@@ -5,7 +5,7 @@
 import { afterAll, expect, spyOn, test } from 'bun:test'
 
 import { compileApp } from '#compiler/compileApp.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
+import { ShadowHost } from '#compiler/ShadowHost.ts'
 
 import { addressOf, appFixture, BIN, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -53,7 +53,7 @@ test('abide dev answers an app of handlers alone — 16.2', async () => {
 // 16.73 — WHAT AN APP'S OWN HANDLER FILE EXPORTS IS ASKED OF THE SNAPSHOT ITS READS TOOK: its file is
 // a root of the project already, so asking it moves nothing. Asserted on the WORK, the snapshots
 // taken, because the answer is the same either way. THE REVERT: drop the `dependency` guard in
-// `TypeSession.projectWith`; every own handler file is told to the config as moved, and the
+// `ShadowHost.openOutside`; every own handler file is told to the config as moved, and the
 // project is reloaded: 2 snapshots where 1 is due.
 test('an own handler file is asked of the snapshot already taken — 16.73', async () => {
     const app = appFixture({
@@ -61,7 +61,7 @@ test('an own handler file is asked of the snapshot already taken — 16.73', asy
         'health/ping.handler.ts': HANDLER,
     })
     const snapshot = spyOn(
-        TypeSession.prototype as unknown as { snapshot: () => unknown },
+        ShadowHost.prototype as unknown as { snapshot: () => unknown },
         'snapshot',
     )
     try {

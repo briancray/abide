@@ -513,7 +513,7 @@ test('an untitled document leaves every other one checked — 38.11', async () =
 }, 60_000)
 
 // A DELETED COMPONENT TAKES ITS CHECKED MODULE WITH IT. THE REVERT: drop the `CHECKED_SUFFIX` arm in
-// `TypeSession.edited`; the page goes on checking `<Card title="x"/>` against the props the deleted
+// `ShadowHost.edited`; the page goes on checking `<Card title="x"/>` against the props the deleted
 // file declared, and reports nothing.
 test('a page importing a deleted component says it cannot find it — 38.11', async () => {
     const uri = Bun.pathToFileURL(`${app}/index.abide`).href
@@ -808,7 +808,7 @@ async function renamedAt(
 // from the attribute's. THE REVERT: write a component's attribute keys as scaffolding again
 // (`JSON.stringify(key)` in `projectShadow`'s invocation); the declaration's side renames Panel alone,
 // and a rename asked at an attribute answers nothing. Or ask no place again where the checked module
-// copies the props type twice (`TypeSession.references`); asked at the attribute, the shorthand
+// copies the props type twice (`LoweredFile.references`); asked at the attribute, the shorthand
 // binding keeps the old name.
 test("a prop's rename reaches every tag passing it — 38.116", async () => {
     const panel = Bun.pathToFileURL(`${app}/lib/Panel.abide`).href
@@ -881,7 +881,7 @@ test('a component is renamed at its close tags too — 38.116', async () => {
 // 38.117 — MARKUP OFFERS WHAT MARKUP TAKES: the blocks the parser reads after `{#`, the arms and the
 // close of the block still open after `{:` and `{/`, the components in scope after `<`, and a
 // component's props not yet written inside its tag. THE REVERT: drop the `templateContext` arm of
-// `TypeSession.complete`; every one of these is answered null.
+// `completionAt`; every one of these is answered null.
 test('markup completes blocks, component tags and their props — 38.117', async () => {
     const uri = Bun.pathToFileURL(`${app}/tags/index.abide`).href
     await opened(uri, TAGS)

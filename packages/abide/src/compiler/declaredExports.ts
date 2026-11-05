@@ -1,4 +1,4 @@
-import type { CallExpression, Node } from 'typescript/unstable/ast'
+import type { CallExpression, Node, SourceFile } from 'typescript/unstable/ast'
 import { SyntaxKind } from 'typescript/unstable/ast'
 import {
     isArrayLiteralExpression,
@@ -51,6 +51,7 @@ import {
     isReactiveMember,
     valueTypeOf,
 } from './reactiveTypes.ts'
+import type { ShadowHost } from './ShadowHost.ts'
 
 /**
  * Every value each module exports, with the abide method that declares it.
@@ -62,15 +63,40 @@ import {
  * namespace is abide's, and an app's own function of that spelling is not. A type is not an
  * export here: it is erased, and has no address to answer at.
  *
- * `projectName` is the tsconfig the project was opened on, which a module outside it is refused by.
- * 38.33 — WHAT IS REFUSED OF A MODULE IS REFUSED AT ITS FILE, `named[at]` for `paths[at]`, every
- * export read either way: a module with a refusal is `undefined`, so nothing refuses it twice.
+ * Per module's `path`: a module `onDisk` is a file the host may not hold yet, which is made a root
+ * of the project where it has to be (`ShadowHost.ask`); a projection is one the host registered.
+ * Where the checker opened no project, every module exports nothing.
+ *
+ * 38.33 — WHAT IS REFUSED OF A MODULE IS REFUSED AT ITS `file`, every export read either way: a
+ * module with a refusal — one outside the project among them — is `undefined`, so nothing refuses
+ * it twice.
  */
 export async function declaredExports(
+    host: ShadowHost,
+    modules: readonly { path: string; file: string; onDisk: boolean }[],
+    refusals: Diagnostics,
+): Promise<Map<string, DeclaredExport[] | undefined>> {
+    const declared = new Map<string, DeclaredExport[] | undefined>()
+    if (modules.length === 0) return declared
+    const onDisk: string[] = []
+    for (const module of modules) if (module.onDisk) onDisk.push(module.path)
+    const asked = await host.ask(
+        (project) => exportsIn(host, project, modules, refusals),
+        { modules: onDisk },
+    )
+    for (let at = 0; at < modules.length; at += 1)
+        declared.set(
+            (modules[at] as (typeof modules)[number]).path,
+            asked === undefined ? [] : asked[at],
+        )
+    return declared
+}
+
+/** What each of `modules` exports in `project`, in their order (`declaredExports`). */
+async function exportsIn(
+    host: ShadowHost,
     project: Project,
-    projectName: string,
-    paths: readonly string[],
-    named: readonly string[],
+    modules: readonly { path: string; file: string }[],
     refusals: Diagnostics,
 ): Promise<(DeclaredExport[] | undefined)[]> {
     const checker = project.checker
@@ -81,16 +107,17 @@ export async function declaredExports(
         ?.path
     const abide = await abideIn(project)
     return allSettled(
-        paths.map(async (path, at) => {
-            const file = named[at] as string
-            const sourceFile = await project.program.getSourceFile(path)
-            if (sourceFile === undefined) {
-                refusals.at(
-                    file,
-                    new Error(
-                        `abide: ${path} is not inside the project ${projectName}, so what it exports cannot be read (RULEBOOK 16.73). Give the app a tsconfig whose include reaches it.`,
-                    ),
+        modules.map(async ({ path, file }) => {
+            let sourceFile: SourceFile
+            try {
+                sourceFile = await host.sourceFile(
+                    project,
+                    path,
+                    path,
+                    'what it exports cannot be read (RULEBOOK 16.73)',
                 )
+            } catch (thrown) {
+                refusals.at(file, thrown)
                 return undefined
             }
             const module = await checker.getSymbolAtLocation(sourceFile)

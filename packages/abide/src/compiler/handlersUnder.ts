@@ -54,40 +54,22 @@ export async function handlersUnder(
     const serving: Source[] = []
     for (const source of sources)
         if (source.file.servers.length > 0) serving.push(source)
-    const paths: string[] = []
-    const named: string[] = []
-    for (const file of files) {
-        paths.push(file.path)
-        named.push(file.relative)
-    }
-    // The project is asked of below, so the session keeps its snapshot until then.
-    using _held = session.hold()
-    const project = await session.projectWith(paths)
-    for (const source of serving) {
-        paths.push(session.projectionOf(source.path))
-        named.push(source.path)
-    }
+    const host = session.host
+    const modules: { path: string; file: string; onDisk: boolean }[] = []
+    for (const file of files)
+        modules.push({ path: file.path, file: file.relative, onDisk: true })
+    for (const source of serving)
+        modules.push({
+            path: host.projectionOf(source.path),
+            file: source.path,
+            onDisk: false,
+        })
     // A module whose read was refused is `undefined`, refused at its file already.
-    const declared =
-        project === undefined || paths.length === 0
-            ? paths.map(() => [])
-            : await declaredExports(
-                  project,
-                  session.tsconfig,
-                  paths,
-                  named,
-                  diagnostics,
-              )
+    const declared = await declaredExports(host, modules, diagnostics)
     const mounts: Mount[] = []
     const names = new Map<string, string>()
-    for (let at = 0; at < files.length; at += 1) {
-        const {
-            relative,
-            route: address,
-            scope,
-            matchers,
-        } = files[at] as (typeof files)[number]
-        const exported = declared[at]
+    for (const { path, relative, route: address, scope, matchers } of files) {
+        const exported = declared.get(path)
         if (exported === undefined) continue
         try {
             const handler = exported.find((each) => each.name === 'default')
@@ -125,12 +107,11 @@ export async function handlersUnder(
             diagnostics.at(relative, thrown)
         }
     }
-    for (let at = 0; at < serving.length; at += 1) {
-        const { relative, position, place, scope } = serving[at] as Source
+    for (const { path, relative, position, place, scope } of serving) {
         // 34.24 — a dependency's file answers where a mount places it, and its handlers below the
         // path it has there.
         const below = place === 'dependency' ? relative : position
-        for (const each of declared[files.length + at] ?? []) {
+        for (const each of declared.get(host.projectionOf(path)) ?? []) {
             if (each.method === undefined) continue
             if (!each.name.startsWith(PRIVATE_EXPORT)) continue
             const name = each.name.slice(PRIVATE_EXPORT.length)

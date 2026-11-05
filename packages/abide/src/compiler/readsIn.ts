@@ -53,31 +53,19 @@ import {
     type PositionKind,
     type PositionTable,
 } from './PositionTable.ts'
-import { INLINE_PROPS, type Span } from './projectShadow.ts'
+import { INLINE_PROPS, type Projection, type Span } from './projectShadow.ts'
 import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
 import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
 import {
     type Abide,
     boundInitializer,
+    isReactiveSymbol,
     isReactiveType,
     unionMembers,
     valueTypeOf,
 } from './reactiveTypes.ts'
 import { sharedModuleWrites } from './sharedModuleWrites.ts'
 import { trackingWarnings } from './trackingWarnings.ts'
-
-/** Where in a `.abide`'s shadow each kind of question is asked (`projectShadow`). */
-export type ShadowSpans = {
-    /** Where the shadow's scripts end and its template begins. */
-    scriptsEnd: number
-    /** The `<script module>`, `<script server>` and `<script>` bodies, in the shadow. */
-    modules: Span
-    servers: Span
-    scripts: Span
-    positions: PositionTable
-    /** 32.67 — where each `{#for}` row's item binding starts. */
-    items: Set<number>
-}
 
 const SETUP: ReadonlySet<PositionKind> = new Set(['setup'])
 const HEAD: ReadonlySet<PositionKind> = new Set(['head'])
@@ -121,19 +109,22 @@ const RAW_LOWERED: ReadonlySet<PositionKind> = new Set([...PROVABLE, 'prop'])
  * absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
  * parents by `classifyRead`, so no token walk re-derives the grammar.
  *
- * Asked of one snapshot (`TypeSession.readsFor`), and every offset — a read's and a warning's — is
- * the shadow's; the session places them in the `.abide`.
+ * Asked of one snapshot (`reactiveReads`), and every offset — a read's and a warning's — is the
+ * shadow's; `reactiveReads` places them in the `.abide`. `suspects` are where each binding starts
+ * whose type the projection cannot vouch for (`bindingsOfReads`), for the next round to ask.
  */
 export async function readsIn(
     checker: Checker,
     abide: Abide,
     sourceFile: SourceFile,
     shadowPath: string,
-    spans: ShadowSpans,
+    projection: Projection,
     file: AbideFile,
     /** Where each name the lowered program proved a `Reactive` starts (`bindingsOfReads`). */
     held: ReadonlySet<number>,
 ): Promise<{ answer: CheckerAnswer; warnings: Finding[]; suspects: number[] }> {
+    const scriptsEnd = projection.scripts.end
+    const positions = projection.positions
     // A destructuring pattern binds names this does not see, and that is 31.12's case.
     const names: Node[] = []
     const spelled = new Set<string>()
@@ -143,7 +134,7 @@ export async function readsIn(
         names.push(name)
     }
     for (const statement of sourceFile.statements) {
-        if (statement.getStart() >= spans.scriptsEnd) break
+        if (statement.getStart() >= scriptsEnd) break
         if (isVariableStatement(statement)) {
             for (const declaration of statement.declarationList.declarations)
                 bind(declaration.name)
@@ -172,12 +163,11 @@ export async function readsIn(
     const topLevel = names.length
     // The script's own statements, as the top-level walk takes the page's: a declaration inside
     // one of its functions is not a name the body reads.
-    for (const { node } of spans.positions.nodesIn(sourceFile, SETUP))
+    for (const { node } of positions.nodesIn(sourceFile, SETUP))
         if (isVariableStatement(node))
             for (const declaration of node.declarationList.declarations)
                 if (isIdentifier(declaration.name)) names.push(declaration.name)
-    refuseDeclared(sourceFile.statements, spans.scriptsEnd, file)
-    const reads: Read[] = []
+    refuseDeclared(sourceFile.statements, scriptsEnd, file)
     // 33's pass runs whatever 31.3's found: a `props` pattern binds no name the walk
     // above collects — `const { amount } = props()` declares a PATTERN — so a file
     // whose only declaration is one would have returned with its props unread.
@@ -186,22 +176,21 @@ export async function readsIn(
         abide,
         sourceFile,
         shadowPath,
-        spans.scriptsEnd,
-        spans.positions,
-        reads,
+        scriptsEnd,
+        positions,
     )
     // Awaited after the round trips below, so a 33.14 refusal would reject with nothing
     // listening and be reported unhandled; `await props` still throws it.
     props.catch(() => {})
-    const params = routeReads(checker, abide, sourceFile, reads)
-    const rows = rowReads(checker, sourceFile, shadowPath, spans, reads)
-    const configs = configReads(
+    const params = routeReads(checker, abide, sourceFile)
+    const rows = rowReads(
         checker,
-        abide,
         sourceFile,
-        spans.servers,
-        reads,
+        shadowPath,
+        positions,
+        new Set(projection.items.values()),
     )
+    const configs = configReads(checker, abide, sourceFile, projection.servers)
     // No name is no round trip to ask about none.
     const symbols =
         names.length === 0 ? [] : await checker.getSymbolAtLocation(names)
@@ -251,6 +240,7 @@ export async function readsIn(
     )
     const holding: Promise<void>[] = []
     const located: { node: Node; read: Read }[] = []
+    const named: Read[] = []
     for (let index = 0; index < nodes.length; index += 1)
         for (const node of nodes[index] as (Node | undefined)[]) {
             if (node === undefined) continue
@@ -258,21 +248,21 @@ export async function readsIn(
             if (read === undefined) continue
             read.byValue = byValue[index] as boolean
             read.local = index >= topLevel
-            reads.push(read)
+            named.push(read)
             located.push({ node, read })
             if (read.shape === 'value')
                 holding.push(holdIn(checker, abide, node, read))
         }
     await Promise.all(holding)
-    await props
-    await params
-    await rows
-    await configs
+    const reads = [
+        ...(await props),
+        ...(await params),
+        ...(await rows),
+        ...(await configs),
+        ...named,
+    ]
     const statics = new Set<number>()
-    const expressions = spans.positions.nodesIn(
-        sourceFile,
-        TEMPLATE_EXPRESSIONS,
-    )
+    const expressions = positions.nodesIn(sourceFile, TEMPLATE_EXPRESSIONS)
     const rawCallees: Node[] = []
     for (const { position, node } of expressions)
         expressionFacts(
@@ -281,15 +271,15 @@ export async function readsIn(
         )
     // A `Reactive` the page named `raw` is a read, and the read's rewrite is the answer.
     if (rawCallees.length > 0) {
-        const named = new Set<number>()
-        for (const one of reads) named.add(one.start)
+        const starts = new Set<number>()
+        for (const one of reads) starts.add(one.start)
         for (const callee of rawCallees)
-            if (!named.has(callee.getStart()))
+            if (!starts.has(callee.getStart()))
                 reads.push(newRead(callee.getStart(), callee.end, 'raw'))
     }
     await proveSlots(checker, expressions, reads, statics)
     reads.sort(byPosition)
-    const warnings = await warningsFor(checker, located, spans.positions)
+    const warnings = await warningsFor(checker, located, positions)
     // 34.18.
     for (const warning of await sharedModuleWrites(
         checker,
@@ -297,8 +287,8 @@ export async function readsIn(
         names.slice(0, topLevel),
         symbols,
         reactive,
-        spans.modules,
-        spans.scripts,
+        projection.modules,
+        projection.scripts,
     ))
         warnings.push(warning)
     const answer = new CheckerAnswer(reads, statics)
@@ -317,7 +307,7 @@ export async function readsIn(
 
 /**
  * Where each binding starts whose type the projection cannot vouch for, for the lowered program to
- * answer (`TypeSession.classify`).
+ * answer (`reactiveReads`).
  *
  * 31.1 — A BINDING TYPED FROM A READ IS TYPED FROM THE `Reactive` IN THE PROJECTION, and the read is
  * of its value. `reactive(route.url.pathname)` asks a `Reactive<URL>` for a `pathname` it does not
@@ -549,7 +539,7 @@ function annotated(
 async function proveSlots(
     checker: Checker,
     expressions: readonly { position: Position; node: Node }[],
-    reads: Read[],
+    reads: readonly Read[],
     /** Where each position it proves static starts, added to. */
     statics: Set<number>,
 ): Promise<void> {
@@ -761,9 +751,9 @@ async function routeReads(
     checker: Checker,
     abide: Abide,
     sourceFile: Node,
-    reads: Read[],
-): Promise<void> {
-    if (abide.route === undefined) return
+): Promise<Read[]> {
+    const reads: Read[] = []
+    if (abide.route === undefined) return reads
     const accesses: Node[] = []
     const owners: Node[] = []
     const visit = (node: Node): void => {
@@ -779,7 +769,7 @@ async function routeReads(
         node.forEachChild(visit)
     }
     sourceFile.forEachChild(visit)
-    if (owners.length === 0) return
+    if (owners.length === 0) return reads
     const symbols = await checker.getSymbolAtLocation(owners)
     for (let at = 0; at < accesses.length; at += 1) {
         const symbol = symbols[at]
@@ -794,6 +784,7 @@ async function routeReads(
             (access as { name?: { text: string } }).name?.text === 'params'
         reads.push(read)
     }
+    return reads
 }
 
 /**
@@ -810,10 +801,12 @@ async function rowReads(
     checker: Checker,
     sourceFile: Node,
     shadowPath: string,
-    spans: ShadowSpans,
-    reads: Read[],
-): Promise<void> {
-    if (spans.items.size === 0) return
+    positions: PositionTable,
+    /** Where each `{#for}` row's item binding starts. */
+    items: Set<number>,
+): Promise<Read[]> {
+    const reads: Read[] = []
+    if (items.size === 0) return reads
     const bound: Node[] = []
     const loops: Node[] = []
     const bind = (name: Node | undefined, loop: Node): void => {
@@ -828,12 +821,12 @@ async function rowReads(
                 bind((element as { name?: Node }).name, loop)
     }
     const visit = (node: Node): void => {
-        const declared = rowItemOf(node, spans.items)
+        const declared = rowItemOf(node, items)
         if (declared !== undefined) bind(declared, node)
         node.forEachChild(visit)
     }
     sourceFile.forEachChild(visit)
-    if (bound.length === 0) return
+    if (bound.length === 0) return reads
     const symbols = await checker.getSymbolAtLocation(bound)
     const found = await Promise.all(
         symbols.map(async (symbol) =>
@@ -852,12 +845,12 @@ async function rowReads(
     for (let at = 0; at < found.length; at += 1) {
         const name = bound[at] as Node
         const loop = loops[at] as Node
-        const item = (rowItemOf(loop, spans.items) as Node).getStart()
+        const item = (rowItemOf(loop, items) as Node).getStart()
         for (const node of found[at] as (Node | undefined)[]) {
             if (node === undefined || node === name) continue
             if (
-                spans.positions.holding(node.getStart())?.kind === 'key' &&
-                rowLoopOf(node, spans.items) === loop
+                positions.holding(node.getStart())?.kind === 'key' &&
+                rowLoopOf(node, items) === loop
             )
                 continue
             const read = classifyPropRead(node)
@@ -866,6 +859,7 @@ async function rowReads(
             reads.push(read)
         }
     }
+    return reads
 }
 
 /** The item binding `node` declares, where it is a `{#for}` row loop. */
@@ -933,7 +927,7 @@ function refuseDeclared(
 
 /**
  * 27.13 — each `onConfig(…)` standing as a statement at the top of a `<script server>`, as a read of
- * its callee, pushed onto `reads`.
+ * its callee.
  *
  * The callee says which are abide's, as `props`'s does. A call anywhere else — inside a function,
  * or handing its unfiling back to a name — is filed all the same, and declares nothing.
@@ -943,9 +937,9 @@ async function configReads(
     abide: Abide,
     sourceFile: Node & { statements: readonly Node[] },
     servers: Span,
-    reads: Read[],
-): Promise<void> {
-    if (abide.onConfig === undefined) return
+): Promise<Read[]> {
+    const reads: Read[] = []
+    if (abide.onConfig === undefined) return reads
     const callees: Node[] = []
     for (const statement of sourceFile.statements) {
         const start = statement.getStart()
@@ -958,7 +952,7 @@ async function configReads(
         )
             callees.push(statement.expression.expression)
     }
-    if (callees.length === 0) return
+    if (callees.length === 0) return reads
     const named = await checker.getSymbolAtLocation(callees)
     for (let at = 0; at < callees.length; at += 1) {
         const symbol = named[at]
@@ -972,10 +966,11 @@ async function configReads(
         const node = callees[at] as Node
         reads.push(newRead(node.getStart(), node.end, 'config'))
     }
+    return reads
 }
 
 /**
- * The reads a `props<Props>()` destructuring contributes, pushed onto `reads`.
+ * The reads a `props<Props>()` destructuring contributes.
  *
  * 33 — WHAT `props<Props>()` BINDS, and it is a second question from 31.3's rather than a case of
  * it: a prop is not a `Reactive` and is not typed as one, so no type answers this. The CALLEE
@@ -997,8 +992,8 @@ async function propsReads(
     shadowPath: string,
     scriptsEnd: number,
     positions: PositionTable,
-    reads: Read[],
-): Promise<void> {
+): Promise<Read[]> {
+    const reads: Read[] = []
     // The spelling only says which calls are worth asking about; the callee says which are abide's.
     const calls: { pattern: Node; call: Node; local: boolean }[] = []
     const callees: Node[] = []
@@ -1024,7 +1019,7 @@ async function propsReads(
     // 32.40 — AND EACH INLINE COMPONENT'S HEAD, inside the function it is projected as. Its names
     // are that function's, so a read of one is local as a branch-local name is (14.8).
     for (const { node } of positions.nodesIn(sourceFile, HEAD)) take(node, true)
-    if (calls.length === 0 || abide.props === undefined) return
+    if (calls.length === 0 || abide.props === undefined) return reads
     const named = await checker.getSymbolAtLocation(callees)
     // One entry per name a pattern binds: the key it takes, the call's read its key joins where
     // the child writes it, and its default's pair.
@@ -1091,7 +1086,7 @@ async function propsReads(
             })
         }
     }
-    if (bound.length === 0) return
+    if (bound.length === 0) return reads
 
     const symbols = await checker.getSymbolAtLocation(bound)
     const found = await Promise.all(
@@ -1178,6 +1173,7 @@ async function propsReads(
         }
     }
     await Promise.all(holding)
+    return reads
 }
 
 /**
@@ -1321,15 +1317,6 @@ function restReads(nodes: (Node | undefined)[], reads: Read[]): void {
 /** A name standing alone as a `bind:` operand, on an element or on a component. */
 function isBindOperand(positions: PositionTable, node: Node): boolean {
     return holdsReactive(positions.of(node))
-}
-
-async function isReactiveSymbol(
-    checker: Checker,
-    abide: Abide,
-    symbol: CheckedSymbol,
-): Promise<boolean> {
-    const type = await checker.getTypeOfSymbol(symbol)
-    return type !== undefined && isReactiveType(checker, abide, type, false)
 }
 
 /**
