@@ -19,14 +19,8 @@ import { failedFrom, isFailed, problemOf } from '#shared/Failed.ts'
 import type { Problem } from '#shared/Failed.ts'
 import { showLine, type ShownCall, showSending } from '#shared/outbox.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
-import {
-    isReactive,
-    produceInto,
-    type Reactive,
-    reactive,
-    refuseInto,
-    standIn,
-} from '#shared/reactive/index.ts'
+import { isReactive, type Reactive, reactive } from '#shared/reactive/index.ts'
+import { produceInto, refuseInto, standIn } from '#shared/reactive/producer.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 
 const DATABASE = 'abide-outbox'

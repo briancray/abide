@@ -10,15 +10,14 @@
 import { LOAD_OFFLINE } from '../LOAD_OFFLINE.ts'
 import { LOAD_SIGNAL } from '../LOAD_SIGNAL.ts'
 import { aborted, refuse } from '../refuse.ts'
-// Through the barrel, for the cycle it names: rpc reaches this module ahead of the barrel.
+// Through the barrel first, for the cycle it names: rpc reaches this module ahead of the barrel.
+import { isReactive, STREAMING } from './index.ts'
 import {
     abandonLoad,
     failedTransiently,
-    isReactive,
     loadOf,
-    STREAMING,
     streamingOrSettled,
-} from './index.ts'
+} from './producer.ts'
 
 /**
  * Who is waiting on one value's load, and what the last one came to.

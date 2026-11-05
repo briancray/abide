@@ -18,7 +18,6 @@ import {
 } from './argsContract.ts'
 import { CELL } from './CELL.ts'
 import { type Callable, type Cell, refuseBothCaps } from './cellShape.ts'
-import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer } from './Expiry.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
@@ -99,6 +98,20 @@ type Follower = {
     cell: Cell
     reader: Subscriber
     evict: () => void
+}
+
+/**
+ * Each followed entry's `Follower`, by its cell: when it last produced, and how long it lives (11.45).
+ */
+const ENTRY_LIVES = new WeakMap<Cell, Follower>()
+
+/**
+ * When the entry `cell` is stops being servable, by its `Keyed`'s `ttl` — infinity where it is no
+ * followed entry. What `deadlineOf` reads beside the value's own `ttl` (21.8).
+ */
+export function entryDeadline(cell: Cell): number {
+    const entry = ENTRY_LIVES.get(cell)
+    return entry === undefined ? Number.POSITIVE_INFINITY : entry.at + entry.ms
 }
 
 /**

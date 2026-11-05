@@ -27,7 +27,8 @@ import {
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
-import { chunksOfStream, isKeyed } from '#shared/reactive/index.ts'
+import { isKeyed } from '#shared/reactive/index.ts'
+import { chunksOfStream, isStreaming } from '#shared/reactive/producer.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
@@ -4887,7 +4888,7 @@ test('a value that stops adopting a stream serves its own value again', async ()
     expect(outer()).toEqual([1])
     flag.set(false)
     expect(outer()).toEqual([99])
-    expect(cellOf(outer).stream).toBeNull()
+    expect(isStreaming(outer)).toBe(false)
     expect(`direct: ${cellOf(outer).direct}`).toBe('direct: true')
 })
 
@@ -6762,9 +6763,7 @@ test('releasing an orphaned stream that follows a write keeps the stream its own
     // … and before that task the stream follows a write, and its owner stops.
     s.set(reactive(7) as never)
     for (const stop of stops) stop()
-    expect(`stream: ${cellOf(s).stream === null ? 'null' : 'own'}`).toBe(
-        'stream: own',
-    )
+    expect(`stream: ${isStreaming(s) ? 'own' : 'null'}`).toBe('stream: own')
     let thrown: unknown
     const reported = (error: unknown): void => {
         thrown = error

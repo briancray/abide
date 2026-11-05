@@ -31,11 +31,12 @@ import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { LOAD_OFFLINE } from '#shared/LOAD_OFFLINE.ts'
 import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
-import { reactive, standIn, structural } from '#shared/reactive/index.ts'
+import { reactive, structural } from '#shared/reactive/index.ts'
 import {
     declareDefaults,
     type Defaults,
 } from '#shared/reactive/parameterDefaults.ts'
+import { standIn } from '#shared/reactive/producer.ts'
 import { declare, type Method } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
 

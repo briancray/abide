@@ -34,19 +34,12 @@ import {
     type Stream,
 } from './cellShape.ts'
 import { CAUGHT_UP, Cursor, hasCursorBehind, keepPlaces } from './Cursor.ts'
-import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer, type Expiry } from './Expiry.ts'
 import { isReactive } from './isReactive.ts'
 import { isThenable } from './isThenable.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
-import {
-    holdLog,
-    logOf,
-    PatchLog,
-    type PatchOp,
-    sendInvalidate,
-} from './patchLog.ts'
+import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
 import { runInScope } from './scoping.ts'
@@ -302,7 +295,7 @@ export type Reactive<
  * THE ONE DISCRIMINATOR between following and forwarding. An own stream's `adoption` is a write it
  * follows (9.11), and a forwarding value's is the stream it forwards.
  */
-function ownStream(cell: Cell): Stream | null {
+export function ownStream(cell: Cell): Stream | null {
     const stream = cell.stream
     return stream !== null && stream.source === null ? stream : null
 }
@@ -2745,11 +2738,6 @@ export function refuseInto(value: Reactive<unknown>, failure: unknown): void {
     refused((value as unknown as Callable)[CELL], failure)
 }
 
-/** Whether `value` holds what was written here, without subscribing — for a caller that is not a reader. */
-export function writtenLocally(value: Reactive<unknown>): boolean {
-    return (value as unknown as Callable)[CELL].local
-}
-
 /**
  * A promise of the value once it is servable and not busy, or of its failure.
  *
@@ -3613,60 +3601,6 @@ const MEMBERS = {
     },
 }
 
-/**
- * The cell `value` serves from, through every adoption: its identity and its ordinal, and nothing
- * else of it the server can reach.
- *
- * 11.12: an adopting value serves the adopted value's production, and an adoption of an adoption
- * goes on down — so a follow's version (18.7) and its feed name the cell that actually produced.
- */
-export function servedCellOf(value: unknown): { readonly ordinal: number } {
-    return adoptedCellOf(value)
-}
-
-/**
- * Holds a patch log on the cell `value` serves from, with `invalidated` called on its every
- * invalidate; returns what releases both. 18.11, 7.10.
- */
-export function followServed(
-    value: unknown,
-    invalidated: () => void,
-): () => void {
-    return holdLog(adoptedCellOf(value), invalidated)
-}
-
-/**
- * When the production `value` serves stops being servable, as a wall-clock time.
- *
- * 21.8 — WHEN THE PRODUCTION A VALUE IS SERVING STOPS BEING SERVABLE, as a wall-clock time: its
- * own `ttl` from when it was minted (6.5), or its entry's from when the entry last produced
- * (11.45), through whatever it adopts. Infinity where neither bounds it.
- */
-export function deadlineOf(value: unknown): number {
-    const cell = adoptedCellOf(value)
-    if (cell.expiry !== null) return cell.expiry.at + cell.expiry.ms
-    const entry = ENTRY_LIVES.get(cell)
-    return entry === undefined ? Number.POSITIVE_INFINITY : entry.at + entry.ms
-}
-
-/**
- * The generation of the load `value` has in flight, or `undefined`.
- *
- * 16.48 — WHICH LOAD A VALUE HAS IN FLIGHT, as the generation that started it, or `undefined` where
- * none is. Read off the cell rather than through `busy`, which is a probe and would subscribe the
- * caller that asked (3.3).
- *
- * A WINDOW HOLDING A PRODUCTION IS BUSY AND IS NO LOAD (5.15): nothing is in flight for a call to end
- * or time, and the window's close is its own bound. Told apart by the hold, which only a value with
- * neither body nor stream makes — so a write's load taken in under a hold is not one a call times.
- */
-export function loadOf(value: unknown): number | undefined {
-    const cell = (value as Callable)[CELL]
-    if (!cell.loading) return undefined
-    if (cell.cap?.holding && cell.stream === null) return undefined
-    return cell.generation
-}
-
 // The cells a mutation's call has been answered from, so the next call knows the answer is spent.
 const ANSWERED = new WeakSet<object>()
 
@@ -3695,16 +3629,6 @@ export function dropAnswered(value: unknown): void {
         Date.now() - expiry.at >= expiry.ms
     )
         dropStanding(cell, expiry)
-}
-
-/**
- * The generation `value`'s past stands at, or `undefined` while a load is in flight.
- *
- * What 21.15's `Cached` compares across a call, read through adoption as `servedCellOf` is.
- */
-export function heldGenerationOf(value: unknown): number | undefined {
-    const cell = adoptedCellOf(value)
-    return cell.loading ? undefined : cell.generation
 }
 
 /**
@@ -3744,26 +3668,6 @@ export function abandonLoad(value: unknown, failure: unknown): void {
  */
 export function streamingOrSettled(value: unknown): Promise<unknown> {
     return settled((value as Callable)[CELL], true)
-}
-
-/**
- * Whether `value` is a streaming producer's `Reactive`.
- *
- * A streaming producer's own `Reactive` — a body declared as an async generator, or one whose run
- * handed one back (9.6).
- */
-export function isStreaming(value: unknown): boolean {
-    if (!isReactive(value)) return false
-    const stream = (value as Partial<Callable>)[CELL]?.stream
-    return stream !== null && stream !== undefined
-}
-
-function adoptedCellOf(value: unknown): Cell {
-    let cell = (value as Callable)[CELL]
-    // A stream's own `adoption` is a write it follows (9.11), and its past is its own.
-    while (cell.adoption !== null && ownStream(cell) === null)
-        cell = cell.adoption.source
-    return cell
 }
 
 /**

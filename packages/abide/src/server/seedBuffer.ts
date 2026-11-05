@@ -24,12 +24,11 @@
 
 import { namedLogger } from '#shared/log.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
+import { isReactive, STREAMING } from '#shared/reactive/index.ts'
 import {
     chunksOfStream,
-    isReactive,
-    STREAMING,
     streamingOrSettled,
-} from '#shared/reactive/index.ts'
+} from '#shared/reactive/producer.ts'
 
 import { positiveSetting } from './config.ts'
 import {
