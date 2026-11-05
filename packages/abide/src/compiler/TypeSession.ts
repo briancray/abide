@@ -1,4 +1,4 @@
-import type { CompletionInfo, Project } from 'typescript/unstable/async'
+import type { CompletionInfo } from 'typescript/unstable/async'
 
 import type { AppLayout } from './appLayout.ts'
 import { appLints } from './appLints.ts'
@@ -63,29 +63,9 @@ export class TypeSession {
         return this.host.belowRoot(path)
     }
 
-    /** Marks a call in flight until the returned value is disposed (`ShadowHost.hold`). */
-    hold(): Disposable {
-        return this.host.hold()
-    }
-
     /** Records the paths a watcher saw move, for the next snapshot to invalidate. */
     edited(paths: string[] | undefined): void {
         this.host.edited(paths)
-    }
-
-    /**
-     * The project, with each of `modules` outside the app's own a root of it — valid for as long as
-     * the caller holds the session (`hold`).
-     */
-    async projectWith(
-        modules: readonly string[],
-    ): Promise<Project | undefined> {
-        return this.host.ask(async (project) => project, { modules })
-    }
-
-    /** Where the checker holds a `.abide`'s projection, once its reads have registered it (16.70). */
-    projectionOf(abidePath: string): string {
-        return this.host.projectionOf(abidePath)
     }
 
     /**

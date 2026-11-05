@@ -226,7 +226,7 @@ test('a kept session holds one snapshot however many it has taken', async () => 
         expect(kept.snapshots).toBe(3)
         expect(held()).toBe(1)
 
-        const inFlight = kept.hold()
+        const inFlight = kept.host.hold()
         for (let at = 3; at < 6; at += 1) await ask(at)
         expect(held()).toBe(4)
         inFlight[Symbol.dispose]()
