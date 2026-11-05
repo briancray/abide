@@ -872,7 +872,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Meaning | Rules |
 | --- | --- | --- |
-| `preload = ["@abide/harness/abide/preload"]` | The `[test]` preload that registers a DOM a test mounts into and measures, then abide's own. | 38.109, 38.119 |
+| `preload = ["@abide/harness/abide/preload"]` | The `[test]` preload that registers a DOM a test mounts into and measures, then abide's own. | 38.109, 38.119, 38.133 |
 
 # CLI
 

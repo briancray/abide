@@ -2869,6 +2869,9 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 38.132 The project `abide scaffold` writes MUST carry a Dockerfile whose image holds the executable
 `abide compile` writes and nothing else of the app.
 
+38.133 Under `bun test` with `@abide/abide/test` preloaded, each test file after the first in a
+process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

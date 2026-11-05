@@ -133,6 +133,76 @@ test('a click rewrites the count and builds nothing', async () => {
     )
 }, 90_000)
 
+// 38.133 — EACH TEST FILE STARTS COLD: one file settles a handler's answer, and the next file in the
+// same process mounts a component calling it and still finds it unanswered, then answered. The two
+// files are named on the command line, which is the order `bun test` runs them in — the order a
+// Linux runner happened to choose is what found it. THE REVERT: drop the `invalidate()` from the
+// preload's `beforeEach`; the cold file reads `1` at mount where `0` is due — exit 1, `1 pass`.
+test('a test file finds no answer an earlier file settled — 38.133', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'cold-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/things/listThings.handler.ts': `import { GET } from '@abide/abide/server'
+
+export default GET(async () => {
+    await Bun.sleep(100)
+    return ['thing']
+})
+`,
+        'src/things/lib/Things.abide': `<script>
+import { reactive } from '@abide/abide'
+
+import listThings from '../listThings.handler.ts'
+
+const things = reactive(() => listThings())
+</script>
+
+<ul>
+    {#for thing of things}
+        <li>{thing}</li>
+    {/for}
+</ul>`,
+        'src/things/tests/settles.test.ts': `import { expect, test } from 'bun:test'
+import { mount } from '@abide/harness/abide'
+import Things from '../lib/Things.abide'
+
+test('the answer settles', async () => {
+    using _things = await mount(Things({}))
+    await Bun.sleep(300)
+    expect(document.querySelectorAll('li').length).toBe(1)
+})
+`,
+        'src/things/tests/cold.test.ts': `import { expect, test } from 'bun:test'
+import { mount } from '@abide/harness/abide'
+import Things from '../lib/Things.abide'
+
+test('the next file waits for its own answer', async () => {
+    using _things = await mount(Things({}))
+    expect(document.querySelectorAll('li').length).toBe(0)
+    await Bun.sleep(300)
+    expect(document.querySelectorAll('li').length).toBe(1)
+})
+`,
+    })
+    const ran = await spawned(
+        [
+            'bun',
+            'test',
+            './src/things/tests/settles.test.ts',
+            './src/things/tests/cold.test.ts',
+        ],
+        { cwd },
+    )
+    expect(`${ran.exitCode} ${ran.stderr.includes('2 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 38.119 — A MOUNTED COMPONENT'S DYNAMIC `import('#src/…')` resolves as its static one does: from the
 // file its browser module stands for, not from the namespace that module is loaded in. THE REVERT:
 // narrow the runtime's hook in `abideModules` back to relative specifiers, and the click reads "ERR
