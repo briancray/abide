@@ -182,11 +182,16 @@ import Held from '#src/lib/Held.abide'
 
 let count = reactive(0)
 let name = reactive('ada')
+let edits = reactive<Record<string, string>>({ kind: 'a' })
+let field = reactive('kind')
+let tally = reactive({ n: 0 })
 </script>
 
 <Card title={name}/>
 <Card {...{ title: 'x' }}/>
 <Held bind:value={name}/>
+<Held bind:value={edits.kind}/>
+<Held bind:value={edits[field]}/>
 <Held bind:value={{ get: () => name, set: (typed) => { name = typed.trim() } }}/>
 <Bare/>
 <Card title="x"><b>kids</b></Card>
@@ -194,7 +199,8 @@ let name = reactive('ada')
 <Card titel="x"/>
 <Bare extra="x"/>
 <Held value={name}/>
-<Held bind:value={count}/>`
+<Held bind:value={count}/>
+<Held bind:value={tally.n}/>`
 
 // 32.34 — a tag choosing by a value is held to the props of what it may hold, and may hold nothing.
 const CHOSEN = `<script>
@@ -387,6 +393,10 @@ test('a tag is held to the props its component declares, on the attribute — 38
         { ...at('<Bare extra', 6), code: 2322 },
         // 32.6 — a `bind:` is held to the prop as the value its `Reactive` holds.
         { ...at('<Held bind:value={count}', 18), code: 2322 },
+        // 32.5 — and one through a path as the value at its end, which is the pair the build hands
+        // over. THE REVERT: take `boundPath` only in `reference`; the two right paths above report
+        // TS2769, the shadow having read each as the string it holds.
+        { ...at('<Held bind:value={tally.n}', 18), code: 2322 },
     ])
     expect(inFile('lib/Bare.abide')).toEqual([])
     expect(inFile('lib/Held.abide')).toEqual([])

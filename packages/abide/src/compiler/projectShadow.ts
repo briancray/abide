@@ -694,6 +694,7 @@ const POSITION_DECLARATIONS = `
 declare function ${ON}<Name extends string>(name: Name, handler: ((event: Name extends keyof HTMLElementEventMap ? HTMLElementEventMap[Name] : Event) => unknown) | null | undefined | false): void
 declare function ${ANY}(value: any): void
 declare function ${PROP}<Value>(value: Value): Value
+declare function ${BIND}<Value>(value: { get(): Value; set(value: Value): unknown }): void
 declare function ${BIND}(value: any): void
 declare function ${BOUND}<Value>(value: ${REACTIVE}<Value, any, any, any>): Value
 declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unknown }): Value

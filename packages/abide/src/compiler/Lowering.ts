@@ -371,7 +371,7 @@ export class Lowering {
      */
     reference(holder: object): string {
         const span = this.spanOf(holder)
-        return this.boundPath(span) ?? grouped(this.lowerChunk(span, true))
+        return grouped(this.lowerChunk(span, true))
     }
 
     /**
@@ -383,9 +383,17 @@ export class Lowering {
      * A COMPUTED STEP IS EMITTED SOURCE, as 31.8's is: `params[s.k]` writes through `s.k` lowered,
      * so the key is read when the input writes and the get reads it too — the binding follows the
      * key. A `!` is a type and no step. `undefined` for an operand that is not a name followed by
-     * steps, which `reference` lowers as it stands — save 32.76's optional step, which is refused.
+     * steps, which `lower` lowers as it stands — save 32.76's optional step, which is refused.
+     *
+     * IN `lower`, SO THE CHECKER READS THE PAIR THE BUILD EMITS. Taken only where the build asked
+     * (`reference`), the shadow lowered the same path as a read, and a component's `bind:` held
+     * `__bound` to the string it read — TS2769 on a binding the build compiles and runs.
      */
-    private boundPath(span: Span): string | undefined {
+    private boundPath(
+        span: Span,
+        origins: Origin[] | undefined,
+        base: number,
+    ): string | undefined {
         const source = this.projection.text
         const text = source.slice(span.start, span.end)
         const from = span.start + (text.length - text.trimStart().length)
@@ -433,7 +441,20 @@ export class Lowering {
         }
         if (segments.length === 0) return undefined
         const name = this.nameOf(read)
-        return `{ get: () => ${this.lowerChunk({ start: from, end: to })}, set: (${STORED}) => ${name}.set(${this.use('writePath')}(${name}(), [${segments.join(', ')}], ${STORED})) }`
+        const open = '{ get: () => '
+        origins?.push({ at: base, source: from, length: 0 })
+        const got = this.lower(
+            { start: from, end: to },
+            false,
+            origins,
+            base + open.length,
+        )
+        origins?.push({
+            at: base + open.length + got.length,
+            source: to,
+            length: 0,
+        })
+        return `${open}${got}, set: (${STORED}) => ${name}.set(${this.use('writePath')}(${name}(), [${segments.join(', ')}], ${STORED})) }`
     }
 
     /**
@@ -567,6 +588,10 @@ export class Lowering {
         const text = source.slice(from, to)
         const wholeFrom = from + (text.length - text.trimStart().length)
         const wholeTo = from + text.trimEnd().length
+        if (holds) {
+            const path = this.boundPath(span, origins, base)
+            if (path !== undefined) return path
+        }
         const reads = this.answer.reads
         let read = this.answer.firstRead(from)
         if (read === reads.length || (reads[read] as Read).start >= to) {
