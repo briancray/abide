@@ -18,7 +18,6 @@ import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { laneFailure } from './answerFailure.ts'
 import { answerRequest, type AppSources } from './answerRequest.ts'
-import type { Mount } from './answerRpc.ts'
 import { Mux, type MuxConnection } from './answerSocket.ts'
 import {
     type Builder,
@@ -38,6 +37,7 @@ import { McpSurface } from './generatedSurfaces.ts'
 import { HOOKS, inOrder, reportUnexpected, rootRungs } from './hooks.ts'
 import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { installServer } from './installServer.ts'
+import type { Mount } from './mountHandlers.ts'
 import { admitsMux, muxSocketOptions, upgraded } from './muxUpgrade.ts'
 import { packageDirectory } from './packageDirectory.ts'
 import { plainAnswer } from './plainAnswer.ts'

@@ -3,9 +3,9 @@
 
 import { expect, test } from 'bun:test'
 
-import type { Mounted } from '../src/server/answerRpc.ts'
 import { derivedArgs } from '../src/server/argsContract.ts'
 import { McpSurface } from '../src/server/generatedSurfaces.ts'
+import type { Mounted } from '../src/server/mountHandlers.ts'
 import type { JsonValue } from '../src/shared/JsonValue.ts'
 
 const BY_MEDIA = {

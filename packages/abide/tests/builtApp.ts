@@ -7,13 +7,13 @@ import { expect } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import type { Compilation } from '#server/abideModules.ts'
-import type { MountRow } from '#server/answerRpc.ts'
 import {
     buildDirectory,
     buildFiles,
     servedBuild,
     spawnedBuild,
 } from '#server/appBuild.ts'
+import type { MountRow } from '#server/mountHandlers.ts'
 
 import { temporaryModule } from './temporaryModule.ts'
 

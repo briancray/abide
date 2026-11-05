@@ -18,10 +18,10 @@ import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { refuse } from '#shared/refuse.ts'
 import { declare } from '#shared/rpc.ts'
 
-import { mountedOwn } from './answerRpc.ts'
 import { callerOf, callerOrMint, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
 import { HOOKS, inOrder } from './hooks.ts'
+import { mountedOwn } from './mountHandlers.ts'
 import { type RequestScope, type Sealed, within } from './requestScope.ts'
 import { signInChanged } from './signInChanged.ts'
 

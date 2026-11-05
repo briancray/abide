@@ -23,7 +23,7 @@ import {
 import { refuse } from '#shared/refuse.ts'
 import { validateJson } from '#shared/validateJson.ts'
 
-import type { Mounted } from './answerRpc.ts'
+import type { Mounted } from './mountHandlers.ts'
 
 export type Document = {
     type?: string | string[]

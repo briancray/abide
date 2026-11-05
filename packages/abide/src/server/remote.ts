@@ -12,8 +12,8 @@ import { rankRoutes } from '#shared/routePattern.ts'
 import type { Method } from '#shared/rpc.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
-import type { Mount } from './answerRpc.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
+import type { Mount } from './mountHandlers.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /**

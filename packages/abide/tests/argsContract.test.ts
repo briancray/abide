@@ -5,9 +5,9 @@
 import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
-import { type Mounted, mountHandlers } from '#server/answerRpc.ts'
 import { argsFor, collapsed, derivedArgs } from '#server/argsContract.ts'
 import { handlerFileMount } from '#server/handlerFileMount.ts'
+import { type Mounted, mountHandlers } from '#server/mountHandlers.ts'
 import { isFailed } from '#shared/Failed.ts'
 
 const SCHEMA = {

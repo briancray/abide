@@ -9,8 +9,8 @@ import { isRecord } from '#shared/isRecord.ts'
 import { useColor } from '#shared/log.ts'
 import { paint as painted } from '#shared/paint.ts'
 
-import type { Mount } from './answerRpc.ts'
 import { LogPanel } from './LogPanel.ts'
+import type { Mount } from './mountHandlers.ts'
 import { callHandler, watch } from './remote.ts'
 import { type Listed, surfaceOf } from './surfaceOf.ts'
 

@@ -1,7 +1,7 @@
 import type { Method } from '#shared/rpc.ts'
 
-import type { Mount, Mounted } from './answerRpc.ts'
 import { argsDocumentOf } from './argsContract.ts'
+import type { Mount, Mounted } from './mountHandlers.ts'
 
 /** A generated surface a handler may be listed on, besides the browser's (20.4 is the build's). */
 export type Surface = 'mcp' | 'openapi' | 'cli'

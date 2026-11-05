@@ -27,7 +27,7 @@ import {
     type UnionOrIntersectionType,
 } from 'typescript/unstable/async'
 
-import type { Mount } from '#server/answerRpc.ts'
+import type { Mount } from '#server/mountHandlers.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import {
     type Defaults,

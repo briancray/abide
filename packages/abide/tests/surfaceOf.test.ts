@@ -5,8 +5,8 @@
 import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
-import type { Mount, Mounted } from '#server/answerRpc.ts'
 import { derivedArgs } from '#server/argsContract.ts'
+import type { Mount, Mounted } from '#server/mountHandlers.ts'
 import {
     argsText,
     cliListing,

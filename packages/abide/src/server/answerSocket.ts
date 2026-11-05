@@ -13,20 +13,19 @@
 import { problemOf } from '#shared/Failed.ts'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { namedLogger } from '#shared/log.ts'
-import { compose } from '#shared/Middleware.ts'
 import { unmounted } from '#shared/mount.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
 import { followServed } from '#shared/reactive/index.ts'
+import { isThenable } from '#shared/reactive/isThenable.ts'
 import { matchesPattern } from '#shared/reactive/matchesPattern.ts'
 import { unowned } from '#shared/reactive/watch.ts'
 import { refuse } from '#shared/refuse.ts'
-import { rpcRequest } from '#shared/rpcRequest.ts'
 
-import { handlerKey, type Mounted } from './answerRpc.ts'
-import { argsFor } from './argsContract.ts'
 import { positiveSetting } from './config.ts'
-import { closedTo, crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
+import { crossingOrigin } from './crossingOrigin.ts'
 import { failureOf } from './hooks.ts'
+import { admitsFollower, followedArgs } from './invokeHandler.ts'
+import { handlerKey, type Mounted } from './mountHandlers.ts'
 import { sendOrClose } from './muxUpgrade.ts'
 import {
     heldByApp,
@@ -392,83 +391,28 @@ export class MuxConnection {
             )
             return
         }
-        // 18.2 — ANOTHER ORIGIN IS CLOSED OUT unless the handler declared it: the same gate, and the
-        // same own origin, as its http answer's (16.13, 16.24, 36.2).
-        if (closedTo(followed.handler.crossOrigin, this.crossing)) {
-            this.peer.send(
-                id,
-                refusal(crossingRefusal(this.crossing, 'subscription')),
-            )
-            return
-        }
         // A SUBSCRIPTION IS HELD FROM THE FRAME ON, not from when its rungs let it through: an
         // `unsub` or the connection's close that lands while a rung is pending stops this
         // placeholder, and the rungs resolving to find another in its place install nothing.
         const pending = (): void => {}
         try {
-            // 18.3 — the args a `GET` over http is answered with, sent as JSON.
-            const args = argsFor(followed.handler, frame.args, undefined)
-            // 18.8 — A GUARDED `GET`'s RUNGS RUN ONCE, as the subscription opens, in this
-            // connection's request: one they admit is fed the value, and one they refuse is sent its
-            // triggers alone.
-            // 18.26 — AND THE MIDDLEWARE ITS FILE'S ROUTE FILED, over the request a `GET` of it
-            // would be: one a rung answers in the handler's place is not fed, as an http call it
-            // answered would never reach the handler.
-            const routed = followed.rungs.length > 0
-            let admitted = !followed.handler.guarded && !routed
-            if (!admitted) {
-                subscriptions.get(id)?.()
-                subscriptions.set(id, pending)
-                // No route rungs, no turn: a guarded `GET`'s rungs start in this frame's own run.
-                admitted =
-                    !routed || (await routeAdmits(this.scope, followed, args))
-                if (admitted && followed.handler.guarded)
-                    admitted = await Promise.resolve(
-                        followed.handler(args as never) as PromiseLike<unknown>,
-                    ).then(
-                        () => true,
-                        () => false,
-                    )
-                if (subscriptions.get(id) !== pending) return
-            }
+            // 18.2, 18.3 — the origin gate and the args a `GET` over http is answered with.
+            const args = followedArgs(followed, frame.args, this.crossing)
+            subscriptions.get(id)?.()
+            subscriptions.set(id, pending)
+            // 18.8, 18.26 — run once, in this connection's request.
+            const admits = admitsFollower(
+                followed,
+                args,
+                this.scope.request as Request,
+            )
+            const admitted = isThenable(admits) ? await admits : admits
+            if (subscriptions.get(id) !== pending) return
             follow(this, id, followed, args, frame.version, admitted)
         } catch (thrown) {
             if (subscriptions.get(id) === pending) subscriptions.delete(id)
             this.peer.send(id, refusal(thrown))
         }
-    }
-}
-
-/**
- * Whether the rungs over `mounted`'s route let a `GET` of it with `args` through, asked over the
- * upgrade's own request at the handler's address. 18.26.
- */
-async function routeAdmits(
-    scope: RequestScope,
-    mounted: Mounted,
-    args: unknown,
-): Promise<boolean> {
-    const upgrade = scope.request as Request
-    const asked = rpcRequest(
-        'GET',
-        mounted.address,
-        args as Record<string, unknown> | undefined,
-    )
-    const request = new Request(new URL(asked.url, upgrade.url), {
-        headers: upgrade.headers,
-        signal: upgrade.signal,
-    })
-    // REACHED BY A FLAG, not by the answer's identity: a rung that wraps or re-heads what `next`
-    // answered still let the call through, and a shared answer would carry every rung's headers.
-    let reached = false
-    try {
-        const answered = await compose(mounted.rungs, async () => {
-            reached = true
-            return new Response(null, { status: 204 })
-        })({ request })
-        return reached && answered.ok
-    } catch {
-        return false
     }
 }
 
