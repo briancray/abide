@@ -491,7 +491,7 @@ export type References = {
  * One place a name is written: whether it is where the name is declared, and where it is a
  * shorthand, which side of it a rename renames — the `local` binding or the `property`.
  */
-export type Occurrence = Place & {
+type Occurrence = Place & {
     declaration: boolean
     shorthand: 'local' | 'property' | undefined
 }

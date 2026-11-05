@@ -36,8 +36,6 @@ export async function reactiveReads(
         text?: string
     })[],
 ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
-    const answers = sources.map(() => UNCHECKED)
-    const warnings: Diagnosis[] = []
     // Per source, its shadow and what is asked of it, or `undefined` where nothing is declared.
     const queries: ({ map: ShadowMap; projection: Projection } | undefined)[] =
         []
@@ -82,20 +80,14 @@ export async function reactiveReads(
         queries.push({ map, projection })
     }
 
-    if (queries.some((query) => query !== undefined))
-        await host.ask(
-            async (project) => {
-                for (const placed of await fixedPoint(
-                    host,
-                    project,
-                    sources,
-                    queries,
-                    answers,
-                ))
-                    warnings.push(...placed)
-            },
-            { edit },
-        )
+    const answered = queries.some((query) => query !== undefined)
+        ? await host.ask(
+              (project) => fixedPoint(host, project, sources, queries),
+              { edit },
+          )
+        : undefined
+    const answers = answered?.answers ?? sources.map(() => UNCHECKED)
+    const warnings = answered?.warnings ?? []
     for (let at = 0; at < sources.length; at += 1) {
         const source = sources[at] as (typeof sources)[number]
         if (source.text !== undefined)
@@ -113,8 +105,8 @@ export async function reactiveReads(
 }
 
 /**
- * Each query answered into `answers`, round after round, and the warnings each file's last answer
- * earned.
+ * Each query's answer, round after round, and the warnings each file's last answer earned — a
+ * source with no query answered `UNCHECKED`.
  *
  * 31.1 — A BINDING THE PROJECTION TYPED FROM A `Reactive` IS ASKED OF THE PROGRAM IT RUNS AS: each
  * file holding one is lowered with what it has answered so far, and a binding that is a `Reactive`
@@ -131,8 +123,8 @@ async function fixedPoint(
     queries: readonly (
         { map: ShadowMap; projection: Projection } | undefined
     )[],
-    answers: CheckerAnswer[],
-): Promise<Diagnosis[][]> {
+): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
+    const answers = sources.map(() => UNCHECKED)
     // Per source, its compiler warnings, the bindings the projection could not type, and those the
     // lowered program proved a `Reactive`.
     const warned: Diagnosis[][] = sources.map(() => [])
@@ -235,9 +227,9 @@ async function fixedPoint(
         )
         // A snapshot the checker opened no project in answers nothing further, and no warning of
         // an earlier round is reported.
-        if (turned === undefined) return []
+        if (turned === undefined) return { answers, warnings: [] }
         if (turned.size === 0) break
         for (const at of asking) if (!turned.has(at)) suspects[at] = []
     }
-    return warned
+    return { answers, warnings: warned.flat() }
 }
