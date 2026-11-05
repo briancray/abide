@@ -11,9 +11,8 @@
 // 19.6 IS THE OTHER HALF: coercion belongs to the pipeline and is never asked of a schema.
 // Together they are what lets 19.3 be enforced at all — see `runSchema`.
 
+import { issuesOf, note } from './issueReport.ts'
 import type { Issues } from './Issues.ts'
-import { issuesOf } from './issuesOf.ts'
-import { note } from './note.ts'
 import { isThenable } from './reactive/isThenable.ts'
 import { untracked } from './reactive/tracking.ts'
 

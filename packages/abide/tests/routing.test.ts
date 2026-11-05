@@ -131,6 +131,32 @@ function router(mounts: Record<string, PageMount>, transitions = false) {
     )
 }
 
+/**
+ * The address `run` handed to the document, `''` where it handed none.
+ *
+ * `location.href` is stubbed for the run, because a real assignment is a document load the DOM
+ * emulator would make.
+ */
+async function leftToDocument(run: () => Promise<void>): Promise<string> {
+    let left = ''
+    const assign = Object.getOwnPropertyDescriptor(location, 'href')
+    Object.defineProperty(location, 'href', {
+        configurable: true,
+        get: () => 'http://localhost/',
+        set: (to: string) => {
+            left = to
+        },
+    })
+    try {
+        await run()
+    } finally {
+        if (assign !== undefined)
+            Object.defineProperty(location, 'href', assign)
+        else delete (location as { href?: string }).href
+    }
+    return left
+}
+
 function matchRoute(segments: Segment[], pathname: string): Params | null {
     const parts = partsOf(pathname)
     if (parts === undefined) return null
@@ -182,29 +208,14 @@ test('a navigation lands where the server redirected it — 30.15, 30.17', async
 })
 
 // 30.18 — ANYTHING BUT A GO-AHEAD IS THE DOCUMENT'S: the router mounts nothing and writes no history
-// entry. THE REVERT: drop the status check in `Router.travel`; the invoice mounts under a refusal.
+// entry. THE REVERT: drop the status check in `outcomeOf`; the invoice mounts under a refusal.
 test('a navigation the server refuses is left to the document — 30.18', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
     await r.hydrate()
     const entries = history.length
-    let left = ''
     answering = () => new Response('refused', { status: 403 })
-    const assign = Object.getOwnPropertyDescriptor(location, 'href')
-    Object.defineProperty(location, 'href', {
-        configurable: true,
-        get: () => 'http://localhost/',
-        set: (to: string) => {
-            left = to
-        },
-    })
-    try {
-        await navigate('/invoices/42')
-    } finally {
-        if (assign !== undefined)
-            Object.defineProperty(location, 'href', assign)
-        else delete (location as { href?: string }).href
-    }
+    const left = await leftToDocument(() => navigate('/invoices/42'))
     flushSync()
     expect(left).toEndWith('/invoices/42')
     expect(history.length).toBe(entries)
@@ -236,27 +247,13 @@ test('a navigation whose chunks fail to load is left to the document — 30.27',
     )
     await r.hydrate()
     const entries = history.length
-    let left = ''
     answering = () => {
         throw new TypeError('Failed to fetch')
     }
-    const assign = Object.getOwnPropertyDescriptor(location, 'href')
-    Object.defineProperty(location, 'href', {
-        configurable: true,
-        get: () => 'http://localhost/',
-        set: (to: string) => {
-            left = to
-        },
-    })
-    try {
-        await navigate('/invoices/42')
-    } catch {
-        // the revert's rejection; `left` reports it
-    } finally {
-        if (assign !== undefined)
-            Object.defineProperty(location, 'href', assign)
-        else delete (location as { href?: string }).href
-    }
+    // the revert's rejection is caught here; `left` reports it
+    const left = await leftToDocument(() =>
+        navigate('/invoices/42').catch(() => {}),
+    )
     flushSync()
     expect(left).toEndWith('/invoices/42')
     expect(history.length).toBe(entries)
@@ -266,35 +263,24 @@ test('a navigation whose chunks fail to load is left to the document — 30.27',
 
 // 30.32 — OFFLINE, THE PAGE STAYS: the request throws with `navigator.onLine` false, and the document
 // load 30.27 would make could only paint the browser's error page. THE REVERT: drop the offline arm
-// from `Router.travel`; the address is handed to the document and `left` reports it.
+// from `outcomeOf`; the address is handed to the document and `left` reports it.
 test('a navigation whose request fails while offline leaves the page standing — 30.32', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
     await r.hydrate()
     const entries = history.length
-    let left = ''
     answering = () => {
         throw new TypeError('Failed to fetch')
     }
-    const assign = Object.getOwnPropertyDescriptor(location, 'href')
-    Object.defineProperty(location, 'href', {
-        configurable: true,
-        get: () => 'http://localhost/',
-        set: (to: string) => {
-            left = to
-        },
-    })
     Object.defineProperty(navigator, 'onLine', {
         configurable: true,
         get: () => false,
     })
+    let left: string
     try {
-        await navigate('/invoices/42')
+        left = await leftToDocument(() => navigate('/invoices/42'))
     } finally {
         delete (navigator as { onLine?: boolean }).onLine
-        if (assign !== undefined)
-            Object.defineProperty(location, 'href', assign)
-        else delete (location as { href?: string }).href
     }
     flushSync()
     expect(`left: '${left}'`).toBe("left: ''")
@@ -1026,7 +1012,7 @@ test('a page that is also a component applies its head only where it is routed �
 // all: the later navigation lands last and wins by accident, which is what made this look fine
 // for as long as every route's chunk was already cached.
 //
-// THE REVERT: drop the `this.navigation !== ticket` check from `Router.travel`. The invoice page
+// THE REVERT: drop both `ticket.signal.aborted` checks from `Router.travel`. The invoice page
 // mounts over the home page that replaced it, and this reports `/invoices/42` where `/` is due.
 test('a superseded navigation does not mount over the one that replaced it', async () => {
     history.replaceState(null, '', '/')
@@ -1550,7 +1536,7 @@ test('a navigation that moves only the query keeps the page — 30.23, 30.24, 30
 // 30.23, 30.24 — THE ROUTE STANDING, AT ANOTHER PATH: a season chosen under one series. `middleware`
 // is asked about the new path, and the page it matched is the one mounted, so it follows: the same
 // nodes, the same scope, and `route.params` moved. THE REVERT: drop the `landing.route ===
-// this.standing` branch from `go`; the page is rebuilt, a new `<h1>` and a new scope.
+// bearing.standing` arm from `outcomeOf`; the page is rebuilt, a new `<h1>` and a new scope.
 test('a navigation to another path of the same route asks, and keeps the page — 30.23, 30.24', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
@@ -1614,7 +1600,7 @@ test('back over a fragment of the standing page neither asks nor remounts, and m
 // A link carrying a fragment to ANOTHER route mounts it and then does the same, where the top of
 // the page is what an address with no fragment gets.
 //
-// THE REVERT: drop the fragment check from `go` and write `scrollTo(0, 0)` after the mount, as
+// THE REVERT: drop the standing-route arm from `outcomeOf`'s first call and write `scrollTo(0, 0)` after the mount, as
 // `commit` did; the in-page link reports `asked` as ['/'] and nothing scrolled into view, and the
 // cross-route one reports [] where ['lines'] is due.
 test('a routed link with a fragment scrolls to its element, remounting nothing it shares — 30.21, 30.33', async () => {
