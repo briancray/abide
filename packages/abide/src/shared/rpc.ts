@@ -35,7 +35,6 @@ import {
     type AdoptedFailures,
     type AdoptedProduced,
     type ChunkOf,
-    chunksOfStream,
     handlerValue,
     isKeyed,
     type Kept,
@@ -46,11 +45,14 @@ import {
     type Refusals,
     type Shaping,
     STREAMING,
-    streamingOrSettled,
     type Streams,
 } from './reactive/index.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
-import { dropAnswered } from './reactive/Reactive.ts'
+import {
+    chunksOfStream,
+    dropAnswered,
+    streamingOrSettled,
+} from './reactive/producer.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { checkArgs } from './refuse.ts'

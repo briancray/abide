@@ -13,9 +13,9 @@
 // is sent the writes since rather than the value — a reconnect a few lines behind a log, or a burst a
 // slow tab missed. A production that was not a patch breaks the chain.
 
-import { servedCellOf } from '#shared/reactive/index.ts'
 import { drainLog, type PatchOp } from '#shared/reactive/patchLog.ts'
 import { writtenAt } from '#shared/reactive/patchMarks.ts'
+import { servedCellOf } from '#shared/reactive/producer.ts'
 
 let next = Date.now() * 1000
 

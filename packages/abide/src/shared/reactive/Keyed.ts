@@ -17,7 +17,7 @@ import {
     PARAMETER_DEFAULTS,
 } from './argsContract.ts'
 import { CELL } from './CELL.ts'
-import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
+import { type Callable, type Cell, refuseBothCaps } from './cellShape.ts'
 import { armTimer } from './Expiry.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
@@ -28,14 +28,13 @@ import {
     createReactive,
     failedTransiently,
     isStreamBody,
-    leaveSelections,
     type Reactive,
     type ReactiveOptions,
-    refuseBothCaps,
     signalMoved,
     startDeferred,
     unwatchStore,
 } from './Reactive.ts'
+import { leaveSelections } from './selections.ts'
 import {
     detach,
     detachProbes,
@@ -43,7 +42,6 @@ import {
     newSubscriber,
     newTracked,
     type Subscriber,
-    type Tracked,
     TRACKING,
     trackProbe,
 } from './tracking.ts'
@@ -89,7 +87,7 @@ export function isKeyed(
  * The args are the entry's body argument and its cell already holds them for every run.
  */
 function argsOf(entry: unknown): unknown {
-    return (entry as { [CELL]: { args: unknown } })[CELL].args
+    return (entry as Callable)[CELL].args
 }
 
 // One entry of `Lifetime.followed`, which is in recency order: what an eviction needs beside when
@@ -97,9 +95,23 @@ function argsOf(entry: unknown): unknown {
 type Follower = {
     at: number
     ms: number
-    cell: Tracked & { servable: boolean; loading: boolean }
+    cell: Cell
     reader: Subscriber
     evict: () => void
+}
+
+/**
+ * Each followed entry's `Follower`, by its cell: when it last produced, and how long it lives (11.45).
+ */
+const ENTRY_LIVES = new WeakMap<Cell, Follower>()
+
+/**
+ * When the entry `cell` is stops being servable, by its `Keyed`'s `ttl` — infinity where it is no
+ * followed entry. What `deadlineOf` reads beside the value's own `ttl` (21.8).
+ */
+export function entryDeadline(cell: Cell): number {
+    const entry = ENTRY_LIVES.get(cell)
+    return entry === undefined ? Number.POSITIVE_INFINITY : entry.at + entry.ms
 }
 
 /**
@@ -138,10 +150,10 @@ class Lifetime {
         this.timer = null
     }
 
-    follow(key: string, entry: { [CELL]: Tracked }, evict: () => void): void {
+    follow(key: string, entry: Callable, evict: () => void): void {
         // 11.33: `Infinity` is the life of the scope, which no timer here can reach.
         if (this.ms === Number.POSITIVE_INFINITY) return
-        const cell = entry[CELL] as Follower['cell']
+        const cell = entry[CELL]
         // A MIRROR WITH NO ADOPTER — `Subscriber.isMirror` says why.
         const reader = newSubscriber([cell], null, true)
         const follower: Follower = { at: 0, ms: this.ms, cell, reader, evict }
@@ -424,13 +436,9 @@ export function createKeyed<
         )
         entries.set(key, created)
         if (lifetime !== null)
-            lifetime.follow(
-                key,
-                created as unknown as { [CELL]: Tracked },
-                () => {
-                    release(key, created)
-                },
-            )
+            lifetime.follow(key, created as unknown as Callable, () => {
+                release(key, created)
+            })
         if (starts !== null)
             starts.reached(created, () => {
                 // 5.20: superseded before it started — not held, so a later reach starts afresh.

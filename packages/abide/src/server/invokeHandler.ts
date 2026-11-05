@@ -10,7 +10,7 @@
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { compose } from '#shared/Middleware.ts'
-import { heldGenerationOf } from '#shared/reactive/index.ts'
+import { heldGenerationOf } from '#shared/reactive/producer.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
 import { argsFor } from './argsContract.ts'

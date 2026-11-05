@@ -26,7 +26,9 @@ import {
 } from '#shared'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
-import { chunksOfStream, isKeyed } from '#shared/reactive/index.ts'
+import { cellOf } from '#shared/reactive/cellShape.ts'
+import { isKeyed } from '#shared/reactive/index.ts'
+import { chunksOfStream, isStreaming } from '#shared/reactive/producer.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
@@ -36,13 +38,6 @@ import { WORK } from '#shared/WORK.ts'
 // 12.6 — the `onError` hooks these tests file are handed what the core reports once a server wires
 // them in (`installServer`), and this file is no server.
 UNEXPECTED.report = handOnError
-
-// THE RECORD A VALUE'S STATE LIVES ON. Every test that asserts a field rather than an
-// answer reaches it through here — read off the callable itself, a field is `undefined`,
-// and an invariant written as an equality between two of them passes on nothing.
-function cellOf<Fields>(value: unknown): Fields {
-    return (value as { [CELL]: Fields })[CELL]
-}
 
 // A wake counter that is not itself a reactive read — `watch` would re-enter the graph
 // and the count would include its own subscription.
@@ -687,7 +682,7 @@ test('a body that reads one value three times holds one subscription of it', () 
         value()
     })
     flushSync()
-    const held = cellOf<{ readers: unknown[] }>(value).readers.length
+    const held = cellOf(value).readers.length
     stop()
     expect(`held: ${held}`).toBe('held: 1')
 })
@@ -698,7 +693,7 @@ function countSlotsRead(
     value: unknown,
     edge: 'readers' | 'probeReaders',
 ): () => number {
-    const cell = cellOf<Record<typeof edge, unknown[]>>(value)
+    const cell = cellOf(value)
     let read = 0
     const list = cell[edge]
     cell[edge] = new Proxy(list, {
@@ -746,13 +741,13 @@ test('disposing the readers of one value reads none of the readers left', () => 
     const slotsRead = countSlotsRead(selected, 'readers')
     for (const stop of old) stop()
     const read = slotsRead()
-    const held = cellOf<{ readers: unknown[] }>(selected).readers.length
+    const held = cellOf(selected).readers.length
     for (const stop of replacing) stop()
     expect(`held after the old rows: ${held}`).toBe(
         `held after the old rows: ${rows}`,
     )
     expect(`slots read: ${read}`).toBe(`slots read: ${2 * rows}`)
-    expect(cellOf<{ readers: unknown[] }>(selected).readers.length).toBe(0)
+    expect(cellOf(selected).readers.length).toBe(0)
 })
 
 // AND A ROW THAT DERIVES OFF THE VALUE IS TORN DOWN THE SAME WAY. A row's `reactive(() => selected()
@@ -786,7 +781,7 @@ test('tearing down rows that derive off one value reads none of its readers', ()
     const read = slotsRead()
     for (const stop of replacing) stop()
     expect(`slots read: ${read}`).toBe(`slots read: ${2 * rows}`)
-    expect(cellOf<{ readers: unknown[] }>(selected).readers.length).toBe(0)
+    expect(cellOf(selected).readers.length).toBe(0)
 })
 
 // A RELEASED ORPHAN READ AGAIN IS ONE READER, once. Its release left it counted dead on a list with
@@ -811,7 +806,7 @@ test('a released orphan read again holds one subscription — 12.14', () => {
         seen = derived() as number
     })
     flushSync()
-    const held = cellOf<{ readers: unknown[] }>(source).readers.length
+    const held = cellOf(source).readers.length
     source.set(5)
     flushSync()
     stopFollower()
@@ -819,9 +814,7 @@ test('a released orphan read again holds one subscription — 12.14', () => {
     expect(`held: ${held}`).toBe('held: 2')
     expect(seen).toBe(6)
     // Read again it is nobody's to release, so it is the one live reader left.
-    const live = cellOf<{ readers: { alive: boolean }[] }>(
-        source,
-    ).readers.filter((reader) => reader.alive)
+    const live = cellOf(source).readers.filter((reader) => reader.alive)
     expect(live).toEqual([cellOf(derived)])
 })
 
@@ -843,7 +836,7 @@ test('the last live reader leaving takes the dead ones with it', () => {
     stopFirst()
     reading.set(false)
     flushSync()
-    const held = cellOf<{ readers: unknown[] }>(value).readers.length
+    const held = cellOf(value).readers.length
     stopSecond()
     expect(`held: ${held}`).toBe('held: 0')
 })
@@ -1343,7 +1336,7 @@ test('a disposer that throws reaches onError and warns, and its effect still rer
 test('a patch replaces the head production rather than appending one', () => {
     const held = reactive<{ n: number }>({ n: 1 })
     held()
-    const before = cellOf<{ ordinal: number }>(held).ordinal
+    const before = cellOf(held).ordinal
     let woken = 0
     const stop = held.watch(() => {
         woken += 1
@@ -1358,7 +1351,7 @@ test('a patch replaces the head production rather than appending one', () => {
     expect(woken).toBe(1)
     expect(held().n).toBe(2)
     // And no production was minted: one production, mutated, not two.
-    expect(cellOf<{ ordinal: number }>(held).ordinal).toBe(before)
+    expect(cellOf(held).ordinal).toBe(before)
     stop()
 })
 
@@ -1448,8 +1441,7 @@ test('a watch over several sources runs for any of them', () => {
 test('stopping a watch drops it from every source it was given', () => {
     const first = reactive(1)
     const second = reactive(2)
-    const readers = (value: unknown): number =>
-        cellOf<{ readers: unknown[] }>(value).readers.length
+    const readers = (value: unknown): number => cellOf(value).readers.length
     const beforeFirst = readers(first)
     const beforeSecond = readers(second)
 
@@ -1519,9 +1511,7 @@ test('a derived and an adopting value stop reading when their owner stops — 12
     collectWatches(previous)
     expect(derived()).toBe(2)
     expect(adopting()).toBe(1)
-    const readers = (source as unknown as { [CELL]: { readers: unknown[] } })[
-        CELL
-    ].readers
+    const readers = cellOf(source).readers
     expect(readers.length).toBe(2)
 
     for (const stop of stops) stop()
@@ -2844,9 +2834,7 @@ test('ttl is inert on a value with no producer', () => {
     expect(`clock reads: ${asked}`).toBe('clock reads: 0')
     // 6.2 is a claim about the READ PATH: a value with nothing to reload with must not
     // pay for a mechanism that could only ever answer "still 41".
-    expect(`direct: ${cellOf<{ direct: boolean }>(held).direct}`).toBe(
-        'direct: true',
-    )
+    expect(`direct: ${cellOf(held).direct}`).toBe('direct: true')
     const realNow = Date.now()
     setSystemTime(new Date(realNow + 60_000))
     try {
@@ -3207,7 +3195,7 @@ test('a keyed entry past its ttl is evicted whole, and the next reach starts aga
     )
     const first = keyed({ id: 1 })
     expect(first()).toBe(10)
-    expect(cellOf<{ expiry: unknown }>(first).expiry).toBeNull()
+    expect(cellOf(first).expiry).toBeNull()
     expect(keyed.entries.size).toBe(1)
 
     await Bun.sleep(80)
@@ -3455,7 +3443,7 @@ test('a write landing on a released value stops the read reloading', async () =>
 // transition is checked, and the split is the honest one rather than a slower fuzz that
 // would have to sleep through a timer on every step.
 function breachedBy(value: unknown): string | null {
-    const cell = cellOf<{ landed: boolean; servable: boolean }>(value)
+    const cell = cellOf(value)
     if (!cell.servable || cell.landed) return null
     return `servable=${cell.servable} landed=${cell.landed}`
 }
@@ -3766,12 +3754,7 @@ test('the wake contract holds across every transition', async () => {
     ): void => {
         for (const { subject, seen } of observers) {
             const where = `${subject.name} at step ${step}, ${when}. The sequence was: ${walked.slice(-8).join(' -> ')}`
-            const cell = cellOf<{
-                direct: boolean
-                state: number
-                servable: boolean
-                owes: number
-            }>(subject.value)
+            const cell = cellOf(subject.value)
             if (cell.direct && !(cell.state === CLEAN && cell.servable))
                 throw new Error(`direct without CLEAN and servable: ${where}`)
             const now = probesOf(subject.value)
@@ -3826,7 +3809,7 @@ test('the wake contract holds across every transition', async () => {
         else if (declared !== undefined) allows.add(declared)
         // `reloadOwed`'s stated cost, read off the record: the operation settles a reload an
         // invalidate left owing (`OWES_RELOAD`).
-        if (cellOf<{ owes: number }>(subject.value).owes === OWES_RELOAD)
+        if (cellOf(subject.value).owes === OWES_RELOAD)
             allows.add('the same value wakes')
         attempt(op)
         flushSync()
@@ -3876,7 +3859,7 @@ test('a transform that refuses stores nothing and mints nothing', () => {
     const bounded = reactive(1, {
         transform: (value) => (value > 10 ? tooBig({ n: value }) : value),
     })
-    const ordinalOf = (): number => cellOf<{ ordinal: number }>(bounded).ordinal
+    const ordinalOf = (): number => cellOf(bounded).ordinal
     const before = ordinalOf()
     const counter = wakes(bounded)
 
@@ -4640,9 +4623,9 @@ test('leaving a loop over a stream drops its subscriber', async () => {
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
-    const before = cellOf<{ readers: unknown[] }>(rows).readers.length
+    const before = cellOf(rows).readers.length
     for await (const _ of rows) break
-    expect(cellOf<{ readers: unknown[] }>(rows).readers.length).toBe(before)
+    expect(cellOf(rows).readers.length).toBe(before)
 })
 
 // 2.7: `await rows` HOLDS FOR THE WHOLE THING. The first chunk makes the value ready, and
@@ -4905,10 +4888,8 @@ test('a value that stops adopting a stream serves its own value again', async ()
     expect(outer()).toEqual([1])
     flag.set(false)
     expect(outer()).toEqual([99])
-    expect(cellOf<{ stream: unknown }>(outer).stream).toBeNull()
-    expect(`direct: ${cellOf<{ direct: boolean }>(outer).direct}`).toBe(
-        'direct: true',
-    )
+    expect(isStreaming(outer)).toBe(false)
+    expect(`direct: ${cellOf(outer).direct}`).toBe('direct: true')
 })
 
 // ── Writes to a stream (RULEBOOK 9.11, 9.12, 9.13, 11.59) ───────────────────────────────
@@ -5060,9 +5041,9 @@ test('a Reactive set on a stream is followed until the next chunk', async () => 
         (await cursor.next()).value,
         (await cursor.next()).value,
     ]
-    const ordinal = cellOf<{ ordinal: number }>(rows).ordinal
+    const ordinal = cellOf(rows).ordinal
     const other = reactive([7, 8])
-    const readersBefore = cellOf<{ readers: unknown[] }>(other).readers.length
+    const readersBefore = cellOf(other).readers.length
     const woken = wakes(rows)
 
     rows.set(other as never)
@@ -5077,9 +5058,7 @@ test('a Reactive set on a stream is followed until the next chunk', async () => 
     expect(`woken by the adopted write: ${woken.count() - 1}`).toBe(
         'woken by the adopted write: 1',
     )
-    expect(
-        `ordinal: ${cellOf<{ ordinal: number }>(rows).ordinal - ordinal}`,
-    ).toBe('ordinal: 0')
+    expect(`ordinal: ${cellOf(rows).ordinal - ordinal}`).toBe('ordinal: 0')
 
     const pending = cursor.next()
     run.push(3)
@@ -5098,7 +5077,7 @@ test('a Reactive set on a stream is followed until the next chunk', async () => 
     )
     expect(`still: ${rows().join(',')}`).toBe('still: 1,2,3')
     expect(
-        `adopted readers after: ${cellOf<{ readers: unknown[] }>(other).readers.length - readersBefore}`,
+        `adopted readers after: ${cellOf(other).readers.length - readersBefore}`,
     ).toBe('adopted readers after: 0')
     expect(`cursor: ${taken.join('|')}`).toBe('cursor: 1|2|3')
     await cursor.return?.()
@@ -5118,7 +5097,7 @@ test('a set over a followed Reactive on a stream replaces it', async () => {
     run.push(1)
     await turns()
     const other = reactive([7])
-    const readersBefore = cellOf<{ readers: unknown[] }>(other).readers.length
+    const readersBefore = cellOf(other).readers.length
     rows.set(other as never)
     expect(`followed: ${rows().join(',')}`).toBe('followed: 7')
 
@@ -5135,7 +5114,7 @@ test('a set over a followed Reactive on a stream replaces it', async () => {
     )
     expect(`still: ${rows().join(',')}`).toBe('still: 5')
     expect(
-        `adopted readers after: ${cellOf<{ readers: unknown[] }>(other).readers.length - readersBefore}`,
+        `adopted readers after: ${cellOf(other).readers.length - readersBefore}`,
     ).toBe('adopted readers after: 0')
 
     // And a second `Reactive` replaces the first the same way.
@@ -5145,7 +5124,7 @@ test('a set over a followed Reactive on a stream replaces it', async () => {
     other.set([0])
     expect(`re-pointed: ${rows().join(',')}`).toBe('re-pointed: 3')
     expect(
-        `first let go: ${cellOf<{ readers: unknown[] }>(other).readers.length - readersBefore}`,
+        `first let go: ${cellOf(other).readers.length - readersBefore}`,
     ).toBe('first let go: 0')
     woken.stop()
 })
@@ -5561,8 +5540,7 @@ test('a guard over a tag selection subscribes once and comes back when the loads
     })
     let probeReaders = 0
     for (const value of values)
-        probeReaders += cellOf<{ probeReaders: unknown[] }>(value).probeReaders
-            .length
+        probeReaders += cellOf(value).probeReaders.length
     expect(`probe readers: ${probeReaders}`).toBe('probe readers: 0')
     loads.settleAll(1)
     await Bun.sleep(1)
@@ -5594,9 +5572,9 @@ test('an evicted keyed entry leaves every selection', async () => {
     invalidate({ tags: ['evictable'] })
     refresh({ tags: ['evictable'] })
     expect(`runs: ${runs}`).toBe('runs: 1')
-    expect(
-        `still in a selection: ${cellOf<{ ref: unknown }>(entry).ref !== null}`,
-    ).toBe('still in a selection: false')
+    expect(`still in a selection: ${cellOf(entry).ref !== null}`).toBe(
+        'still in a selection: false',
+    )
 })
 
 // 13.20 — A TAGGED SWEEP RELOADS WHAT CARRIES THE TAG, and a synchronous derivation over it that
@@ -6785,9 +6763,7 @@ test('releasing an orphaned stream that follows a write keeps the stream its own
     // … and before that task the stream follows a write, and its owner stops.
     s.set(reactive(7) as never)
     for (const stop of stops) stop()
-    expect(
-        `stream: ${cellOf<{ stream: unknown }>(s).stream === null ? 'null' : 'own'}`,
-    ).toBe('stream: own')
+    expect(`stream: ${isStreaming(s) ? 'own' : 'null'}`).toBe('stream: own')
     let thrown: unknown
     const reported = (error: unknown): void => {
         thrown = error
@@ -6896,7 +6872,7 @@ test('a body that diverges near its front dedups its reads in linear work', () =
         return total
     })
     expect(sum()).toBe((width * (width - 1)) / 2)
-    const record = cellOf<{ sources: unknown[] }>(sum)
+    const record = cellOf(sum)
     let loads = 0
     record.sources = new Proxy(record.sources, {
         get(target, key, receiver) {
@@ -6910,7 +6886,7 @@ test('a body that diverges near its front dedups its reads in linear work', () =
     // Every value is still subscribed once: one more write to a row recomputes the sum.
     ;(rows[500] as Reactive<number>).set(0)
     expect(sum()).toBe((width * (width + 1)) / 2 - 500)
-    expect(cellOf<{ readers: unknown[] }>(rows[500]).readers.length).toBe(1)
+    expect(cellOf(rows[500]).readers.length).toBe(1)
 })
 
 // The set `track` dedups a long body against must still dedup: a value read again and again past
@@ -6931,8 +6907,8 @@ test('a long body that reads one value many times holds one subscription of it',
     total()
     flip.set(true)
     expect(total()).toBe(4951)
-    expect(cellOf<{ readers: unknown[] }>(repeated).readers.length).toBe(1)
-    expect(cellOf<{ readers: unknown[] }>(rows[99]).readers.length).toBe(1)
+    expect(cellOf(repeated).readers.length).toBe(1)
+    expect(cellOf(rows[99]).readers.length).toBe(1)
     repeated.set(1)
     expect(total()).toBe(5051)
 })

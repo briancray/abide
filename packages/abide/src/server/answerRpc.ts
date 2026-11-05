@@ -8,7 +8,7 @@
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
-import { deadlineOf } from '#shared/reactive/index.ts'
+import { deadlineOf } from '#shared/reactive/producer.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'

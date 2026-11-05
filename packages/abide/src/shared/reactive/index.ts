@@ -38,33 +38,19 @@ import { share } from './share.ts'
 export { isReactive } from './isReactive.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
-// The server reaches the core through here rather than `./Reactive.ts`: `Reactive.ts` →
-// `log.ts` → this barrel → `scoped.ts` → `Reactive.ts` is a cycle, and a server module loaded
-// first that imports the core directly meets `MEMBER_KEYS` before it is initialized.
+// The rest of the framework reaches the core through here rather than `./Reactive.ts`: `Reactive.ts` →
+// `log.ts` → this barrel → `scoped.ts` → `Reactive.ts` is a cycle, and a module loaded first that
+// imports the core directly meets `MEMBER_KEYS` before it is initialized. The verbs a producer
+// outside the core spends a value through are `producer.ts`'s, which comes through here first.
 export {
-    abandonLoad,
-    chunksOfStream,
-    deadlineOf,
-    failedTransiently,
     flushSync,
-    followServed,
-    heldGenerationOf,
     type Identity,
-    isStreaming,
-    loadOf,
     moveItem,
-    patchInto,
-    produceInto,
     type Reactive,
     type ReactiveOptions,
-    refuseInto,
     rowItem,
     type Store,
-    servedCellOf,
-    standIn,
-    streamingOrSettled,
     type Transformer,
-    writtenLocally,
 } from './Reactive.ts'
 export { STREAMING } from './STREAMING.ts'
 export {

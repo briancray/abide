@@ -7,18 +7,16 @@
 // ONE RECORD PER VALUE, IN A SIDE TABLE, not a field on the cell. Every value would carry the field
 // and only a called one ever fills it, so the table is what keeps a plain `reactive` paying nothing.
 
-import { LOAD_OFFLINE } from '../LOAD_OFFLINE.ts'
-import { LOAD_SIGNAL } from '../LOAD_SIGNAL.ts'
+import { beginLoadCall, endLoadCall, reachedInLoadCall } from '../loadCall.ts'
 import { aborted, refuse } from '../refuse.ts'
-// Through the barrel, for the cycle it names: rpc reaches this module ahead of the barrel.
+// Through the barrel first, for the cycle it names: rpc reaches this module ahead of the barrel.
+import { isReactive, STREAMING } from './index.ts'
 import {
     abandonLoad,
     failedTransiently,
-    isReactive,
     loadOf,
-    STREAMING,
     streamingOrSettled,
-} from './index.ts'
+} from './producer.ts'
 
 /**
  * Who is waiting on one value's load, and what the last one came to.
@@ -75,7 +73,7 @@ const ATTENDED = new WeakMap<object, Attended>()
  * Reaches `args` through `reach` as a call does, under that call's `signal` and `timeout`.
  *
  * 16.49 — a load this call starts may be ended by it, so its transport is handed a signal of the
- * load's own (`LOAD_SIGNAL`, read by the body as it starts) — the caller's is only one vote.
+ * load's own (`startingLoadCall`, read by the body as it starts) — the caller's is only one vote.
  */
 export function callLoad(
     reach: (args: unknown) => unknown,
@@ -86,14 +84,12 @@ export function callLoad(
     offline?: (args: unknown) => unknown,
 ): unknown {
     const ending = signal === undefined ? undefined : new AbortController()
-    LOAD_SIGNAL.current = ending?.signal
-    LOAD_OFFLINE.current = offline
+    beginLoadCall(ending?.signal, offline)
     let reached: unknown
     let attended: Attended | undefined
     try {
         reached = reach(args)
-        const standing = LOAD_OFFLINE.standing
-        if (standing !== undefined) standing.value = reached
+        reachedInLoadCall(reached)
         attended = ATTENDED.get(reached as object)
         // 16.62 — the callers of an aborted load stopped waiting, and this one has not.
         // 15.19 — and of one whose last answer failed transiently, which runs again here where an
@@ -106,9 +102,7 @@ export function callLoad(
         if (again || failedTransiently(reached))
             (reached as { refresh(): void }).refresh()
     } finally {
-        LOAD_SIGNAL.current = undefined
-        LOAD_OFFLINE.current = undefined
-        LOAD_OFFLINE.standing = undefined
+        endLoadCall()
     }
     if (!isReactive(reached)) return reached
     const load = loadOf(reached)

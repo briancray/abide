@@ -6,7 +6,7 @@
 import { expect, test } from 'bun:test'
 
 import { flushSync, reactive, synced, watch } from '#shared'
-import { produceInto } from '#shared/reactive/index.ts'
+import { produceInto } from '#shared/reactive/producer.ts'
 
 // 3.12 — NOTHING TO BE OUT OF STEP WITH: a value with no body is the producer of what it holds.
 test('a value with no body is synced, whatever is written to it — 3.12', () => {

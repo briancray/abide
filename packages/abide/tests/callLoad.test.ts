@@ -6,7 +6,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { flushSync, reactive } from '#shared'
-import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
+import { startingLoadCall } from '#shared/loadCall.ts'
 import { callLoad } from '#shared/reactive/callLoad.ts'
 
 type Loading = (() => unknown) & {
@@ -83,13 +83,13 @@ test('a call after an aborted load starts another — 16.62', async () => {
 test('the body a call starts is handed the load own signal — 16.49', () => {
     let handed: AbortSignal | undefined
     const value = reactive(({ id }: { id: string }) => {
-        handed = LOAD_SIGNAL.current
+        handed = startingLoadCall().signal
         return new Promise<string>(() => id)
     }) as unknown as (args: unknown) => Loading
     const leaving = new AbortController()
     callLoad(value, { id: '4' }, leaving.signal, undefined)
     expect(handed === leaving.signal).toBe(false)
-    expect(LOAD_SIGNAL.current).toBeUndefined()
+    expect(startingLoadCall().signal).toBeUndefined()
     leaving.abort()
     flushSync()
     expect(`aborted: ${handed?.aborted}`).toBe('aborted: true')

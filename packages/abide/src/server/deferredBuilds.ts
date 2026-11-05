@@ -9,7 +9,8 @@
 // nonce is never written anywhere, so no text an author or a caller supplies can stand in for one.
 
 import { regionMarkup } from '#shared/anchorMarkup.ts'
-import { isReactive, isStreaming, loadOf } from '#shared/reactive/index.ts'
+import { isReactive } from '#shared/reactive/index.ts'
+import { isStreaming, loadOf } from '#shared/reactive/producer.ts'
 
 import type { PageCall } from './PageRender.ts'
 import type { Rendered } from './render.ts'

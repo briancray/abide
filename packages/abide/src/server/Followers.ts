@@ -10,8 +10,8 @@
 
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import type { ServerFrame } from '#shared/muxFrames.ts'
-import { followServed } from '#shared/reactive/index.ts'
 import { matchesPattern } from '#shared/reactive/matchesPattern.ts'
+import { followServed } from '#shared/reactive/producer.ts'
 import { unowned } from '#shared/reactive/watch.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 

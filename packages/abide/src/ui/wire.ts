@@ -29,13 +29,13 @@ import { isFailed } from '#shared/Failed.ts'
 import { answerChunks } from '#shared/framing.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
-import { LOAD_OFFLINE } from '#shared/LOAD_OFFLINE.ts'
-import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
-import { reactive, standIn, structural } from '#shared/reactive/index.ts'
+import { standForLoadCall, startingLoadCall } from '#shared/loadCall.ts'
+import { reactive, structural } from '#shared/reactive/index.ts'
 import {
     declareDefaults,
     type Defaults,
 } from '#shared/reactive/parameterDefaults.ts'
+import { standIn } from '#shared/reactive/producer.ts'
 import { declare, type Method } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
 
@@ -72,11 +72,11 @@ export function wire(
     // ONE PARAMETER, so the value is keyed by args whatever the handler declared (16.6's arity rule):
     // an unkeyed handler is reached with no args, which is one key.
     const body = (args: Record<string, unknown> | undefined) => {
-        // 16.49, 16.81 — the load's own signal and stand-in, set by the call starting it and read
-        // before anything awaits.
-        const signal = LOAD_SIGNAL.current
+        // 16.49, 16.81 — the load's own signal and stand-in, as the call starting it carried them.
+        const starting = startingLoadCall()
+        const signal = starting.signal
         const request = requestOf(args)
-        let offline = LOAD_OFFLINE.current
+        let offline = starting.offline
         // A reload no call started — a refresh, or the one `whenOnline` asks — that gets no answer
         // waits before asking again, where asking at once would get none on every tick.
         const retryIn = offline === undefined ? UNANSWERED_RETRY_MS : 0
@@ -93,8 +93,7 @@ export function wire(
                 ? queuedCall(request, address, args)
                 : undefined
         let standing: { value: unknown } | undefined
-        if (queued !== undefined)
-            LOAD_OFFLINE.standing = standing = { value: undefined }
+        if (queued !== undefined) standing = standForLoadCall()
         const stoodIn = (failed: Answer): unknown => {
             const value = (offline as (args: unknown) => unknown)(args)
             if (queued === undefined) {
@@ -145,7 +144,7 @@ export function wire(
     ): AsyncGenerator<unknown> {
         // 16.49 — read on the first line: the core's pump takes the first step inside the reach, so
         // this runs while the call that started the load still has its signal set.
-        const signal = LOAD_SIGNAL.current
+        const signal = startingLoadCall().signal
         const request = requestOf(args)
         const answer = await answerOf(request, true, signal)
         if (answer.ok) answeredOnce.add(request.key)

@@ -8,15 +8,15 @@ import { mounted } from '#shared/mount.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
+import { type Reactive } from '#shared/reactive/index.ts'
+import { patchEpoch, writtenSince } from '#shared/reactive/patchMarks.ts'
 import {
     heldGenerationOf,
     loadOf,
     patchInto,
     produceInto,
-    type Reactive,
     writtenLocally,
-} from '#shared/reactive/index.ts'
-import { patchEpoch, writtenSince } from '#shared/reactive/patchMarks.ts'
+} from '#shared/reactive/producer.ts'
 
 import { HYDRATE_LOG } from './Mismatch.ts'
 import { undelivered, whenDelivered } from './outboxQueue.ts'
