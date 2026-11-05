@@ -2283,8 +2283,9 @@ loads MUST NOT carry it.
 34.20 A `<script server>` in a `.abide` file of the app's own under a `public` directory MUST be a
 compile error.
 
-34.21 A file a script block imports `with { type: 'text' }`, a `.abide` among them, MUST be imported
-as its text and typed a `string`, on a server, in a browser and to the checker alike.
+34.21 A file a script block imports `with { type: 'text' }`, a `.abide` and a file whose name has no
+extension among them, MUST be imported as its text and typed a `string`, on a server, in a browser
+and to the checker alike.
 
 34.22 A binding a `<script server>` imports that its file's `<script module>` or `<script>` imports
 from the same specifier under the same name MUST compile as that one binding, a value wherever any

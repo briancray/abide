@@ -6,9 +6,9 @@
 //
 // WHICH FACE AN IMPORT GETS IS SPELLED ON ITS SPECIFIER (`MODULE_QUERIES`), because bun hands a plugin
 // no import attributes: a compiled module asks for `?component`, a browser module for its own
-// `?style`, a text import for `?text`. A `.abide` named bare is a module abide did not compile
-// asking — on a server that is the bound face 34.16 states, and in a browser the component module
-// itself.
+// `?style`, a text import for `.abide-text` (`TEXT_SUFFIX`). A `.abide` named bare is a module abide
+// did not compile asking — on a server that is the bound face 34.16 states, and in a browser the
+// component module itself.
 //
 // THE TABLES — the route, error and handler tables, and in a browser the router's table and the
 // entry — are the build's own modules, served from `__abide` below the root, where no app writes.
@@ -44,7 +44,7 @@ import {
     HANDLER_SUFFIX,
     SERVER_QUERY,
     STYLE_QUERY,
-    TEXT_QUERY,
+    TEXT_SUFFIX,
 } from './MODULE_QUERIES.ts'
 import { MOUNTABLE } from './MOUNTABLE.ts'
 import { PRIVATE_EXPORT } from './PRIVATE_EXPORT.ts'
@@ -293,8 +293,8 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                 new RegExp(`\\.abide${RegExp.escape(query)}$`)
             asking(
                 'text',
-                TEXT_QUERY,
-                new RegExp(`${RegExp.escape(TEXT_QUERY)}$`),
+                TEXT_SUFFIX,
+                new RegExp(`${RegExp.escape(TEXT_SUFFIX)}$`),
             )
             asking('style', STYLE_QUERY, abideWith(STYLE_QUERY))
             asking('component', COMPONENT_QUERY, abideWith(COMPONENT_QUERY))

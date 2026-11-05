@@ -1,6 +1,6 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { COMPONENT_QUERY, TEXT_QUERY } from '#server/MODULE_QUERIES.ts'
+import { COMPONENT_QUERY, TEXT_SUFFIX } from '#server/MODULE_QUERIES.ts'
 
 import { isContextualKeyword, type Token, tokenize } from './tokenize.ts'
 
@@ -473,7 +473,7 @@ export function importedNames(
  */
 function facedSpecifier(specifier: string, lane: Lane): string | undefined {
     if (specifier.endsWith(SOURCE_SUFFIX))
-        return `${specifier.slice(0, -SOURCE_SUFFIX.length)}${TEXT_QUERY}`
+        return `${specifier.slice(0, -SOURCE_SUFFIX.length)}${TEXT_SUFFIX}`
     if (lane === 'component' && specifier.endsWith('.abide'))
         return `${specifier}${COMPONENT_QUERY}`
     return undefined
