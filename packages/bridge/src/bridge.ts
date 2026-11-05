@@ -7,6 +7,8 @@
 // inside the page's own request, as the person at the page. No credential of theirs reaches this
 // machine, and none of this machine's reaches the site.
 
+import { getCACertificates } from 'node:tls' // bun's fetch reads this machine's trust store only under `--use-system-ca`, a flag `bun x` and the link handler's launch cannot pass
+
 import type { AssistantEvent } from '@abide/abide/server'
 
 import { claudeTurn, type TurnRequest } from './claudeTurn.ts'
@@ -88,6 +90,17 @@ export async function bridge(options: {
     silenceMilliseconds?: number
 }): Promise<void> {
     const site = options.site.replace(/\/+$/, '')
+    // 44.47 — bun's own roots and this machine's, so a site whose certificate an organization's
+    // authority signed is reached as the browser reaches it. a `ca` replaces bun's roots rather than
+    // adding to them, so both are passed.
+    const tls = {
+        ca: [
+            ...new Set([
+                ...getCACertificates('bundled'),
+                ...getCACertificates('system'),
+            ]),
+        ],
+    }
     // WHAT IS SAID IS READ AS A NOTIFICATION, where a link opened the bridge (`opened.ts`): one short
     // sentence naming the site by its host. The detail goes to Claude Code, in the failure it is answered.
     const host = new URL(site).host
@@ -102,6 +115,7 @@ export async function bridge(options: {
         {
             headers: { accept: 'text/event-stream' },
             signal: dialed.signal,
+            tls,
         },
     )
     if (!stream.ok || stream.body === null)
@@ -140,6 +154,7 @@ export async function bridge(options: {
                     'content-type': 'application/jsonl',
                 },
                 body: lines.join('\n'),
+                tls,
             })
             if (!posted.ok) {
                 failure = `${site} refused a report (${posted.status}): ${await posted.text()}`
@@ -313,6 +328,7 @@ export async function bridge(options: {
                         authorization: `Bearer ${token}`,
                     },
                     signal: dialed.signal,
+                    tls,
                 })
                 if (resumed.ok && resumed.body !== null) {
                     say(`Reconnected to ${host}.`)

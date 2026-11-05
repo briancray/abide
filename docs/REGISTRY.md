@@ -906,6 +906,6 @@ site's `claudeCode`.
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | This machine's Claude Code, paired with the browser a site minted the code for. | 44.15, 44.16, 44.24, 44.25, 44.27, 44.30, 44.44, 44.45, 44.46 |
+| `abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | This machine's Claude Code, paired with the browser a site minted the code for. | 44.15, 44.16, 44.24, 44.25, 44.27, 44.30, 44.44, 44.45, 44.46, 44.47 |
 | `abide-bridge install [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | The app that opens a site's `abide-bridge` links on this machine, registered. | 44.41, 44.42, 44.43, 44.44 |
 | `abide-bridge uninstall` | `abide-bridge install`, undone. | 44.43 |

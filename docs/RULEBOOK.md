@@ -3450,6 +3450,9 @@ report is taken, and MUST NOT say it while it redials per 44.25.
 44.46 A bridge MUST end a turn once `/__abide/bridge` did not take a report carrying it, and MUST
 report that turn failed.
 
+44.47 A bridge MUST reach `/__abide/bridge` over a certificate that either bun's own authorities or
+the authorities its machine trusts sign, however the bridge was started.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker
