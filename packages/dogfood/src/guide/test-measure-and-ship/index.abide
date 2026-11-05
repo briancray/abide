@@ -1,6 +1,7 @@
 <script>
 import { url } from '@abide/abide'
 import bunfigSource from 'crm-10/bunfig.toml' with { type: 'text' }
+import dockerfileSource from 'crm-10/Dockerfile' with { type: 'text' }
 import topDealsSpecSource from 'crm-10/e2e/TopDeals.test.ts' with { type: 'text' }
 import testRowsSource from 'crm-10/scripts/testRows.ts' with { type: 'text' }
 import launcherSource from 'crm-10/src/launcher.abide' with { type: 'text' }
@@ -408,11 +409,11 @@ abide compile --platforms linux-x64,darwin-arm64`} />
             <code>./crm-10 start</code> serves it, and <code>config()</code> still reads the
             environment.</p>
 
-        <p>The <code>Dockerfile</code> the scaffold writes, which the CRM carries, has two
-            stages. The first installs and runs <code>abide compile</code> in
-            <code>oven/bun</code>. The second copies the executable alone onto
-            <code>gcr.io/distroless/cc-debian12</code> and runs <code>/server start</code>, so the
-            image holds no Bun, no source and no <code>node_modules</code>.</p>
+        <Snippet source={dockerfileSource} path="Dockerfile" />
+
+        <p>The scaffold writes this <code>Dockerfile</code>, and the CRM carries it. Only the
+            executable reaches the second stage, so the image holds no Bun, no source and no
+            <code>node_modules</code>.</p>
 
         <Code code={`docker build -t crm .
 docker run -p 3000:3000 -e ABIDE_PRINCIPAL_SECRET crm`} />

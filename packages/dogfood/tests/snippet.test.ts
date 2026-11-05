@@ -5,6 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
+import { languageOf } from '../src/lib/highlight.ts'
 import { slice } from '../src/lib/slice.ts'
 
 const SOURCE = `<script>
@@ -136,4 +137,16 @@ test('every example class the build emits resolves in the stylesheet', async () 
         unstyled.push(name)
     }
     expect(unstyled).toEqual([])
+})
+
+// 40.9 — THE LANGUAGE IS THE FILE NAME'S EXTENSION, and a name with none is its own. THE REVERT:
+// the path's last `.` onward — `Dockerfile` is then `Dockerfile`, captioned `.Dockerfile`, and a
+// dot in a directory names a language for the file below it.
+test('a file name with no extension is its own language', () => {
+    expect(languageOf('src/home/index.abide')).toBe('abide')
+    expect(languageOf('bunfig.toml')).toBe('toml')
+    expect(languageOf('.env')).toBe('env')
+    expect(languageOf('Dockerfile')).toBe('dockerfile')
+    expect(languageOf('examples/crm-10/Makefile')).toBe('makefile')
+    expect(languageOf('.github/workflows/LICENSE')).toBe('license')
 })
