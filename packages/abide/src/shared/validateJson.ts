@@ -14,10 +14,9 @@
 // generated document carries them.
 
 import { isRecord } from './isRecord.ts'
+import { issuesOf, note } from './issueReport.ts'
 import type { Issues } from './Issues.ts'
-import { issuesOf } from './issuesOf.ts'
 import type { JsonValue } from './JsonValue.ts'
-import { note } from './note.ts'
 
 type Node = { [key: string]: JsonValue }
 
