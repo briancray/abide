@@ -29,13 +29,13 @@ import {
     createReactive,
     failedTransiently,
     isStreamBody,
-    leaveSelections,
     type Reactive,
     type ReactiveOptions,
     signalMoved,
     startDeferred,
     unwatchStore,
 } from './Reactive.ts'
+import { leaveSelections } from './selections.ts'
 import {
     detach,
     detachProbes,

@@ -21,7 +21,7 @@ import {
 import { online } from '#shared/online.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
 import { followServed } from '#shared/reactive/index.ts'
-import { unfileProducers } from '#shared/reactive/Reactive.ts'
+import { unfileProducers } from '#shared/reactive/selections.ts'
 
 // A FILE OF ITS OWN IS NOT A PROCESS OF ITS OWN: under `bun run test:serial` every file before this
 // one ran here, and what each left filed is in this sweep — the principal's document, a stream
