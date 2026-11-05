@@ -14,6 +14,7 @@
 
 import { contractOf, type Gated } from './argsContract.ts'
 import { CELL } from './CELL.ts'
+import type { Callable, Cell } from './cellShape.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { brandedPrototype, MEMBER_KEYS, signalMoved } from './Reactive.ts'
 import { currentScope, runInScope, SCOPING } from './scoping.ts'
@@ -101,8 +102,8 @@ for (const key of MEMBER_KEYS)
     }
 const FORWARDING_PROTOTYPE = brandedPrototype(forwarders)
 Object.defineProperty(FORWARDING_PROTOTYPE, CELL, {
-    get(this: Forwarder): unknown {
-        return instanceOf(this[FILED])[CELL]
+    get(this: Forwarder): Cell {
+        return (instanceOf(this[FILED]) as unknown as Callable)[CELL]
     },
 })
 

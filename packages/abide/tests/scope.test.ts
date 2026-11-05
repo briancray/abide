@@ -16,7 +16,7 @@ import {
     response,
 } from '#server/requestScope.ts'
 import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
-import { CELL } from '#shared/reactive/CELL.ts'
+import { cellOf } from '#shared/reactive/cellShape.ts'
 import { GET, POST } from '#shared/rpc.ts'
 
 installServer()
@@ -115,9 +115,7 @@ test("a value derived in a request lets go of a global at the request's teardown
             expect(plus()).toBe(1)
             releaseScope(currentRequestScope() as RequestScope)
         })
-    const readers = (level as unknown as { [CELL]: { readers: unknown[] } })[
-        CELL
-    ].readers
+    const readers = cellOf(level).readers
     expect(readers.length).toBe(0)
 })
 

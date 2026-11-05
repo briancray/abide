@@ -19,13 +19,9 @@ import {
     watch,
 } from '#shared'
 import { online } from '#shared/online.ts'
-import { CELL } from '#shared/reactive/CELL.ts'
+import { cellOf } from '#shared/reactive/cellShape.ts'
 import { followServed } from '#shared/reactive/index.ts'
 import { unfileProducers } from '#shared/reactive/Reactive.ts'
-
-function cellOf<Fields>(value: unknown): Fields {
-    return (value as { [CELL]: Fields })[CELL]
-}
 
 // A FILE OF ITS OWN IS NOT A PROCESS OF ITS OWN: under `bun run test:serial` every file before this
 // one ran here, and what each left filed is in this sweep — the principal's document, a stream
@@ -180,8 +176,7 @@ test('a guard over the bare selection subscribes once and wakes twice for n relo
     })
     let probeReaders = 0
     for (const value of values)
-        probeReaders += cellOf<{ probeReaders: unknown[] }>(value).probeReaders
-            .length
+        probeReaders += cellOf(value).probeReaders.length
     expect(`probe readers: ${probeReaders}`).toBe('probe readers: 0')
 
     // Each value is subscribed through its reader, so the refresh reloads all ten.

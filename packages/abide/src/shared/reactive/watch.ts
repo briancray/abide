@@ -15,6 +15,7 @@ import { namedLogger } from '../log.ts'
 import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
+import type { Callable } from './cellShape.ts'
 import { NotLanded } from './NotLanded.ts'
 import type { Reactive } from './Reactive.ts'
 import { currentScope, runInScope } from './scoping.ts'
@@ -161,12 +162,10 @@ export function watch(first: unknown, second?: Effect): Disposer {
     // An app hands over the VALUES; the reader list lives on each one's record. Copied
     // rather than aliased, because the reader keeps this array for its whole life and the
     // app's own array is the app's to mutate.
-    const given = (Array.isArray(first) ? first : [first]) as {
-        [CELL]: Tracked
-    }[]
+    const given = (Array.isArray(first) ? first : [first]) as Callable[]
     const sources: Tracked[] = []
     for (let index = 0; index < given.length; index += 1)
-        sources.push((given[index] as { [CELL]: Tracked })[CELL])
+        sources.push((given[index] as Callable)[CELL])
     return owned(watchOver(sources, null, second))
 }
 

@@ -9,6 +9,7 @@
 // callable it adopted.
 
 import { CELL } from './CELL.ts'
+import type { Callable } from './cellShape.ts'
 import { reactive } from './index.ts'
 import { brandedPrototype, type Reactive } from './Reactive.ts'
 
@@ -32,9 +33,10 @@ const PAIR_PROTOTYPE = brandedPrototype({
  */
 export function pairReactive(pair: Pair): Reactive<unknown> {
     const over = reactive(() => pair.get())
-    const callable = (over as unknown as { [CELL]: { callable: unknown } })[
-        CELL
-    ].callable as { [PAIR]: Pair }
+    const callable = (over as unknown as Callable)[CELL]
+        .callable as unknown as {
+        [PAIR]: Pair
+    }
     Object.setPrototypeOf(callable, PAIR_PROTOTYPE)
     callable[PAIR] = pair
     return over as Reactive<unknown>
