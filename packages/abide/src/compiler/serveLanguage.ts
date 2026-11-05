@@ -5,14 +5,18 @@ import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 
 import { checkSource, lowerApp } from './checkApp.ts'
 import { citedClauses } from './citedClauses.ts'
-import type { AppChecker } from './compileApp.ts'
 import { type Diagnosis, formatDiagnosis } from './Diagnostics.ts'
 import { DOCS_SITE } from './DOCS_SITE.ts'
 import { formatAbide } from './formatAbide.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import { KeptChecker } from './KeptChecker.ts'
 import { lineOf, offsetOf } from './lineOf.ts'
-import type { Inspection, Place } from './LoweredFile.ts'
+import {
+    completionAt,
+    type Inspection,
+    type LoweredFile,
+    type Place,
+} from './LoweredFile.ts'
 import { nearest } from './nearest.ts'
 
 // 38.11 — `abide lsp`: THE `.abide` LANGUAGE SERVER, OVER STDIO. It is `abide check` (38.3) asked
@@ -22,7 +26,7 @@ import { nearest } from './nearest.ts'
 // WHAT IT SPEAKS is the part of the protocol a diagnostic needs: the handshake, a document opened,
 // changed and closed, and `publishDiagnostics` back. The document is synced whole (`Full`), so what
 // is checked is exactly the editor's text, saved or not. A hover, a jump to a definition, a
-// completion, the references to a name and a rename of it are asked of the program that check
+// completion, the references to a name and a rename of it are asked of the lowering that check
 // registered (`LoweredFile`), so they answer about the same text.
 //
 // THE APP IS THE DOCUMENT'S. An editor starts this at the root of whatever it has open, which in a
@@ -204,29 +208,30 @@ export async function serveLanguage(
         )
     }
 
-    // A question about a document is about the text the editor shows, so a check still settling
-    // runs now rather than after the answer; and it is answered in the queue, after that check.
     const inspect = (params: unknown): Promise<Inspection | undefined> =>
-        ask(params, (checker, path, text, offset) =>
-            checker.session.inspect(path, text, offset),
-        )
+        ask(params, (lowered, text, offset) => lowered?.inspect(text, offset))
 
     // 38.116 — asked after every page of the app is lowered, which is what a page this one never
     // imports needs to be among the references.
     const references = (params: unknown) =>
-        ask(params, async (checker, path, text, offset) => {
-            await lowerApp(checker, held)
-            return checker.session.references(path, text, offset)
-        })
+        ask(
+            params,
+            (lowered, text, offset) => lowered?.references(text, offset),
+            true,
+        )
 
+    // A QUESTION ABOUT A DOCUMENT IS ASKED OF THE LOWERING ITS CHECK REGISTERED (`LoweredFile`), of
+    // the text the editor shows: a check still settling runs now rather than after the answer, and
+    // the question is answered in the queue, after that check. A lowering of another text answers
+    // nothing at an offset into this one, save the props a tag being typed offers (38.117).
     const ask = <Answer>(
         params: unknown,
         question: (
-            checker: AppChecker,
-            path: string,
+            lowered: LoweredFile | undefined,
             text: string,
             offset: number,
-        ) => Promise<Answer | undefined>,
+        ) => Promise<Answer | undefined> | undefined,
+        everyPage = false,
     ): Promise<Answer | undefined> => {
         const { textDocument, position } = params as {
             textDocument: { uri: string }
@@ -242,9 +247,10 @@ export async function serveLanguage(
             const document = documents.get(uri)
             const at = placed(uri)
             if (document === undefined || at === undefined) return undefined
+            const checker = await checkerOf(at.app).live()
+            if (everyPage) await lowerApp(checker, held)
             return question(
-                await checkerOf(at.app).live(),
-                at.path,
+                checker.session.lowered(at.path),
                 document.text,
                 offsetOf(document.text, position),
             )
@@ -337,8 +343,8 @@ export async function serveLanguage(
                 const trigger = (
                     params?.context as { triggerCharacter?: string } | undefined
                 )?.triggerCharacter
-                const found = await ask(params, (checker, path, text, offset) =>
-                    checker.session.complete(path, text, offset, trigger),
+                const found = await ask(params, (lowered, text, offset) =>
+                    completionAt(lowered, text, offset, trigger),
                 )
                 const items: object[] = []
                 for (const entry of found?.entries ?? [])
