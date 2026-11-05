@@ -104,7 +104,7 @@ test("a package's handler is mounted where the app re-exports it, and nowhere el
 })
 
 // A LINKED PACKAGE LIES OUTSIDE THE ROOT, which is where bun resolves it to. THE REVERTS: drop the
-// real-path lookup from `TypeSession.shadowAt`, or the session config's `files`; the checker reads the
+// real-path lookup from `ShadowHost.shadowAt`, or the session config's `files`; the checker reads the
 // re-export through the link as an empty module, and refuses `billing/charge.handler.ts` as
 // exporting no handler (16.73).
 test('a linked package outside the root compiles with the app — 34.23, 34.25', async () => {

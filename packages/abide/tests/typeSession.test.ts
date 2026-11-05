@@ -93,7 +93,7 @@ count = count + step
 
 // 31.1 OVER AN IMPORT, END TO END: the page declares nothing reactive of its own, and the value it
 // renders is a `Reactive` another module exports. THE REVERT: collect only the declared names in
-// `TypeSession.readsFor`; the slot then renders a field of the `Reactive` object rather than of its
+// `readsIn`; the slot then renders a field of the `Reactive` object rather than of its
 // value — `<p></p>` where `<p>hello</p>` is due, and nothing refuses.
 test('a page reads a Reactive it imports and renders its value', async () => {
     const source = `<script>
@@ -122,7 +122,7 @@ import { onboarding } from '${ROOT}src/conversations.ts'
 // `Reactive`. The lowering reads `a` in `let b = a`, so `b` is handed 1 — while the checker, asked
 // of the shadow, infers `b` as the `Reactive` `a` is there. Both answers have to be the same one, and
 // a declared name and an imported one are the same case. THE REVERT: drop `dropValueHolders` from
-// `TypeSession.readsFor`; `b`, `c` and `greeting` are then read as `b()`, `c()` and `greeting()` —
+// `readsIn`; `b`, `c` and `greeting` are then read as `b()`, `c()` and `greeting()` —
 // a call on 1 and on `{ text: 'hello' }` — and the render throws `b is not a function`. The
 // annotated `held` is 31.3's own hold, and stays a `Reactive` either way.
 test('a binding of a reactive name holds its value, declared or imported — 31.3', async () => {
@@ -155,7 +155,7 @@ const held: import('@abide/abide').Reactive<number> = a
 })
 
 // Two files through one session, at the same shadow path. THE REVERT: drop `fileChanges` from
-// the `updateSnapshot` call in `TypeSession`; the second query then answers about the FIRST
+// the `updateSnapshot` call in `ShadowHost`; the second query then answers about the FIRST
 // file's text at the second file's offsets and reports `['b']` where `['a']` is due — the names
 // are real names and the types are real types, so nothing about the answer looks wrong.
 test('a second file in the same session is not answered from the first', async () => {
@@ -212,7 +212,7 @@ test('a whole build takes ONE snapshot, not one per file', async () => {
 test('a kept session holds one snapshot however many it has taken', async () => {
     const kept = await TypeSession.open(TSCONFIG)
     const held = (): number =>
-        (kept as unknown as { api: { activeSnapshots: Set<unknown> } }).api
+        (kept.host as unknown as { api: { activeSnapshots: Set<unknown> } }).api
             .activeSnapshots.size
     try {
         const ask = (at: number) =>
@@ -358,12 +358,12 @@ const { label } = props()
 // not notice holds the stderr it inherited, and whatever reads that to its end waits with it. The
 // process is on a private field of the API's — so this is also what says the field has moved, where
 // `close` would otherwise find nothing there and kill nothing. THE REVERT: drop `child?.kill()` from
-// `TypeSession.close`; `killed` reads false.
+// `ShadowHost.close`; `killed` reads false.
 test('closing a session kills its checker process', async () => {
     const opened = await TypeSession.open(TSCONFIG)
     // `open` starts the process: it asks the checker how it keys a path.
     const child = (
-        opened as unknown as {
+        opened.host as unknown as {
             api: { client: { process?: { pid: number; killed: boolean } } }
         }
     ).api.client.process

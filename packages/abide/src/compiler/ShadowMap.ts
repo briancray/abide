@@ -14,7 +14,7 @@ export const SHADOW_SUFFIX = '.shadow.ts'
  * the first alone — and which one a position is in is the file the checker named, so the map owns
  * the two suffixes as well as the two `origins`.
  *
- * Built over the projection alone where nothing has been lowered yet (`TypeSession.classify`), and
+ * Built over the projection alone where nothing has been lowered yet (`reactiveReads`), and
  * over both once it has.
  */
 export class ShadowMap {

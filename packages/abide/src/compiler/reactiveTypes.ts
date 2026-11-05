@@ -183,6 +183,19 @@ export async function isReactiveType(
 }
 
 /**
+ * Whether the value `symbol` names is a `Reactive` (31.3) — the one question a binding is asked,
+ * whether of its projection or of the program it lowers to.
+ */
+export async function isReactiveSymbol(
+    checker: Checker,
+    abide: Abide,
+    symbol: CheckedSymbol,
+): Promise<boolean> {
+    const type = await checker.getTypeOfSymbol(symbol)
+    return type !== undefined && isReactiveType(checker, abide, type, false)
+}
+
+/**
  * Whether a type is abide's `Selection`, or a type parameter constrained by one.
  *
  * 31.13 — A POSITION TYPED AS A `Selection`, or as a type parameter constrained by one (the free

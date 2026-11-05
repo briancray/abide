@@ -497,7 +497,7 @@ test('config() is typed by what onConfig defaults — 27.13', () => {
 
 // 38.3 — A FINDING IN A COMPONENT'S PROPS TYPE IS REPORTED ONCE, where it was typed, though the
 // checked module reads that type twice (its `props` call, and what a tag is held to). THE REVERT:
-// drop the de-duplication from `TypeSession.diagnose`; it reads twice.
+// drop the de-duplication from `diagnoseSources`; it reads twice.
 test("a finding in a component's props type is reported once — 38.3", () => {
     expect(
         inFile('lib/Typo.abide').map(({ line, column, code }) => ({
@@ -573,7 +573,7 @@ test('each tracking warning lands on its read and on no near miss — 14.14, 14.
     expect(warnings.length).toBe(6)
 })
 
-// THE REVERT: drop the `isIgnored` test from `TypeSession.readsFor`; the two silenced reads are
+// THE REVERT: drop the `isIgnored` test from the warnings `reactiveReads` places; the two silenced reads are
 // warned on (3 against 1).
 test('a warning the line above its read names the clause of is not reported — 14.19', () => {
     const warnings = inFile('ignored/index.abide').filter(
@@ -690,7 +690,7 @@ const run = () => thing?.go()
 // 31.1, 31.4, 31.15 — A VALUE OPENING AT A READ'S MEMBER IS A `Reactive` THE FILE READS AND WRITES BY
 // NAME. In the projection `route.url.pathname` asks a `Reactive<URL>` for a member it does not declare,
 // and the error type resolves `reactive`'s overloads to a `Keyed`, so the binding was no `Reactive`.
-// THE REVERT: drop the rounds after the first in `TypeSession.classify`; each write is a string
+// THE REVERT: drop the rounds after the first in `reactiveReads`; each write is a string
 // assigned to the `Reactive` (TS2322, 2) and the build rebinds the name rather than calling `set`.
 test('a value opening at a read member is read and written by name — 31.1', async () => {
     const opened = appFixture({
