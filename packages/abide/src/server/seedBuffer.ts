@@ -32,12 +32,7 @@ import {
 } from '#shared/reactive/index.ts'
 
 import { positiveSetting } from './config.ts'
-import {
-    currentRequestScope,
-    heldByApp,
-    type PageRender,
-    releaseScope,
-} from './requestScope.ts'
+import { currentRequestScope, heldByApp, releaseScope } from './requestScope.ts'
 
 const HYDRATE_LOG = namedLogger('abide:hydrate')
 
@@ -57,6 +52,12 @@ const SEED_LIFE_MS = 30_000
 export type Outcome =
     | { settled: true; value: unknown; duration: number | undefined }
     | { settled: false; error: unknown; duration: number }
+
+/**
+ * What a page's render reports each call into: `true` where the call was new to the render, for the
+ * early-call script to start (41.20).
+ */
+export type SeedSink = (rpc: object, args: unknown, reached: unknown) => boolean
 
 type Entry = {
     rpc: object
@@ -105,7 +106,7 @@ function reportsOnce(): (rpc: object, args: unknown) => string | undefined {
  * 41.30 — the seed sink of a page the worker keeps: each call reported once, for the early-call
  * script, and none of them left in the seed buffer (41.29) — the page is opened later, if at all.
  */
-export function callsOnly(): PageRender['seed'] {
+export function callsOnly(): SeedSink {
     const firstReport = reportsOnce()
     return (rpc, args) => firstReport(rpc, args) !== undefined
 }
@@ -117,7 +118,7 @@ export function callsOnly(): PageRender['seed'] {
  * reported once: two components reaching one invoice are one call in the browser too, since the
  * browser's `Rpc` joins a standing call (1.8).
  */
-export function seedFor(caller: string): PageRender['seed'] {
+export function seedFor(caller: string): SeedSink {
     const firstReport = reportsOnce()
     return (rpc, args, reached) => {
         const key = firstReport(rpc, args)

@@ -11,22 +11,8 @@
 import { regionMarkup } from '#shared/anchorMarkup.ts'
 import { isReactive, isStreaming, loadOf } from '#shared/reactive/index.ts'
 
+import type { PageCall } from './PageRender.ts'
 import type { Rendered } from './render.ts'
-import type { PageCall } from './requestScope.ts'
-
-// SYNCHRONOUS SETUP IS WHAT MAKES ONE COUNTER ENOUGH. 34.3 keeps a setup from awaiting, so no other
-// request's render runs between a component's two reads, however many renders are in flight.
-let callsInRenders = 0
-
-/** How many calls renders have made, read on either side of a component's setup. */
-export function callsInRender(): number {
-    return callsInRenders
-}
-
-/** Counts a call a page's render made (`reachedInRender`). */
-export function noteCallInRender(): void {
-    callsInRenders += 1
-}
 
 /** A deferred child: its record, and the page's calls its setup made, marked with its build. */
 type Deferred = { rendered: Rendered; callsFrom: number; callsTo: number }

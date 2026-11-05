@@ -7,8 +7,8 @@
 
 import type { Rung } from '#shared/Middleware.ts'
 
+import { EARLY_CALL_HASH } from './PageRender.ts'
 import { randomToken } from './randomToken.ts'
-import { EARLY_CALL_HASH } from './render.ts'
 import { within } from './requestScope.ts'
 
 // 29.5.

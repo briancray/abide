@@ -16,11 +16,11 @@ import type { Framed } from '#shared/framing.ts'
 import type { Params } from '#shared/matchRoute.ts'
 import type { Principal } from '#shared/principal.ts'
 import { type Scope, SCOPING } from '#shared/reactive/scoping.ts'
-import type { RpcRequest } from '#shared/rpcRequest.ts'
 
 import type { Followers } from './Followers.ts'
 import type { McpSurface } from './generatedSurfaces.ts'
 import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
+import type { PageRender } from './PageRender.ts'
 
 /** The three framings a stream is answered in. 17.6. */
 export type Framing = Framed | 'bytes'
@@ -82,7 +82,7 @@ export type RequestScope = Scope & {
     /** What a write through `response` is collected onto, for whoever answers to apply. 22.9. */
     response: { status: number; headers: Headers }
     /**
-     * The page this scope is rendering, which its calls report into.
+     * The page this scope is rendering, which its calls report into (`PageRender.ts`).
      *
      * 41.13, 41.20 — `undefined` in every scope but a page's.
      */
@@ -104,19 +104,6 @@ export type RequestScope = Scope & {
     }
 }
 
-/**
- * A page's render, as its calls see it: the seed sink and the requests the browser will make.
- *
- * The seed buffer's sink for this caller (41.13), and the requests the browser will make for the
- * calls, for the early-call script (41.20). ON THE SCOPE because that is the only thing a call made
- * deep in a page's setup can find it through when requests interleave — `RPC_SERVER.reached` is
- * one slot for every request in flight.
- */
-export type PageRender = {
-    seed: (rpc: object, args: unknown, reached: unknown) => boolean
-    calls: PageCall[]
-}
-
 /** An app as the scopes it opens hold it: what answers a request in it, and its MCP surface. */
 export type AnsweringApp = {
     answer: (request: Request) => Promise<Response>
@@ -128,17 +115,6 @@ export type AnsweringApp = {
     held: Set<() => void>
     /** Every subscription to this app's handlers, over its mux or as an event stream. 18.3. */
     followers: Followers
-}
-
-/**
- * One call a page's render made: the request the browser will make for it, what it reached, and
- * whether the markup was built from it settled — `undefined` until the pass that built from it
- * ends (41.25, `markPainted`).
- */
-export type PageCall = {
-    request: RpcRequest
-    reached: unknown
-    painted: boolean | undefined
 }
 
 // `undefined` IS A STORE, not the absence of one: a value built outside every request runs its body
@@ -328,16 +304,6 @@ export const LISTENING: {
     server: undefined,
     timeout: (received, seconds) =>
         LISTENING.server?.timeout(received, seconds),
-}
-
-/**
- * Sets what the calls a render makes report into, on the request's own scope.
- *
- * 41.13 — set before the render runs: a page's render passes one, and an error page's none. The
- * render is awaited where the request is answered, so it runs in that scope throughout (42.6).
- */
-export function beginRender(page: PageRender | undefined): void {
-    ;(STORAGE.getStore() as RequestScope).page = page
 }
 
 /** The scope a request or `App.run` opened, or `undefined` outside every one. */

@@ -15,11 +15,11 @@ import { PRINCIPAL } from '#shared/principal.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 
-import { reachedInRender } from './answerRequest.ts'
 import { environmentTimeout } from './answerRpc.ts'
 import { configuredMount, derivedAppName } from './config.ts'
 import { cspRung, nonce } from './csp.ts'
 import { handOnError } from './hooks.ts'
+import { recordInRender } from './PageRender.ts'
 import { SERVER_PRINCIPAL } from './principal.ts'
 import { reportHealth } from './reportHealth.ts'
 import { handlerTook, request, requestCookies } from './requestScope.ts'
@@ -39,6 +39,6 @@ export function installServer(): void {
     // 16.11 — the request a handler's rung is handed.
     RPC_SERVER.request = request
     RPC_SERVER.timeout = environmentTimeout
-    RPC_SERVER.reached = reachedInRender
+    RPC_SERVER.reached = recordInRender
     RPC_SERVER.handled = handlerTook
 }

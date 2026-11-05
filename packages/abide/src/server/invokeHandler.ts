@@ -14,11 +14,11 @@ import { heldGenerationOf } from '#shared/reactive/index.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
 import { argsFor } from './argsContract.ts'
-import { callerOf } from './callerOf.ts'
 import { closedTo, crossingRefusal } from './crossingOrigin.ts'
 import type { FollowedHandler, Mounted } from './mountHandlers.ts'
+import { takeSeeded } from './PageRender.ts'
 import { currentRequestScope, rungsTook, timed } from './requestScope.ts'
-import { type Outcome, outcomeOf, takeSeed } from './seedBuffer.ts'
+import { type Outcome, outcomeOf } from './seedBuffer.ts'
 
 /**
  * What the origin gate makes of a call from `crossing`: the refusal it is answered with, or the
@@ -113,9 +113,7 @@ export async function invokeHandler(
     }
     // 41.7 — the call a hydrating page makes for what its render already reached is answered from
     // that, and the handler is not run again (41.13).
-    const caller = seeds ? callerOf() : undefined
-    const seeded =
-        caller === undefined ? undefined : takeSeed(caller, handler, args)
+    const seeded = seeds ? takeSeeded(handler, args) : undefined
     // The entry key of a `global` value, taken once for every read of it below.
     const global = GLOBAL_GETS.get(handler)
     const key = global?.key(args)

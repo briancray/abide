@@ -4,14 +4,13 @@
 /// <reference path="./componentModules.d.ts" />
 
 import { regionMarkup } from '#shared/anchorMarkup.ts'
-import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
 import type { ShareScope } from '#shared/reactive/share.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
 
-import { buildDeferred, markPainted } from './deferredBuilds.ts'
-import { currentRequestScope, type PageCall } from './requestScope.ts'
+import { buildDeferred } from './deferredBuilds.ts'
+import { currentRequestScope } from './requestScope.ts'
 
 /**
  * A compiled component, opaque to an app.
@@ -326,10 +325,7 @@ export async function renderDocument(
     // 41.20 — THE PAGE'S CALLS LEAVE AHEAD OF ITS MARKUP. Setup has run, so every call the page
     // makes is known, and a script in the head starts each one as the request the browser's own
     // `Rpc` would make — while the rest of the document and the bundle are still on their way.
-    const calls = currentRequestScope()?.page?.calls
-    if (calls !== undefined) markPainted(calls)
-    const early =
-        calls !== undefined && calls.length > 0 ? earlyCallScript(calls) : ''
+    const early = currentRequestScope()?.page?.earlyCallScript() ?? ''
     // 39.4 — THE SHELL IS THE OUTERMOST CONTRIBUTOR, so its head is merged with the page's in the
     // one pass that merges the levels'.
     //
@@ -341,50 +337,6 @@ export async function renderDocument(
         `${mergeHead(document, headAt, early, head)}${document.slice(headAt, bodyAt)}${regionMarkup(body)}${document.slice(bodyAt)}`,
     )
 }
-
-/**
- * The head markup that starts each of the page's calls before the bundle arrives.
- *
- * 41.20 — THE SCRIPT ITSELF: each call started with `fetch`, and its answer left under the call's
- * key in `EARLY_CALLS` for `wire` to take (41.21). An answer's body is left UNREAD (16.32), so a
- * streaming handler's copy takes its chunks as they land rather than after the last one.
- * Inline because nothing else runs before the bundle has arrived, which is the wait it exists to
- * overlap.
- *
- * 41.25 — A ROW ENDING IN `1` IS A CALL THE MARKUP WAS BUILT FROM SETTLED, a refusal included, and
- * its entry is marked `painted` for hydration to wait on — its body read to its bytes, so the wait
- * covers it too. Marked as each pass of the markup is built (`markPainted`), not here. 41.26 — A CALL THAT STREAMS IS NEVER MARKED: the
- * browser reads its chunks as they land (16.32), so no wait for its answer makes it settled where
- * the page hydrates, and its region is 41.24's to put right.
- *
- * 29.9, 29.10 — THE CALLS ARE DATA AND THE RUNNER IS A CONSTANT. What a page called differs per
- * response, so it rides in a JSON block a browser never executes, and the one script that does run
- * is the same bytes in every response — which is what lets `csp` permit it by its hash rather than
- * by the nonce an app's own inline script spends. The JSON has `<` escaped, so no string in it can
- * close the element.
- */
-function earlyCallScript(calls: PageCall[]): string {
-    const rows: (
-        [string, string, RequestInit] | [string, string, RequestInit, 1]
-    )[] = []
-    for (const { request, painted } of calls)
-        rows.push(
-            painted === true
-                ? [request.key, request.url, request.init, 1]
-                : [request.key, request.url, request.init],
-        )
-    return `<script type="application/json">${JSON.stringify(rows).replace(/</g, '\\u003c')}</script><script>${EARLY_CALL_RUNNER}</script>`
-}
-
-// THE RUNNER RECORDS, IT NEVER CLASSIFIES: the `Response`, and a painted call's body read to its end
-// — the one decision is `painted`, which the server made. `answerOf` reads the record as it reads an
-// answer it fetched, so no second reading of a content type lives in a string no typecheck reaches.
-// The shape is `EarlyCall`'s. 16.80 — a page the worker answers has it answer the page's calls too,
-// which the browser alone can tell: the server cannot see whether a worker will replay this page.
-export const EARLY_CALL_RUNNER = `(function(s,c,w){for(var i=0;i<c.length;i++)(function(k,u,n,h){if(w)n.cache='force-cache';var e=s[k]={painted:h,response:void 0,bytes:void 0};e.promise=fetch(u,n).then(function(r){return h?r.arrayBuffer().then(function(b){e.bytes=b;e.response=r}):e.response=r}).catch(function(){})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent),(self.navigator.serviceWorker||{}).controller)`
-
-/** The early-call runner's hash, as `script-src` names it. 29.9. */
-export const EARLY_CALL_HASH = `'sha256-${new Bun.CryptoHasher('sha256').update(EARLY_CALL_RUNNER).digest('base64')}'`
 
 /** Where the body's content ends, which is where a page's markup goes. */
 function bodyAnchor(document: string): number {
