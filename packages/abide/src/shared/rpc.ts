@@ -532,14 +532,15 @@ export function declare(method: Method): Declare {
         }) satisfies Gated<unknown>
         const members = rpc as unknown as Record<string, unknown>
         // 7.10, 7.18 — A TRIGGER ON A SERVER REACHES EVERY BROWSER HOLDING WHAT IT NAMES, through the
-        // mux (18.3). `null` in a browser, where the trigger is the copy's own.
+        // mux (18.3). None follow in a browser, where the trigger is the copy's own.
         for (const name of SELECTION_MEMBERS) {
             if (name === 'busy') continue
             members[name] =
                 name === 'invalidate' || name === 'refresh'
                     ? (pattern?: unknown): unknown => {
                           const done = faceHere()[name](pattern)
-                          RPC_SERVER.broadcast?.(rpc, name, pattern)
+                          for (const followers of RPC_SERVER.following)
+                              followers.broadcast(rpc, name, pattern)
                           return done
                       }
                     : (pattern?: unknown): unknown => faceHere()[name](pattern)

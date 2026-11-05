@@ -16,7 +16,7 @@ import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import { argsFor } from './argsContract.ts'
 import { callerOf } from './callerOf.ts'
 import { closedTo, crossingRefusal } from './crossingOrigin.ts'
-import type { Mounted } from './mountHandlers.ts'
+import type { FollowedHandler, Mounted } from './mountHandlers.ts'
 import { currentRequestScope, rungsTook, timed } from './requestScope.ts'
 import { type Outcome, outcomeOf, takeSeed } from './seedBuffer.ts'
 
@@ -29,15 +29,15 @@ import { type Outcome, outcomeOf, takeSeed } from './seedBuffer.ts'
  * declared it may come. 16.24, 36.2 — the same gate and the same own origin for every lane.
  */
 export function originGate(
-    mounted: Mounted,
+    handler: Mounted['handler'],
     crossing: string | null,
     following: boolean,
 ): Failed<'HttpError', undefined> | string | null {
-    if (!closedTo(mounted.handler.crossOrigin, crossing)) return crossing
+    if (!closedTo(handler.crossOrigin, crossing)) return crossing
     if (following) return crossingRefusal(crossing, 'subscription')
-    return argsInURL(mounted.method)
+    return argsInURL(handler.method)
         ? null
-        : crossingRefusal(crossing, mounted.method)
+        : crossingRefusal(crossing, handler.method)
 }
 
 /** Which run answered a call, as 21.15's `server-timing` names it. */
@@ -148,11 +148,11 @@ export async function invokeHandler(
  * (18.3) — or a throw of the refusal, the origin gate's included (18.2).
  */
 export function followedArgs(
-    mounted: Mounted,
+    mounted: FollowedHandler,
     given: unknown,
     crossing: string | null,
 ): unknown {
-    const gate = originGate(mounted, crossing, true)
+    const gate = originGate(mounted.handler, crossing, true)
     if (isFailed(gate)) throw gate
     return argsFor(mounted.handler, given, undefined)
 }
@@ -167,7 +167,7 @@ export function followedArgs(
  * not fed, as an http call it answered would never reach the handler.
  */
 export function admitsFollower(
-    mounted: Mounted,
+    mounted: FollowedHandler,
     args: unknown,
     upgrade: Request,
 ): boolean | Promise<boolean> {
@@ -178,7 +178,7 @@ export function admitsFollower(
 }
 
 async function throughRoute(
-    mounted: Mounted,
+    mounted: FollowedHandler,
     args: unknown,
     upgrade: Request,
 ): Promise<boolean> {
@@ -187,7 +187,10 @@ async function throughRoute(
 }
 
 /** Whether the handler's own rungs let a call with `args` through. 18.8. */
-function handlerAdmits(mounted: Mounted, args: unknown): Promise<boolean> {
+function handlerAdmits(
+    mounted: FollowedHandler,
+    args: unknown,
+): Promise<boolean> {
     return Promise.resolve(
         mounted.handler(args as never) as PromiseLike<unknown>,
     ).then(
@@ -201,7 +204,7 @@ function handlerAdmits(mounted: Mounted, args: unknown): Promise<boolean> {
  * upgrade's own request at the handler's address. 18.26.
  */
 async function routeAdmits(
-    mounted: Mounted,
+    mounted: FollowedHandler,
     args: unknown,
     upgrade: Request,
 ): Promise<boolean> {

@@ -18,6 +18,7 @@ import type { Principal } from '#shared/principal.ts'
 import { type Scope, SCOPING } from '#shared/reactive/scoping.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
 
+import type { Followers } from './Followers.ts'
 import type { McpSurface } from './generatedSurfaces.ts'
 import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 
@@ -125,6 +126,8 @@ export type AnsweringApp = {
      * still being written, a seed entry and its timer. 42.11 — `App.stop` ends every one.
      */
     held: Set<() => void>
+    /** Every subscription to this app's handlers, over its mux or as an event stream. 18.3. */
+    followers: Followers
 }
 
 /**

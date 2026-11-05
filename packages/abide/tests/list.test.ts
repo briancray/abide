@@ -10,6 +10,7 @@ import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLoca
 
 import { measure } from '@abide/harness/abide'
 
+import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { flushSync, reactive } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { List, listAt, updateList } from '#ui/List.ts'
@@ -1730,6 +1731,7 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
 // and the same warning, the painted rows replaced (adopted: false, 1 warning).
 test('a {#for} over a followed GET adopts the rows the server painted, over the mux — 41.8, 41.10', async () => {
     const { Mux } = await import('#server/answerSocket.ts')
+    const { Followers } = await import('#server/Followers.ts')
     const { GET } = await import('#shared/rpc.ts')
     const { resetSocketWire } = await import('#ui/socketWire.ts')
     const { wire } = await import('#ui/wire.ts')
@@ -1740,13 +1742,15 @@ test('a {#for} over a followed GET adopts the rows the server painted, over the 
     const owner = reactive<string[]>([...turns], { global: true })
     const handler = GET(owner as never) as unknown as { address: string }
     handler.address = '/transcript'
+    const row = {
+        address: handler.address,
+        rungs: [],
+        copy: undefined,
+        handler: handler as unknown as FollowedHandler['handler'],
+    }
     const mux = new Mux(
-        new Map([
-            [
-                `GET ${handler.address}`,
-                { handler, ui: true, scope: '/', rungs: [] } as never,
-            ],
-        ]),
+        (address) => (address === row.address ? row : undefined),
+        new Followers(),
         undefined,
     )
     // A web socket whose far end is the mux above: every frame either way is its own task. A frame

@@ -7,8 +7,10 @@ import { expect, test } from 'bun:test'
 import { answered } from '#server/answerFailure.ts'
 import { Mux } from '#server/answerSocket.ts'
 import { config } from '#server/config.ts'
+import { Followers } from '#server/Followers.ts'
 import { fileRoute, middleware, onConfig, rungsOver } from '#server/hooks.ts'
 import { installServer } from '#server/installServer.ts'
+import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { reactive } from '#shared'
 import { GET } from '#shared/rpc.ts'
 
@@ -48,8 +50,8 @@ test('every onConfig composes, the deeper route over the root — 27.6, 37.7', a
 })
 
 // 18.26 — A FOLLOW IS HELD TO ITS ROUTE'S MIDDLEWARE as it opens: refused there, it is sent its
-// triggers alone and never the value. THE REVERT: drop the `routeAdmits` admission from the mux's
-// subscribe; the locked follow is fed `value`.
+// triggers alone and never the value. THE REVERT: drop the `routeAdmits` admission from `admitsFollower`
+// (`invokeHandler.ts`); the locked follow is fed `value`.
 test("a GET followed over the mux passes its route's middleware — 18.26", async () => {
     fileRoute('/vault')
     const unfile = middleware(async (next, { request }) =>
@@ -62,19 +64,15 @@ test("a GET followed over the mux passes its route's middleware — 18.26", asyn
         address: string
     }
     handler.address = '/vault/gold'
+    const row: FollowedHandler = {
+        address: '/vault/gold',
+        rungs: rungsOver('/vault', answered),
+        copy: undefined,
+        handler: handler as unknown as FollowedHandler['handler'],
+    }
     const mux = new Mux(
-        new Map([
-            [
-                'GET /vault/gold',
-                {
-                    handler,
-                    ui: true,
-                    route: '/vault',
-                    rungs: rungsOver('/vault', answered),
-                    address: '/vault/gold',
-                } as never,
-            ],
-        ]),
+        (address) => (address === row.address ? row : undefined),
+        new Followers(),
         undefined,
     )
     const fed = async (key: string): Promise<string[]> => {
@@ -119,19 +117,15 @@ test('a route rung that re-heads the answer still admits the follow — 18.26', 
         address: string
     }
     handler.address = '/traced/trail'
+    const row: FollowedHandler = {
+        address: '/traced/trail',
+        rungs: rungsOver('/traced', answered),
+        copy: undefined,
+        handler: handler as unknown as FollowedHandler['handler'],
+    }
     const mux = new Mux(
-        new Map([
-            [
-                'GET /traced/trail',
-                {
-                    handler,
-                    ui: true,
-                    route: '/traced',
-                    rungs: rungsOver('/traced', answered),
-                    address: '/traced/trail',
-                } as never,
-            ],
-        ]),
+        (address) => (address === row.address ? row : undefined),
+        new Followers(),
         undefined,
     )
     const sent: { op: string }[] = []

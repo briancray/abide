@@ -7,8 +7,10 @@ import { expect, test } from 'bun:test'
 
 import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import type { BootedApp } from '#server/createApp.ts'
+import { Followers } from '#server/Followers.ts'
 import { onError } from '#server/hooks.ts'
 import { installServer } from '#server/installServer.ts'
+import type { FollowedHandler } from '#server/mountHandlers.ts'
 import {
     currentRequestScope,
     request,
@@ -33,13 +35,15 @@ function guarded(middleware: Rung<never, unknown>[]): Mux {
         middleware: middleware as never,
     }) as unknown as { address: string }
     handler.address = ADDRESS
+    const row: FollowedHandler = {
+        address: ADDRESS,
+        rungs: [],
+        copy: undefined,
+        handler: handler as unknown as FollowedHandler['handler'],
+    }
     return new Mux(
-        new Map([
-            [
-                `GET ${ADDRESS}`,
-                { handler, ui: true, scope: '/', rungs: [] } as never,
-            ],
-        ]),
+        (address) => (address === ADDRESS ? row : undefined),
+        new Followers(),
         undefined,
     )
 }

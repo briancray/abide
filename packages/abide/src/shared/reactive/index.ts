@@ -551,7 +551,8 @@ export function refresh<Chosen extends Selection>(
         (selection as { refresh(pattern: unknown): void }).refresh(pattern)
     else {
         refreshOver(sweep)
-        RPC_SERVER.swept?.('refresh', sweep)
+        for (const followers of RPC_SERVER.following)
+            followers.sweep('refresh', sweep)
     }
 }
 /** Marks the selection stale: drops the cache behind it, never the value. */
@@ -566,7 +567,8 @@ export function invalidate<Chosen extends Selection>(
         )
     else {
         invalidateOver(sweep)
-        RPC_SERVER.swept?.('invalidate', sweep)
+        for (const followers of RPC_SERVER.following)
+            followers.sweep('invalidate', sweep)
     }
 }
 

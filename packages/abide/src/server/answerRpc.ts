@@ -21,7 +21,6 @@ import {
     type ErrorPages,
     handlerHeaders,
 } from './answerFailure.ts'
-import { followAsEvents } from './answerSocket.ts'
 import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
 import { collapsed } from './argsContract.ts'
 import { positiveSetting } from './config.ts'
@@ -66,7 +65,11 @@ export async function answerRpc(
     const inUrl = argsInURL(found.method)
     const form = isForm(request)
     // 21.19 — the origin the answer admits, where the handler declared it may read.
-    const admitted = originGate(found, crossingOrigin(origin, url), false)
+    const admitted = originGate(
+        found.handler,
+        crossingOrigin(origin, url),
+        false,
+    )
     if (isFailed(admitted)) return answered(admitted)
     const raw = await argsOf(
         request,
@@ -152,7 +155,8 @@ async function answerOutcome(
     const etag = serving !== undefined ? `"${versionOf(serving)}"` : undefined
     if (etag !== undefined) {
         headers.set(VERSION_HEADER, etag)
-        RPC_SERVER.served?.(found.handler, serving, invoked.key as string)
+        for (const followers of RPC_SERVER.following)
+            followers.served(found.handler, serving, invoked.key as string)
     }
     // 21.22 — A `GET` THE DEVICE KEEPS, where the worker is there to keep it: a value, not a
     // refusal (16.40) nor a stream with no end to keep (16.32) — a generator's, or the lines a
@@ -186,15 +190,17 @@ async function answerOutcome(
     // 18.20 — A READER ASKING FOR AN EVENT STREAM IS FOLLOWED, rather than answered once: the value,
     // then each change, from the version its `Last-Event-ID` names. A handler that streams answers
     // its own chunks as it always has (16.45).
+    const followers = currentRequestScope()?.app?.followers
     if (
         etag !== undefined &&
+        followers !== undefined &&
         !streams(outcome.value) &&
         prefers(request, 'text/event-stream', 'application/json')
     ) {
         const events = handlerHeaders()
         sseHeaders(events)
         return new Response(
-            followAsEvents(
+            followers.events(
                 found,
                 invoked.args,
                 versionInEtag(request.headers.get('last-event-id')),

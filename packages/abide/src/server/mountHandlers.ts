@@ -80,6 +80,28 @@ export type Mounted = Mount & {
 }
 
 /**
+ * What following a handler reads of its row: where it answers, the rungs its route filed, the
+ * handler, and the `tags` its copy carries. 18.3, 18.8, 18.26.
+ */
+export type FollowedHandler = Pick<
+    Mounted,
+    'address' | 'rungs' | 'handler' | 'copy'
+>
+
+/**
+ * The `GET` a browser follows at each address among `handlers` — one it is handed a wrapper for
+ * (20.4) — or `undefined`.
+ */
+export function followedIn(
+    handlers: Map<string, Mounted>,
+): (address: string) => FollowedHandler | undefined {
+    return (address) => {
+        const found = handlers.get(handlerKey('GET', address))
+        return found?.ui === true ? found : undefined
+    }
+}
+
+/**
  * The row of a handler abide mounts itself, keyed as `answerRpc` looks one up.
  *
  * Built on the core's `declare` with no generated surface (20.1) — the app's tree never names it.
