@@ -1,7 +1,7 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { ERROR_META } from '#shared/ERROR_META.ts'
-import { firstMatch, type Params, partsOf } from '#shared/matchRoute.ts'
+import { firstMatch, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import { OFFLINE_SAVED } from '#shared/OFFLINE_CACHES.ts'
@@ -13,6 +13,12 @@ import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { LAYER_NAVIGATE } from './LAYER_NAMES.ts'
 import { LevelChain, type PageModule } from './LevelChain.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
+import {
+    type Bearing,
+    type Found,
+    outcomeOf,
+    type Settled,
+} from './outcomeOf.ts'
 import { pageRegion, type Region } from './regions.ts'
 
 export type Route = {
@@ -29,8 +35,6 @@ export type Route = {
 }
 
 type Compiled = Route & { segments: Segment[] }
-
-type Found = { route: Compiled; params: Params }
 
 /** A window's scroll, `[scrollX, scrollY]`. */
 type Scroll = readonly [number, number]
@@ -151,7 +155,7 @@ export class Router {
      * as the address below the app's root. Every way in — a click, an intent, back and forward, a
      * hydration — is matched here.
      */
-    match(pathname: string): Found | undefined {
+    match(pathname: string): Found<Compiled> | undefined {
         const below = unmounted(pathname)
         const parts = below === undefined ? undefined : partsOf(below)
         return parts === undefined ? undefined : firstMatch(this.routes, parts)
@@ -209,28 +213,17 @@ export class Router {
         options: NavigateOptions,
         step: Step,
     ): Promise<void> {
-        const target =
-            typeof url === 'string' ? new URL(url, location.href) : url
-        // A CROSS-ORIGIN ADDRESS IS NOT A ROUTE. Handing it to `pushState` throws, and treating
-        // it as a miss would leave the caller with a navigation that silently did nothing.
-        if (target.origin !== location.origin || this.errorPage) {
-            location.href = target.href
-            return
+        const bearing: Bearing<Compiled> = {
+            target: typeof url === 'string' ? new URL(url, location.href) : url,
+            origin: location.origin,
+            errorPage: this.errorPage,
+            standing: this.standing,
+            mounted: this.mounted,
+            match: (pathname) => this.match(pathname),
         }
-        const found = this.match(target.pathname)
-        if (found === undefined) {
-            // NOT A ROUTE THIS BUILD KNOWS, so it is the server's to answer — which is a document
-            // load, and the one case where 30.7 does not apply because there is no route to run.
-            location.href = target.href
-            return
-        }
-        // 30.21, 30.23, 30.24 — THE ROUTE STANDING, AT ITS OWN PATH: another query, another fragment or
-        // the same address. The page reads its address through `route`, so it follows rather than
-        // being rebuilt, and there is no path for `middleware` to decide anything new about.
-        if (found.route === this.standing && this.mounted === target.pathname) {
-            this.follow(target, options, found, step)
-            return
-        }
+        const before = outcomeOf(bearing)
+        if (before.kind !== 'ask') return this.settle(before, options, step)
+        const found = before.found
         const ticket = this.supersede()
         route.navigating.set(true)
         // EVERY WAY OUT CLEARS WHAT THE WAY IN SET: a load that fails, a setup that throws and a
@@ -239,68 +232,59 @@ export class Router {
         try {
             // 30.15 — THE SERVER IS ASKED ALONGSIDE THE LOAD, so its `middleware` decides the
             // navigation for the price of the one round trip the chunks already cost.
+            // 30.27 — `loadOrMiss`, because a rejection here was dropped by the click's `void`,
+            // and the link did nothing.
             const [answer, loaded] = await Promise.all([
-                ask(target, ticket.signal),
+                ask(bearing.target, ticket.signal),
                 loadOrMiss(found.route),
             ])
             // SUPERSEDED, so this navigation is over. Nothing has been touched yet, which is the
             // whole reason the ticket is checked here rather than after the mount — and
             // `navigating` stays the newer navigation's to clear.
             if (ticket.signal.aborted) return
-            // 30.32 — OFFLINE, THE DOCUMENT LOAD BELOW CAN ONLY PAINT THE BROWSER'S ERROR PAGE over a
-            // page that works. A history step has already moved the bar, so it is left to the
-            // document.
-            if (
-                answer === undefined &&
-                !navigator.onLine &&
-                step.direction === 'push'
-            ) {
+            const after = outcomeOf(bearing, {
+                found,
+                answer,
+                loaded: loaded !== undefined,
+                online: navigator.onLine,
+                pushed: step.direction === 'push',
+            })
+            if (after.kind === 'offline') {
                 // 45.12 — UNLESS THE SERVICE WORKER SAVED THE PAGE, which the document load is
                 // then answered with.
-                if ((await savedOffline(target)) && !ticket.signal.aborted)
-                    location.href = target.href
+                if (
+                    (await savedOffline(bearing.target)) &&
+                    !ticket.signal.aborted
+                )
+                    location.href = after.href
                 return
             }
-            // 30.18 — A REFUSAL, A RESPONSE MIDDLEWARE ANSWERED ITSELF, or no answer at all: the
-            // document asks again and paints whatever the server says. A fetch that failed —
-            // offline, or a redirect to another origin that CORS will not let it follow — goes to
-            // the address it was sent to.
-            // 30.27 — AND CHUNKS THAT WOULD NOT LOAD, with the server down or a deploy that removed
-            // them: a rejection here was dropped by the click's `void`, and the link did nothing.
-            if (answer?.status !== 204 || loaded === undefined) {
-                location.href = answer?.url ?? target.href
-                return
-            }
-            // 30.17 — REDIRECTED, and the server already said yes to where it landed: the answer is
-            // the 204 at the end of the chain. That address is mounted in place of the one asked
-            // for, and a route the client has no row for is the document's (30.10).
-            const landed = answer.redirected ? new URL(answer.url) : target
-            const landing = answer.redirected
-                ? this.match(landed.pathname)
-                : found
-            if (landing === undefined) {
-                location.href = landed.href
-                return
-            }
-            // 30.23 — THE ROUTE STANDING, AT ANOTHER PATH: `middleware` has said yes to the path, and
-            // the page it matched is the one already mounted, so it follows.
-            if (landing.route === this.standing) {
-                this.follow(landed, options, landing, step)
-                return
-            }
+            if (after.kind !== 'mount') return this.settle(after, options, step)
             const arriving =
-                landing === found ? loaded : await loadOrMiss(landing.route)
+                after.found === found
+                    ? loaded
+                    : await loadOrMiss(after.found.route)
             if (ticket.signal.aborted) return
             if (arriving === undefined) {
-                location.href = landed.href
+                location.href = after.at.href
                 return
             }
             await this.write(ticket, step.direction, () =>
-                this.commit(landed, landing, arriving, options, step),
+                this.commit(after.at, after.found, arriving, options, step),
             )
         } finally {
             if (this.navigation === ticket) route.navigating.set(false)
         }
+    }
+
+    /** Executes an outcome that loads nothing: a document load, or a step within the page. */
+    private settle(
+        outcome: Settled<Compiled>,
+        options: NavigateOptions,
+        step: Step,
+    ): void {
+        if (outcome.kind === 'document') location.href = outcome.href
+        else this.follow(outcome.at, options, outcome.found, step)
     }
 
     /**
@@ -317,7 +301,7 @@ export class Router {
     follow(
         target: URL,
         options: NavigateOptions,
-        found: Found,
+        found: Found<Compiled>,
         step: Step,
     ): void {
         this.supersede()
@@ -447,7 +431,7 @@ export class Router {
      */
     private commit(
         target: URL,
-        found: Found,
+        found: Found<Compiled>,
         arriving: PageModule[],
         options: NavigateOptions,
         step: Step,
@@ -515,7 +499,7 @@ export class Router {
      *
      * 23.1 — WRITTEN BEFORE THE ARRIVING PAGE'S SETUP, which reads it.
      */
-    private arriveAt(target: URL, found: Found): void {
+    private arriveAt(target: URL, found: Found<Compiled>): void {
         arrive(target.href, found.route.pattern, found.params)
         this.standing = found.route
         this.mounted = target.pathname
