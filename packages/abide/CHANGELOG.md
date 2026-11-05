@@ -1,5 +1,36 @@
 # @abide/abide
 
+## 0.124.0
+
+### Minor Changes
+
+- 057aef8: `TypeSession` (from `@abide/abide/compiler`) no longer carries `hold`, `projectWith` or `projectionOf`. Every analysis now asks the shadow program through one `ShadowHost`, which owns the snapshot a question runs against, so a caller no longer holds the session and reaches for a raw project by hand.
+- 1a7baec: `abide scaffold` writes a Dockerfile and `.dockerignore`: the app built with `abide compile` on the bun that scaffolded it, and an image on distroless holding the executable alone (RULEBOOK 38.132).
+
+### Patch Changes
+
+- b50ba69: ABIDE.md points at a page address the bundled docs really carry (`guide/keep-it-current.md`), and names the scaffold's Dockerfile and `abide compile` (RULEBOOK 38.132)
+- d3cee54: ABIDE.md says what a `watch` may write: its run assigns no state, and what a timer or a call it started hands back is written when that lands, as an event handler writes
+- de50907: followers owned per app and passed to the mux ([`19e48d5`](https://github.com/briancray/abide/commit/19e48d5d12bdd12e648867e213442cdba0425cc1))
+- de50907: a ShadowHost every analysis asks through, and one reads fixed point ([`1d3e371`](https://github.com/briancray/abide/commit/1d3e3710a5c42c09b44004b5142b47e09bcb20c6))
+- de50907: split runDesktop into a DesktopSession and the window it drives ([`2174dc2`](https://github.com/briancray/abide/commit/2174dc22fea7c092b5ccf10807fd747fd632416c))
+- 5221322: each test file under the test preload starts cold, so a file passes whatever order bun runs the files in — 38.133 ([`2afa677`](https://github.com/briancray/abide/commit/2afa67778caa5a15248d00cb6219078995b2d342))
+- de50907: the selection index into selections.ts ([`4c58131`](https://github.com/briancray/abide/commit/4c581310ba08ccceaf213600b6f8166e186195c5))
+- de50907: one issueReport module for note and issuesOf ([`4d2b85d`](https://github.com/briancray/abide/commit/4d2b85d88da14b474eaa7979347e5ca6ffc6e837))
+- de50907: editor questions asked of the lowering a check registered ([`57d65a8`](https://github.com/briancray/abide/commit/57d65a8c009d4e4b3a740362e7e85ee97a9e3b10))
+- de50907: one module owns the call starting a load ([`8331a7d`](https://github.com/briancray/abide/commit/8331a7df809e0f851a3ebb1d4b99f0b708d1d2be))
+- de50907: a producer port for the verbs outside the core spend ([`84bfbbd`](https://github.com/briancray/abide/commit/84bfbbddcc96ed6dbaec78348d279c5873269698))
+- de50907: one handler invocation for the http and socket lanes ([`8828727`](https://github.com/briancray/abide/commit/8828727a3c2fa24b8c5b37ef8b580aaaf874c0d2))
+- de50907: declare the Cell shape once, in cellShape.ts ([`8fee2f4`](https://github.com/briancray/abide/commit/8fee2f49e63535e92e59240531669794b6f23b16))
+- de50907: the reads fixed point returns its answers rather than filling the caller's ([`c704569`](https://github.com/briancray/abide/commit/c7045690405bb633c329a5252429485eca03d5c8))
+- de50907: decide a navigation's outcome in a pure outcomeOf, executed by Router ([`dc055fc`](https://github.com/briancray/abide/commit/dc055fc290782ebd9b4ea50b0db23a4c408835a4))
+- de50907: one page-render session owns seeding, recording and early calls ([`fcfb07a`](https://github.com/briancray/abide/commit/fcfb07aa398cedafdbd5cef87cecb022c712f6fa))
+- d870b05: `abide format` opens an expression `bun fmt` breaks onto lines of its own at its brace — `{name` rather than `{    name` — the first line outdented like the rest (RULEBOOK 38.126).
+- 5e3caa6: An array mutator called on a reactive name in a `.abide` file is a write: `tags.push(tag)`, `deal.notes.splice(0, 1)` and the rest run on a copy that the name then holds, so the page repaints (RULEBOOK 31.9). The receiver's type decides it — a class's own `push` or a `Map`'s `set` is still the value's call. ABIDE.md names `items.push(item)` as the write again.
+- 2350996: A page's module, and every module it imports, is now evaluated outside the request that first renders it. In an executable `abide compile` writes, a module's `reactive` was built as the first request's own rather than per request, so whatever that request left — a signed-out caller's refusal — stood for every caller after it (RULEBOOK 11.67).
+- d98f382: `abide scaffold`'s `bunfig.toml` comments fit the 80-column line the formatter prints.
+- 37dddd1: A file with no extension imported `with { type: 'text' }` — a `Dockerfile`, a `LICENSE`, a `Makefile` — is its text under `abide dev` and `abide start`, where the page used to answer 500 (RULEBOOK 34.21).
+
 ## 0.123.3
 
 ### Patch Changes
