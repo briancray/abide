@@ -1,5 +1,11 @@
 # @abide/bridge
 
+## 0.5.2
+
+### Patch Changes
+
+- ccbee47: the bridge trusts the authorities this machine trusts as well as bun's own, so it pairs with a site whose certificate an organization's authority signed — 44.47
+
 ## 0.5.1
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.124.1
+
+### Patch Changes
+
+- cd07376: a throttled or debounced body is busy while its window holds a run, and an await waits for it — 5.15 ([`1482fd3`](https://github.com/briancray/abide/commit/1482fd3368675794ab6db48ff1ff2c5b8861d68c))
+- cd07376: a bind: through a path is checked as the get/set pair the build emits — 32.5 ([`c91d03f`](https://github.com/briancray/abide/commit/c91d03f816af91f994314fc17b2101d8ec77ec51))
+
 ## 0.124.0
 
 ### Minor Changes
