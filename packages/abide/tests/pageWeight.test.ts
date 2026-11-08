@@ -12,6 +12,8 @@ afterAll(removeTemporaryModules)
 
 // A string `validateJson` throws with: a literal survives minification where a name does not.
 const SCHEMA_VALIDATOR = 'does not implement the JSON Schema keyword'
+// And one `webStore` reaches through `storedValue` (8.22): a store a page does not import costs it nothing.
+const WEB_STORE = 'holds something no abide store wrote'
 
 // The static closure a page's document loads — the entry, then each chunk the manifest names for
 // the page, and every chunk those import.
@@ -55,6 +57,13 @@ let count = reactive(0)
 </script>
 
 <p>{String(validateJson({ type: 'number' }, count) === null)}</p>`,
+        'stored/index.abide': `<script>
+import { reactive, webStore } from '@abide/abide'
+
+let count = reactive(0, { store: webStore('count') })
+</script>
+
+<button onclick={() => { count = count + 1 }}>{count}</button>`,
     })
     const out = `${app}/.abide`
     const built = await buildApp(app)
@@ -68,4 +77,10 @@ let count = reactive(0)
     expect(
         (await closureText(out, 'index.abide')).includes(SCHEMA_VALIDATOR),
     ).toBe(false)
+    expect(
+        (await closureText(out, 'stored/index.abide')).includes(WEB_STORE),
+    ).toBe(true)
+    expect((await closureText(out, 'index.abide')).includes(WEB_STORE)).toBe(
+        false,
+    )
 }, 60_000)

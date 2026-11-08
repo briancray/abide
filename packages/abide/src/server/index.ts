@@ -92,6 +92,8 @@ export {
     sse,
     type Values,
 } from './responseHelpers.ts'
+// 8.25 — a `Store` in a `bun:sqlite` table.
+export { sqliteStore } from './sqliteStore.ts'
 // 24 — the trace this work belongs to.
 export { trace } from './trace.ts'
 

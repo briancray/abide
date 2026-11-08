@@ -44,6 +44,8 @@ export const BUILTIN_TYPES = new Set([
     // Bun
     'CookieInit',
     'CookieStoreDeleteOptions',
+    // `bun:sqlite`'s connection, which `sqliteStore` takes.
+    'Database',
     'Server',
     // Interop
     'StandardSchemaV1',

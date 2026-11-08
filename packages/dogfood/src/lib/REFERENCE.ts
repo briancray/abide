@@ -52,6 +52,20 @@ export const REFERENCE: readonly {
         typeOnly: true,
     },
     {
+        route: '/reference/webStore',
+        names: ['webStore'],
+        entry: '@abide/abide',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
+        route: '/reference/sqliteStore',
+        names: ['sqliteStore'],
+        entry: '@abide/abide/server',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
         route: '/reference/types/Shared',
         names: ['Shared'],
         entry: '@abide/abide',

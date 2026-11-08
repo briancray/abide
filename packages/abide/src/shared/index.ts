@@ -119,4 +119,6 @@ export {
     url,
 } from './url.ts'
 export { validateJson } from './validateJson.ts'
+// 8.22 — a `Store` in the browser's Web Storage, inert where there is none (8.23).
+export { webStore } from './webStore.ts'
 export { mutatePath, writePath } from './writePath.ts'
