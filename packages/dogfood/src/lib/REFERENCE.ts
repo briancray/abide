@@ -866,7 +866,7 @@ export const REFERENCE: readonly {
     {
         route: '/reference/onError',
         names: ['onError'],
-        entry: '@abide/abide/server',
+        entry: '@abide/abide',
         group: 'Configuration',
         typeOnly: false,
     },

@@ -4,8 +4,8 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET } from '#server'
-import type { JsonValue, StandardSchemaV1 } from '#shared'
+import { GET, POST } from '#server'
+import type { Issues, JsonValue, StandardSchemaV1 } from '#shared'
 import { jsonSchema, reactive, validateJson } from '#shared'
 
 // THE TYPE ARGUMENT IS NOT DECORATION. `Issues<T>` answers a bare `string[]` where `T` is
@@ -721,4 +721,25 @@ test('a member left undefined is absent — 19.25', async () => {
         { args: jsonSchema(schema) },
     )
     expect(await noted({ title: 't', note: undefined })).toBe('t:-')
+})
+
+// 19.26 — `Issues` OVER A HANDLER IS THE `Issues` OF WHAT IT IS CALLED WITH, so a form's refusal
+// state names the handler. Checked by `bun run typecheck`: each `@ts-expect-error` is a value the
+// handler's `Args` refuses.
+//
+// THE REVERT: drop the `Rpc` arm of `Issues`. Over a function it is then the record arm keyed by
+// the function's own members, and both `@ts-expect-error` lines go unused.
+test('Issues over an Rpc is the Issues of its args', () => {
+    const save = POST(
+        (args: { name: string; amount: number }) =>
+            `${args.name}${args.amount}`,
+    )
+    const rename = POST((name: string) => name)
+    const keyed: Issues<typeof save> = { name: ['required'], '': ['whole'] }
+    // @ts-expect-error — not a field of `save`'s args.
+    const stray: Issues<typeof save> = { nope: ['x'] }
+    const bare: Issues<typeof rename> = ['too short']
+    // @ts-expect-error — a handler called with a scalar has nowhere to key by.
+    const keyedScalar: Issues<typeof rename> = { '': ['x'] }
+    expect([keyed, stray, bare, keyedScalar].length).toBe(4)
 })

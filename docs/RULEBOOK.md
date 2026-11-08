@@ -1373,6 +1373,8 @@ MUST NOT change that type.
 19.25 `validateJson` MUST read a member left `undefined`, at any depth of a record, as absent to
 `required`, `properties` and `additionalProperties` — in process as the wire carries it (30.28).
 
+19.26 An `Issues<T>` over an `Rpc` MUST be the `Issues` of that `Rpc`'s `Args`.
+
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
@@ -2518,6 +2520,16 @@ a 405 for a rung filed at the root route.
 
 37.15 A `middleware` rung outside one that returned a `Failed` MUST be handed 37.14's answer from
 `next`, and MUST NOT be handed the `Failed`.
+
+37.16 An `onError` called in a component's `<script>` MUST be filed in the browser for as long as
+that component stands, and MUST file nothing where that `<script>` runs for a server's render.
+
+37.17 In a browser, a throw nothing caught, a rejection nothing handled and what 12.6 hands
+`onError` MUST each reach every `onError` 37.16 filed, the last filed first, and once — a throw
+12.6 handed MUST NOT be handed again where 12.7 surfaces it.
+
+37.18 In a browser, an `onError` that throws MUST be written to `abide:lifecycle`, and MUST NOT keep
+any other `onError` from being handed the error.
 
 # 38. Commands
 

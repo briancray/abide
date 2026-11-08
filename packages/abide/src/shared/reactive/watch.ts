@@ -50,9 +50,10 @@ function reportThrow(thrown: unknown, message: string): void {
 /**
  * Reports an effect's throw, then re-throws it in a browser.
  *
- * 12.7 — A BROWSER HAS NO `onError`, so the throw goes on out to surface as an uncaught error: to
- * the caller of `watch` on a first run, and on a rerun to the drain, which reports it and runs the
- * rest of its queue (`drainPending`). A server's has been handed it, and re-thrown there it would
+ * 12.7 — A BROWSER'S THROW GOES ON OUT to surface as an uncaught error: to the caller of `watch` on
+ * a first run, and on a rerun to the drain, which reports it and runs the rest of its queue
+ * (`drainPending`) — and its `onError`, handed it already, is not handed it again (`onError.ts`).
+ * A server's has been handed it, and re-thrown there it would
  * fail the handler or the render whose write woke this effect — a second report of one failure,
  * against code that did not fail.
  */
@@ -114,6 +115,13 @@ export function owned(dispose: Disposer): Disposer {
     if (stops !== undefined) stops.push(dispose)
     currentScope()?.stops.push(dispose)
     return dispose
+}
+
+/**
+ * Whether a component's setup is being collected now: a browser's, since a server's never is.
+ */
+export function settingUp(): boolean {
+    return OWNING.stops !== undefined
 }
 
 /**

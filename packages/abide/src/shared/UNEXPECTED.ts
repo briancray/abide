@@ -4,7 +4,7 @@
  * 12.6 — filled by `#server/installServer.ts` with the `onError` hooks and nothing else: the core warns on
  * its own namespace, so the lifecycle log is not written a second time. A leaf, for `RPC_SERVER`'s
  * reason: the reactive core reports through it and a browser bundle must not reach what fills it.
- * `null` in a browser, which has no `onError`.
+ * In a browser, filled by the first `onError` filed there (37.16), and `null` until one is.
  */
 export const UNEXPECTED: { report: ((error: unknown) => void) | null } = {
     report: null,
