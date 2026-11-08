@@ -1134,6 +1134,10 @@ a call not yet delivered.
 as a write made here (3.10), and a `GET`'s copy that 16.81 or this settles MUST be loaded again once
 `online` is true.
 
+16.86 A refusal a rung may answer with MUST reach `Failures` (16.8) where the rungs are listed at the
+declaration, and a rung naming no refusal, one typed to answer anything or a `Middleware` whose
+`Refused` is `Failed<string, unknown>`, MUST add none.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.

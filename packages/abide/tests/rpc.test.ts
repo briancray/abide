@@ -1,14 +1,19 @@
 import { expect, test } from 'bun:test'
 
 import { GET, POST } from '#server'
+import { inScope } from '#server/requestScope.ts'
 import {
     busy,
+    type Failed,
     flushSync,
     invalidate,
+    type Middleware,
     notFound,
+    type Reactive,
     reactive,
     ready,
     refresh,
+    refuse,
     watch,
 } from '#shared'
 import { answered } from '#shared/answerOf.ts'
@@ -192,6 +197,67 @@ test('a refusal lands on the value and narrows by name — 16.8', async () => {
         expect(path).toBe('/invoices/nope')
     }
     expect(getInvoice.isError(error, 'ValidationError')).toBe(false)
+})
+
+// 16.8, 16.86 — A REFUSAL A RUNG NAMES IS THE `Rpc`'s, beside the handler's own: a rung declared once as a
+// `Middleware` naming what it refuses with, and one written inline at the declaration, each carry
+// theirs, and a rung naming none (`Middleware`'s default) widens nothing. The type half is the
+// annotations: `Names` only compiles as the exact union, and `error.data.owner` only where `isError`
+// narrowed to the rung's refusal. THE REVERT: drop `| RungRefusals<Answers>` from the keyed
+// plain-function arm in `rpc.ts` — `Names` is `"HttpError" | "Stale" | "ValidationError"` and the
+// `.data.owner` read fails typecheck on `never`.
+test("a rung's named refusal is on the Rpc's failures, and narrows by name — 16.8, 16.86", async () => {
+    const stale = refuse.named('Stale', 409, 'Changed since read.')
+    const notYours = refuse.named('NotYours', 403, 'Not yours.', {
+        schema: (data: unknown) => data as { owner: string },
+    })
+    const owned: Middleware<
+        never,
+        { args: () => unknown },
+        Failed<'NotYours', { owner: string }>
+    > = async (next, ctx) =>
+        (ctx.args() as { home: string }).home === 'mine'
+            ? next()
+            : notYours({ owner: 'someone' })
+    const open: Middleware = async (next) => next()
+    const save = POST(
+        async ({ home }: { home: string; fresh: boolean }) =>
+            home === 'stale' ? stale() : home,
+        {
+            middleware: [
+                open,
+                owned,
+                async (next, ctx) =>
+                    ctx.args().fresh ? next() : refuse.named('Late', 410)(),
+            ],
+        },
+    )
+    type Names = typeof save extends (
+        ...args: never[]
+    ) => Reactive<unknown, unknown, infer Failures, unknown>
+        ? Failures extends { name: infer Name }
+            ? Name
+            : never
+        : never
+    const names: [Names] extends [
+        'HttpError' | 'Late' | 'NotYours' | 'Stale' | 'ValidationError',
+    ]
+        ? [
+              'HttpError' | 'Late' | 'NotYours' | 'Stale' | 'ValidationError',
+          ] extends [Names]
+            ? true
+            : false
+        : false = true
+
+    // A rung reads the request, so the call is made inside one.
+    const error = await inScope(new Request('http://app/'), async () => {
+        const refused = save({ home: 'theirs', fresh: true })
+        await refused.catch(() => {})
+        return refused.error()
+    })
+    const owners: string[] = []
+    if (save.isError(error, 'NotYours')) owners.push(error.data.owner)
+    expect([names, owners]).toEqual([true, ['someone']])
 })
 
 // 16.8, 19.9 — A HANDLER WHOSE ARGS THE ANNOTATION CHECKS CARRIES THE `ValidationError` THE WIRE
