@@ -6,6 +6,7 @@
 // What `serveDev` and `devWorker` keep is the processes and the sockets.
 
 import { plainAnswer } from './plainAnswer.ts'
+import type { ReceivedFrom } from './requestScope.ts'
 
 /** One direction of the line between the halves: bun's IPC in `abide dev`, a pair of queues in a test. */
 export type Channel<Message> = { postMessage(message: Message): void }
@@ -17,6 +18,8 @@ export type Ask = {
     url: string
     headers: [string, string][]
     body: ArrayBuffer | null
+    /** 22.11 — the peer the listener received it from. */
+    from: ReceivedFrom
 }
 
 /** What the listener's half sends: a request, and a pull or cancel of its body. */
@@ -62,7 +65,7 @@ export function describe(thrown: unknown): string {
 export function serveOver(
     channel: Channel<FromRelay>,
     answering: {
-        fetch(request: Request): Promise<Response>
+        fetch(request: Request, from: ReceivedFrom): Promise<Response>
         /** 37.3 — whether the answer admits the request to the mux. */
         admits(request: Request, response: Response): boolean
         /** The answer to a throw out of `fetch`, which is an answer and not a dropped message. */
@@ -107,7 +110,7 @@ export function serveOver(
         asks.set(request, ask.id)
         let response: Response
         try {
-            response = await answering.fetch(request)
+            response = await answering.fetch(request, ask.from)
         } catch (thrown) {
             response = answering.failed(describe(thrown))
         }
@@ -207,6 +210,7 @@ type InFlight = {
     request: Request
     headers: [string, string][]
     body: ArrayBuffer | null
+    from: ReceivedFrom
     settle: (response: Response) => void
     asked: Channel<ToRelay> | undefined
     stream: ReadableStreamDefaultController<Uint8Array> | null
@@ -252,6 +256,7 @@ export function askOver(
             url: waiting.request.url,
             headers: waiting.headers,
             body: waiting.body,
+            from: waiting.from,
         })
     }
 
@@ -310,7 +315,7 @@ export function askOver(
          * what the worker rebuilds one from — and the body is collected ONCE, HERE, which is what lets
          * it be asked again of a replacement (38.24): a body can only be read off a `Request` once.
          */
-        async ask(request: Request): Promise<Response> {
+        async ask(request: Request, from: ReceivedFrom): Promise<Response> {
             const body =
                 request.body === null ? null : await request.arrayBuffer()
             return await new Promise<Response>((settle) => {
@@ -318,6 +323,7 @@ export function askOver(
                     request,
                     headers: identityOnly(request.headers),
                     body,
+                    from,
                     settle,
                     asked: undefined,
                     stream: null,

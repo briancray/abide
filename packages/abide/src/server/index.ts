@@ -81,7 +81,14 @@ export { type Component, render } from './render.ts'
 // child's markup one thing for the client to walk to.
 export { renderComponent } from './renderComponent.ts'
 // 22.1 — the request being served, the response being built for it, and the listening server.
-export { request, response, server } from './requestScope.ts'
+// 22.11 — and where it came from.
+export {
+    type ReceivedFrom,
+    request,
+    requestIP,
+    response,
+    server,
+} from './requestScope.ts'
 // 17 — the response helpers, each a write through `response`.
 export {
     bytes,

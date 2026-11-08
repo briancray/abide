@@ -370,7 +370,8 @@ import Snippet from '#src/lib/Snippet.abide'
             <tbody>
                 <tr><td><code>request()</code></td><td>the platform's <code>Request</code>: headers, URL, method, signal</td></tr>
                 <tr><td><code>response()</code></td><td>the status and headers being sent back</td></tr>
-                <tr><td><code>server()</code></td><td>the listening <code>Bun.Server</code>, for what abide does not carry, such as a client's IP</td></tr>
+                <tr><td><code>requestIP()</code></td><td>the address the request came from, the same under <code>abide dev</code> and <code>abide start</code>, or <code>'in-process'</code> for a call the app made of itself</td></tr>
+                <tr><td><code>server()</code></td><td>the listening <code>Bun.Server</code>, for what abide does not carry</td></tr>
             </tbody>
         </table>
 

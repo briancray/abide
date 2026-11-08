@@ -1481,7 +1481,7 @@ stale-if-error=31536000`.
 
 # 22. Request-scoped ambients
 
-22.1 `request`, `response` and `server` MUST throw outside a request.
+22.1 `request`, `requestIP`, `response` and `server` MUST throw outside a request.
 
 22.2 `cookies` MUST be isomorphic, and on a server writes MUST be collected onto the response.
 
@@ -1504,6 +1504,13 @@ being served.
 22.10 A write through `cookies` or `response` MUST throw once the response headers are out, and on
 a connection to the socket mux, whose headers went out with the upgrade. A caller minted there MUST
 be that scope's alone.
+
+22.11 `requestIP` MUST answer the address of the peer the listener received the request being served
+from, the same under `abide start`, `abide dev` and `App.listen`, and `null` where the listener names
+none.
+
+22.12 `requestIP` MUST answer `'in-process'` for a request no listener received: one `App.fetch` or
+`App.run` was handed in process, a call the app makes of itself among them.
 
 # 23. Route and connectivity
 
@@ -2886,6 +2893,9 @@ process MUST start as a bare `invalidate` (13.6) leaves the values the files bef
 names, as written — an entry by the function it calls or the name it refers to, a spread by what it
 spreads, an inline function as `<inline>`, and a value that is no array as one entry — and MUST say
 where that declaration's options are not an object written inline.
+
+38.135 `abide dev`, `abide start`, the executable's `start` and the app 38.53 serves MUST listen on
+the interface `--hostname` names alone, and on every interface where it names none.
 
 # 39. Head and view transitions
 

@@ -32,6 +32,7 @@ import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { muxSocketOptions, sendOrClose, upgraded } from './muxUpgrade.ts'
 import { placeOf } from './placement.ts'
 import { plainAnswer } from './plainAnswer.ts'
+import type { ReceivedFrom } from './requestScope.ts'
 import { askOver } from './responseRelay.ts'
 import { SETTLE_MILLISECONDS } from './SETTLE_MILLISECONDS.ts'
 
@@ -43,6 +44,8 @@ export type DevOptions = {
      */
     root: string
     port?: number | undefined
+    /** 38.135 — the interface the listener binds, every one where `undefined`. */
+    hostname?: string | undefined
 }
 
 // The app's process, spoken to in its own protocol.
@@ -63,7 +66,13 @@ const LAST_DEV_PORT = 3099
 // An app-mux socket's data: the id the worker knows its connection by, and what `Mux.connect` reads
 // off the upgrade. `undefined` on the reload client's.
 type Carried =
-    { connection: number; url: string; headers: [string, string][] } | undefined
+    | {
+          connection: number
+          url: string
+          headers: [string, string][]
+          from: ReceivedFrom
+      }
+    | undefined
 
 /**
  * `abide dev`'s listener, compiling the app here and serving it from a child process.
@@ -268,6 +277,9 @@ export async function serveDev(
     let muxOptions = muxSocketOptions()
     const serving = (port: number | undefined): Bun.Serve.Options<Carried> => ({
         ...(port === undefined ? {} : { port }),
+        ...(options.hostname === undefined
+            ? {}
+            : { hostname: options.hostname }),
         // 16.54, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
         maxRequestBodySize: Number.MAX_SAFE_INTEGER,
         // 16.56 — the bound a request received whole lifts and its answer puts back (16.23).
@@ -281,10 +293,12 @@ export async function serveDev(
             const mux =
                 asked !== DEV_ADDRESS &&
                 request.headers.get('upgrade') === 'websocket'
-            if (!mux && asked !== DEV_ADDRESS) return relay.ask(request)
+            // 22.11 — the peer, which only this process can see, crosses with the request.
+            const from = listening.requestIP(request)
+            if (!mux && asked !== DEV_ADDRESS) return relay.ask(request, from)
             // 37.3 — THE MUX'S UPGRADE IS ASKED OF THE APP FIRST, whose lane runs in the worker.
             if (mux && ready) {
-                const answered = await relay.ask(request)
+                const answered = await relay.ask(request, from)
                 if (!relay.admitted(answered)) return answered
             }
             // NOT WHILE THE APP IS COMPILING. The reload client and the browser's mux both read a
@@ -298,6 +312,7 @@ export async function serveDev(
                     connection: nextConnection,
                     url: request.url,
                     headers: [...request.headers.entries()],
+                    from,
                 }
             }
             return upgraded(listening, request, data)

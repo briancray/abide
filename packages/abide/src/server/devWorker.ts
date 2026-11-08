@@ -35,7 +35,7 @@ import { bootApp, type BootedApp } from './createApp.ts'
 import { keepServing } from './faultPolicy.ts'
 import { type Manifest, NO_MANIFEST } from './manifestOf.ts'
 import { admitsMux, muxSocketOptions } from './muxUpgrade.ts'
-import { LISTENING } from './requestScope.ts'
+import { LISTENING, RECEIVED_FROM, type ReceivedFrom } from './requestScope.ts'
 import {
     describe,
     type FromRelay,
@@ -70,6 +70,7 @@ export type ToWorker =
           connection: number
           url: string
           headers: [string, string][]
+          from: ReceivedFrom
       }
     | { kind: 'socket-message'; connection: number; text: string }
     | { kind: 'socket-close'; connection: number }
@@ -113,7 +114,9 @@ let failure = ''
 const relay = serveOver(
     { postMessage: toListener },
     {
-        async fetch(request) {
+        async fetch(request, from) {
+            // 22.11 — where the listener received it from, which is not this process.
+            RECEIVED_FROM.set(request, from)
             await opening
             return app === undefined
                 ? failedDocument(failure)
@@ -161,21 +164,20 @@ async function receive(message: ToWorker): Promise<void> {
     await opening
     if (message.kind === 'socket-open') {
         const numbered = message.connection
-        const connection = mux?.connect(
-            new Request(message.url, { headers: message.headers }),
-            {
-                send(text: string) {
-                    toListener({
-                        kind: 'socket-send',
-                        connection: numbered,
-                        text,
-                    })
-                },
-                // NOTHING TO CLOSE: the listener holds the browser's socket, and it outlives this
-                // worker (38.14). Nothing here stops the mux, either.
-                close() {},
+        const upgrade = new Request(message.url, { headers: message.headers })
+        RECEIVED_FROM.set(upgrade, message.from)
+        const connection = mux?.connect(upgrade, {
+            send(text: string) {
+                toListener({
+                    kind: 'socket-send',
+                    connection: numbered,
+                    text,
+                })
             },
-        )
+            // NOTHING TO CLOSE: the listener holds the browser's socket, and it outlives this
+            // worker (38.14). Nothing here stops the mux, either.
+            close() {},
+        })
         if (connection !== undefined) connections.set(numbered, connection)
         return
     }

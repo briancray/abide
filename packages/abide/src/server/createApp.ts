@@ -58,6 +58,7 @@ import {
     holdScope,
     inReleasedScope,
     LISTENING,
+    RECEIVED_FROM,
     rungsTook,
     serverTiming,
 } from './requestScope.ts'
@@ -447,6 +448,8 @@ export async function bootEntered(
                 maxRequestBodySize: Number.MAX_SAFE_INTEGER,
                 // 18.1, 37.3 — THE ONE MUX, upgraded where the app lane admitted it.
                 fetch: async (request, server) => {
+                    // 22.11 — where it came from, for `requestIP` to answer.
+                    RECEIVED_FROM.set(request, server.requestIP(request))
                     const answered = await fetch(request)
                     return admitsMux(request, answered, booted)
                         ? upgraded(server, request, {

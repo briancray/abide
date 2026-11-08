@@ -26,6 +26,7 @@ import type { FollowedHandler } from './mountHandlers.ts'
 import { sendOrClose } from './muxUpgrade.ts'
 import {
     inOpenScope,
+    RECEIVED_FROM,
     releaseScope,
     type RequestScope,
     scopeFor,
@@ -139,11 +140,11 @@ export class MuxConnection {
             upgrade.url,
         )
         // NO `received`: an upgraded connection has no http idle timeout for 16.23 to set.
-        this.scope = scopeFor(
-            new Request(upgrade, { signal: this.hangUp.signal }),
-            undefined,
-            mux.app,
-        )
+        const request = new Request(upgrade, { signal: this.hangUp.signal })
+        // 22.11 — every frame came from where the upgrade did.
+        if (RECEIVED_FROM.has(upgrade))
+            RECEIVED_FROM.set(request, RECEIVED_FROM.get(upgrade) ?? null)
+        this.scope = scopeFor(request, undefined, mux.app)
         // 22.10 — the headers went out with the upgrade, so nothing a frame writes is carried.
         this.scope.applied = true
     }
