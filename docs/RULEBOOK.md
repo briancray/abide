@@ -383,6 +383,20 @@ producer.
 7.19 A load over a value `s.invalidate` marked that is refused with `HttpError` at 503 MUST leave the
 value it held being served.
 
+7.20 `poll` MUST refresh the value per 7.4 every `poll` milliseconds from where it is constructed,
+and on a `Keyed` MUST refresh each entry the `Keyed` holds.
+
+7.21 `poll` MUST NOT refresh a value while its `s.busy` is true.
+
+7.22 A `poll` timer MUST NOT hold the process open.
+
+7.23 `poll` MUST stop once the value is released: the setup or request that built it, or its
+`Keyed`, ended.
+
+7.24 `poll` on a value with no producer MUST be inert.
+
+7.25 A `poll` that is not a positive number MUST refuse at construction.
+
 # 8. Stores
 
 8.1 A `Store` MUST provide both `get` and `set`.

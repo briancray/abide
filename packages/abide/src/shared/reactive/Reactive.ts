@@ -40,6 +40,7 @@ import { isThenable } from './isThenable.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
 import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
+import { armPoll, refreshIdle, refuseBadPoll } from './poll.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
 import { runInScope } from './scoping.ts'
@@ -147,6 +148,13 @@ export type ReactiveOptions<
      * once — see `expiryFor`.
      */
     ttl?: number
+    /**
+     * A refresh every this many milliseconds.
+     *
+     * RULEBOOK 7.20 through 7.25: `s.refresh` on a clock, skipped while the value is busy and
+     * stopped with the value. Inert on a value with no producer (7.24).
+     */
+    poll?: number
     /**
      * The gate on the way in, run before `transform` on every way in.
      *
@@ -3987,5 +3995,16 @@ export function createReactive<
         else if (initial !== NO_INITIAL) open(cell, initial)
     } else if (deferred) cell.loading = true
     else startProducer(cell)
+    // 7.20, 7.23, 7.24 — a `Keyed` takes `poll` off its entries' options and polls them itself.
+    const poll = options?.poll
+    if (poll !== undefined) {
+        refuseBadPoll(label, poll)
+        if (reloads(cell)) {
+            const stop = armPoll(poll, () =>
+                refreshIdle(self as unknown as Reactive<unknown>),
+            )
+            if (owning()) owned(stop)
+        }
+    }
     return self as unknown as Reactive<Stored, Accepted, Failures, Produced>
 }
