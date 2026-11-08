@@ -5,7 +5,7 @@ import { dollars } from './dollars.ts'
 import { targetStore } from './targetStore.ts'
 
 // One option, and the reads and writes below are untouched.
-let target = reactive(500_000, { store: targetStore })
+let target = reactive<number | undefined>(500_000, { store: targetStore })
 </script>
 
 <label>the team's target this quarter
@@ -13,5 +13,5 @@ let target = reactive(500_000, { store: targetStore })
 </label>
 
 <ul class="tiles">
-    <li><span>target</span><strong>{dollars(target)}</strong></li>
+    <li><span>target</span><strong>{dollars(target ?? 0)}</strong></li>
 </ul>

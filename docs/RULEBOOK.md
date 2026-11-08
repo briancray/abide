@@ -2153,6 +2153,16 @@ build error.
 32.77 A slot holding a value branded by `raw` MUST write its markup as given, with no element or
 attribute in it removed and no URL in it scheme-checked.
 
+32.78 `abide check` MUST hold the `set` of a `bind:` on an element to what the element writes back:
+a boolean for `bind:checked` and `bind:open`, a list of files for `bind:files`, and for a
+`bind:value` `number | undefined` on an `<input>` whose `type` is `number` or `range`, and otherwise,
+on an `<input>` or a `<textarea>`, a string where the bound value holds no number,
+`number | undefined` where it holds nothing else, and all three where it holds both (32.58). A
+`<select>` MUST be held as an `<input>` is, save that where the bound value holds strings it writes
+those strings, and a `<select multiple>` a list of the strings its value's items hold, or of any
+string where they hold none. A `type` or a `multiple` written as an expression, or absent beside a
+spread, MUST be held to the union of what each value of it writes.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
