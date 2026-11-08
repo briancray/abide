@@ -29,6 +29,7 @@ export { type Failed, isFailed } from './Failed.ts'
 export { type Health, health } from './health.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
+export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
 // 32.15's run-time half. In this seam because BOTH sides ask it what a `{#for}` subject iterates
 // as — the server's emitted block, the client's `updateList`, and the markup a client builds for a

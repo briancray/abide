@@ -680,9 +680,9 @@ teardown of the scope it was opened in.
 12.6 A throw from an `Effect` or a `Disposer`, and a read of a failed `Reactive` inside one, MUST
 reach `onError` as thrown, and MUST warn on `abide:watch` with the trace.
 
-12.7 In a browser a throw from an `Effect` MUST additionally surface as an uncaught error — re-thrown
-to the caller of `watch` from its first run, and reported with `reportError` from a rerun — and
-MUST NOT keep any other `Effect` the same turn woke from running.
+12.7 Where `isServer` is false, a throw from an `Effect` MUST additionally surface as an uncaught
+error — re-thrown to the caller of `watch` from its first run, and reported with `reportError` from
+a rerun — and MUST NOT keep any other `Effect` the same turn woke from running.
 
 12.8 An `Effect` that threw MUST stop its `watch`.
 
@@ -1506,6 +1506,9 @@ being served.
 a connection to the socket mux, whose headers went out with the upgrade. A caller minted there MUST
 be that scope's alone.
 
+22.11 `isServer` MUST be true inside a request, an `App.run` or a `render`, and wherever there is no
+document, and MUST be false everywhere else.
+
 # 23. Route and connectivity
 
 23.1 Each member of `route` MUST be its own `Reactive`, and `route` MUST NOT be one `Reactive` over a
@@ -1521,9 +1524,9 @@ composite.
 
 23.6 `route.name` MUST be the resolution path.
 
-23.7 In a browser `online` MUST be `navigator.onLine` and its events.
+23.7 Where `isServer` is false, `online` MUST be `navigator.onLine` and its events.
 
-23.8 On a server `online` MUST be true.
+23.8 Where `isServer` is true, `online` MUST be true.
 
 23.9 In a page or a layout, `route.params()` MUST be typed by that file's own route: a required
 segment as text, an optional one as text that may be absent, a rest as a list, and in a layout any

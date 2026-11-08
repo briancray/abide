@@ -542,6 +542,13 @@ export const REFERENCE: readonly {
         typeOnly: false,
     },
     {
+        route: '/reference/isServer',
+        names: ['isServer'],
+        entry: '@abide/abide',
+        group: 'Ambient values',
+        typeOnly: false,
+    },
+    {
         route: '/reference/health',
         names: ['health'],
         entry: '@abide/abide',

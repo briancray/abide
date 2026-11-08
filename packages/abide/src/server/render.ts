@@ -11,7 +11,7 @@ import type { ShareScope } from '#shared/reactive/share.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
 
 import { buildDeferred } from './deferredBuilds.ts'
-import { currentRequestScope } from './requestScope.ts'
+import { currentRequestScope, inRender } from './requestScope.ts'
 
 /**
  * A compiled component, opaque to an app.
@@ -314,7 +314,15 @@ export function render(component: Component): Promise<Uint8Array<ArrayBuffer>> {
  * `render` into `given`: abide's own document with what the server adds to it — a page's client
  * tags, the launcher page's stylesheet. NOT PUBLIC SURFACE — `server/index.ts` exports `render`.
  */
-export async function renderDocument(
+export function renderDocument(
+    component: Component,
+    given: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+    // 22.11 — a server's render whether or not a request is being served.
+    return inRender(() => documentOf(component, given))
+}
+
+async function documentOf(
     component: Component,
     given: string,
 ): Promise<Uint8Array<ArrayBuffer>> {
