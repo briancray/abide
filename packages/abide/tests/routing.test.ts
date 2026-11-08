@@ -2147,3 +2147,81 @@ test('a view transition carries the direction it moved in — 39.18, 39.19', asy
         ;(globalThis as { ViewTransition?: unknown }).ViewTransition = typed
     }
 })
+
+// 23.28 — `route.index` IS THE ENTRY'S PLACE in the history the router wrote: 0 at a document load
+// that found none, one past the entry a push or a browser-pushed fragment step left, and the index
+// a reload or a history step arrives at. THE REVERT, run: hand `arrive` 0 in place of `this.index`
+// in `arriveAt` and `follow`; the push reads 0 where 1 is due.
+test('route.index follows the entry the address bar stands at — 23.28', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    flushSync()
+    expect(route.index()).toBe(0)
+    const stop = listenForRoutes(r)
+    try {
+        await navigate('/invoices/42')
+        expect(route.index()).toBe(1)
+        // A fragment link the browser pushed itself carries no index; the router stamps the next.
+        history.pushState(null, '', '/invoices/42#lines')
+        dispatchEvent(new PopStateEvent('popstate'))
+        await until(() => route.index() === 2)
+        expect(route.index()).toBe(2)
+        // A step back arrives at the index its entry was written with.
+        await step({ index: 0, scroll: null }, '/')
+        expect(route.index()).toBe(0)
+    } finally {
+        stop()
+    }
+    // A reload arrives at the index its entry carries.
+    history.replaceState({ index: 4, scroll: null }, '', '/')
+    await router(await pages()).hydrate()
+    expect(route.index()).toBe(4)
+})
+
+// 30.38 — A STEP SETTLES ONCE IT HAS ARRIVED: the page it steps back to is mounted, and `route`
+// stands at it, when the promise settles — where `history.go` alone says nothing of either. THE
+// REVERT, run: settle `step` as soon as `history.go` returns; `#home` is null and the index 1 at
+// the settle, where the home page and 0 are due.
+test('navigate by a number settles once the step has arrived — 30.38', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    const stop = listenForRoutes(r)
+    try {
+        await navigate('/invoices/42')
+        expect(document.querySelector('#invoice')).not.toBeNull()
+        await navigate(-1)
+        expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+        expect(route.index()).toBe(0)
+        expect(location.pathname).toBe('/')
+        // FORWARD is the browser spec's (`e2e/routing.spec.ts`): happy-dom's `replaceState` drops
+        // the entries after the one it writes, and the arrival writes the entry it arrives at.
+    } finally {
+        stop()
+    }
+})
+
+// 30.39 — A STEP OF NONE IS NO RELOAD: `history.go(0)` reloads the document, so it is never called.
+// THE REVERT, run: drop the `by === 0` arm from `step`; the step is still waiting at 50 ms, on a
+// `history.go(0)` it called.
+test('navigate(0) settles at once and does not reload — 30.39', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    const go = history.go
+    let calls = 0
+    history.go = () => {
+        calls += 1
+    }
+    try {
+        const settled = await Promise.race([
+            navigate(0).then(() => true),
+            Bun.sleep(50).then(() => false),
+        ])
+        expect(settled).toBe(true)
+        expect(calls).toBe(0)
+    } finally {
+        history.go = go
+    }
+})

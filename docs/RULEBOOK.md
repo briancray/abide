@@ -1582,6 +1582,13 @@ under, and one naming none MUST be a build error naming the segment's file and `
 23.27 Two routes naming different matchers, or a matcher and none, at one parameter position after
 one static prefix MUST be a build error naming both files.
 
+23.28 In a browser `route.index` MUST be 0 at an entry a document load arrived at carrying no index
+the router wrote, one more than the index of the entry a push or a browser's fragment step left, and
+the index the entry was written with where a history step or a reload arrives at it — so a step back
+of no more than `route.index` entries MUST arrive at an entry of this app's router.
+
+23.29 On a server `route.index` MUST be 0.
+
 # 24. Tracing
 
 24.1 `trace` MUST be built on first ask and held for the request.
@@ -1868,6 +1875,11 @@ matches it, and a `[...rest]` naming one MUST take a part only where it does.
 30.37 An address whose part a segment refuses, by its matcher or by 30.34, MUST be matched against
 the routes 30.9 ranks after that route.
 
+30.38 `navigate` given a number MUST step the history by that many entries, back where it is
+negative, and MUST settle once the entry the next history step arrives at is arrived at, per 30.29.
+
+30.39 `navigate` given 0 MUST settle at once, and MUST NOT reload the document.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
@@ -1909,8 +1921,8 @@ type parameter constrained by one.
 array or an object whose prototype is `Object.prototype` or `null` — MUST assign on that value itself, MUST NOT
 copy it or any level above it, and MUST NOT wake a reader.
 
-31.15 `route.url`, `route.params`, `route.name` and `route.navigating` MUST each be read and written
-as a name bound to a `Reactive` is, per 31.1 to 31.7.
+31.15 `route.url`, `route.params`, `route.name`, `route.index` and `route.navigating` MUST each be
+read and written as a name bound to a `Reactive` is, per 31.1 to 31.7.
 
 # 32. Templating
 

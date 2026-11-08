@@ -119,13 +119,14 @@ middleware(async (next, { request: asked }) => {
 })
 `
 
-// 23.1 — A PAGE READS WHERE IT IS off `route`, and `online` answers true on a server (23.8).
+// 23.1 — A PAGE READS WHERE IT IS off `route`, and `online` answers true on a server (23.8), where
+// `route.index` is 0 (23.29).
 const WHERE = `<script>
 import { busy, online, outbox, route } from '@abide/abide'
 </script>
 
 <main><p id="where">{route.name()}|{route.params().id}|{route.url().pathname}|{route.navigating()}|{online()}</p>
-<p id="named">{route.name.toUpperCase()}|{route.params.id}|{route.url.pathname}|{route.navigating ? 'moving' : 'still'}</p>
+<p id="named">{route.name.toUpperCase()}|{route.params.id}|{route.url.pathname}|{route.navigating ? 'moving' : 'still'}|{route.index + 1}</p>
 <p id="outbox">{outbox().map((call) => call.id).join(',') || 'none'}|{busy() ? 'sending' : 'idle'}</p></main>`
 
 let base = ''
@@ -539,12 +540,13 @@ test('a server-rendered page reads route and online — 23.1, 23.8', async () =>
     expect(second).toContain('/invoices/[id]|7|/invoices/7|false|true')
 })
 
-// 31.15 — `route`'s FOUR VALUES ARE READ BY NAME, each as a name bound to a `Reactive` is: a member
+// 31.15 — `route`'s FIVE VALUES ARE READ BY NAME, each as a name bound to a `Reactive` is: a member
 // after one reaches the value. THE REVERT: drop `routeReads` from the classify pass; `route.name`
 // is handed on as the `Reactive`, `toUpperCase` is not a member of one, and the page answers 500.
-test('route.name, params, url and navigating are read by name — 31.15', async () => {
+// 23.29 — and the index a server renders is 0.
+test('route.name, params, url, navigating and index are read by name — 31.15, 23.29', async () => {
     const page = await (await Bun.fetch(`${base}/invoices/42`)).text()
-    expect(page).toContain('/INVOICES/[ID]|42|/invoices/42|still')
+    expect(page).toContain('/INVOICES/[ID]|42|/invoices/42|still|1')
 })
 
 // 46.15 — ON A SERVER THE OUTBOX ANSWERS NO CALLS, and nothing is in flight from it: both sides call

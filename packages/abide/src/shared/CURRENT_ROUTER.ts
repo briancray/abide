@@ -1,11 +1,13 @@
 /**
- * What a router offers `navigate`: a way to go to a URL.
+ * What a router offers `navigate`: a way to go to a URL, and a way to step the history.
  *
  * Named for what it DOES rather than what it is: `Navigator` is a DOM global, and a routing file
  * is the one place a reader would take the two for each other.
  */
 export type Navigable = {
     go(url: URL | string, options: NavigateOptions): Promise<void>
+    /** 30.38 — steps the history by `by` entries, settling once the step has arrived. */
+    step(by: number): Promise<void>
 }
 
 export type NavigateOptions = { replace?: boolean; keepScroll?: boolean }

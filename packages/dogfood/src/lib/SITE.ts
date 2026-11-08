@@ -288,6 +288,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`RouteLiteral`',
                         '`navigate`',
                         '`route.url`',
+                        '`route.index`',
                         '`route.navigating`',
                         '`view-transition-name`',
                         '`APP_URL`',

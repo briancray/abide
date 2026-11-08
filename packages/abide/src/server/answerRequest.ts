@@ -332,7 +332,8 @@ async function answerMatched(
     // would otherwise render one address and hydrate against another.
     const at = new URL(request.url)
     at.pathname = mounted(at.pathname)
-    arrive(at.href, page.pattern, params)
+    // 23.29 — a request is a document load, which arrives at an entry of its own.
+    arrive(at.href, page.pattern, params, 0)
     // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
     // and 41.13, every call it makes is recorded into its render.
     beginPageRender(request)
