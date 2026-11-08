@@ -13,6 +13,8 @@ afterAll(removeTemporaryModules)
 // A string `validateJson` throws with: a literal survives minification where a name does not.
 const SCHEMA_VALIDATOR = 'does not implement the JSON Schema keyword'
 const IMAGE_DRAWER = 'could not be drawn as one a model is shown'
+// And one `webStore` reaches through `storedValue` (8.22): a store a page does not import costs it nothing.
+const WEB_STORE = 'holds something no abide store wrote'
 
 // The static closure a page's document loads — the entry, then each chunk the manifest names for
 // the page, and every chunk those import.
@@ -56,6 +58,13 @@ let count = reactive(0)
 </script>
 
 <p onclick={() => imagePiece(new Blob())}>{String(validateJson({ type: 'number' }, count) === null)}</p>`,
+        'stored/index.abide': `<script>
+import { reactive, webStore } from '@abide/abide'
+
+let count = reactive(0, { store: webStore('count') })
+</script>
+
+<button onclick={() => { count = count + 1 }}>{count}</button>`,
     })
     const out = `${app}/.abide`
     const built = await buildApp(app)
@@ -68,4 +77,7 @@ let count = reactive(0)
     expect(light.includes(SCHEMA_VALIDATOR)).toBe(false)
     // 44.52 — nor the image a turn is pasted with, which only a chat panel draws.
     expect(light.includes(IMAGE_DRAWER)).toBe(false)
+    expect((await closureText(out, 'stored/index.abide')).includes(WEB_STORE)).toBe(true)
+    // 8.22 — nor a store the page does not import.
+    expect(light.includes(WEB_STORE)).toBe(false)
 }, 60_000)

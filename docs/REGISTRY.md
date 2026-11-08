@@ -73,6 +73,8 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `reactive` | `<Accepted>() => Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty overload, for a value nothing has written yet. | 4.14 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21 |
+| `webStore` | `<Stored>(key: string, options?: { area?: 'local' \| 'session'; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's Web Storage. | 8.22, 8.23, 8.24, 8.26, 8.27, 8.28 |
+| `sqliteStore` | `<Stored>(database: Database \| string, key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a `bun:sqlite` table, from `@abide/abide/server`. | 8.25, 8.26, 8.27, 8.28 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
 
@@ -98,6 +100,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`. | 5.4, 5.5, 18.4 |
 | `by` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.22, 18.4, 18.15, 32.32 |
 | `ttl` | `number` | The life of a production, or of a keyed entry. | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 11.6, 11.35, 11.45, 11.48, 11.49, 11.69 |
+| `poll` | `number` | How often the value refreshes itself, in milliseconds. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25 |
 | `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.4, 11.28, 11.30, 11.40, 11.41, 11.56, 11.60, 11.68, 11.72 |
 | `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.39, 11.53, 11.67 |
 | `tags` | `string[] \| ((args: Args) => string[])` | What a `Selection` matches on. | 11.43, 11.44, 18.4, 18.15 |

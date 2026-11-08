@@ -23,6 +23,7 @@ import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
 import { parameterDefaults } from './parameterDefaults.ts'
+import { armPoll, refreshIdle, refuseBadPoll } from './poll.ts'
 import {
     abandonDeferred,
     createReactive,
@@ -344,7 +345,8 @@ export function createKeyed<
     // 11.45: A KEYED `ttl` IS THE LIFE OF AN ENTRY, not of a production inside one, so it is
     // taken off the options every entry is built from — forwarded, it would build the
     // unkeyed mechanism in every entry and evict nothing from this map.
-    const { ttl, args, throttle, debounce, ...rest } = options ?? {}
+    // 7.20 — and `poll`, so one timer walks the entries rather than one per entry.
+    const { ttl, args, throttle, debounce, poll, ...rest } = options ?? {}
     const gate = args as Schema<Args> | undefined
     const entryOptions = rest
     // 5.14, at the factory: a keyed value is capped one way or the other.
@@ -374,6 +376,15 @@ export function createKeyed<
         owned(() => {
             for (const entry of entries.values()) unwatchStore(entry)
         })
+
+    // 7.20, 7.23 — one timer over the entries held at each tick: an evicted entry is out of the map.
+    if (poll !== undefined) {
+        refuseBadPoll(`${label}()`, poll)
+        const stop = armPoll(poll, () => {
+            for (const entry of entries.values()) refreshIdle(entry)
+        })
+        if (owning()) owned(stop)
+    }
 
     function askMembership(): void {
         const reader = TRACKING.reader

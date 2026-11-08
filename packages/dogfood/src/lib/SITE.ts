@@ -210,6 +210,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`refresh`',
                         '`invalidate`',
                         '`ttl`',
+                        '`poll`',
                         '`s.peek`',
                         '`throttle`',
                         '`debounce`',
@@ -230,6 +231,8 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`Transformer`, `Disposer`, middleware, lifecycle hooks',
                         '`store`',
                         '`Store`',
+                        '`webStore`',
+                        '`sqliteStore`',
                     ],
                 },
                 {

@@ -383,6 +383,20 @@ producer.
 7.19 A load over a value `s.invalidate` marked that is refused with `HttpError` at 503 MUST leave the
 value it held being served.
 
+7.20 `poll` MUST refresh the value per 7.4 every `poll` milliseconds from where it is constructed,
+and on a `Keyed` MUST refresh each entry the `Keyed` holds.
+
+7.21 `poll` MUST NOT refresh a value while its `s.busy` is true.
+
+7.22 A `poll` timer MUST NOT hold the process open.
+
+7.23 `poll` MUST stop once the value is released: the setup or request that built it, or its
+`Keyed`, ended.
+
+7.24 `poll` on a value with no producer MUST be inert.
+
+7.25 A `poll` that is not a positive number MUST refuse at construction.
+
 # 8. Stores
 
 8.1 A `Store` MUST provide both `get` and `set`.
@@ -432,6 +446,26 @@ the function it is handed MUST run `get` again as a restore, per 8.18, and MUST 
 
 8.21 What a `Store`'s `watch` returns MUST be called once the `Reactive` is released: a `Keyed`
 entry evicted, or the setup or request that built it, or its `Keyed`, ended.
+
+8.22 `webStore` MUST keep the value under its key in `localStorage`, or in `sessionStorage` where its
+`area` is `'session'`.
+
+8.23 `webStore` MUST answer every `get` with a miss, and MUST write nothing, where the process has no
+Web Storage.
+
+8.24 `webStore`'s `watch` MUST call what it is handed when another document writes or clears its key
+in its area.
+
+8.25 `sqliteStore` MUST keep the value in one row of its table under its key, and MUST create the
+table where it does not exist.
+
+8.26 `webStore` and `sqliteStore` MUST answer a miss for a value whose `ttl`, as their `set` received
+it, has passed.
+
+8.27 `webStore` and `sqliteStore` MUST run their `schema` on what `get` reads, and MUST throw what it
+refuses, per 8.15.
+
+8.28 `webStore` and `sqliteStore` MUST keep the value as JSON.
 
 # 9. Streams and wired values
 

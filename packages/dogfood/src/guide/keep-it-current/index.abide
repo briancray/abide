@@ -124,6 +124,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>s.refresh</code></td><td>reloads one value now, serving what is held until the new one lands</td></tr>
                 <tr><td><code>s.invalidate</code></td><td>marks one value stale; the next read loads</td></tr>
                 <tr><td><code>ttl</code></td><td><code>{'{ ttl: 60_000 }'}</code> lets a value expire a minute after it loaded. Expiry wakes nobody, and the next read loads</td></tr>
+                <tr><td><code>poll</code></td><td><code>{'{ poll: 60_000 }'}</code> refreshes a value every minute for as long as the component or request that built it stands, skipping a minute its load is still running</td></tr>
             </tbody>
         </table>
     </Section>
@@ -339,6 +340,20 @@ import Section from '#src/lib/Section.abide'
             edits, the store adds <code>watch</code>. It is handed a function to call when that
             happens, and returns the function that stops watching. The value reads <code>get</code>
             again, and the body does not run.</p>
+
+        <p>Two stores come with abide, for the places a value most often lives:</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>Where the value lives</th></tr></thead>
+            <tbody>
+                <tr><td><code>webStore</code></td><td><code>{"webStore('layout')"}</code> keeps it in this browser's <code>localStorage</code>, or <code>sessionStorage</code> with <code>{"{ area: 'session' }"}</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
+                <tr><td><code>sqliteStore</code></td><td><code>{"sqliteStore('crm.db', 'target')"}</code>, from <code>@abide/abide/server</code>, keeps it in a SQLite table, so a restarted server opens on it</td></tr>
+            </tbody>
+        </table>
+
+        <p>Both keep the value as JSON with the value's <code>ttl</code> beside it, and pass what they
+            read through a <code>schema</code> when given one: a restore skips the value's own, so an
+            entry an older build wrote is a miss rather than a wrong value.</p>
     </Section>
     <Section title="Next">
         <ul>
