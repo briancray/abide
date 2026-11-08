@@ -3476,6 +3476,9 @@ that image is of a type 44.36 does not name.
 44.55 `imageFiles` MUST hand back, in order, the files a `DataTransfer` carries of a type 44.36
 names, reading its `items` where its `files` hold none.
 
+44.56 The `install` of a pairing `claudeCode.bridgeCommand` or `claudeCode.bridge` mints MUST run
+`abide-bridge install` at the bridge release its command runs.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker

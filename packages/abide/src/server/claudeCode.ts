@@ -43,12 +43,13 @@ type PairingOptions = Pick<ClaudeCodeConfig, 'tools'>
 
 /**
  * Whether this browser's bridge is connected, and the command and the link that pair one where it is
- * not.
+ * not, with the command that installs the app the link opens.
  */
 export type BridgeStatus = {
     paired: boolean
     command: string | undefined
     link: string | undefined
+    install: string | undefined
 }
 
 /** The visitor's own Claude Code, reached through the bridge paired to their browser. */
@@ -121,17 +122,21 @@ function askingCaller(): string {
 function bridgeCommand(options: PairingOptions = {}): {
     command: string
     link: string
+    install: string
     expires: number
 } {
     const { code, expires } = mintCode(askingCaller(), signedInAs())
     return { ...commandFor(code, options), expires }
 }
 
-/** The command and the link that pair a bridge by `code`, granting `tools`. */
+/**
+ * The command and the link that pair a bridge by `code`, granting `tools`, and the command that
+ * installs the app the link opens — of the release the command runs, 44.56.
+ */
 function commandFor(
     code: string,
     { tools }: PairingOptions,
-): { command: string; link: string } {
+): { command: string; link: string; install: string } {
     const site = `${appOrigin() ?? new URL(request().url).origin}${mounted('')}`
     const granted = tools?.length ? tools.join(',') : undefined
     const query = new URLSearchParams({ site, code, version: BRIDGE_VERSION })
@@ -140,6 +145,7 @@ function commandFor(
     return {
         command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}${grant}`,
         link: `${BRIDGE_SCHEME}://pair?${query}`,
+        install: `bunx @abide/bridge@${BRIDGE_VERSION} install`,
     }
 }
 
@@ -157,7 +163,12 @@ async function* bridge(
         request().signal,
     ))
         yield code === undefined
-            ? { paired: true, command: undefined, link: undefined }
+            ? {
+                  paired: true,
+                  command: undefined,
+                  link: undefined,
+                  install: undefined,
+              }
             : { paired: false, ...commandFor(code, options) }
 }
 

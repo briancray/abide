@@ -697,16 +697,19 @@ test('a pairing command minted with tools grants them to the bridge it starts �
 // 44.40, 44.41 — THE LINK IS THE COMMAND'S PAIRING: the bridge reads from it the site, code, release and
 // tools the command beside it carries, and its code pairs. THE REVERT: mint the link a code of its
 // own, and its code is no pairing this page's command stands for.
-test('a pairing link carries what its command does, and its code pairs — 44.40, 44.41', async () => {
+test('a pairing link carries what its command does, and its code pairs — 44.40, 44.41, 44.56', async () => {
     const answer = await Bun.fetch(`${base}/granting`, {
         headers: asPage('nine'),
     })
-    const { command, link } = (await answer.json()) as {
+    const { command, link, install } = (await answer.json()) as {
         command: string
         link: string
+        install: string
     }
     const [pairing = '', claudeArgs = ''] = command.split(' -- ')
-    const [, , site, code] = pairing.split(' ')
+    const [runner, release, site, code] = pairing.split(' ')
+    // 44.56 — the app the link opens, installed at the release the command runs.
+    expect(install).toBe(`${runner} ${release} install`)
     const read = pairingOf(link)
     expect(read).toEqual({
         site: site as string,

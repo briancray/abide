@@ -297,7 +297,7 @@ import Section from '#src/lib/Section.abide'
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
                 <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired with the command to run and the link to open, then paired.</td></tr>
-                <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, command, link }'}</code>.</td></tr>
+                <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, command, link, install }'}</code>. <code>install</code> is the command that installs the app the link opens, at the release the command runs.</td></tr>
                 <tr><td><code>claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>
                 <tr><td><code>/__abide/bridge</code></td><td>Where the visitor's bridge connects. It opens the first time a command is minted.</td></tr>
             </tbody>
