@@ -198,13 +198,14 @@ function resolvePrincipal(): Promise<Principal> {
 /**
  * This request's principal, resolved from `claims` as a sealed cookie's are, with no cookie written.
  *
- * 42.19 — `App.run`'s `principal`, which is why it throws where `principal.set` does.
+ * 42.19, 42.20 — `App.run`'s and `App.fetch`'s `principal`, which is why it throws where
+ * `principal.set` does.
  */
 export function presumePrincipal(claims: Record<string, unknown>): void {
     const scope = within('App.run principal')
     if (!isRecord(claims))
         throw new Error(
-            'abide: App.run takes a principal of claims, as principal.set does. RULEBOOK 26.11.',
+            'abide: App.run and App.fetch take a principal of claims, as principal.set does. RULEBOOK 26.11.',
         )
     const expires = Date.now() + ttl()
     scope.principal = documentOf(claims, expires)

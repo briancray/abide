@@ -46,6 +46,13 @@ const HANDLERS: Record<string, string> = {
 `,
     'probe/rewritten.handler.ts': `${IMPORTS}export default GET(() => request().headers.get('x-rewritten') ?? 'the original')
 `,
+    'probe/who.handler.ts': `${IMPORTS}import { principal } from '@abide/abide'
+
+export default GET(async () => {
+    const resolved = (await principal.resolved) as { authenticated: boolean; id?: string }
+    return \`\${resolved.authenticated} \${resolved.id} \${principal.caller()}\`
+})
+`,
     'probe/traced.handler.ts': `${IMPORTS}export default GET(() =>
     trace.span('lookup', () => ({
         id: trace(),
@@ -342,6 +349,12 @@ test('renders twice', async () => {
 //
 // 42.19 — A RUN GIVEN A PRINCIPAL IS SIGNED IN AS IT, with no request given and no principal cookie written.
 // THE REVERT: drop `presumePrincipal` from `run`; `presumed` reads 'false undefined false'.
+//
+// 42.20, 42.21 — A FETCH GIVEN A PRINCIPAL AND A CALLER IS ANSWERED AS THEM, over the cookies its
+// request carries, with neither cookie written; and a run given a caller alone reads it. THE REVERT:
+// drop `presume(options)` from `fetch`; `who` reads 'false undefined from-cookie 0'. Drop
+// `presumeCaller` from `presume`; `who` reads 'true grace from-cookie 0' and `ranAs` reads a caller
+// minted in the given one's place.
 test('createApp boots inside onStart, answers with no socket, and stops inside onStop — 42, 37.4, 17.8', async () => {
     await Bun.write(
         `${app}/lib/host.ts`,
@@ -363,8 +376,15 @@ const presumed = await app.run(async () => {
     const resolved = (await principal.resolved) as { authenticated: boolean; id?: string }
     return \`\${resolved.authenticated} \${resolved.id} \${response().headers.getSetCookie().some((cookie) => cookie.startsWith('abide-principal='))}\`
 }, { principal: { id: 'ada' } })
+const asked = await app.fetch(
+    new Request('http://app.test/probe/who', { headers: { cookie: 'abide-caller=from-cookie' } }),
+    { principal: { id: 'grace' }, caller: 'one-browser' },
+)
+const written = asked.headers.getSetCookie().filter((cookie) => cookie.startsWith('abide-')).length
+const who = \`\${await asked.json()} \${written}\`
+const ranAs = await app.run(() => principal.caller(), { caller: 'two-browser' })
 await app.stop()
-console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.status} \${exploded.statusText}\`, inRequest, outside, presumed, marks }))
+console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.status} \${exploded.statusText}\`, inRequest, outside, presumed, who, ranAs, marks }))
 `,
     )
     expect(
@@ -378,6 +398,8 @@ console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.stat
         inRequest: 'http://app.test/x',
         outside: 'threw',
         presumed: 'true ada false',
+        who: 'true grace one-browser 0',
+        ranAs: 'two-browser',
         marks: [
             'before start',
             'after start',

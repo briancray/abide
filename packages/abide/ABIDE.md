@@ -29,12 +29,16 @@ affected code saying what it did, and tell the user.
   calls it. Every component has a test that `mount`s it and counts the work an
   interaction did with `measure`, both from `@abide/harness/abide` (RULEBOOK 38.119, 43.23) — a
   test that only reads the text back passes against a component doing ten times the work.
+  A prop the test moves is handed as a getter — `Label({ get label() { return source() } })` —
+  and is read through it on every read (RULEBOOK 38.134); any other prop is the value it was given.
   A test waits on a value landing — `await` the handler call, or the `Reactive` the component
   reads, which is thenable (RULEBOOK 1.4) — never on `Bun.sleep` or a timer. Break the code once and
   watch a new test fail; a test that has never failed has not been shown to test anything.
   Called outside a request, a `GET` keeps its answer for the whole test process: a test that changes
   the data behind one calls its `invalidate()` in `beforeEach`. A handler that reads `config()` or
   `principal` runs inside `app.run(…)` of `await createApp()`, where the app's `onConfig` has run.
+  A request sent as someone is `app.fetch(request, { principal, caller })` (RULEBOOK 42.20, 42.21),
+  never a hand-written `abide-principal` or `abide-caller` cookie.
   `mount` sets no route, so a page stays thin: it reads the route and hands what it needs to a
   component in `lib/`, and the test mounts that component.
 - `bun run bench` — runs `harness-bench`: every `*.bench.ts` under `src/`, kept beside the code it

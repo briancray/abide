@@ -46,6 +46,11 @@ export function callerOrMint(): string {
     return callerOf() ?? mintCaller(scope)
 }
 
+/** This request's caller, given rather than read off its cookie, with no cookie written. 42.21. */
+export function presumeCaller(caller: string): void {
+    within('App caller').caller = caller
+}
+
 /**
  * Mints a fresh caller for this request, sets its cookie, and returns it.
  *

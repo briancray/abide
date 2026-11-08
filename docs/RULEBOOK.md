@@ -2884,6 +2884,10 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 38.133 Under `bun test` with `@abide/abide/test` preloaded, each test file after the first in a
 process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
 
+38.134 A prop a test hands a component it binds for `mount` as an own getter MUST be read through
+that getter on each read the component makes, and any other prop MUST be the value it held when the
+component was bound.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -3215,6 +3219,13 @@ connection still answering, and MUST then run `onStop` without waiting on what i
 `onPrincipal` as a sealed cookie's are, MUST NOT write the principal cookie, and MUST give the scope
 a request where `request` is not given.
 
+42.20 A `principal` on `App.fetch` MUST be the claims the request's `principal` resolves from, as
+42.19 states for `App.run`, over any principal cookie the request carries.
+
+42.21 A `caller` on `App.run` or `App.fetch` MUST be its scope's `principal.caller`, over any caller
+cookie the request carries, MUST NOT write the caller cookie, and on `App.run` MUST give the scope a
+request where `request` is not given.
+
 # 43. The measurement harness
 
 43.1 `@abide/harness/measure`, `@abide/harness/engine` and `@abide/harness/server` MUST each be
@@ -3297,7 +3308,8 @@ one JSON row per line as each lands, for the items `inScope` and `matchesFilter`
 runner wrote no report as `broken` rather than as a result.
 
 43.28 The DOM `@abide/harness/preload` registers MUST leave the runtime's own `fetch`, `Request`,
-`Response`, `Headers`, `Blob`, `File`, `FormData`, `AbortController` and `AbortSignal` the globals.
+`Response`, `Headers`, `Blob`, `File`, `FormData`, `AbortController`, `AbortSignal`, `WebSocket`,
+`TransformStream` and `WritableStream` the globals.
 
 43.29 `runBenches` MUST run, as one bench each, every function a bench file exports other than
 `CEILINGS`.
@@ -3312,6 +3324,9 @@ naming a bench its file does not export.
 43.33 `harness-bench` MUST exit non-zero where `runBenches` reports anything under 43.31 or 43.32.
 
 43.34 `runBenches` given `only` MUST run only the bench files whose path below `root` holds it.
+
+43.35 The DOM `@abide/harness/preload` registers MUST NOT fetch a stylesheet or a script a document
+it parses names.
 
 # 44. The assistant
 

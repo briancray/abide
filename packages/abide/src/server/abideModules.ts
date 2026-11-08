@@ -489,11 +489,17 @@ function compiledAt(served: Held, path: string): CompiledFile {
 // what an app's own module calls is a function of plain props answering a `Component` (35.4), which
 // `render` invokes with nothing. The component is the module's one export (34.17).
 // 38.119 — and it carries what `mount` hydrates it with: the same accessors, and its browser module.
+// 38.134 — a prop written as a getter is read through it on every read, as a parent's would be.
 function boundModule(path: string): string {
     return `import component from ${JSON.stringify(path)}
 export default (props = {}) => {
     const accessors = {}
     for (const key in props) {
+        const live = Object.getOwnPropertyDescriptor(props, key)?.get
+        if (live !== undefined) {
+            accessors[key] = () => live.call(props)
+            continue
+        }
         const value = props[key]
         accessors[key] = () => value
     }

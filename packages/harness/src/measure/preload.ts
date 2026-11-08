@@ -18,7 +18,9 @@ delete process.env.FORCE_COLOR
 
 // THE WIRE STAYS BUN'S. happy-dom registers its own `fetch` family over bun's, and those drop a
 // `cookie` or `origin` header a test sets, hand a handler a `Blob` with no `bytes()`, and are refused
-// by `Bun.serve`. The DOM reaches its own through its window either way.
+// by `Bun.serve`; its `WebSocket` takes none of the upgrade headers bun's does, and its
+// `TransformStream` and `WritableStream` are node's `Transform` and `Writable`, not web streams. The
+// DOM reaches its own through its window either way.
 const WIRE = [
     'fetch',
     'Request',
@@ -29,9 +31,21 @@ const WIRE = [
     'FormData',
     'AbortController',
     'AbortSignal',
+    'WebSocket',
+    'TransformStream',
+    'WritableStream',
 ] as const
 const native: Record<string, unknown> = {}
 for (const name of WIRE) native[name] = globalThis[name]
-GlobalRegistrator.register({ url: 'http://localhost/' })
+// 43.35 — a document a test parses names its stylesheets and scripts, and a DOM that fetched them
+// would fetch them from a host nothing answers, in whichever test file happened to parse one.
+GlobalRegistrator.register({
+    url: 'http://localhost/',
+    settings: {
+        disableCSSFileLoading: true,
+        disableJavaScriptFileLoading: true,
+        handleDisabledFileLoadingAsSuccess: true,
+    },
+})
 for (const name of WIRE) Object.assign(globalThis, { [name]: native[name] })
 install()

@@ -133,6 +133,49 @@ test('a click rewrites the count and builds nothing', async () => {
     )
 }, 90_000)
 
+// 38.134 — A PROP HANDED AS A GETTER IS LIVE: the mounted component reads it through the getter, so a
+// test drives a read-only prop as a parent would, where a Reactive would bind it. THE REVERT: read
+// `props[key]` once in `boundModule` whatever its descriptor; `#label` stays 'one still' where
+// 'two still' is due — exit 1, `0 pass`.
+test('a prop handed to a mounted component as a getter is read live — 38.134', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'live-prop-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/lib/Label.abide': `<script>
+import { props } from '@abide/abide'
+
+const { label, fixed } = props<{ label: string; fixed: string }>()
+</script>
+
+<p id="label">{label} {fixed}</p>`,
+        'src/tests/Label.test.ts': `import { expect, test } from 'bun:test'
+import { flushSync, reactive } from '@abide/abide'
+import { mount } from '@abide/harness/abide'
+import Label from '../lib/Label.abide'
+
+test('the getter source moves the mounted label', async () => {
+    const source = reactive('one')
+    using _label = await mount(Label({ get label() { return source() }, fixed: 'still' }))
+    expect(document.querySelector('#label')?.textContent).toBe('one still')
+    source.set('two')
+    flushSync()
+    expect(document.querySelector('#label')?.textContent).toBe('two still')
+})
+`,
+    })
+    const ran = await spawned(['bun', 'test', './src/tests/Label.test.ts'], {
+        cwd,
+    })
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 38.133 — EACH TEST FILE STARTS COLD: one file settles a handler's answer, and the next file in the
 // same process mounts a component calling it and still finds it unanswered, then answered. The two
 // files are named on the command line, which is the order `bun test` runs them in — the order a
