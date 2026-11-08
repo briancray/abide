@@ -737,11 +737,11 @@ function valueLeaves(node: Node, leaves: Node[]): void {
     }
 }
 
-// 23.1 — the four values `route` holds, each a `Reactive` of its own.
-const ROUTE_MEMBERS = new Set(['url', 'params', 'name', 'navigating'])
+// 23.1 — the five values `route` holds, each a `Reactive` of its own.
+const ROUTE_MEMBERS = new Set(['url', 'params', 'name', 'index', 'navigating'])
 
 /**
- * 31.15 — `route`'s four values, each read by name as a name bound to a `Reactive` is.
+ * 31.15 — `route`'s five values, each read by name as a name bound to a `Reactive` is.
  *
  * `route.params.id` reads `route.params().id`, and the explicit call keeps compiling (31.7). Told
  * by the symbol, as `props` is, so an app's own `route` is not abide's.

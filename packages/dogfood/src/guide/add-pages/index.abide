@@ -229,6 +229,11 @@ import Section from '#src/lib/Section.abide'
         <p>A plain <code>&lt;a href&gt;</code> click does the same. Reach for
             <code>navigate</code> when code decides where to go. <code>route.navigating</code> is
             true while a navigation is in flight, which is what a progress bar reads.</p>
+
+        <p><code>navigate(-1)</code> steps back through the history the way <code>history.go</code>
+            does, and its promise settles once the page it steps to is on screen.
+            <code>route.index</code> is the entry's place in the history the app wrote: a step back of
+            up to that many entries stays inside the app.</p>
     </Section>
 
     <Section title="A view transition carries the company across pages">

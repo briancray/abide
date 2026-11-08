@@ -35,7 +35,7 @@ test.describe.configure({ mode: 'default' })
 let APP = ''
 
 const HOME = `<head><title>Home</title><meta name="description" content="the home page"></head>
-<main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="go" href="/about">about</a><a id="plain" href="/plain">plain</a></main>`
+<main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="go" href="/about">about</a><a id="plain" href="/plain">plain</a><button id="step-forward" onclick={() => navigate(1).then(() => Object.assign(window, { __FORWARD__: document.querySelector('#about') !== null }))}>forward</button></main>`
 // WHAT THE SERVER ACTUALLY RENDERS, taken from the page's own server module rather than written
 // out here. A hand-copied shell is a hydration mismatch waiting to happen, and 41.10 answers one
 // by warning and stopping — so the page comes up looking right and dead, which is the failure
@@ -67,11 +67,11 @@ test.beforeAll(async ({}, testInfo) => {
     )
     writeFileSync(
         `${APP}/index.abide`,
-        `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
+        `<script>\nimport { navigate, reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
     )
     writeFileSync(
         `${APP}/about/index.abide`,
-        '<head><title>About</title><meta name="description" content="the about page"></head>\n<main id="about"><h1>About</h1><a id="back" href="/">home</a></main>',
+        `<script>\nimport { navigate, route } from '@abide/abide'\n</script>\n<head><title>About</title><meta name="description" content="the about page"></head>\n<main id="about"><h1>About</h1><a id="back" href="/">home</a><p id="at">{route.index}</p><button id="step-back" onclick={() => navigate(-1).then(() => Object.assign(window, { __LANDED__: document.querySelector('#home') !== null }))}>back</button></main>`,
     )
     // A package's own directory, so the tsconfig beside its manifest is no file of an address (23.22).
     writeFileSync(
@@ -346,4 +346,58 @@ test('a navigation to a page with no title ends on the title a direct load paint
             () => document.head.querySelectorAll('title').length,
         ),
     ).toBe(0)
+})
+
+// 30.38 — A STEP THROUGH THE HISTORY SETTLES ONCE IT HAS ARRIVED, in a real browser, where the bar
+// moves later and says so only by `popstate`: the page stepped to is mounted when `navigate(-1)` and
+// `navigate(1)` settle, and the document was never reloaded. 23.28 — `route.index` is the entry's
+// place, through a push and a reload.
+//
+// THE REVERT, run: settle `step` as soon as `history.go` returns; `__LANDED__` reads false where
+// true is due.
+test('navigate by a number settles once the step has arrived — 30.38, 23.28', async ({
+    page,
+}) => {
+    const base = `http://localhost:${port}`
+    await page.goto(`${base}/`)
+    await page.waitForFunction(
+        () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,
+    )
+    await page.click('#go')
+    await expect(page.locator('#at')).toHaveText('1')
+    await page.evaluate(() => {
+        ;(window as { __KEPT__?: string }).__KEPT__ = 'yes'
+    })
+
+    await page.click('#step-back')
+    await page.waitForFunction(
+        () => (window as { __LANDED__?: boolean }).__LANDED__ !== undefined,
+    )
+    expect(
+        await page.evaluate(
+            () => (window as { __LANDED__?: boolean }).__LANDED__,
+        ),
+    ).toBe(true)
+    expect(new URL(page.url()).pathname).toBe('/')
+
+    await page.click('#step-forward')
+    await page.waitForFunction(
+        () => (window as { __FORWARD__?: boolean }).__FORWARD__ !== undefined,
+    )
+    expect(
+        await page.evaluate(
+            () => (window as { __FORWARD__?: boolean }).__FORWARD__,
+        ),
+    ).toBe(true)
+    await expect(page.locator('#at')).toHaveText('1')
+    expect(
+        await page.evaluate(() => (window as { __KEPT__?: string }).__KEPT__),
+    ).toBe('yes')
+
+    // A RELOAD keeps the entry's place.
+    await page.reload()
+    await page.waitForFunction(
+        () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,
+    )
+    await expect(page.locator('#at')).toHaveText('1')
 })

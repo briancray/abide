@@ -105,7 +105,12 @@ export class Router {
      * nothing hydrates over it, and leaving it is a document load.
      */
     private readonly errorPage: boolean
-    /** The place in this document's history of the entry the address bar stands at (`Entry`). */
+    /**
+     * The place in this document's history of the entry the address bar stands at (`Entry`).
+     *
+     * 23.28 — `route.index` IS THIS, moved where `route.url` is (`arrive`) rather than here: a back
+     * step moves this before the page it arrives at has loaded.
+     */
     private index: number
     /**
      * 30.29 — the scroll each entry was left at, by its `index`.
@@ -127,6 +132,14 @@ export class Router {
      * Read off the compiled `<style>` blocks. Nothing here looks at the document's stylesheets.
      */
     private readonly transitions: boolean
+    /**
+     * 30.38 — what settles each `step` still waiting on the browser to say it has arrived.
+     *
+     * Settled ALL AT ONCE by the next arrival, rather than one per `popstate`: a browser that folds
+     * two queued `history.go`s into one traversal fires one event, and a step waiting for a second
+     * would never settle.
+     */
+    private readonly stepping: (() => void)[]
 
     constructor(region: Region, routes: Compiled[], transitions: boolean) {
         this.region = region
@@ -146,6 +159,7 @@ export class Router {
         this.scrolls = []
         this.prefetched = new Set()
         this.transitions = transitions
+        this.stepping = []
     }
 
     /**
@@ -199,12 +213,31 @@ export class Router {
      * within the standing page, back over an in-page `#anchor` jump, is `follow`'s: nothing asked,
      * nothing remounted. 30.29 — the scroll is put back once the page it belongs to is mounted.
      */
-    popped(): Promise<void> {
-        return this.travel(
-            location.href,
-            { replace: true, keepScroll: true },
-            this.stepped(),
-        )
+    async popped(): Promise<void> {
+        try {
+            await this.travel(
+                location.href,
+                { replace: true, keepScroll: true },
+                this.stepped(),
+            )
+        } finally {
+            for (const arrived of this.stepping.splice(0)) arrived()
+        }
+    }
+
+    /**
+     * Steps the history by `by` entries, settling once the entry stepped to is arrived at.
+     *
+     * 30.38 — THE BROWSER MOVES THE BAR LATER and says so only by `popstate`, so the step settles in
+     * `popped`, once the arriving page is mounted and its scroll put back. 30.39 — `history.go(0)`
+     * reloads the document, which no `navigate` does, so a step of none is over before it starts.
+     */
+    step(by: number): Promise<void> {
+        if (by === 0) return Promise.resolve()
+        return new Promise((arrived) => {
+            this.stepping.push(arrived)
+            history.go(by)
+        })
     }
 
     /** `go`, arriving as `step` says: a push, or a history step with the scroll it restores. */
@@ -313,7 +346,7 @@ export class Router {
             options.replace === true || target.href === location.href,
             [scrollX, scrollY],
         )
-        arrive(target.href, found.route.pattern, found.params)
+        arrive(target.href, found.route.pattern, found.params, this.index)
         this.mounted = target.pathname
         if (step.scroll !== undefined) scrollTo(step.scroll[0], step.scroll[1])
         else if (options.keepScroll !== true && target.hash !== '')
@@ -500,7 +533,7 @@ export class Router {
      * 23.1 — WRITTEN BEFORE THE ARRIVING PAGE'S SETUP, which reads it.
      */
     private arriveAt(target: URL, found: Found<Compiled>): void {
-        arrive(target.href, found.route.pattern, found.params)
+        arrive(target.href, found.route.pattern, found.params, this.index)
         this.standing = found.route
         this.mounted = target.pathname
     }
