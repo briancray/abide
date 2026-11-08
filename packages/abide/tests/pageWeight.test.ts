@@ -77,7 +77,9 @@ let count = reactive(0, { store: webStore('count') })
     expect(light.includes(SCHEMA_VALIDATOR)).toBe(false)
     // 44.52 — nor the image a turn is pasted with, which only a chat panel draws.
     expect(light.includes(IMAGE_DRAWER)).toBe(false)
-    expect((await closureText(out, 'stored/index.abide')).includes(WEB_STORE)).toBe(true)
+    expect(
+        (await closureText(out, 'stored/index.abide')).includes(WEB_STORE),
+    ).toBe(true)
     // 8.22 — nor a store the page does not import.
     expect(light.includes(WEB_STORE)).toBe(false)
 }, 60_000)
