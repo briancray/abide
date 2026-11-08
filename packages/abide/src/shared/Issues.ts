@@ -11,6 +11,8 @@
 // nowhere to key by, and `{ '': string[] }` for that case is a wrapper every reader would
 // have to unwrap.
 
+import type { Rpc } from './rpc.ts'
+
 type Down = [0, 0, 1, 2, 3, 4]
 
 /**
@@ -43,7 +45,13 @@ export type Paths<T, Limit extends number = 5> = Limit extends 0
 
 /**
  * A refusal's messages keyed by path, `''` for the whole value, or a bare list over a scalar.
+ *
+ * 19.26 — over an `Rpc`, the `Issues` of what it is called with: a form holding a handler's
+ * refusal names the handler rather than spelling its `Args`.
  */
-export type Issues<T> = T extends object
-    ? Partial<Record<Paths<T> | '', string[]>>
-    : string[]
+export type Issues<T> =
+    T extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced>
+        ? Issues<Args>
+        : T extends object
+          ? Partial<Record<Paths<T> | '', string[]>>
+          : string[]
