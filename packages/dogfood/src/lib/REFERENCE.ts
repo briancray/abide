@@ -479,6 +479,20 @@ export const REFERENCE: readonly {
         typeOnly: false,
     },
     {
+        route: '/reference/requestIP',
+        names: ['requestIP'],
+        entry: '@abide/abide/server',
+        group: 'Ambient values',
+        typeOnly: false,
+    },
+    {
+        route: '/reference/types/ReceivedFrom',
+        names: ['ReceivedFrom'],
+        entry: '@abide/abide/server',
+        group: 'Ambient values',
+        typeOnly: true,
+    },
+    {
         route: '/reference/response',
         names: ['response'],
         entry: '@abide/abide/server',
@@ -799,6 +813,13 @@ export const REFERENCE: readonly {
         entry: '@abide/abide/server',
         group: 'Configuration',
         typeOnly: false,
+    },
+    {
+        route: '/reference/types/Lane',
+        names: ['Lane'],
+        entry: '@abide/abide/server',
+        group: 'Configuration',
+        typeOnly: true,
     },
     {
         route: '/reference/onStart',
