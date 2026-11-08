@@ -10,6 +10,12 @@
 // value (15.1), so it is in this seam rather than the server's: the same object crosses a
 // wire, fills `s.error` and narrows through `s.isError`.
 
+// 44 — a conversation as a page sends it and is handed it back: the server's `assistant` yields it.
+export type {
+    AssistantContent,
+    AssistantEvent,
+    AssistantMessage,
+} from './AssistantEvent.ts'
 // 33.23 — an element's attributes, typed as a component's props.
 export type { Attributes } from './Attributes.ts'
 // 32.37 — what a value writes into an attribute, on both sides.
@@ -27,6 +33,8 @@ export { escapeAttribute, escapeStyleValue, escapeText } from './escapeText.ts'
 export { type Failed, isFailed } from './Failed.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'
+// 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.
+export { imageFiles, imagePiece } from './imagePiece.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 export { jsonSchema } from './jsonSchema.ts'
@@ -96,6 +104,8 @@ export {
     watch,
 } from './reactive/index.ts'
 export { aborted, notFound, refuse, validationError } from './refuse.ts'
+// 44.51 — what a conversation's calls to one handler answered.
+export { resultsOf } from './resultsOf.ts'
 export { route } from './route.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 export { safeUrl } from './safeUrl.ts'

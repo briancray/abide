@@ -14,6 +14,7 @@ export const BUILTIN_TYPES = new Set([
     'DataView',
     'Date',
     'Error',
+    'Exclude',
     'Extract',
     'Function',
     'Iterable',
@@ -30,7 +31,9 @@ export const BUILTIN_TYPES = new Set([
     'Uint8Array',
     // Web platform
     'AbortSignal',
+    'DataTransfer',
     'Element',
+    'File',
     'HTMLButtonElement',
     'HTMLElementTagNameMap',
     'SVGElementTagNameMap',

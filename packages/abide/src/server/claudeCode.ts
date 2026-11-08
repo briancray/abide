@@ -8,17 +8,15 @@
 // directory, settings — is not an option here at all, and its built-in `tools` are a request the visitor
 // grants or does not: the bridge decides (44.15, 44.16, 44.29).
 
+import type {
+    AssistantContent,
+    AssistantMessage,
+} from '#shared/AssistantEvent.ts'
 import { BRIDGE_SCHEME } from '#shared/BRIDGE_SCHEME.ts'
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
 
-import {
-    type AssistantContent,
-    type AssistantMessage,
-    blocksOf,
-    forwardOf,
-    type Provider,
-} from './assistant.ts'
+import { blocksOf, forwardOf, type Provider } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import { mintCode, pairingStatus, runTurn } from './bridgeRelay.ts'
 import { callerOf } from './callerOf.ts'

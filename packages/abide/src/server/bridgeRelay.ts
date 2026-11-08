@@ -22,7 +22,7 @@ import { refuse } from '#shared/refuse.ts'
 import { answered } from './answerFailure.ts'
 import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
-import type { AssistantEvent } from './assistant.ts'
+import type { ProviderEvent } from './assistant.ts'
 import { Inbox } from './Inbox.ts'
 import { randomToken } from './randomToken.ts'
 import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
@@ -126,7 +126,7 @@ export async function* runTurn({
     /** Never rejects: its failure is a reply too. */
     answer: (method: string, params: unknown) => Promise<unknown>
     signal: AbortSignal
-}): AsyncGenerator<AssistantEvent> {
+}): AsyncGenerator<ProviderEvent> {
     const bridge = BY_KEY.get(pairingKey(caller, signedIn))
     // 44.13, 44.33 — nothing paired by this sign-in is the page's cue to show the command.
     if (bridge === undefined)
@@ -146,7 +146,7 @@ export async function* runTurn({
     signal.addEventListener('abort', cancel)
     try {
         for await (const item of inbox) {
-            if (item.kind === 'event') yield item.event as AssistantEvent
+            if (item.kind === 'event') yield item.event as ProviderEvent
             else if (item.kind === 'mcp')
                 void answer(item.method, item.params).then((reply) => {
                     bridge.frames.push({

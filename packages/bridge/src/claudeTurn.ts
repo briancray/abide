@@ -11,7 +11,7 @@
 import { mkdtemp, rm } from 'node:fs/promises' // bun has no temporary directory or recursive remove of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
 
-import type { AssistantEvent, ClaudeCodeConfig } from '@abide/abide/server'
+import type { ClaudeCodeConfig, ProviderEvent } from '@abide/abide/server'
 
 import { readLines } from './readLines.ts'
 
@@ -177,7 +177,7 @@ function textOf(content: McpContent[] | string | undefined): string {
     return text
 }
 
-function done(stop: string, usage: Usage | undefined): AssistantEvent {
+function done(stop: string, usage: Usage | undefined): ProviderEvent {
     return {
         type: 'done',
         stop,
@@ -203,7 +203,7 @@ export async function claudeTurn(
         claudeArgs: string[]
         mcpUrl: string
         signal: AbortSignal
-        report: (event: AssistantEvent) => void
+        report: (event: ProviderEvent) => void
         say: (line: string) => void
     },
 ): Promise<void> {

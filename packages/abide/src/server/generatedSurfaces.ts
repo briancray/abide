@@ -15,6 +15,7 @@
 
 import { isFailed } from '#shared/Failed.ts'
 import { essenceOf } from '#shared/framing.ts'
+import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
@@ -26,7 +27,6 @@ import { bodyWithin } from './answerRpc.ts'
 import type { ToolAnswer, ToolDefinition } from './assistant.ts'
 import { appIdentity } from './config.ts'
 import { crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
-import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
 import { MCP_PROTOCOL_VERSION } from './MCP_PROTOCOL_VERSION.ts'
 import type { Mounted } from './mountHandlers.ts'
 import { type Listed, surfaceOf } from './surfaceOf.ts'
@@ -326,7 +326,7 @@ export class McpSurface {
 
     /** What calling the tool `name` as `asker` answered, a refusal or a missing tool a failed one. */
     call(name: string, args: unknown, asker: Request): Promise<ToolAnswer> {
-        const tool = this.#tool(name)
+        const tool = this.tool(name)
         if (tool === undefined) {
             logCall(String(name), 404, undefined)
             return Promise.resolve({
@@ -337,12 +337,13 @@ export class McpSurface {
         return this.#called(tool, args as Record<string, unknown>, asker)
     }
 
-    #tool(name: unknown): Published | undefined {
+    /** The tool it lists as `name`, or `undefined` where it lists none. */
+    tool(name: unknown): Listed | undefined {
         return this.#published().find((one) => one.name === name)
     }
 
     async #called(
-        one: Published,
+        one: Listed,
         args: Record<string, unknown> | undefined,
         asker: Request,
     ): Promise<ToolAnswer> {
@@ -416,7 +417,7 @@ export class McpSurface {
             case 'tools/list':
                 return { result: { tools: this.list() } }
             case 'tools/call': {
-                const tool = this.#tool(params?.name)
+                const tool = this.tool(params?.name)
                 if (tool === undefined) {
                     logCall(String(params?.name), 404, undefined)
                     return mcpFailure(

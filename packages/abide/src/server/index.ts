@@ -26,13 +26,17 @@ export {
     type RpcOptions,
 } from '#shared/rpc.ts'
 // 45 — a conversation with a model, piped through a handler, and the two providers abide ships.
+// 44 — what a page sends and is handed back, which the isomorphic entry carries too.
+export type {
+    AssistantContent,
+    AssistantEvent,
+    AssistantMessage,
+} from '#shared/AssistantEvent.ts'
 export {
-    type AssistantContent,
-    type AssistantEvent,
-    type AssistantMessage,
     type AssistantOptions,
     assistant,
     type Provider,
+    type ProviderEvent,
     type ToolAnswer,
     type Toolbox,
     type ToolDefinition,

@@ -21,7 +21,10 @@ import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'
 import { HEARTBEAT_MILLISECONDS } from '../src/server/HEARTBEAT_MILLISECONDS.ts'
 import { RESUME_MILLISECONDS } from '../src/server/RESUME_MILLISECONDS.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
+import type { AssistantEvent } from '../src/shared/AssistantEvent.ts'
 import { BRIDGE_SCHEME } from '../src/shared/BRIDGE_SCHEME.ts'
+import { resultsOf } from '../src/shared/resultsOf.ts'
+import type { Rpc } from '../src/shared/rpc.ts'
 import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { inMemoryApp } from './inMemoryApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -66,9 +69,27 @@ export default POST(async ({ id }: { id: string }) => {
 }, { clients: { mcp: false } })
 `
 
-const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, type ClaudeCodeConfig, GET, POST } from '@abide/abide/server'
+const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, type ClaudeCodeConfig, GET, POST, type Provider } from '@abide/abide/server'
 
 const HIDDEN = { clients: { mcp: false } }
+
+// A provider an app wrote: one call to the app's tool, one to a tool of its own, a failed call, and a
+// call to a handler that answers no value — each named as the Toolbox lists it (44.50).
+const own: Provider = {
+    async *run(_messages, tools) {
+        yield { type: 'tool', id: 'a', name: 'post_invoices_whoami' }
+        const answer = await tools.call('post_invoices_whoami', {})
+        const [piece] = answer.content
+        yield { type: 'result', id: 'a', text: piece?.type === 'text' ? piece.text : '', failed: answer.failed }
+        yield { type: 'tool', id: 'b', name: 'web_search' }
+        yield { type: 'result', id: 'b', text: '{"hits":[]}', failed: false }
+        yield { type: 'tool', id: 'c', name: 'post_invoices_whoami' }
+        yield { type: 'result', id: 'c', text: '"refused"', failed: true }
+        yield { type: 'tool', id: 'd', name: 'get_pictures_drawn' }
+        yield { type: 'result', id: 'd', text: '[1]', failed: false }
+        yield { type: 'done', stop: 'end_turn', usage: { input: 0, output: 0 } }
+    },
+}
 
 export const bridge = GET(() => claudeCode.bridge(), { ...HIDDEN, timeout: Infinity })
 
@@ -77,10 +98,12 @@ export const command = GET(() => claudeCode.bridgeCommand(), HIDDEN)
 export const granting = GET(() => claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
 
 export const ask = POST(
-    async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code'; maxTurns?: number; config?: Record<string, unknown> }) {
+    async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code' | 'own'; maxTurns?: number; config?: Record<string, unknown> }) {
         yield* assistant(
             messages,
-            via === 'api'
+            via === 'own'
+                ? own
+                : via === 'api'
                 ? claudeApi({ apiKey: 'key', baseURL: process.env.FAKE_API, model: 'claude-opus-5', max_tokens: 1000 })
                 // Loose, so an option no site may set reaches the bridge to be refused there.
                 : claudeCode((config ?? { model: 'sonnet', appendSystemPrompt: 'Be brief.' }) as ClaudeCodeConfig),
@@ -90,6 +113,9 @@ export const ask = POST(
     HIDDEN,
 )
 `
+
+// The handler `post_invoices_whoami` calls, as its `Rpc` reads it (44.48).
+const WHOAMI = { method: 'POST' as const, address: '/invoices/whoami' }
 
 let app = ''
 let base = ''
@@ -211,7 +237,7 @@ async function pairBridge(
 
 function ask(
     caller: string,
-    via: 'api' | 'code',
+    via: 'api' | 'code' | 'own',
     content: string,
     maxTurns?: number,
     config?: ClaudeCodeConfig,
@@ -304,9 +330,21 @@ test('the relay answers 404 until the app mints a pairing code — 44.19, 36.7',
 test('both providers play one conversation as one event sequence, tools called as the asker — 44.2, 44.7, 44.17', async () => {
     const expected = [
         { type: 'text', text: 'checking' },
-        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami' },
+        {
+            type: 'tool',
+            id: 'toolu_1',
+            name: 'post_invoices_whoami',
+            handler: WHOAMI,
+        },
         { type: 'input', id: 'toolu_1', input: {} },
-        { type: 'result', id: 'toolu_1', text: '"ada"', failed: false },
+        {
+            type: 'result',
+            id: 'toolu_1',
+            text: '"ada"',
+            failed: false,
+            handler: WHOAMI,
+            value: 'ada',
+        },
         { type: 'text', text: 'saw "ada"' },
         { type: 'done', stop: 'end_turn', usage: { input: 3, output: 5 } },
     ]
@@ -328,11 +366,62 @@ test('claudeApi shows a tool answered image to the model as one, and the event c
         id: 'toolu_1',
         text: '',
         failed: false,
+        handler: { method: 'GET', address: '/pictures/drawn' },
     })
     expect(said).toContainEqual({
         type: 'text',
         text: `saw ${JSON.stringify({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw==' } })}`,
     })
+}, 30_000)
+
+// 44.48, 44.49, 44.50, 44.51 — A CALL CARRIES THE HANDLER IT REACHED, AND ITS ANSWER THE VALUE IT
+// SPELLS, read off the app's own surface whichever provider ran it — here one the app wrote. A tool
+// that is not the app's carries no handler, and a failed call or one to a handler answering no value
+// (a picture, 19.21) carries no value, whatever its words spell. THE REVERTS: carry no handler in
+// `read`, and `resultsOf` finds none of the two calls rather than one; read every answer's words as
+// JSON, and `web_search`'s value is `{ hits: [] }` and the picture's `[1]`; drop `!event.failed` from
+// `resultsOf`, and it hands back `["ada", undefined]`.
+test('a call carries its handler and its answer its value, whoever ran it — 44.48, 44.49, 44.50, 44.51', async () => {
+    const said = (await events(
+        await ask('one', 'own', 'who am I?'),
+    )) as AssistantEvent[]
+    expect(said.filter((event) => event.type === 'result')).toEqual([
+        {
+            type: 'result',
+            id: 'a',
+            text: '"ada"',
+            failed: false,
+            handler: WHOAMI,
+            value: 'ada',
+        },
+        {
+            type: 'result',
+            id: 'b',
+            text: '{"hits":[]}',
+            failed: false,
+            handler: undefined,
+            value: undefined,
+        },
+        {
+            type: 'result',
+            id: 'c',
+            text: '"refused"',
+            failed: true,
+            handler: WHOAMI,
+            value: undefined,
+        },
+        {
+            type: 'result',
+            id: 'd',
+            text: '[1]',
+            failed: false,
+            handler: { method: 'GET', address: '/pictures/drawn' },
+            value: undefined,
+        },
+    ])
+    expect(
+        resultsOf(said, WHOAMI as unknown as Rpc<string, never>),
+    ).toStrictEqual(['ada'])
 }, 30_000)
 
 // 44.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
@@ -343,7 +432,12 @@ test('claudeApi shows a tool answered image to the model as one, and the event c
 test('a conversation out of turns ends on max_turns without running the pending call — 44.11', async () => {
     expect(await events(await ask('one', 'api', 'who am I?', 1))).toEqual([
         { type: 'text', text: 'checking' },
-        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami' },
+        {
+            type: 'tool',
+            id: 'toolu_1',
+            name: 'post_invoices_whoami',
+            handler: WHOAMI,
+        },
         { type: 'input', id: 'toolu_1', input: {} },
         { type: 'done', stop: 'max_turns', usage: { input: 1, output: 2 } },
     ])
@@ -369,7 +463,12 @@ async function eventsUntilTool(answer: Response): Promise<unknown[]> {
 // `assistant` line in the bridge, and that provider yields nothing for two seconds.
 test('a tool call is announced before its input is written — 44.28', async () => {
     const started = [
-        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami' },
+        {
+            type: 'tool',
+            id: 'toolu_1',
+            name: 'post_invoices_whoami',
+            handler: WHOAMI,
+        },
     ]
     expect(await eventsUntilTool(await ask('one', 'api', 'writing'))).toEqual(
         started,
