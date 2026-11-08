@@ -102,9 +102,10 @@ export type Persisted = {
     /** The value's own `ttl`, taken once, and infinity where it declares none (8.13). */
     ttl: number
     /**
-     * Set while a restore mints its production, so what was just read is not written back (8.8).
+     * Set while a production 8.8 does not write back is minted: a restore, which is what was just
+     * read, and the initial value a miss falls back to, which the store never held.
      */
-    restoring: boolean
+    withheld: boolean
     writing: boolean
     pending: boolean
     /**
@@ -601,7 +602,7 @@ export class Cell {
                           ? store(args as never)
                           : store) as Store<unknown>,
                       ttl: options?.ttl ?? Number.POSITIVE_INFINITY,
-                      restoring: false,
+                      withheld: false,
                       writing: false,
                       pending: false,
                       unconfirmed: undefined,

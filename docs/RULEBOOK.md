@@ -400,7 +400,8 @@ miss falls back to.
 
 8.7 A restored stream MUST report `s.ready` true and `s.busy` false.
 
-8.8 A `Store`'s `set` MUST run once per production, per 5.2.
+8.8 A `Store`'s `set` MUST run once per production, per 5.2, save a restore and the initial value a
+miss falls back to.
 
 8.9 A `Store`'s `set` on a streaming producer MUST run once at close, on the accumulation.
 

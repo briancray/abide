@@ -5751,7 +5751,7 @@ test('a restore runs neither schema nor transform', () => {
 // collapsed is not a production and is not written, and neither is the restore — writing back what
 // was just read is a round trip for nothing.
 //
-// THE REVERT is `persist` ignoring `restoring`: `sets: 9,5,6`.
+// THE REVERT is `persist` ignoring `withheld`: `sets: 9,5,6`.
 test('set runs once per production, with the ttl, and never for the restore', () => {
     const memory = memoryStore<number>({ answer: () => 9 })
     const value = reactive(4, { store: memory.store, ttl: 60_000 })
@@ -5776,14 +5776,37 @@ test('writes to a slow store coalesce latest-wins and never block a read', async
     expect(value()).toBe(4)
     expect(
         `in flight: ${memory.sets.map((write) => write.value).join(',')}`,
-    ).toBe('in flight: 0')
+    ).toBe('in flight: 1')
     memory.release()
     await Bun.sleep(1)
     memory.release()
     await Bun.sleep(1)
     expect(`sets: ${memory.sets.map((write) => write.value).join(',')}`).toBe(
-        'sets: 0,4',
+        'sets: 1,4',
     )
+})
+
+// 8.8: A MISS THAT FALLS BACK TO THE INITIAL VALUE WRITES NOTHING. The initial value is the
+// declaration rather than a production anything made, and a server render missing a browser's store
+// on every request wrote the default over it — apps guarded `set` on the server to stop it. A body's
+// run on a miss is a production, and still fills the store.
+//
+// THE REVERT is `settleRestore` opening the initial value without `withheld`: `sets: 1, body: 7`,
+// the `{}` written back.
+test('a store miss falling back to the initial value does not write it, and a body run does — 8.8', () => {
+    const initial = memoryStore<Record<string, number>>({
+        answer: () => undefined,
+    })
+    const value = reactive<Record<string, number>>({}, { store: initial.store })
+    expect(value()).toEqual({})
+    const body = memoryStore<number>({ answer: () => undefined })
+    const computed = reactive(() => 7, { store: body.store })
+    expect(computed()).toBe(7)
+    expect(
+        `sets: ${initial.sets.length}, body: ${body.sets.map((write) => write.value).join(',')}`,
+    ).toBe('sets: 0, body: 7')
+    value.set({ a: 1 })
+    expect(`after a write: ${initial.sets.length}`).toBe('after a write: 1')
 })
 
 // 8.12: A PERSISTER THAT SILENTLY STOPPED IS WORSE THAN NONE. A failed write warns and the store

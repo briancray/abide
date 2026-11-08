@@ -1012,8 +1012,8 @@ function serve(cell: Cell, value: unknown): void {
     // servable — `armNext` reads the deadline off a production that has landed, and from
     // `produce` it would be reading one that had not.
     if (cell.expiry !== null) armNext(cell, cell.expiry)
-    // 8.8: every production that reaches a reader is written, and nothing else is — a write the
-    // identity gate collapsed never arrives here.
+    // 8.8: every production that reaches a reader is written but the two `persist` withholds, and
+    // nothing else is — a write the identity gate collapsed never arrives here.
     if (cell.store !== null) persist(cell, cell.store, value)
 }
 
@@ -3203,11 +3203,19 @@ function settleRestore(
         restore(cell, persisted, value)
         return
     }
-    // A MISS IS THE VALUE WITHOUT A STORE: the body runs, or the initial value lands (8.3).
+    // A MISS IS THE VALUE WITHOUT A STORE: the body runs, or the initial value lands (8.3). The
+    // body's run is a production the store is filled from; the initial value is the declaration,
+    // and writing it back on every miss is what a server render did to a browser's store (8.8).
     if (cell.body !== null) startProducer(cell)
     else if (initial === undefined) landOpening(cell)
-    else if (initial !== NO_INITIAL) open(cell, initial)
-    else endLoad(cell, false)
+    else if (initial !== NO_INITIAL) {
+        persisted.withheld = true
+        try {
+            open(cell, initial)
+        } finally {
+            persisted.withheld = false
+        }
+    } else endLoad(cell, false)
 }
 
 /**
@@ -3218,13 +3226,13 @@ function settleRestore(
  * it back.
  */
 function restore(cell: Cell, persisted: Persisted, value: unknown): void {
-    persisted.restoring = true
+    persisted.withheld = true
     try {
         const stream = cell.stream
         if (stream === null) produce(cell, value)
         else restoreStream(cell, stream, value as unknown[])
     } finally {
-        persisted.restoring = false
+        persisted.withheld = false
     }
 }
 
@@ -3263,7 +3271,7 @@ function restoreStream(cell: Cell, stream: Stream, chunks: unknown[]): void {
  * asked at all and the written value stands in its place. Asking took the value BACKWARDS and left
  * it there: `s.set(99)` over a store still holding 1 leaves a `set` in flight, a `refresh` in the
  * same turn read 1 and produced it, and the queued write then landed 99 in the store — the cell
- * serving 1 and the store holding 99 for the life of the value, with `restoring` stopping the
+ * serving 1 and the store holding 99 for the life of the value, with `withheld` stopping the
  * reverted value from being written back and no probe moving to say so.
  */
 function rereadStore(cell: Cell, persisted: Persisted): void {
@@ -3353,13 +3361,12 @@ function settleMiss(cell: Cell): void {
 }
 
 /**
- * Writes a production to the store, unless it is a restore or a stream's.
+ * Writes a production to the store, unless 8.8 withholds it or it is a stream's.
  *
- * A restore is what was just read, and a stream is written at its close (8.9) — neither is
- * persisted from here.
+ * A stream is written at its close (8.9), not from here.
  */
 function persist(cell: Cell, persisted: Persisted, value: unknown): void {
-    if (persisted.restoring || cell.stream !== null) return
+    if (persisted.withheld || cell.stream !== null) return
     writeStore(cell, persisted, value)
 }
 

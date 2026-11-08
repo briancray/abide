@@ -320,8 +320,8 @@ import Section from '#src/lib/Section.abide'
         </Example>
 
         <p>A <code>Store</code> is a <code>get</code> and a <code>set</code>. The value reads the
-            store when it is built and falls back to <code>500_000</code> on a miss, and every change
-            is written back. The reads and writes in the markup do not change.</p>
+            store when it is built and falls back to <code>500_000</code> on a miss without writing it,
+            and every change is written back. The reads and writes in the markup do not change.</p>
 
         <p>This store goes through two handlers, so the target is one value on the server: the
             next visit opens on it, and so does everyone else's, painted right the first time. After
