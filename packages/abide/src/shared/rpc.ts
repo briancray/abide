@@ -183,9 +183,44 @@ export type RpcContext<Args = unknown> = { request: Request; args: () => Args }
  */
 const SENT: unique symbol = Symbol('abide.sent')
 
-export type RpcOptions<Args = unknown> = {
+/**
+ * What a rung's `next` answers as a declaration types it: opaque, so what the rung answers in the
+ * handler's place is told apart from the answer it passes on.
+ */
+declare const REACHED: unique symbol
+type Reached = { readonly [REACHED]: true }
+
+/**
+ * The refusals a declaration's rungs answer with, read off what each answers.
+ *
+ * 16.86 — A REFUSAL A RUNG NAMES IS THE `Rpc`'s, and one it does not name is not: a `Failed` whose
+ * name is `string` (a `Middleware` declaring no refusals) would widen every name the union narrows
+ * by, and a rung answering `unknown` names none.
+ */
+type RungRefusals<Answers extends readonly unknown[]> =
+    Answers[number] extends infer Answer
+        ? Answer extends Failed<infer Name, unknown>
+            ? string extends Name
+                ? never
+                : Answer
+            : never
+        : never
+
+export type RpcOptions<
+    Args = unknown,
+    Answers extends readonly unknown[] = unknown[],
+> = {
     description?: string
-    middleware?: Rung<RpcContext<Args>, unknown>[]
+    /**
+     * 16.86 — one rung per answer in `Answers`, each read in context: a rung's own refusals are
+     * inferred where the list is written at the declaration.
+     */
+    middleware?: {
+        [At in keyof Answers]: (
+            next: (ctx?: RpcContext<Args>) => Promise<Reached>,
+            ctx: RpcContext<Args>,
+        ) => Answers[At] | Promise<Answers[At]>
+    }
     timeout?: number
     clients?: Clients
     crossOrigin?: boolean | string[]
@@ -221,20 +256,34 @@ type Held<Accepted> = Accepted extends
  * which is why a value handed in takes the address's alone: it has decided its own.
  */
 type Declare = {
-    <Stored, Args, Accepted, Failures, Produced>(
+    <
+        Stored,
+        Args,
+        Accepted,
+        Failures,
+        Produced,
+        Answers extends readonly unknown[] = unknown[],
+    >(
         handler: Keyed<Stored, Args, Accepted, Failures, Produced>,
-        options?: RpcOptions<Args>,
-    ): Rpc<Stored, Args, Failures, Produced>
-    <Stored, Accepted, Failures, Produced>(
+        options?: RpcOptions<Args, Answers>,
+    ): Rpc<Stored, Args, Failures | RungRefusals<Answers>, Produced>
+    <
+        Stored,
+        Accepted,
+        Failures,
+        Produced,
+        Answers extends readonly unknown[] = unknown[],
+    >(
         handler: Reactive<Stored, Accepted, Failures, Produced>,
-        options?: RpcOptions<undefined>,
-    ): Rpc<Stored, undefined, Failures, Produced>
+        options?: RpcOptions<undefined, Answers>,
+    ): Rpc<Stored, undefined, Failures | RungRefusals<Answers>, Produced>
     // 11.2 — a stream whose parameter is optional is keyed, for `reactive`'s reason.
     <
         Body extends (args?: never) => unknown,
         Shaped = ChunkOf<Body>[],
         Gate = Schema<ChunkOf<Body>[]>,
         ArgsGate = Schema<Parameters<Body>[0]>,
+        Answers extends readonly unknown[] = unknown[],
     >(
         handler: Body & OptionalParameter<Body> & Streams<Body> & Plain,
         options?: Shaping<
@@ -244,36 +293,49 @@ type Declare = {
             Gate,
             ArgsGate
         > &
-            RpcOptions<Parameters<Body>[0]>,
+            RpcOptions<Parameters<Body>[0], Answers>,
     ): Rpc<
         Kept<Shaped>,
         Parameters<Body>[0],
-        Refusals<Shaped, Gate, ChunkOf<Body>[], ArgsGate, Parameters<Body>[0]>,
+        | Refusals<Shaped, Gate, ChunkOf<Body>[], ArgsGate, Parameters<Body>[0]>
+        | RungRefusals<Answers>,
         ChunkOf<Body>
     >
-    <Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>>(
+    <
+        Chunk,
+        Shaped = Chunk[],
+        Gate = Schema<Chunk[]>,
+        Answers extends readonly unknown[] = unknown[],
+    >(
         handler: (() =>
             AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>) &
             Plain,
-        options?: Shaping<Chunk[], Shaped, never, Gate> & RpcOptions<undefined>,
-    ): Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Chunk[]>, Chunk>
+        options?: Shaping<Chunk[], Shaped, never, Gate> &
+            RpcOptions<undefined, Answers>,
+    ): Rpc<
+        Kept<Shaped>,
+        undefined,
+        Refusals<Shaped, Gate, Chunk[]> | RungRefusals<Answers>,
+        Chunk
+    >
     <
         Chunk,
         Args,
         Shaped = Chunk[],
         Gate = Schema<Chunk[]>,
         ArgsGate = Schema<Args>,
+        Answers extends readonly unknown[] = unknown[],
     >(
         handler: ((
             args: Args,
         ) => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>) &
             Plain,
         options?: Shaping<Chunk[], Shaped, Args, Gate, ArgsGate> &
-            RpcOptions<Args>,
+            RpcOptions<Args, Answers>,
     ): Rpc<
         Kept<Shaped>,
         Args,
-        Refusals<Shaped, Gate, Chunk[], ArgsGate, Args>,
+        Refusals<Shaped, Gate, Chunk[], ArgsGate, Args> | RungRefusals<Answers>,
         Chunk
     >
     // 11.2 — an optional parameter is keyed, and ahead of the arm below for `reactive`'s reason.
@@ -282,6 +344,7 @@ type Declare = {
         Shaped = Awaited<ReturnType<Body>>,
         Gate = Schema<Awaited<ReturnType<Body>>>,
         ArgsGate = Schema<Parameters<Body>[0]>,
+        Answers extends readonly unknown[] = unknown[],
     >(
         handler: Body & OptionalParameter<Body> & Plain,
         options?: Shaping<
@@ -291,7 +354,7 @@ type Declare = {
             Gate,
             ArgsGate
         > &
-            RpcOptions<Parameters<Body>[0]>,
+            RpcOptions<Parameters<Body>[0], Answers>,
     ): Rpc<
         Kept<Shaped>,
         Parameters<Body>[0],
@@ -302,17 +365,25 @@ type Declare = {
               Awaited<ReturnType<Body>>,
               ArgsGate,
               Parameters<Body>[0]
-          >,
+          >
+        | RungRefusals<Answers>,
         AdoptedProduced<ReturnType<Body>, Kept<Shaped>>
     >
-    <Computed, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>>(
+    <
+        Computed,
+        Shaped = Awaited<Computed>,
+        Gate = Schema<Awaited<Computed>>,
+        Answers extends readonly unknown[] = unknown[],
+    >(
         handler: (() => Computed) & Plain,
         options?: Shaping<Awaited<Computed>, Shaped, never, Gate> &
-            RpcOptions<undefined>,
+            RpcOptions<undefined, Answers>,
     ): Rpc<
         Kept<Shaped>,
         undefined,
-        AdoptedFailures<Computed> | Refusals<Shaped, Gate, Awaited<Computed>>,
+        | AdoptedFailures<Computed>
+        | Refusals<Shaped, Gate, Awaited<Computed>>
+        | RungRefusals<Answers>,
         AdoptedProduced<Computed, Kept<Shaped>>
     >
     <
@@ -321,23 +392,34 @@ type Declare = {
         Shaped = Awaited<Computed>,
         Gate = Schema<Awaited<Computed>>,
         ArgsGate = Schema<Args>,
+        Answers extends readonly unknown[] = unknown[],
     >(
         handler: ((args: Args) => Computed) & Plain,
         options?: Shaping<Awaited<Computed>, Shaped, Args, Gate, ArgsGate> &
-            RpcOptions<Args>,
+            RpcOptions<Args, Answers>,
     ): Rpc<
         Kept<Shaped>,
         Args,
         | AdoptedFailures<Computed>
-        | Refusals<Shaped, Gate, Awaited<Computed>, ArgsGate, Args>,
+        | Refusals<Shaped, Gate, Awaited<Computed>, ArgsGate, Args>
+        | RungRefusals<Answers>,
         AdoptedProduced<Computed, Kept<Shaped>>
     >
     // 16.1 — a value, `reactive`'s value overload given an address. Last, so a function is a body.
-    <Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
+    <
+        Accepted,
+        Shaped = Accepted,
+        Gate = Schema<Accepted>,
+        Answers extends readonly unknown[] = unknown[],
+    >(
         handler: Held<Accepted>,
         options?: Shaping<Accepted, Shaped, never, Gate> &
-            RpcOptions<undefined>,
-    ): Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Accepted>>
+            RpcOptions<undefined, Answers>,
+    ): Rpc<
+        Kept<Shaped>,
+        undefined,
+        Refusals<Shaped, Gate, Accepted> | RungRefusals<Answers>
+    >
 }
 
 /** What a handler's selection members answer before a call has built its value: no entries' answers. */
@@ -379,7 +461,11 @@ export function declare(method: Method): Declare {
         // 16.11, 16.12 — THE RUNGS, IN REGISTRATION ORDER, around the reach. Built once, at the
         // declaration (16.14); a value keyed by args, so a second call with the same args in one
         // request joins the first (1.8) and a server files one per request (11.32).
-        const rungs = options?.middleware ?? []
+        // `Reached` is the declaration's view of `next`; at run time it answers the handler's value.
+        const rungs = (options?.middleware ?? []) as readonly Rung<
+            RpcContext,
+            unknown
+        >[]
         // A rung that handed `next` a context of its own making chose those args.
         const argsOf = (ctx: RpcContext): unknown =>
             SENT in ctx ? (ctx as { [SENT]: unknown })[SENT] : ctx.args()

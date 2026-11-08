@@ -7,18 +7,18 @@ import type { Failed } from './Failed.ts'
  * A rung written once for every lane whose context carries `Extra`: generic over the context it is
  * handed and over what `next` answers, so it passes `next()`'s answer on, refuses in its place, or
  * answers with an `Answer` of its own.
+ *
+ * `Refused` is what it may refuse with; a rung naming its refusals carries them onto the `Rpc` its
+ * handler is declared with (16.86), where one left at `Failed<string, unknown>` carries none.
  */
-export type Middleware<Answer = never, Extra extends object = object> = <
-    Given extends { request: Request } & Extra,
-    Result,
->(
+export type Middleware<
+    Answer = never,
+    Extra extends object = object,
+    Refused extends Failed<string, unknown> = Failed<string, unknown>,
+> = <Given extends { request: Request } & Extra, Result>(
     next: (ctx?: Given) => Promise<Result>,
     ctx: Given,
-) =>
-    | Result
-    | Answer
-    | Failed<string, unknown>
-    | Promise<Result | Answer | Failed<string, unknown>>
+) => Result | Answer | Refused | Promise<Result | Answer | Refused>
 
 /** A rung as one lane composes it, over that lane's context and what its center answers. */
 export type Rung<Ctx, Result> = (

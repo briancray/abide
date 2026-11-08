@@ -733,6 +733,78 @@ function clear() {
     expect(await checkApp(opened)).toEqual([])
 }, 60_000)
 
+// 32.78 — AN ELEMENT'S `bind:` IS HELD TO WHAT THE ELEMENT WRITES BACK: a numeric input writes a
+// number or `undefined` (32.58), a text field a string — or a number where its value is one — a
+// `<select>` one of the value's own strings and a `<select multiple>` a list of them, `checked` and
+// `open` a boolean and `files` a list of files, and a `type` written as an expression the union of
+// every input's. The binds above the line check clean;
+// each below it has a `set` taking what the element never writes. THE REVERT: open every element
+// `bind:` with `BIND` in `projectShadow`, as before — the seven below the line report nothing. A
+// `reactive(0)` on a numeric input is one of them: a blank field writes `undefined` into it.
+test("an element's bind: is held to what the element writes — 32.78", async () => {
+    const bound = appFixture({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                skipLibCheck: true,
+            },
+            include: ['.'],
+        }),
+        'index.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let amount = reactive<number | undefined>(1)
+let name = reactive('ada')
+let count = reactive(0)
+let tags = reactive<string[]>([])
+let done = reactive(false)
+let files = reactive<File[]>([])
+let kind = reactive('text')
+let either = reactive<string | number | undefined>('')
+let typed = reactive<string | undefined>(undefined)
+let size = reactive<'s' | 'm'>('s')
+let sizes = reactive<('s' | 'm')[]>([])
+</script>
+<input type="number" bind:value={amount} />
+<input type="RANGE" bind:value={{ get: () => amount, set: (picked) => { amount = picked } }} />
+<input bind:value={name} />
+<input type="date" bind:value={{ get: () => name, set: (text: string) => { name = text } }} />
+<textarea bind:value={name}></textarea>
+<input bind:value={either} />
+<select bind:value={name}></select>
+<select multiple bind:value={tags}></select>
+<select bind:value={size}></select>
+<select multiple bind:value={sizes}></select>
+<input type="checkbox" bind:checked={done} />
+<details bind:open={done}></details>
+<input type="file" bind:files={files} />
+<input type={kind} bind:value={either} />
+<input type="number" bind:value={{ get: () => typed, set: (text: string) => { typed = text } }} />
+<input type="number" bind:value={name} />
+<input type="number" bind:value={count} />
+<select multiple bind:value={name}></select>
+<input type="checkbox" bind:checked={name} />
+<input type="file" bind:files={tags} />
+<input type={kind} bind:value={name} />`,
+    })
+    expect(
+        (await checkApp(bound)).map(({ line, code }) => ({ line, code })),
+    ).toEqual([
+        { line: 30, code: 2322 },
+        { line: 31, code: 2345 },
+        { line: 32, code: 2345 },
+        { line: 33, code: 2345 },
+        { line: 34, code: 2345 },
+        { line: 35, code: 2345 },
+        { line: 36, code: 2345 },
+    ])
+}, 60_000)
+
 // 33.23 THROUGH `abide check` — a component typed `& Attributes<'button'>` that spreads its rest onto a
 // `<button>`: a caller's static text, a bare attribute, microdata and a typed listener are each held
 // to what a button takes, and a `type` it does not take is refused. THE REVERT: drop `Written` from

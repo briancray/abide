@@ -17,7 +17,7 @@ const NEW_DEAL = jsonSchema<NewDeal>({
 })
 
 export default POST(
-    ({ name, company, amount }: NewDeal) => {
+    ({ name, company, amount }) => {
         // Every caller shares one list: past ten, the newest replaces the last.
         if (DEALS.length >= 10) DEALS.pop()
         const deal = {

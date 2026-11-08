@@ -20,6 +20,7 @@ import {
     SOURCE_SUFFIX,
 } from './splitImports.ts'
 import type {
+    Attribute,
     Body,
     Branch,
     ElementNode,
@@ -489,7 +490,10 @@ function project(file: AbideFile): Projection {
                         const [kind, open] = attribute.lowerName.startsWith(
                             'bind:',
                         )
-                            ? (['elementBind', `${BIND}(`] as const)
+                            ? ([
+                                  'elementBind',
+                                  bindOpenerOf(node, attribute.lowerName),
+                              ] as const)
                             : openerOf(node.tag, attribute.lowerName)
                         slots.set(
                             attribute,
@@ -636,7 +640,7 @@ function project(file: AbideFile): Projection {
  * implicit `any`; an attribute on a component whose tag is no name a call can spell (`invocation`
  * has the rest) is typed by nothing the shadow can see, and says so with `any` rather than with an
  * error the author did not make. A `bind:` operand is not asked about here: the caller opens it
- * with `BIND`, which types it as `any` too.
+ * with `bindOpenerOf`.
  */
 function openerOf(
     tag: string,
@@ -646,6 +650,44 @@ function openerOf(
     if (isEventName(lowerName))
         return ['listener', `${ON}(${JSON.stringify(lowerName.slice(2))}, `]
     return ['attribute', '(']
+}
+
+/**
+ * What a `bind:` operand on an element is opened with: the bind's `set` held to what the element
+ * writes back (32.78), or `BIND` where the element's write is no type the shadow knows.
+ *
+ * A `type` or a `multiple` written as an expression, or one a spread may write, is read as each it
+ * could be, so the `set` is held to the union of their writes.
+ */
+function bindOpenerOf(node: ElementNode, lowerName: string): string {
+    const kind = writesOf(node, lowerName)
+    return kind === undefined
+        ? `${BIND}(`
+        : `${BIND_WRITES}(${JSON.stringify(kind)})(`
+}
+
+/** Which write a `bind:` on an element stands for, as `BIND_WRITES` names its kinds. */
+function writesOf(node: ElementNode, lowerName: string): string | undefined {
+    if (lowerName === 'bind:checked' || lowerName === 'bind:open')
+        return 'boolean'
+    if (lowerName === 'bind:files') return 'files'
+    if (lowerName !== 'bind:value') return undefined
+    if (node.lowerTag === 'textarea') return 'text'
+    if (node.lowerTag !== 'input' && node.lowerTag !== 'select')
+        return undefined
+    const named = node.lowerTag === 'input' ? 'type' : 'multiple'
+    let written: Attribute | undefined
+    let spread = false
+    for (const attribute of node.attributes) {
+        if (attribute.lowerName === named) written = attribute
+        else if (attribute.name === '...') spread = true
+    }
+    if (written?.expression || (written === undefined && spread))
+        return node.lowerTag === 'input' ? 'input' : 'select'
+    if (node.lowerTag === 'select')
+        return written === undefined ? 'option' : 'options'
+    const type = written?.value.trim().toLowerCase()
+    return type === 'number' || type === 'range' ? 'number' : 'text'
 }
 
 const PROP = '__prop'
@@ -669,6 +711,8 @@ const ON = '__on'
 const ANY = '__any'
 /** 31.3 — what a `bind:` operand is wrapped in on an element and on a component. */
 const BIND = '__bind'
+/** 32.78 — what an element's `bind:` is opened with where the shadow knows what the element writes. */
+const BIND_WRITES = '__bindWrites'
 const BOUND = '__bound'
 
 /** 33.6 — the type a written prop's cell is checked as, which is the framework's own. */
@@ -696,6 +740,12 @@ declare function ${ANY}(value: any): void
 declare function ${PROP}<Value>(value: Value): Value
 declare function ${BIND}<Value>(value: { get(): Value; set(value: Value): unknown }): void
 declare function ${BIND}(value: any): void
+type ${BIND_WRITES}Number<Value> = [Extract<Value, number>] extends [never] ? never : number | undefined
+type ${BIND_WRITES}Text<Value> = [Extract<Value, number>] extends [never] ? string : [Exclude<Value, number>] extends [never] ? number | undefined : string | number | undefined
+type ${BIND_WRITES}Option<Value> = [Extract<Value, string>] extends [never] ? ${BIND_WRITES}Text<Value> : Extract<Value, string> | ${BIND_WRITES}Number<Value>
+type ${BIND_WRITES}Options<Value> = Value extends readonly (infer Item)[] ? [Extract<Item, string>] extends [never] ? string[] : Extract<Item, string>[] : string[]
+type ${BIND_WRITES}Of<Kind, Value> = Kind extends 'boolean' ? boolean : Kind extends 'files' ? File[] : Kind extends 'number' ? number | undefined : Kind extends 'input' ? string | number | undefined : Kind extends 'option' ? ${BIND_WRITES}Option<Value> : Kind extends 'options' ? ${BIND_WRITES}Options<Value> : Kind extends 'select' ? ${BIND_WRITES}Option<Value> | ${BIND_WRITES}Options<Value> : ${BIND_WRITES}Text<Value>
+declare function ${BIND_WRITES}<Kind extends string>(kind: Kind): <Value>(value: { (): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown } | { get(): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown }) => void
 declare function ${BOUND}<Value>(value: ${REACTIVE}<Value, any, any, any>): Value
 declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unknown }): Value
 declare function __restValues<Accessors>(record: Accessors): { [Key in keyof Accessors]: NonNullable<Accessors[Key]> extends () => infer Value ? Value : never }

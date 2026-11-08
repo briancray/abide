@@ -7,12 +7,12 @@ type NewDeal = { name: string; company: string; amount: number }
 
 let name = reactive('Ledger audit')
 let company = reactive('')
-let amount = reactive(0)
+let amount = reactive<number | undefined>(0)
 let issues = reactive<Issues<NewDeal>>({})
 
 async function add() {
     try {
-        await createDeal({ name, company, amount })
+        await createDeal({ name, company, amount: amount ?? 0 })
         issues = {}
     } catch (error) {
         if (!createDeal.isError(error, 'ValidationError')) throw error
@@ -25,7 +25,7 @@ async function add() {
 <div class="row">
     <label>name <input bind:value={name}></label>
     <label>company <input bind:value={company}></label>
-    <label>amount <input bind:value={amount}></label>
+    <label>amount <input type="number" bind:value={amount}></label>
     <button onclick={add}>Add deal</button>
 </div>
 
