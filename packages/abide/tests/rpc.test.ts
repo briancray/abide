@@ -260,6 +260,33 @@ test("a rung's named refusal is on the Rpc's failures, and narrows by name — 1
     expect([names, owners]).toEqual([true, ['someone']])
 })
 
+// 16.87 — A DECLARED `args` TYPES THE HANDLER'S PARAMETER, so the body is not annotated a second
+// time. The type half is `Typed`, which is `never` for `any`: each read only compiles where the
+// member took the schema's type rather than the `any` an unannotated destructuring falls back to.
+// THE REVERT: write `Schema<NoInfer<Args>>` in `Shaping`'s `args` — `n` and `name` are `any`, and
+// both reads fail typecheck, `any` assigned to `never`.
+test("a declared args types the handler's parameter — 16.87", async () => {
+    type Typed<Value> = 0 extends 1 & Value ? never : Value
+    const double = POST(
+        ({ n }) => {
+            const read: Typed<typeof n> = n
+            return read * 2
+        },
+        { args: (value: unknown) => value as { n: number } },
+    )
+    const greet = GET(
+        ({ name }) => {
+            const read: Typed<typeof name> = name
+            return `hi ${read}`
+        },
+        { args: (value: unknown) => value as { name: string } },
+    )
+    expect([await double({ n: 2 }), await greet({ name: 'ada' })]).toEqual([
+        4,
+        'hi ada',
+    ])
+})
+
 // 16.8, 19.9 — A HANDLER WHOSE ARGS THE ANNOTATION CHECKS CARRIES THE `ValidationError` THE WIRE
 // REFUSES THEM WITH, no `args` gate declared: the schema 19.9 derives is an object's wherever `Args` is
 // one record, and a call outside the process that does not hold to it is answered 422 before the body

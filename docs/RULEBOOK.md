@@ -1138,6 +1138,9 @@ as a write made here (3.10), and a `GET`'s copy that 16.81 or this settles MUST 
 declaration, and a rung naming no refusal, one typed to answer anything or a `Middleware` whose
 `Refused` is `Failed<string, unknown>`, MUST add none.
 
+16.87 A handler whose parameter carries no annotation MUST take its `Args` from the `args` its options
+declare.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
