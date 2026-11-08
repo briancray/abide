@@ -3289,7 +3289,8 @@ one JSON row per line as each lands, for the items `inScope` and `matchesFilter`
 runner wrote no report as `broken` rather than as a result.
 
 43.28 The DOM `@abide/harness/preload` registers MUST leave the runtime's own `fetch`, `Request`,
-`Response`, `Headers`, `Blob`, `File`, `FormData`, `AbortController` and `AbortSignal` the globals.
+`Response`, `Headers`, `Blob`, `File`, `FormData`, `AbortController`, `AbortSignal`, `WebSocket`,
+`TransformStream` and `WritableStream` the globals.
 
 43.29 `runBenches` MUST run, as one bench each, every function a bench file exports other than
 `CEILINGS`.
@@ -3304,6 +3305,9 @@ naming a bench its file does not export.
 43.33 `harness-bench` MUST exit non-zero where `runBenches` reports anything under 43.31 or 43.32.
 
 43.34 `runBenches` given `only` MUST run only the bench files whose path below `root` holds it.
+
+43.35 The DOM `@abide/harness/preload` registers MUST NOT fetch a stylesheet or a script a document
+it parses names.
 
 # 44. The assistant
 
