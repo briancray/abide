@@ -48,13 +48,26 @@ export function buildApp(
 }
 
 // `abide start` on a built app, on a port the OS picks — answered once it has printed where.
+// `flags` are laid after the command's own.
 export async function startApp(
     app: string,
     env: Record<string, string | undefined> = process.env,
     out = buildDirectory(app),
+    flags: string[] = [],
 ): Promise<{ base: string; stop: () => void }> {
     const server = Bun.spawn(
-        ['bun', BIN, 'start', '--root', app, '--out', out, '--port', '0'],
+        [
+            'bun',
+            BIN,
+            'start',
+            '--root',
+            app,
+            '--out',
+            out,
+            '--port',
+            '0',
+            ...flags,
+        ],
         // THE ENVIRONMENT AS IT STANDS, which a spawn does not take by default: bun hands a child
         // the one this process started with, so a test that set a variable would not reach it.
         { stdout: 'pipe', stderr: 'pipe', env },
@@ -106,12 +119,13 @@ export async function lastLinePrinted<Parsed>(
 export async function serveApp(
     files: Record<string, string>,
     env: Record<string, string | undefined> = process.env,
+    flags: string[] = [],
 ): Promise<{ app: string; base: string; stop: () => void }> {
     const app = appFixture(files)
     const built = await buildApp(app)
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)
-    return { app, ...(await startApp(app, env)) }
+    return { app, ...(await startApp(app, env, undefined, flags)) }
 }
 
 // WHAT A BUILD KEPT, read as `abide start` reads it: each `.abide` compiled and each handler file's

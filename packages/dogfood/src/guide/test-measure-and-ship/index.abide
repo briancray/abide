@@ -379,7 +379,7 @@ abide start --port 8080`} />
         <Snippet source={bunfigSource} path="bunfig.toml" from={['[fmt]', 'tabWidth', 'semi', 'singleQuote', 'sortImports']} />
 
         <p><code>abide build</code> writes content-hashed chunks and a manifest naming them.
-            <code>abide start [--port &lt;n&gt;]</code> serves what was built, and builds first where
+            <code>abide start [--port &lt;n&gt;] [--hostname &lt;host&gt;]</code> serves what was built, and builds first where
             nothing was. Configuration is checked as it starts, so a misconfigured deployment fails to
             come up.</p>
 

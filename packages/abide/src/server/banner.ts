@@ -9,15 +9,16 @@ import type { AppPackage } from './config.ts'
  * What `start` and `dev` print once the app is listening: the app, and every address it answers at.
  *
  * THE LOCAL ADDRESS IS THE FIRST URL PRINTED, because a harness reading the output takes the first
- * `http://` it finds (`addressOf` in the tests). The network rows follow it unconditionally: neither
- * `listen` nor `serveDev` names a hostname, and `Bun.serve` given none binds every interface —
- * whatever `url` says.
+ * `http://` it finds (`addressOf` in the tests). 38.58, 38.136 — the network rows follow it where the
+ * listener binds every interface, which `Bun.serve` given no `hostname` does whatever `url` says, and
+ * are left out where `hostname` names one interface.
  */
 export function banner(
     host: string,
     command: string,
     identity: AppPackage,
     server: Bun.Server<unknown>,
+    hostname: string | undefined,
 ): string {
     const color = useColor()
     const paint = (code: string, text: string): string =>
@@ -29,8 +30,11 @@ export function banner(
             ? ''
             : `  ${paint('2', `${identity.name}${identity.version === undefined ? '' : ` ${identity.version}`}`)}`
     let text = `\n  ${title}${named}\n\n  ${paint('32', '➜')}  ${paint('1', 'Local:')}    ${paint('36', local)}\n`
-    for (const address of networkAddresses())
-        text += `  ${paint('32', '➜')}  ${paint('1', 'Network:')}  ${paint('36', `${server.url.protocol}//${address}:${server.port}/`)}\n`
+    const everyInterface =
+        hostname === undefined || hostname === '0.0.0.0' || hostname === '::'
+    if (everyInterface)
+        for (const address of networkAddresses())
+            text += `  ${paint('32', '➜')}  ${paint('1', 'Network:')}  ${paint('36', `${server.url.protocol}//${address}:${server.port}/`)}\n`
     return text
 }
 

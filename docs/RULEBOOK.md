@@ -1518,7 +1518,7 @@ stale-if-error=31536000`.
 
 # 22. Request-scoped ambients
 
-22.1 `request`, `response` and `server` MUST throw outside a request.
+22.1 `request`, `requestIP`, `response` and `server` MUST throw outside a request.
 
 22.2 `cookies` MUST be isomorphic, and on a server writes MUST be collected onto the response.
 
@@ -1544,6 +1544,13 @@ be that scope's alone.
 
 22.11 `isServer` MUST be true inside a request, an `App.run` or a `render`, and wherever there is no
 document, and MUST be false everywhere else.
+
+22.12 `requestIP` MUST answer the address of the peer the listener received the request being served
+from, the same under `abide start`, `abide dev` and `App.listen`, and `null` where the listener names
+none.
+
+22.13 `requestIP` MUST answer `'in-process'` for a request no listener received: one `App.fetch` or
+`App.run` was handed in process, a call the app makes of itself among them.
 
 # 23. Route and connectivity
 
@@ -2531,6 +2538,16 @@ that component stands, and MUST file nothing where that `<script>` runs for a se
 37.18 In a browser, an `onError` that throws MUST be written to `abide:lifecycle`, and MUST NOT keep
 any other `onError` from being handed the error.
 
+37.19 A `middleware` rung MUST be handed as `ctx.lane` the `Lane` that answers the request it is
+handed, a request a rung handed `next` included: `handler` where a handler answers its method at its
+address, a private handler and one abide mounts included; `file` a file under a `public` directory;
+`openapi`, `mcp` and `bridge` that address of abide's own; `socket` the upgrade to the socket mux;
+`abide` every other address under `/__abide`; and `page` every other address, one nothing answers
+included.
+
+37.20 A `middleware` rung MUST be handed the request addressed below the path `APP_URL` names, as
+the route table reads it.
+
 # 38. Commands
 
 ## The commands
@@ -2937,6 +2954,14 @@ process MUST start as a bare `invalidate` (13.6) leaves the values the files bef
 38.134 A prop a test hands a component it binds for `mount` as an own getter MUST be read through
 that getter on each read the component makes, and any other prop MUST be the value it held when the
 component was bound.
+
+38.135 `abide routes` MUST print beside each handler every rung its declaration's `middleware`
+names, as written — an entry by the function it calls or the name it refers to, a spread by what it
+spreads, an inline function as `<inline>`, and a value that is no array as one entry — and MUST say
+where that declaration's options are not an object written inline.
+
+38.136 `abide dev`, `abide start`, the executable's `start` and the app 38.53 serves MUST listen on
+the interface `--hostname` names alone, and on every interface where it names none.
 
 # 39. Head and view transitions
 

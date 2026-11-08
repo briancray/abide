@@ -72,7 +72,7 @@ test('a body is pulled from the worker one chunk per read — 38.35, 38.36', asy
                 ),
             ),
     )
-    const response = await relay.ask(new Request('http://dev.test/count'))
+    const response = await relay.ask(new Request('http://dev.test/count'), null)
     const reader = (response.body as ReadableStream<Uint8Array>).getReader()
     const read: number[] = []
     for (let index = 0; index < 3; index += 1)
@@ -95,10 +95,10 @@ test('a body of declared length crosses whole with its head — 38.35', async ()
             ? new Response('whole', { headers: { 'content-length': '5' } })
             : new Response(null, { status: 204 })
     }, crossed)
-    const whole = await relay.ask(new Request('http://dev.test/whole'))
+    const whole = await relay.ask(new Request('http://dev.test/whole'), null)
     expect(whole.headers.get('content-length')).toBe('5')
     expect(await whole.text()).toBe('whole')
-    const empty = await relay.ask(new Request('http://dev.test/empty'))
+    const empty = await relay.ask(new Request('http://dev.test/empty'), null)
     expect(`${empty.status} ${empty.body}`).toBe('204 null')
     expect(crossed.filter((kind) => kind === 'pull').length).toBe(0)
 })
@@ -122,7 +122,7 @@ test('an html body failing mid-stream shows the failure, then errors — 38.37',
             { headers: { 'content-type': 'text/html' } },
         )
     })
-    const response = await relay.ask(new Request('http://dev.test/page'))
+    const response = await relay.ask(new Request('http://dev.test/page'), null)
     const reader = (response.body as ReadableStream<Uint8Array>).getReader()
     let text = ''
     let failed = ''
@@ -155,7 +155,10 @@ test('a replaced worker’s unanswered request is asked again of the next — 38
             () => listener,
         ),
     )
-    const headed = await listener.ask(new Request('http://dev.test/stream'))
+    const headed = await listener.ask(
+        new Request('http://dev.test/stream'),
+        null,
+    )
     const reading = (headed.body as ReadableStream<Uint8Array>)
         .getReader()
         .read()
@@ -169,6 +172,7 @@ test('a replaced worker’s unanswered request is asked again of the next — 38
             method: 'POST',
             body: 'dune',
         }),
+        null,
     )
     await settled()
     listener.replace(undefined)
@@ -208,7 +212,7 @@ test('cancelling the body aborts the request and its source — 38.96', async ()
             }),
         )
     })
-    const response = await relay.ask(new Request('http://dev.test/long'))
+    const response = await relay.ask(new Request('http://dev.test/long'), null)
     const reader = (response.body as ReadableStream<Uint8Array>).getReader()
     await reader.read()
     await reader.cancel()

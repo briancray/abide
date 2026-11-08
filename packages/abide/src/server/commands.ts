@@ -245,10 +245,11 @@ function usage(host: Host, commands: Row[]): string {
             text += `  ${command.padEnd(width)}  ${meaning}\n`
     if (!sourced)
         return `${text}
-  --port     the listen port the app is served on
-  --url      the running app the shell, call, watch, openapi and mcp talk to
-  --method   the method call sends, where the handler answers more than one
-  --version  the version of this executable's app
+  --port      the listen port the app is served on
+  --hostname  the interface it listens on — every one where none is named
+  --url       the running app the shell, call, watch, openapi and mcp talk to
+  --method    the method call sends, where the handler answers more than one
+  --version   the version of this executable's app
 `
     text += `
   --root       the app's source directory, where its pages sit —
@@ -256,6 +257,7 @@ function usage(host: Host, commands: Row[]): string {
   --out        where the build goes, beside the app by default; the file compile and
                bundle write — named after the app, where you stand
   --port       the listen port for dev, start and the shell's app
+  --hostname   the interface they listen on — every one where none is named
   --url        the running app the shell, call, watch, openapi and mcp talk to
   --target     the platform compile builds for — linux-x64, darwin-arm64, windows-x64…
   --platforms  several of them, comma-separated, one executable each
@@ -291,6 +293,8 @@ function parseFlags(argv: string[]) {
             // `PORT` and then falls back to 3000 — `abide dev` scanning on from there, 38.63 — and
             // a default written here would take that away from every host that sets it.
             port: { type: 'string' },
+            // NO DEFAULT EITHER: `Bun.serve` given none binds every interface (38.136).
+            hostname: { type: 'string' },
             url: { type: 'string' },
             method: { type: 'string' },
             target: { type: 'string' },
@@ -321,14 +325,17 @@ async function served(
     process.env.NODE_ENV ??= 'production'
     const booted = await booting(host, app, given)
     if (typeof booted === 'number') return booted
-    const port = given.values.port
-    await booted.listen(port === undefined ? {} : { port: Number(port) })
+    const { port, hostname } = given.values
+    await booted.listen({
+        ...(port === undefined ? {} : { port: Number(port) }),
+        ...(hostname === undefined ? {} : { hostname }),
+    })
     stopOnSignalOrFault(booted)
     const server = LISTENING.server as Bun.Server<unknown>
     return {
         app: booted,
         url: withoutTrailingSlash(server.url.href),
-        heading: banner(host.name, 'start', app.package, server),
+        heading: banner(host.name, 'start', app.package, server, hostname),
     }
 }
 

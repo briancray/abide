@@ -31,6 +31,31 @@ server.middleware((next) => next())
 
 export default server.GET(() => [1, 2])
 `,
+        // 38.135 — a handler's own rungs, named as written: a call, a spread, a name, inline.
+        'media/lib/homeAccess.ts': `import type { Middleware } from '@abide/abide'
+
+export const homeAccess = (): Middleware[] => [(next) => next()]
+export const audited: Middleware = (next) => next()
+`,
+        'media/saveGrid.handler.ts': `import { POST } from '@abide/abide/server'
+import { audited, homeAccess } from './lib/homeAccess.ts'
+
+export default POST(() => 'saved', {
+    middleware: [...homeAccess(), audited, (next) => next()],
+})
+`,
+        'media/dropGrid.handler.ts': `import { DELETE } from '@abide/abide/server'
+import { homeAccess } from './lib/homeAccess.ts'
+
+const OPTIONS = { middleware: homeAccess() }
+
+export default DELETE(() => 'dropped', OPTIONS)
+`,
+        'media/openGrid.handler.ts': `import { PUT } from '@abide/abide/server'
+import { homeAccess } from './lib/homeAccess.ts'
+
+export default PUT(() => 'opened', { middleware: homeAccess() })
+`,
         // 16.70 — declared, not exported: the component's own, answered below `/__abide/handlers/`.
         'media/lib/Card.abide': `<script server>
 import { POST } from '@abide/abide/server'
@@ -46,8 +71,9 @@ afterAll(removeTemporaryModules)
 
 // THE REVERT: answer `kind: 'handler'` for every mount in `appMap`; the private handler reads
 // `handler`, and the text loses its `(private)`. Drop `matchers` from `appMap`'s rows; the page
-// names `ID` with nothing saying what it takes.
-test('abide routes --json lists every route, the private handler marked, and every hook — 38.108', async () => {
+// names `ID` with nothing saying what it takes. 38.135 — answer `[]` from `rungsNamed`; the three
+// guarded handlers read as carrying no rungs, `saveGrid`'s three names and `dropGrid`'s unread lost.
+test("abide routes --json lists every route, the private handler marked, each handler's rungs, and every hook — 38.108, 38.135", async () => {
     const ran = await spawned(['bun', BIN, 'routes', '--root', app, '--json'])
     expect(ran.exitCode, ran.stderr).toBe(0)
     expect(JSON.parse(ran.stdout)).toEqual({
@@ -58,6 +84,7 @@ test('abide routes --json lists every route, the private handler marked, and eve
                 file: 'index.abide',
                 kind: 'page',
                 matchers: {},
+                middleware: [],
             },
             {
                 method: 'POST',
@@ -65,6 +92,7 @@ test('abide routes --json lists every route, the private handler marked, and eve
                 file: 'media/lib/Card.abide',
                 kind: 'private',
                 matchers: {},
+                middleware: [],
             },
             {
                 method: 'GET',
@@ -72,6 +100,15 @@ test('abide routes --json lists every route, the private handler marked, and eve
                 file: 'media/[id=ID].abide',
                 kind: 'page',
                 matchers: { ID: '^(?!\\.\\.?$)(?:\\d+)$' },
+                middleware: [],
+            },
+            {
+                method: 'DELETE',
+                address: '/media/dropGrid',
+                file: 'media/dropGrid.handler.ts',
+                kind: 'handler',
+                matchers: {},
+                middleware: null,
             },
             {
                 method: 'GET',
@@ -79,6 +116,23 @@ test('abide routes --json lists every route, the private handler marked, and eve
                 file: 'media/getGrid.handler.ts',
                 kind: 'handler',
                 matchers: {},
+                middleware: [],
+            },
+            {
+                method: 'PUT',
+                address: '/media/openGrid',
+                file: 'media/openGrid.handler.ts',
+                kind: 'handler',
+                matchers: {},
+                middleware: ['homeAccess'],
+            },
+            {
+                method: 'POST',
+                address: '/media/saveGrid',
+                file: 'media/saveGrid.handler.ts',
+                kind: 'handler',
+                matchers: {},
+                middleware: ['homeAccess', 'audited', '<inline>'],
             },
         ],
         hooks: [
@@ -96,7 +150,7 @@ test('abide routes prints the same map as text — 38.108', async () => {
     const ran = await spawned(['bun', BIN, 'routes', '--root', app])
     expect(ran.exitCode, ran.stderr).toBe(0)
     const lines = ran.stdout.trimEnd().split('\n')
-    expect(lines.slice(0, 4).map((line) => line.split(/\s+/))).toEqual([
+    expect(lines.slice(0, 7).map((line) => line.split(/\s+/))).toEqual([
         ['GET', '/', 'index.abide'],
         [
             'POST',
@@ -105,9 +159,32 @@ test('abide routes prints the same map as text — 38.108', async () => {
             '(private)',
         ],
         ['GET', '/media/[id=ID]', 'media/[id=ID].abide'],
+        [
+            'DELETE',
+            '/media/dropGrid',
+            'media/dropGrid.handler.ts',
+            'middleware:',
+            'unread',
+        ],
         ['GET', '/media/getGrid', 'media/getGrid.handler.ts'],
+        [
+            'PUT',
+            '/media/openGrid',
+            'media/openGrid.handler.ts',
+            'middleware:',
+            'homeAccess',
+        ],
+        [
+            'POST',
+            '/media/saveGrid',
+            'media/saveGrid.handler.ts',
+            'middleware:',
+            'homeAccess,',
+            'audited,',
+            '<inline>',
+        ],
     ])
-    expect(lines.slice(4)).toEqual([
+    expect(lines.slice(7)).toEqual([
         '',
         'matchers',
         `  ID  /^(?!\\.\\.?$)(?:\\d+)$/`,

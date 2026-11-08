@@ -45,6 +45,11 @@ export type Mount = {
     /** Its `description`, where the declaration writes one as a literal the build can read. */
     description: string | undefined
     /**
+     * The rung each entry of its declaration's `middleware` names, as written; `null` where the
+     * options are not written where the build can read them. 38.135.
+     */
+    middleware: string[] | null
+    /**
      * What a `GET`'s value declares that the browser's copy behaves by, or `undefined`.
      *
      * 18.4 — set where its declaration names any of it.
@@ -134,6 +139,7 @@ export function mountedOwn(
             cli: false,
             mcp: false,
             description: undefined,
+            middleware: [],
             copy: undefined,
             defaults: undefined,
             args: undefined,

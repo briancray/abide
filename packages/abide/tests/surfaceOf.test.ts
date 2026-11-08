@@ -31,6 +31,7 @@ function row(path: string, rest: Partial<Mount> = {}): Mount {
         cli: true,
         mcp: true,
         description: undefined,
+        middleware: [],
         copy: undefined,
         defaults: undefined,
         args: undefined,

@@ -241,12 +241,14 @@ import Snippet from '#src/lib/Snippet.abide'
         <p>The same <code>adminsOnly</code> fits a layout, and there it runs over every page and
             handler below it. Its refusal is answered in the lane the request was in: the section's
             <code>error.abide</code> paints it over a page, and a handler answers it as Problem
-            Details. A layout's rung has the request and nothing else, so it cannot read a handler's
-            arguments.</p>
+            Details. A layout's rung has the request and its <code>lane</code> — what answers it —
+            and not a handler's arguments.</p>
 
         <p>Filed in the root <code>src/layout.abide</code>, a rung runs before routing, over
-            every request the app answers. <code>abide routes</code> lists each rung beside the route
-            it is filed at.</p>
+            every request the app answers, abide's own addresses included, each addressed below the
+            mount. A gate over pages alone tests <code>lane === 'page'</code> rather than spelling
+            out which paths are abide's. <code>abide routes</code> lists each rung beside the route
+            it is filed at, and the rungs each handler names.</p>
     </Section>
 
     <Section title="`crossOrigin` opens one handler to a partner">
@@ -370,7 +372,8 @@ import Snippet from '#src/lib/Snippet.abide'
             <tbody>
                 <tr><td><code>request()</code></td><td>the platform's <code>Request</code>: headers, URL, method, signal</td></tr>
                 <tr><td><code>response()</code></td><td>the status and headers being sent back</td></tr>
-                <tr><td><code>server()</code></td><td>the listening <code>Bun.Server</code>, for what abide does not carry, such as a client's IP</td></tr>
+                <tr><td><code>requestIP()</code></td><td>the address the request came from, the same under <code>abide dev</code> and <code>abide start</code>, or <code>'in-process'</code> for a call the app made of itself</td></tr>
+                <tr><td><code>server()</code></td><td>the listening <code>Bun.Server</code>, for what abide does not carry</td></tr>
             </tbody>
         </table>
 

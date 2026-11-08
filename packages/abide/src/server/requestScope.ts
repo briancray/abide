@@ -445,6 +445,35 @@ export function response(): { status: number; headers: Headers } {
     return scope.response
 }
 
+/** Where a request came from: a peer's address, `null` where the listener names none. */
+export type ReceivedFrom = {
+    address: string
+    family: 'IPv4' | 'IPv6'
+    port: number
+} | null
+
+/**
+ * The peer each request a listener received came from, keyed by the request it handed the app.
+ *
+ * 22.12 — FILED BY THE LISTENER: `App.listen` files what bun names, and `abide dev`'s worker what its
+ * listener sent beside the request (38.14). A request nobody filed was made in process.
+ */
+export const RECEIVED_FROM = new WeakMap<Request, ReceivedFrom>()
+
+/**
+ * The address the request being served came from, or `'in-process'` for one no listener received.
+ *
+ * 22.12, 22.13 — the same under `abide start`, `abide dev` and `App.listen`; `null` where the
+ * listener names no peer, as a unix socket does. A socket mux frame answers its upgrade's.
+ */
+export function requestIP(): ReceivedFrom | 'in-process' {
+    const scope = within('requestIP')
+    const asked = (scope.received ?? scope.request) as Request
+    return RECEIVED_FROM.has(asked)
+        ? (RECEIVED_FROM.get(asked) as ReceivedFrom)
+        : 'in-process'
+}
+
 /**
  * The listening server.
  *

@@ -111,13 +111,27 @@ process.exit(3)
 </script>
 
 <main id="exit"/>`,
+        // 22.12 — where a call came from, which only the listener's process can see.
+        'whereFrom.handler.ts':
+            "import { GET, requestIP } from '@abide/abide/server'\n\nexport default GET(() => requestIP())\n",
         'package.json': PACKAGE,
         'tsconfig.json': TSCONFIG,
     })
-    server = Bun.spawn(['bun', BIN, 'dev', '--root', app, '--port', '0'], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
+    // 38.136 — on the loopback interface alone.
+    server = Bun.spawn(
+        [
+            'bun',
+            BIN,
+            'dev',
+            '--root',
+            app,
+            '--port',
+            '0',
+            '--hostname',
+            '127.0.0.1',
+        ],
+        { stdout: 'pipe', stderr: 'pipe' },
+    )
     const decoder = new TextDecoder()
     const stderr = server.stderr as ReadableStream<Uint8Array>
     const told = (async () => {
@@ -681,3 +695,30 @@ test('a dev server given a taken port does not move off it — 38.64', async () 
         release?.()
     }
 }, 30_000)
+
+// 38.136 — `abide dev --hostname` LISTENS ON THAT INTERFACE ALONE, as `abide start`'s does
+// (`requestIP.test.ts`). THE REVERT: drop `hostname` from what `serveDev` hands `Bun.serve`; the
+// address prints as `localhost` and the IPv6 loopback answers.
+test('dev --hostname listens on the interface it names alone — 38.136', async () => {
+    const at = new URL(base)
+    expect(at.hostname).toBe('127.0.0.1')
+    const elsewhere = await Bun.fetch(`http://[::1]:${at.port}/`).then(
+        () => 'answered',
+        () => 'refused',
+    )
+    expect(elsewhere).toBe('refused')
+})
+
+// 22.12 — THE PEER CROSSES TO THE WORKER WITH THE REQUEST, so a handler under `abide dev` reads what
+// one under `abide start` does. THE REVERT: drop the `RECEIVED_FROM.set` from the worker's `fetch`;
+// the call reads `'in-process'`.
+test('requestIP answers the peer the listener received under dev — 22.12', async () => {
+    const from = (await (
+        await Bun.fetch(`${base}/whereFrom`)
+    ).json()) as Record<string, unknown>
+    expect([from.address, from.family, typeof from.port]).toEqual([
+        '127.0.0.1',
+        'IPv4',
+        'number',
+    ])
+})

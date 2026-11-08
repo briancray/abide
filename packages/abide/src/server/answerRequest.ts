@@ -33,7 +33,12 @@ import { answerBridge } from './bridgeRelay.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { answerMcp, openApi } from './generatedSurfaces.ts'
-import { failureOf, type LaneRung } from './hooks.ts'
+import {
+    type AppContext,
+    failureOf,
+    type Lane,
+    type LaneRung,
+} from './hooks.ts'
 import { type Mounted, mountedOwn } from './mountHandlers.ts'
 import { muxAdmission } from './muxUpgrade.ts'
 import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
@@ -95,10 +100,7 @@ export type RouteRow = {
      * 16.14 — composed once with the table. Every server block is imported before it is built
      * (37.1), so these are the rungs the boot found, as the root's are.
      */
-    answers: Map<
-        Ranked | Mounted,
-        (ctx: { request: Request }) => Promise<Response>
-    >
+    answers: Map<Ranked | Mounted, (ctx: AppContext) => Promise<Response>>
 }
 
 /** A public file, read once at boot: where the bytes are, the etag off them, and its type. */
@@ -171,7 +173,7 @@ export async function answerRequest(
     // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where it answers nothing.
     const surface = SURFACES.get(asked)
     if (surface !== undefined) {
-        const answer = await surface(app, request)
+        const answer = await surface.answer(app, request)
         if (answer === undefined) return notFound()
         // 21.4 — an answer about the app's surfaces is never cached.
         return answerValue(
@@ -187,11 +189,7 @@ export async function answerRequest(
     // 37.3 — THE MUX'S UPGRADE PASSES THE APP LANE as every request does (`muxUpgrade`).
     const admitted = muxAdmission(asked, request, app)
     if (admitted !== undefined) return admitted
-    // 16.70 — a private handler is answered by the route table, below abide's own namespace.
-    if (
-        asked.startsWith(`${ABIDE_ADDRESS}/`) &&
-        !asked.startsWith(`${PRIVATE_HANDLERS_ADDRESS}/`)
-    ) {
+    if (isFrameworkAddress(asked)) {
         const answer = app.framework(asked, request)
         if (answer === undefined) return notFound()
         return readsOnly(request) ? answer : methodRefused(app, asked, READS)
@@ -217,38 +215,7 @@ export async function answerRequest(
             refuse(400, 'The address is not a valid path.'),
         )
 
-    // 19.20 — THE MOST SPECIFIC ROUTE ANSWERING THE METHOD, an `OPTIONS` asking about the method
-    // its preflight names (16.24). A route that matches and answers some other method is held, so
-    // an address nothing answers the method at is a 405 naming what is answered there (15.17).
-    const preflight = request.method === 'OPTIONS'
-    // `null` for an `OPTIONS` that names no method, which is no preflight (Fetch's CORS-preflight
-    // request carries one) and so no handler's: the route answers 15.17's 405 with what it allows.
-    const asking = preflight
-        ? request.headers.get('access-control-request-method')
-        : method
-    let allowed: Set<string> | undefined
-    let found:
-        | { route: RouteRow; params: Params; handler: Mounted | undefined }
-        | undefined
-    for (const route of app.routes) {
-        const params = matchOf(route.segments, parts)
-        if (params === undefined) continue
-        const handler =
-            asking === null ? undefined : route.handlers.get(asking as Method)
-        if (
-            handler !== undefined ||
-            (!preflight && asking === 'GET' && route.page !== undefined)
-        ) {
-            found = { route, params, handler }
-            break
-        }
-        allowed ??= new Set()
-        if (route.page !== undefined) allowed.add('GET').add('HEAD')
-        for (const method of route.handlers.keys()) {
-            allowed.add(method)
-            if (method === 'GET') allowed.add('HEAD')
-        }
-    }
+    const { found, allowed } = routed(app, parts, request)
     if (found === undefined) {
         if (allowed !== undefined)
             return methodRefused(app, asked, [...allowed], request)
@@ -270,8 +237,90 @@ export async function answerRequest(
     scope.params = found.params
     const answer = found.route.answers.get(
         found.handler ?? (found.route.page as Ranked),
-    ) as (ctx: { request: Request }) => Promise<Response>
-    return answer({ request })
+    ) as (ctx: AppContext) => Promise<Response>
+    return answer({
+        request,
+        lane: found.handler === undefined ? 'page' : 'handler',
+    })
+}
+
+/**
+ * What `answerRequest` would answer `request` with, by the arm of its dispatch it takes. 37.19.
+ *
+ * ASKED IN THE DISPATCH'S OWN ORDER, over the same tables, so a gate reading it before routing
+ * (37.3) is told what routing will choose.
+ */
+export function laneOf(app: AppSources, request: Request): Lane {
+    const asked = new URL(request.url).pathname
+    if (OWN_HANDLERS.has(asked)) return 'handler'
+    const surface = SURFACES.get(asked)
+    if (surface !== undefined) return surface.lane
+    if (muxAdmission(asked, request, app) !== undefined) return 'socket'
+    if (isFrameworkAddress(asked)) return 'abide'
+    if (app.published.has(decodedOrKept(asked))) return 'file'
+    const parts = partsOf(asked)
+    if (parts === undefined) return 'page'
+    return routed(app, parts, request).found?.handler === undefined
+        ? 'page'
+        : 'handler'
+}
+
+/**
+ * Whether `asked` is an address abide answers out of the command's own files.
+ *
+ * 16.70 — a private handler is answered by the route table, below abide's own namespace.
+ */
+function isFrameworkAddress(asked: string): boolean {
+    return (
+        asked.startsWith(`${ABIDE_ADDRESS}/`) &&
+        !asked.startsWith(`${PRIVATE_HANDLERS_ADDRESS}/`)
+    )
+}
+
+/**
+ * The route answering `request` at `parts`, or the methods answered there where none answers its own.
+ *
+ * 19.20 — THE MOST SPECIFIC ROUTE ANSWERING THE METHOD, an `OPTIONS` asking about the method
+ * its preflight names (16.24). A route that matches and answers some other method is held, so
+ * an address nothing answers the method at is a 405 naming what is answered there (15.17).
+ */
+function routed(
+    app: AppSources,
+    parts: string[],
+    request: Request,
+): {
+    found:
+        | { route: RouteRow; params: Params; handler: Mounted | undefined }
+        | undefined
+    allowed: Set<string> | undefined
+} {
+    const preflight = request.method === 'OPTIONS'
+    // `null` for an `OPTIONS` that names no method, which is no preflight (Fetch's CORS-preflight
+    // request carries one) and so no handler's: the route answers 15.17's 405 with what it allows.
+    const asking = preflight
+        ? request.headers.get('access-control-request-method')
+        : request.method === 'HEAD'
+          ? 'GET'
+          : request.method
+    let allowed: Set<string> | undefined
+    for (const route of app.routes) {
+        const params = matchOf(route.segments, parts)
+        if (params === undefined) continue
+        const handler =
+            asking === null ? undefined : route.handlers.get(asking as Method)
+        if (
+            handler !== undefined ||
+            (!preflight && asking === 'GET' && route.page !== undefined)
+        )
+            return { found: { route, params, handler }, allowed: undefined }
+        allowed ??= new Set()
+        if (route.page !== undefined) allowed.add('GET').add('HEAD')
+        for (const method of route.handlers.keys()) {
+            allowed.add(method)
+            if (method === 'GET') allowed.add('HEAD')
+        }
+    }
+    return { found: undefined, allowed }
 }
 
 /**
@@ -370,18 +419,31 @@ const OWN_HANDLERS = new Map([
 
 // THE ADDRESSES ABIDE ANSWERS ITSELF, looked up once rather than asked in turn: each to its value,
 // a `Response` of its own, or `undefined` for a 404.
+// 37.19 — each with the lane a gate is told it is.
 const SURFACES = new Map<
     string,
-    (app: AppSources, request: Request) => unknown
+    {
+        lane: Lane
+        answer: (app: AppSources, request: Request) => unknown
+    }
 >([
-    [OPENAPI_ADDRESS, (app) => openApi(app.handlers)],
+    [
+        OPENAPI_ADDRESS,
+        { lane: 'openapi', answer: (app) => openApi(app.handlers) },
+    ],
     // Filled by the app answering this request, so never `undefined` here.
     [
         MCP_ADDRESS,
-        (_app, request) =>
-            answerMcp((within('mcp').app as AnsweringApp).mcp, request),
+        {
+            lane: 'mcp',
+            answer: (_app, request) =>
+                answerMcp((within('mcp').app as AnsweringApp).mcp, request),
+        },
     ],
-    [BRIDGE_ADDRESS, (_app, request) => answerBridge(request)],
+    [
+        BRIDGE_ADDRESS,
+        { lane: 'bridge', answer: (_app, request) => answerBridge(request) },
+    ],
 ])
 
 /**
@@ -396,7 +458,7 @@ export function answerInside(
     app: AppSources,
     found: Ranked | Mounted,
     rungs: LaneRung[],
-): (ctx: { request: Request }) => Promise<Response> {
+): (ctx: AppContext) => Promise<Response> {
     return compose(rungs, ({ request }) => answerMatched(app, request, found))
 }
 

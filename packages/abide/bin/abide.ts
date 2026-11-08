@@ -821,14 +821,15 @@ async function lsp({ values }: Given): Promise<number> {
  */
 async function dev(
     { root }: AppDirectories,
-    { values: { port } }: Given,
+    { values: { port, hostname } }: Given,
 ): Promise<undefined> {
     process.env.NODE_ENV ??= 'development'
     const server = await serveDev({
         root,
         port: port === undefined ? undefined : Number(port),
+        hostname,
     })
-    console.log(banner('abide', 'dev', packageUnder(root), server))
+    console.log(banner('abide', 'dev', packageUnder(root), server, hostname))
     return undefined
 }
 

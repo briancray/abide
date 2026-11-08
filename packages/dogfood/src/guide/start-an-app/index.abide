@@ -192,7 +192,7 @@ bun run dev`} />
             <thead><tr><th>Command</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
                 <tr><td><code>abide scaffold &lt;name&gt;</code></td><td>writes the starter app above</td></tr>
-                <tr><td><code>abide dev [--port &lt;n&gt;]</code></td><td>serves the app and restarts it on every save; takes the first free port from 3000, or the one you name</td></tr>
+                <tr><td><code>abide dev [--port &lt;n&gt;] [--hostname &lt;host&gt;]</code></td><td>serves the app and restarts it on every save; takes the first free port from 3000, or the one you name, on every interface or the one you name</td></tr>
                 <tr><td><code>abide run &lt;file&gt; [args…]</code></td><td>runs one script with the app's own modules, such as a script that loads contacts from a spreadsheet</td></tr>
                 <tr><td><code>--help</code> · <code>-h</code> · <code>abide help</code></td><td>prints every command</td></tr>
                 <tr><td><code>--version</code> · <code>-v</code></td><td>prints the version installed</td></tr>
