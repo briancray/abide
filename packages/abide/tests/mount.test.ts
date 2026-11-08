@@ -28,7 +28,7 @@ import { route } from '@abide/abide'
 </script>
 
 <main>an invoice at <b id="at">{route.url().pathname}</b></main>`,
-            // 37.16, 37.17 — a root rung that says what it was handed, and a gate over pages alone
+            // 37.19, 37.20 — a root rung that says what it was handed, and a gate over pages alone
             // that sends a closed caller to the login page — written by lane and by the app's own
             // address, with no address of abide's spelled out.
             'layout.abide': `<script server>
@@ -211,15 +211,15 @@ test('an MCP tool call reaches its handler under the mount — 20.10, 36.11', as
     })
 })
 
-// 37.16 — A ROOT RUNG IS TOLD WHAT ANSWERS THE REQUEST, by the arm of the dispatch it takes: a page and
+// 37.19 — A ROOT RUNG IS TOLD WHAT ANSWERS THE REQUEST, by the arm of the dispatch it takes: a page and
 // an address nothing answers, a handler (abide's own `health` among them), a public file, each surface
-// of abide's own, and the rest of `/__abide`. 37.17 — AND IS HANDED IT BELOW THE MOUNT, so the app's
+// of abide's own, and the rest of `/__abide`. 37.20 — AND IS HANDED IT BELOW THE MOUNT, so the app's
 // own address is spelled as its route is. THE REVERTS: answer `'page'` from `laneOf` for everything,
 // and the gate sends the handler, the file and every surface of abide's own to the login page; hand
 // the root rungs the request as it arrived in `App.fetch`, and every path reads `/docs/…` and the
 // gate redirects `/docs/login` to itself, a loop; and keep `ctx.lane` for the request a rung hands
 // `next` in `answering`, and `/alias`, handed on as the public file, reads `page`.
-test('a root rung is told the lane, below the mount, and a page-only gate closes pages alone — 37.16, 37.17', async () => {
+test('a root rung is told the lane, below the mount, and a page-only gate closes pages alone — 37.19, 37.20', async () => {
     const asked = async (path: string): Promise<string> => {
         const answer = await Bun.fetch(`${base}/docs${path}`, {
             headers: { 'x-gate': 'closed' },
@@ -264,9 +264,9 @@ test('a root rung is told the lane, below the mount, and a page-only gate closes
     expect(mcp.headers.get('x-lane')).toBe('mcp /__abide/mcp')
 })
 
-// 37.16 — THE SOCKET MUX'S UPGRADE IS ITS OWN LANE, so a gate can close it apart from every page and
+// 37.19 — THE SOCKET MUX'S UPGRADE IS ITS OWN LANE, so a gate can close it apart from every page and
 // handler. THE REVERT: answer `'abide'` for the upgrade in `laneOf`; the gated socket opens.
-test('the socket upgrade is the socket lane — 37.16', async () => {
+test('the socket upgrade is the socket lane — 37.19', async () => {
     const dir = temporaryModule({
         'client.ts': `const [base, gate] = process.argv.slice(2)
 const ws = new WebSocket(base.replace('http', 'ws') + '/docs/__abide/socket', {

@@ -31,7 +31,7 @@ server.middleware((next) => next())
 
 export default server.GET(() => [1, 2])
 `,
-        // 38.134 — a handler's own rungs, named as written: a call, a spread, a name, inline.
+        // 38.135 — a handler's own rungs, named as written: a call, a spread, a name, inline.
         'media/lib/homeAccess.ts': `import type { Middleware } from '@abide/abide'
 
 export const homeAccess = (): Middleware[] => [(next) => next()]
@@ -71,9 +71,9 @@ afterAll(removeTemporaryModules)
 
 // THE REVERT: answer `kind: 'handler'` for every mount in `appMap`; the private handler reads
 // `handler`, and the text loses its `(private)`. Drop `matchers` from `appMap`'s rows; the page
-// names `ID` with nothing saying what it takes. 38.134 — answer `[]` from `rungsNamed`; the three
+// names `ID` with nothing saying what it takes. 38.135 — answer `[]` from `rungsNamed`; the three
 // guarded handlers read as carrying no rungs, `saveGrid`'s three names and `dropGrid`'s unread lost.
-test("abide routes --json lists every route, the private handler marked, each handler's rungs, and every hook — 38.108, 38.134", async () => {
+test("abide routes --json lists every route, the private handler marked, each handler's rungs, and every hook — 38.108, 38.135", async () => {
     const ran = await spawned(['bun', BIN, 'routes', '--root', app, '--json'])
     expect(ran.exitCode, ran.stderr).toBe(0)
     expect(JSON.parse(ran.stdout)).toEqual({

@@ -1505,11 +1505,11 @@ being served.
 a connection to the socket mux, whose headers went out with the upgrade. A caller minted there MUST
 be that scope's alone.
 
-22.11 `requestIP` MUST answer the address of the peer the listener received the request being served
+22.12 `requestIP` MUST answer the address of the peer the listener received the request being served
 from, the same under `abide start`, `abide dev` and `App.listen`, and `null` where the listener names
 none.
 
-22.12 `requestIP` MUST answer `'in-process'` for a request no listener received: one `App.fetch` or
+22.13 `requestIP` MUST answer `'in-process'` for a request no listener received: one `App.fetch` or
 `App.run` was handed in process, a call the app makes of itself among them.
 
 # 23. Route and connectivity
@@ -2476,14 +2476,14 @@ a 405 for a rung filed at the root route.
 37.15 A `middleware` rung outside one that returned a `Failed` MUST be handed 37.14's answer from
 `next`, and MUST NOT be handed the `Failed`.
 
-37.16 A `middleware` rung MUST be handed as `ctx.lane` the `Lane` that answers the request it is
+37.19 A `middleware` rung MUST be handed as `ctx.lane` the `Lane` that answers the request it is
 handed, a request a rung handed `next` included: `handler` where a handler answers its method at its
 address, a private handler and one abide mounts included; `file` a file under a `public` directory;
 `openapi`, `mcp` and `bridge` that address of abide's own; `socket` the upgrade to the socket mux;
 `abide` every other address under `/__abide`; and `page` every other address, one nothing answers
 included.
 
-37.17 A `middleware` rung MUST be handed the request addressed below the path `APP_URL` names, as
+37.20 A `middleware` rung MUST be handed the request addressed below the path `APP_URL` names, as
 the route table reads it.
 
 # 38. Commands
@@ -2889,12 +2889,12 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 38.133 Under `bun test` with `@abide/abide/test` preloaded, each test file after the first in a
 process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
 
-38.134 `abide routes` MUST print beside each handler every rung its declaration's `middleware`
+38.135 `abide routes` MUST print beside each handler every rung its declaration's `middleware`
 names, as written — an entry by the function it calls or the name it refers to, a spread by what it
 spreads, an inline function as `<inline>`, and a value that is no array as one entry — and MUST say
 where that declaration's options are not an object written inline.
 
-38.135 `abide dev`, `abide start`, the executable's `start` and the app 38.53 serves MUST listen on
+38.136 `abide dev`, `abide start`, the executable's `start` and the app 38.53 serves MUST listen on
 the interface `--hostname` names alone, and on every interface where it names none.
 
 # 39. Head and view transitions

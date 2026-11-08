@@ -245,7 +245,7 @@ export async function answerRequest(
 }
 
 /**
- * What `answerRequest` would answer `request` with, by the arm of its dispatch it takes. 37.16.
+ * What `answerRequest` would answer `request` with, by the arm of its dispatch it takes. 37.19.
  *
  * ASKED IN THE DISPATCH'S OWN ORDER, over the same tables, so a gate reading it before routing
  * (37.3) is told what routing will choose.
@@ -418,7 +418,7 @@ const OWN_HANDLERS = new Map([
 
 // THE ADDRESSES ABIDE ANSWERS ITSELF, looked up once rather than asked in turn: each to its value,
 // a `Response` of its own, or `undefined` for a 404.
-// 37.16 — each with the lane a gate is told it is.
+// 37.19 — each with the lane a gate is told it is.
 const SURFACES = new Map<
     string,
     {

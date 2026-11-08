@@ -18,7 +18,7 @@ export type Ask = {
     url: string
     headers: [string, string][]
     body: ArrayBuffer | null
-    /** 22.11 — the peer the listener received it from. */
+    /** 22.12 — the peer the listener received it from. */
     from: ReceivedFrom
 }
 

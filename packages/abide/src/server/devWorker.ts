@@ -115,7 +115,7 @@ const relay = serveOver(
     { postMessage: toListener },
     {
         async fetch(request, from) {
-            // 22.11 — where the listener received it from, which is not this process.
+            // 22.12 — where the listener received it from, which is not this process.
             RECEIVED_FROM.set(request, from)
             await opening
             return app === undefined

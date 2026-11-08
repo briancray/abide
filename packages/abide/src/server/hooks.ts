@@ -27,7 +27,7 @@ import type { LauncherOptions } from './launcherOptions.ts'
 import { currentRequestScope } from './requestScope.ts'
 
 /**
- * What answers a request, by the lane the app sends it down. 37.16.
+ * What answers a request, by the lane the app sends it down. 37.19.
  *
  * One per arm of `answerRequest`'s dispatch: a page (and every address no route answers), a
  * handler, a public file, the three surfaces of abide's own a gate decides about one by one, the
@@ -43,7 +43,7 @@ export type Lane =
     | 'socket'
     | 'abide'
 
-/** What an app rung is handed: the request, and what answers it (37.16). */
+/** What an app rung is handed: the request, and what answers it (37.19). */
 export type AppContext = { request: Request; lane: Lane }
 
 /** A rung `middleware` files: what `next` answered passed on, or a refusal in its place (37.14). */
@@ -154,7 +154,7 @@ function answering(
     laneOf: ((request: Request) => Lane) | undefined,
 ): LaneRung {
     return async (next, ctx) => {
-        // 37.16 — A REQUEST A RUNG HANDS `next` IS ANSWERED BY WHAT ITS OWN ADDRESS ROUTES TO, asked
+        // 37.19 — A REQUEST A RUNG HANDS `next` IS ANSWERED BY WHAT ITS OWN ADDRESS ROUTES TO, asked
         // again before routing (`laneOf`) and kept after it, where routing has already chosen.
         const result = await rung(
             (given) =>
@@ -178,7 +178,7 @@ function answering(
 /**
  * The rungs filed at the root route, which run before routing. 37.3.
  *
- * `laneOf` is what the dispatch would answer a request with (37.16), asked of one a rung hands on.
+ * `laneOf` is what the dispatch would answer a request with (37.19), asked of one a rung hands on.
  */
 export function rootRungs(
     answer: RefusalAnswer,

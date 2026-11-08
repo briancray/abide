@@ -111,13 +111,13 @@ process.exit(3)
 </script>
 
 <main id="exit"/>`,
-        // 22.11 — where a call came from, which only the listener's process can see.
+        // 22.12 — where a call came from, which only the listener's process can see.
         'whereFrom.handler.ts':
             "import { GET, requestIP } from '@abide/abide/server'\n\nexport default GET(() => requestIP())\n",
         'package.json': PACKAGE,
         'tsconfig.json': TSCONFIG,
     })
-    // 38.135 — on the loopback interface alone.
+    // 38.136 — on the loopback interface alone.
     server = Bun.spawn(
         [
             'bun',
@@ -696,10 +696,10 @@ test('a dev server given a taken port does not move off it — 38.64', async () 
     }
 }, 30_000)
 
-// 38.135 — `abide dev --hostname` LISTENS ON THAT INTERFACE ALONE, as `abide start`'s does
+// 38.136 — `abide dev --hostname` LISTENS ON THAT INTERFACE ALONE, as `abide start`'s does
 // (`requestIP.test.ts`). THE REVERT: drop `hostname` from what `serveDev` hands `Bun.serve`; the
 // address prints as `localhost` and the IPv6 loopback answers.
-test('dev --hostname listens on the interface it names alone — 38.135', async () => {
+test('dev --hostname listens on the interface it names alone — 38.136', async () => {
     const at = new URL(base)
     expect(at.hostname).toBe('127.0.0.1')
     const elsewhere = await Bun.fetch(`http://[::1]:${at.port}/`).then(
@@ -709,10 +709,10 @@ test('dev --hostname listens on the interface it names alone — 38.135', async 
     expect(elsewhere).toBe('refused')
 })
 
-// 22.11 — THE PEER CROSSES TO THE WORKER WITH THE REQUEST, so a handler under `abide dev` reads what
+// 22.12 — THE PEER CROSSES TO THE WORKER WITH THE REQUEST, so a handler under `abide dev` reads what
 // one under `abide start` does. THE REVERT: drop the `RECEIVED_FROM.set` from the worker's `fetch`;
 // the call reads `'in-process'`.
-test('requestIP answers the peer the listener received under dev — 22.11', async () => {
+test('requestIP answers the peer the listener received under dev — 22.12', async () => {
     const from = (await (
         await Bun.fetch(`${base}/whereFrom`)
     ).json()) as Record<string, unknown>

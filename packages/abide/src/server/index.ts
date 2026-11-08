@@ -81,7 +81,7 @@ export { type Component, render } from './render.ts'
 // child's markup one thing for the client to walk to.
 export { renderComponent } from './renderComponent.ts'
 // 22.1 — the request being served, the response being built for it, and the listening server.
-// 22.11 — and where it came from.
+// 22.12 — and where it came from.
 export {
     type ReceivedFrom,
     request,

@@ -16,7 +16,7 @@ type MappedRoute = {
     kind: 'page' | 'handler' | 'private'
     /** 23.26 — each matcher its address names, to the anchored pattern it takes a part by. */
     matchers: Record<string, string>
-    /** 38.134 — the rungs a handler's `middleware` names, `[]` for none, `null` where unread. */
+    /** 38.135 — the rungs a handler's `middleware` names, `[]` for none, `null` where unread. */
     middleware: string[] | null
 }
 
@@ -111,7 +111,7 @@ export function mapText(map: Awaited<ReturnType<typeof appMap>>): string {
     return lines.join('\n')
 }
 
-/** 38.134 — a handler's rungs as the text map prints them after its file, or nothing for none. */
+/** 38.135 — a handler's rungs as the text map prints them after its file, or nothing for none. */
 function rungsText(middleware: string[] | null): string {
     if (middleware === null) return '  middleware: unread'
     return middleware.length === 0

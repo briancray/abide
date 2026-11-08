@@ -44,7 +44,7 @@ export type DevOptions = {
      */
     root: string
     port?: number | undefined
-    /** 38.135 — the interface the listener binds, every one where `undefined`. */
+    /** 38.136 — the interface the listener binds, every one where `undefined`. */
     hostname?: string | undefined
 }
 
@@ -293,7 +293,7 @@ export async function serveDev(
             const mux =
                 asked !== DEV_ADDRESS &&
                 request.headers.get('upgrade') === 'websocket'
-            // 22.11 — the peer, which only this process can see, crosses with the request.
+            // 22.12 — the peer, which only this process can see, crosses with the request.
             const from = listening.requestIP(request)
             if (!mux && asked !== DEV_ADDRESS) return relay.ask(request, from)
             // 37.3 — THE MUX'S UPGRADE IS ASKED OF THE APP FIRST, whose lane runs in the worker.

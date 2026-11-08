@@ -448,7 +448,7 @@ export async function bootEntered(
                 maxRequestBodySize: Number.MAX_SAFE_INTEGER,
                 // 18.1, 37.3 — THE ONE MUX, upgraded where the app lane admitted it.
                 fetch: async (request, server) => {
-                    // 22.11 — where it came from, for `requestIP` to answer.
+                    // 22.12 — where it came from, for `requestIP` to answer.
                     RECEIVED_FROM.set(request, server.requestIP(request))
                     const answered = await fetch(request)
                     return admitsMux(request, answered, booted)
@@ -487,7 +487,7 @@ export async function bootEntered(
 /**
  * What a root rung is handed: the request, and what answers it, asked on the first read.
  *
- * 37.16 — LAZILY, because routing a request twice is a cost only an app whose root rungs read the
+ * 37.19 — LAZILY, because routing a request twice is a cost only an app whose root rungs read the
  * lane pays: the dispatch routes it again after them, and an app with none reads nothing here.
  */
 class RootContext implements AppContext {

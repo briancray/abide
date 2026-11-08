@@ -293,7 +293,7 @@ function parseFlags(argv: string[]) {
             // `PORT` and then falls back to 3000 — `abide dev` scanning on from there, 38.63 — and
             // a default written here would take that away from every host that sets it.
             port: { type: 'string' },
-            // NO DEFAULT EITHER: `Bun.serve` given none binds every interface (38.135).
+            // NO DEFAULT EITHER: `Bun.serve` given none binds every interface (38.136).
             hostname: { type: 'string' },
             url: { type: 'string' },
             method: { type: 'string' },

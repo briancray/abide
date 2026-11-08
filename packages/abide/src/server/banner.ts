@@ -9,7 +9,7 @@ import type { AppPackage } from './config.ts'
  * What `start` and `dev` print once the app is listening: the app, and every address it answers at.
  *
  * THE LOCAL ADDRESS IS THE FIRST URL PRINTED, because a harness reading the output takes the first
- * `http://` it finds (`addressOf` in the tests). 38.58, 38.135 — the network rows follow it where the
+ * `http://` it finds (`addressOf` in the tests). 38.58, 38.136 — the network rows follow it where the
  * listener binds every interface, which `Bun.serve` given no `hostname` does whatever `url` says, and
  * are left out where `hostname` names one interface.
  */

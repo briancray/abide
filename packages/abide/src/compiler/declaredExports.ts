@@ -614,7 +614,7 @@ function describedAs(
  * The rung each entry of a handler call's inline `middleware` names, or `null` where its options are
  * not an object written inline.
  *
- * 38.134 — AS WRITTEN, which is what the build can read without running it: an entry is named by
+ * 38.135 — AS WRITTEN, which is what the build can read without running it: an entry is named by
  * the function it calls or the name it refers to, a spread by what it spreads, and an inline function
  * `<inline>`. A value that is not an array is read as one entry, so `middleware: homeAccess(…)` names
  * `homeAccess`.
