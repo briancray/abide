@@ -28,7 +28,31 @@ import { route } from '@abide/abide'
 </script>
 
 <main>an invoice at <b id="at">{route.url().pathname}</b></main>`,
-            'layout.abide': `<script>
+            // 37.16, 37.17 — a root rung that says what it was handed, and a gate over pages alone
+            // that sends a closed caller to the login page — written by lane and by the app's own
+            // address, with no address of abide's spelled out.
+            'layout.abide': `<script server>
+import { url } from '@abide/abide'
+import { middleware, response } from '@abide/abide/server'
+
+middleware((next, { request }) =>
+    new URL(request.url).pathname === '/alias'
+        ? next({ request: new Request(new URL('/robots.txt', request.url)) })
+        : next(),
+)
+middleware((next, { request, lane }) => {
+    const path = new URL(request.url).pathname
+    response().headers.set('x-lane', lane + ' ' + path)
+    const gate = request.headers.get('x-gate')
+    if (gate === 'closed' && lane === 'page' && path !== '/login')
+        return new Response(null, { status: 302, headers: { location: url('/login') } })
+    if (gate === 'sockets' && lane === 'socket')
+        return new Response('no sockets', { status: 403 })
+    return next()
+})
+</script>
+
+<script>
 import { url } from '@abide/abide'
 </script>
 
@@ -36,6 +60,7 @@ import { url } from '@abide/abide'
             'lib/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
             'public/fonts/face.woff2': 'a face',
             'public/robots.txt': 'User-agent: *\n',
+            'login.abide': '<main>sign in</main>',
             'invoices/getInvoice.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
             // a segment named as the mount, which an address missing the mount is mistaken for
             'docs/getDoc.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, title: 'a doc' }), { description: 'A doc.' })\n`,
@@ -184,4 +209,79 @@ test('an MCP tool call reaches its handler under the mount — 20.10, 36.11', as
         id: '4',
         title: 'a doc',
     })
+})
+
+// 37.16 — A ROOT RUNG IS TOLD WHAT ANSWERS THE REQUEST, by the arm of the dispatch it takes: a page and
+// an address nothing answers, a handler (abide's own `health` among them), a public file, each surface
+// of abide's own, and the rest of `/__abide`. 37.17 — AND IS HANDED IT BELOW THE MOUNT, so the app's
+// own address is spelled as its route is. THE REVERTS: answer `'page'` from `laneOf` for everything,
+// and the gate sends the handler, the file and every surface of abide's own to the login page; hand
+// the root rungs the request as it arrived in `App.fetch`, and every path reads `/docs/…` and the
+// gate redirects `/docs/login` to itself, a loop; and keep `ctx.lane` for the request a rung hands
+// `next` in `answering`, and `/alias`, handed on as the public file, reads `page`.
+test('a root rung is told the lane, below the mount, and a page-only gate closes pages alone — 37.16, 37.17', async () => {
+    const asked = async (path: string): Promise<string> => {
+        const answer = await Bun.fetch(`${base}/docs${path}`, {
+            headers: { 'x-gate': 'closed' },
+            redirect: 'manual',
+        })
+        const sent =
+            answer.status === 302 ? ` -> ${answer.headers.get('location')}` : ''
+        return `${answer.status} ${answer.headers.get('x-lane')}${sent}`
+    }
+    const html = await (await Bun.fetch(`${base}/docs`)).text()
+    const entry = /src="\/docs(\/__abide\/client\/entry-[^"]+\.js)"/.exec(
+        html,
+    )?.[1] as string
+    expect({
+        page: await asked('/invoices/4'),
+        login: await asked('/login'),
+        nowhere: await asked('/nowhere'),
+        handler: await asked('/invoices/getInvoice?id=4'),
+        health: await asked('/__abide/health'),
+        file: await asked('/robots.txt'),
+        openapi: await asked('/__abide/openapi.json'),
+        bridge: await asked('/__abide/bridge'),
+        bundle: await asked(entry),
+        alias: await asked('/alias'),
+    }).toEqual({
+        page: '302 page /invoices/4 -> /docs/login',
+        login: '200 page /login',
+        nowhere: '302 page /nowhere -> /docs/login',
+        handler: '200 handler /invoices/getInvoice',
+        health: '200 handler /__abide/health',
+        file: '200 file /robots.txt',
+        openapi: '200 openapi /__abide/openapi.json',
+        bridge: '404 bridge /__abide/bridge',
+        bundle: `200 abide ${entry}`,
+        alias: '200 file /robots.txt',
+    })
+    const mcp = await Bun.fetch(`${base}/docs/__abide/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-gate': 'closed' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+    })
+    expect(mcp.headers.get('x-lane')).toBe('mcp /__abide/mcp')
+})
+
+// 37.16 — THE SOCKET MUX'S UPGRADE IS ITS OWN LANE, so a gate can close it apart from every page and
+// handler. THE REVERT: answer `'abide'` for the upgrade in `laneOf`; the gated socket opens.
+test('the socket upgrade is the socket lane — 37.16', async () => {
+    const dir = temporaryModule({
+        'client.ts': `const [base, gate] = process.argv.slice(2)
+const ws = new WebSocket(base.replace('http', 'ws') + '/docs/__abide/socket', {
+    headers: gate === '' ? {} : { 'x-gate': gate },
+})
+const opened = await new Promise((done) => {
+    ws.onopen = () => done(true)
+    ws.onerror = () => done(false)
+})
+ws.close()
+console.log(JSON.stringify(opened))
+`,
+    })
+    const opens = (gate: string): Promise<boolean> =>
+        lastLinePrinted<boolean>(['bun', `${dir}/client.ts`, base, gate])
+    expect(await opens('')).toBe(true)
+    expect(await opens('sockets')).toBe(false)
 })

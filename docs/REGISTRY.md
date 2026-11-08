@@ -645,7 +645,7 @@ type Refusals<Shaped, Gate, Stored, ArgsGate = Schema<never>, Args = never> = Re
 | `[[name]]` | An optional segment. | 23.5, 30.4, 30.34, 30.36 |
 | `[...name]` | A rest segment, terminal. | 23.5, 30.5, 30.34, 30.36 |
 | `[name=NAME]` · `[[name=NAME]]` · `[...name=NAME]` | A dynamic segment a param file's matcher decides. | 19.1, 23.26, 23.27, 30.19, 30.35, 30.36, 30.37 |
-| `/__abide/**` | Every endpoint abide controls. | 20.8 |
+| `/__abide/**` | Every endpoint abide controls. | 20.8, 37.16 |
 
 ## `render`
 
@@ -724,7 +724,8 @@ type Refusals<Shaped, Gate, Stored, ArgsGate = Schema<never>, Args = never> = Re
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `middleware` | `(...rungs: ((next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Response \| Failed<string, unknown> \| Promise<Response \| Failed<string, unknown>>)[]) => () => void` | The per-request lane at the calling file's route. | 18.26, 37.2, 37.3, 37.13, 37.14, 37.15 |
+| `middleware` | `(...rungs: ((next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request; lane: Lane }) => Response \| Failed<string, unknown> \| Promise<Response \| Failed<string, unknown>>)[]) => () => void` | The per-request lane at the calling file's route. | 18.26, 37.2, 37.3, 37.13, 37.14, 37.15, 37.16, 37.17 |
+| `Lane` | `'page' \| 'handler' \| 'file' \| 'openapi' \| 'mcp' \| 'bridge' \| 'socket' \| 'abide'` | What answers a request a `middleware` rung is handed. | 37.16 |
 | `onStart` | `(fn: (start: () => Promise<void>) => void \| Promise<void>) => () => void` | Wraps the boot. | 37.4, 37.6, 37.13 |
 | `onStop` | `(fn: (stop: () => Promise<void>) => void \| Promise<void>) => () => void` | Mirrors it for teardown. | 37.4, 37.6, 37.13 |
 | `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route. | 37.5, 37.8, 37.13 |

@@ -62,6 +62,7 @@ export {
     type ConfigOptions,
     type Env,
     fileRoute,
+    type Lane,
     middleware,
     onConfig,
     onError,

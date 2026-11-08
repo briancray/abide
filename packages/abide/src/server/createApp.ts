@@ -17,7 +17,7 @@ import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { laneFailure } from './answerFailure.ts'
-import { answerRequest, type AppSources } from './answerRequest.ts'
+import { answerRequest, type AppSources, laneOf } from './answerRequest.ts'
 import { Mux, type MuxConnection } from './answerSocket.ts'
 import {
     type Builder,
@@ -35,7 +35,14 @@ import {
 } from './config.ts'
 import { Followers } from './Followers.ts'
 import { McpSurface } from './generatedSurfaces.ts'
-import { HOOKS, inOrder, reportUnexpected, rootRungs } from './hooks.ts'
+import {
+    type AppContext,
+    HOOKS,
+    inOrder,
+    type Lane,
+    reportUnexpected,
+    rootRungs,
+} from './hooks.ts'
 import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { installServer } from './installServer.ts'
 import { followedIn, type Mount } from './mountHandlers.ts'
@@ -247,8 +254,15 @@ export async function bootEntered(
     // route's rungs, the ones below it running after routing (37.2, `answerRequest`). 21.20 — the
     // center takes its own time back out of what `fetch` counts for the whole onion.
     // 37.14 — before routing, the lane is the request's to say (15.22).
-    const rungs = rootRungs((failure, request) =>
-        laneFailure(booted, new URL(request.url).pathname, failure, request),
+    const rungs = rootRungs(
+        (failure, request) =>
+            laneFailure(
+                booted,
+                new URL(request.url).pathname,
+                failure,
+                request,
+            ),
+        (request) => laneOf(booted, request),
     )
     const answer = compose(rungs, async ({ request }) => {
         const began = performance.now()
@@ -296,7 +310,9 @@ export async function bootEntered(
                 async () => {
                     let answered: Response
                     try {
-                        answered = await answer({ request })
+                        answered = await answer(
+                            new RootContext(booted, request),
+                        )
                         if (rungs.length > 0)
                             rungsTook(performance.now() - started)
                     } catch (thrown) {
@@ -462,6 +478,26 @@ export async function bootEntered(
         stop,
         // 42.14.
         [Symbol.asyncDispose]: stop,
+    }
+}
+
+/**
+ * What a root rung is handed: the request, and what answers it, asked on the first read.
+ *
+ * 37.16 — LAZILY, because routing a request twice is a cost only an app whose root rungs read the
+ * lane pays: the dispatch routes it again after them, and an app with none reads nothing here.
+ */
+class RootContext implements AppContext {
+    readonly request: Request
+    #sources: AppSources
+    #lane: Lane | undefined = undefined
+    constructor(sources: AppSources, request: Request) {
+        this.#sources = sources
+        this.request = request
+    }
+    get lane(): Lane {
+        this.#lane ??= laneOf(this.#sources, this.request)
+        return this.#lane
     }
 }
 

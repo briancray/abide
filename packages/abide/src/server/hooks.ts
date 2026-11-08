@@ -26,11 +26,29 @@ import { config } from './config.ts'
 import type { LauncherOptions } from './launcherOptions.ts'
 import { currentRequestScope } from './requestScope.ts'
 
-type AppContext = { request: Request }
+/**
+ * What answers a request, by the lane the app sends it down. 37.16.
+ *
+ * One per arm of `answerRequest`'s dispatch: a page (and every address no route answers), a
+ * handler, a public file, the three surfaces of abide's own a gate decides about one by one, the
+ * socket mux's upgrade, and the rest of `/__abide`.
+ */
+export type Lane =
+    | 'page'
+    | 'handler'
+    | 'file'
+    | 'openapi'
+    | 'mcp'
+    | 'bridge'
+    | 'socket'
+    | 'abide'
+
+/** What an app rung is handed: the request, and what answers it (37.16). */
+export type AppContext = { request: Request; lane: Lane }
 
 /** A rung `middleware` files: what `next` answered passed on, or a refusal in its place (37.14). */
 export type AppRung = (
-    next: (ctx?: AppContext) => Promise<Response>,
+    next: (ctx?: { request: Request }) => Promise<Response>,
     ctx: AppContext,
 ) =>
     | Response
@@ -130,18 +148,46 @@ export function inOrder<T>(list: readonly Filed<T>[]): T[] {
  * 37.14, 37.15 — PER LINK, not at the onion's edge: a rung outside this one is handed the answer
  * from `next`, so one that reads a `Response` (29.2's) reads one whichever rung inside it refused.
  */
-function answering(rung: AppRung, answer: RefusalAnswer): LaneRung {
+function answering(
+    rung: AppRung,
+    answer: RefusalAnswer,
+    laneOf: ((request: Request) => Lane) | undefined,
+): LaneRung {
     return async (next, ctx) => {
-        const result = await rung(next, ctx)
+        // 37.16 — A REQUEST A RUNG HANDS `next` IS ANSWERED BY WHAT ITS OWN ADDRESS ROUTES TO, asked
+        // again before routing (`laneOf`) and kept after it, where routing has already chosen.
+        const result = await rung(
+            (given) =>
+                next(
+                    given === undefined || given.request === ctx.request
+                        ? ctx
+                        : {
+                              request: given.request,
+                              lane:
+                                  laneOf === undefined
+                                      ? ctx.lane
+                                      : laneOf(given.request),
+                          },
+                ),
+            ctx,
+        )
         return isFailed(result) ? answer(result, ctx.request) : result
     }
 }
 
-/** The rungs filed at the root route, which run before routing. 37.3. */
-export function rootRungs(answer: RefusalAnswer): LaneRung[] {
+/**
+ * The rungs filed at the root route, which run before routing. 37.3.
+ *
+ * `laneOf` is what the dispatch would answer a request with (37.16), asked of one a rung hands on.
+ */
+export function rootRungs(
+    answer: RefusalAnswer,
+    laneOf: (request: Request) => Lane,
+): LaneRung[] {
     const rungs: LaneRung[] = []
     for (const entry of HOOKS.rungs)
-        if (entry.route === ROOT) rungs.push(answering(entry.item, answer))
+        if (entry.route === ROOT)
+            rungs.push(answering(entry.item, answer, laneOf))
     return rungs
 }
 
@@ -156,7 +202,7 @@ export function rungsOver(route: string, answer: RefusalAnswer): LaneRung[] {
     const rungs: LaneRung[] = []
     for (const entry of HOOKS.rungs)
         if (entry.route !== ROOT && coversRoute(entry.segments, segments))
-            rungs.push(answering(entry.item, answer))
+            rungs.push(answering(entry.item, answer, undefined))
     return rungs
 }
 

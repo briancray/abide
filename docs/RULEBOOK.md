@@ -2469,6 +2469,16 @@ a 405 for a rung filed at the root route.
 37.15 A `middleware` rung outside one that returned a `Failed` MUST be handed 37.14's answer from
 `next`, and MUST NOT be handed the `Failed`.
 
+37.16 A `middleware` rung MUST be handed as `ctx.lane` the `Lane` that answers the request it is
+handed, a request a rung handed `next` included: `handler` where a handler answers its method at its
+address, a private handler and one abide mounts included; `file` a file under a `public` directory;
+`openapi`, `mcp` and `bridge` that address of abide's own; `socket` the upgrade to the socket mux;
+`abide` every other address under `/__abide`; and `page` every other address, one nothing answers
+included.
+
+37.17 A `middleware` rung MUST be handed the request addressed below the path `APP_URL` names, as
+the route table reads it.
+
 # 38. Commands
 
 ## The commands

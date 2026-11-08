@@ -222,7 +222,7 @@ async function routeAdmits(
         const answered = await compose(mounted.rungs, async () => {
             reached = true
             return new Response(null, { status: 204 })
-        })({ request })
+        })({ request, lane: 'handler' })
         return reached && answered.ok
     } catch {
         return false
