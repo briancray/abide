@@ -9,7 +9,7 @@
 
 import { getCACertificates } from 'node:tls' // bun's fetch reads this machine's trust store only under `--use-system-ca`, a flag `bun x` and the link handler's launch cannot pass
 
-import type { AssistantEvent } from '@abide/abide/server'
+import type { ProviderEvent } from '@abide/abide/server'
 
 import { claudeTurn, type TurnRequest } from './claudeTurn.ts'
 import { readLines } from './readLines.ts'
@@ -45,7 +45,7 @@ type SiteFrame =
     | { type: 'bye' }
 
 type Report =
-    | { type: 'event'; turn: string; event: AssistantEvent }
+    | { type: 'event'; turn: string; event: ProviderEvent }
     | {
           type: 'mcp'
           turn: string

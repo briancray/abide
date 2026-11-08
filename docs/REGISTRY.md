@@ -352,12 +352,16 @@ type Refusals<Shaped, Gate, Stored, ArgsGate = Schema<never>, Args = never> = Re
 | `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39 |
 | `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string \| AssistantContent[] }` | One turn of the transcript a caller sends: its words, or its pieces in order. | 44.3, 44.4 |
 | `AssistantContent` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string }` | A piece of a turn: words, or an image as base64 with its type. | 44.5, 44.35, 44.36, 44.37, 44.38, 44.39 |
-| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, and the end. | 44.2, 44.11, 44.28 |
+| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; handler: { method: string; address: string } \| undefined } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean; handler: { method: string; address: string } \| undefined; value: unknown } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, and the end. | 44.2, 44.11, 44.28, 44.48, 44.49 |
 | `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number }` | What `assistant` takes beside a provider. | 44.6, 44.8, 44.11 |
-| `Provider` | `{ run(messages: (AssistantMessage & { content: AssistantContent[] })[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<AssistantEvent> }` | What runs a conversation. | 44.2, 44.28, 44.39 |
+| `Provider` | `{ run(messages: (AssistantMessage & { content: AssistantContent[] })[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<ProviderEvent> }` | What runs a conversation. | 44.2, 44.28, 44.39, 44.50 |
+| `ProviderEvent` | `Exclude<AssistantEvent, { type: 'tool' \| 'result' }> \| { type: 'tool'; id: string; name: string } \| { type: 'result'; id: string; text: string; failed: boolean }` | An `AssistantEvent` as a provider yields it, before `assistant` reads the handler and the value off the app's surface. | 44.28, 44.35, 44.50 |
 | `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<ToolAnswer> }` | The app's MCP tools, called as the asker. | 44.6, 44.7, 44.35 |
 | `ToolAnswer` | `{ content: AssistantContent[]; failed: boolean }` | What a tool call answered: its pieces, and whether it failed. | 20.21, 20.22, 44.35 |
 | `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 20.19, 44.6 |
+| `resultsOf` | `<Value>(events: readonly AssistantEvent[], handler: Rpc<Value, never, unknown, unknown>) => Value[]` | What a conversation's calls to one handler answered. | 44.51 |
+| `imagePiece` | `(image: Blob) => Promise<{ type: 'image'; data: string; mimeType: string }>` | An image as a turn's image piece, drawn down to what a model looks at. | 44.52, 44.53, 44.54 |
+| `imageFiles` | `(data: DataTransfer \| null) => File[]` | The images a paste or a drop carries that a model is shown. | 44.55 |
 
 ## `claudeApi`
 
@@ -372,9 +376,9 @@ type Refusals<Shaped, Gate, Stored, ArgsGate = Schema<never>, Args = never> = Re
 | --- | --- | --- | --- |
 | `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.33 |
 | `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. | 44.16, 44.29 |
-| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; link: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the built-in tools it is given. | 44.14, 44.32, 44.33, 44.40 |
+| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; link: string; install: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the built-in tools it is given, and the command that installs the app the link opens. | 44.14, 44.32, 44.33, 44.40, 44.56 |
 | `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40 |
-| `BridgeStatus` | `{ paired: boolean; command: string \| undefined; link: string \| undefined }` | Whether a bridge is paired, and the command and the link that pair one where none is. | 44.20, 44.40 |
+| `BridgeStatus` | `{ paired: boolean; command: string \| undefined; link: string \| undefined; install: string \| undefined }` | Whether a bridge is paired, and the command and the link that pair one where none is, with the command that installs the app the link opens. | 44.20, 44.40, 44.56 |
 | `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 16.57, 16.78 |
 
 # Ambient values

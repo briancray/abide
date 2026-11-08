@@ -10,35 +10,28 @@
 // another request's scope — `claudeCode` answers one from the bridge's — and the call is still this
 // asker's.
 
+import type {
+    AssistantContent,
+    AssistantEvent,
+    AssistantMessage,
+} from '#shared/AssistantEvent.ts'
+import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
+import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
 
 import { type McpReply, McpSurface } from './generatedSurfaces.ts'
-import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
 import { request, within } from './requestScope.ts'
+import type { Listed } from './surfaceOf.ts'
 
-/** A piece of a turn: words, or an image as base64 with its type. */
-export type AssistantContent =
-    | { type: 'text'; text: string }
-    | { type: 'image'; data: string; mimeType: string }
-
-/** One turn of the transcript a caller sends: its words, or its pieces in order. */
-export type AssistantMessage = {
-    role: 'user' | 'assistant'
-    content: string | AssistantContent[]
-}
-
-/** What a conversation yields, the same from every provider. */
-export type AssistantEvent =
-    | { type: 'text'; text: string }
+/**
+ * An `AssistantEvent` as a `Provider` yields it: a tool call named, and its result in words, with what
+ * `assistant` reads off the app's own surface for both — the handler, and the value — still to come.
+ */
+export type ProviderEvent =
+    | Exclude<AssistantEvent, { type: 'tool' | 'result' }>
     | { type: 'tool'; id: string; name: string }
-    | { type: 'input'; id: string; input: unknown }
     | { type: 'result'; id: string; text: string; failed: boolean }
-    | {
-          type: 'done'
-          stop: string
-          usage: { input: number; output: number }
-      }
 
 /** A tool as the app's MCP surface lists it. */
 export type ToolDefinition = {
@@ -68,7 +61,7 @@ export type Provider = {
         messages: (AssistantMessage & { content: AssistantContent[] })[],
         tools: Toolbox,
         limits: { maxTurns: number; signal: AbortSignal },
-    ): AsyncGenerator<AssistantEvent>
+    ): AsyncGenerator<ProviderEvent>
 }
 
 /** What `assistant` takes beside a provider, the same for every one. */
@@ -118,19 +111,83 @@ export async function* assistant(
                 )
         }
     }
-    const tools = toolboxOver(
-        options.mcp === true ? appSurface() : NO_SURFACE,
-        askerOf(request()),
-    )
+    const surface = options.mcp === true ? appSurface() : NO_SURFACE
+    const tools = toolboxOver(surface, askerOf(request()))
     const signal = request().signal
     const events = provider.run(turns, tools, {
         maxTurns: options.maxTurns ?? MAX_TURNS,
         signal,
     })
-    // 28.7 — a closed namespace runs the provider's stream untouched.
+    // 28.7 — a closed namespace pays for no line.
     yield* ASSISTANT_LOG.enabled()
-        ? traced(events, messages.length, signal)
-        : events
+        ? traced(read(events, surface), messages.length, signal)
+        : read(events, surface)
+}
+
+/** A called tool's handler, and whether its answer is a value read as JSON (19.21). */
+type Called = {
+    handler: { method: Listed['method']; address: string } | undefined
+    valued: boolean
+}
+
+const NOT_THE_APPS: Called = { handler: undefined, valued: false }
+
+/**
+ * `events` with each call's handler, and each answer's value, read off `surface`. 44.48, 44.49.
+ *
+ * READ HERE RATHER THAN BY EACH PROVIDER, so a provider the app wrote yields the same events abide's
+ * do (44.2): a provider names the tool as the `Toolbox` lists it (44.50), and the rest is the surface's.
+ */
+async function* read(
+    events: AsyncGenerator<ProviderEvent>,
+    surface: McpSurface,
+): AsyncGenerator<AssistantEvent> {
+    const calls = new Map<string, Called>()
+    for await (const event of events) {
+        if (event.type === 'tool') {
+            const tool = surface.tool(event.name)
+            const called: Called =
+                tool === undefined
+                    ? NOT_THE_APPS
+                    : {
+                          // 16.10 — the address an `Rpc` carries, under the mount.
+                          handler: {
+                              method: tool.method,
+                              address: mounted(tool.address),
+                          },
+                          valued: tool.result !== undefined,
+                      }
+            calls.set(event.id, called)
+            yield {
+                type: 'tool',
+                id: event.id,
+                name: event.name,
+                handler: called.handler,
+            }
+        } else if (event.type === 'result') {
+            const called = calls.get(event.id) ?? NOT_THE_APPS
+            yield {
+                type: 'result',
+                id: event.id,
+                text: event.text,
+                failed: event.failed,
+                handler: called.handler,
+                value:
+                    called.valued && !event.failed
+                        ? valueOf(event.text)
+                        : undefined,
+            }
+        } else yield event
+    }
+}
+
+/** An answer's words as the JSON value they spell, or `undefined` where they spell none. */
+function valueOf(text: string): unknown {
+    try {
+        return JSON.parse(text)
+    } catch {
+        return undefined
+    }
 }
 
 /**

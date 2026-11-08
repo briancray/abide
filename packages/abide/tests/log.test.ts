@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 
-import { assistant, type AssistantEvent } from '#server/assistant.ts'
+import { assistant, type ProviderEvent } from '#server/assistant.ts'
 import { inScope } from '#server/requestScope.ts'
 import { clientTags } from '#server/servedApp.ts'
 import { log } from '#shared'
@@ -199,7 +199,7 @@ test("a browser's log.named prefixes the app name the document carries — 28.4"
 // writes a line; log `unfinished` alone and the three read the same.
 test('a conversation writes one debug line on abide:assistant when it ends — 44.31', async () => {
     process.env.DEBUG = 'abide:assistant'
-    const played: AssistantEvent[] = [
+    const played: ProviderEvent[] = [
         { type: 'tool', id: 't1', name: 'get_contacts' },
         { type: 'input', id: 't1', input: {} },
         { type: 'result', id: 't1', text: '[]', failed: false },
@@ -210,7 +210,7 @@ test('a conversation writes one debug line on abide:assistant when it ends — 4
             yield* played
         },
     }
-    const conversation = (): AsyncGenerator<AssistantEvent> =>
+    const conversation = (): ReturnType<typeof assistant> =>
         assistant([{ role: 'user', content: 'who?' }], provider)
     const lines = (): string[] =>
         (log.records.peek() ?? [])
@@ -222,7 +222,7 @@ test('a conversation writes one debug line on abide:assistant when it ends — 4
         for await (const _ of conversation()) break
     })
     const failing = {
-        async *run(): AsyncGenerator<AssistantEvent> {
+        async *run(): AsyncGenerator<ProviderEvent> {
             yield { type: 'tool', id: 't1', name: 'get_contacts' }
             throw new Error('claude exited 1 with no result')
         },
@@ -237,7 +237,7 @@ test('a conversation writes one debug line on abide:assistant when it ends — 4
     })
     const hangUp = new AbortController()
     const hungUp = {
-        async *run(): AsyncGenerator<AssistantEvent> {
+        async *run(): AsyncGenerator<ProviderEvent> {
             hangUp.abort()
         },
     }

@@ -12,6 +12,7 @@ afterAll(removeTemporaryModules)
 
 // A string `validateJson` throws with: a literal survives minification where a name does not.
 const SCHEMA_VALIDATOR = 'does not implement the JSON Schema keyword'
+const IMAGE_DRAWER = 'could not be drawn as one a model is shown'
 
 // The static closure a page's document loads — the entry, then each chunk the manifest names for
 // the page, and every chunk those import.
@@ -49,23 +50,22 @@ let count = reactive(0)
 
 <button onclick={() => { count = count + 1 }}>{count}</button>`,
         'schema/index.abide': `<script>
-import { reactive, validateJson } from '@abide/abide'
+import { imagePiece, reactive, validateJson } from '@abide/abide'
 
 let count = reactive(0)
 </script>
 
-<p>{String(validateJson({ type: 'number' }, count) === null)}</p>`,
+<p onclick={() => imagePiece(new Blob())}>{String(validateJson({ type: 'number' }, count) === null)}</p>`,
     })
     const out = `${app}/.abide`
     const built = await buildApp(app)
     expect(built.exitCode, built.stderr).toBe(0)
     // The positive case first: the validator is in the build, so its absence below is the split.
-    expect(
-        (await closureText(out, 'schema/index.abide')).includes(
-            SCHEMA_VALIDATOR,
-        ),
-    ).toBe(true)
-    expect(
-        (await closureText(out, 'index.abide')).includes(SCHEMA_VALIDATOR),
-    ).toBe(false)
+    const heavy = await closureText(out, 'schema/index.abide')
+    expect(heavy.includes(SCHEMA_VALIDATOR)).toBe(true)
+    expect(heavy.includes(IMAGE_DRAWER)).toBe(true)
+    const light = await closureText(out, 'index.abide')
+    expect(light.includes(SCHEMA_VALIDATOR)).toBe(false)
+    // 44.52 — nor the image a turn is pasted with, which only a chat panel draws.
+    expect(light.includes(IMAGE_DRAWER)).toBe(false)
 }, 60_000)

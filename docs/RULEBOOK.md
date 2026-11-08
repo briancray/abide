@@ -3484,6 +3484,32 @@ report that turn failed.
 44.47 A bridge MUST reach `/__abide/bridge` over a certificate that either bun's own authorities or
 the authorities its machine trusts sign, however the bridge was started.
 
+44.48 `assistant` MUST carry on each `tool` and `result` `AssistantEvent` of a call to a tool its
+`Toolbox` lists the `method` and the `address` the called handler's `Rpc` reads, and MUST carry
+`undefined` for a call to any other tool.
+
+44.49 A `result` `AssistantEvent` MUST carry as its `value` its text read as JSON where its call did
+not fail and its handler has a schema 19.21 derives, and MUST carry `undefined` otherwise.
+
+44.50 A `Provider` MUST name the tool of each `tool` event it yields as its `Toolbox` lists it.
+
+44.51 `resultsOf` MUST hand back, in order, the `value` of each `result` `AssistantEvent` whose
+handler is the `Rpc` it is given, and none of a call that failed.
+
+44.52 `imagePiece` MUST draw an image longer than 1568 pixels on its long side down to 1568, and an
+image of a type 44.36 does not name at its own size, and MUST NOT draw a GIF.
+
+44.53 An image `imagePiece` draws MUST be a PNG where it was a PNG or a WebP, and a JPEG otherwise.
+
+44.54 `imagePiece` MUST hand on as it is an image it does not draw or cannot, and MUST throw where
+that image is of a type 44.36 does not name.
+
+44.55 `imageFiles` MUST hand back, in order, the files a `DataTransfer` carries of a type 44.36
+names, reading its `items` where its `files` hold none.
+
+44.56 The `install` of a pairing `claudeCode.bridgeCommand` or `claudeCode.bridge` mints MUST run
+`abide-bridge install` at the bridge release its command runs.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker
