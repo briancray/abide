@@ -3207,6 +3207,13 @@ connection still answering, and MUST then run `onStop` without waiting on what i
 `onPrincipal` as a sealed cookie's are, MUST NOT write the principal cookie, and MUST give the scope
 a request where `request` is not given.
 
+42.20 A `principal` on `App.fetch` MUST be the claims the request's `principal` resolves from, as
+42.19 states for `App.run`, over any principal cookie the request carries.
+
+42.21 A `caller` on `App.run` or `App.fetch` MUST be its scope's `principal.caller`, over any caller
+cookie the request carries, MUST NOT write the caller cookie, and on `App.run` MUST give the scope a
+request where `request` is not given.
+
 # 43. The measurement harness
 
 43.1 `@abide/harness/measure`, `@abide/harness/engine` and `@abide/harness/server` MUST each be

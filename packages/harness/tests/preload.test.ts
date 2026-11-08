@@ -30,7 +30,9 @@ test('the preload leaves bun its own WebSocket and web streams — 43.28', async
                 : new Response('not a socket', { status: 400 }),
         websocket: {
             data: undefined as unknown as string | null,
-            message: (socket, message) => socket.send(`${socket.data} ${message}`),
+            message: (socket, message) => {
+                socket.send(`${socket.data} ${message}`)
+            },
         },
     })
     const socket = new WebSocket(`ws://127.0.0.1:${server.port}/`, {

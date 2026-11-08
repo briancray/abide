@@ -37,6 +37,8 @@ affected code saying what it did, and tell the user.
   Called outside a request, a `GET` keeps its answer for the whole test process: a test that changes
   the data behind one calls its `invalidate()` in `beforeEach`. A handler that reads `config()` or
   `principal` runs inside `app.run(…)` of `await createApp()`, where the app's `onConfig` has run.
+  A request sent as someone is `app.fetch(request, { principal, caller })` (RULEBOOK 42.20, 42.21),
+  never a hand-written `abide-principal` or `abide-caller` cookie.
   `mount` sets no route, so a page stays thin: it reads the route and hands what it needs to a
   component in `lib/`, and the test mounts that component.
 - `bun run bench` — runs `harness-bench`: every `*.bench.ts` under `src/`, kept beside the code it

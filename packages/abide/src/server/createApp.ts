@@ -26,6 +26,7 @@ import {
     spawnedBuild,
 } from './appBuild.ts'
 import { holdsApp } from './appTree.ts'
+import { presumeCaller } from './callerOf.ts'
 import {
     APP_PACKAGE,
     type AppPackage,
@@ -65,12 +66,15 @@ const REQUEST_LOG = namedLogger('abide:request')
 // by it.
 const STOP_TIMEOUT = 5000
 
+/** Who a scope `App.run` or `App.fetch` opens is answered as, over what its request's cookies say. */
+type Presumed = { principal?: Record<string, unknown>; caller?: string }
+
 /** The app object: what a host, a test or a script holds the app as. */
 export interface App {
-    fetch(request: Request): Promise<Response>
+    fetch(request: Request, options?: Presumed): Promise<Response>
     run<Result>(
         fn: () => Result | Promise<Result>,
-        options?: { request?: Request; principal?: Record<string, unknown> },
+        options?: { request?: Request } & Presumed,
     ): Promise<Result>
     listen(options?: {
         port?: number
@@ -265,23 +269,32 @@ export async function bootEntered(
     let stopping = false
     let bound: Bun.Server<unknown> | undefined
 
+    // 42.19, 42.20, 42.21 — inside the scope, ahead of anything that reads either.
+    const presume = (options: Presumed | undefined): void => {
+        if (options?.principal !== undefined)
+            presumePrincipal(options.principal)
+        if (options?.caller !== undefined) presumeCaller(options.caller)
+    }
+
     const run: App['run'] = async (fn, options) => {
-        const claims = options?.principal
-        // 42.19 — a principal is a request's, so one given alone is given a request to be.
+        // 42.19, 42.21 — a principal or a caller is a request's, so one given alone is given a request
+        // to be.
         const request =
             options?.request ??
-            (claims === undefined ? undefined : new Request(IN_PROCESS_ORIGIN))
+            (options?.principal === undefined && options?.caller === undefined
+                ? undefined
+                : new Request(IN_PROCESS_ORIGIN))
         return inReleasedScope(
             request,
             async () => {
-                if (claims !== undefined) presumePrincipal(claims)
+                presume(options)
                 return await fn()
             },
             answering,
         )
     }
 
-    const fetch = async (given: Request): Promise<Response> => {
+    const fetch: App['fetch'] = async (given, options) => {
         if (stopping) return plainAnswer('the app is stopping', 503)
         const request = belowMount(given)
         if (request instanceof Response) return request
@@ -294,6 +307,7 @@ export async function bootEntered(
             return await inReleasedScope(
                 request,
                 async () => {
+                    presume(options)
                     let answered: Response
                     try {
                         answered = await answer({ request })

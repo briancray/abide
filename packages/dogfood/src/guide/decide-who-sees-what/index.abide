@@ -128,7 +128,9 @@ import Snippet from '#src/lib/Snippet.abide'
 
         <p>A test signs in without the cookie. <code>app.run(fn, &#123; principal: &#123; id: 'theo' &#125; &#125;)</code>
             hands those claims to <code>onPrincipal</code> as a sealed cookie's are, and the card's
-            test reads the member they name.</p>
+            test reads the member they name. <code>app.fetch(request, &#123; principal &#125;)</code>
+            sends one request signed in the same way, and <code>caller</code> beside it names the
+            browser.</p>
 
         <p>What it returns is read as <code>principal.resolved</code>, typed by
             <code>Principal</code>. Declare your fields on that interface, as the app's
