@@ -29,6 +29,8 @@ affected code saying what it did, and tell the user.
   calls it. Every component has a test that `mount`s it and counts the work an
   interaction did with `measure`, both from `@abide/harness/abide` (RULEBOOK 38.119, 43.23) — a
   test that only reads the text back passes against a component doing ten times the work.
+  A prop the test moves is handed as a getter — `Label({ get label() { return source() } })` —
+  and is read through it on every read (RULEBOOK 38.134); any other prop is the value it was given.
   A test waits on a value landing — `await` the handler call, or the `Reactive` the component
   reads, which is thenable (RULEBOOK 1.4) — never on `Bun.sleep` or a timer. Break the code once and
   watch a new test fail; a test that has never failed has not been shown to test anything.

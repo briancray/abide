@@ -2872,6 +2872,10 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 38.133 Under `bun test` with `@abide/abide/test` preloaded, each test file after the first in a
 process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
 
+38.134 A prop a test hands a component it binds for `mount` as an own getter MUST be read through
+that getter on each read the component makes, and any other prop MUST be the value it held when the
+component was bound.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
