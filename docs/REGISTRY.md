@@ -727,7 +727,7 @@ type Refusals<Shaped, Gate, Stored, ArgsGate = Schema<never>, Args = never> = Re
 | `middleware` | `(...rungs: ((next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Response \| Failed<string, unknown> \| Promise<Response \| Failed<string, unknown>>)[]) => () => void` | The per-request lane at the calling file's route. | 18.26, 37.2, 37.3, 37.13, 37.14, 37.15 |
 | `onStart` | `(fn: (start: () => Promise<void>) => void \| Promise<void>) => () => void` | Wraps the boot. | 37.4, 37.6, 37.13 |
 | `onStop` | `(fn: (stop: () => Promise<void>) => void \| Promise<void>) => () => void` | Mirrors it for teardown. | 37.4, 37.6, 37.13 |
-| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route. | 37.5, 37.8, 37.13 |
+| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route, or in the browser below the calling component. | 37.5, 37.8, 37.13, 37.16, 37.17, 37.18, 12.6 |
 | `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's config defaults. | 27.6, 37.7, 37.13 |
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2, 37.7, 37.13 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7, 37.13 |

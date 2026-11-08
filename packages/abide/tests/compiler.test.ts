@@ -160,8 +160,9 @@ test('the compiler is not reachable from the server seam', async () => {
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
-    // `request`, `response` and `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the seven hooks and the
-    // `fileRoute` a compiled server block files them under are 37's,
+    // `request`, `response` and `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the hooks and the
+    // `fileRoute` a compiled server block files them under are 37's — `onError` among the shared
+    // seam's, the server's own exported over the browser's (37.16) —
     // `trace` is 24's and `config` is 27's; `callsInRender` is what an emitted component reads
     // around its setup (41.28) and `derivedArgs` what a handler's module holds it to its annotation by
     // (19.9); the six response helpers are 17's, `reachable` is
@@ -188,7 +189,6 @@ test('the compiler is not reachable from the server seam', async () => {
             'jsonl',
             'middleware',
             'onConfig',
-            'onError',
             'onHealth',
             'onLauncher',
             'onPrincipal',
