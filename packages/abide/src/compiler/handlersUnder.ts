@@ -128,6 +128,7 @@ export async function handlersUnder(
                 cli: false,
                 mcp: false,
                 description: each.description,
+                middleware: each.middleware,
                 copy: each.copy,
                 defaults: each.defaults,
                 args: each.args,

@@ -13,6 +13,7 @@ export function handlerFileMount(
         | 'cli'
         | 'mcp'
         | 'description'
+        | 'middleware'
         | 'copy'
         | 'defaults'
         | 'args'
@@ -32,6 +33,7 @@ export function handlerFileMount(
         cli: declared.cli,
         mcp: declared.mcp,
         description: declared.description,
+        middleware: declared.middleware,
         copy: declared.copy,
         defaults: declared.defaults,
         args: declared.args,

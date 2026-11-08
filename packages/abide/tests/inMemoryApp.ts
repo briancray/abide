@@ -36,6 +36,7 @@ export function inMemoryApp(
                 {
                     method: handler.method,
                     description: handler.description,
+                    middleware: [],
                     // Every surface, as a declaration that names none is listed on (20.3, 20.4).
                     ui: true,
                     cli: true,

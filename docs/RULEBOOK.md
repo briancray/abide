@@ -2872,6 +2872,11 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 38.133 Under `bun test` with `@abide/abide/test` preloaded, each test file after the first in a
 process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
 
+38.134 `abide routes` MUST print beside each handler every rung its declaration's `middleware`
+names, as written — an entry by the function it calls or the name it refers to, a spread by what it
+spreads, an inline function as `<inline>`, and a value that is no array as one entry — and MUST say
+where that declaration's options are not an object written inline.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

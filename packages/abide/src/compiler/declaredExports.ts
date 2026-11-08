@@ -10,6 +10,7 @@ import {
     isObjectLiteralExpression,
     isPropertyAccessExpression,
     isPropertyAssignment,
+    isSpreadElement,
     isStringLiteral,
     isVariableDeclaration,
 } from 'typescript/unstable/ast/is'
@@ -179,6 +180,10 @@ async function exportsIn(
                             cli: declared?.cli ?? true,
                             mcp: declared?.mcp ?? true,
                             description: declared?.description,
+                            middleware:
+                                declared === undefined
+                                    ? []
+                                    : declared.middleware,
                             copy: declared?.copy,
                             defaults: declared?.defaults,
                             args:
@@ -228,6 +233,7 @@ type DeclaredExport = Pick<
     | 'args'
     | 'result'
     | 'description'
+    | 'middleware'
 > & {
     method: Declared | undefined
     /** 18.15 — what its copy's options declare and the build could not read. */
@@ -249,6 +255,7 @@ async function declaringMethod(
           cli: boolean
           mcp: boolean
           description: string | undefined
+          middleware: string[] | null
           copy: CopyOptions | undefined
           unread: Node[]
           defaulted?: string[]
@@ -321,6 +328,7 @@ async function declaringMethod(
         cli: declaredFor(call, 'cli') ?? !answersResponse,
         mcp: declaredFor(call, 'mcp') ?? !answersResponse,
         description,
+        middleware: rungsNamed(call),
         ...declared,
         defaulted: defaultedMembers(body),
         defaults: literalDefaults(body) ?? undefined,
@@ -600,6 +608,39 @@ function describedAs(
             isNoSubstitutionTemplateLiteral(description))
         ? description.text
         : undefined
+}
+
+/**
+ * The rung each entry of a handler call's inline `middleware` names, or `null` where its options are
+ * not an object written inline.
+ *
+ * 38.134 — AS WRITTEN, which is what the build can read without running it: an entry is named by
+ * the function it calls or the name it refers to, a spread by what it spreads, and an inline function
+ * `<inline>`. A value that is not an array is read as one entry, so `middleware: homeAccess(…)` names
+ * `homeAccess`.
+ */
+function rungsNamed(
+    call: Node & { arguments?: readonly Node[] },
+): string[] | null {
+    const options = call.arguments?.[1]
+    if (options === undefined) return []
+    if (!isObjectLiteralExpression(options)) return null
+    const written = optionNamed(options, 'middleware')
+    if (written === undefined) return []
+    const entries = isArrayLiteralExpression(written)
+        ? written.elements
+        : [written]
+    const names: string[] = []
+    for (const entry of entries)
+        names.push(rungName(isSpreadElement(entry) ? entry.expression : entry))
+    return names
+}
+
+function rungName(entry: Node): string {
+    const named = isCallExpression(entry) ? entry.expression : entry
+    return isIdentifier(named) || isPropertyAccessExpression(named)
+        ? named.getText()
+        : '<inline>'
 }
 
 /**

@@ -16,6 +16,8 @@ type MappedRoute = {
     kind: 'page' | 'handler' | 'private'
     /** 23.26 — each matcher its address names, to the anchored pattern it takes a part by. */
     matchers: Record<string, string>
+    /** 38.134 — the rungs a handler's `middleware` names, `[]` for none, `null` where unread. */
+    middleware: string[] | null
 }
 
 /** One hook call, the route it is filed at, and the file making it. */
@@ -42,6 +44,8 @@ export async function appMap(
             file: route.source,
             kind: 'page',
             matchers: route.matchers,
+            // A page declares no rungs of its own: what runs over it is filed by a hook (37.2).
+            middleware: [],
         })
     for (const mount of app.mounts)
         routes.push({
@@ -50,6 +54,7 @@ export async function appMap(
             file: mount.source,
             kind: mount.private ? 'private' : 'handler',
             matchers: mount.matchers,
+            middleware: mount.middleware,
         })
     routes.sort((one, two) =>
         one.address === two.address
@@ -81,7 +86,7 @@ export function mapText(map: Awaited<ReturnType<typeof appMap>>): string {
     const addresses = width(map.routes.map((route) => route.address))
     for (const route of map.routes)
         lines.push(
-            `${route.method.padEnd(methods)}  ${route.address.padEnd(addresses)}  ${route.file}${route.kind === 'private' ? '  (private)' : ''}`,
+            `${route.method.padEnd(methods)}  ${route.address.padEnd(addresses)}  ${route.file}${route.kind === 'private' ? '  (private)' : ''}${rungsText(route.middleware)}`,
         )
     // 23.26 — each matcher once, whichever routes name it: what a part must match to be taken.
     const matchers = new Map<string, string>()
@@ -104,4 +109,12 @@ export function mapText(map: Awaited<ReturnType<typeof appMap>>): string {
             )
     }
     return lines.join('\n')
+}
+
+/** 38.134 — a handler's rungs as the text map prints them after its file, or nothing for none. */
+function rungsText(middleware: string[] | null): string {
+    if (middleware === null) return '  middleware: unread'
+    return middleware.length === 0
+        ? ''
+        : `  middleware: ${middleware.join(', ')}`
 }
