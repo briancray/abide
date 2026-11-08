@@ -25,6 +25,8 @@ export type Scope = {
 
 export type Scoping = {
     current(): Scope | undefined
+    /** 22.11 — whether the work running is a server's: inside a scope, or inside a `render`. */
+    serving(): boolean
     /**
      * Runs `body` with `scope` as the current one, and `undefined` as no scope at all.
      *

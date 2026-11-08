@@ -447,6 +447,12 @@ type Refusals<Shaped, Gate, Stored, ArgsGate = Schema<never>, Args = never> = Re
 | --- | --- | --- | --- |
 | `server` | `<WebSocketData>() => Server<WebSocketData>` | The listening server. | 22.1 |
 
+## `isServer`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `isServer` | `() => boolean` | Whether the work running is a server's. | 22.11, 12.7, 23.7, 23.8 |
+
 ## `health`
 
 | Name | Signature | Meaning | Rules |

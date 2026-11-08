@@ -11,6 +11,7 @@
 // imports the narrowed form from here. A second argument is the author saying which form
 // they meant, and it needs nothing from the other module but a type.
 
+import { isServer } from '../isServer.ts'
 import { namedLogger } from '../log.ts'
 import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
@@ -60,7 +61,8 @@ function effectThrew(thrown: unknown): void {
         thrown,
         'an effect threw, and its watch is stopped. RULEBOOK 12.6, 12.8.',
     )
-    if (typeof document !== 'undefined') throw thrown
+    // 22.11, NOT `typeof document`: a test process's in-process render has one, and re-threw.
+    if (!isServer()) throw thrown
 }
 
 /**

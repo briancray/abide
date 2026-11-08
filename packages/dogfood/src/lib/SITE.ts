@@ -226,6 +226,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`watch` effect, bare',
                         '`watch` effect, over sources',
                         '`flushSync`',
+                        '`isServer`',
                         '`Transformer`, `Disposer`, middleware, lifecycle hooks',
                         '`store`',
                         '`Store`',

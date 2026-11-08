@@ -125,8 +125,15 @@ const STORAGE = new AsyncLocalStorage<RequestScope | undefined>()
 // value is filed per request (11.32), and a server module builds values as it loads — the
 // principal's document here, an app's handlers ahead of `bootApp` in a compiled entry. Anything
 // that can enter a scope imports this module, so none is built before the provider is in.
+// 22.11 — A RENDER OUTSIDE EVERY REQUEST IS STILL A SERVER'S: `render` called bare, and `mount`'s
+// first half, which a test process runs beside a DOM and the browser half that hydrates it. Marked
+// apart from STORAGE so the render's values stay the ones 11.32 files outside a request.
+const RENDERING = new AsyncLocalStorage<true>()
+
 SCOPING.provider = {
     current: (): Scope | undefined => STORAGE.getStore(),
+    serving: (): boolean =>
+        STORAGE.getStore() !== undefined || RENDERING.getStore() === true,
     run: (scope, body, given) =>
         STORAGE.run(scope as RequestScope | undefined, body, given),
 }
@@ -177,6 +184,11 @@ export function inScope<Result>(
     body: () => Result,
 ): Result {
     return STORAGE.run(scopeFor(given, given, undefined), body)
+}
+
+/** Runs `body` as a server's render, where no request is current, and returns what it returned. */
+export function inRender<Result>(body: () => Result): Result {
+    return STORAGE.getStore() === undefined ? RENDERING.run(true, body) : body()
 }
 
 /** Runs `body` in `scope`, which `scopeFor` opened, and returns what it returned. */

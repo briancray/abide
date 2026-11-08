@@ -285,8 +285,14 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>Disposer</code></td><td>what tears the previous run down</td></tr>
                 <tr><td><code>s.peek</code></td><td>reads what is held without subscribing</td></tr>
                 <tr><td><code>flushSync</code></td><td>runs every effect a write woke before it returns, for a handler that measures or scrolls the page the write left</td></tr>
+                <tr><td><code>isServer</code></td><td>whether the effect is running on the server, for work only a browser can do</td></tr>
             </tbody>
         </table>
+
+        <p>A watch runs on the server too, while the page renders. Guard work that needs the
+            browser, such as <code>localStorage</code>, with <code>isServer()</code> rather than
+            <code>typeof window</code>: a test renders the server half beside a DOM, and
+            <code>isServer()</code> still answers for the side the work is on.</p>
 
         <p>The effect is the one place in this card where a read subscribes. Its
             <code>Disposer</code> does not, and nor does any function abide calls without rebuilding
@@ -320,8 +326,8 @@ import Section from '#src/lib/Section.abide'
         </Example>
 
         <p>A <code>Store</code> is a <code>get</code> and a <code>set</code>. The value reads the
-            store when it is built and falls back to <code>500_000</code> on a miss, and every change
-            is written back. The reads and writes in the markup do not change.</p>
+            store when it is built and falls back to <code>500_000</code> on a miss without writing it,
+            and every change is written back. The reads and writes in the markup do not change.</p>
 
         <p>This store goes through two handlers, so the target is one value on the server: the
             next visit opens on it, and so does everyone else's, painted right the first time. After
