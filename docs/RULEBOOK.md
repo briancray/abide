@@ -1183,6 +1183,10 @@ declaration, and a rung naming no refusal, one typed to answer anything or a `Mi
 16.87 A handler whose parameter carries no annotation MUST take its `Args` from the `args` its options
 declare.
 
+16.88 A handler file's `rpc.address` MUST be its route (23.14) once the file is loaded in a process
+serving the app's compilation, `bun test`'s under `@abide/abide/test` included (38.109), whether or
+not `createApp` has run, and its mount's address once mounted.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.

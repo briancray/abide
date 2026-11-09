@@ -135,6 +135,8 @@ export function serveCompilation(root: string, compilation: Compilation): void {
 // plugin per compilation because the filter is fixed at registration, and the runtime's `onLoad`
 // cannot fall through, so the filter names the handler files and nothing else. The face it names
 // is resolved by `modulesPlugin`, registered once.
+// 16.88 — AND STAMPS ITS ADDRESS, so a test importing the file calls, links and matches it (44.51)
+// with no app booted; a boot's mount stamps it again, under the mount.
 // 15.8, 19.9 — AND HOLDS ITS HANDLER TO THE SCHEMA ITS ANNOTATION DERIVES, once the face has built it:
 // this module is what every import of the file is answered with — the server's mount, a test's own
 // import, a component's under `mount` — so a call is held to it whoever makes it.
@@ -153,13 +155,14 @@ function handlerFilesPlugin(
                 },
                 (args) => {
                     const face = JSON.stringify(`${args.path}${HANDLER_SUFFIX}`)
-                    const schema = faces.get(args.path)?.args
+                    const held = faces.get(args.path) as HandlerFace
                     return {
                         contents:
-                            `export { default } from ${face}\n` +
-                            (schema === undefined
+                            `export { default } from ${face}\nimport __handler from ${face}\n` +
+                            `__handler.address = ${JSON.stringify(held.address)}\n` +
+                            (held.args === undefined
                                 ? ''
-                                : `import __handler from ${face}\nimport { derivedArgs as __derivedArgs } from '${SERVER_SPECIFIER}'\n__derivedArgs(__handler, ${JSON.stringify(schema)})\n`),
+                                : `import { derivedArgs as __derivedArgs } from '${SERVER_SPECIFIER}'\n__derivedArgs(__handler, ${JSON.stringify(held.args)})\n`),
                         loader: 'js',
                     }
                 },

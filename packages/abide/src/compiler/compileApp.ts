@@ -404,6 +404,7 @@ async function emitApp(
         if (!mount.private)
             handlers[mount.source] = {
                 scope: mount.scope,
+                address: mount.address,
                 client: standIns.get(mount.source) ?? '',
                 args: mount.args,
             }

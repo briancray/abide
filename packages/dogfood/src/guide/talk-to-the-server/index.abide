@@ -288,6 +288,7 @@ import Section from '#src/lib/Section.abide'
             <tbody>
                 <tr><td><code>rpc.url</code></td><td>the address, with the args written in, for a link, a form or a webhook</td></tr>
                 <tr><td><code>rpc.method</code></td><td>the verb it was declared with</td></tr>
+                <tr><td><code>rpc.address</code></td><td>its route, once its file has loaded, in a test as in the app</td></tr>
                 <tr><td><code>rpc.raw</code></td><td>the <code>Response</code> itself, for a header or a body you read yourself</td></tr>
                 <tr><td><code>rpc.description</code></td><td>the sentence it was declared with</td></tr>
             </tbody>

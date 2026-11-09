@@ -225,7 +225,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15 |
-| `Middleware` | `Middleware<Answer = never, Extra extends object = object, Refused extends Failed<string, unknown> = Failed<string, unknown>> = <Given extends { request: Request } & Extra, Result>(next: (ctx?: Given) => Promise<Result>, ctx: Given) => Result \| Answer \| Refused \| Promise<Result \| Answer \| Refused>` | One rung, written once for every lane whose context carries `Extra`. | 16.8, 16.14, 16.15, 16.16, 16.21, 16.86, 37.14, 37.15 |
+| `Middleware` | `Middleware<Answer = never, Extra extends object = object, Refused extends Failed<string, unknown> = Failed<string, unknown>> = <Given extends { request: Request } & Extra, Result extends {} \| null \| undefined>(next: (ctx?: Given) => Promise<Result>, ctx: Given) => Result \| Answer \| Refused \| Promise<Result \| Answer \| Refused>` | One rung, written once for every lane whose context carries `Extra`. | 16.8, 16.14, 16.15, 16.16, 16.21, 16.86, 37.14, 37.15 |
 | `GET` | `<Stored, Accepted, Failures, Produced, Answers extends readonly unknown[] = unknown[]>(handler: Reactive<Stored, Accepted, Failures, Produced>, options?: RpcOptions<undefined, Answers>) => Rpc<Stored, undefined, Failures \| RungRefusals<Answers>, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 12.17, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27 |
 | `GET` | `<Stored, Args, Accepted, Failures, Produced, Answers extends readonly unknown[] = unknown[]>(handler: Keyed<Stored, Args, Accepted, Failures, Produced>, options?: RpcOptions<Args, Answers>) => Rpc<Stored, Args, Failures \| RungRefusals<Answers>, Produced>` | The keyed overload, for a `Keyed` given an address. | 11.2, 16.1, 16.3, 16.6 |
 | `GET` | `<Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>, Answers extends readonly unknown[] = unknown[]>(handler: () => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Shaping<Chunk[], Shaped, never, Gate> & RpcOptions<undefined, Answers>) => Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Chunk[]> \| RungRefusals<Answers>, Chunk>` | The streaming overload, whose options build the value it becomes beside its address. | 16.1, 16.6, 16.7, 16.44, 16.45, 16.46, 16.47 |
@@ -245,6 +245,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response. | 16.11, 16.42 |
 | `rpc.method` | `string` | The HTTP method. | 16.2 |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. | 16.9, 16.10, 30.28 |
+| `rpc.address` | `string \| undefined` | Where the handler answers. | 16.88 |
 | `rpc.description` | `string \| undefined` | The human description. | 16.28 |
 | `PatchOp` | `{ op: 'add' \| 'replace' \| 'test'; path: string; value: unknown } \| { op: 'remove'; path: string } \| { op: 'move' \| 'copy'; from: string; path: string }` | One JSON Patch operation (RFC 6902), its paths JSON Pointers, as a followed `GET` is sent what an `s.patch` wrote. | 18.11, 18.13 |
 
@@ -267,7 +268,7 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `description` | `string` | The human description carried onto every generated surface. | 16.28 |
-| `middleware` | `{ [At in keyof Answers]: (next: (ctx?: { request: Request; args: () => Args }) => Promise<Reached>, ctx: { request: Request; args: () => Args }) => Answers[At] \| Promise<Answers[At]> }` | The rungs run per call. | 16.8, 16.11, 16.12, 16.16, 16.17, 16.18, 16.19, 16.20, 16.86 |
+| `middleware` | `{ [At in keyof Answers]: (next: (ctx?: { request: Request; args: () => Args }) => Promise<Reached>, ctx: { request: Request; args: () => Args }) => Answers[At] \| Promise<Answers[At]> } \| readonly ((next: (ctx?: { request: Request; args: () => Args }) => Promise<Reached>, ctx: { request: Request; args: () => Args }) => unknown)[]` | The rungs run per call. | 16.8, 16.11, 16.12, 16.16, 16.17, 16.18, 16.19, 16.20, 16.86 |
 | `timeout` | `number` | How long the call may go without progress. | 16.22, 16.58, 16.59, 16.60, 16.61, 16.77 |
 | `clients` | `Clients` | Which surfaces carry this handler. | 16.37, 20.3 |
 | `crossOrigin` | `boolean \| string[]` | Whether other origins may call it, or follow it over the mux. | 16.24, 18.2, 21.19 |
@@ -365,7 +366,7 @@ type Reached = { readonly [REACHED]: true }
 | `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<ToolAnswer> }` | The app's MCP tools, called as the asker. | 44.6, 44.7, 44.35 |
 | `ToolAnswer` | `{ content: AssistantContent[]; failed: boolean }` | What a tool call answered: its pieces, and whether it failed. | 20.21, 20.22, 44.35 |
 | `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 20.19, 44.6 |
-| `resultsOf` | `<Value>(events: readonly AssistantEvent[], handler: Rpc<Value, never, unknown, unknown>) => Value[]` | What a conversation's calls to one handler answered. | 44.51 |
+| `resultsOf` | `<Value>(events: readonly AssistantEvent[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { method: string; address: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 44.51 |
 | `imagePiece` | `(image: Blob) => Promise<{ type: 'image'; data: string; mimeType: string }>` | An image as a turn's image piece, drawn down to what a model looks at. | 44.52, 44.53, 44.54 |
 | `imageFiles` | `(data: DataTransfer \| null) => File[]` | The images a paste or a drop carries that a model is shown. | 44.55 |
 

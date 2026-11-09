@@ -10,12 +10,19 @@ import type { Failed } from './Failed.ts'
  *
  * `Refused` is what it may refuse with; a rung naming its refusals carries them onto the `Rpc` its
  * handler is declared with (16.86), where one left at `Failed<string, unknown>` carries none.
+ *
+ * `Result` IS BOUNDED BY EVERYTHING BUT `unknown`. A rung read outside a context — listed by a
+ * helper, or beside the plain array arm of `RpcOptions['middleware']` — is read at its erased
+ * signature, where `Result` is its bound, and an `unknown` there absorbs `Refused` in the union.
  */
 export type Middleware<
     Answer = never,
     Extra extends object = object,
     Refused extends Failed<string, unknown> = Failed<string, unknown>,
-> = <Given extends { request: Request } & Extra, Result>(
+> = <
+    Given extends { request: Request } & Extra,
+    Result extends {} | null | undefined,
+>(
     next: (ctx?: Given) => Promise<Result>,
     ctx: Given,
 ) => Result | Answer | Refused | Promise<Result | Answer | Refused>

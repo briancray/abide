@@ -168,6 +168,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`cache-control: private, max-age=<ttl>`',
                         '`cache-control: public, max-age=31536000, immutable`',
                         '`rpc.url`',
+                        '`rpc.address`',
                         '`rpc.method`',
                         '`rpc.raw`',
                         '`rpc.description`',

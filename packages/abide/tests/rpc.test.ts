@@ -260,6 +260,46 @@ test("a rung's named refusal is on the Rpc's failures, and narrows by name — 1
     expect([names, owners]).toEqual([true, ['someone']])
 })
 
+// 16.86 — A RUNG LISTED BY A HELPER IS READ AS ONE LISTED INLINE: a list a function builds is not
+// typed in context, so each `Middleware` in it is read at its erased signature, and its `Refused`
+// must survive that read. And a generic helper's rung takes its `Args` from the handler it is listed
+// on. Types only: each line compiles where the list carried what it should. THE REVERTS: drop
+// `Result`'s bound in `Middleware.ts` — `Result` erases to `unknown`, which absorbs `Refused`, and
+// `failure.name` fails typecheck on `never` (as does the inline list's above); drop the plain array
+// arm of `RpcOptions['middleware']` — `guarded`'s helper takes `Args` as `unknown`, and no overload
+// matches.
+test("a helper's rungs carry their refusals, and take the handler's args — 16.86", () => {
+    const owned: Middleware<
+        never,
+        { args: () => unknown },
+        Failed<'NotYours', undefined>
+    > = async (next) => next()
+    const listed = (): (typeof owned)[] => [owned]
+    const tupled = () => [owned] as const
+    type Given<Args> = { request: Request; args: () => Args }
+    const forArgs = <Args>(): ((
+        next: (ctx?: Given<Args>) => Promise<unknown>,
+        ctx: Given<Args>,
+    ) => unknown)[] => []
+    const names: string[] = []
+    const failure: unknown = refuse.named('NotYours', 403)()
+    for (const handler of [
+        POST(({ home }: { home: string }) => home, { middleware: listed() }),
+        POST(({ home }: { home: string }) => home, { middleware: tupled() }),
+        POST(({ home }: { home: string }) => home, {
+            middleware: [...listed()],
+        }),
+    ])
+        if (handler.isError(failure, 'NotYours')) names.push(failure.name)
+    const guarded = POST(({ home }: { home: string }) => home, {
+        middleware: forArgs(),
+    })
+    expect([names, guarded.method]).toEqual([
+        ['NotYours', 'NotYours', 'NotYours'],
+        'POST',
+    ])
+})
+
 // 16.87 — A DECLARED `args` TYPES THE HANDLER'S PARAMETER, so the body is not annotated a second
 // time. The type half is `Typed`, which is `never` for `any`: each read only compiles where the
 // member took the schema's type rather than the `any` an unannotated destructuring falls back to.

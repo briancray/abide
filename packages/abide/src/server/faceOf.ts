@@ -43,10 +43,12 @@ export type Asked =
 
 /**
  * One handler file, as `Compilation.handlers` holds it — and 19.9's schema its default's annotation
- * derives, which the module at the file's path holds it to (`derivedArgs`).
+ * derives, which the module at the file's path holds it to (`derivedArgs`), and the address it is
+ * stamped with on load (16.2).
  */
 export type HandlerFace = {
     scope: string
+    address: string
     client: string
     args: JsonValue | undefined
 }

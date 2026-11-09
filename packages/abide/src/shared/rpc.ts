@@ -122,7 +122,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     url(...args: undefined extends Args ? [args?: Args] : [args: Args]): string
     /** The same call, handed back as the `Response` (16.42). */
     raw(args?: Args, init?: RequestInit): Promise<Response>
-    /** Where the handler is mounted, stamped by whoever mounted it — `undefined` until then. */
+    /** Where the handler answers: its route once its file has loaded, its mount's once mounted (16.88). */
     address: string | undefined
     keyed: boolean
     timeout: number | undefined
@@ -214,13 +214,22 @@ export type RpcOptions<
     /**
      * 16.86 — one rung per answer in `Answers`, each read in context: a rung's own refusals are
      * inferred where the list is written at the declaration.
+     *
+     * The plain array arm is the context a list built by a GENERIC helper is typed in: the mapped
+     * arm is over `Answers`, still being inferred, so the helper's own `Args` read nothing there and
+     * fell to `unknown`. It adds no refusal of its own — `Answers` is still read off the list.
      */
-    middleware?: {
-        [At in keyof Answers]: (
-            next: (ctx?: RpcContext<Args>) => Promise<Reached>,
-            ctx: RpcContext<Args>,
-        ) => Answers[At] | Promise<Answers[At]>
-    }
+    middleware?:
+        | {
+              [At in keyof Answers]: (
+                  next: (ctx?: RpcContext<Args>) => Promise<Reached>,
+                  ctx: RpcContext<Args>,
+              ) => Answers[At] | Promise<Answers[At]>
+          }
+        | readonly ((
+              next: (ctx?: RpcContext<Args>) => Promise<Reached>,
+              ctx: RpcContext<Args>,
+          ) => unknown)[]
     timeout?: number
     clients?: Clients
     crossOrigin?: boolean | string[]
@@ -386,6 +395,23 @@ type Declare = {
         | RungRefusals<Answers>,
         AdoptedProduced<Computed, Kept<Shaped>>
     >
+    // 16.1 — a value, `reactive`'s value overload given an address. Ahead of the arm below rather
+    // than last, so a body refused for its options is reported by that arm, naming them, and not as
+    // a value it never was: `Held` already turns every function away.
+    <
+        Accepted,
+        Shaped = Accepted,
+        Gate = Schema<Accepted>,
+        Answers extends readonly unknown[] = unknown[],
+    >(
+        handler: Held<Accepted>,
+        options?: Shaping<Accepted, Shaped, never, Gate> &
+            RpcOptions<undefined, Answers>,
+    ): Rpc<
+        Kept<Shaped>,
+        undefined,
+        Refusals<Shaped, Gate, Accepted> | RungRefusals<Answers>
+    >
     <
         Computed,
         Args,
@@ -404,21 +430,6 @@ type Declare = {
         | Refusals<Shaped, Gate, Awaited<Computed>, ArgsGate, Args>
         | RungRefusals<Answers>,
         AdoptedProduced<Computed, Kept<Shaped>>
-    >
-    // 16.1 — a value, `reactive`'s value overload given an address. Last, so a function is a body.
-    <
-        Accepted,
-        Shaped = Accepted,
-        Gate = Schema<Accepted>,
-        Answers extends readonly unknown[] = unknown[],
-    >(
-        handler: Held<Accepted>,
-        options?: Shaping<Accepted, Shaped, never, Gate> &
-            RpcOptions<undefined, Answers>,
-    ): Rpc<
-        Kept<Shaped>,
-        undefined,
-        Refusals<Shaped, Gate, Accepted> | RungRefusals<Answers>
     >
 }
 

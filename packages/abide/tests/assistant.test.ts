@@ -7,6 +7,8 @@ import { afterAll, afterEach, beforeAll, expect, jest, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
+import { POST } from '#server'
+
 import {
     BRIDGE_PATH,
     HEARTBEAT_MILLISECONDS as BRIDGE_HEARTBEAT_MILLISECONDS,
@@ -423,6 +425,29 @@ test('a call carries its handler and its answer its value, whoever ran it — 44
         resultsOf(said, WHOAMI as unknown as Rpc<string, never>),
     ).toStrictEqual(['ada'])
 }, 30_000)
+
+// 44.51 — ANY HANDLER IS ONE `resultsOf` TAKES, whatever it is called with: it reads the handler's
+// method and address, and its value's type off the call. Types only: `setHome` takes args, and the
+// value read back is a `string`. THE REVERT: type the parameter `Rpc<Value, never, unknown, unknown>`
+// — an `Rpc` is contravariant in its `Args`, and `setHome` is refused.
+test('a handler that takes args is one resultsOf reads — 44.51', () => {
+    const setHome = POST(({ home }: { home: string }) => home)
+    setHome.address = '/homes/setHome'
+    const homes: string[] = resultsOf(
+        [
+            {
+                type: 'result',
+                id: 'a',
+                text: '"north"',
+                failed: false,
+                handler: { method: 'POST', address: '/homes/setHome' },
+                value: 'north',
+            },
+        ],
+        setHome,
+    )
+    expect(homes).toEqual(['north'])
+})
 
 // 44.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
 // `post_invoices_whoami` is announced as it streams, but no `result` follows and the conversation ends on
