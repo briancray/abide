@@ -743,6 +743,10 @@ save where a clause orders them.
 12.16 A stream released under 12.14 MUST stop its run, and the later read MUST start it once more,
 whether or not the stopped run had closed.
 
+12.17 A `reactive` declared where 12.4, 12.5 and 12.13 would own no `watch` MUST NOT be owned by
+one current where it is first reached, save the instance a request builds of it under 11.67, which
+that request owns.
+
 # 13. Selections
 
 13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, one `Rpc`, or a set of `tags`.

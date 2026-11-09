@@ -20,6 +20,7 @@ import { brandedPrototype, MEMBER_KEYS, signalMoved } from './Reactive.ts'
 import { currentScope, runInScope, SCOPING } from './scoping.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
 import { newTracked, type Tracked, TRACKING, trackProbe } from './tracking.ts'
+import { owning, unowned } from './watch.ts'
 
 const UNBUILT: unique symbol = Symbol('abide.unbuilt')
 
@@ -39,6 +40,11 @@ class Filed {
     make: () => unknown
     global: boolean
     /**
+     * 12.17 — whether the declaration had an owner. A home declared with none — a module's, which is
+     * every handler's — is the process's, and is built as one wherever it is first reached.
+     */
+    declaredOwned: boolean
+    /**
      * 3.3, 13.19 — what a probe asked before the value was built here subscribes to, moved by the
      * build: the home's. A scope files its own in `instances` under this one as its key, and drops
      * it with the scope.
@@ -49,6 +55,7 @@ class Filed {
         this.make = make
         this.home = lazy ? UNBUILT : make()
         this.global = global
+        this.declaredOwned = owning()
         this.unbuilt = newTracked()
     }
 }
@@ -66,7 +73,9 @@ function instanceOf(filed: Filed): Record<PropertyKey, unknown> {
     const scope = filed.global ? undefined : currentScope()
     if (scope === undefined) {
         if (filed.home === UNBUILT) {
-            filed.home = runInScope(undefined, () => filed.make(), undefined)
+            filed.home = filed.declaredOwned
+                ? runInScope(undefined, filed.make, undefined)
+                : unowned(() => runInScope(undefined, filed.make, undefined))
             signalMoved(filed.unbuilt)
         }
         return filed.home as Record<PropertyKey, unknown>

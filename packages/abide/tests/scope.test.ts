@@ -10,6 +10,7 @@ import { type Component, render } from '#server/render.ts'
 import {
     currentRequestScope,
     holdScope,
+    inReleasedRender,
     inScope,
     releaseScope,
     request,
@@ -18,6 +19,7 @@ import {
 } from '#server/requestScope.ts'
 import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
 import { cellOf } from '#shared/reactive/cellShape.ts'
+import { collectWatches } from '#shared/reactive/watch.ts'
 import { GET, POST } from '#shared/rpc.ts'
 
 installServer()
@@ -184,6 +186,45 @@ test('a plain handler declaring global is built once, on its first call — 11.3
         })
     expect(await visit()).toBe(1)
     expect(`body runs: ${runs}`).toBe('body runs: 1')
+})
+
+// 12.17 — A HOME FIRST REACHED INSIDE AN OWNER IS NOT THAT OWNER'S. A handler is declared where
+// nothing owns it, and built where a render outside every request, or a component's setup, would own
+// a derived value it was released when that one stopped: the next reach ran its body again and
+// started its stream again. THE REVERT: build the home in `instanceOf` without `unowned` — "body
+// runs: 4, starts: 2" where "body runs: 2, starts: 1" is due. Its other arm, a value declared IN an
+// owner, is 8.21's: build every home unowned and that test's store watch outlives its setup.
+test('a home first reached inside an owner outlives it — 12.17', async () => {
+    let runs = 0
+    let starts = 0
+    const visit = GET(() => {
+        runs += 1
+        return runs
+    })
+    const archive = GET(async function* () {
+        starts += 1
+        yield starts
+    })
+    await inReleasedRender(async () => {
+        await visit()
+        await archive()
+    })
+    const again = GET(() => {
+        runs += 1
+        return runs
+    })
+    const setup: (() => void)[] = []
+    const previous = collectWatches(setup)
+    again()
+    collectWatches(previous)
+    for (const stop of setup) stop()
+    await tick()
+    await visit()
+    await archive()
+    await again()
+    expect(`body runs: ${runs}, starts: ${starts}`).toBe(
+        'body runs: 2, starts: 1',
+    )
 })
 
 // 13.19, 16.64 — A HANDLER NO CALL HAS REACHED ANSWERS AS ONE WITH NO ENTRIES, and asking builds
