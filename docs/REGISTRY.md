@@ -268,7 +268,7 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `description` | `string` | The human description carried onto every generated surface. | 16.28 |
-| `middleware` | `{ [At in keyof Answers]: (next: (ctx?: { request: Request; args: () => Args }) => Promise<Reached>, ctx: { request: Request; args: () => Args }) => Answers[At] \| Promise<Answers[At]> } \| readonly ((next: (ctx?: { request: Request; args: () => Args }) => Promise<Reached>, ctx: { request: Request; args: () => Args }) => unknown)[]` | The rungs run per call. | 16.8, 16.11, 16.12, 16.16, 16.17, 16.18, 16.19, 16.20, 16.86 |
+| `middleware` | `{ [At in keyof Answers]: (next: (ctx?: { request: Request; args: () => Args }) => Promise<Reached>, ctx: { request: Request; args: () => Args }) => Answers[At] \| Promise<Answers[At]> } \| readonly ((next: (ctx?: { request: Request; args: () => NoInfer<Args> }) => Promise<Reached>, ctx: { request: Request; args: () => NoInfer<Args> }) => unknown)[]` | The rungs run per call. | 16.8, 16.11, 16.12, 16.16, 16.17, 16.18, 16.19, 16.20, 16.86 |
 | `timeout` | `number` | How long the call may go without progress. | 16.22, 16.58, 16.59, 16.60, 16.61, 16.77 |
 | `clients` | `Clients` | Which surfaces carry this handler. | 16.37, 20.3 |
 | `crossOrigin` | `boolean \| string[]` | Whether other origins may call it, or follow it over the mux. | 16.24, 18.2, 21.19 |

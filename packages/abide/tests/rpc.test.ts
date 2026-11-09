@@ -264,11 +264,13 @@ test("a rung's named refusal is on the Rpc's failures, and narrows by name — 1
 // 16.86 — A RUNG LISTED BY A HELPER IS READ AS ONE LISTED INLINE: a list a function builds is not
 // typed in context, so each `Middleware` in it is read at its erased signature, and its `Refused`
 // must survive that read. And a generic helper's rung takes its `Args` from the handler it is listed
-// on. Types only: each line compiles where the list carried what it should. THE REVERTS: drop
+// on, and a keyed handler's `Args` are its own whatever a rung's `Extra` asks of them. Types only:
+// each line compiles where the list carried what it should. THE REVERTS: drop
 // `Result`'s bound in `Middleware.ts` — `Result` erases to `unknown`, which absorbs `Refused`, and
 // `failure.name` fails typecheck on `never` (as does the inline list's above); drop the plain array
 // arm of `RpcOptions['middleware']` — `guarded`'s helper takes `Args` as `unknown`, and no overload
-// matches.
+// matches; drop that arm's `NoInfer` — the keyed handlers' `Args` are inferred off `owned`'s
+// `args: () => unknown` as well as off `realms`, and no overload matches either.
 test("a helper's rungs carry their refusals, and take the handler's args — 16.86", () => {
     const owned: Middleware<
         never,
@@ -281,6 +283,7 @@ test("a helper's rungs carry their refusals, and take the handler's args — 16.
         next: (ctx?: RpcContext<Args>) => Promise<unknown>,
         ctx: RpcContext<Args>,
     ) => unknown)[] => []
+    const realms = reactive((args: { home: string }) => args.home)
     const names: string[] = []
     const failure: unknown = refuse.named('NotYours', 403)()
     for (const handler of [
@@ -289,13 +292,15 @@ test("a helper's rungs carry their refusals, and take the handler's args — 16.
         POST(({ home }: { home: string }) => home, {
             middleware: [...listed()],
         }),
+        GET(realms, { middleware: [owned] }),
+        GET(realms, { middleware: listed() }),
     ])
         if (handler.isError(failure, 'NotYours')) names.push(failure.name)
     const guarded = POST(({ home }: { home: string }) => home, {
         middleware: forArgs(),
     })
     expect([names, guarded.method]).toEqual([
-        ['NotYours', 'NotYours', 'NotYours'],
+        ['NotYours', 'NotYours', 'NotYours', 'NotYours', 'NotYours'],
         'POST',
     ])
 })

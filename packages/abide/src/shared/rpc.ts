@@ -223,11 +223,13 @@ export type RpcOptions<
      *
      * The plain array arm is the context a list built by a GENERIC helper is typed in: the mapped
      * arm is over `Answers`, still being inferred, so the helper's own `Args` read nothing there and
-     * are `unknown`. It adds no refusal of its own — `Answers` is still read off the list.
+     * are `unknown`. It adds no refusal of its own — `Answers` is still read off the list — and
+     * no `Args` either: a `Middleware` asking `args: () => unknown` of its context would otherwise
+     * widen a keyed handler's to `unknown`, which its `Keyed` then refuses.
      */
     middleware?:
         | { [At in keyof Answers]: HandlerRung<Args, Answers[At]> }
-        | readonly HandlerRung<Args, unknown>[]
+        | readonly HandlerRung<NoInfer<Args>, unknown>[]
     timeout?: number
     clients?: Clients
     crossOrigin?: boolean | string[]
