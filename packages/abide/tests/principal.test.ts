@@ -274,28 +274,6 @@ test('a page fetched to be kept carries its early calls and seeds nothing — 41
     expect(answer.headers.get('server-timing')).toStartWith('Direct;')
 })
 
-// 41.29 — THE PAGE THE WORKER FETCHED FOR THE NAVIGATION IT ANSWERS IS SEEDED: it is the one that
-// hydrates, and a render that left its calls unseeded had every one asked of the handler again by
-// the page's own call. THE REVERT: drop the `KEEP_OPENED` test from `hydrated` in `answerRequest`;
-// the read is `Direct` where `Seeded` is due.
-test('a page the worker fetched for the navigation it opens is seeded — 41.29, 45.23', async () => {
-    const { principal, caller } = await signedIn()
-    const cookie = `${principal}; ${caller}`
-    await (
-        await Bun.fetch(`${base}/`, {
-            headers: {
-                cookie,
-                'sec-fetch-dest': 'empty',
-                'abide-keep': 'open',
-            },
-        })
-    ).text()
-    const answer = await Bun.fetch(`${base}/__abide/principal`, {
-        headers: { cookie },
-    })
-    expect(answer.headers.get('server-timing')).toStartWith('Seeded;')
-})
-
 // A SIGN-IN OR SIGN-OUT A HANDLER ANSWERED SAYS SO, in a header a browser's `fetch` can read — the
 // principal cookie is `HttpOnly` and `set-cookie` is withheld from script, so nothing else on the
 // answer tells the page its `principal` moved. A read of the principal says nothing. THE REVERT:

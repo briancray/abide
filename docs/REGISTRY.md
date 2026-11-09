@@ -707,7 +707,7 @@ type Reached = { readonly [REACHED]: true }
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
 | `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
 | `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
-| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23, 45.24 |
+| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23, 45.24, 45.25, 45.26 |
 | `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |

@@ -441,8 +441,8 @@ test('a call made offline survives a reload and is delivered once online — 46.
 
 // 45.23, 41.30 — A PAGE OPENED FROM ITS KEPT COPY STARTS ITS CALLS EARLY, as the page it was kept from
 // did, so it hydrates with its data rather than ahead of it. THE REVERT: drop the `KEEP` header from
-// `fromNetwork`'s page request; the kept page carries no early call, and the reload hydrates before
-// the note has landed, warning that client and server disagree.
+// `pageRequest`; the copy the first reload revalidated carries no early call, and the second reload
+// hydrates before the note has landed, warning that client and server disagree.
 test('a page reopened from its kept copy hydrates with its data — 45.23, 41.30', async ({
     page,
 }) => {

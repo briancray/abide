@@ -7,7 +7,6 @@
 
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
-import { KEEP_OPENED } from '#shared/KEEP_OPENED.ts'
 import { KEPT_HEADER } from '#shared/KEPT_HEADER.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
@@ -42,7 +41,7 @@ async function dropOurs(keeping) {
 }
 `
 
-// 45.3 through 45.8, 45.13, 45.17 through 45.21, and 45.24.
+// 45.3 through 45.8, 45.13, and 45.17 through 45.26.
 const SAVING = `
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -149,31 +148,33 @@ function marked(saved) {
     })
 }
 
-// A page as the worker asks for it, whether a navigation or the worker keeping an open window's:
-// past the browser's cache, as a page kept, and with its redirects left to the page — one followed
-// would be saved under the address it was asked at, holding where it led (RULEBOOK 45.4, 45.21,
-// 45.23).
-function pageRequest(url, headers, keep) {
+// A page no navigation is asking for, as the worker asks for it: past the browser's cache, as a page
+// kept, and with its redirects left unfollowed — one followed would be saved under the address it was
+// asked at, holding where it led (RULEBOOK 45.4, 45.21, 45.23).
+function pageRequest(url, headers) {
     const asking = new Headers(headers)
-    asking.set(KEEP, keep)
+    asking.set(KEEP, '1')
     return new Request(url, { headers: asking, redirect: 'manual', cache: 'no-cache' })
 }
 
-// 45.21 — PAST THE BROWSER'S OWN CACHE, which holds the same answers under the same headers and would
-// hand a revalidation the copy it is replacing. A navigation's request takes no init of its own, so it
-// is asked again by address, its redirects left to the page as a navigation's are — and 45.23, as a
-// page kept, which a script's fetch is not otherwise told from (RULEBOOK 41.29, 41.30), and as the
-// page the navigation opens where opened says it is, which then hydrates from what it seeded.
+// 45.25 — THE NAVIGATION ASKED AS ITSELF: any init rebuilds a navigation's request as a script's
+// fetch, and a proxy in front of the app tells the two apart — one sending a page load to sign-in
+// answers a fetch 401. As itself it is the document that hydrates (RULEBOOK 41.29), its redirects
+// left to the browser. Anything else is asked past the browser's own cache (RULEBOOK 45.21), which
+// holds the same answers under the same headers and would hand a revalidation the copy it is replacing
+// — and a page as one kept, which a script's fetch is not otherwise told from (RULEBOOK 45.23, 41.30).
 async function fromNetwork(event, page, opened) {
     const request = event.request
-    const asked = page
-        ? pageRequest(request.url, request.headers, opened ? OPENED : '1')
-        : new Request(request, { cache: 'no-cache' })
+    const asked = opened
+        ? request
+        : page
+          ? pageRequest(request.url, request.headers)
+          : new Request(request, { cache: 'no-cache' })
     const since = drops
     const response = await fetch(asked)
     // A copy nothing reads is a tee holding every chunk, so one is cloned only to be saved.
     const copy = kept(response) ? response.clone() : undefined
-    event.waitUntil(keep(request, copy, since, response.headers.has(PRINCIPAL)))
+    event.waitUntil(keep(request, response, copy, since))
     return response
 }
 
@@ -181,11 +182,11 @@ async function fromNetwork(event, page, opened) {
 // window's as the worker activates, and an address the router reached.
 function keepPage(url) {
     const since = drops
-    return fetch(pageRequest(url, undefined, '1')).then((response) => {
+    return fetch(pageRequest(url)).then((response) => {
         // Nothing reads this answer, so one 45.3 or 45.4 turns away is let go here.
         const copy = kept(response) ? response : undefined
         if (copy === undefined) response.body?.cancel()
-        return keep(new Request(url), copy, since, response.headers.has(PRINCIPAL))
+        return keep(new Request(url), response, copy, since)
     }, () => {})
 }
 
@@ -273,12 +274,21 @@ function dropSaved() {
 // Saves a copy 45.3 and 45.4 let through where no drop has come since its request was asked — after
 // the drop its own answer makes where that answer rotated the principal — and cancels one where one has.
 // One any caller may be answered is saved whenever it was asked, since no caller's cookies made it.
-async function keep(request, copy, since, rotated) {
-    if (rotated) {
+async function keep(request, response, copy, since) {
+    if (response.headers.has(PRINCIPAL)) {
         await dropSaved()
         since = drops
     }
-    if (copy === undefined) return
+    // 45.26 — AN ANSWER NOT SAVED STILL REPLACES THE COPY: a redirect or a 401 is what the address
+    // answers now, and a copy left standing would answer every load in its stale-while-revalidate
+    // window in its place — a session lapsed behind a sign-in proxy never reaching the sign-in. A
+    // server error is no answer to replace a copy with.
+    if (copy === undefined) {
+        if (response.status >= 500) return
+        await (await caches.open(SAVED)).delete(request)
+        await (await caches.open(SHARED)).delete(request)
+        return
+    }
     const shared = directivesOf(copy).has('public')
     if (!shared && since !== drops) return copy.body?.cancel()
     // An address whose answer went public or private since leaves no copy behind for savedCopy to
@@ -338,7 +348,6 @@ export function answerWorker(manifest: Manifest | undefined): Response {
         script = `${CACHES}const PRINCIPAL = ${JSON.stringify(PRINCIPAL_HEADER)}
 const KEPT = ${JSON.stringify(KEPT_HEADER)}
 const KEEP = ${JSON.stringify(KEEP_HEADER)}
-const OPENED = ${JSON.stringify(KEEP_OPENED)}
 const NAVIGATION = ${JSON.stringify(NAVIGATION_HEADER)}
 const REACHED = ${JSON.stringify(REACHED_MESSAGE)}
 // 45.4 — the types a stream 16.32 frames, which has no end to save.

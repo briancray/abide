@@ -11,7 +11,6 @@
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
-import { KEEP_OPENED } from '#shared/KEEP_OPENED.ts'
 import type { Rpc } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
 
@@ -141,18 +140,15 @@ export class PageRender {
  * one `principal.caller` reads for the rest of the request. 41.13 — every call the render makes is
  * left for the browser's own call to be answered from. 41.29 — BUT NOT A PAGE A SCRIPT FETCHED, which
  * nothing hydrates: its entries would answer the next call this caller makes with what the render
- * saw, a sign-in since included — save the one the worker fetched for the navigation it answers,
- * which is the page that hydrates (45.23). 41.30 — SAVE ONE THE WORKER KEEPS, whose early calls are
- * what a later open of it starts.
+ * saw, a sign-in since included. The worker asks for the navigation it answers as that navigation
+ * (45.25), so the page that hydrates is never one a script fetched. 41.30 — SAVE ONE THE WORKER
+ * KEEPS, whose early calls are what a later open of it starts.
  */
 export function beginPageRender(request: Request): PageRender {
     const caller = callerOrMint()
     const keep = request.headers.get(KEEP_HEADER)
-    const hydrated =
-        keep === KEEP_OPENED ||
-        request.headers.get('sec-fetch-dest') !== 'empty'
     const page = new PageRender(
-        hydrated
+        request.headers.get('sec-fetch-dest') !== 'empty'
             ? seedFor(caller)
             : keep !== null
               ? callsOnly()

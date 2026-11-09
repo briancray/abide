@@ -3253,8 +3253,7 @@ adopts the page, however early its answer arrived.
 made an `Rpc` call, or whose markup reads a bare `busy` or `ready`, and building that component's
 markup.
 
-41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` MUST NOT fill the seed buffer,
-save one whose `abide-keep` header names `open`.
+41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` MUST NOT fill the seed buffer.
 
 41.30 A `render` answering a request carrying `abide-keep` MUST write 41.20's script.
 
@@ -3666,17 +3665,24 @@ and that copy is stale by no more than its `stale-if-error`.
 45.20 The worker `ABIDE_OFFLINE` turns on MUST answer a request that is not a navigation, and whose
 `cache` is `no-cache`, `reload` or `no-store`, with the network's answer alone.
 
-45.21 The worker `ABIDE_OFFLINE` turns on MUST ask the network past the browser's own cache.
+45.21 The worker `ABIDE_OFFLINE` turns on MUST ask the network past the browser's own cache, save
+for a navigation 45.25 has it ask as itself.
 
 45.22 The worker `ABIDE_OFFLINE` turns on MUST mark an answer it gives from a copy it saved with an
 `abide-kept` header naming that copy's `date`.
 
 45.23 The worker `ABIDE_OFFLINE` turns on MUST ask for a page it saves with an `abide-keep` header,
-naming `open` where its answer is the one a navigation opens.
+save for a navigation 45.25 has it ask as itself.
 
 45.24 The worker `ABIDE_OFFLINE` turns on MUST save the page of an address a `navigate` reached,
 where it saved no copy of that address 45.19 would answer with, and MUST NOT save one of another
 origin.
+
+45.25 The worker `ABIDE_OFFLINE` turns on MUST ask the network for a navigation with the navigation's
+own request, unchanged.
+
+45.26 The worker `ABIDE_OFFLINE` turns on MUST drop the copy it saved of an address where the network
+answers that address with an answer 45.3 or 45.4 does not let it save, save one of 500 or above.
 
 # 46. Outbox
 

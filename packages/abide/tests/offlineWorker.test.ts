@@ -109,8 +109,9 @@ async function worker(
         },
         delete: async (name: string) => stores.delete(name),
         keys: async () => [...stores.keys()],
+        // A copy per match, as a browser's cache storage answers: one copy read twice is read once.
         match: async (request: Request, options: { cacheName: string }) =>
-            stores.get(options.cacheName)?.get(keyOf(request)),
+            stores.get(options.cacheName)?.get(keyOf(request))?.clone(),
     }
     const self = {
         location: new URL(`${ORIGIN}/__abide/worker.js`),
@@ -357,20 +358,61 @@ test('a no-cache call is answered by the network alone, a navigation still from 
 })
 
 // 45.21 — THE NETWORK IS ASKED PAST THE BROWSER'S OWN CACHE, which keeps the same answers under the
-// same headers and would hand a revalidation the copy it means to replace: a call, a page, and the
-// open windows' pages as the worker activates. THE REVERT: pass `request` unchanged to `fetch` in
-// `fromNetwork`; the call is asked `default`.
+// same headers and would hand a revalidation the copy it means to replace: a call, a page revalidated
+// behind its copy, and the open windows' pages as the worker activates — the navigation itself is
+// 45.25's. THE REVERT: pass `request` unchanged to `fetch` in `fromNetwork`; the call is asked
+// `default`.
 test('the worker asks the network with no-cache — 45.21', async () => {
     const offline = await worker(MANIFEST, () => aged('kept', KEPT))
     offline.scope.windows.push({ url: `${ORIGIN}/open` })
     await offline.dispatch('activate')
     await offline.dispatch('fetch', { request: new Request(`${ORIGIN}/data`) })
-    await offline.navigate('/')
+    await offline.navigate('/open')
     expect(offline.fetched).toEqual([
         `no-cache ${ORIGIN}/open`,
         `no-cache ${ORIGIN}/data`,
-        `no-cache ${ORIGIN}/`,
+        `no-cache ${ORIGIN}/open`,
     ])
+})
+
+// 45.25 — THE NAVIGATION IS ASKED AS ITSELF: the very request the browser handed the worker, since any
+// init rebuilds it as a script's fetch (`mode` `same-origin`, `sec-fetch-mode: cors`), and a sign-in
+// proxy that redirects a page load answers that fetch 401. Bun keeps `mode` through an init where a
+// browser does not, so what is asserted is the request's identity. THE REVERT: ask the navigation
+// through `pageRequest` in `fromNetwork`, as before; the request asked is not the navigation's.
+test('a navigation is asked of the network as the navigation itself — 45.25', async () => {
+    const asked: Request[] = []
+    const offline = await worker(MANIFEST, (request) => {
+        asked.push(request)
+        return aged('kept', KEPT)
+    })
+    const navigation = new Request(`${ORIGIN}/`, {
+        ...({ mode: 'navigate' } as RequestInit),
+    })
+    await offline.dispatch('fetch', { request: navigation })
+    expect(asked.length).toBe(1)
+    expect(asked[0] === navigation).toBe(true)
+})
+
+// 45.26 — AN ANSWER THE WORKER DOES NOT SAVE STILL REPLACES THE COPY IT HELD: the session behind a
+// sign-in proxy lapses, the page's copy answers the next load stale-while-revalidate, and the
+// revalidation is answered 401 — so the reload after it goes to the network, where the proxy sends it
+// to sign-in, rather than to the signed-out copy for the rest of the week. A server error leaves the
+// copy standing. THE REVERT: return from `keep` where `copy` is `undefined`, as before; the reload
+// reads `kept` from the copy and the network is never asked as a navigation.
+test('a copy answered over by a 401 or a redirect is dropped, and a 5xx leaves it — 45.26', async () => {
+    let answering: () => Response = () => aged('kept', KEPT)
+    const offline = await worker(MANIFEST, () => answering())
+    await offline.navigate('/')
+    answering = () => new Response('', { status: 503 })
+    expect(await (await offline.navigate('/'))?.text()).toBe('kept')
+    expect(offline.saved('abide:saved')).toEqual([`${ORIGIN}/`])
+    answering = () => new Response('sign in', { status: 401 })
+    expect(await (await offline.navigate('/'))?.text()).toBe('kept')
+    expect(offline.saved('abide:saved')).toEqual([])
+    const reloaded = await offline.navigate('/')
+    expect(reloaded?.status).toBe(401)
+    expect(await reloaded?.text()).toBe('sign in')
 })
 
 // 45.22 — A COPY KEPT SAYS SO, and when the server answered it; the network's answer says nothing. THE
@@ -393,13 +435,12 @@ test('an answer from a kept copy carries abide-kept with its date — 45.22', as
     expect(await fromKept?.text()).toBe('tile')
 })
 
-// 45.23 — A PAGE IS ASKED FOR AS ONE THE WORKER KEEPS, so the server writes the early calls a later
-// open of it starts (41.30), and as `open` where the navigation opens that very answer, which then
-// hydrates from what its render seeded (41.29) — a page revalidated behind its copy, or saved as the
-// worker activates, is opened by nobody. A call is asked for as it was made. THE REVERT: drop the
-// `KEEP` header from `fromNetwork`'s page request; the navigation is asked without it. Pass `page`
-// for `opened` behind the copy in `answer`; the revalidation is asked `open`.
-test('the worker asks for a page it keeps with abide-keep, naming open where the navigation opens it — 45.23', async () => {
+// 45.23 — A PAGE NO NAVIGATION ASKS FOR IS ASKED FOR AS ONE THE WORKER KEEPS, so the server writes the
+// early calls a later open of it starts (41.30): one revalidated behind its copy, or saved as the
+// worker activates. The navigation is asked as itself (45.25), a document whose render writes them
+// anyway, and a call as it was made. THE REVERT: drop the `KEEP` header from `pageRequest`; the
+// revalidation is asked without it.
+test('the worker asks for a page no navigation asks for with abide-keep — 45.23', async () => {
     const kept: string[] = []
     const offline = await worker(MANIFEST, (request) => {
         kept.push(
@@ -412,7 +453,7 @@ test('the worker asks for a page it keeps with abide-keep, naming open where the
     await offline.navigate('/')
     await offline.navigate('/')
     await offline.dispatch('fetch', { request: new Request(`${ORIGIN}/data`) })
-    expect(kept).toEqual(['/open 1', '/ open', '/ 1', '/data null'])
+    expect(kept).toEqual(['/open 1', '/ null', '/ 1', '/data null'])
 })
 
 // 45.4 — SAVED ONLY FROM A 200 THAT IS NOT A STREAM. THE REVERT: drop the status check from `kept`;
