@@ -1,5 +1,41 @@
 # @abide/abide
 
+## 0.125.0
+
+### Minor Changes
+
+- e948e8e: `App.fetch` takes a `principal` and a `caller`, and `App.run` a `caller`, each answered as over the request's cookies with no cookie written — 42.20, 42.21
+- 74eacfc: an assistant's `tool` and `result` events carry the handler they called (`{ method, address }`, as its `Rpc` reads them) and a result the value it answered, read off the app's own surface whichever provider ran the conversation — `resultsOf(events, handler)` is every successful call's value, typed as the handler's; a `Provider` now yields `ProviderEvent`s naming each tool as its `Toolbox` lists it; `AssistantMessage`, `AssistantContent` and `AssistantEvent` are exported from `@abide/abide` for the browser; `imagePiece(file)` and `imageFiles(dataTransfer)` turn a pasted, dropped or picked image into a turn's image piece, drawn down to 1568px — 44.48-44.55
+- 1eaf716: `assistant` takes a `signal` in its options: aborting it ends the conversation at once, refused `aborted` at 499, even while the provider is stuck in an await — the same end a client leaving now gets — 44.57
+- fd731a2: a `BridgeStatus` and `claudeCode.bridgeCommand()` carry `install`, the command that installs the bridge app the pairing link opens at the release the pairing command runs, so a page no longer parses the release out of `command` — 44.56
+- c5ea214: `onError` from `@abide/abide`, called in a layout's or a page's `<script>`, hears in the browser what nothing caught — an uncaught throw, an unhandled rejection such as a call's refusal no handler caught, and an effect's throw — once each, nearest component first, for as long as the component stands — 37.16, 37.17, 37.18
+- 17fdafe: `onRefusal` from `@abide/abide`, called in a layout's or a page's `<script>`, is handed in the browser every refusal a call over http is answered with — the handler's, a proxy's 401, the 503 for no answer, and one an `outbox` send gets — with the call's method and URL, once each, nearest component first, for as long as the component stands; the value still refuses — 37.22-37.27
+- b436c3e: `abide dev`, `abide start`, the shell's app and a compiled executable's `start` take `--hostname` and listen on that interface alone — every interface where none is named, and the banner then lists no network address — 38.136; and `requestIP()` answers where the request being served came from, the same under `start`, `dev` and `App.listen`, or `'in-process'` for one no listener received — 22.12, 22.13
+- c49316f: `isServer()` answers which side the running work is on — true inside a request, an `App.run` or a `render` even with a DOM preloaded, so an in-process test takes the server branch; an effect's throw no longer fails a server render beside that DOM, and `online` is true there — 22.11, 12.7, 23.8
+- 02f34f7: a `middleware` rung is handed `ctx.lane` — the `Lane` that answers its request: a page, a handler, a public file, `openapi`, `mcp`, `bridge`, the socket upgrade, or the rest of `/__abide` — so a gate need not spell out abide's own addresses, and is handed the request below the mount — 37.19, 37.20
+- 801345f: `poll` — a reactive option that refreshes the value every `poll` milliseconds, skipping a tick while it is busy and stopping with the value's owner or its `Keyed` (RULEBOOK 7.20 through 7.25)
+- 3ffb8c0: `route.index` is the entry's place in the history the app's router wrote, and `navigate(by)` steps the history and settles once the step has arrived — 23.28, 23.29, 30.38, 30.39
+- 380be01: `abide routes` names the rungs each handler's `middleware` declares, as written, and `--json` carries them as `middleware` on every route — `null` where the options are not written inline — 38.135
+- 226e6a7: a refusal a rung names is on its `Rpc`'s failures and narrows by name, and `Middleware` takes the refusals it may answer with as a third parameter — 16.8, 16.86
+- cbcd422: `webStore` (from `@abide/abide`) and `sqliteStore` (from `@abide/abide/server`) — shipped `Store`s for Web Storage, following other tabs' writes and inert on a server, and for a `bun:sqlite` table; both keep the value's `ttl` beside it and run an optional `schema` over what they read (RULEBOOK 8.22 through 8.28)
+
+### Patch Changes
+
+- 6f2742a: a handler whose parameter carries no annotation takes its `Args` from the `args` its options declare, now stated and gated — 16.87
+- eb201fb: one spelling each for a server's stops, a refused call and a present member; endedBy races a fresh abort per step ([`47dffbf`](https://github.com/briancray/abide/commit/47dffbf3563895200aabed1fc4d7a65aa6764fe0))
+- eb201fb: a render outside every request is torn down as a request is, and so is mount's server pass — 12.5, 38.119 ([`a7a2ada`](https://github.com/briancray/abide/commit/a7a2ada76a61df4f6632542b01083383d6218910))
+- eb201fb: renumber clauses 22.11-12, 37.16-17, 38.134-135 to follow those merged beside them ([`d4ca7c5`](https://github.com/briancray/abide/commit/d4ca7c57ec2deb91eef08c6182729d561da5e8c6))
+- eb201fb: a navigation the worker forwards is the page that hydrates — chromium sends it navigate with its destination empty — 41.29, 45.25 ([`f94c1bd`](https://github.com/briancray/abide/commit/f94c1bd4cfd9a416036bd8d918ce109f07642b66))
+- 5d05e0e: `onError` from `@abide/abide` throws where it could never file — a `<script server>`, a server module, a module's top level, a later callback — naming `@abide/abide/server`'s, rather than doing nothing (RULEBOOK 37.21).
+- 693c7f3: `abide check` holds an element's `bind:` to what the element writes back — a numeric input's `number | undefined`, a text field's string, a `<select>`'s strings, a boolean for `checked` and `open`, files for `files` — and a `type` written as an expression to the union of them — 32.78
+- 20bb20a: a handler's value, and any `reactive` a module declares, built on a server where it is first reached, is no longer owned by the render or the component setup that reached it first — so it is not released when that one ends, and the next read neither runs its body again nor restarts its stream. A request's own instance is still that request's — 12.17
+- d3b0202: `Issues<typeof handler>` is the issues of what the handler is called with, so a form's refusal state names the handler rather than `Parameters<typeof handler>[0]` — 19.26
+- ce73c75: a prop handed to a component bound for `mount` as a getter is read through it on every read — 38.134
+- e93eaf6: A mutator on a `Reactive` list typed with `undefined` or `null` — `drafts?.push(d)`, or `drafts.push(d)` once narrowed — is a write that wakes its readers, as on a list typed without them — 31.9
+- 92f7c58: the offline worker asks the network for a navigation as that navigation, so a sign-in proxy redirects it rather than answering a fetch 401, and drops a saved copy the network answers over with a redirect or a 4xx — 45.25, 45.26
+- 26ebcb7: a stream whose owner stopped and whose last reader left is started again by the next read, rather than staying stopped — a `{#for}` row or `{#if}` arm that comes back, or a streamed `GET` shared by a reader that left; and `mount` tears its server pass down as `render` does — 12.14, 12.16
+- f215b78: a store miss that falls back to the initial value no longer writes it back through `set`, so a server render no longer overwrites a browser's store with the default — 8.8
+
 ## 0.124.1
 
 ### Patch Changes
