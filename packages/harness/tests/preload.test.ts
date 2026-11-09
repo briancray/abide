@@ -54,7 +54,23 @@ test('the preload leaves bun its own WebSocket and web streams — 43.28', async
 // 43.35 — A PARSED DOCUMENT FETCHES NOTHING IT NAMES: a server-rendered page parsed in a test names
 // its stylesheets and its script at an address nothing in the test answers. THE REVERT: register the
 // DOM with no `settings`; `asked` reads 2.
+//
+// `waitUntilComplete` waits on EVERY task the process's one window holds, and under
+// `bun run test:serial` every earlier file left its own there — a keyed value's `ttl` in
+// `bareSelection.test.ts` arms a 60 s timer, and the wait outlived the test's 5 s. So what earlier
+// files left is aborted first, and the wait is on this test's own. THE REVERT: drop the `abort`;
+// `bun test packages/abide/tests/bareSelection.test.ts packages/harness/tests/preload.test.ts`
+// times out.
 test('a document parsed under the preload fetches no stylesheet or script it names — 43.35', async () => {
+    const happyDOM = (
+        window as unknown as {
+            happyDOM: {
+                abort(): Promise<void>
+                waitUntilComplete(): Promise<void>
+            }
+        }
+    ).happyDOM
+    await happyDOM.abort()
     let asked = 0
     using server = Bun.serve({
         port: 0,
@@ -70,11 +86,7 @@ test('a document parsed under the preload fetches no stylesheet or script it nam
         `<html><head><link rel="stylesheet" href="${origin}/parsed.css"></head><body></body></html>`,
         'text/html',
     )
-    await (
-        window as unknown as {
-            happyDOM: { waitUntilComplete(): Promise<void> }
-        }
-    ).happyDOM.waitUntilComplete()
+    await happyDOM.waitUntilComplete()
     document.head.innerHTML = ''
     expect(asked).toBe(0)
 })
