@@ -122,7 +122,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     url(...args: undefined extends Args ? [args?: Args] : [args: Args]): string
     /** The same call, handed back as the `Response` (16.42). */
     raw(args?: Args, init?: RequestInit): Promise<Response>
-    /** Where the handler answers: its route once its file has loaded, its mount's once mounted (16.88). */
+    /** Where the handler answers: its route under the mount, once its file has loaded (16.88). */
     address: string | undefined
     keyed: boolean
     timeout: number | undefined
@@ -206,6 +206,12 @@ type RungRefusals<Answers extends readonly unknown[]> =
             : never
         : never
 
+/** One rung of a handler's `middleware`, answering `Answer` in the handler's place or passing on. */
+type HandlerRung<Args, Answer> = (
+    next: (ctx?: RpcContext<Args>) => Promise<Reached>,
+    ctx: RpcContext<Args>,
+) => Answer | Promise<Answer>
+
 export type RpcOptions<
     Args = unknown,
     Answers extends readonly unknown[] = unknown[],
@@ -217,19 +223,11 @@ export type RpcOptions<
      *
      * The plain array arm is the context a list built by a GENERIC helper is typed in: the mapped
      * arm is over `Answers`, still being inferred, so the helper's own `Args` read nothing there and
-     * fell to `unknown`. It adds no refusal of its own — `Answers` is still read off the list.
+     * are `unknown`. It adds no refusal of its own — `Answers` is still read off the list.
      */
     middleware?:
-        | {
-              [At in keyof Answers]: (
-                  next: (ctx?: RpcContext<Args>) => Promise<Reached>,
-                  ctx: RpcContext<Args>,
-              ) => Answers[At] | Promise<Answers[At]>
-          }
-        | readonly ((
-              next: (ctx?: RpcContext<Args>) => Promise<Reached>,
-              ctx: RpcContext<Args>,
-          ) => unknown)[]
+        | { [At in keyof Answers]: HandlerRung<Args, Answers[At]> }
+        | readonly HandlerRung<Args, unknown>[]
     timeout?: number
     clients?: Clients
     crossOrigin?: boolean | string[]

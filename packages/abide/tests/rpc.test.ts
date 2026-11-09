@@ -18,6 +18,7 @@ import {
 } from '#shared'
 import { answered } from '#shared/answerOf.ts'
 import { validationError } from '#shared/refuse.ts'
+import type { RpcContext } from '#shared/rpc.ts'
 
 const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
 
@@ -276,10 +277,9 @@ test("a helper's rungs carry their refusals, and take the handler's args — 16.
     > = async (next) => next()
     const listed = (): (typeof owned)[] => [owned]
     const tupled = () => [owned] as const
-    type Given<Args> = { request: Request; args: () => Args }
     const forArgs = <Args>(): ((
-        next: (ctx?: Given<Args>) => Promise<unknown>,
-        ctx: Given<Args>,
+        next: (ctx?: RpcContext<Args>) => Promise<unknown>,
+        ctx: RpcContext<Args>,
     ) => unknown)[] => []
     const names: string[] = []
     const failure: unknown = refuse.named('NotYours', 403)()

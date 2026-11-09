@@ -3,11 +3,11 @@
 
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
-import { mounted as underMount } from '#shared/mount.ts'
 import type { Gated, HeldToAnnotation } from '#shared/reactive/argsContract.ts'
 import type { Defaults } from '#shared/reactive/parameterDefaults.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 
+import { addressed } from './addressed.ts'
 import { answered } from './answerFailure.ts'
 import { derivedArgs } from './argsContract.ts'
 import { type LaneRung, rungsOver } from './hooks.ts'
@@ -116,11 +116,7 @@ export function mountedOwn(
     name: string,
     handler: object,
 ): [string, Mounted] {
-    // 16.10 — READ WHEN IT IS REPORTED, where a mounted handler's is stamped at boot: the mount is
-    // the configuration's, and nothing boots this handler.
-    Object.defineProperty(handler, 'address', {
-        get: () => underMount(address),
-    })
+    addressed(handler, address)
     return [
         address,
         {
@@ -168,7 +164,7 @@ export async function mountHandlers(
         const handler = exported as Mounted['handler']
         // 16.9, 16.10 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
         // page's render turns a call it made into the browser's request by (41.20).
-        handler.address = underMount(mount.address)
+        addressed(handler, mount.address)
         // 19.9 — the schema the build derived off its annotation, for a handler whose module did not
         // file it on load: a bundled executable's faces carry no `derivedArgs` call.
         if (mount.args !== undefined) derivedArgs(handler, mount.args)

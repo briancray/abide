@@ -17,9 +17,12 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)
 
-// THE REVERT: drop `handlerFilesPlugin` from `serveCompilation`; every spelling loads the raw file,
-// which is not the face the server mounts, and all three comparisons are false.
-test('every spelling of a handler file import is the face the server mounts — 16.2', async () => {
+// 16.88 — AND IT KNOWS ITS ADDRESS with no app booted, so a test matching a conversation's results to
+// it (`resultsOf`, 44.51) finds them.
+// THE REVERTS: drop `handlerFilesPlugin` from `serveCompilation`; every spelling loads the raw file,
+// which is not the face the server mounts, and all three comparisons are false. Drop the
+// `__addressed` line from it, and the address is `undefined`.
+test('every spelling of a handler file import is the face the server mounts, at its address — 16.2, 16.88', async () => {
     const dir = temporaryModule({
         'package.json': JSON.stringify({
             name: 'spellings',
@@ -53,29 +56,5 @@ export { relative, withExtension, withoutExtension }
     expect(spellings.withExtension).toBe(mounted.default)
     expect(spellings.withoutExtension).toBe(mounted.default)
     expect(spellings.relative).toBe(mounted.default)
-})
-
-// 16.88, 44.51 — A HANDLER FILE IMPORTED WITH NO APP BOOTED KNOWS ITS ADDRESS: a test matching a
-// conversation's results to the handler (`resultsOf`) compares addresses, and an unstamped one never
-// matches. THE REVERT: drop the `__handler.address` line from `handlerFilesPlugin`; the address is
-// `undefined`.
-test('a handler file is stamped with its address as it loads — 16.88', async () => {
-    const dir = temporaryModule({
-        'package.json': JSON.stringify({ name: 'stamped', type: 'module' }),
-        'media/getGrid.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 42)\n`,
-    })
-    serveCompilation(dir, {
-        files: {},
-        handlers: {
-            'media/getGrid.handler.ts': {
-                scope: '/media',
-                address: '/media/getGrid',
-                client: '',
-                args: undefined,
-            },
-        },
-        tables: {},
-    })
-    const handler = (await import(`${dir}/media/getGrid.handler.ts`)).default
-    expect(handler.address).toBe('/media/getGrid')
+    expect(spellings.relative.address).toBe('/media/getGrid')
 })

@@ -56,6 +56,9 @@ export { type App, createApp } from './createApp.ts'
 // 41.28's run-time half: an emitted component reads it on either side of its setup, and one whose
 // setup made a call answers as a page does. Not an app's name.
 export { callsInRender } from './PageRender.ts'
+// 16.88's run-time half: what the module a handler file is loaded through calls to give it its
+// address. Not an app's name.
+export { addressed } from './addressed.ts'
 // 19.9's run-time half: what the module a handler is loaded through calls to hold it to the schema
 // its annotation derives (15.8). Not an app's name.
 export { derivedArgs } from './argsContract.ts'
