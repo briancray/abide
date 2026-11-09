@@ -1282,7 +1282,11 @@ async function liftedMutators(
         asked.push(
             valueOf(node).then(async (value) => {
                 if (value === undefined) return
-                let types: Type[] = [value]
+                // `null` and `undefined` aside at the root as at every step down: `drafts?.push(d)`
+                // over a `Reactive<Draft[] | undefined>` is a mutator on an array.
+                let types: Type[] = []
+                for (const held of await unionMembers(value))
+                    if ((held.flags & NULLISH) === 0) types.push(held)
                 for (const step of steps)
                     types = await stepTypes(checker, types, step)
                 if (types.length === 0) return

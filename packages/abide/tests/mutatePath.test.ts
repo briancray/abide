@@ -40,6 +40,26 @@ deal.notes?.reverse()`)
     )
 })
 
+// `null` AND `undefined` ASIDE AT THE ROOT, as at every step down. A `Reactive<Draft[] | undefined>`
+// is an array where it is anything, and a `?.push` or a narrowed `push` on it is a mutator.
+// THE REVERT: seed the walk with `[value]` again — `pending?.push(…)` and the narrowed call then
+// lower to `pending()?.push(…)`, grow the held array in place, and wake no `{#for}` over it.
+test('a mutator on an imported list typed with undefined is a write — 31.9', async () => {
+    const lowered = await lower(`import { drafts, pending } from './drafts.ts'
+drafts.push({ id: 1 })
+pending?.push({ id: 2 })
+if (pending) pending.push({ id: 3 })`)
+    expect(lowered).toContain(
+        '__mutatePath(drafts, [], (__mutated) => __mutated.push({ id: 1 }))',
+    )
+    expect(lowered).toContain(
+        '__mutatePath(pending, [], (__mutated) => __mutated?.push({ id: 2 }))',
+    )
+    expect(lowered).toContain(
+        'if (pending()) __mutatePath(pending, [], (__mutated) => __mutated.push({ id: 3 }))',
+    )
+})
+
 // THE TYPE DECIDES, NOT THE NAME. A class's own `push`, a `Map`'s `set`, an array method that does
 // not mutate, and a value typed `any` are each left the call on the value they were.
 test('a mutator name on a receiver that is not an array stays a call on the value — 31.9', async () => {
@@ -112,4 +132,18 @@ let tags = reactive(['a'])
     ;(document.getElementById('add') as HTMLButtonElement).click()
     flushSync()
     expect(document.getElementById('out')?.textContent).toBe('a,b')
+})
+
+test('a push on a list typed with undefined repaints the {#for} over it — 31.9', async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let tags = reactive<string[] | undefined>(['a'])
+</script>
+
+<button id="add" onclick={() => tags?.push('b')}>add</button>
+<ul id="out">{#for tag of tags ?? []}<li>{tag}</li>{/for}</ul>`)
+    ;(document.getElementById('add') as HTMLButtonElement).click()
+    flushSync()
+    expect(document.getElementById('out')?.textContent).toBe('ab')
 })
