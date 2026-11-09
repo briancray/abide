@@ -181,8 +181,8 @@ test('the getter source moves the mounted label', async () => {
 // disposer, and the one the hydration opened is the only one left live — until `stop` ends it too.
 // THE REVERT: have `serverStops` answer a request's stops alone; the server pass's watch is owned by
 // nothing, its listener stays on `window` beside the hydration's and outlives `stop` — "2 3", exit 1,
-// `0 pass`. Torn down BEFORE the hydration instead (`render` outside `inRender` in `testMount.ts`),
-// this passes and a mounted streamed `GET` never lands: crm-05's `ActivityHistory` times out.
+// `0 pass`. The server pass is torn down BEFORE the hydration, and a streamed `GET` the two share is
+// started again by the hydration's read (12.14) — crm-05's `ActivityHistory` is the case.
 test("a mounted component's server-pass watch is torn down with the render — 12.5, 38.119", async () => {
     const cwd = temporaryModule({
         'package.json': JSON.stringify({

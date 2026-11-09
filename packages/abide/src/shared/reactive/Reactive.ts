@@ -56,7 +56,6 @@ import { STREAMING } from './STREAMING.ts'
 import {
     CHECK,
     CLEAN,
-    detach,
     DIRTY,
     dropProbeReader,
     newSubscriber,
@@ -1685,7 +1684,8 @@ function run(cell: Cell): void {
     // where the cascade would try: `a` reads `b` and `b` reads `a`. Without this the
     // recursion is unbounded and the failure is a stack overflow rather than a value.
     if (cell.running) return
-    // A released orphan read again (12.14) — see `tombstone`.
+    // A released orphan read again (12.14) — see `tombstone`. A released stream's run is its next
+    // start: the generator its body hands back is promoted onto the stream it already has (9.6).
     if (!cell.alive) revive(cell as unknown as Subscriber)
     cell.generation += 1
     cell.state = CLEAN
@@ -1855,11 +1855,13 @@ function landOpening(cell: Cell): void {
  * WHAT STARTS A PRODUCER, for the three callers that start one: construction, `refresh`
  * and `invalidate`. A stream is dispatched HERE rather than inside `run`, which a recompute
  * walks per node per write — and a stream is never recomputed, having no tracked source to
- * be marked by (14.13).
+ * be marked by (14.13). A RELEASED stream (12.16) is the exception: it is owed a run, and the
+ * run is what revives it and settles the debt, where a start here would leave the debt for the
+ * next read to start it a second time.
  */
 function startProducer(cell: Cell): void {
     const stream = ownStream(cell)
-    if (stream === null) run(cell)
+    if (stream === null || !cell.alive) run(cell)
     else startStream(cell, stream)
 }
 
@@ -3889,22 +3891,22 @@ function orphan(cell: Cell): void {
  * Left subscribed, a value a dropped row built stayed on its sources' reader lists for the life of
  * the page, and an adopting one's mirror ran on every write to what it adopted. Released, it holds
  * what it last served; a read that reaches it later — it escaped its owner — runs the body again
- * and subscribes afresh, so it is never stale, and from then on it is nobody's to release. A
- * stream is stopped rather than owed: it is never recomputed (14.13), only started.
+ * and subscribes afresh, so it is never stale, and from then on it is nobody's to release. 12.16 — a
+ * stream's run is stopped and it is owed the same run: the body's next start (9.6), which serves
+ * what the stopped one held until it says something (9.7) — a stream nothing pumps is the one value
+ * a later read could never bring current.
  */
 function releaseOrphan(cell: Cell): void {
     cell.orphaned = false
-    const stream = cell.stream
     const own = ownStream(cell)
     if (own !== null) stopStream(own)
     dropAdoption(cell)
     cell.aborted = false
-    if (cell.body !== null && stream === null) {
-        // OWED A RUN, so a read that reaches it again runs it — and `run` revives it first.
-        tombstone(cell as unknown as Subscriber)
-        cell.state = DIRTY
-        cell.direct = false
-    } else detach(cell as unknown as Subscriber)
+    // OWED A RUN, so a read that reaches it again runs it — and `run` revives it first. No `body`
+    // test: only a value with one is ever orphaned (`createReactive`).
+    tombstone(cell as unknown as Subscriber)
+    cell.state = DIRTY
+    cell.direct = false
 }
 
 RELEASING.unread = (source: Tracked): void => releaseOrphan(source as Cell)

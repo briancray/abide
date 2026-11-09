@@ -733,12 +733,15 @@ woke have run.
 12.13 A `watch` registered inside a `{#if}` arm or a `{#for}` row MUST stop when the region
 holding that arm or row is removed.
 
-12.14 A `reactive` over a body that is not a stream, built where 12.4, 12.5 or 12.13 would own a
-`watch`, MUST stop reading its sources once that owner stops and nothing else reads it, and MUST
-answer a later read with what its body computes then.
+12.14 A `reactive` over a body, built where 12.4, 12.5 or 12.13 would own a `watch`, MUST stop
+reading its sources once that owner stops and nothing else reads it, and MUST answer a later read
+with what its body computes then.
 
 12.15 The `Effect` values one turn wakes, a slot's own update among them, MAY run in any order,
 save where a clause orders them.
+
+12.16 A stream released under 12.14 MUST stop its run, and the later read MUST start it once more,
+whether or not the stopped run had closed.
 
 # 13. Selections
 

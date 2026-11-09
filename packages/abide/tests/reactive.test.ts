@@ -818,6 +818,111 @@ test('a released orphan read again holds one subscription — 12.14', () => {
     expect(live).toEqual([cellOf(derived)])
 })
 
+// 12.16 — A RELEASED STREAM IS OWED A START, as a released body is owed a run (12.14). Its
+// owner stopped while a reader it escaped to still read it, and that reader leaving stopped the
+// run mid-stream; a reader reaching it after that read a stream nothing would ever pump again.
+// ONE START, NOT TWO: the read and the probe after it both reach the value, and only the first
+// starts it. THE REVERT: give `releaseOrphan` back its arm detaching, rather than tombstoning, a
+// value whose `stream` was set ahead of `dropAdoption` — "starts 1, seen [1]" where "starts 2,
+// seen [1,2]" is due.
+test('a released stream read again starts once more — 12.16', async () => {
+    let starts = 0
+    let gate: () => void = (): void => {}
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const s = reactive(async function* () {
+        starts += 1
+        yield 1
+        await new Promise<void>((resolve) => {
+            gate = resolve
+        })
+        yield 2
+    })
+    collectWatches(previous)
+    await Bun.sleep(5)
+    let seen: unknown
+    const stopFirst = watch(() => {
+        seen = s()
+    })
+    for (const stop of stops) stop()
+    // The last reader leaves, mid-stream.
+    stopFirst()
+    const stopAgain = watch(() => {
+        seen = s()
+    })
+    s.busy()
+    await Bun.sleep(5)
+    gate()
+    await Bun.sleep(5)
+    stopAgain()
+    expect(`starts ${starts}, seen ${JSON.stringify(seen)}`).toBe(
+        'starts 2, seen [1,2]',
+    )
+})
+
+// 12.16 AND 9.6 — A REFRESH OF A RELEASED STREAM IS ITS ONE START. The release left it owing a run,
+// and a start that is not that run leaves the debt standing for the read after it to start it
+// again. THE REVERT: drop `|| !cell.alive` from `startProducer` — "starts 3" where 2 are due.
+test('a refresh of a released stream starts it once, and the read after it does not — 12.16', async () => {
+    let starts = 0
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const s = reactive(async function* () {
+        starts += 1
+        yield starts
+    })
+    collectWatches(previous)
+    await Bun.sleep(5)
+    const stopFirst = watch(() => {
+        s()
+    })
+    for (const stop of stops) stop()
+    stopFirst()
+    s.refresh()
+    let seen: unknown
+    const stopAgain = watch(() => {
+        seen = s()
+    })
+    await Bun.sleep(5)
+    stopAgain()
+    expect(`starts ${starts}, seen ${JSON.stringify(seen)}`).toBe(
+        'starts 2, seen [2]',
+    )
+})
+
+// 12.14 OVER AN ADOPTED STREAM — a body handing back a stream it does not own forwards it (11.15),
+// and released, it is owed a run like any body: read again it adopts afresh and serves what the
+// stream has said since. THE REVERT, as above: a forwarding value detached rather than tombstoned
+// holds its last chunk — "[1]" where "[1,2]" is due.
+test('a released value forwarding a stream adopts it again when read — 12.14', async () => {
+    let gate: () => void = (): void => {}
+    const s = reactive(async function* () {
+        yield 1
+        await new Promise<void>((resolve) => {
+            gate = resolve
+        })
+        yield 2
+    })
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const forwarding = reactive(() => s)
+    collectWatches(previous)
+    await Bun.sleep(5)
+    let seen: unknown
+    const stopFirst = watch(() => {
+        seen = forwarding()
+    })
+    for (const stop of stops) stop()
+    stopFirst()
+    gate()
+    await Bun.sleep(5)
+    const stopAgain = watch(() => {
+        seen = forwarding()
+    })
+    stopAgain()
+    expect(JSON.stringify(seen)).toBe('[1,2]')
+})
+
 // A LIST WITH ENTRIES HAS A LIVE ONE, which every `readers.length` test in the core leans on — an
 // orphan is released on it (12.14), and a walk is skipped on it. A dead reader left in place must
 // not outlive the last live one, and the drop that leaves it alone is a LIVE reader's — scanned

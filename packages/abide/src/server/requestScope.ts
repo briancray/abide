@@ -192,18 +192,7 @@ export function inScope<Result>(
 }
 
 /**
- * Runs `body` as a server's render and returns what it returned: every watch it opens is filed on
- * `stops`, for the caller to stop (`stopAll`), where no request or render is already current.
- */
-export function inRender<Result>(
-    stops: (() => void)[],
-    body: () => Result,
-): Result {
-    return currentStops() === undefined ? RENDERING.run(stops, body) : body()
-}
-
-/**
- * `inRender`, stopping every watch `body` opened once it has settled.
+ * Runs `body` as a server's render, stopping every watch it opened once it has settled.
  *
  * 12.5 — A RENDER OUTSIDE EVERY REQUEST IS TORN DOWN as a request's scope is, once its document is
  * written. Inside a request or a render already open, the watches are that one's to stop.
@@ -303,7 +292,7 @@ export function releaseScope(scope: RequestScope): void {
 }
 
 /** Runs and drops every stop in `stops`. 12.5. */
-export function stopAll(stops: (() => void)[]): void {
+function stopAll(stops: (() => void)[]): void {
     for (let at = 0; at < stops.length; at += 1) (stops[at] as () => void)()
     stops.length = 0
 }
