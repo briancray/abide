@@ -6,6 +6,7 @@
 import { expect, test } from 'bun:test'
 
 import { installServer } from '#server/installServer.ts'
+import { type Component, render } from '#server/render.ts'
 import {
     currentRequestScope,
     holdScope,
@@ -101,6 +102,30 @@ test("a watch stops at its request's teardown, which a held body defers — 12.5
     level.set(2)
     flushSync()
     expect({ runs, disposed }).toEqual({ runs: 2, disposed: 2 })
+})
+
+// 12.5 — A RENDER OUTSIDE EVERY REQUEST IS TORN DOWN AS ONE IS: `render` called bare, in a test or a
+// script, stops the watches its component opened once the document is written. THE REVERT: have
+// `serverStops` answer a request's stops alone; the watch is owned by nothing, and a later write
+// wakes it — `{ runs: 2, disposed: 1 }` where `{ runs: 1, disposed: 1 }` is due.
+test('a watch a bare render opened stops once its document is written — 12.5', async () => {
+    const level = reactive(0, { global: true })
+    let runs = 0
+    let disposed = 0
+    const component = (() => {
+        watch(() => {
+            level()
+            runs += 1
+            return () => {
+                disposed += 1
+            }
+        })
+        return { head: '', body: '', document: undefined }
+    }) as unknown as Component
+    await render(component)
+    level.set(1)
+    flushSync()
+    expect({ runs, disposed }).toEqual({ runs: 1, disposed: 1 })
 })
 
 // 12.14 — A VALUE DERIVED IN A REQUEST lets go of a global it read at the request's

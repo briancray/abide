@@ -127,13 +127,13 @@ const STORAGE = new AsyncLocalStorage<RequestScope | undefined>()
 // that can enter a scope imports this module, so none is built before the provider is in.
 // 22.11 — A RENDER OUTSIDE EVERY REQUEST IS STILL A SERVER'S: `render` called bare, and `mount`'s
 // first half, which a test process runs beside a DOM and the browser half that hydrates it. Marked
-// apart from STORAGE so the render's values stay the ones 11.32 files outside a request.
-const RENDERING = new AsyncLocalStorage<true>()
+// apart from STORAGE so the render's values stay the ones 11.32 files outside a request. What it
+// holds is the render's stops (12.5): a request's are its scope's.
+const RENDERING = new AsyncLocalStorage<(() => void)[]>()
 
 SCOPING.provider = {
     current: (): Scope | undefined => STORAGE.getStore(),
-    serving: (): boolean =>
-        STORAGE.getStore() !== undefined || RENDERING.getStore() === true,
+    serverStops: () => STORAGE.getStore()?.stops ?? RENDERING.getStore(),
     run: (scope, body, given) =>
         STORAGE.run(scope as RequestScope | undefined, body, given),
 }
@@ -186,9 +186,34 @@ export function inScope<Result>(
     return STORAGE.run(scopeFor(given, given, undefined), body)
 }
 
-/** Runs `body` as a server's render, where no request is current, and returns what it returned. */
-export function inRender<Result>(body: () => Result): Result {
-    return STORAGE.getStore() === undefined ? RENDERING.run(true, body) : body()
+/**
+ * Runs `body` as a server's render and returns what it returned: every watch it opens is filed on
+ * `stops`, for the caller to stop (`stopAll`), where no request or render is already current.
+ */
+export function inRender<Result>(
+    stops: (() => void)[],
+    body: () => Result,
+): Result {
+    return STORAGE.getStore() === undefined &&
+        RENDERING.getStore() === undefined
+        ? RENDERING.run(stops, body)
+        : body()
+}
+
+/**
+ * `inRender`, stopping every watch `body` opened once it has settled.
+ *
+ * 12.5 — A RENDER OUTSIDE EVERY REQUEST IS TORN DOWN as a request's scope is, once its document is
+ * written. Inside a request or a render already open, the watches are that one's to stop.
+ */
+export function inReleasedRender<Result>(
+    body: () => Promise<Result>,
+): Promise<Result> {
+    // A REQUEST'S PAGE PAYS NOTHING HERE — no wrapping promise, no tick — as its scope stops them.
+    if (STORAGE.getStore() !== undefined || RENDERING.getStore() !== undefined)
+        return body()
+    const stops: (() => void)[] = []
+    return RENDERING.run(stops, body).finally(() => stopAll(stops))
 }
 
 /** Runs `body` in `scope`, which `scopeFor` opened, and returns what it returned. */
@@ -273,7 +298,11 @@ export function releaseScope(scope: RequestScope): void {
         scope.unreaped = false
         LISTENING.timeout(scope.received as Request, IDLE_TIMEOUT_SECONDS)
     }
-    const stops = scope.stops
+    stopAll(scope.stops)
+}
+
+/** Runs and drops every stop in `stops`. 12.5. */
+export function stopAll(stops: (() => void)[]): void {
     for (let at = 0; at < stops.length; at += 1) (stops[at] as () => void)()
     stops.length = 0
 }

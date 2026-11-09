@@ -6,6 +6,7 @@ import { flushSync } from '#shared/reactive/Reactive.ts'
 
 import { MOUNTABLE } from './MOUNTABLE.ts'
 import { type Component, render } from './render.ts'
+import { inRender, stopAll } from './requestScope.ts'
 
 type Mountable = {
     accessors: Record<string, () => unknown>
@@ -36,7 +37,14 @@ export async function mount(component: Component): Promise<Mounted> {
         throw new Error(
             'abide: mount renders into a DOM, and this process has none. Preload `@abide/harness/preload` ahead of `@abide/abide/test` in bunfig.toml. RULEBOOK 38.119.',
         )
-    const html = new TextDecoder().decode(await render(component))
+    // 12.5 — THE SERVER PASS IS TORN DOWN as a request's scope is, but ONCE THE HYDRATION READS rather
+    // than once the document is written: the two passes share this process's handler answers, where a
+    // page load's do not, and the render's reader leaving first ends a stream the hydration is about
+    // to read — a streamed `GET` mounted that way never lands.
+    const serverPass: (() => void)[] = []
+    const html = new TextDecoder().decode(
+        await inRender(serverPass, () => render(component)),
+    )
     // After the `<body …>` open tag, whatever attributes the component wrote onto it (35.15).
     document.body.innerHTML = html.slice(
         html.indexOf('>', html.indexOf('<body')) + 1,
@@ -49,6 +57,7 @@ export async function mount(component: Component): Promise<Mounted> {
     ])
     const scope = hydrate(pageRegion(document.body), mountable.accessors)
     flushSync()
+    stopAll(serverPass)
     const stop = (): void => scope?.stop()
     return { stop, [Symbol.dispose]: stop }
 }
