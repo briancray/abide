@@ -11,6 +11,9 @@ import { answerChunks } from '#shared/framing.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 
+// The request the answers below are read for; it names the call to `onRefusal` (37.24) alone.
+const CALL = { method: 'GET', url: '/rpc/invoice' } as const
+
 const ANSWERS: Record<string, () => Response> = {
     '/rpc/invoice': () =>
         new Response('{"id":"7"}', {
@@ -92,13 +95,15 @@ test("a call painted settled is read from the runner's record at once, as a fetc
             Answer,
             Answer,
         ]
-        expect(answered(invoice)).toEqual({ id: '7' })
+        expect(answered(invoice, CALL)).toEqual({ id: '7' })
         expect(invoice.version).toBe(12)
         expect(invoice.life).toBe(30_000)
         expect(invoice.followable).toBe(true)
-        expect([...(answered(cover) as Uint8Array)]).toEqual([37, 80, 0, 255])
+        expect([...(answered(cover, CALL) as Uint8Array)]).toEqual([
+            37, 80, 0, 255,
+        ])
         expect(cover.followable).toBe(false)
-        expect((answered(missing) as { status: number }).status).toBe(502)
+        expect((answered(missing, CALL) as { status: number }).status).toBe(502)
         expect(missing.followable).toBe(false)
     } finally {
         globals[EARLY_CALLS] = undefined
@@ -147,6 +152,7 @@ test('a call painted in flight is read as its reader reads it, and a failed one 
                     false,
                     undefined,
                 ),
+                CALL,
             ),
         ).toEqual({ id: '7' })
         expect(fetched).toEqual([])
@@ -157,6 +163,7 @@ test('a call painted in flight is read as its reader reads it, and a failed one 
                     false,
                     undefined,
                 ),
+                CALL,
             ),
         ).toEqual({ id: '7' })
         expect(fetched).toEqual(['/rpc/missing'])

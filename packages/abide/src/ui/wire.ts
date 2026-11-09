@@ -101,7 +101,7 @@ export function wire(
                 return standIn(value)
             }
             return enqueue(queued, standing as { value: unknown }, value).then(
-                (kept) => (kept ? standIn(value) : answered(failed)),
+                (kept) => (kept ? standIn(value) : answered(failed, request)),
             )
         }
         // 16.83 — BEHIND CALLS NOT YET DELIVERED A CALL WAITS ITS TURN, rather than overtaking them.
@@ -120,9 +120,9 @@ export function wire(
             // asked of the network once there is one.
             if (answer.kept) {
                 whenOnline(args, 0)
-                return standIn(answered(answer))
+                return standIn(answered(answer, request))
             }
-            return answered(answer)
+            return answered(answer, request)
         }
         const answer = answerOf(request, false, signal)
         return answer instanceof Promise ? answer.then(settle) : settle(answer)
@@ -153,7 +153,7 @@ export function wire(
             yield* answerChunks(answer.body, answer.framing)
             return
         }
-        const value = answered(answer)
+        const value = answered(answer, request)
         if (isFailed(value)) throw value
         if (Array.isArray(value)) yield* value
     }

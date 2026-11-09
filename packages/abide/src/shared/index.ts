@@ -64,6 +64,8 @@ export { outbox, type QueuedCall } from './outbox.ts'
 // 37.16 — the browser's `onError`. `@abide/abide/server` exports the server's over it.
 export { onError } from './onError.ts'
 export { onMenu } from './onMenu.ts'
+// 37.22 — the browser's `onRefusal`, which has no server's.
+export { onRefusal } from './onRefusal.ts'
 export { type Principal, principal } from './principal.ts'
 // EMITTED CODE'S: a prop the child writes (33.6, 33.7), and one it hands where a `Reactive` is due (33.27).
 export {

@@ -186,7 +186,7 @@ async function sendLine(): Promise<void> {
                 retryLater()
                 return
             }
-            const value = answeredValue(answer)
+            const value = answeredValue(answer, call)
             if (isFailed(value)) {
                 call.error = problemOf(value)
                 await shelf.put(call)

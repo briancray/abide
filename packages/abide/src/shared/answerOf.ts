@@ -12,6 +12,7 @@ import {
     framingOf,
 } from './framing.ts'
 import { KEPT_HEADER } from './KEPT_HEADER.ts'
+import { refused } from './onRefusal.ts'
 import { principalRotated } from './principalRotated.ts'
 import { refuse } from './refuse.ts'
 import type { RpcRequest } from './rpcRequest.ts'
@@ -179,13 +180,17 @@ function answerFrom(
  * What a call's body hands back: the value, nothing (16.31), or the refusal it was answered with.
  *
  * The refusal (15.1) is rebuilt as the `Failed` the server returned. RETURNED, so the value refuses
- * (15.5) rather than failing the way a network error does.
+ * (15.5) rather than failing the way a network error does — and handed to `onRefusal` (37.24) on
+ * its way, `call` being the request it answers.
  *
  * 16.32 — A FRAMED STREAM IS COLLECTED INTO THE CHUNKS IT CARRIED, which is the value a streaming
  * handler holds once its run has closed — for a copy the build did not mark as streaming, whose
  * value is one production. A marked one reads its body as it lands (`framedStream`).
  */
-export function answered(answer: Answer): unknown {
+export function answered(
+    answer: Answer,
+    call: Pick<RpcRequest, 'method' | 'url'>,
+): unknown {
     if (answer.status === 204) return undefined
     if (answer.ok) {
         // 16.34 — a binary decodes back to the bytes it was.
@@ -200,6 +205,9 @@ export function answered(answer: Answer): unknown {
         body = undefined
     }
     if (answer.ok) return body
-    if (isProblem(body)) return failedFrom(body)
-    return refuse(answer.status, answer.statusText || undefined)
+    const refusal = isProblem(body)
+        ? failedFrom(body)
+        : refuse(answer.status, answer.statusText || undefined)
+    refused(refusal, call)
+    return refusal
 }

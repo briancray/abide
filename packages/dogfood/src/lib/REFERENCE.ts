@@ -892,6 +892,13 @@ export const REFERENCE: readonly {
         typeOnly: false,
     },
     {
+        route: '/reference/onRefusal',
+        names: ['onRefusal'],
+        entry: '@abide/abide',
+        group: 'Configuration',
+        typeOnly: false,
+    },
+    {
         route: '/reference/onPrincipal',
         names: ['onPrincipal'],
         entry: '@abide/abide/server',
