@@ -1,5 +1,41 @@
 # @abide/harness
 
+## 0.3.2
+
+### Patch Changes
+
+- 90356fb: a document parsed under the preload fetches no stylesheet or script it names — 43.35
+- 90356fb: the preload leaves bun its own `WebSocket`, `TransformStream` and `WritableStream` — 43.28
+- Updated dependencies [e948e8e]
+- Updated dependencies [6f2742a]
+- Updated dependencies [74eacfc]
+- Updated dependencies [1eaf716]
+- Updated dependencies [eb201fb]
+- Updated dependencies [eb201fb]
+- Updated dependencies [eb201fb]
+- Updated dependencies [eb201fb]
+- Updated dependencies [fd731a2]
+- Updated dependencies [5d05e0e]
+- Updated dependencies [c5ea214]
+- Updated dependencies [17fdafe]
+- Updated dependencies [693c7f3]
+- Updated dependencies [20bb20a]
+- Updated dependencies [b436c3e]
+- Updated dependencies [c49316f]
+- Updated dependencies [d3b0202]
+- Updated dependencies [02f34f7]
+- Updated dependencies [ce73c75]
+- Updated dependencies [e93eaf6]
+- Updated dependencies [92f7c58]
+- Updated dependencies [801345f]
+- Updated dependencies [26ebcb7]
+- Updated dependencies [3ffb8c0]
+- Updated dependencies [380be01]
+- Updated dependencies [226e6a7]
+- Updated dependencies [cbcd422]
+- Updated dependencies [f215b78]
+  - @abide/abide@0.125.0
+
 ## 0.3.1
 
 ### Patch Changes
