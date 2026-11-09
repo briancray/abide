@@ -148,7 +148,10 @@ export function beginPageRender(request: Request): PageRender {
     const caller = callerOrMint()
     const keep = request.headers.get(KEEP_HEADER)
     const page = new PageRender(
-        request.headers.get('sec-fetch-dest') !== 'empty'
+        // A WORKER'S NAVIGATION IS STILL ONE: forwarded unchanged (45.25) it arrives `navigate` with
+        // its destination `empty`, and no script's fetch can ask in that mode.
+        request.headers.get('sec-fetch-dest') !== 'empty' ||
+            request.headers.get('sec-fetch-mode') === 'navigate'
             ? seedFor(caller)
             : keep !== null
               ? callsOnly()

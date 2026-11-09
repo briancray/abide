@@ -80,6 +80,27 @@ test('a page a script fetched records nothing and seeds nothing — 41.29', asyn
     ).toBeUndefined()
 })
 
+// 41.29 — A NAVIGATION THE WORKER FORWARDS IS THE PAGE THAT HYDRATES: chromium sends it `navigate` with
+// its destination `empty`, the destination a script's fetch carries. THE REVERT: read the destination
+// alone; the script reads `''` and the seed is gone, and a page reopened from its kept copy hydrates
+// ahead of its data (`offline.spec.ts`, 45.23).
+test('a navigation a worker forwards seeds and writes its early calls — 41.29, 45.25', async () => {
+    const { rpc } = counted('/page-render/forwarded')
+    const forwarded = pageRequest('page-d', {
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'navigate',
+    })
+    const script = await inScope(forwarded, async () => {
+        const page = beginPageRender(forwarded)
+        await rpc({ id: 4 })
+        return page.earlyCallScript()
+    })
+    expect(script).toContain('/page-render/forwarded?id=4')
+    expect(
+        inScope(pageRequest('page-d'), () => takeSeeded(rpc, { id: 4 })),
+    ).toBeDefined()
+})
+
 test('a page the worker keeps records its calls for the early-call script and seeds nothing — 41.30', async () => {
     const { rpc } = counted('/page-render/kept')
     const kept = pageRequest('page-c', {

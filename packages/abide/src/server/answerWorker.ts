@@ -159,7 +159,7 @@ function pageRequest(url, headers) {
 
 // 45.25 — THE NAVIGATION ASKED AS ITSELF: any init rebuilds a navigation's request as a script's
 // fetch, and a proxy in front of the app tells the two apart — one sending a page load to sign-in
-// answers a fetch 401. As itself it is the document that hydrates (RULEBOOK 41.29), its redirects
+// answers a fetch 401. As itself its mode is navigate, the page that hydrates (RULEBOOK 41.29), its redirects
 // left to the browser. Anything else is asked past the browser's own cache (RULEBOOK 45.21), which
 // holds the same answers under the same headers and would hand a revalidation the copy it is replacing
 // — and a page as one kept, which a script's fetch is not otherwise told from (RULEBOOK 45.23, 41.30).

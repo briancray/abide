@@ -3277,7 +3277,8 @@ adopts the page, however early its answer arrived.
 made an `Rpc` call, or whose markup reads a bare `busy` or `ready`, and building that component's
 markup.
 
-41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` MUST NOT fill the seed buffer.
+41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` and whose `sec-fetch-mode` is not
+`navigate` MUST NOT fill the seed buffer.
 
 41.30 A `render` answering a request carrying `abide-keep` MUST write 41.20's script.
 
