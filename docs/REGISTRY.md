@@ -355,12 +355,12 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39 |
+| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39, 44.57 |
 | `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string \| AssistantContent[] }` | One turn of the transcript a caller sends: its words, or its pieces in order. | 44.3, 44.4 |
 | `AssistantContent` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string }` | A piece of a turn: words, or an image as base64 with its type. | 44.5, 44.35, 44.36, 44.37, 44.38, 44.39 |
 | `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; handler: { method: string; address: string } \| undefined } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean; handler: { method: string; address: string } \| undefined; value: unknown } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, and the end. | 44.2, 44.11, 44.28, 44.48, 44.49 |
-| `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number }` | What `assistant` takes beside a provider. | 44.6, 44.8, 44.11 |
-| `Provider` | `{ run(messages: (AssistantMessage & { content: AssistantContent[] })[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<ProviderEvent> }` | What runs a conversation. | 44.2, 44.28, 44.39, 44.50 |
+| `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number; signal?: AbortSignal }` | What `assistant` takes beside a provider. | 44.6, 44.8, 44.11, 44.57 |
+| `Provider` | `{ run(messages: (AssistantMessage & { content: AssistantContent[] })[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<ProviderEvent> }` | What runs a conversation. | 44.2, 44.28, 44.39, 44.50, 44.57 |
 | `ProviderEvent` | `Exclude<AssistantEvent, { type: 'tool' \| 'result' }> \| { type: 'tool'; id: string; name: string } \| { type: 'result'; id: string; text: string; failed: boolean }` | An `AssistantEvent` as a provider yields it, before `assistant` reads the handler and the value off the app's surface. | 44.28, 44.35, 44.50 |
 | `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<ToolAnswer> }` | The app's MCP tools, called as the asker. | 44.6, 44.7, 44.35 |
 | `ToolAnswer` | `{ content: AssistantContent[]; failed: boolean }` | What a tool call answered: its pieces, and whether it failed. | 20.21, 20.22, 44.35 |
