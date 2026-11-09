@@ -38,7 +38,7 @@ export class BrowserHooks<Handed extends unknown[]> {
         if (!settingUp()) {
             // ONLY A BROWSER COLLECTS A SETUP, so a server's render — in a process with a document
             // or without one — files nothing.
-            if (SCOPING.provider?.serving() === true) return () => {}
+            if (SCOPING.provider?.serverStops() !== undefined) return () => {}
             // 37.21 — ANYWHERE ELSE IT COULD NEVER FILE: a call outside a component's setup has
             // nothing to stand for.
             throw new Error(this.misplaced)

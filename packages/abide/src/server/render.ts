@@ -11,7 +11,7 @@ import type { ShareScope } from '#shared/reactive/share.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
 
 import { buildDeferred } from './deferredBuilds.ts'
-import { currentRequestScope, inRender } from './requestScope.ts'
+import { currentRequestScope, inReleasedRender } from './requestScope.ts'
 
 /**
  * A compiled component, opaque to an app.
@@ -318,8 +318,9 @@ export function renderDocument(
     component: Component,
     given: string,
 ): Promise<Uint8Array<ArrayBuffer>> {
-    // 22.11 — a server's render whether or not a request is being served.
-    return inRender(() => documentOf(component, given))
+    // 22.11 — a server's render whether or not a request is being served; 12.5 — and torn down once
+    // written where no request is.
+    return inReleasedRender(() => documentOf(component, given))
 }
 
 async function documentOf(

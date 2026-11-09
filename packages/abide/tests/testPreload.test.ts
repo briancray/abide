@@ -176,6 +176,60 @@ test('the getter source moves the mounted label', async () => {
     )
 }, 90_000)
 
+// 12.5, 38.119 — THE SERVER PASS'S WATCH STOPS WITH IT. `mount` renders as a request does, and a
+// request's scope is torn down once its document is written: the watch the render opened runs its
+// disposer, and the one the hydration opened is the only one left live — until `stop` ends it too.
+// THE REVERT: have `serverStops` answer a request's stops alone; the server pass's watch is owned by
+// nothing, its listener stays on `window` beside the hydration's and outlives `stop` — "2 3", exit 1,
+// `0 pass`. Torn down BEFORE the hydration instead (`render` outside `inRender` in `testMount.ts`),
+// this passes and a mounted streamed `GET` never lands: crm-05's `ActivityHistory` times out.
+test("a mounted component's server-pass watch is torn down with the render — 12.5, 38.119", async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'watch-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/lib/Analytics.abide': `<script>
+import { watch } from '@abide/abide'
+
+watch(() => {
+    const heard = (): void => {
+        ;(globalThis as { heard?: number }).heard = ((globalThis as { heard?: number }).heard ?? 0) + 1
+    }
+    window.addEventListener('identify', heard)
+    return () => window.removeEventListener('identify', heard)
+})
+</script>
+
+<p>analytics</p>`,
+        'src/tests/Analytics.test.ts': `import { expect, test } from 'bun:test'
+import { mount } from '@abide/harness/abide'
+import Analytics from '../lib/Analytics.abide'
+
+test('one listener is live while mounted, and none once stopped', async () => {
+    const analytics = await mount(Analytics({}))
+    window.dispatchEvent(new Event('identify'))
+    const mounted = (globalThis as { heard?: number }).heard
+    analytics.stop()
+    window.dispatchEvent(new Event('identify'))
+    expect(\`\${mounted} \${(globalThis as { heard?: number }).heard}\`).toBe('1 1')
+})
+`,
+    })
+    const ran = await spawned(
+        ['bun', 'test', './src/tests/Analytics.test.ts'],
+        {
+            cwd,
+        },
+    )
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 38.133 — EACH TEST FILE STARTS COLD: one file settles a handler's answer, and the next file in the
 // same process mounts a component calling it and still finds it unanswered, then answered. The two
 // files are named on the command line, which is the order `bun test` runs them in — the order a

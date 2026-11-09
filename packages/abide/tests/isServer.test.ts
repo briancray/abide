@@ -65,7 +65,7 @@ test('a request answered beside a DOM is a server, and an effect throw does not 
 })
 
 // `render` OUTSIDE EVERY REQUEST is a server's too: `mount`'s first half (38.119) is one, run beside
-// the browser half that hydrates it. THE REVERT is `renderDocument` not entering `inRender`:
+// the browser half that hydrates it. THE REVERT is `renderDocument` not entering `inReleasedRender`:
 // `during: false`.
 test('a render outside every request is a server — 22.11', async () => {
     let during: boolean | undefined

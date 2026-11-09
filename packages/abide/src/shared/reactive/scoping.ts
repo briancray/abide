@@ -25,8 +25,14 @@ export type Scope = {
 
 export type Scoping = {
     current(): Scope | undefined
-    /** 22.11 — whether the work running is a server's: inside a scope, or inside a `render`. */
-    serving(): boolean
+    /**
+     * The stops of the server work running — a request's scope, or a `render` outside every request —
+     * or `undefined` where none is.
+     *
+     * 12.5 — what a `watch` opened in that work is stopped with. 22.11 — and whether the work running
+     * is a server's at all.
+     */
+    serverStops(): (() => void)[] | undefined
     /**
      * Runs `body` with `scope` as the current one, and `undefined` as no scope at all.
      *
@@ -46,6 +52,12 @@ export const SCOPING: { provider: Scoping | null } = { provider: null }
 export function currentScope(): Scope | undefined {
     const provider = SCOPING.provider
     return provider === null ? undefined : provider.current()
+}
+
+/** What a `watch` opened now is stopped with on a server — 12.5 — or `undefined` in a browser. */
+export function serverStops(): (() => void)[] | undefined {
+    const provider = SCOPING.provider
+    return provider === null ? undefined : provider.serverStops()
 }
 
 /**

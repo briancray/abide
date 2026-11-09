@@ -87,7 +87,7 @@ function heard(): string[] {
     return STATE.heard.splice(0)
 }
 
-// THE REVERT: file in a server's render as in a browser's setup — drop the `serving()` early return
+// THE REVERT: file in a server's render as in a browser's setup — drop the `serverStops()` early return
 // in `BrowserHooks.file` — and the render files each hook, so the list reads both of them.
 test("a server's render files no onRefusal — 37.22", async () => {
     await refusedCall()

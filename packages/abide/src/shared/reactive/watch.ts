@@ -19,7 +19,7 @@ import { CELL } from './CELL.ts'
 import type { Callable } from './cellShape.ts'
 import { NotLanded } from './NotLanded.ts'
 import type { Reactive } from './Reactive.ts'
-import { currentScope, runInScope } from './scoping.ts'
+import { currentScope, runInScope, serverStops } from './scoping.ts'
 import {
     detach,
     newSubscriber,
@@ -107,13 +107,14 @@ export function collectWatches(
  * Hands `dispose` to the setup being collected, if one is, and to the scope it was opened in, if
  * there is one; answers it.
  *
- * 12.5 — the scope is a server's request (`currentScope`), which a browser never has.
+ * 12.5 — the scope is a server's request, or its render outside every request (`serverStops`),
+ * which a browser never has.
  */
 export function owned(dispose: Disposer): Disposer {
     if (OWNING.free) return dispose
     const stops = OWNING.stops
     if (stops !== undefined) stops.push(dispose)
-    currentScope()?.stops.push(dispose)
+    serverStops()?.push(dispose)
     return dispose
 }
 
@@ -133,7 +134,7 @@ export function settingUp(): boolean {
 export function owning(): boolean {
     return (
         !OWNING.free &&
-        (OWNING.stops !== undefined || currentScope() !== undefined)
+        (OWNING.stops !== undefined || serverStops() !== undefined)
     )
 }
 
