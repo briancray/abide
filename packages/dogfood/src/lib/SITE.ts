@@ -332,6 +332,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         'rpc › `middleware`',
                         'Lifecycle hooks › `middleware`',
                         '`Lane`',
+                        '`onRefusal`',
                         '`crossOrigin`',
                         '`access-control-allow-origin`',
                         '`vary`',

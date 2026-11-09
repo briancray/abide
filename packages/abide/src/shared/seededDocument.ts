@@ -22,13 +22,12 @@ export function seededDocument<Document>(
     | Document
     | Failed<string, unknown>
     | Promise<Document | Failed<string, unknown>> {
-    const answer = answerOf(
-        rpcRequest('GET', mounted(address), undefined),
-        false,
-        undefined,
-    )
+    const request = rpcRequest('GET', mounted(address), undefined)
+    const answer = answerOf(request, false, undefined)
     return (
-        answer instanceof Promise ? answer.then(answered) : answered(answer)
+        answer instanceof Promise
+            ? answer.then((settled) => answered(settled, request))
+            : answered(answer, request)
     ) as
         | Document
         | Failed<string, unknown>

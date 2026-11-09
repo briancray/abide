@@ -2569,6 +2569,23 @@ the route table reads it.
 browser or rendered by a server — a `<script server>`, a server module, a module's top level, a
 callback that runs later — MUST throw, naming `@abide/abide/server`'s as the server's.
 
+37.22 An `onRefusal` MUST be filed, and MUST file nothing, where 37.16 has an `onError` filed and
+file nothing.
+
+37.23 An `onRefusal` called anywhere 37.21 has an `onError` from `@abide/abide` throw MUST throw.
+
+37.24 In a browser, every `Failed` an `Rpc` call is answered with over http — one its handler
+returned, one anything between the browser and the handler answered with, 16.79's, and one a call
+`outbox` sends is answered with — MUST reach every `onRefusal` 37.22 filed, the last filed first,
+and once, handed the call's method and URL beside it.
+
+37.25 A call whose `signal` aborted MUST NOT reach `onRefusal`.
+
+37.26 In a browser, an `onRefusal` that throws MUST be handled as 37.18 has an `onError` that throws.
+
+37.27 An `onRefusal` MUST NOT change the `Failed` the call refuses with, nor keep the call from
+refusing with it.
+
 # 38. Commands
 
 ## The commands

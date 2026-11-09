@@ -18,6 +18,7 @@ export const HOOK_NAMES: ReadonlySet<string> = new Set([
     'onPrincipal',
     'onLauncher',
     'onMenu',
+    'onRefusal',
 ])
 
 /** One call of one of abide's hooks. */

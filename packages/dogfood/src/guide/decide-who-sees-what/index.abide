@@ -5,6 +5,7 @@ import adminErrorSource from 'crm-07/src/account/admin/error.abide' with { type:
 import getTeamSource from 'crm-07/src/account/admin/getTeam.handler.ts' with { type: 'text' }
 import adminLayoutSource from 'crm-07/src/account/admin/layout.abide' with { type: 'text' }
 import exportContactsSource from 'crm-07/src/account/exportContacts.handler.ts' with { type: 'text' }
+import getCommissionSource from 'crm-07/src/account/getCommission.handler.ts' with { type: 'text' }
 import getContactSource from 'crm-07/src/account/getContact.handler.ts' with { type: 'text' }
 import getStatementSource from 'crm-07/src/account/getStatement.handler.ts' with { type: 'text' }
 import accountPageSource from 'crm-07/src/account/index.abide' with { type: 'text' }
@@ -36,6 +37,9 @@ import salesReportTestSource from 'crm-07/src/account/lib/SalesReport.test.ts' w
 import SignIn from 'crm-07/src/account/lib/SignIn.abide'
 import signInComponentSource from 'crm-07/src/account/lib/SignIn.abide' with { type: 'text' }
 import signInTestSource from 'crm-07/src/account/lib/SignIn.test.ts' with { type: 'text' }
+import SignInAgain from 'crm-07/src/account/lib/SignInAgain.abide'
+import signInAgainSource from 'crm-07/src/account/lib/SignInAgain.abide' with { type: 'text' }
+import signInAgainTestSource from 'crm-07/src/account/lib/SignInAgain.test.ts' with { type: 'text' }
 import SyncContact from 'crm-07/src/account/lib/SyncContact.abide'
 import syncContactComponentSource from 'crm-07/src/account/lib/SyncContact.abide' with { type: 'text' }
 import syncContactTestSource from 'crm-07/src/account/lib/SyncContact.test.ts' with { type: 'text' }
@@ -249,6 +253,33 @@ import Snippet from '#src/lib/Snippet.abide'
             mount. A gate over pages alone tests <code>lane === 'page'</code> rather than spelling
             out which paths are abide's. <code>abide routes</code> lists each rung beside the route
             it is filed at, and the rungs each handler names.</p>
+    </Section>
+
+    <Section title="`onRefusal` hears a session end on any call">
+        <Example
+            id="crm-07-sign-in-again"
+            app="crm-07"
+            title="`onRefusal(fn)` — one hook for every call refused 401"
+            summary="Your commission is for a member signed in. Sign in as Theo, then as Nobody: the next call is refused 401, and the card asks for a sign-in."
+            files={{
+                'src/account/lib/SignInAgain.abide': signInAgainSource,
+                'src/account/getCommission.handler.ts': getCommissionSource,
+                'src/account/lib/SignInAgain.test.ts': signInAgainTestSource,
+            }}
+        >
+            <SignInAgain />
+        </Example>
+
+        <p>A call that is refused does not throw. The refusal lands on the value's
+            <code>error</code>, so <code>onError</code> never hears it. <code>onRefusal</code>, called
+            in a component's <code>&lt;script&gt;</code>, hears every refusal a call from this browser
+            gets while that component stands. That is the server's, a 401 from a proxy in front of it,
+            the 503 for no answer at all, and one a call in <code>outbox</code> gets. Each
+            hook gets the call's method and URL beside the refusal, the nearest component's first.</p>
+
+        <p>The hook hears the refusal and leaves it where it is. The value still refuses, so the card
+            that made the call shows what it shows for any refusal. An aborted call is not a refusal,
+            and a hook filed in a layout hears every page below it.</p>
     </Section>
 
     <Section title="`crossOrigin` opens one handler to a partner">

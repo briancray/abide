@@ -391,19 +391,22 @@ test('every rpc carries the transport refusal in its failures — 16.8', async (
     // @ts-expect-error no failure of this name is carried, declared or the transport's
     expect(error?.name === 'NotFound').toBe(false)
 
-    const rebuilt = answered({
-        status: 500,
-        statusText: 'Internal Server Error',
-        ok: false,
-        framing: null,
-        followable: false,
-        version: undefined,
-        life: undefined,
-        kept: false,
-        text: 'the handler threw',
-        bytes: undefined,
-        body: undefined,
-    })
+    const rebuilt = answered(
+        {
+            status: 500,
+            statusText: 'Internal Server Error',
+            ok: false,
+            framing: null,
+            followable: false,
+            version: undefined,
+            life: undefined,
+            kept: false,
+            text: 'the handler threw',
+            bytes: undefined,
+            body: undefined,
+        },
+        { method: 'GET', url: '/ask' },
+    )
     expect(rebuilt).toMatchObject({
         name: 'HttpError',
         status: 500,

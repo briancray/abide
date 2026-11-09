@@ -1,0 +1,31 @@
+<script>
+import { onRefusal, principal, reactive, watch } from '@abide/abide'
+
+import getCommission from '../getCommission.handler.ts'
+import SignInAs from './SignInAs.abide'
+
+let signedOut = reactive(false)
+
+// Any call on the page refused 401, whoever made it, asks for a sign-in.
+onRefusal((refusal) => {
+    if (refusal.status === 401) signedOut = true
+})
+
+const commission = reactive(() => getCommission())
+
+watch(principal.resolved, () => {
+    signedOut = false
+    getCommission.refresh()
+})
+</script>
+
+<SignInAs />
+
+{#if signedOut}
+    <p class="status">Your session ended. Pick a member to sign in again.</p>
+{:else}
+    <ul class="fields">
+        <li><span>commission</span>
+            <strong>{commission.ready() ? commission.amount : '—'}</strong></li>
+    </ul>
+{/if}

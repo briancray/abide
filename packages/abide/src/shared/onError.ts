@@ -9,46 +9,24 @@
 // throws are handed through `UNEXPECTED` as they are on a server, and the one of them that then
 // surfaces as uncaught (12.7) is not handed a second time.
 
-import { namedLogger } from './log.ts'
-import { SCOPING } from './reactive/scoping.ts'
-import { owned, settingUp } from './reactive/watch.ts'
+import { BrowserHooks } from './BrowserHooks.ts'
 import { UNEXPECTED } from './UNEXPECTED.ts'
 
-type Filed = { hook: (error: unknown) => unknown }
-
-// IN THE ORDER FILED, which is outermost first: a layout's setup runs before the page inside it.
-const FILED: Filed[] = []
+const HOOKS = new BrowserHooks<[error: unknown]>(
+    'onError',
+    "abide: onError of `@abide/abide` files only in a component's <script>; a <script server> or a server module files the server's, of `@abide/abide/server`. RULEBOOK 37.21.",
+    listen,
+)
 
 // What 12.6 handed and 12.7 may yet surface as uncaught, held until the task that handed it is over.
 const SURFACING: unknown[] = []
 
-const LIFECYCLE_LOG = namedLogger('abide:lifecycle')
-
-let listening = false
-
 /** Files `hook` for every failure nothing caught while the calling component stands; returns what unfiles it. */
 export function onError(hook: (error: unknown) => unknown): () => void {
-    if (!settingUp()) {
-        // ONLY A BROWSER COLLECTS A SETUP, so a server's render — in a process with a document or
-        // without one — files nothing.
-        if (SCOPING.provider?.serving() === true) return () => {}
-        // 37.21 — ANYWHERE ELSE IT COULD NEVER FILE: a `<script server>` or a server module wanted
-        // the server's, and a call outside a component's setup has nothing to stand for.
-        throw new Error(
-            "abide: onError of `@abide/abide` files only in a component's <script>; a <script server> or a server module files the server's, of `@abide/abide/server`. RULEBOOK 37.21.",
-        )
-    }
-    if (!listening) listen()
-    const entry: Filed = { hook }
-    FILED.push(entry)
-    return owned(() => {
-        const at = FILED.indexOf(entry)
-        if (at !== -1) FILED.splice(at, 1)
-    })
+    return HOOKS.file(hook)
 }
 
 function listen(): void {
-    listening = true
     // A SERVER'S SLOT IS LEFT AS IT IS: a test with a document and a server has both lanes.
     UNEXPECTED.report ??= handedUnexpected
     addEventListener('error', (event) => surfaced((event as ErrorEvent).error))
@@ -60,7 +38,7 @@ function listen(): void {
 function handedUnexpected(error: unknown): void {
     if (SURFACING.length === 0) setTimeout(() => (SURFACING.length = 0))
     SURFACING.push(error)
-    hand(error)
+    HOOKS.hand(error)
 }
 
 function surfaced(error: unknown): void {
@@ -69,20 +47,5 @@ function surfaced(error: unknown): void {
         SURFACING.splice(at, 1)
         return
     }
-    hand(error)
-}
-
-// 37.17 — NEAREST FIRST, which is the last filed. A hook that throws is written rather than handed
-// on, where it would surface as uncaught and be handed back here.
-function hand(error: unknown): void {
-    for (let at = FILED.length - 1; at >= 0; at -= 1) {
-        // A hook that unfiled one on its way leaves the walk past the end.
-        const entry = FILED[at]
-        if (entry === undefined) continue
-        try {
-            entry.hook(error)
-        } catch (thrown) {
-            LIFECYCLE_LOG.error('an onError hook threw', thrown)
-        }
-    }
+    HOOKS.hand(error)
 }
