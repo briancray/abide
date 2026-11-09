@@ -12,7 +12,7 @@ import type { Failed } from './Failed.ts'
 import { untracked } from './reactive/tracking.ts'
 import type { Method } from './rpc.ts'
 
-type RefusedCall = { method: Method; url: string }
+export type RefusedCall = { method: Method; url: string }
 
 const HOOKS = new BrowserHooks<
     [refusal: Failed<string, unknown>, call: RefusedCall]

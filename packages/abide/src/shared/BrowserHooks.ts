@@ -3,7 +3,7 @@
 // so the two cannot come apart on where they file, whom they hand first, or what a throw does.
 
 import { namedLogger } from './log.ts'
-import { SCOPING } from './reactive/scoping.ts'
+import { serverStops } from './reactive/scoping.ts'
 import { owned, settingUp } from './reactive/watch.ts'
 
 const LIFECYCLE_LOG = namedLogger('abide:lifecycle')
@@ -18,11 +18,7 @@ export class BrowserHooks<Handed extends unknown[]> {
     /** Run before the first hook is filed — `onError`'s listeners. */
     private first: (() => void) | undefined
 
-    constructor(
-        name: string,
-        misplaced: string,
-        first: (() => void) | undefined = undefined,
-    ) {
+    constructor(name: string, misplaced: string, first?: () => void) {
         this.name = name
         this.misplaced = misplaced
         this.first = first
@@ -38,7 +34,7 @@ export class BrowserHooks<Handed extends unknown[]> {
         if (!settingUp()) {
             // ONLY A BROWSER COLLECTS A SETUP, so a server's render — in a process with a document
             // or without one — files nothing.
-            if (SCOPING.provider?.serverStops() !== undefined) return () => {}
+            if (serverStops() !== undefined) return () => {}
             // 37.21 — ANYWHERE ELSE IT COULD NEVER FILE: a call outside a component's setup has
             // nothing to stand for.
             throw new Error(this.misplaced)

@@ -6,11 +6,10 @@
 // two. What tells them apart is what the server alone enters: a request scope, or a render (the
 // provider's `serverStops`). A process with no document at all is a server whatever it is doing.
 
-import { SCOPING } from './reactive/scoping.ts'
+import { serverStops } from './reactive/scoping.ts'
 
 /** Whether the work running is a server's. */
 export function isServer(): boolean {
     if (typeof document === 'undefined') return true
-    const provider = SCOPING.provider
-    return provider !== null && provider.serverStops() !== undefined
+    return serverStops() !== undefined
 }

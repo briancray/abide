@@ -447,6 +447,14 @@ const NULLISH =
     TypeFlags.Any |
     TypeFlags.Unknown
 
+/** A union's members, or the type alone, with every `NULLISH` one aside. */
+async function presentMembers(type: Type): Promise<Type[]> {
+    const present: Type[] = []
+    for (const held of await unionMembers(type))
+        if ((held.flags & NULLISH) === 0) present.push(held)
+    return present
+}
+
 async function admitsNullish(type: Type): Promise<boolean> {
     for (const member of await unionMembers(type))
         if ((member.flags & NULLISH) !== 0) return true
@@ -1224,11 +1232,10 @@ async function ownMembers(
         asked.push(
             valueOf(node).then(async (value) => {
                 if (value === undefined) return
-                for (const held of await unionMembers(value))
+                for (const held of await presentMembers(value))
                     if (
-                        (held.flags & NULLISH) === 0 &&
                         (await checker.getPropertyOfType(held, member)) !==
-                            undefined
+                        undefined
                     )
                         return void owned.add(node)
             }),
@@ -1284,9 +1291,7 @@ async function liftedMutators(
                 if (value === undefined) return
                 // `null` and `undefined` aside at the root as at every step down: `drafts?.push(d)`
                 // over a `Reactive<Draft[] | undefined>` is a mutator on an array.
-                let types: Type[] = []
-                for (const held of await unionMembers(value))
-                    if ((held.flags & NULLISH) === 0) types.push(held)
+                let types = await presentMembers(value)
                 for (const step of steps)
                     types = await stepTypes(checker, types, step)
                 if (types.length === 0) return
@@ -1314,34 +1319,30 @@ async function stepTypes(
     step: string | undefined,
 ): Promise<Type[]> {
     const next: Type[] = []
-    for (const type of types)
-        for (const held of await unionMembers(type)) {
-            if ((held.flags & NULLISH) !== 0) continue
-            if (step !== undefined) {
-                const member = await checker.getPropertyOfType(held, step)
-                const stepped =
-                    member === undefined
-                        ? undefined
-                        : await checker.getTypeOfSymbol(member)
-                if (stepped !== undefined)
-                    next.push(...(await unionMembers(stepped)))
-                continue
-            }
-            if (await checker.isArrayType(held)) {
-                const [element] = await checker.getTypeArguments(
-                    held as TypeReference,
-                )
-                if (element !== undefined)
-                    next.push(...(await unionMembers(element)))
-                continue
-            }
-            for (const index of await checker.getIndexInfosOfType(held))
-                next.push(...(await unionMembers(index.valueType)))
+    // `types` is present members already: the root's, or this walk's own.
+    for (const held of types) {
+        if (step !== undefined) {
+            const member = await checker.getPropertyOfType(held, step)
+            const stepped =
+                member === undefined
+                    ? undefined
+                    : await checker.getTypeOfSymbol(member)
+            if (stepped !== undefined)
+                next.push(...(await presentMembers(stepped)))
+            continue
         }
-    const present: Type[] = []
-    for (const type of next)
-        if ((type.flags & NULLISH) === 0) present.push(type)
-    return present
+        if (await checker.isArrayType(held)) {
+            const [element] = await checker.getTypeArguments(
+                held as TypeReference,
+            )
+            if (element !== undefined)
+                next.push(...(await presentMembers(element)))
+            continue
+        }
+        for (const index of await checker.getIndexInfosOfType(held))
+            next.push(...(await presentMembers(index.valueType)))
+    }
+    return next
 }
 
 /**

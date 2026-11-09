@@ -147,17 +147,20 @@ async function* endedBy(
     events: AsyncGenerator<ProviderEvent>,
     signal: AbortSignal,
 ): AsyncGenerator<ProviderEvent> {
-    let stop = (): void => {}
-    const stopped = new Promise<never>((_, reject) => {
-        stop = () => reject(aborted())
-    })
-    // Lost to a step that settled first, it is still handled.
-    stopped.catch(() => {})
+    // A STEP RACES ITS OWN ABORT: one promise pending for the whole conversation would keep a
+    // reaction per event, none freed until it ends.
+    let rejectStep: (reason: unknown) => void = () => {}
+    const stop = (): void => rejectStep(aborted())
     signal.addEventListener('abort', stop, { once: true })
     try {
-        if (signal.aborted) throw aborted()
         for (;;) {
-            const step = await Promise.race([events.next(), stopped])
+            if (signal.aborted) throw aborted()
+            const step = await Promise.race([
+                events.next(),
+                new Promise<never>((_, reject) => {
+                    rejectStep = reject
+                }),
+            ])
             if (step.done === true) return
             yield step.value
         }

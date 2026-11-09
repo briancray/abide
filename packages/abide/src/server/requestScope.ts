@@ -131,9 +131,14 @@ const STORAGE = new AsyncLocalStorage<RequestScope | undefined>()
 // holds is the render's stops (12.5): a request's are its scope's.
 const RENDERING = new AsyncLocalStorage<(() => void)[]>()
 
+/** The stops of the request or the render current, or `undefined` where neither is. */
+function currentStops(): (() => void)[] | undefined {
+    return STORAGE.getStore()?.stops ?? RENDERING.getStore()
+}
+
 SCOPING.provider = {
     current: (): Scope | undefined => STORAGE.getStore(),
-    serverStops: () => STORAGE.getStore()?.stops ?? RENDERING.getStore(),
+    serverStops: currentStops,
     run: (scope, body, given) =>
         STORAGE.run(scope as RequestScope | undefined, body, given),
 }
@@ -194,10 +199,7 @@ export function inRender<Result>(
     stops: (() => void)[],
     body: () => Result,
 ): Result {
-    return STORAGE.getStore() === undefined &&
-        RENDERING.getStore() === undefined
-        ? RENDERING.run(stops, body)
-        : body()
+    return currentStops() === undefined ? RENDERING.run(stops, body) : body()
 }
 
 /**
@@ -210,8 +212,7 @@ export function inReleasedRender<Result>(
     body: () => Promise<Result>,
 ): Promise<Result> {
     // A REQUEST'S PAGE PAYS NOTHING HERE — no wrapping promise, no tick — as its scope stops them.
-    if (STORAGE.getStore() !== undefined || RENDERING.getStore() !== undefined)
-        return body()
+    if (currentStops() !== undefined) return body()
     const stops: (() => void)[] = []
     return RENDERING.run(stops, body).finally(() => stopAll(stops))
 }

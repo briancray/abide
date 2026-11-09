@@ -12,7 +12,7 @@ import {
     framingOf,
 } from './framing.ts'
 import { KEPT_HEADER } from './KEPT_HEADER.ts'
-import { refused } from './onRefusal.ts'
+import { refused, type RefusedCall } from './onRefusal.ts'
 import { principalRotated } from './principalRotated.ts'
 import { refuse } from './refuse.ts'
 import type { RpcRequest } from './rpcRequest.ts'
@@ -187,10 +187,7 @@ function answerFrom(
  * handler holds once its run has closed — for a copy the build did not mark as streaming, whose
  * value is one production. A marked one reads its body as it lands (`framedStream`).
  */
-export function answered(
-    answer: Answer,
-    call: Pick<RpcRequest, 'method' | 'url'>,
-): unknown {
+export function answered(answer: Answer, call: RefusedCall): unknown {
     if (answer.status === 204) return undefined
     if (answer.ok) {
         // 16.34 — a binary decodes back to the bytes it was.

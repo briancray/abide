@@ -285,8 +285,10 @@ async function keep(request, response, copy, since) {
     // server error is no answer to replace a copy with.
     if (copy === undefined) {
         if (response.status >= 500) return
-        await (await caches.open(SAVED)).delete(request)
-        await (await caches.open(SHARED)).delete(request)
+        await Promise.all([
+            caches.open(SAVED).then((cache) => cache.delete(request)),
+            caches.open(SHARED).then((cache) => cache.delete(request)),
+        ])
         return
     }
     const shared = directivesOf(copy).has('public')
