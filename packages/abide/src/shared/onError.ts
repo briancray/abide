@@ -10,6 +10,7 @@
 // surfaces as uncaught (12.7) is not handed a second time.
 
 import { namedLogger } from './log.ts'
+import { SCOPING } from './reactive/scoping.ts'
 import { owned, settingUp } from './reactive/watch.ts'
 import { UNEXPECTED } from './UNEXPECTED.ts'
 
@@ -27,9 +28,16 @@ let listening = false
 
 /** Files `hook` for every failure nothing caught while the calling component stands; returns what unfiles it. */
 export function onError(hook: (error: unknown) => unknown): () => void {
-    // ONLY A BROWSER COLLECTS A SETUP, so a server's render — in a process with a document or
-    // without one — files nothing.
-    if (!settingUp()) return () => {}
+    if (!settingUp()) {
+        // ONLY A BROWSER COLLECTS A SETUP, so a server's render — in a process with a document or
+        // without one — files nothing.
+        if (SCOPING.provider?.serving() === true) return () => {}
+        // 37.21 — ANYWHERE ELSE IT COULD NEVER FILE: a `<script server>` or a server module wanted
+        // the server's, and a call outside a component's setup has nothing to stand for.
+        throw new Error(
+            "abide: onError of `@abide/abide` files only in a component's <script>; a <script server> or a server module files the server's, of `@abide/abide/server`. RULEBOOK 37.21.",
+        )
+    }
     if (!listening) listen()
     const entry: Filed = { hook }
     FILED.push(entry)

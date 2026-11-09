@@ -2565,6 +2565,10 @@ included.
 37.20 A `middleware` rung MUST be handed the request addressed below the path `APP_URL` names, as
 the route table reads it.
 
+37.21 An `onError` from `@abide/abide` called anywhere but a component's `<script>` being set up in a
+browser or rendered by a server — a `<script server>`, a server module, a module's top level, a
+callback that runs later — MUST throw, naming `@abide/abide/server`'s as the server's.
+
 # 38. Commands
 
 ## The commands

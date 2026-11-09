@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { flushSync, reactive } from '#shared'
+import { onError } from '#shared/onError.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -115,4 +116,14 @@ test('a component that went takes its onError with it — 37.16', () => {
     flushSync()
     dispatchEvent(new ErrorEvent('error', { error: new Error('after') }))
     expect(heard()).toEqual(['outer:after'])
+})
+
+// THE REVERT: return the no-op where nothing is set up, as the server's render does, and the call
+// below files nothing and says nothing — the trap a `<script server>` importing this one fell into.
+// The render's side of the same branch is `beforeAll`'s: this page's setups ran through a server's
+// render first, and a throw there would fail every test in the file.
+test("an onError called outside a component's setup or a render throws — 37.21", () => {
+    expect(() => onError(() => {})).toThrow(
+        'abide: onError of `@abide/abide` files only in a component',
+    )
 })
