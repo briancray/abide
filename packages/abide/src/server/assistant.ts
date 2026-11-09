@@ -18,7 +18,7 @@ import type {
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
-import { refuse } from '#shared/refuse.ts'
+import { aborted, refuse } from '#shared/refuse.ts'
 
 import { type McpReply, McpSurface } from './generatedSurfaces.ts'
 import { request, within } from './requestScope.ts'
@@ -65,7 +65,11 @@ export type Provider = {
 }
 
 /** What `assistant` takes beside a provider, the same for every one. */
-export type AssistantOptions = { mcp?: boolean; maxTurns?: number }
+export type AssistantOptions = {
+    mcp?: boolean
+    maxTurns?: number
+    signal?: AbortSignal
+}
 
 const MAX_TURNS = 10
 const ASSISTANT_LOG = namedLogger('abide:assistant')
@@ -113,15 +117,57 @@ export async function* assistant(
     }
     const surface = options.mcp === true ? appSurface() : NO_SURFACE
     const tools = toolboxOver(surface, askerOf(request()))
-    const signal = request().signal
-    const events = provider.run(turns, tools, {
-        maxTurns: options.maxTurns ?? MAX_TURNS,
+    // 44.57 — the caller's signal and the request's are one: either ends the conversation.
+    const signal =
+        options.signal === undefined
+            ? request().signal
+            : AbortSignal.any([request().signal, options.signal])
+    const events = endedBy(
+        provider.run(turns, tools, {
+            maxTurns: options.maxTurns ?? MAX_TURNS,
+            signal,
+        }),
         signal,
-    })
+    )
     // 28.7 — a closed namespace pays for no line.
     yield* ASSISTANT_LOG.enabled()
         ? traced(read(events, surface), messages.length, signal)
         : read(events, surface)
+}
+
+/**
+ * `events` until `signal` aborts, then `aborted`. 44.57.
+ *
+ * THE ABORT DOES NOT WAIT FOR THE PROVIDER: one stuck in an await it was handed no signal for — a
+ * bridge that never answers — is asked to return and left to, and the conversation ends now. An
+ * abort read ahead of a throw, as `traced` reads it: a provider that throws as it unwinds was ended
+ * by the abort.
+ */
+async function* endedBy(
+    events: AsyncGenerator<ProviderEvent>,
+    signal: AbortSignal,
+): AsyncGenerator<ProviderEvent> {
+    let stop = (): void => {}
+    const stopped = new Promise<never>((_, reject) => {
+        stop = () => reject(aborted())
+    })
+    // Lost to a step that settled first, it is still handled.
+    stopped.catch(() => {})
+    signal.addEventListener('abort', stop, { once: true })
+    try {
+        if (signal.aborted) throw aborted()
+        for (;;) {
+            const step = await Promise.race([events.next(), stopped])
+            if (step.done === true) return
+            yield step.value
+        }
+    } catch (thrown) {
+        throw signal.aborted ? aborted() : thrown
+    } finally {
+        signal.removeEventListener('abort', stop)
+        // A provider still awaiting returns once that await settles, and nobody waits for it.
+        events.return(undefined).catch(() => {})
+    }
 }
 
 /** A called tool's handler, and whether its answer is a value read as JSON (19.21). */

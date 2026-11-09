@@ -3517,7 +3517,7 @@ before it exits.
 44.31 A conversation MUST write one `debug` line on `abide:assistant` when its events end, naming
 its stop reason, the transcript's length, the tool calls it made, its usage and how long it took,
 and naming it `unfinished` where it ended without a `done`, followed by why — `aborted` where the
-request's signal aborted, else `failed` where its provider threw, with the throw's message ending the
+signal 44.57 hands its provider aborted, else `failed` where its provider threw, with the throw's message ending the
 line, else `stopped` where its caller stopped reading.
 
 44.32 A command `claudeCode.bridgeCommand` or `claudeCode.bridge` mints with `tools` MUST grant
@@ -3600,6 +3600,10 @@ names, reading its `items` where its `files` hold none.
 
 44.56 The `install` of a pairing `claudeCode.bridgeCommand` or `claudeCode.bridge` mints MUST run
 `abide-bridge install` at the bridge release its command runs.
+
+44.57 `assistant` MUST hand its `Provider` a `limits.signal` that aborts once the request's signal
+aborts or once the `signal` its caller passed does, and once that signal aborts MUST end the
+conversation without waiting for the provider to, refused with `aborted` at status 499.
 
 # 45. Offline
 
