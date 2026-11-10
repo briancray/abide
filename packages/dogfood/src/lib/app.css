@@ -225,7 +225,8 @@
         @apply size-2 flex-none rounded-full bg-(--side);
     }
 
-    .snippet pre {
+    .snippet pre,
+    .example pre {
         @apply rounded-none border-0 bg-transparent;
     }
 
@@ -341,10 +342,6 @@
 
     .ex-files button[aria-selected=true] {
         @apply bg-ink/7 text-ink;
-    }
-
-    .example pre {
-        @apply rounded-none border-0 bg-transparent;
     }
 
     /* THE RUNNING COMPONENT, on the page rather than in a frame: the docs app is the app it runs in.

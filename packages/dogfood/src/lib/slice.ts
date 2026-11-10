@@ -6,22 +6,7 @@
 // end of the construct it opens — which is the whole rule, applied by two balancers because markup
 // and code close differently and nothing else does.
 
-// The HTML void elements, which open no construct to close.
-const VOID_ELEMENTS = new Set([
-    'area',
-    'base',
-    'br',
-    'col',
-    'embed',
-    'hr',
-    'img',
-    'input',
-    'link',
-    'meta',
-    'source',
-    'track',
-    'wbr',
-])
+import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 const TAG = /<\/?([a-zA-Z][\w-]*)|\/>/g
 

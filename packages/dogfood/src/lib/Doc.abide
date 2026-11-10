@@ -18,9 +18,7 @@ const { previous, next } = neighborsOf(page.route)
 const plain = page.title.replaceAll('`', '')
 const markdown = url(markdownAddressOf(page.route) as RouteLiteral)
 
-const headings = reactive.share('docHeadings', () =>
-    reactive<{ id: string; title: string; level: number }[]>([]),
-)
+const headings = reactive.share('docHeadings', () => reactive([]))
 </script>
 
 <head>

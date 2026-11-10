@@ -8,9 +8,7 @@ import { inline, slugify } from './inline.ts'
 const { title, level = 2 } = props<{ title: string; level?: 2 | 3 }>()
 const id = slugify(title)
 
-const headings = reactive.share('docHeadings', () =>
-    reactive<{ id: string; title: string; level: number }[]>([]),
-)
+const headings = reactive.share('docHeadings', () => reactive([]))
 headings = [...headings, { id, title, level }]
 </script>
 

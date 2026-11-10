@@ -7,6 +7,7 @@
 // files are written as captioned fences.
 
 import { markdownAddressOf } from './sitePages.ts'
+import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 const ENTITIES: Record<string, string> = {
     amp: '&',
@@ -37,7 +38,6 @@ type Element = {
 }
 type Node = Element | string
 
-const VOID = new Set(['br', 'hr', 'img', 'input', 'meta', 'link'])
 const TOKEN =
     /<!--[\s\S]*?-->|<\/([a-zA-Z][\w-]*)\s*>|<([a-zA-Z][\w-]*)((?:\s+[^\s=>]+(?:=(?:"[^"]*"|'[^']*'|[^\s>]*))?)*)\s*\/?>|[^<]+/g
 const ATTRIBUTE = /([^\s=>]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\s>]*)))?/g
@@ -74,7 +74,8 @@ function parse(html: string): Element {
                 double ?? single ?? bare ?? '',
             )
         parent.children.push(element)
-        if (!VOID.has(element.tag) && !whole.endsWith('/>')) open.push(element)
+        if (!VOID_ELEMENTS.has(element.tag) && !whole.endsWith('/>'))
+            open.push(element)
     }
     return root
 }
@@ -136,16 +137,17 @@ function inline(node: Node): string {
     }
 }
 
-// A fence's language is the code's own class where it has one, and its file's extension where not.
-function fence(caption: string, code: string, language = ''): string {
-    const spoken =
-        language || (/\.(\w+)(?: — excerpt)?$/.exec(caption)?.[1] ?? '')
-    return `\`\`\`${spoken}${caption ? ` ${caption}` : ''}\n${code.replace(/\n$/, '')}\n\`\`\``
-}
-
-function languageOf(pre: Element | undefined): string {
+/**
+ * A `<pre>` as a fence. Its language is the code's own class where it has one, and its caption's
+ * extension where not.
+ */
+function fence(caption: string, pre: Element | undefined): string {
     const code = pre && find(pre, (node) => node.tag === 'code')
-    return /\blanguage-(\w+)/.exec(code?.attributes.class ?? '')?.[1] ?? ''
+    const language =
+        /\blanguage-(\w+)/.exec(code?.attributes.class ?? '')?.[1] ||
+        (/\.(\w+)(?: — excerpt)?$/.exec(caption)?.[1] ?? '')
+    const text = pre === undefined ? '' : textOf(pre)
+    return `\`\`\`${language}${caption ? ` ${caption}` : ''}\n${text.replace(/\n$/, '')}\n\`\`\``
 }
 
 /** Block markup as markdown blocks. */
@@ -212,19 +214,17 @@ function blocks(element: Element, out: string[]): void {
                 out.push(`> [!TIP]\n> ${inline(child).trim()}`)
                 break
             case 'pre':
-                out.push(fence('', textOf(child), languageOf(child)))
+                out.push(fence('', child))
                 break
             case 'figure':
                 if (kind.includes('example')) out.push(card(child))
                 else {
                     // The caption as written — a path or a side word — rather than as shown.
                     const caption = child.attributes['data-caption'] ?? ''
-                    const code = find(child, (node) => node.tag === 'pre')
                     out.push(
                         fence(
                             caption,
-                            code === undefined ? '' : textOf(code),
-                            languageOf(code),
+                            find(child, (node) => node.tag === 'pre'),
                         ),
                     )
                 }
@@ -250,7 +250,7 @@ function card(figure: Element): string {
     let index = 0
     for (const node of figure.children) {
         if (typeof node === 'string' || node.tag !== 'pre') continue
-        text += `\n\n${fence(paths[index] ?? '', textOf(node))}`
+        text += `\n\n${fence(paths[index] ?? '', node)}`
         index += 1
     }
     return text

@@ -212,13 +212,9 @@ export async function referencePages(): Promise<{
 // Every reference page in reading order, which \`SECTIONS\` and the reference nav list. Run the script; do
 // not edit this.
 
-export const REFERENCE: readonly {
-    route: string
-    names: readonly string[]
-    entry: string | undefined
-    group: string
-    typeOnly: boolean
-}[] = [\n`
+import type { ReferencePage } from './referenceOf.ts'
+
+export const REFERENCE: readonly ReferencePage[] = [\n`
     const quoted = (text: string): string => `'${text.replaceAll("'", "\\'")}'`
     for (const page of pages)
         leaf += `    {

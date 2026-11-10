@@ -17,9 +17,7 @@ const groups = sidebarGroupsOf('/reference').filter(
 
 // The rail's headings, filed here: a `<Section>` per group would file each from inside the loop,
 // after `<Doc>` has decided whether there is a rail (as `lib/Reference.abide` does).
-const headings = reactive.share('docHeadings', () =>
-    reactive<{ id: string; title: string; level: number }[]>([]),
-)
+const headings = reactive.share('docHeadings', () => reactive([]))
 headings = groups.map((group) => ({
     id: slugify(group.section),
     title: group.section,

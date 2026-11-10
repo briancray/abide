@@ -14,6 +14,7 @@ const SECTIONS = referenceSectionsOf(REGISTRY, REFERENCE)
 import { raw, reactive, route, type RouteLiteral, url } from '@abide/abide'
 
 import Doc from '#src/lib/Doc.abide'
+import type { Heading } from '#src/lib/Heading.ts'
 import { inline, slugify } from '#src/lib/inline.ts'
 import { SITE } from '#src/lib/SITE.ts'
 
@@ -41,10 +42,8 @@ for (const group of SITE)
 // THE RAIL'S HEADINGS, filed here rather than by a `<Section>` per row: the sections are a loop,
 // and a heading filed from inside one lands after `<Doc>` has decided whether there is a rail.
 const TAUGHT = 'Taught in'
-const headings = reactive.share('docHeadings', () =>
-    reactive<{ id: string; title: string; level: number }[]>([]),
-)
-const filed: { id: string; title: string; level: number }[] = []
+const headings = reactive.share('docHeadings', () => reactive([]))
+const filed: Heading[] = []
 for (const section of sections)
     filed.push({
         id: slugify(section.heading),

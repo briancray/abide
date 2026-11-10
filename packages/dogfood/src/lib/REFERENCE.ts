@@ -2,13 +2,9 @@
 // Every reference page in reading order, which `SECTIONS` and the reference nav list. Run the script; do
 // not edit this.
 
-export const REFERENCE: readonly {
-    route: string
-    names: readonly string[]
-    entry: string | undefined
-    group: string
-    typeOnly: boolean
-}[] = [
+import type { ReferencePage } from './referenceOf.ts'
+
+export const REFERENCE: readonly ReferencePage[] = [
     {
         route: '/reference/types/Reactive',
         names: ['Reactive'],
