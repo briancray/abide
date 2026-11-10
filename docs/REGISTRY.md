@@ -456,7 +456,7 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `trace` | `() => string` | The trace id of the operation this work belongs to. | 24.1 |
 | `trace.sampled` | `() => boolean` | The caller's sampling decision, carried through verbatim. | 24.2 |
-| `trace.span` | `<T>(name: string, body: () => T, options?: { timing?: boolean }) => T` | Opens a child span around a body. | 24.3, 24.4, 24.6, 24.7 |
+| `trace.span` | `<T>(name: string, body: () => T, options?: { timing?: boolean }) => T` | Opens a child span around a body. | 24.3, 24.4, 24.6, 24.7, 24.8 |
 | `trace.headers` | `() => Record<string, string>` | What an outbound request carries. | 24.5 |
 
 ## `server`

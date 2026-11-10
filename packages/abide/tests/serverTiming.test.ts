@@ -45,6 +45,17 @@ export const guarded = GET(
     },
 )
 
+export const thenable = GET(() =>
+    trace.span(
+        'remote',
+        (): PromiseLike<{ n: number }> => {
+            const settled = Bun.sleep(50).then(() => ({ n: 1 }))
+            return { then: (fulfilled, rejected) => settled.then(fulfilled, rejected) }
+        },
+        { timing: true },
+    ),
+)
+
 export const spanned = GET(() =>
     trace.span(
         'db',
@@ -128,6 +139,13 @@ test('a span opened with timing is carried under its name — 24.6', async () =>
     const metrics = await timings(`${RPC}/spanned`)
     expect(metrics.get('db')).toBeGreaterThanOrEqual(45)
     expect(metrics.has('Direct')).toBe(true)
+})
+
+// 24.8 — A THENABLE THAT IS NOT A NATIVE PROMISE still holds the span open. THE REVERT: close on
+// anything but a `Promise`; `remote` reads ~0 ms.
+test('a span whose body returns a thenable closes when it settles — 24.8', async () => {
+    const metrics = await timings(`${RPC}/thenable`)
+    expect(metrics.get('remote')).toBeGreaterThanOrEqual(45)
 })
 
 test('a timing span whose name is not a token throws — 24.7', () => {

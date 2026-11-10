@@ -1671,6 +1671,9 @@ name, where it closed before the head was sent.
 
 24.7 A `trace.span` opened with `timing` MUST throw where its name is not an HTTP token.
 
+24.8 A `trace.span` whose body returns a thenable MUST close when it settles, and MUST take a
+`Reactive` as a value per 1.6.
+
 # 25. Health
 
 25.1 `GET /__abide/health` MUST answer `Health` over http.

@@ -9,6 +9,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
 
 import { writeSpan } from '#shared/log.ts'
+import { isReactive } from '#shared/reactive/isReactive.ts'
+import { isThenable } from '#shared/reactive/isThenable.ts'
 
 import { randomToken } from './randomToken.ts'
 import {
@@ -88,7 +90,7 @@ export const trace = Object.assign(
         /**
          * Runs `body` as a span, logging it when it settles; returns what `body` returns.
          *
-         * 24.3, 24.4 — ONE LINE PER SPAN, written when the body settles: `time` is when it started,
+         * 24.3, 24.4, 24.8 — ONE LINE PER SPAN, written when the body settles: `time` is when it started,
          * and the duration is `performance.now`'s, which a clock change cannot move. 24.6 — and
          * one `server-timing` entry where asked for, which only a span closed before the head
          * went out reaches.
@@ -121,7 +123,11 @@ export const trace = Object.assign(
                 throw thrown
             }
             if (result instanceof Promise) return result.finally(close) as T
-            close()
+            // 24.8 — ANY OTHER THENABLE IS WATCHED, NOT WRAPPED, so the caller keeps what it was
+            // handed. A `Reactive` is a value here (1.6) and closes the span now.
+            if (isThenable(result) && !isReactive(result))
+                result.then(close, close)
+            else close()
             return result
         },
         /**
