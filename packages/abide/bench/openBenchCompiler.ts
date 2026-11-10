@@ -2,9 +2,14 @@
 // component benches time, and what the bench page runs them through. One checker session per run:
 // opening one is seconds, and every compile after it is not.
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
-
 import { emitComponent, parseAbide, TypeSession } from '@abide/abide/compiler'
+
+// The emitted modules go where the tests write theirs, by the tests' own helper — see
+// `serveDocsApp.ts` for why a bench reaches into `tests/`.
+import {
+    removeTemporaryModules,
+    temporaryModule,
+} from '../tests/temporaryModule.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 
@@ -25,15 +30,12 @@ export async function openBenchCompiler(): Promise<{
     const session = await TypeSession.open(
         `${REPO}packages/abide/tsconfig.json`,
     )
-    const made: string[] = []
     return {
         /**
          * Compiles `source` as `name` and returns the emitted module and its imported render.
          *
-         * The emitted module, written where the tests write theirs — outside `packages/abide`, so
-         * `conventions.test.ts`'s glob does not scan it. ITS OWN DIR PER CALL, because an import
-         * path is cached: a second `Page.ts` at a path already imported hands back the first
-         * size's module.
+         * ITS OWN DIR PER CALL, because an import path is cached: a second `Page.ts` at a path
+         * already imported hands back the first size's module.
          */
         async compile(name, source, beside = {}) {
             const file = parseAbide(source)
@@ -47,11 +49,7 @@ export async function openBenchCompiler(): Promise<{
                 /\.abide\?component'/g,
                 ".ts'",
             )
-            const dir = mkdtempSync(`${REPO}.test-modules/bench-`)
-            made.push(dir)
-            for (const [at, text] of Object.entries(beside))
-                writeFileSync(`${dir}/${at}`, text)
-            writeFileSync(`${dir}/${name}.ts`, module)
+            const dir = temporaryModule({ ...beside, [`${name}.ts`]: module })
             const loaded = (await import(`${dir}/${name}.ts`)) as {
                 default: Render
             }
@@ -59,8 +57,7 @@ export async function openBenchCompiler(): Promise<{
         },
         close() {
             session.close()
-            for (const dir of made)
-                rmSync(dir, { recursive: true, force: true })
+            removeTemporaryModules()
         },
     }
 }
