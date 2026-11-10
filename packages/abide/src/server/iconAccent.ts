@@ -75,9 +75,9 @@ export function inkOn(accent: string): string {
 function decoded(
     png: Uint8Array,
 ): { data: Uint8Array; channels: number } | undefined {
-    const size = pngSize(png)
-    if (size === undefined) return undefined
-    const { width, height } = size
+    const dimensions = pngSize(png)
+    if (dimensions === undefined) return undefined
+    const { width, height } = dimensions
     const view = new DataView(png.buffer, png.byteOffset, png.byteLength)
     let channels = 0
     const compressed: Uint8Array[] = []

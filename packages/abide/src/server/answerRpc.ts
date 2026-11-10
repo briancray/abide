@@ -23,7 +23,7 @@ import {
 } from './answerFailure.ts'
 import { answerValue, isValues, namesEtag, sseHeaders } from './answerValue.ts'
 import { collapsed } from './argsContract.ts'
-import { positiveSetting } from './config.ts'
+import { ownOrigin, positiveSetting } from './config.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'
 import { failureOf } from './hooks.ts'
 import { type Invocation, invokeHandler, originGate } from './invokeHandler.ts'
@@ -350,7 +350,7 @@ async function navigated(
     const from = referer === null ? null : URL.parse(referer)
     headers.set(
         'location',
-        from !== null && crossingOrigin(from.origin, request.url) === null
+        from !== null && from.origin === ownOrigin(request.url)
             ? from.href
             : underMount('/'),
     )

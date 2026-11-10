@@ -126,11 +126,6 @@ function handlerAt(
     return firstMatch(rankRoutes(rows), partsOf(address) ?? [])?.route.mount
 }
 
-/**
- * The request a call with text args is: in the URL where its method carries them, a form where not.
- *
- * 16.9 — a route written with its parameters takes them out of the args and into the path.
- */
 /** `path` as an address in the app: one leading slash, whether it was written or not. */
 function addressOf(path: string): string {
     return `/${path.replace(/^\//, '')}`
@@ -150,6 +145,11 @@ function requestFor(
     return rpcRequest(method, route, args)
 }
 
+/**
+ * The request a call with text args is: in the URL where its method carries them, a form where not.
+ *
+ * 16.9 — a route written with its parameters takes them out of the args and into the path.
+ */
 function textRequest(
     method: Method,
     route: HandlerRoute,

@@ -53,10 +53,8 @@ function secrets(): string[] {
     return listed
 }
 
-function signature(secret: string, payload: string): string {
-    return new Bun.CryptoHasher('sha256', secret)
-        .update(payload)
-        .digest('base64url')
+function signature(secret: string, signed: string): Uint8Array {
+    return new Bun.CryptoHasher('sha256', secret).update(signed).digest()
 }
 
 /** The JWT header every seal carries, and the only one a seal is read under: HS256, never `none`. */
@@ -82,7 +80,7 @@ function seal(
         }),
     )
     const signed = `${JWT_HEADER}.${payload}`
-    return `${signed}.${signature(secret, signed)}`
+    return `${signed}.${signature(secret, signed).toBase64({ alphabet: 'base64url', omitPadding: true })}`
 }
 
 /**
@@ -102,9 +100,7 @@ function unseal(sealed: string | null): Sealed | undefined {
         })
         let verified = false
         for (const secret of secrets()) {
-            const expected = new Bun.CryptoHasher('sha256', secret)
-                .update(`${header}.${payload}`)
-                .digest()
+            const expected = signature(secret, `${header}.${payload}`)
             if (
                 expected.length === given.length &&
                 crypto.timingSafeEqual(expected, given)
