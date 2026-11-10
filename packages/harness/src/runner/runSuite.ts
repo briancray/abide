@@ -8,7 +8,8 @@
 // whole job is showing what is red cannot fall over when something is. It throws only when the
 // runner produced no report at all, which is a different thing and one the page has to say out
 // loud: a suite that HANGS reports nothing, and "0 failures" read off an absent file is the worst
-// answer available.
+// answer available. So a hung suite is STOPPED at a deadline rather than waited on — its row would
+// otherwise read "running" for as long as the page stays open (RULEBOOK 43.27).
 
 import { tmpdir } from 'node:os' // bun has no temporary-directory lookup of its own
 
@@ -30,6 +31,19 @@ import type { TestCase } from '../rows/index.ts'
 // INSTALLED WITH THE FIRST SUITE rather than on import: a process that only reads this module's
 // parser has no suite to pass a signal on to, and is not this module's to exit.
 const LIVE = new Set<Bun.Subprocess>()
+
+// Several times the slowest file on record — a docs spec across both of its projects, ~1.2 min.
+const SUITE_DEADLINE_MILLISECONDS = 10 * 60_000
+// What a suite gets to tear down its own servers after SIGINT before its group is killed outright.
+const TEARDOWN_MILLISECONDS = 10_000
+
+function signalGroup(child: Bun.Subprocess, signal: NodeJS.Signals): void {
+    try {
+        process.kill(-child.pid, signal)
+    } catch {
+        // The group emptied between its suite ending and this signal.
+    }
+}
 let passingSignals = false
 function passSignalsOn(): void {
     if (passingSignals) return
@@ -39,13 +53,7 @@ function passSignalsOn(): void {
         ['SIGINT', 130],
     ] as const)
         process.on(signal, () => {
-            for (const child of LIVE) {
-                try {
-                    process.kill(-child.pid, 'SIGINT')
-                } catch {
-                    // The group emptied between its suite ending and this signal.
-                }
-            }
+            for (const child of LIVE) signalGroup(child, 'SIGINT')
             process.exit(code)
         })
 }
@@ -141,14 +149,17 @@ export const PLAYWRIGHT_REPORT: ReportTo = (path) => ({
 /**
  * Runs one test command with a JUnit reporter and returns its parsed suites and wall time.
  *
- * A red run resolves; only a missing report throws — see the file header.
+ * A red run resolves; a missing report throws, and so does a run past `deadline` — see the file
+ * header.
  */
 export async function runSuite(spec: {
     command: string[]
     reportTo: ReportTo
     cwd: string
     environment?: Record<string, string>
+    deadline?: number
 }): Promise<{ suites: Suite[]; milliseconds: number }> {
+    const deadline = spec.deadline ?? SUITE_DEADLINE_MILLISECONDS
     const report = `${tmpdir()}/abide-suite-${crypto.randomUUID()}.xml`
     const pointed = spec.reportTo(report)
     passSignalsOn()
@@ -162,12 +173,28 @@ export async function runSuite(spec: {
         detached: true,
     })
     LIVE.add(child)
+    let pastDeadline = false
+    let killing: Timer | undefined
+    const stopping = setTimeout(() => {
+        pastDeadline = true
+        signalGroup(child, 'SIGINT')
+        killing = setTimeout(
+            () => signalGroup(child, 'SIGKILL'),
+            TEARDOWN_MILLISECONDS,
+        )
+    }, deadline)
     const [stderr] = await Promise.all([
         new Response(child.stderr).text(),
         child.exited,
     ])
+    clearTimeout(stopping)
+    clearTimeout(killing)
     LIVE.delete(child)
     const milliseconds = (Bun.nanoseconds() - startedAt) / 1e6
+    if (pastDeadline)
+        throw new Error(
+            `the suite ran past its ${deadline} ms deadline and was stopped.\n${stderr.slice(-2000)}`,
+        )
 
     const file = Bun.file(report)
     if (!(await file.exists()))

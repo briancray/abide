@@ -3434,8 +3434,9 @@ the child a parallel worker unless it is given a worker id.
 one JSON row per line as each lands, for the items `inScope` and `matchesFilter` select by
 `--scope` and `--filter`.
 
-43.27 `testRows` MUST run each test file in a process of its own, and MUST report a file whose
-runner wrote no report as `broken` rather than as a result.
+43.27 `testRows` MUST run each test file in a process of its own, MUST report a file whose
+runner wrote no report as `broken` rather than as a result, and MUST stop a file still running ten
+minutes after it started and report it as `broken`.
 
 43.28 The DOM `@abide/harness/preload` registers MUST leave the runtime's own `fetch`, `Request`,
 `Response`, `Headers`, `Blob`, `File`, `FormData`, `AbortController`, `AbortSignal`, `WebSocket`,

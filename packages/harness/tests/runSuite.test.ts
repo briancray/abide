@@ -8,6 +8,7 @@ import {
     BUN_REPORT,
     parseJUnit,
     PLAYWRIGHT_REPORT,
+    runSuite,
 } from '../src/runner/runSuite.ts'
 
 const REPORT = `<?xml version="1.0" encoding="UTF-8"?>
@@ -96,4 +97,19 @@ test('each runner is pointed at its report the way it accepts', () => {
         args: ['--reporter=junit'],
         environment: { PLAYWRIGHT_JUNIT_OUTPUT_NAME: '/tmp/r.xml' },
     })
+})
+
+// A SUITE THAT HANGS IS STOPPED, not waited on: its row would read "running" for as long as the page
+// stayed open. Reverted to waiting on the exit alone, this runs into the test's own 5 s timeout.
+test('a suite past its deadline is stopped and reported, not waited on — 43.27', async () => {
+    const startedAt = performance.now()
+    await expect(
+        runSuite({
+            command: ['bun', '-e', 'await Bun.sleep(60_000)'],
+            reportTo: BUN_REPORT,
+            cwd: import.meta.dir,
+            deadline: 200,
+        }),
+    ).rejects.toThrow('deadline')
+    expect(performance.now() - startedAt).toBeLessThan(4000)
 })

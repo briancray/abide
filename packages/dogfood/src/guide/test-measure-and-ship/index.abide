@@ -357,7 +357,8 @@ bun scripts/testRows.ts --scope all --filter reports`} />
         </table>
 
         <p>A file whose runner wrote no report is <code>broken</code>, which is different from a
-            red result: a suite that hangs reports nothing.</p>
+            red result: a suite that hangs reports nothing. One still running after ten minutes is
+            stopped and reported <code>broken</code> too.</p>
     </Section>
 
     <Section title="Check, build and start the CRM">
