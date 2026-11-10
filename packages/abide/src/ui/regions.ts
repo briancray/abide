@@ -54,9 +54,7 @@ export function pageRegion(host: Node): Region {
         const close = closeOf(node)
         if (close !== null) return { open: node as Comment, close }
     }
-    throw new Mismatch(
-        "abide: the host holds no page region, so the client and the server disagree about this document's shape. RULEBOOK 41.10.",
-    )
+    throw new Mismatch('the host holds no page region', "this document's")
 }
 
 /**
@@ -94,10 +92,7 @@ export function fillRegion(
     // close anchor had been detached emptied itself and then dropped the new content on the
     // floor — the one silent failure in a module where every other one refuses with 41.10 on it.
     const parent = region.close.parentNode
-    if (parent === null)
-        throw new Mismatch(
-            `abide: this region is not in a document, so the client and the server disagree about this region's shape. RULEBOOK 41.10.`,
-        )
+    if (parent === null) throw new Mismatch('this region is not in a document')
     emptyRegion(region, parent)
     if (build === undefined) return
     beginLayer(LAYER_FILL)

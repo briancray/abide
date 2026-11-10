@@ -17,7 +17,17 @@ export const HYDRATE_LOG = namedLogger('abide:hydrate')
  * throw from an author's own expression is not a mismatch and is rethrown untouched, which is why
  * this is a class rather than a string test on a message.
  */
-export class Mismatch extends Error {}
+export class Mismatch extends Error {
+    /**
+     * `found` is what the walk met, and `shaped` whose shape it puts in doubt — a region's, or the
+     * whole document's where the page region itself is missing.
+     */
+    constructor(found: string, shaped = "this region's") {
+        super(
+            `abide: ${found}, so the client and the server disagree about ${shaped} shape. RULEBOOK 41.10.`,
+        )
+    }
+}
 
 /**
  * Whether a throw was a mismatch, warning when it was.

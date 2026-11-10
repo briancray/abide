@@ -39,9 +39,7 @@ export function elementHere(
         node.nodeType !== 1 ||
         (node as Element).localName !== tag
     )
-        throw new Mismatch(
-            `abide: expected <${tag}> where the client walked, so the client and the server disagree about this region's shape. RULEBOOK 41.10.`,
-        )
+        throw new Mismatch(`expected <${tag}> where the client walked`)
     return node as Element
 }
 
@@ -61,9 +59,7 @@ export function textHere(node: Node | null | undefined): Text | RawRun {
             if (run !== null) return run
         }
     }
-    throw new Mismatch(
-        "abide: text was due where the server wrote none, so the client and the server disagree about this region's shape. RULEBOOK 41.10.",
-    )
+    throw new Mismatch('text was due where the server wrote none')
 }
 
 /**
@@ -120,8 +116,6 @@ export function regionHere(node: Node | null | undefined): Region | undefined {
 /** The region a step found, checked to be there; throws `Mismatch` where it is not. */
 export function regionFound(region: Region | undefined): Region {
     if (region === undefined)
-        throw new Mismatch(
-            "abide: a region was due where the client walked, so the client and the server disagree about this region's shape. RULEBOOK 41.10.",
-        )
+        throw new Mismatch('a region was due where the client walked')
     return region
 }

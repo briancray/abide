@@ -105,8 +105,8 @@ import { wire } from '@abide/abide/wire'
 // what the bundler pulls through it. `emitClient.ts`'s head records this having been broken once
 // already by a subtler cause.
 //
-// THE MARKER IS A STRING ONLY THE RUNTIME SPELLS — 41.10's mismatch message, which `adoptWalk.ts`
-// and `regions.ts` both carry and a minifier leaves alone. BOTH DIRECTIONS, for the reason the
+// THE MARKER IS A STRING ONLY THE RUNTIME SPELLS — 41.10's mismatch message, which `Mismatch.ts`
+// writes for every refusal the hydration walk makes and a minifier leaves alone. BOTH DIRECTIONS, for the reason the
 // test above gives: a gate that only checks an absence passes just as well on a build of nothing.
 //
 // THE REVERT: have `emitClient` answer a module for a static file instead of ''. This reports
@@ -140,7 +140,7 @@ test('a static page does not carry the runtime into its bundle', async () => {
             built.outputs[0] as { text(): Promise<string> }
         ).text()
         return {
-            carries: text.includes('disagree about this region'),
+            carries: text.includes('the client and the server disagree'),
             bytes: text.length,
         }
     }

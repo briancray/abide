@@ -149,7 +149,7 @@ function hydrate(list: List, items: unknown[]): boolean {
     if (!agreed) {
         warnMismatch(
             new Mismatch(
-                `abide: the document holds ${found.length} rows where this {#for} computes ${items.length}, so the client and the server disagree about this region's shape. RULEBOOK 41.10.`,
+                `the document holds ${found.length} rows where this {#for} computes ${items.length}`,
             ),
         )
         if (found.length > items.length)
