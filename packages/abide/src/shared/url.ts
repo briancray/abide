@@ -4,9 +4,10 @@
 //
 // 16.10 — RESOLVED AGAINST THE MOUNT at the call, so the same build serves at the root and below it.
 
-import { filledPath } from './filledPath.ts'
+import { filledSegments } from './filledSegments.ts'
 import { mounted } from './mount.ts'
 import { queryText } from './queryText.ts'
+import { parseRoutePattern } from './routePattern.ts'
 
 type Parts<P extends string> = P extends `${infer Head}/${infer Tail}`
     ? Head | Parts<Tail>
@@ -108,7 +109,11 @@ export function url<P extends RouteLiteral>(
     const params = (rest[0] ?? {}) as Record<string, unknown>
     const query = rest[1]
     const address = mounted(
-        filledPath(pattern ?? '/', params, `url('${pattern}')`),
+        filledSegments(
+            parseRoutePattern(pattern ?? '/'),
+            params,
+            `url('${pattern}')`,
+        ),
     )
     // 30.6 — the query half, last; 30.28 — in the spelling an `Rpc`'s args are written in.
     const search =

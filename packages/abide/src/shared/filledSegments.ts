@@ -1,29 +1,19 @@
 // A ROUTE'S PATH WITH ITS PARAMETERS WRITTEN IN, for the two things that build an address from a
 // route: `url`, from a page's literal (30.1), and a call, from its handler's route (16.9).
 
-import { parseRoutePattern, type Segment } from './routePattern.ts'
+import type { Segment } from './routePattern.ts'
 
 /**
- * `pattern` with each parameter `params` names written in as a path segment, or `/` for none.
+ * A parsed route with each parameter `params` names written in as a path segment, or `/` for none.
  *
  * `spelled` is how the caller is named where a parameter is refused — `url('/x/[id]')`, or a
  * handler's route — and `refused` what is thrown for it: an `Error` naming the clause, by default.
  */
-export function filledPath(
-    pattern: string,
-    params: Record<string, unknown>,
-    spelled: string,
-    refused: (name: string, message: string) => unknown = thrownError,
-): string {
-    return filledSegments(parseRoutePattern(pattern), params, spelled, refused)
-}
-
-/** `filledPath` over a route already parsed: a handler's, compiled once (`HandlerRoute`). */
 export function filledSegments(
     segments: Segment[],
     params: Record<string, unknown>,
     spelled: string,
-    refused: (name: string, message: string) => unknown,
+    refused: (name: string, message: string) => unknown = thrownError,
 ): string {
     let address = ''
     for (const segment of segments) {
@@ -78,6 +68,7 @@ function encodedSegment(
     return encodeURIComponent(text)
 }
 
-function thrownError(_name: string, message: string): Error {
+/** A refusal thrown as the `Error` its message is. */
+export function thrownError(_name: string, message: string): Error {
     return new Error(message)
 }

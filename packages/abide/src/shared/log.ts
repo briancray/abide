@@ -11,6 +11,7 @@
 
 import { APP_META } from './APP_META.ts'
 import { DEBUG_META } from './DEBUG_META.ts'
+import { numberFromText } from './numberFromText.ts'
 import { paint } from './paint.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
@@ -49,9 +50,13 @@ let kept = DEFAULT_BUFFER
 
 function recordsValue(): Reactive<LogRecord[]> {
     if (records === undefined) {
-        const configured = Number(environment('ABIDE_MAX_LOG_BUFFER_COUNT'))
+        const configured = numberFromText(
+            environment('ABIDE_MAX_LOG_BUFFER_COUNT') ?? '',
+        )
         kept =
-            Number.isInteger(configured) && configured >= 0
+            configured !== undefined &&
+            Number.isInteger(configured) &&
+            configured >= 0
                 ? configured
                 : DEFAULT_BUFFER
         // 28.1 — one array for the process.

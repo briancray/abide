@@ -4,7 +4,8 @@
 // sent (36.6), and neither variable is read anywhere else.
 
 import { applyPatch } from '#shared/applyPatch.ts'
-import { eventsOf } from '#shared/framing.ts'
+import { thrownError } from '#shared/filledSegments.ts'
+import { eventsOf, framingOf } from '#shared/framing.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import { firstMatch, partsOf } from '#shared/matchRoute.ts'
 import type { PatchOp } from '#shared/reactive/patchLog.ts'
@@ -148,7 +149,7 @@ function textRequest(
             if (route.names.has(name)) params[name] = value
             else pairs.append(name, value)
         // Thrown as the message it is, which the command line prints.
-        address = route.path(params, (_name, message) => new Error(message))
+        address = route.path(params, thrownError)
     }
     if (argsInURL(method))
         return { url: `${address}?${pairs}`, init: { method } }
@@ -196,7 +197,7 @@ export async function watch(
         return 1
     }
     const type = answer.headers.get('content-type') ?? ''
-    if (!type.startsWith('text/event-stream') || answer.body === null) {
+    if (framingOf(type) !== 'sse' || answer.body === null) {
         console.log(await answer.text())
         return 0
     }

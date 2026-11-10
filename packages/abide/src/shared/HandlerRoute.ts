@@ -3,7 +3,7 @@
 // what holds the handler — an `Rpc`, a browser's `wire` — and read by every call through it: the
 // request a call is (`rpcRequest`), the in-process call's early refusal, and `abide call`.
 
-import { filledSegments } from './filledPath.ts'
+import { filledSegments } from './filledSegments.ts'
 import { validationError } from './refuse.ts'
 import { parseRoutePattern, type Segment } from './routePattern.ts'
 
