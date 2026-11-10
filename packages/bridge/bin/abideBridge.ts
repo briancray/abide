@@ -5,16 +5,22 @@
 // follows `--` is passed to Claude Code as you wrote it, and is how you give a site what reaches this
 // machine — `-- --tools WebSearch,WebFetch` for the built-in tools it asks for.
 //
-// `abide-bridge install` takes the same options and builds and registers, on macOS, the app that opens the
-// pairing link a site shows beside its command, so a click pairs instead of a terminal — every link it
-// opens runs with the `--env` and the `--` options given here (44.44); `abide-bridge uninstall` takes it
-// away.
+// `abide-bridge install` takes the same options and builds and registers, on macOS, Linux or Windows,
+// what opens the pairing link a site shows beside its command, so a click pairs instead of a terminal —
+// every link it opens runs with the `--env` and the `--` options given here (44.44); `abide-bridge
+// uninstall` takes it away. `abide-bridge forget [<site>]` stops always allowing a site, or every site.
 
+import { allowedIn, forget } from '../src/allowedSites.ts'
 import { bridge } from '../src/bridge.ts'
-import { install, installDirectory, uninstall } from '../src/install.ts'
+import {
+    handlerDirectory,
+    install,
+    installDirectory,
+    uninstall,
+} from '../src/install.ts'
 
 const USAGE =
-    'usage: abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge install [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge uninstall'
+    'usage: abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge install [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge uninstall\n       abide-bridge forget [<site>]'
 
 const all = process.argv.slice(2)
 const split = all.indexOf('--')
@@ -40,7 +46,10 @@ const [site, code] = positional
 if (
     malformed ||
     site === undefined ||
-    (site !== 'uninstall' && site !== 'install' && code === undefined)
+    (site !== 'uninstall' &&
+        site !== 'install' &&
+        site !== 'forget' &&
+        code === undefined)
 ) {
     console.error(USAGE)
     process.exit(2)
@@ -50,6 +59,16 @@ try {
     if (site === 'uninstall') {
         await uninstall()
         console.error(`Removed ${installDirectory()}.`)
+    } else if (site === 'forget') {
+        const forgotten = await forget(
+            allowedIn(handlerDirectory(installDirectory())),
+            code,
+        )
+        console.error(
+            forgotten === 0
+                ? `No site was always allowed${code === undefined ? '' : ` as ${code}`}.`
+                : `Forgot ${forgotten === 1 ? 'one site' : `${forgotten} sites`}. The next link from ${forgotten === 1 ? 'it' : 'them'} asks you again.`,
+        )
     } else {
         // Absolute, because an installed handler runs from no directory of the visitor's and on no shell's PATH.
         const found = Bun.which(claude ?? 'claude')

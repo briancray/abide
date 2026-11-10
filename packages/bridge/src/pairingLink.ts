@@ -1,7 +1,7 @@
 // A PAIRING AS A LINK: what a site shows beside its command (44.40), opened by the handler
 // `abide-bridge install` registers. It carries what the command does — the site, the code, the bridge
-// release that speaks the site's relay and the built-in tools it asks for — and nothing more, and the
-// handler asks the visitor before it runs one (44.42).
+// release that speaks the site's relay and the tools of this machine it asks for — and nothing more,
+// and the handler asks the visitor before it runs one (44.42).
 
 // abide's `BRIDGE_SCHEME`, spelled out for `BRIDGE_PATH`'s reason — a test holds the two equal.
 export const PAIRING_SCHEME = 'abide-bridge'
@@ -18,8 +18,9 @@ export type Pairing = {
 const RELEASE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 // abide's codes are base64url.
 const CODE = /^[\w-]+$/
-// A tool as `--tools` names one: `WebSearch`, `Bash`.
-const TOOL = /^[A-Za-z][A-Za-z0-9]*$/
+// A tool as the bridge's `--tools` names one: a built-in, `WebSearch`, or an MCP server's,
+// `mcp__calendar__meetings`, or all of one server's, `mcp__calendar` (44.29).
+const TOOL = /^(?:[A-Za-z][A-Za-z0-9]*|mcp__[A-Za-z0-9_-]+)$/
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
 
 /**
@@ -62,9 +63,14 @@ export function pairingOf(link: string): Pairing | undefined {
         return undefined
     for (const tool of tools) if (!TOOL.test(tool)) return undefined
     return {
-        site: `${siteUrl.origin}${siteUrl.pathname}`.replace(/\/+$/, ''),
+        site: siteOf(siteUrl),
         code,
         version,
         tools,
     }
+}
+
+/** A site as the bridge keeps it: its origin and path, with no trailing slash. */
+export function siteOf(url: URL): string {
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, '')
 }

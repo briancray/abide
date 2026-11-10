@@ -7,12 +7,13 @@
 // inside the page's own request, as the person at the page. No credential of theirs reaches this
 // machine, and none of this machine's reaches the site.
 
-import { getCACertificates } from 'node:tls' // bun's fetch reads this machine's trust store only under `--use-system-ca`, a flag `bun x` and the link handler's launch cannot pass
-
 import type { ProviderEvent } from '@abide/abide/server'
 
 import { claudeTurn, type TurnRequest } from './claudeTurn.ts'
+import { grantFor, withheldNotices } from './grant.ts'
+import { siteOf } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
+import { siteTls } from './siteTls.ts'
 
 // abide's `BRIDGE_ADDRESS`, spelled out because the bridge carries no abide at run time — a test
 // holds the two equal.
@@ -33,7 +34,7 @@ export const HEARTBEAT_MILLISECONDS = 15_000
 export const SILENCE_MILLISECONDS = 3 * HEARTBEAT_MILLISECONDS
 
 type SiteFrame =
-    | { type: 'paired'; token: string }
+    | { type: 'paired'; token: string; tools?: string[] }
     | ({ type: 'turn' } & TurnRequest)
     | {
           type: 'reply'
@@ -55,6 +56,7 @@ type Report =
       }
     | { type: 'end'; turn: string }
     | { type: 'fail'; turn: string; message: string }
+    | { type: 'missing'; tools: string[] }
 
 /** A relayed MCP request the site has yet to reply to. */
 type Waiting = {
@@ -89,18 +91,8 @@ export async function bridge(options: {
     replyMilliseconds?: number
     silenceMilliseconds?: number
 }): Promise<void> {
-    const site = options.site.replace(/\/+$/, '')
-    // 44.47 — bun's own roots and this machine's, so a site whose certificate an organization's
-    // authority signed is reached as the browser reaches it. a `ca` replaces bun's roots rather than
-    // adding to them, so both are passed.
-    const tls = {
-        ca: [
-            ...new Set([
-                ...getCACertificates('bundled'),
-                ...getCACertificates('system'),
-            ]),
-        ],
-    }
+    const site = siteOf(new URL(options.site))
+    const tls = siteTls()
     // WHAT IS SAID IS READ AS A NOTIFICATION, where a link opened the bridge (`opened.ts`): one short
     // sentence naming the site by its host. The detail goes to Claude Code, in the failure it is answered.
     const host = new URL(site).host
@@ -175,13 +167,16 @@ export async function bridge(options: {
         // 44.46 — a turn the site missed part of has no answer left to give, and is ended: what it
         // still waits on is answered as `run` ends it, and the reason is what it reports it failed with.
         for (const item of batch)
-            turns
-                .get(item.turn)
-                ?.abort(
-                    new MissedTurn(
-                        `The site missed part of this turn, so it was ended: ${failure}`,
-                    ),
-                )
+            // A lost `missing` is said again by the next look, rather than taken as said.
+            if (item.type === 'missing') reported = undefined
+            else
+                turns
+                    .get(item.turn)
+                    ?.abort(
+                        new MissedTurn(
+                            `The site missed part of this turn, so it was ended: ${failure}`,
+                        ),
+                    )
     }
     // One post at a time, in order: a turn's `end` never overtakes its last event.
     const report = (item: Report): void => {
@@ -199,6 +194,24 @@ export async function bridge(options: {
         if (said.has(line)) return
         said.add(line)
         say(line)
+    }
+
+    // 44.61 — WHAT THE PAIRING ASKED FOR AND THIS MACHINE CANNOT GIVE, reported once it pairs and again
+    // before a turn where it changed: a server the visitor adds meanwhile is found at the next turn.
+    let pairingAsked: string[] = []
+    let reported: string | undefined
+    const reportMissing = async (): Promise<void> => {
+        const { grant } = await grantFor(
+            pairingAsked,
+            options.claudeArgs ?? [],
+            sayOnce,
+        )
+        const missing = [...grant.ungranted, ...grant.unserved]
+        const key = missing.join(',')
+        if (key === reported) return
+        reported = key
+        for (const notice of withheldNotices(grant)) sayOnce(notice)
+        report({ type: 'missing', tools: missing })
     }
 
     const turns = new Map<string, AbortController>()
@@ -275,6 +288,7 @@ export async function bridge(options: {
     const run = async (turn: TurnRequest): Promise<void> => {
         const controller = new AbortController()
         turns.set(turn.id, controller)
+        await reportMissing()
         // A cancel or a signal aborts with no reason of its own, and ends the turn as asked.
         const missed = (): string | undefined =>
             controller.signal.reason instanceof MissedTurn
@@ -363,9 +377,11 @@ export async function bridge(options: {
                     ) as SiteFrame
                     if (frame.type === 'paired') {
                         token = frame.token
+                        pairingAsked = frame.tools ?? []
                         say(
                             `Connected to ${host}. Close the page to disconnect.`,
                         )
+                        void reportMissing()
                     } else if (frame.type === 'turn') void run(frame)
                     else if (frame.type === 'reply')
                         answer(frame.id, frame.reply)

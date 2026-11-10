@@ -4,19 +4,24 @@
 //
 // THE SITE ASKS, THE VISITOR GRANTS (44.15, 44.16, 44.29). Every option is Claude Code's own, by name:
 // a site's is laid on as its flag where it only shapes the answer, and its `tools` are a request the
-// visitor's own `--tools` narrows. What reaches this machine — a user's settings, a project's
-// CLAUDE.md, the files around it, its shell, the web from its network — is the visitor's to give, on
-// the bridge's command line, and nothing the site sends can.
+// visitor's own `--tools` narrows (`grant.ts`). What reaches this machine — a user's settings, a
+// project's CLAUDE.md, the files around it, its shell, the web from its network, its MCP servers — is
+// the visitor's to give, on the bridge's command line, and nothing the site sends can.
 
 import { mkdtemp, rm } from 'node:fs/promises' // bun has no temporary directory or recursive remove of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
 
 import type { ClaudeCodeConfig, ProviderEvent } from '@abide/abide/server'
 
+import {
+    type Grant,
+    grantFor,
+    SERVER_NAME,
+    takeFlag,
+    withheldNotices,
+} from './grant.ts'
 import { readLines } from './readLines.ts'
 
-// What Claude Code names the one MCP server it is handed, and so the prefix on each tool it calls.
-const SERVER_NAME = 'app'
 // Every tool of that server, as `--allowedTools` names them.
 const SERVER_TOOLS = `mcp__${SERVER_NAME}`
 const TOOL_PREFIX = `${SERVER_TOOLS}__`
@@ -106,67 +111,34 @@ function siteFlags(config: Omit<ClaudeCodeConfig, 'tools'>): string[] {
 }
 
 /**
- * The values the visitor gave a flag by any of its `spellings` — `--flag a b`, `--flag a,b` or
- * `--flag=a` — taken out of `args`, or `undefined` where they never gave it.
- */
-function takeFlag(args: string[], spellings: string[]): string[] | undefined {
-    let values: string[] | undefined
-    for (let index = 0; index < args.length;) {
-        const arg = args[index] as string
-        const [flag, inline] = arg.split(/=(.*)/s) as [string, string?]
-        if (!spellings.includes(flag)) {
-            index++
-            continue
-        }
-        values ??= []
-        if (inline !== undefined) {
-            values.push(inline)
-            args.splice(index, 1)
-        } else {
-            let end = index + 1
-            while (end < args.length && !(args[end] as string).startsWith('-'))
-                end++
-            values.push(...args.slice(index + 1, end))
-            args.splice(index, end - index)
-        }
-    }
-    return values
-}
-
-/**
  * Every flag but the protocol's: the site's, then the visitor's — so theirs wins where both set one —
- * then the built-in tools both named (44.29), and no setting source where the visitor named none.
- * Beside them, the tools the site asked for that the visitor did not give.
+ * then the tools the site asked for and the visitor granted (44.29), and no setting source where the
+ * visitor named none.
+ * Beside them, what the site was given of this machine (`grantOf`).
  */
-function launchFlags(
+async function launchFlags(
     config: ClaudeCodeConfig,
     visitor: string[],
-): { flags: string[]; ungranted: string[] } {
+): Promise<{ flags: string[]; grant: Grant }> {
     const { tools: asked, ...options } = config
-    const args = [...visitor]
-    const granted = new Set<string>()
-    for (const value of takeFlag(args, ['--tools']) ?? [])
-        for (const tool of value.split(/[\s,]+/)) granted.add(tool)
+    // 44.15 — the visitor's servers reach a turn only as the tools it was given are of them.
+    const { grant, args } = await grantFor(asked ?? [], visitor)
     const allowed = takeFlag(args, ['--allowedTools', '--allowed-tools'])
     const sources = takeFlag(args, ['--setting-sources']) ?? []
-    const tools: string[] = []
-    const ungranted: string[] = []
-    for (const tool of asked ?? [])
-        (granted.has(tool) ? tools : ungranted).push(tool)
     const flags = [
         ...siteFlags(options),
         ...args,
         '--tools',
-        tools.join(','),
-        // The site's own tools are always approved; a built-in one is approved as granted, unless
-        // the visitor said which calls of it are.
+        grant.builtIn.join(','),
+        // The site's own tools are always approved; one of this machine's is approved as granted,
+        // unless the visitor said which calls of it are.
         '--allowedTools',
         SERVER_TOOLS,
-        ...(allowed ?? tools),
+        ...(allowed ?? [...grant.builtIn, ...grant.mcp]),
         '--setting-sources',
         sources.join(','),
     ]
-    return { flags, ungranted }
+    return { flags, grant }
 }
 
 function textOf(content: McpContent[] | string | undefined): string {
@@ -207,17 +179,15 @@ export async function claudeTurn(
         say: (line: string) => void
     },
 ): Promise<void> {
-    const { flags, ungranted } = launchFlags(turn.config, options.claudeArgs)
-    if (ungranted.length > 0)
-        options.say(
-            `The site asked for ${ungranted.join(', ')}, which this bridge wasn’t given. Add \`-- --tools ${ungranted.join(',')}\` to allow it.`,
-        )
+    const { flags, grant } = await launchFlags(turn.config, options.claudeArgs)
+    for (const notice of withheldNotices(grant)) options.say(notice)
     const directory = await mkdtemp(`${tmpdir()}/abide-bridge-`)
     const config = `${directory}/mcp.json`
     await Bun.write(
         config,
         JSON.stringify({
             mcpServers: {
+                ...grant.servers,
                 [SERVER_NAME]: { type: 'http', url: options.mcpUrl },
             },
         }),
