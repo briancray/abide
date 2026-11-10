@@ -1,7 +1,7 @@
 import { refuse } from '@abide/abide'
 import { POST, reachable } from '@abide/abide/server'
 
-import { billingOrigin } from './lib/billing.server.ts'
+import { billingOrigin } from './lib/billingOrigin.server.ts'
 
 /** Refuses at once while billing is down, rather than waiting on every call. */
 export default POST(

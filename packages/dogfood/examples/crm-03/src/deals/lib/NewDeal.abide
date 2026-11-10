@@ -3,12 +3,10 @@ import { type Issues, reactive } from '@abide/abide'
 
 import createDeal from '../createDeal.handler.ts'
 
-type NewDeal = { name: string; company: string; amount: number }
-
 let name = reactive('Ledger audit')
 let company = reactive('')
 let amount = reactive<number | undefined>(0)
-let issues = reactive<Issues<NewDeal>>({})
+let issues = reactive<Issues<typeof createDeal>>({})
 
 async function add() {
     try {

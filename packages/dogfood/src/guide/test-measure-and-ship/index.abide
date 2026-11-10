@@ -24,13 +24,13 @@ import moneySource from 'crm-10/src/reports/lib/money.ts' with { type: 'text' }
 import PipelineSummary from 'crm-10/src/reports/lib/PipelineSummary.abide'
 import pipelineSummarySource from 'crm-10/src/reports/lib/PipelineSummary.abide' with { type: 'text' }
 import pipelineSummaryTestSource from 'crm-10/src/reports/lib/PipelineSummary.test.ts' with { type: 'text' }
-import rankDealsSource from 'crm-10/src/reports/lib/rankDeals.ts' with { type: 'text' }
 import StageTiles from 'crm-10/src/reports/lib/StageTiles.abide'
 import stageTilesSource from 'crm-10/src/reports/lib/StageTiles.abide' with { type: 'text' }
 import stageTilesTestSource from 'crm-10/src/reports/lib/StageTiles.test.ts' with { type: 'text' }
 import summarizeStageSource from 'crm-10/src/reports/lib/summarizeStage.ts' with { type: 'text' }
 import TopDeals from 'crm-10/src/reports/lib/TopDeals.abide'
 import topDealsSource from 'crm-10/src/reports/lib/TopDeals.abide' with { type: 'text' }
+import topFiveSource from 'crm-10/src/reports/lib/topFive.ts' with { type: 'text' }
 import WonDeals from 'crm-10/src/reports/lib/WonDeals.abide'
 import wonDealsSource from 'crm-10/src/reports/lib/WonDeals.abide' with { type: 'text' }
 import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { type: 'text' }
@@ -276,7 +276,7 @@ import Snippet from '#src/lib/Snippet.abide'
             summary="Ranking five thousand deals takes a sort and a render. Its spec clicks the other ranking in Chromium and asks what part of the click the sort was."
             files={{
                 'src/reports/lib/TopDeals.abide': topDealsSource,
-                'src/reports/lib/rankDeals.ts': rankDealsSource,
+                'src/reports/lib/topFive.ts': topFiveSource,
                 'e2e/TopDeals.test.ts': topDealsSpecSource,
             }}
         >

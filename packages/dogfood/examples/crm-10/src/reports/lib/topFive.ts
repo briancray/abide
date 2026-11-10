@@ -1,5 +1,5 @@
 /** Five thousand deals, with their value and the days since last contact. */
-export const DEALS: { company: string; amount: number; idle: number }[] = []
+const DEALS: { company: string; amount: number; idle: number }[] = []
 for (let at = 0; at < 5000; at += 1)
     DEALS.push({
         company: `Company ${at}`,

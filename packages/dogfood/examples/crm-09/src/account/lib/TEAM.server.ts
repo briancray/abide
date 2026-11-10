@@ -5,7 +5,7 @@ export const TEAM = [
 ] as const
 
 declare module '@abide/abide' {
-    // What `onPrincipal` in signIn.ts adds; absent while nobody is signed in.
+    // What `onPrincipal` in signIn.handler.ts adds; absent while nobody is signed in.
     interface Principal {
         name?: string
         role?: string

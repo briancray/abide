@@ -4,7 +4,7 @@ import envSource from 'crm-08/.env' with { type: 'text' }
 import getPoolSource from 'crm-08/src/ops/getPool.handler.ts' with { type: 'text' }
 import getRetriesSource from 'crm-08/src/ops/getRetries.handler.ts' with { type: 'text' }
 import opsPageSource from 'crm-08/src/ops/index.abide' with { type: 'text' }
-import billingSource from 'crm-08/src/ops/lib/billing.ts' with { type: 'text' }
+import billingSource from 'crm-08/src/ops/lib/billing.server.ts' with { type: 'text' }
 import CallLog from 'crm-08/src/ops/lib/CallLog.abide'
 import callLogSource from 'crm-08/src/ops/lib/CallLog.abide' with { type: 'text' }
 import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 'text' }
@@ -201,7 +201,7 @@ import Snippet from '#src/lib/Snippet.abide'
             files={{
                 'src/ops/lib/Sync.abide': syncSource,
                 'src/ops/syncContact.handler.ts': syncContactSource,
-                'src/ops/lib/billing.ts': billingSource,
+                'src/ops/lib/billing.server.ts': billingSource,
                 'src/ops/lib/Sync.test.ts': syncTestSource,
             }}
         >
@@ -225,7 +225,7 @@ import Snippet from '#src/lib/Snippet.abide'
 
         <p>The billing module's span is the line with a duration in it:</p>
 
-        <Snippet source={billingSource} path="src/ops/lib/billing.ts" from={['await trace.span(']} />
+        <Snippet source={billingSource} path="src/ops/lib/billing.server.ts" from={['await trace.span(']} />
 
         <p>With <code>timing</code>, a span joins <code>server-timing</code> under its name, so the
             name has to be a plain token. A call to another service carries the trace on with
