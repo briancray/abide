@@ -58,18 +58,14 @@ export async function callHandler(
     handlers: Mount[],
     signal?: AbortSignal,
 ): Promise<{ code: number; text: string }> {
-    const address = `/${path.replace(/^\//, '')}`
+    const address = addressOf(path)
     const asked = method?.toUpperCase()
     const handler = handlerAt(handlers, address, asked)
     const args = callArgs(given)
-    const route = new HandlerRoute(address)
     const chosen = (asked ??
         (handler?.method as Method | undefined) ??
         (args === undefined ? 'GET' : 'POST')) as Method
-    const request =
-        args instanceof URLSearchParams
-            ? textRequest(chosen, route, args)
-            : rpcRequest(chosen, route, args)
+    const request = requestFor(chosen, address, args)
     const answer = await fetch(`${url}${request.url}`, {
         ...request.init,
         headers: { ...remoteHeaders(), ...request.init.headers },
@@ -135,6 +131,23 @@ function handlerAt(
  *
  * 16.9 — a route written with its parameters takes them out of the args and into the path.
  */
+/** `path` as an address in the app: one leading slash, whether it was written or not. */
+function addressOf(path: string): string {
+    return `/${path.replace(/^\//, '')}`
+}
+
+/** The request calling `address` with `args` makes: a form's pairs as text, anything else as rpc. */
+function requestFor(
+    method: Method,
+    address: string,
+    args: ReturnType<typeof callArgs>,
+): { url: string; init: RequestInit } {
+    const route = new HandlerRoute(address)
+    return args instanceof URLSearchParams
+        ? textRequest(method, route, args)
+        : rpcRequest(method, route, args)
+}
+
 function textRequest(
     method: Method,
     route: HandlerRoute,
@@ -177,17 +190,12 @@ export async function watch(
     given: string[],
     signal?: AbortSignal,
 ): Promise<number> {
-    const route = new HandlerRoute(`/${address.replace(/^\//, '')}`)
-    const args = callArgs(given)
-    const request =
-        args instanceof URLSearchParams
-            ? textRequest('GET', route, args)
-            : rpcRequest('GET', route, args)
+    const request = requestFor('GET', addressOf(address), callArgs(given))
     const answer = await fetch(`${url}${request.url}`, {
         ...request.init,
         headers: {
             ...remoteHeaders(),
-            ...(request.init.headers as Record<string, string> | undefined),
+            ...request.init.headers,
             accept: 'text/event-stream',
         },
         signal: signal ?? null,

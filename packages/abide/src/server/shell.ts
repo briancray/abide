@@ -43,6 +43,11 @@ function wordsOf(text: string): string[] {
     return words
 }
 
+/** A `call` or `watch` line's args: a JSON object as typed, `name=value` words as a shell reads them. */
+function argWords(restOfLine: string): string[] {
+    return restOfLine.startsWith('{') ? [restOfLine] : wordsOf(restOfLine)
+}
+
 /**
  * Runs the interactive shell against a running app until `exit` or the end of input.
  *
@@ -188,11 +193,7 @@ export async function shell(options: {
                 const answered = await callHandler(
                     url,
                     address,
-                    // A JSON object is the rest of the line as typed; `name=value` words are read
-                    // as a shell reads them, quotes and all.
-                    restOfLine.startsWith('{')
-                        ? [restOfLine]
-                        : wordsOf(restOfLine),
+                    argWords(restOfLine),
                     undefined,
                     handlers,
                     running.signal,
@@ -214,14 +215,7 @@ export async function shell(options: {
             else if (word === 'watch' && address !== undefined) {
                 const following = new AbortController()
                 watching.add(following)
-                void watch(
-                    url,
-                    address,
-                    restOfLine.startsWith('{')
-                        ? [restOfLine]
-                        : wordsOf(restOfLine),
-                    following.signal,
-                )
+                void watch(url, address, argWords(restOfLine), following.signal)
                     .catch((thrown: Error) => {
                         if (!following.signal.aborted)
                             console.log(`watch: ${thrown.message}`)
