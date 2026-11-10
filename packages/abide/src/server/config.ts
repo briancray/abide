@@ -202,9 +202,12 @@ function appUrl(): URL | undefined {
     return appUrlIs
 }
 
-/** The app's own origin, where `APP_URL` declares one. 36.2. */
-export function appOrigin(): string | undefined {
-    return appUrl()?.origin
+/**
+ * The app's own origin: `APP_URL`'s where the app declares one, and that of `url` — the request's —
+ * where not. 36.2.
+ */
+export function ownOrigin(url: URL | string): string {
+    return (appUrl() ?? (typeof url === 'string' ? new URL(url) : url)).origin
 }
 
 // 36.2, 16.10 — THE MOUNT IS `APP_URL`'s PATH, trailing slash dropped, and the root where there is

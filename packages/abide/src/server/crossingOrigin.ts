@@ -5,7 +5,7 @@
 import type { Failed } from '#shared/Failed.ts'
 import { refuse } from '#shared/refuse.ts'
 
-import { appOrigin } from './config.ts'
+import { ownOrigin } from './config.ts'
 
 /**
  * The `Origin` a request came from when it is not the app's own, and `null` when it is.
@@ -16,10 +16,7 @@ export function crossingOrigin(
     origin: string | null,
     url: URL | string,
 ): string | null {
-    if (origin === null) return null
-    const own =
-        appOrigin() ?? (typeof url === 'string' ? new URL(url) : url).origin
-    return origin === own ? null : origin
+    return origin === null || origin === ownOrigin(url) ? null : origin
 }
 
 /** Whether a handler's `crossOrigin` admits `origin`. */

@@ -21,7 +21,7 @@ import { blocksOf, forwardOf, type Provider } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import { mintCode, pairingStatus, runTurn } from './bridgeRelay.ts'
 import { callerOf } from './callerOf.ts'
-import { appOrigin } from './config.ts'
+import { ownOrigin } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
 import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
@@ -147,7 +147,7 @@ function commandFor(
     code: string,
     { tools }: PairingOptions,
 ): { command: string; link: string; install: string } {
-    const site = `${appOrigin() ?? new URL(request().url).origin}${mounted('')}`
+    const site = `${ownOrigin(request().url)}${mounted('')}`
     const granted = tools?.length ? tools.join(',') : undefined
     const query = new URLSearchParams({ site, code, version: BRIDGE_VERSION })
     if (granted !== undefined) query.set('tools', granted)
