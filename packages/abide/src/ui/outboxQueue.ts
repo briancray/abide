@@ -29,6 +29,8 @@ import { isReactive, type Reactive, reactive } from '#shared/reactive/index.ts'
 import { produceInto, refuseInto, standIn } from '#shared/reactive/producer.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 
+import { Backoff } from './Backoff.ts'
+
 // 46.11 — a bare `busy` hears the call this queue has in flight.
 OUTBOX_SENDING.any = anySending
 
@@ -62,8 +64,8 @@ let LINE: Kept[] = []
 let sending = false
 /** 46.6 — a call refused 401 holds the line until `principal` changes or `retry` is called. */
 let held = false
-let retrying: ReturnType<typeof setTimeout> | undefined
-let backoff = RETRY_FLOOR_MS
+/** 46.8 — the next try, backing off from a second to a minute while nothing answers. */
+const backoff = new Backoff(RETRY_FLOOR_MS, RETRY_CEILING_MS, deliver)
 let askedToPersist = false
 /**
  * The value each call stands in for, by its id: the one its call settled, where this page made it,
@@ -100,9 +102,8 @@ export function whenDelivered(listener: () => void): void {
  * out each discard's write.
  */
 export function resetOutbox(): void {
-    clearTimeout(retrying)
-    retrying = undefined
-    backoff = RETRY_FLOOR_MS
+    backoff.cancel()
+    backoff.reset()
     held = false
     waiting = false
     LINE = []
@@ -153,7 +154,7 @@ export async function enqueue(
         askedToPersist = true
         void navigator.storage?.persist?.().catch(() => {})
     }
-    retryLater()
+    backoff.later()
     return true
 }
 
@@ -192,7 +193,7 @@ async function sendLine(): Promise<void> {
                 call.attempts += 1
                 await shelf.put(call)
                 publish()
-                retryLater()
+                backoff.later()
                 return
             }
             const value = answeredValue(answer, call)
@@ -214,9 +215,9 @@ async function sendLine(): Promise<void> {
             produceInto(valueStanding(call), value)
             VALUES.delete(call.id)
         }
-        backoff = RETRY_FLOOR_MS
+        backoff.reset()
     } catch {
-        retryLater()
+        backoff.later()
     } finally {
         sending = false
         showSending(undefined)
@@ -251,16 +252,6 @@ function valueStanding(kept: Kept): Reactive<unknown> {
         VALUES.set(kept.id, value)
     }
     return value
-}
-
-/** 46.8 — the next try, backing off from a second to a minute while nothing answers. */
-function retryLater(): void {
-    clearTimeout(retrying)
-    retrying = setTimeout(() => {
-        retrying = undefined
-        deliver()
-    }, backoff)
-    backoff = Math.min(backoff * 2, RETRY_CEILING_MS)
 }
 
 /** Whether the line last held a call waiting, so the move to none is heard once. */
@@ -339,7 +330,7 @@ async function retry(id: string): Promise<void> {
         }
     publish()
     changed()
-    backoff = RETRY_FLOOR_MS
+    backoff.reset()
     deliver()
 }
 
@@ -433,13 +424,7 @@ function listen(): void {
     // 46.2, 46.20 — a line kept from an earlier visit, read where one was left: a page with no call kept
     // opens no database, which costs every page with a handler a read before it hydrates.
     if (marked()) void reread().then(deliver, () => {})
-    window.addEventListener('online', () => {
-        backoff = RETRY_FLOOR_MS
-        deliver()
-    })
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') deliver()
-    })
+    backoff.whenReachable(deliver)
     onPrincipalRotated(() => {
         held = false
         deliver()

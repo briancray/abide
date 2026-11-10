@@ -563,7 +563,7 @@ function goOffline(): () => void {
 }
 
 // 18.33 — BACK ONLINE, THE MUX REDIALS NOW rather than when its backoff runs out. THE REVERT: drop the
-// `online` listener from `Mux`'s constructor; no socket opens until the retry's timer fires.
+// `online` listener from `Backoff.whenReachable`; no socket opens until the retry's timer fires.
 test('a mux the server closed opens again at once when the browser comes online — 18.33', async () => {
     const atlas = wire('GET', `${LIBRARY}/atlas`) as (
         args?: unknown,
@@ -588,7 +588,7 @@ test('a mux the server closed opens again at once when the page becomes visible 
 })
 
 // 18.34 — OFFLINE, THE MUX DOES NOT DIAL, and the `online` event is what dials it. THE REVERT: drop the
-// `navigator.onLine` guard from `retryLater`; a socket opens once the backoff's 250 ms run out.
+// `navigator.onLine` guard from `Mux`'s `onclose`; a socket opens once the backoff's 250 ms run out.
 test('a mux that closed while offline is not opened again until the browser is online — 18.34', async () => {
     const before = muxSockets()
     const restore = goOffline()
