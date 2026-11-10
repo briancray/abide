@@ -182,7 +182,7 @@ import Snippet from '#src/lib/Snippet.abide'
             id="crm-10-gate"
             app="crm-10"
             title={'`gate(name, { revert, worth }, body)` — a test that runs its own revert'}
-            summary="Every amount on the reports goes through one formatter. Winning a deal builds none, and the gate puts the formatter-per-amount version back to prove the test can tell."
+            summary="Every won deal's amount goes through one formatter. Winning a deal builds none, and the gate puts the formatter-per-amount version back to prove the test can tell."
             files={{
                 'src/reports/lib/WonDeals.abide': wonDealsSource,
                 'src/reports/lib/money.ts': moneySource,
