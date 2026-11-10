@@ -26,7 +26,7 @@ const REGISTRY_KEY = `HKCU\\Software\\Classes\\${PAIRING_SCHEME}`
 
 /** The handler install bundles into `directory`, which the desktop starts. */
 export function handlerIn(directory: string): string {
-    return `${directory}/handler/opened.js`
+    return `${handlerDirectory(directory)}/opened.js`
 }
 
 /** The directory the handler and what it keeps — its settings, the sites it always allows — are in. */
@@ -80,9 +80,8 @@ async function uninstallLinux(directory: string): Promise<void> {
 }
 
 /** Where install writes, under the visitor's own home on each desktop. */
-export function installDirectory(
-    platform: NodeJS.Platform = process.platform,
-): string {
+export function installDirectory(): string {
+    const platform = process.platform
     if (platform === 'win32')
         return `${Bun.env.LOCALAPPDATA ?? `${Bun.env.USERPROFILE ?? ''}\\AppData\\Local`}\\abide-bridge`
     if (platform === 'linux') return `${dataHome()}/abide-bridge`

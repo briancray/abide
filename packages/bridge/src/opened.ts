@@ -93,12 +93,10 @@ function claudeArgsOf(pairing: Pairing, settings: HandlerSettings): string[] {
 
 /**
  * The `PATH` the bridge runs on: the directories of `bun` and `claude`, then the one install was run
- * on, joined by `separator` — `;` on Windows.
+ * on, joined by the platform's separator — `;` on Windows.
  */
-export function searchPath(
-    settings: HandlerSettings,
-    separator = process.platform === 'win32' ? ';' : ':',
-): string {
+export function searchPath(settings: HandlerSettings): string {
+    const separator = process.platform === 'win32' ? ';' : ':'
     const directories: string[] = []
     for (const directory of [
         directoryOf(settings.bun),
