@@ -1,6 +1,7 @@
 // 44.52-44.55 — AN IMAGE A VISITOR PASTES, DROPS OR PICKS, as the piece a turn carries it in. In
 // the browser it is drawn down to what a model looks at, so a full-size screenshot is not sent whole
-// with every turn of the transcript; where nothing can draw (a server) it goes as it is.
+// with every turn of the transcript, and a photo is always drawn, so where it was taken does not go
+// with it; where nothing can draw (a server) it goes as it is.
 
 import type { AssistantContent } from './AssistantEvent.ts'
 import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
@@ -8,21 +9,26 @@ import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
 // The longest side, in pixels, a model looks at before it scales an image down itself.
 const LONG_EDGE = 1568
 const JPEG_QUALITY = 0.9
+// A phone's photos, which a model is not shown but a browser that decodes them draws as a JPEG.
+const PHOTO_TYPES = new Set(['image/heic', 'image/heif'])
 
-/** The image files a paste or a drop carries of a type a model is shown, in order. 44.55. */
+/** The image files a paste or a drop carries of a type a model is shown, or a HEIC or HEIF, in order. 44.55. */
 export function imageFiles(data: DataTransfer | null): File[] {
     const files: File[] = []
     if (data === null) return files
-    for (const file of data.files)
-        if (IMAGE_TYPES.has(file.type)) files.push(file)
+    for (const file of data.files) if (carried(file.type)) files.push(file)
     if (files.length > 0) return files
     // A pasted image some browsers carry in `items` alone.
     for (const item of data.items) {
-        if (item.kind !== 'file' || !IMAGE_TYPES.has(item.type)) continue
+        if (item.kind !== 'file' || !carried(item.type)) continue
         const file = item.getAsFile()
         if (file !== null) files.push(file)
     }
     return files
+}
+
+function carried(type: string): boolean {
+    return IMAGE_TYPES.has(type) || PHOTO_TYPES.has(type)
 }
 
 /** `image` as a turn's image piece, drawn down to `LONG_EDGE` on its long side. 44.52, 44.53, 44.54. */
@@ -49,8 +55,9 @@ export async function imagePiece(
 
 /**
  * `image` drawn at most `LONG_EDGE` on its long side, or `undefined` where it is already that and of
- * a type a model is shown. A photo stays a JPEG, and anything else becomes a PNG, sharp text and all —
- * but a type a model is not shown (a HEIC) is a photo.
+ * a type a model is shown — save a JPEG, which is drawn at any size so its EXIF (a phone's GPS among
+ * it) is left behind and its orientation applied. A photo stays a JPEG, and anything else becomes a
+ * PNG, sharp text and all — but a type a model is not shown (a HEIC) is a photo.
  */
 async function drawnDown(
     image: Blob,
@@ -62,7 +69,8 @@ async function drawnDown(
             1,
             LONG_EDGE / Math.max(bitmap.width, bitmap.height),
         )
-        if (scale === 1 && shown) return undefined
+        if (scale === 1 && shown && image.type !== 'image/jpeg')
+            return undefined
         const canvas = new OffscreenCanvas(
             Math.round(bitmap.width * scale),
             Math.round(bitmap.height * scale),

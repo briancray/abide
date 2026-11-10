@@ -367,8 +367,8 @@ type Reached = { readonly [REACHED]: true }
 | `ToolAnswer` | `{ content: AssistantContent[]; failed: boolean }` | What a tool call answered: its pieces, and whether it failed. | 20.21, 20.22, 44.35 |
 | `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 20.19, 44.6 |
 | `resultsOf` | `<Value>(events: readonly AssistantEvent[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { method: string; address: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 44.51 |
-| `imagePiece` | `(image: Blob) => Promise<{ type: 'image'; data: string; mimeType: string }>` | An image as a turn's image piece, drawn down to what a model looks at. | 44.52, 44.53, 44.54 |
-| `imageFiles` | `(data: DataTransfer \| null) => File[]` | The images a paste or a drop carries that a model is shown. | 44.55 |
+| `imagePiece` | `(image: Blob) => Promise<{ type: 'image'; data: string; mimeType: string }>` | An image as a turn's image piece, drawn down to what a model looks at and redrawn where it is a photo. | 44.52, 44.53, 44.54 |
+| `imageFiles` | `(data: DataTransfer \| null) => File[]` | The images a paste or a drop carries that a model is shown, or that `imagePiece` draws as one. | 44.55 |
 
 ## `claudeApi`
 

@@ -1972,6 +1972,7 @@ copy MUST NOT be optimized away.
 
 31.9 A call of an array's mutator through a member path MUST be a write per 31.8, run on a copy of
 the receiver, and MUST be resolved from the type of the receiver rather than from the member name.
+Arguments that suspend — an `await`, a `yield` — MUST be evaluated before the copy is taken.
 
 31.10 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
 
@@ -3625,8 +3626,9 @@ not fail and its handler has a schema 19.21 derives, and MUST carry `undefined` 
 44.51 `resultsOf` MUST hand back, in order, the `value` of each `result` `AssistantEvent` whose
 handler is the `Rpc` it is given, and none of a call that failed.
 
-44.52 `imagePiece` MUST draw an image longer than 1568 pixels on its long side down to 1568, and an
-image of a type 44.36 does not name at its own size, and MUST NOT draw a GIF.
+44.52 `imagePiece` MUST draw an image longer than 1568 pixels on its long side down to 1568, and a
+JPEG and an image of a type 44.36 does not name at their own size, so a photo's metadata — where it
+was taken — does not go with it, and MUST NOT draw a GIF.
 
 44.53 An image `imagePiece` draws MUST be a PNG where it was a PNG or a WebP, and a JPEG otherwise.
 
@@ -3634,7 +3636,7 @@ image of a type 44.36 does not name at its own size, and MUST NOT draw a GIF.
 that image is of a type 44.36 does not name.
 
 44.55 `imageFiles` MUST hand back, in order, the files a `DataTransfer` carries of a type 44.36
-names, reading its `items` where its `files` hold none.
+names or a HEIC or HEIF, which 44.52 draws, reading its `items` where its `files` hold none.
 
 44.56 The `install` of a pairing `claudeCode.bridgeCommand` or `claudeCode.bridge` mints MUST run
 `abide-bridge install` at the bridge release its command runs.

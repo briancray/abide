@@ -147,3 +147,24 @@ let tags = reactive<string[] | undefined>(['a'])
     flushSync()
     expect(document.getElementById('out')?.textContent).toBe('ab')
 })
+
+// THE REVERT: leave `suspends` unset in `classifyRead`; the push then lowers inside the
+// mutator's own arrow, which is not async, and the page refuses to compile.
+test('a mutator whose arguments await evaluates them before the write — 31.9', async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let tags = reactive(['a'])
+async function add() {
+    tags.push(...(await Promise.resolve(['b', 'c'])), 'd')
+}
+</script>
+
+<button id="add" onclick={add}>add</button>
+<p id="out">{tags.join('')}</p>`)
+    ;(document.getElementById('add') as HTMLButtonElement).click()
+    await Promise.resolve()
+    await Promise.resolve()
+    flushSync()
+    expect(document.getElementById('out')?.textContent).toBe('abcd')
+})

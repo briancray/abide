@@ -91,6 +91,11 @@ export type Read = {
     path: { name: string | undefined; start: number; end: number }[]
     value: Span | undefined
     /**
+     * 31.9 — on a `mutate`, the span of the call's arguments where they suspend (`await`, `yield`):
+     * they are evaluated ahead of the write, as the mutator runs inside a function of its own.
+     */
+    suspends: Span | undefined
+    /**
      * 33.6 — the name is a props accessor handing back the prop's cell.
      *
      * So the `Reactive` every rewrite reaches is `name()` rather than the name. On a default's
@@ -142,6 +147,7 @@ export function newRead(
         arguments: 0,
         path: [],
         value: undefined,
+        suspends: undefined,
         through: false,
         held: false,
         byValue: false,
@@ -150,6 +156,17 @@ export function newRead(
         routeParams: false,
         item: -1,
     }
+}
+
+/** Whether evaluating `node` suspends the function it runs in — an `await` or a `yield` of its own. */
+function suspends(node: Node): boolean {
+    if (FUNCTIONS.has(node.kind)) return false
+    if (
+        node.kind === SyntaxKind.AwaitExpression ||
+        node.kind === SyntaxKind.YieldExpression
+    )
+        return true
+    return node.forEachChild(suspends) === true
 }
 
 function isAssigned(outer: Node, target: Node): outer is BinaryExpression {
@@ -338,6 +355,12 @@ export function classifyRead(
         read.shape = 'mutate'
         read.to = top.parent.end
         read.value = { start: top.expression.end, end: top.parent.end }
+        const args = top.parent.arguments
+        for (const argument of args)
+            if (suspends(argument)) {
+                read.suspends = { start: args.pos, end: args.end }
+                break
+            }
         return read
     }
     const outer = top.parent

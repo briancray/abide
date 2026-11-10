@@ -855,7 +855,15 @@ export class Lowering {
                             ? this.lower(segment)
                             : JSON.stringify(segment.name),
                     )
-                return `${this.use('mutatePath')}(${name}, [${segments.join(', ')}], (${MUTATED}) => ${MUTATED}${call})`
+                const write = `${this.use('mutatePath')}(${name}, [${segments.join(', ')}], (${MUTATED}) => ${MUTATED}`
+                // Arguments that suspend cannot run inside the mutator's own function: they are
+                // evaluated first, in order, and the write follows what they settled to.
+                if (read.suspends === undefined) return `${write}${call})`
+                const callee = this.lower({
+                    start: (read.value as Span).start,
+                    end: read.suspends.start,
+                }).trim()
+                return `((${MUTATED_ARGUMENTS}) => ${write}${callee}...${MUTATED_ARGUMENTS})))([${this.lower(read.suspends)}])`
             }
             // 27.13 — the call bound to a name, for the checker to read the defaults' type off.
             case 'config':
@@ -1041,3 +1049,4 @@ const STORED = '__stored'
 const PREVIOUS = '__previous'
 // 31.9 — the copy a lifted mutator is called on.
 const MUTATED = '__mutated'
+const MUTATED_ARGUMENTS = '__mutatedArguments'

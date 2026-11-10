@@ -44,7 +44,7 @@ const decoded = (data: string): string => atob(data)
 
 // THE REVERTS: drop `Math.min(1, …)` and a small image is drawn up to 1568 rather than sent as it
 // is; draw a GIF and it arrives as one frame's PNG; keep a HEIC's type and the model is handed an
-// image it refuses (44.36).
+// image it refuses (44.36); send a small JPEG as it is and its EXIF — the phone's GPS — goes with it.
 test('an image is drawn down to 1568 on its long side, a photo as a JPEG — 44.52, 44.53', async () => {
     drawsAt(3136, 1000)
     const screenshot = await imagePiece(
@@ -70,6 +70,12 @@ test('an image is drawn down to 1568 on its long side, a photo as a JPEG — 44.
         data: btoa('small'),
         mimeType: 'image/png',
     })
+    // A photo is drawn at its own size, so its metadata is left behind.
+    const snapshot = await imagePiece(
+        new Blob(['exif'], { type: 'image/jpeg' }),
+    )
+    expect(snapshot.mimeType).toBe('image/jpeg')
+    expect(decoded(snapshot.data)).toBe('800x600')
     // A type no model is shown is drawn as one, at whatever size.
     const heic = await imagePiece(new Blob(['heic'], { type: 'image/heic' }))
     expect(heic.mimeType).toBe('image/jpeg')
@@ -95,13 +101,19 @@ test('an image nothing can draw goes as it is, or throws where a model is not sh
     expect(large.data).toBe(btoa('large'))
 })
 
-// THE REVERT: read `files` alone, and a paste carrying its image in `items` attaches nothing.
-test('a paste or a drop hands on the images a model is shown, from its items where its files hold none — 44.55', () => {
+// THE REVERTS: read `files` alone, and a paste carrying its image in `items` attaches nothing; hand
+// back the types a model is shown alone, and a phone's HEIC is dropped before `imagePiece` can draw it.
+test('a paste or a drop hands on the images a model is shown or a HEIC, from its items where its files hold none — 44.55', () => {
     const png = new File(['png'], 'shot.png', { type: 'image/png' })
     const svg = new File(['svg'], 'icon.svg', { type: 'image/svg+xml' })
     const jpeg = new File(['jpeg'], 'photo.jpg', { type: 'image/jpeg' })
-    const dropped = { files: [svg, png, jpeg], items: [] }
-    expect(imageFiles(dropped as unknown as DataTransfer)).toEqual([png, jpeg])
+    const heic = new File(['heic'], 'IMG_0001.HEIC', { type: 'image/heic' })
+    const dropped = { files: [svg, png, heic, jpeg], items: [] }
+    expect(imageFiles(dropped as unknown as DataTransfer)).toEqual([
+        png,
+        heic,
+        jpeg,
+    ])
     const item = (file: File) => ({
         kind: 'file',
         type: file.type,
