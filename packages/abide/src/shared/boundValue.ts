@@ -137,8 +137,8 @@ export function selectedMarkup(markup: string, value: unknown): string {
  *
  * NOT THE COMPILER'S DECODER (`decodeCharacterReferences`): its spec-exact table of named
  * references is build-time and stays out of the client, so a named reference past these five
- * reads as written. A numeric one is the spec's — the
- * compiler's own `numericReferenceCharacter`, windows-1252 remap included.
+ * reads as written. A numeric one is the spec's — `numericReferenceCharacter`, which the compiler's
+ * decoder reads it through too, windows-1252 remap included.
  */
 function decoded(text: string): string {
     if (!text.includes('&')) return text
