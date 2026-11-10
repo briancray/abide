@@ -98,6 +98,9 @@ function walk(
     return params
 }
 
+/** A route an address matched, and the params it matched with. */
+export type Found<Route> = { route: Route; params: Params }
+
 /**
  * The first route whose pattern matches `parts`, with its params, or `undefined`.
  *
@@ -113,7 +116,7 @@ function walk(
 export function firstMatch<T extends { segments: Segment[] }>(
     routes: T[],
     parts: string[],
-): { route: T; params: Params } | undefined {
+): Found<T> | undefined {
     for (const route of routes) {
         const params = walk(route.segments, 0, parts, 0, false)
         if (params !== null) return { route, params }

@@ -1,7 +1,4 @@
-import type { Params } from '#shared/matchRoute.ts'
-
-/** A route an address matched, and the params it matched with. */
-export type Found<RouteRow> = { route: RouteRow; params: Params }
+import type { Found } from '#shared/matchRoute.ts'
 
 /**
  * What a navigation knows before it asks anything: where it is going, and what stands.

@@ -1,7 +1,7 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { ERROR_META } from '#shared/ERROR_META.ts'
-import { firstMatch, partsOf } from '#shared/matchRoute.ts'
+import { firstMatch, type Found, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import { OFFLINE_SAVED } from '#shared/OFFLINE_CACHES.ts'
@@ -13,12 +13,7 @@ import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { LAYER_NAVIGATE } from './LAYER_NAMES.ts'
 import { LevelChain, type PageModule } from './LevelChain.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
-import {
-    type Bearing,
-    type Found,
-    outcomeOf,
-    type Settled,
-} from './outcomeOf.ts'
+import { type Bearing, outcomeOf, type Settled } from './outcomeOf.ts'
 import { pageRegion, type Region } from './regions.ts'
 
 export type Route = {
