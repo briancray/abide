@@ -39,6 +39,7 @@
 // moment the clock does.
 
 import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
+import { unrefTimer } from './unrefTimer.ts'
 
 export type Expiry = {
     /** The life of one production, in milliseconds. */
@@ -109,7 +110,6 @@ export function armTimer(
         fire,
         delay > 0 ? Math.min(delay, LONGEST_DELAY) : 0,
     )
-    const unref = (timer as { unref?: () => void }).unref
-    if (typeof unref === 'function') unref.call(timer)
+    unrefTimer(timer)
     expiry.timer = timer
 }

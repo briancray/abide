@@ -8,6 +8,7 @@
 // and only a called one ever fills it, so the table is what keeps a plain `reactive` paying nothing.
 
 import { beginLoadCall, endLoadCall, reachedInLoadCall } from '../loadCall.ts'
+import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
 import { aborted, refuse } from '../refuse.ts'
 // Through the barrel first, for the cycle it names: rpc reaches this module ahead of the barrel.
 import { isReactive, STREAMING } from './index.ts'
@@ -158,9 +159,13 @@ function timeLoad(attended: Attended, milliseconds: number | undefined): void {
     let timer: ReturnType<typeof setTimeout> | undefined
     const arm = (): void => {
         clearTimeout(timer)
-        timer = setTimeout(() => {
-            if (loadOf(reached) === load) abandonLoad(reached, refuse(504))
-        }, milliseconds)
+        // PAST WHAT `setTimeout` HOLDS a delay runs after 1 ms, which would refuse the load at once.
+        timer = setTimeout(
+            () => {
+                if (loadOf(reached) === load) abandonLoad(reached, refuse(504))
+            },
+            Math.min(milliseconds, LONGEST_DELAY),
+        )
     }
     let settled = false
     const end = (): void => {

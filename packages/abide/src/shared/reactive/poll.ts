@@ -8,6 +8,7 @@
 // its `ttl` evicted is out of the walk by being out of the map.
 
 import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
+import { unrefTimer } from './unrefTimer.ts'
 import type { Disposer } from './watch.ts'
 
 /**
@@ -26,15 +27,13 @@ export function refuseBadPoll(label: string, poll: number | undefined): void {
 /**
  * Runs `tick` every `poll` milliseconds, never holding the process open, and answers its stop.
  *
- * 7.22 FOLLOWS 6.4's FEATURE TEST: Bun's `Timer` carries `unref`, a browser's number does not and
- * has no process to hold. `Infinity` arms nothing; a finite interval past what a timer holds runs
+ * 7.22 FOLLOWS 6.4's FEATURE TEST (`unrefTimer`). `Infinity` arms nothing; a finite interval past what a timer holds runs
  * at the longest one it does.
  */
 export function armPoll(poll: number, tick: () => void): Disposer {
     if (poll === Number.POSITIVE_INFINITY) return () => {}
     const timer = setInterval(tick, Math.min(poll, LONGEST_DELAY))
-    const unref = (timer as { unref?: () => void }).unref
-    if (typeof unref === 'function') unref.call(timer)
+    unrefTimer(timer)
     return () => clearInterval(timer)
 }
 

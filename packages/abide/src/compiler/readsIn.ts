@@ -36,8 +36,9 @@ import {
     type TypeReference,
 } from 'typescript/unstable/async'
 
+import { RESHAPING } from '#shared/reactive/RESHAPING.ts'
+
 import { aliasedSymbol } from './aliasedSymbol.ts'
-import { ARRAY_MUTATORS } from './ARRAY_MUTATORS.ts'
 import { CheckerAnswer } from './CheckerAnswer.ts'
 import {
     classifyPropRead,
@@ -1269,7 +1270,7 @@ async function liftedMutators(
             const up = receiver.parent
             if (isPropertyAccessExpression(up) && up.expression === receiver) {
                 if (
-                    ARRAY_MUTATORS.has(up.name.text) &&
+                    RESHAPING.has(up.name.text) &&
                     isCallExpression(up.parent) &&
                     up.parent.expression === up
                 ) {

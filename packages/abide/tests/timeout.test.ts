@@ -41,6 +41,22 @@ test('a load that goes its timeout without settling refuses 504 — 16.59', asyn
     expect(value.error()).toMatchObject({ name: 'HttpError', status: 504 })
 })
 
+// PAST WHAT `setTimeout` HOLDS — 2^31 - 1 ms — a delay runs after 1 ms. THE REVERT: arm `timeLoad`'s
+// timer with `milliseconds` uncapped; the load is refused 504 before it answers at 30 ms.
+test('a timeout past what a timer holds does not end the load at once — 16.59', async () => {
+    const slow = GET(
+        async () => {
+            await Bun.sleep(30)
+            return 'answered'
+        },
+        { timeout: Number.MAX_SAFE_INTEGER },
+    ) as unknown as () => Loading
+    const value = slow()
+    await settled(value)
+    expect(statusOf(value)).toBeUndefined()
+    expect(value.peek()).toBe('answered')
+})
+
 // PER CHUNK, NOT PER RUN: six chunks 40 ms apart run 240 ms under a 150 ms timeout — each gap clears it
 // by 110 ms, which a loaded `--parallel` worker does not eat. THE REVERT: drop the `arm()` in the cursor
 // loop; the clock runs from the first call and the run is ended at 150 ms.
