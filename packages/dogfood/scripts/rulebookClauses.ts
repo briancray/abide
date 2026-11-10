@@ -1,3 +1,5 @@
+import { CLAUSE } from '../src/rulebook/lib/CLAUSE.ts'
+
 /**
  * Splits RULEBOOK.md into its numbered clauses, each an id and its text on one line.
  *
@@ -10,7 +12,7 @@ export function rulebookClauses(
 ): { id: string; text: string }[] {
     const clauses: { id: string; text: string }[] = []
     for (const paragraph of rulebook.split(/\n\s*\n/)) {
-        const clause = /^(\d+\.\d+)\s+([\s\S]*)$/.exec(paragraph.trim())
+        const clause = CLAUSE.exec(paragraph.trim())
         if (clause)
             clauses.push({
                 id: clause[1] ?? '',

@@ -10,7 +10,8 @@ export type RowItem = { id: string; section: string; name: string }
 /**
  * Where a row is in its run.
  *
- * `broken` is the RUNNER failing — no report, a thrown bench — and is not a red result.
+ * `broken` is the RUNNER failing — no report, or a suite stopped at its deadline (43.27) — and is
+ * not a red result.
  */
 export type RowState = 'queued' | 'running' | 'done' | 'broken'
 

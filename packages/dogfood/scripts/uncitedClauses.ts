@@ -25,6 +25,7 @@ const SCANNED = [
     'packages/abide/tests',
     'packages/abide/e2e',
     'packages/abide/bench',
+    'packages/abide/bin',
     'packages/dogfood/src',
     'packages/dogfood/scripts',
     'packages/dogfood/tests',

@@ -1,14 +1,15 @@
 import { inline, slugify } from '#src/lib/inline.ts'
 
+import { CLAUSE } from './CLAUSE.ts'
+
 // RULEBOOK.md AS A PAGE, read off the file rather than copied into one, so a renumber is a rebuild
 // and never an edit here. A clause and a group are anchored by their own number — `#41.10`, `#41` —
 // which is the address an editor or a citation links to.
 //
-// The clause match is `dogfood/scripts/rulebookClauses.ts`'s, the reading the citation gates use, and
-// `tests/rulebookPage.test.ts` holds the two to the same ids. The paragraph split is not: a page
-// also breaks before a heading that opens with no blank line above it.
+// The clause match is `CLAUSE`, shared with `dogfood/scripts/rulebookClauses.ts`, the reading the
+// citation gates use. The paragraph split is not, and `tests/rulebookPage.test.ts` holds the two to
+// the same ids: a page also breaks before a heading that opens with no blank line above it.
 
-const CLAUSE = /^(\d+\.\d+)\s+([\s\S]*)$/
 const GROUP = /^# (\d+)\.\s+(.*)$/
 
 // A clause hangs its number in the gutter, and the one an address points at is washed.

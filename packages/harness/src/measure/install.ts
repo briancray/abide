@@ -30,10 +30,9 @@
 import type { Work } from './Work.ts'
 
 type Role =
-    | 'insertArgs'
+    | 'eachArg'
     | 'insertFirstArg'
     | 'insertSecondArg'
-    | 'removeArgs'
     | 'removeReceiver'
     | 'replaceChild'
     | 'replaceReceiver'
@@ -55,31 +54,31 @@ type Role =
 // both-substrates gate compares the two.
 const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     ['Node', 'insertBefore', 'insertFirstArg'],
-    ['Node', 'appendChild', 'insertArgs'],
-    ['Node', 'removeChild', 'removeArgs'],
+    ['Node', 'appendChild', 'eachArg'],
+    ['Node', 'removeChild', 'eachArg'],
     ['Node', 'replaceChild', 'replaceChild'],
     ['Node', 'cloneNode', 'clone'],
     ['Node', 'textContent', 'textContent'],
     ['Element', 'textContent', 'textContent'],
     ['CharacterData', 'textContent', 'textContent'],
     ['Element', 'remove', 'removeReceiver'],
-    ['Element', 'before', 'insertArgs'],
-    ['Element', 'after', 'insertArgs'],
+    ['Element', 'before', 'eachArg'],
+    ['Element', 'after', 'eachArg'],
     ['Element', 'replaceWith', 'replaceReceiver'],
     ['CharacterData', 'remove', 'removeReceiver'],
-    ['CharacterData', 'before', 'insertArgs'],
-    ['CharacterData', 'after', 'insertArgs'],
+    ['CharacterData', 'before', 'eachArg'],
+    ['CharacterData', 'after', 'eachArg'],
     ['CharacterData', 'replaceWith', 'replaceReceiver'],
-    ['Element', 'append', 'insertArgs'],
-    ['Element', 'prepend', 'insertArgs'],
+    ['Element', 'append', 'eachArg'],
+    ['Element', 'prepend', 'eachArg'],
     ['Element', 'replaceChildren', 'replaceChildren'],
     // A KEYED REORDER IN CHROMIUM IS THIS CALL (`moveNode`), so leaving it off read
     // every reorder there as 0 moves. One node moves, as with `insertBefore`.
     ['Element', 'moveBefore', 'insertFirstArg'],
     ['Document', 'moveBefore', 'insertFirstArg'],
     ['DocumentFragment', 'moveBefore', 'insertFirstArg'],
-    ['Document', 'append', 'insertArgs'],
-    ['Document', 'prepend', 'insertArgs'],
+    ['Document', 'append', 'eachArg'],
+    ['Document', 'prepend', 'eachArg'],
     ['Document', 'replaceChildren', 'replaceChildren'],
     ['Element', 'setAttribute', 'attribute'],
     ['Element', 'setAttributeNS', 'attribute'],
@@ -286,8 +285,7 @@ function tallyBefore(
     member: string,
 ): void {
     switch (role) {
-        case 'insertArgs':
-        case 'removeArgs':
+        case 'eachArg':
             for (const argument of args) tallyNode(argument)
             return
         case 'insertFirstArg':
