@@ -1,3 +1,4 @@
+import { type Reactive, reactive } from '#shared/reactive/index.ts'
 import {
     currentShare,
     enterShare,
@@ -5,9 +6,9 @@ import {
     type ShareScope,
 } from '#shared/reactive/share.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
-import { type Disposer, watchTracked } from '#shared/reactive/watch.ts'
+import { type Disposer, unowned, watchTracked } from '#shared/reactive/watch.ts'
 
-import { reconciled, reconcileHead } from './reconcileHead.ts'
+import { reconciled, reconcileHead, unpainted } from './reconcileHead.ts'
 import { isEmptyRegion, type Region } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
@@ -116,10 +117,13 @@ export class Level {
         const contribution = new HeadContribution(this, head)
         this.contributed.add(contribution)
         contribution.dispose = watchTracked(() => contribution.follow())
-        // Batched while this level mounts; reconciled at once for an arm or a row mounted after it.
-        if (isEmptyRegion(region))
+        // Batched while this level mounts, and for an arm or a row mounted after it, with the rest of
+        // its turn.
+        if (isEmptyRegion(region)) {
+            unpainted(contribution)
             if (this.unapplied !== undefined) this.unapplied = true
-            else this.reconcile()
+            else reconcileLater(this.chain)
+        }
         return contribution
     }
 
@@ -178,7 +182,8 @@ export class HeadContribution {
         const text = this.head()
         const last = this.last
         this.last = text
-        if (last !== undefined && text !== last) this.level.reconcile()
+        if (last !== undefined && text !== last)
+            reconcileLater(this.level.chain)
     }
 
     /**
@@ -193,8 +198,36 @@ export class HeadContribution {
         if (!level.contributed.has(this)) return
         if (!reconciled(this)) level.reconcile()
         level.contributed.delete(this)
-        level.reconcile()
+        reconcileLater(level.chain)
     }
+}
+
+/** The chains a contributor asked to reconcile since the head last was, each once. */
+const STALE = new Set<{ reconcile(): void }>()
+/** Moved to wake the one watch that reconciles `STALE`; both opened by the first ask. */
+let asked: Reactive<number> | undefined
+
+/**
+ * Reconciles `chain`'s head at the end of this turn's drain — ONCE A TURN, NOT ONCE A CONTRIBUTOR.
+ * A `{#for}` grown by N rows that each carry a `<head>` joins N contributors in one effect, and a
+ * reconcile walks every contributor the chain holds, so one per row is N² — measured in chromium
+ * past a frame at ~400 rows of a keyless `<style>` and ~600 of a keyed `<link>`. A WATCH RATHER THAN A MICROTASK: a contribution made inside an
+ * effect is written in that same drain, and `flushSync` ends the turn for this as for every effect.
+ */
+function reconcileLater(chain: { reconcile(): void }): void {
+    let version = asked
+    if (version === undefined) {
+        // UNOWNED: whichever component asks first, the watch outlives it.
+        const opened = unowned(() => reactive(0))
+        watchTracked(() => {
+            opened()
+            for (const stale of STALE) stale.reconcile()
+            STALE.clear()
+        })
+        version = asked = opened
+    }
+    if (STALE.size === 0) version.set((version.peek() as number) + 1)
+    STALE.add(chain)
 }
 
 /**

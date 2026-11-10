@@ -3,7 +3,9 @@
 
 import { expect, test } from 'bun:test'
 
-import { contributeHead, Level } from '#ui/Level.ts'
+import { flushSync } from '#shared/reactive/index.ts'
+import { enterShare, leaveShare } from '#shared/reactive/share.ts'
+import { contributeHead, type HeadContribution, Level } from '#ui/Level.ts'
 import { reconcileHead } from '#ui/reconcileHead.ts'
 import type { Region } from '#ui/regions.ts'
 
@@ -144,4 +146,61 @@ test('a head script a client writes runs once, and again only when it changes �
     expect(document.head.querySelectorAll('script').length).toBe(1)
     reconcileHead([])
     expect(document.head.querySelectorAll('script').length).toBe(0)
+})
+
+// A LIST GROWN OR EMPTIED BY N ROWS RECONCILES THE HEAD ONCE, NOT ONCE A ROW: each reconcile walks
+// every contributor, so one a row is N², and in chromium past a frame at ~400 rows. THE REVERT:
+// `this.reconcile()` for `reconcileLater(...)` in `contribute` and `stop`; this reports 100
+// reconciles where 1 is due.
+test('rows grown after their level mount reconcile the head once a turn — 39.13, 39.16', () => {
+    for (const size of [100, 1000]) {
+        document.head.innerHTML = '<title>page</title>'
+        const levels: Level[] = []
+        let reconciles = 0
+        const level = new Level({
+            reconcile: () => {
+                reconciles += 1
+                Level.reconcile(levels)
+            },
+        })
+        levels.push(level)
+        level.setHead(() => '<title>page</title>')
+        // Rows mounted after the level, into regions the client builds.
+        const back = enterShare(level)
+        const rows: (HeadContribution | undefined)[] = []
+        for (let row = 0; row < size; row += 1)
+            rows.push(
+                contributeHead(
+                    region([]),
+                    () => `<style>.row-${row}{}</style>`,
+                ),
+            )
+        leaveShare(back)
+        flushSync()
+        expect({ size, reconciles }).toEqual({ size, reconciles: 1 })
+        expect(document.head.querySelectorAll('style').length).toBe(size)
+        for (const row of rows) row?.stop()
+        flushSync()
+        expect({ size, reconciles }).toEqual({ size, reconciles: 2 })
+        expect(document.head.querySelectorAll('style').length).toBe(0)
+    }
+})
+
+// 39.16 — ROWS JOINING IN ONE RECONCILE EACH WRITE THEIR OWN equal keyless node. THE REVERT: drop
+// `claimed.add(node)` from `reconcileHead`'s write; the second row adopts the node the first just
+// wrote as the server's, 2 stand where 3 are due, and the first leaving takes the second's too.
+test('rows joining in one reconcile each own an equal keyless node — 39.16', () => {
+    document.head.innerHTML = ''
+    const levels: Level[] = []
+    const level = new Level(chainOf(levels))
+    levels.push(level)
+    const rows: (HeadContribution | undefined)[] = []
+    level.mount(() => {
+        for (let row = 0; row < 3; row += 1)
+            rows.push(contributeHead(region([]), () => '<style>.x{}</style>'))
+    })
+    expect(document.head.querySelectorAll('style').length).toBe(3)
+    rows[0]?.stop()
+    flushSync()
+    expect(document.head.querySelectorAll('style').length).toBe(2)
 })

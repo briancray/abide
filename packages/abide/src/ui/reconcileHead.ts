@@ -34,6 +34,15 @@ export function reconciled(who: object): boolean {
 }
 
 /**
+ * Marks `who` as built on the client: it owns nothing yet, and there is nothing the server painted
+ * for it to adopt. A first reconcile would otherwise walk the whole head per contributor looking
+ * for one, which for a list grown by N rows each with a keyless node is N² equality checks.
+ */
+export function unpainted(who: object): void {
+    ownedBy.set(who, [])
+}
+
+/**
  * Writes the head the chain contributes: `chain` is every contributor and the head it reads now,
  * outermost first.
  *
@@ -100,6 +109,10 @@ export function reconcileHead(
                             ? firstOwnedAfter(chain, at)
                             : previous.nextSibling,
                     )
+                // 39.16 — WRITTEN HERE IS NOBODY ELSE'S TO ADOPT: a later contributor wanting an
+                // equal node, joining in this same reconcile, would otherwise take this one as
+                // the server's and the two would share it.
+                claimed.add(node)
             }
             next.push(node)
             previous = node
