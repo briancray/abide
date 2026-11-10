@@ -24,9 +24,9 @@ import {
     type MergeGroup,
 } from './classifyTemplate.ts'
 import {
-    Cursor,
+    type Cursor,
+    placed,
     type PlacedNode,
-    placeTemplate,
     REGION_ROOT,
     ROW_ROOT,
 } from './Cursor.ts'
@@ -163,14 +163,11 @@ export function emitClient(
     // THE TEMPLATE IS PLACED ONCE (`placeTemplate`) and everything this module emits is rendered
     // from what was placed: the mount's walk, a region's build, and the markup a region made once
     // fills from — the same positions the server's markup is rendered from.
-    const page = new Cursor(
-        undefined,
-        undefined,
-        false,
+    const page = placed(
+        file.template,
+        file.components,
         selfFill === 'invoked' || selfFill === 'both',
     )
-    page.components = file.components
-    placeTemplate(file.template, page)
     const { defs, chain, helpers, lines } = emitRegion(
         page,
         new RegionEmission(lowering),
@@ -445,9 +442,7 @@ function clientComponent(
     parent: RegionEmission,
 ): string {
     const lowering = parent.lowering
-    const sink = new Cursor(undefined, undefined, false, true)
-    sink.components = component.components
-    placeTemplate(component.children, sink)
+    const sink = placed(component.children, component.components, true)
     const { defs, chain, helpers, lines } = emitRegion(sink, parent.nested())
     const head =
         component.pattern === '' ? '' : `${lowering.setup(component)}\n`

@@ -15,7 +15,7 @@ import {
     isSlot,
     type MergeGroup,
 } from './classifyTemplate.ts'
-import { Cursor, type PlacedNode, placeTemplate } from './Cursor.ts'
+import { type Cursor, placed, type PlacedNode } from './Cursor.ts'
 import { invocationProps, passedName } from './invocationProps.ts'
 import { type Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -445,9 +445,7 @@ function invocationMarkup(
  * lanes cannot disagree about which contribution won.
  */
 export function headSink(file: AbideFile): Cursor {
-    const sink = new Cursor()
-    placeTemplate(mergeHead(file.head), sink)
-    return sink
+    return placed(mergeHead(file.head))
 }
 
 /**
@@ -545,9 +543,7 @@ function serverComponent(
     component: InlineComponent,
     lowering: Lowering,
 ): string {
-    const sink = new Cursor()
-    sink.components = component.components
-    placeTemplate(component.children, sink)
+    const sink = placed(component.children, component.components)
     const head =
         component.pattern === '' ? '' : `${lowering.setup(component)}\n`
     const setup =

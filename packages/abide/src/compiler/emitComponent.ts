@@ -2,7 +2,7 @@ import type { JsonValue } from '#shared/JsonValue.ts'
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
-import { Cursor, placeTemplate } from './Cursor.ts'
+import { placed } from './Cursor.ts'
 import { abideBindings } from './hookCalls.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
@@ -18,7 +18,6 @@ import {
 } from './renderMarkup.ts'
 import { insideShare, SETTLED_AT, shareScope } from './shareScope.ts'
 import { splitImports, withoutProps } from './splitImports.ts'
-import type { TemplateNode } from './TemplateNode.ts'
 
 // The name the body is bound to while a component's head contributions land (`HEADS`).
 const BODY = '__body'
@@ -61,9 +60,7 @@ export function emitComponent(
     // name the app's own tooling reports as unused, in a file nobody wrote.
     const lowering = new Lowering(file, answer, false, chunks)
 
-    const page = new Cursor()
-    page.components = file.components
-    placeTemplate(file.template, page)
+    const page = placed(file.template, file.components)
     const body = renderLevel(page.top, lowering, SERVER_LANE)
     // 32.43 — the template's own components, declared where the body is built: they read the
     // setup's names, and a child they invoke adds its head to the body's.
@@ -239,11 +236,4 @@ function importClause(names: string[]): string {
     const written: string[] = []
     for (const name of names) written.push(`${name} as __${name}`)
     return written.join(', ')
-}
-
-// `nodes` placed on a sink of their own, as `headSink` places a head.
-function placed(nodes: TemplateNode[]): Cursor {
-    const sink = new Cursor()
-    placeTemplate(nodes, sink)
-    return sink
 }

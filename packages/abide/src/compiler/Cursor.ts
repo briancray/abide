@@ -205,7 +205,7 @@ export class Cursor {
      * 32.43 — the inline components this region's body declares, which both lanes declare at its
      * head. What an invocation in it is passed (32.50) is on the invocation.
      */
-    components: readonly InlineComponent[] = []
+    readonly components: readonly InlineComponent[]
     /** The sink this one is nested in (`nest`), or null at a page's or component's own root. */
     private outer: Cursor | null = null
     private readonly head: string
@@ -224,9 +224,11 @@ export class Cursor {
         parent = `${REGION_ROOT}.close.parentNode`,
         parserOwned = false,
         repeated = false,
+        components: readonly InlineComponent[] = [],
     ) {
         this.head = head
         this.repeated = repeated
+        this.components = components
         this.frames = [{ parent, within: null, parserOwned, after: null }]
     }
 
@@ -294,13 +296,20 @@ export class Cursor {
      * A nested region's sink, hung off the region's position. A `{#for}` row passes its own head
      * and parent, because a row's root is the row's first node and not a pair of anchors.
      */
-    nest(at: PlacedNode, head?: string, parent?: string, row = false): Cursor {
+    nest(
+        at: PlacedNode,
+        components: readonly InlineComponent[],
+        head?: string,
+        parent?: string,
+        row = false,
+    ): Cursor {
         const sink = new Cursor(
             head,
             parent,
             at.parserOwned,
             // A row repeats, and everything below it repeats too.
             this.repeated || row,
+            components,
         )
         sink.outer = this
         at.inner.push(sink)
@@ -383,20 +392,21 @@ export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
                 const single = isSingleRooted(node.children)
                 const row = cursor.nest(
                     here,
+                    node.components,
                     single
                         ? `${ROW_ROOT}.node`
                         : `${ROW_ROOT}.node.nextSibling`,
                     `${ROW_ROOT}.node.parentNode`,
                     true,
                 )
-                row.components = node.components
                 placeTemplate(node.children, row)
                 continue
             }
             for (const branch of node.branches) {
-                const arm = cursor.nest(here)
-                arm.components = branch.components
-                placeTemplate(branch.children, arm)
+                placeTemplate(
+                    branch.children,
+                    cursor.nest(here, branch.components),
+                )
             }
             continue
         }
@@ -406,9 +416,7 @@ export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
             // A slot's fallback is always a sink, empty or not; an invocation's children are one
             // only where the caller wrote some.
             if (isSlot(node) || node.children.length > 0) {
-                const inside = cursor.nest(here)
-                inside.components = node.components
-                placeTemplate(node.children, inside)
+                placeTemplate(node.children, cursor.nest(here, node.components))
             }
             continue
         }
@@ -416,4 +424,18 @@ export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
         placeTemplate(node.children, cursor)
         cursor.leave()
     }
+}
+
+/**
+ * `nodes` placed on a sink of their own at a region's root: a page's, a component's, a head's.
+ * `repeated` where every instance of the region builds its own nodes (`Cursor.repeated`).
+ */
+export function placed(
+    nodes: TemplateNode[],
+    components: readonly InlineComponent[] = [],
+    repeated = false,
+): Cursor {
+    const sink = new Cursor(undefined, undefined, false, repeated, components)
+    placeTemplate(nodes, sink)
+    return sink
 }
