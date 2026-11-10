@@ -47,9 +47,6 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-const settle = (ms = 10): Promise<void> =>
-    new Promise((done) => setTimeout(done, ms))
-
 const LIBRARY = `import { GET, POST, reactive, structural } from '@abide/abide/server'
 
 const shelf = reactive([{ id: 'a' }], {
@@ -186,7 +183,7 @@ test('a copy compared structurally wakes nobody for a load that answers the same
     flushSync()
     const before = woken
     shelf().refresh()
-    await settle()
+    await Bun.sleep(10)
     flushSync()
     expect(woken - before).toBe(0)
     stop()
@@ -204,7 +201,7 @@ test('a copy goes stale when the max-age its answer carried runs out', async () 
     const before = loads
     await timed()
     expect(loads - before).toBe(0)
-    await settle(1_200)
+    await Bun.sleep(1_200)
     await timed()
     expect(loads - before).toBe(1)
 })
@@ -219,7 +216,7 @@ test('a copy answered max-age=0 is stale at once', async () => {
     ) => (() => unknown) & PromiseLike<unknown>
     await ending()
     const before = loads
-    await settle()
+    await Bun.sleep(10)
     await ending()
     expect(loads - before).toBe(1)
 })
@@ -338,7 +335,7 @@ test('a stale copy whose reload reaches no server goes on serving what it held â
     answer = { body: ['kept'], life: 'private, max-age=0' }
     const offline = wire('GET', '/library/offline') as Copy
     expect(await outcome(offline())).toBe('served ["kept"]')
-    await settle()
+    await Bun.sleep(10)
     unreachable = true
     try {
         const before = loads

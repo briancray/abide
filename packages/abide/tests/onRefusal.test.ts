@@ -78,7 +78,7 @@ async function refusedCall(): Promise<{ status?: number } | undefined> {
     const value = readBoard({ n: calls })
     // A read subscribes nothing here; it starts the load.
     value.error()
-    await new Promise((done) => setTimeout(done, 10))
+    await Bun.sleep(10)
     flushSync()
     return value.error() as { status?: number } | undefined
 }

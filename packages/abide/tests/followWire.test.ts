@@ -90,8 +90,6 @@ afterAll(() => {
     resetSocketWire()
 })
 
-const settle = (): Promise<void> => new Promise((done) => setTimeout(done, 10))
-
 // 18.9 — THE FOLLOW NAMES THE VERSION ITS ANSWER CARRIED, and 18.10 — a value the server sends is the
 // copy's. THE REVERT: skip `followRpc` in `wire`'s settle; nothing is sent over the mux and the copy
 // keeps ['dune'] where ['dune', 'emma'] is due.
@@ -100,7 +98,7 @@ test('a GET loaded is followed at the version it was answered with, and takes wh
         args?: unknown,
     ) => (() => string[]) & PromiseLike<string[]>
     expect(await books()).toEqual(['dune'])
-    await settle()
+    await Bun.sleep(10)
 
     const socket = muxSocket()
     expect(socket?.url).toBe(MUX)
@@ -128,7 +126,7 @@ test('an invalidate the server sends makes the next read fetch', async () => {
         args?: unknown,
     ) => (() => unknown) & PromiseLike<unknown>
     await contact({ id: 7 })
-    await settle()
+    await Bun.sleep(10)
     const socket = muxSocket()
     const follow = socket.sent.find(
         (frame) => frame.address === `${LIBRARY}/contact`,
@@ -150,7 +148,7 @@ test('a patch over the version held is written into the copy', async () => {
         args?: unknown,
     ) => (() => string[]) & PromiseLike<string[]>
     await shelved()
-    await settle()
+    await Bun.sleep(10)
     const socket = muxSocket()
     const follow = socket.sent.find(
         (frame) => frame.address === `${LIBRARY}/shelved`,
@@ -183,7 +181,7 @@ test('a patch over a version the copy does not hold makes it read again', async 
         args?: unknown,
     ) => (() => string[]) & PromiseLike<string[]>
     await archived()
-    await settle()
+    await Bun.sleep(10)
     const socket = muxSocket()
     const follow = socket.sent.find(
         (frame) => frame.address === `${LIBRARY}/archived`,
@@ -198,7 +196,7 @@ test('a patch over a version the copy does not hold makes it read again', async 
         version: 2,
         ops: [{ path: [0], set: 'written over the wrong shelf' }],
     })
-    await settle()
+    await Bun.sleep(10)
     expect(answers).toBe(before + 1)
     expect(archived()()).toEqual(['the whole shelf, read again'])
 })
@@ -216,7 +214,7 @@ test('a copy written to locally reads again rather than take a patch over it', a
             args?: unknown,
         ) => Reactive<string[]> & PromiseLike<string[]>
         await copy()
-        await settle()
+        await Bun.sleep(10)
         const follow = muxSocket().sent.find(
             (frame) => frame.address === `${LIBRARY}/${name}`,
         ) as Sent
@@ -259,7 +257,7 @@ test('a copy written to locally reads again rather than take a patch over it', a
         before = answers
         shelf = ['dune', 'emma', 'read again']
         local.removeFirst(local.follow.version as number)
-        await settle()
+        await Bun.sleep(10)
         reads.push(answers - before)
         held.push(local.copy())
     }
@@ -284,7 +282,7 @@ test("a frame the follow takes does not keep a page's load going — 16.48", asy
         PromiseLike<unknown> & { refresh(): void; busy(): boolean }
     const value = reading()
     await value
-    await settle()
+    await Bun.sleep(10)
     const socket = muxSocket()
     const follow = socket.sent.find(
         (frame) => frame.address === `${LIBRARY}/reading`,
@@ -331,7 +329,7 @@ test('a bare refresh does not send a mutation again — 13.16', async () => {
         flushSync()
         refresh()
         flushSync()
-        await settle()
+        await Bun.sleep(10)
         stop()
         expect(`posts: ${posts}`).toBe('posts: 1')
     } finally {
@@ -405,10 +403,7 @@ test('a bare invalidate during a mutation does not send it again — 13.17', asy
         invalidate()
         flushSync()
         respond()
-        await Promise.race([
-            awaited,
-            new Promise((resolve) => setTimeout(resolve, 200)),
-        ])
+        await Promise.race([awaited, Bun.sleep(200)])
         expect(`posts: ${answers.length}`).toBe('posts: 1')
     } finally {
         globalThis.fetch = answering
@@ -429,7 +424,7 @@ test('a GET answered with a binary is not followed — 18.24', async () => {
             args?: unknown,
         ) => PromiseLike<unknown>
         await cover()
-        await settle()
+        await Bun.sleep(10)
         const subs = muxSocket()?.sent.filter(
             (frame) => frame.address === `${LIBRARY}/cover`,
         )
@@ -449,7 +444,7 @@ test('a sign-in reopens the mux, and every follow is sent again over the new soc
         args?: unknown,
     ) => PromiseLike<unknown>
     await guarded()
-    await settle()
+    await Bun.sleep(10)
     const before = muxSocket()
     const answering = globalThis.fetch
     globalThis.fetch = (async () =>
@@ -465,7 +460,7 @@ test('a sign-in reopens the mux, and every follow is sent again over the new soc
             false,
             undefined,
         )
-        await settle()
+        await Bun.sleep(10)
     } finally {
         globalThis.fetch = answering
     }
@@ -500,7 +495,7 @@ test('a sign-in tells the other tabs from a tab that never read principal — 26
             false,
             undefined,
         )
-        await settle()
+        await Bun.sleep(10)
     } finally {
         globalThis.fetch = answering
         otherTab.close()
@@ -529,7 +524,7 @@ test('a GET answered with a refusal is not followed — 18.24', async () => {
             () => {},
             () => {},
         )
-        await settle()
+        await Bun.sleep(10)
         const subs = muxSocket()?.sent.filter(
             (frame) => frame.address === `${LIBRARY}/ledger`,
         )
@@ -569,12 +564,12 @@ test('a mux the server closed opens again at once when the browser comes online 
         args?: unknown,
     ) => PromiseLike<unknown>
     await atlas()
-    await settle()
+    await Bun.sleep(10)
     const before = muxSockets()
     dropMux()
     dispatchEvent(new Event('online'))
     expect(`opened: ${muxSockets() - before}`).toBe('opened: 1')
-    await settle()
+    await Bun.sleep(10)
 })
 
 // 18.33 — A TAB SHOWN AGAIN REDIALS NOW: a hidden tab's timers are throttled. THE REVERT: drop the
@@ -584,7 +579,7 @@ test('a mux the server closed opens again at once when the page becomes visible 
     dropMux()
     document.dispatchEvent(new Event('visibilitychange'))
     expect(`opened: ${muxSockets() - before}`).toBe('opened: 1')
-    await settle()
+    await Bun.sleep(10)
 })
 
 // 18.34 — OFFLINE, THE MUX DOES NOT DIAL, and the `online` event is what dials it. THE REVERT: drop the
@@ -594,7 +589,7 @@ test('a mux that closed while offline is not opened again until the browser is o
     const restore = goOffline()
     try {
         dropMux()
-        await new Promise((done) => setTimeout(done, 400))
+        await Bun.sleep(400)
         expect(`opened offline: ${muxSockets() - before}`).toBe(
             'opened offline: 0',
         )
@@ -603,7 +598,7 @@ test('a mux that closed while offline is not opened again until the browser is o
     }
     dispatchEvent(new Event('online'))
     expect(`opened online: ${muxSockets() - before}`).toBe('opened online: 1')
-    await settle()
+    await Bun.sleep(10)
 })
 
 // 18.35 — A COPY WRITTEN HERE WAITS OUT THE CALLS THAT WROTE IT: a value the server sends before they
@@ -621,7 +616,7 @@ test('a copy written here takes nothing sent while its calls wait, and reads aga
             patch(mutate: (held: string[]) => void): void
         }
     await stacked()
-    await settle()
+    await Bun.sleep(10)
     const socket = muxSocket()
     const follow = socket.sent.find(
         (frame) => frame.address === `${LIBRARY}/stacked`,
@@ -654,7 +649,7 @@ test('a copy written here takes nothing sent while its calls wait, and reads aga
                 },
             },
         )
-        await settle()
+        await Bun.sleep(10)
         expect(stacked()()).toEqual(['dune', 'mine'])
         expect(stacked().synced()).toBe(false)
         socket.push({
@@ -667,8 +662,8 @@ test('a copy written here takes nothing sent while its calls wait, and reads aga
         expect(stacked()()).toEqual(['dune', 'mine'])
         reachable = true
         deliver()
-        await settle()
-        await settle()
+        await Bun.sleep(10)
+        await Bun.sleep(10)
         expect(outbox()).toEqual([])
         expect(stacked()()).toEqual(['dune', 'mine'])
         expect(stacked().synced()).toBe(true)

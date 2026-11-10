@@ -15,6 +15,7 @@ import { TryRegion } from '#ui/TryRegion.ts'
 
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
+import { warningsWhile } from './warningsWhile.ts'
 
 afterAll(closeTyped)
 afterAll(removeTemporaryModules)
@@ -110,10 +111,7 @@ test('a failing binding swaps the body for the catch, and recovers — 32.16', a
 
 // A PAGE THE SERVER PAINTED IN ITS CATCH hydrates without calling that a mismatch, and recovers.
 test('a server-painted catch hydrates quietly and recovers — 32.16, 41.10', async () => {
-    const warned: unknown[] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
-    try {
+    const warned = await warningsWhile(async () => {
         await served(pageWith('nope'))
         expect(document.querySelector('.status')?.textContent).toBe(
             'Rate must be a positive number.',
@@ -122,12 +120,8 @@ test('a server-painted catch hydrates quietly and recovers — 32.16, 41.10', as
         expect(document.getElementById('converted')?.textContent).toBe(
             '$1240.00',
         )
-    } finally {
-        console.warn = warn
-    }
-    expect(
-        warned.filter((line) => String(line).includes('abide:hydrate')),
-    ).toEqual([])
+    }, 'abide:hydrate')
+    expect(warned).toEqual([])
 })
 
 // `{:finally}` STANDS AFTER THE REGION, not in either arm, so a swap leaves it where it was. THE
@@ -210,10 +204,7 @@ test('a server-painted catch is adopted, and the body is evaluated once — 32.1
 // REVERT: the guess — a mount that throws on any disagreement, caught bare and refilled — rebuilds the
 // body in silence.
 test('a mismatch in a server-painted body warns — 41.10', async () => {
-    const warned: string[] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
-    try {
+    const warned = await warningsWhile(async () => {
         await served(pageWith('1.09'), () => {
             const converted = document.getElementById('converted') as Element
             converted.replaceWith(document.createElement('em'))
@@ -221,12 +212,8 @@ test('a mismatch in a server-painted body warns — 41.10', async () => {
         expect(document.getElementById('converted')?.textContent).toBe(
             '$1351.60',
         )
-    } finally {
-        console.warn = warn
-    }
-    expect(warned.filter((line) => line.includes('abide:hydrate')).length).toBe(
-        1,
-    )
+    }, 'abide:hydrate')
+    expect(warned.length).toBe(1)
 })
 
 // A BODY THAT FAILED ON THE SERVER AND SUCCEEDS IN THE BROWSER is filled, not left in its catch: the
@@ -237,26 +224,25 @@ test('a mismatch in a server-painted body warns — 41.10', async () => {
 test('a body that only failed on the server is filled on the client, quietly — 32.16', async () => {
     const flagged = globalThis as { serverOnly?: boolean }
     flagged.serverOnly = true
-    const warned: string[] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
-    await served(
-        pageWith('1.09').replace(
-            'const value = Number(typed)',
-            "if ((globalThis as { serverOnly?: boolean }).serverOnly) throw new Error('server only')\n    const value = Number(typed)",
-        ),
-        () => {
-            expect(document.querySelector('.status')?.textContent).toBe(
-                'server only',
-            )
-            flagged.serverOnly = false
-        },
-    ).finally(() => {
-        console.warn = warn
-    })
+    const warned = await warningsWhile(
+        () =>
+            served(
+                pageWith('1.09').replace(
+                    'const value = Number(typed)',
+                    "if ((globalThis as { serverOnly?: boolean }).serverOnly) throw new Error('server only')\n    const value = Number(typed)",
+                ),
+                () => {
+                    expect(document.querySelector('.status')?.textContent).toBe(
+                        'server only',
+                    )
+                    flagged.serverOnly = false
+                },
+            ),
+        'abide:hydrate',
+    )
     expect(document.getElementById('converted')?.textContent).toBe('$1351.60')
     expect(document.querySelector('.status')).toBeNull()
-    expect(warned.filter((line) => line.includes('abide:hydrate'))).toEqual([])
+    expect(warned).toEqual([])
 })
 
 // `renderPage`'s unrun mount, with the parser's one template made before anything is counted.

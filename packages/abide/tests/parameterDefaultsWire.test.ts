@@ -15,7 +15,7 @@ let runs = 0
 export default GET(async ({ page = 1 }: { page?: number }) => {
     runs += 1
     const run = runs
-    await new Promise((done) => setTimeout(done, 150))
+    await Bun.sleep(150)
     return { page, run }
 })
 `

@@ -15,6 +15,7 @@ import { measure } from '@abide/harness/abide'
 
 import { flushSync } from '#shared'
 
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
 
@@ -25,11 +26,6 @@ afterAll(removeTemporaryModules)
 async function mountPage(source: string) {
     const { html, client, mount } = await renderPage(source)
     return { html, client, mounting: measure(mount) }
-}
-
-const click = (selector: string): void => {
-    ;(document.querySelector(selector) as HTMLElement).click()
-    flushSync()
 }
 
 // A CALL THE CHECKER CANNOT SEE INTO. `big` is a plain function; the read of `n` is in its body.
@@ -101,7 +97,7 @@ function big() { return n * 2 }
 
 <main><h1 id="static">Total</h1><p id="out">{big()}</p></main>`)
     expect(html).toContain('<h1 id="static">Total</h1>')
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Bun.sleep(0)
     flushSync()
     expect(document.querySelector('#out')?.textContent).toBe('2')
 })

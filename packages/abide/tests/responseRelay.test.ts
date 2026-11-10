@@ -51,8 +51,6 @@ function relayOver(
     return listener
 }
 
-const settled = (): Promise<void> => new Promise((done) => setTimeout(done, 5))
-
 // 38.36 — THE BODY IS READ NO FASTER THAN THE READER READS IT: a pull on the listener's stream is one
 // pull of the worker's. THE REVERT: give the listener's stream a high-water mark of 16 rather than 0;
 // the source is pulled 17 times before the reader has taken 3 chunks.
@@ -77,7 +75,7 @@ test('a body is pulled from the worker one chunk per read — 38.35, 38.36', asy
     const read: number[] = []
     for (let index = 0; index < 3; index += 1)
         read.push(((await reader.read()).value as Uint8Array)[0] as number)
-    await settled()
+    await Bun.sleep(5)
     expect(read).toEqual([1, 2, 3])
     expect(pulled).toBe(3)
     await reader.cancel()
@@ -174,7 +172,7 @@ test('a replaced worker’s unanswered request is asked again of the next — 38
         }),
         null,
     )
-    await settled()
+    await Bun.sleep(5)
     listener.replace(undefined)
     listener.endAll('replaced mid-response', true)
     listener.replace(
@@ -216,6 +214,6 @@ test('cancelling the body aborts the request and its source — 38.96', async ()
     const reader = (response.body as ReadableStream<Uint8Array>).getReader()
     await reader.read()
     await reader.cancel()
-    await settled()
+    await Bun.sleep(5)
     expect(`${signal?.aborted} ${cancelled}`).toBe('true true')
 })

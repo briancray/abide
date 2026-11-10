@@ -16,6 +16,7 @@ import { emitComponent, parseAbide } from '#compiler'
 import { buildFiles } from '#server/appBuild.ts'
 import { flushSync } from '#shared'
 
+import { click } from './click.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { closeTyped, renderPage, TYPED_ROOT, typedSession } from './typed.ts'
 
@@ -678,10 +679,6 @@ let mark = reactive('')
     flushSync()
     expect(document.querySelectorAll('li').length).toBe(2)
 
-    const click = (id: string): void => {
-        ;(document.querySelector(id) as HTMLElement).click()
-        flushSync()
-    }
     click('#drop')
     expect(document.querySelectorAll('li').length).toBe(1)
 

@@ -20,8 +20,6 @@ import { answered } from '#shared/answerOf.ts'
 import { validationError } from '#shared/refuse.ts'
 import type { RpcContext } from '#shared/rpc.ts'
 
-const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
-
 // 16.6 — GET OVER A PLAIN FUNCTION IS GET OVER THE `reactive` OF IT, so a parameter makes it keyed
 // and a second call with the same args joins the first (1.8). The work is what is asserted: a
 // call that reran the body still answers the same invoice. THE REVERT: have each call wrap
@@ -79,7 +77,7 @@ test('a mutation runs again on a later call, where a read serves what it holds �
 
     await readInvoice({ id: '42' })
     await payInvoice({ id: '42' })
-    await tick()
+    await Bun.sleep(0)
     await readInvoice({ id: '42' })
     await payInvoice({ id: '42' })
 
@@ -150,7 +148,7 @@ test("a plain handler's options build its value too — 16.6", async () => {
         { ttl: 60_000 },
     )
     await payInvoice({ id: '42' })
-    await tick()
+    await Bun.sleep(0)
     await payInvoice({ id: '42' })
     expect(`payments: ${payments}`).toBe('payments: 1')
 

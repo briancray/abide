@@ -25,6 +25,7 @@ import { flushSync } from '#shared'
 import { pageRegion } from '#ui/regions.ts'
 import type { Scope } from '#ui/Scope.ts'
 
+import { click } from './click.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
     clientOf,
@@ -34,33 +35,12 @@ import {
     TYPED_ROOT,
     typedSession,
 } from './typed.ts'
+import { warningsWhile } from './warningsWhile.ts'
 
 afterAll(closeTyped)
 
 const session = await typedSession()
 afterAll(removeTemporaryModules)
-
-const click = (id: string): void => {
-    ;(document.querySelector(id) as HTMLElement).click()
-    flushSync()
-}
-
-// Everything `console.warn` was told while the body ran. 41.10's warning is the only thing the
-// clause leaves visible when a block rebuilds, so a test that does not read it is reading the
-// output of a page that may have been rebuilt three times.
-async function warningsWhile(body: () => Promise<void>): Promise<string[]> {
-    const said: string[] = []
-    const warn = console.warn
-    console.warn = (...parts: unknown[]): void => {
-        said.push(parts.map(String).join(' '))
-    }
-    try {
-        await body()
-    } finally {
-        console.warn = warn
-    }
-    return said
-}
 
 // A NESTED REGION IS FOUND FROM THE ARM THAT HOLDS IT. The arm's root is its own anchor pair, handed
 // to the arm's mount as `__root`, and the walk inside it starts at the pair's opening anchor.

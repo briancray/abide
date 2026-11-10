@@ -7,8 +7,7 @@ import { afterAll, expect, test } from 'bun:test'
 
 import { measure } from '@abide/harness/abide'
 
-import { flushSync } from '#shared'
-
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage } from './typed.ts'
 
@@ -39,11 +38,6 @@ const { as: Inner } = props<{ as: (...args: any[]) => unknown }>()
 </script>
 
 <section id="frame"><Inner label="framed"/></section>`
-
-const click = (id: string): void => {
-    ;(document.querySelector(id) as HTMLElement).click()
-    flushSync()
-}
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'

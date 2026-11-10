@@ -35,6 +35,9 @@ import { collectWatches } from '#shared/reactive/watch.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { WORK } from '#shared/WORK.ts'
 
+import { deferredLoads } from './deferredLoads.ts'
+import { warningsWhile } from './warningsWhile.ts'
+
 // 12.6 — the `onError` hooks these tests file are handed what the core reports once a server wires
 // them in (`installServer`), and this file is no server.
 UNEXPECTED.report = handOnError
@@ -2392,10 +2395,6 @@ test('a probe a body stops reading stops waking it', async () => {
 const WINDOW = 30
 const AFTER_WINDOW = 90
 
-function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 test('a throttle lets the leading change through and holds the rest', () => {
     const query = reactive<number>(undefined, { throttle: WINDOW })
     const woken = wakes(query)
@@ -2443,7 +2442,7 @@ test('a window caps the wake at one for ten writes', async () => {
     const woken = wakes(feed)
     for (let write = 1; write <= 10; write += 1) feed.set(write)
     expect(woken.count()).toBe(0)
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     // 5.9: ONE wake for ten writes, and the value the last one left — equal counts would
     // mean the window capped nothing.
     expect(woken.count()).toBe(1)
@@ -2459,7 +2458,7 @@ test('a held value goes on being served, and the window reads as busy', async ()
     expect(query()).toBe(1)
     expect(query.busy()).toBe(true)
     expect(query.ready()).toBe(true)
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(query()).toBe(2)
     expect(query.busy()).toBe(false)
 })
@@ -2471,7 +2470,7 @@ test('the identity gate compares against the last production, not the last relea
     query.set(1)
     // Comparing the third write against the RELEASED 1 would collapse it, and the reader
     // would then settle on 2 for a value whose last write was 1.
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(query()).toBe(1)
 })
 
@@ -2502,7 +2501,7 @@ test('a throttle caps the wakes a run of patches makes', async () => {
     expect(woken.count()).toBe(1)
     // 5.15: the window is holding a change, so the value reads as busy while it does.
     expect(rows.busy()).toBe(true)
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(woken.count()).toBe(2)
     expect((rows()[0] as { n: number }).n).toBe(10)
     expect(rows.busy()).toBe(false)
@@ -2522,13 +2521,13 @@ test('a throttle collapses a run of refreshes into one reload per window', async
         { throttle: WINDOW },
     )
     await loaded
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     const before = loads
     loaded.refresh()
     loaded.refresh()
     loaded.refresh()
     expect(loads - before).toBe(1)
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(loads - before).toBe(2)
 })
 
@@ -2549,7 +2548,7 @@ test('a debounce holds refreshes until they stop, and reloads with nobody readin
     loaded.refresh()
     loaded.refresh()
     expect(loads - before).toBe(0)
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(loads - before).toBe(1)
 })
 
@@ -2566,7 +2565,7 @@ test('a throttled derived value that recomputes to the same figure wakes nobody'
     for (let write = 2; write <= 6; write += 1) {
         source.set(write)
         flushSync()
-        await sleep(AFTER_WINDOW)
+        await Bun.sleep(AFTER_WINDOW)
         derived()
         flushSync()
     }
@@ -2587,7 +2586,7 @@ test('a throttled derived value that does move still wakes, once per window', as
     for (let write = 2; write <= 6; write += 1) {
         source.set(write)
         flushSync()
-        await sleep(AFTER_WINDOW)
+        await Bun.sleep(AFTER_WINDOW)
         derived()
         flushSync()
     }
@@ -2611,7 +2610,7 @@ test('a run of writes wakes once per window rather than twice at its edges', asy
     query.set(1)
     query.set(2)
     expect(woken.count()).toBe(1)
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     // The window closing released what it held — the second wake, and the last one. A
     // throttle that re-opened a window on an empty close would wake again here for
     // nothing, which is the shape a trailing-edge timer usually gets wrong.
@@ -2639,10 +2638,10 @@ test('a debounce waits for the changes to stop, not for the first of them', asyn
     const woken = wakes(query)
     for (let write = 1; write <= 12; write += 1) {
         query.set(write)
-        await sleep(20)
+        await Bun.sleep(20)
     }
     expect(woken.count()).toBe(0)
-    await sleep(LONG * 3)
+    await Bun.sleep(LONG * 3)
     expect(woken.count()).toBe(1)
     expect(query()).toBe(12)
     woken.stop()
@@ -2692,9 +2691,9 @@ test('a cap on the key spares the call a superseded key would have made', async 
     for (const typed of ['n', 'no', 'nor', 'north']) {
         region.set(typed)
         flushSync()
-        await sleep(20)
+        await Bun.sleep(20)
     }
-    await sleep(LONG * 3)
+    await Bun.sleep(LONG * 3)
     flushSync()
     // Four keystrokes, no new call: every intermediate key was superseded inside the
     // window and never reached, and the last one is the key already held.
@@ -2720,7 +2719,7 @@ async function typeInto(
     for (const letter of letters) {
         value.set(letter)
         flushSync()
-        await sleep(20)
+        await Bun.sleep(20)
     }
 }
 
@@ -2755,7 +2754,7 @@ function searchRig(options: Record<string, number>): {
 test('a debounced body runs once for a burst, with the last key', async () => {
     const rig = searchRig({ debounce: 150 })
     await typeInto(rig.region, ['s', 'so', 'sou', 'south'])
-    await sleep(450)
+    await Bun.sleep(450)
     flushSync()
     // ONE call, and the key it was made with is the one the typist stopped on. The three
     // intermediate keys were never reached, so no entry exists for them and no request
@@ -2770,7 +2769,7 @@ test('a debounced body runs once for a burst, with the last key', async () => {
 test('a throttled body runs the leading change and the trailing one', async () => {
     const rig = searchRig({ throttle: 150 })
     await typeInto(rig.region, ['s', 'so', 'sou', 'south'])
-    await sleep(450)
+    await Bun.sleep(450)
     flushSync()
     // 5.12: the leading change goes straight through, and the window caps what follows —
     // so the two calls are the first key and the last, and neither middle key was reached.
@@ -2808,7 +2807,7 @@ test('a throttled body is busy while its window holds a run, and an await waits 
 test('an uncapped body runs for every key, which is what the cap is against', async () => {
     const rig = searchRig({})
     await typeInto(rig.region, ['s', 'so', 'sou', 'south'])
-    await sleep(450)
+    await Bun.sleep(450)
     flushSync()
     expect(rig.keys).toEqual(['s', 'so', 'sou', 'south'])
     expect(rig.wakes()).toBe(4)
@@ -4982,7 +4981,7 @@ test('a capped value adopting a stream while its window holds a write keeps forw
     const outer = reactive<unknown>(0, { debounce: WINDOW })
     outer.set(5)
     outer.set(inner)
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     run.push(2)
     await turns()
     expect(outer()).toEqual([1, 2])
@@ -4998,7 +4997,7 @@ test('a capped value adopting an unlanded value while its window holds a write s
     outer.set(5)
     const inner = reactive(() => new Promise<number>(() => {}))
     outer.set(inner)
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(`ready: ${outer.ready()} peek: ${outer.peek()}`).toBe(
         'ready: false peek: undefined',
     )
@@ -5452,7 +5451,7 @@ test('throttle on a stream wakes readers once per window, and a cursor still get
     }
     flushSync()
     expect(`wakes: ${wakes}`).toBe('wakes: 1')
-    await sleep(STREAM_WINDOW * 2)
+    await Bun.sleep(STREAM_WINDOW * 2)
     flushSync()
     expect(`wakes: ${wakes}`).toBe('wakes: 2')
     const seen: unknown[] = []
@@ -5481,7 +5480,7 @@ test('a read of a throttled stream serves the accumulation as the last release l
     run.push(3)
     await turns()
     expect(`during: ${rows().join(',')}`).toBe('during: 1,2')
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(`after: ${rows().join(',')}`).toBe('after: 1,2,3')
 })
 
@@ -5498,7 +5497,7 @@ test('a debounced stream releases once the chunks stop, and its close releases w
         await turns()
     }
     expect(`held: ${rows().join(',')}`).toBe('held: 1')
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(`released: ${rows().join(',')}`).toBe('released: 1,2,3,4')
     run.push(5)
     run.close()
@@ -5506,23 +5505,6 @@ test('a debounced stream releases once the chunks stop, and its close releases w
 })
 
 // ── `tags` selections, process-wide (RULEBOOK 11.43, 11.44, 13.1, 13.2, 13.3, 13.7, 13.9, 13.11) ──
-
-// Deferred loads, settled by hand, so a case can hold a set of values busy between two lines.
-function deferredLoads(): {
-    load: () => Promise<number>
-    settleAll: (value: number) => void
-} {
-    const settles: ((value: number) => void)[] = []
-    return {
-        load: () =>
-            new Promise<number>((resolve) => {
-                settles.push(resolve)
-            }),
-        settleAll: (value) => {
-            for (const settle of settles.splice(0)) settle(value)
-        },
-    }
-}
 
 // 13.2 AND 13.11 OVER TAGS, and 11.44's function form. A tag reaches across values — keyed
 // entries of one memo and an unkeyed value elsewhere carrying the same tag answer as one set.
@@ -5811,15 +5793,11 @@ test('a store answers before the initial value, and a miss falls back to it', ()
             throw new Error('corrupt')
         },
     })
-    const warn = console.warn
-    console.warn = (): void => {}
-    try {
+    warningsWhile(() =>
         expect(
             `unreadable: ${reactive(4, { store: unreadable.store })()}`,
-        ).toBe('unreadable: 4')
-    } finally {
-        console.warn = warn
-    }
+        ).toBe('unreadable: 4'),
+    )
 })
 
 // An unsettled `get` IS a load: busy with nothing to serve until it answers.
@@ -6655,7 +6633,7 @@ test('a debounce on a keyed value starts only the key the reaches stopped at', a
         'busy: true, ready: false',
     )
     expect(`held: ${search.entries.size}`).toBe('held: 1')
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(`calls: ${calls.join(',')}`).toBe('calls: nor')
     expect(last()).toBe(3)
     expect(`superseded busy: ${first.busy()}`).toBe('superseded busy: false')
@@ -6676,7 +6654,7 @@ test('a throttle on a keyed value starts the first key at once and the latest at
     region({ name: 'south' })
     region({ name: 'east' })
     expect(`calls: ${calls.join(',')}`).toBe('calls: north')
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(`calls: ${calls.join(',')}`).toBe('calls: north,east')
 })
 
@@ -6693,7 +6671,7 @@ test('a debounce on a keyed stream opens one stream for a burst of reaches', asy
     rows({ region: 'n' })
     rows({ region: 'no' })
     const settled = rows({ region: 'nor' })
-    await sleep(AFTER_WINDOW)
+    await Bun.sleep(AFTER_WINDOW)
     expect(`opened: ${opened.join(',')}`).toBe('opened: nor')
     expect(await settled).toEqual(['nor'])
 })

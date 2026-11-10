@@ -24,8 +24,6 @@ import { GET, POST } from '#shared/rpc.ts'
 
 installServer()
 
-const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
-
 // 11.32 — A BODY BUILT AT IMPORT RUNS ONCE PER REQUEST, and a request sees its own answer. THE
 // REVERT: have `outsideScope` answer false; the value is process-wide again, and the second request
 // reads the first one's `set` — 5 where 0 is due.
@@ -39,7 +37,7 @@ test('a value built outside every request is one value per request — 11.32', a
 
     await inScope(new Request('http://app/a'), async () => {
         visits.set(visits() + 5)
-        await tick()
+        await Bun.sleep(0)
         expect(visits()).toBe(5)
     })
     await inScope(new Request('http://app/b'), async () => {
@@ -156,7 +154,7 @@ test('a handler declaring no parameter does not run at its declaration — 16.64
         runs += 1
         return runs
     })
-    await tick()
+    await Bun.sleep(0)
     expect(runs).toBe(0)
     await inScope(new Request('http://app/a'), async () => {
         expect(await visit()).toBe(1)
@@ -178,7 +176,7 @@ test('a plain handler declaring global is built once, on its first call — 11.3
         },
         { global: true },
     )
-    await tick()
+    await Bun.sleep(0)
     expect(runs).toBe(0)
     for (const path of ['a', 'b'])
         await inScope(new Request(`http://app/${path}`), async () => {
@@ -218,7 +216,7 @@ test('a home first reached inside an owner outlives it — 12.17', async () => {
     again()
     collectWatches(previous)
     for (const stop of setup) stop()
-    await tick()
+    await Bun.sleep(0)
     await visit()
     await archive()
     await again()
@@ -252,7 +250,7 @@ test('a handler no call has reached is not busy, and asking runs nothing — 13.
     const outside = probes()
     await inScope(new Request('http://app/a'), async () => {
         const inside = probes()
-        await tick()
+        await Bun.sleep(0)
         expect(`${outside} | ${inside} | body runs: ${runs}`).toBe(
             'false true true false | false true true false | body runs: 0',
         )
@@ -285,13 +283,13 @@ test('a reader that probed before the first call wakes when it starts and settle
         const stop = watch(() => {
             seen.push(save.busy())
         })
-        await tick()
+        await Bun.sleep(0)
         const probing = runs
         const call = save()
-        await tick()
+        await Bun.sleep(0)
         release()
         await call
-        await tick()
+        await Bun.sleep(0)
         stop()
         return `${seen.join(' ')}, probing ran ${probing}`
     }
@@ -321,7 +319,7 @@ test('a probe over a mutation a sweep invalidated runs nothing — 3.14', async 
         await save()
         refresh()
         const busy = save.busy()
-        await tick()
+        await Bun.sleep(0)
         expect(`busy: ${busy}, writes: ${writes}`).toBe(
             'busy: false, writes: 1',
         )
@@ -405,7 +403,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
     b.open()
     a.open()
     await Promise.all([a.done, b.done])
-    await tick()
+    await Bun.sleep(0)
     expect(totals).toEqual({ a: 30, b: 20 })
 })
 
@@ -458,7 +456,7 @@ test('an effect a load aborted reruns under its own request, whichever request d
 
     ;(opens.b as (answer: string) => void)('b')
     ;(opens.a as (answer: string) => void)('a')
-    await tick()
+    await Bun.sleep(0)
     const landed = { seen: [...seen].sort(), narrowed: [...narrowed].sort() }
     const later = { seen: [] as string[], narrowed: [] as string[] }
     seen.length = 0
@@ -560,7 +558,7 @@ test('a bare refresh reaches the request it was made in and no other — 13.8', 
     })
     const b = held('b', reach, subscribe)
     expect(loads).toBe(3)
-    await tick()
+    await Bun.sleep(0)
     b.open()
     await b.done
     a.open()
@@ -629,7 +627,7 @@ test('request and response read the request being served, and throw outside one 
         expect(() => request()).toThrow(/RULEBOOK 22\.1/)
     })
     const url = await inScope(new Request('http://app/invoices'), async () => {
-        await tick()
+        await Bun.sleep(0)
         response().status = 201
         expect(response().status).toBe(201)
         return request().url

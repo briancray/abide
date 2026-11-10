@@ -160,7 +160,7 @@ test('a call joining a load does not extend its timeout — 16.61', async () => 
         timeout: 200,
     }) as unknown as () => Loading
     const value = never()
-    await new Promise((done) => setTimeout(done, 150))
+    await Bun.sleep(150)
     expect(never()).toBe(value)
     const busyAtCheckpoint = await new Promise((done) =>
         setTimeout(() => done(value.busy()), 100),

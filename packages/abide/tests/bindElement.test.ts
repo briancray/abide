@@ -11,16 +11,12 @@ import { afterAll, expect, test } from 'bun:test'
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
 
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage } from './typed.ts'
 
 afterAll(closeTyped)
 afterAll(removeTemporaryModules)
-
-const click = (selector: string): void => {
-    ;(document.querySelector(selector) as HTMLElement).click()
-    flushSync()
-}
 
 // THE REVERT: what this replaced. `bind:element=""` was written into the markup — inert, ignored
 // by a browser, and the node never reached anything.

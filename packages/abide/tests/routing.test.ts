@@ -31,6 +31,7 @@ import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
 
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { warningsWhile } from './warningsWhile.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
@@ -1324,18 +1325,11 @@ crumbs.set(['Home'])
             layouts: [async () => ({ default: layout })],
         },
     ])
-    const said: string[] = []
-    const warn = console.warn
-    console.warn = (...parts: unknown[]): void => {
-        said.push(parts.map(String).join(' '))
-    }
-    try {
+    const said = await warningsWhile(async () => {
         await r.hydrate()
         flushSync()
-    } finally {
-        console.warn = warn
-    }
-    expect(said.filter((line) => line.includes('41.10'))).toEqual([])
+    }, '41.10')
+    expect(said).toEqual([])
     // HYDRATED WHERE IT STANDS, not rebuilt.
     expect(document.querySelector('#crumbs a')).toBe(painted)
 })
@@ -1400,8 +1394,7 @@ function viewTransitions(): {
 }
 
 async function until(done: () => boolean): Promise<void> {
-    for (let turn = 0; turn < 100 && !done(); turn += 1)
-        await new Promise((resolve) => setTimeout(resolve, 0))
+    for (let turn = 0; turn < 100 && !done(); turn += 1) await Bun.sleep(0)
 }
 
 // 39.9 — THE NAVIGATION IS OVER WHEN THE DOM IS WRITTEN, while the animation is still playing.

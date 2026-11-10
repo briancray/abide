@@ -10,6 +10,8 @@ import { ArmRegion, ChosenRegion } from '#ui/ArmRegion.ts'
 import type { Region } from '#ui/regions.ts'
 import { Scope } from '#ui/Scope.ts'
 
+import { warningsWhile } from './warningsWhile.ts'
+
 type Counted = {
     builds: number
     mounts: number
@@ -139,18 +141,13 @@ test('a chosen component mounts itself, and an absent one leaves the region empt
 // reports `['b']` where `[]` is due, and no warning.
 test('a painted component the client chose none for is emptied — 41.24', () => {
     const { host, region } = regionIn('b')
-    const warned: string[] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
-    try {
-        new ChosenRegion(region, new Scope(), {}, null).show(null)
-    } finally {
-        console.warn = warn
-    }
+    const warned = warningsWhile(
+        () => new ChosenRegion(region, new Scope(), {}, null).show(null),
+        'abide:hydrate',
+    )
     expect({
         standing: tags(host),
-        warnings: warned.filter((line) => line.includes('abide:hydrate'))
-            .length,
+        warnings: warned.length,
     }).toEqual({ standing: [], warnings: 1 })
 })
 
@@ -163,13 +160,9 @@ test('a first swap to an arm the open does not name fills it — 41.24', () => {
     region.open.data = '[0'
     const p = counted('p')
     const em = counted('em')
-    const warn = console.warn
-    console.warn = () => {}
-    try {
-        new ArmRegion(region, new Scope(), [p.arm, em.arm], true).show(1)
-    } finally {
-        console.warn = warn
-    }
+    warningsWhile(() =>
+        new ArmRegion(region, new Scope(), [p.arm, em.arm], true).show(1),
+    )
     expect(tags(host)).toEqual(['em'])
     expect([em.builds, em.mounts, p.mounts]).toEqual([1, 1, 0])
 })

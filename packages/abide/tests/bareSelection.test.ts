@@ -23,6 +23,8 @@ import { cellOf } from '#shared/reactive/cellShape.ts'
 import { followServed } from '#shared/reactive/producer.ts'
 import { unfileProducers } from '#shared/reactive/selections.ts'
 
+import { deferredLoads } from './deferredLoads.ts'
+
 // A FILE OF ITS OWN IS NOT A PROCESS OF ITS OWN: under `bun run test:serial` every file before this
 // one ran here, and what each left filed is in this sweep — the principal's document, a stream
 // another file dropped and nothing has collected — and `busy()` reads true while they ask.
@@ -30,23 +32,6 @@ import { unfileProducers } from '#shared/reactive/selections.ts'
 // readers to 13.7. THE REVERT: drop this hook; after `principalEarly.test.ts` in one process the
 // guard reads `busy saw: true,true,true`.
 beforeAll(unfileProducers)
-
-// Loads settled by hand, so a case can hold a set of values busy between two lines.
-function deferredLoads(): {
-    load: () => Promise<number>
-    settleAll: (value: number) => void
-} {
-    const settles: ((value: number) => void)[] = []
-    return {
-        load: () =>
-            new Promise<number>((resolve) => {
-                settles.push(resolve)
-            }),
-        settleAll: (value) => {
-            for (const settle of settles.splice(0)) settle(value)
-        },
-    }
-}
 
 // 13.6 AND 7.3 — A BARE `invalidate()` MATCHES PRODUCERS, AND LOADS NOTHING. The value with no
 // producer is followed by a browser, which is the one place an invalidate of it is not inert (7.10):

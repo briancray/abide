@@ -25,6 +25,7 @@ import {
     refusal,
     renderPage,
 } from './typed.ts'
+import { warningsWhile } from './warningsWhile.ts'
 
 afterAll(closeTyped)
 
@@ -792,7 +793,7 @@ test('a for over an async iterable appends each item as it arrives', async () =>
     mount()
 
     // The pump is microtasks; one macrotask turn drains every one of them.
-    await new Promise((settle) => setTimeout(settle, 0))
+    await Bun.sleep(0)
 
     expect(
         [...document.querySelectorAll('#stream li')].map(
@@ -840,12 +841,7 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
 
     // Only the reconcile's own lines, and only while the clicks below run — `console.warn` is the
     // stand-in for `log.named` everywhere in this seam, so the channel is what tells them apart.
-    const said: string[] = []
-    const warn = console.warn
-    console.warn = (...parts: unknown[]): void => {
-        said.push(parts.map(String).join(' '))
-    }
-    try {
+    const hydrate = warningsWhile(() => {
         mount()
 
         const rows = (): string[] =>
@@ -870,17 +866,14 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
             flushSync()
         })
         expect(woke.bindingRuns).toBe(3)
+    }, 'abide:hydrate')
 
-        // 41.15 — ONCE FOR THE BLOCK. The key repeats on every reconcile the region ever runs, and
-        // three writes have now gone through it.
-        const hydrate = said.filter((line) => line.includes('abide:hydrate'))
-        expect(hydrate).toHaveLength(1)
-        expect(hydrate[0]).toContain(
-            'abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.14.',
-        )
-    } finally {
-        console.warn = warn
-    }
+    // 41.15 — ONCE FOR THE BLOCK. The key repeats on every reconcile the region ever runs, and
+    // three writes have now gone through it.
+    expect(hydrate).toHaveLength(1)
+    expect(hydrate[0]).toContain(
+        'abide: a {#for} key is repeated in this list, so the last row under it is the one kept and the rows it shadows are dropped. RULEBOOK 41.14.',
+    )
 })
 
 // A RERUN IS NOT A NEW SOURCE. The subject expression is read inside a watch, so any OTHER
@@ -924,16 +917,16 @@ test('a second call with the same source does not restart the pump', async () =>
     const builders = { make, mount, update: noUpdate }
     const list = listAt(region, false, key, () => builders)
     updateList(list, source)
-    await new Promise((settle) => setTimeout(settle, 0))
+    await Bun.sleep(0)
     expect(text()).toEqual(['a', 'b'])
 
     // The watch reruns over an unrelated write and hands back the same iterable.
     updateList(list, source)
-    await new Promise((settle) => setTimeout(settle, 0))
+    await Bun.sleep(0)
     expect(text()).toEqual(['a', 'b'])
 
     release()
-    await new Promise((settle) => setTimeout(settle, 0))
+    await Bun.sleep(0)
     expect(text()).toEqual(['a', 'b', 'c'])
 })
 
@@ -1209,12 +1202,12 @@ test('a list arriving in place of a stream stops the stream', async () => {
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
 
     updateList(list, arriving())
-    await new Promise((settle) => setTimeout(settle, 0))
+    await Bun.sleep(0)
     expect(text()).toEqual(['a'])
 
     updateList(list, ['x'])
     release()
-    await new Promise((settle) => setTimeout(settle, 0))
+    await Bun.sleep(0)
     expect(text()).toEqual(['x'])
 })
 
@@ -1258,7 +1251,7 @@ test('a list stopped while its source is quiet returns the source at once — 12
         () => ({ make, mount: () => new Scope(), update: noUpdate }),
     )
     updateList(list, quiet)
-    await new Promise((settle) => setTimeout(settle, 0))
+    await Bun.sleep(0)
     expect(host.querySelectorAll('li')).toHaveLength(1)
 
     list.stop()
@@ -1363,16 +1356,7 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
     for (const node of painted.slice(3)) node.remove()
     expect(document.querySelectorAll('#five li')).toHaveLength(3)
 
-    const said: string[] = []
-    const warn = console.warn
-    console.warn = (...parts: unknown[]): void => {
-        said.push(parts.map(String).join(' '))
-    }
-    try {
-        mount()
-    } finally {
-        console.warn = warn
-    }
+    const said = warningsWhile(mount)
     expect(
         [...document.querySelectorAll('#five li')].map((n) => n.textContent),
     ).toEqual(['a', 'b', 'c', 'd', 'e'])
@@ -1413,16 +1397,7 @@ test('a document holding more rows than the client computes warns and rebuilds �
     }
     expect(document.querySelectorAll('#three li')).toHaveLength(5)
 
-    const said: string[] = []
-    const warn = console.warn
-    console.warn = (...parts: unknown[]): void => {
-        said.push(parts.map(String).join(' '))
-    }
-    try {
-        mount()
-    } finally {
-        console.warn = warn
-    }
+    const said = warningsWhile(mount)
     expect(
         [...document.querySelectorAll('#three li')].map((n) => n.textContent),
     ).toEqual(['a', 'b', 'c'])

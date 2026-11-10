@@ -12,20 +12,15 @@ import { parseAbide } from '#compiler'
 import { checkApp } from '#compiler/checkApp.ts'
 import { UNCHECKED } from '#compiler/CheckerAnswer.ts'
 import { compileApp } from '#compiler/compileApp.ts'
-import { flushSync } from '#shared'
 
 import { appFixture } from './builtApp.ts'
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage, TYPED_ROOT, typedSession } from './typed.ts'
 
 afterAll(closeTyped)
 const session = await typedSession()
 afterAll(removeTemporaryModules)
-
-const click = (selector: string): void => {
-    ;(document.querySelector(selector) as HTMLElement).click()
-    flushSync()
-}
 
 // 32.42 — THE PAGE'S OWN VALUE, read by name inside the body, with no prop to carry it.
 const COUNTER = `<script>

@@ -10,8 +10,8 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { emitComponent, parseAbide } from '#compiler'
-import { flushSync } from '#shared'
 
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
 
@@ -29,11 +29,6 @@ const { title } = props<{ title: string }>()
 
 // 32.18's second row: children, or a fallback where the caller wrote none.
 const NOTE = `<aside><slot>nothing yet</slot></aside>`
-
-const click = (selector: string): void => {
-    ;(document.querySelector(selector) as HTMLElement).click()
-    flushSync()
-}
 
 // THE REVERT: the throw this replaced — `<Card>` with children was a compile error naming 32.18.
 test('a caller writes markup between the tags and the child places it — 32.18', async () => {

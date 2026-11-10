@@ -275,7 +275,7 @@ test('every example renders on the server and mounts on the client', async () =>
                 // The host holds the component and nothing else, so the pair `render` wrote round
                 // it (41.9) is its first child and its last.
                 mount({ open: host.firstChild, close: host.lastChild })
-                await new Promise((resolve) => setTimeout(resolve, 0))
+                await Bun.sleep(0)
             } catch (thrown) {
                 broken.push(
                     `${example}: ${String(thrown).split('\n')[0] ?? ''}`,
@@ -285,7 +285,7 @@ test('every example renders on the server and mounts on the client', async () =>
         // ONE LONG DRAIN AT THE END, because the per-example one is a single macrotask and a value
         // can land 200 ms later. Without it a failure the LAST example defers arrives after the
         // listeners are gone, and that example is scored as running.
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await Bun.sleep(300)
     } finally {
         globalThis.fetch = fetched
         RPC_SERVER.raw = serverRaw

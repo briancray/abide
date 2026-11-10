@@ -26,7 +26,7 @@ export default GET(async ({ id }: { id: string }) => {
 const GET_SLOW = `import { GET } from '@abide/abide/server'
 
 export default GET(async () => {
-    await new Promise((done) => setTimeout(done, 200))
+    await Bun.sleep(200)
     return 'late'
 })
 `
@@ -88,13 +88,13 @@ const seen = ((globalThis as { overlap?: { firstDone: boolean; overlapped: boole
     overlapped: false,
 })
 const first = reactive(async () => {
-    await new Promise((done) => setTimeout(done, 20))
+    await Bun.sleep(20)
     seen.firstDone = true
     return 'one'
 })
 const second = reactive(async () => {
     seen.overlapped = !seen.firstDone
-    await new Promise((done) => setTimeout(done, 20))
+    await Bun.sleep(20)
     return 'two'
 })
 </script>
@@ -106,7 +106,7 @@ const second = reactive(async () => {
         Component,
         '<!doctype html><html><head></head><body></body></html>',
     )
-    await new Promise((done) => setTimeout(done, 60))
+    await Bun.sleep(60)
     expect(
         (globalThis as { overlap?: { overlapped: boolean } }).overlap
             ?.overlapped,

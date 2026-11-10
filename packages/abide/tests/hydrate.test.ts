@@ -13,6 +13,7 @@ import { measure } from '@abide/harness/abide'
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
 
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import {
     clientOf,
@@ -21,6 +22,7 @@ import {
     TYPED_ROOT,
     typedSession,
 } from './typed.ts'
+import { warningsWhile } from './warningsWhile.ts'
 
 afterAll(closeTyped)
 
@@ -199,7 +201,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
     // A MACROTASK, NOT TWO MICROTASKS. The subject lands in a microtask, the list reconciles in
     // the turn the write wakes, and a slot that is one read is ready a tick sooner than a block
     // that has to build rows — which is why the text case above needs less than this one.
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Bun.sleep(0)
     flushSync()
     expect(
         [...document.querySelectorAll('#list li')].map((n) => n.textContent),
@@ -247,7 +249,7 @@ const width = reactive(() => Promise.resolve('40px'))
     // AND BOTH FILL. THE REVERT: drop the `plan.attributes` loop in `emitRegion` — the document
     // is identical and both values stay empty for the life of the page.
     mount()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Bun.sleep(0)
     flushSync()
     expect(document.querySelector('#attr')?.getAttribute('title')).toBe('warm')
     expect((document.querySelector('#styled') as HTMLElement).style.width).toBe(
@@ -369,7 +371,7 @@ const shown = reactive(() => Promise.resolve(true))
     expect(html).not.toContain('id="off"')
 
     mount()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Bun.sleep(0)
     flushSync()
     expect(document.querySelector('#arm')?.textContent).toBe('on')
     expect(document.querySelector('#off')).toBeNull()
@@ -399,10 +401,10 @@ const side = (globalThis as { armSide?: string }).armSide
     side.armSide = 'client'
     let warned: string[]
     try {
-        warned = hydrateWarnings(() => {
+        warned = warningsWhile(() => {
             mount()
             flushSync()
-        })
+        }, 'abide:hydrate')
     } finally {
         side.armSide = undefined
     }
@@ -428,12 +430,12 @@ let on = reactive(false)
 
 <main>{#if on}<b>on</b>{:else}<i>off</i>{/if}<button id="flip" onclick={() => { on = !on }}>flip</button></main>`)
     let work: ReturnType<typeof measure> | undefined
-    const warned = hydrateWarnings(() => {
+    const warned = warningsWhile(() => {
         work = measure(() => {
             mount()
             flushSync()
         })
-    })
+    }, 'abide:hydrate')
     expect(work?.nodesCreated).toBe(0)
     expect(warned).toEqual([])
     ;(document.querySelector('#flip') as HTMLElement).click()
@@ -573,11 +575,6 @@ let flag = reactive(true)
         [...(document.querySelector(`#${id}`) as HTMLElement).classList]
             .sort()
             .join(' ')
-    const click = (id: string) => {
-        ;(document.querySelector(`#${id}`) as HTMLElement).click()
-        flushSync()
-    }
-
     // THE FIRST RUN OVER A SERVED PAGE WRITES NO CLASS: every token is there already.
     const mountWork = measure(() => {
         mount()
@@ -588,21 +585,21 @@ let flag = reactive(true)
     expect(sorted('out')).toBe('badge calm overdue')
 
     // ONE TOKEN OUT AND ONE IN, through the class list — never the attribute.
-    const toneWork = measure(() => click('tone'))
+    const toneWork = measure(() => click('#tone'))
     expect(sorted('out')).toBe('badge loud overdue')
     expect(toneWork.classWrites).toBe(2)
     expect(toneWork.attributesSet).toBe(0)
 
     expect(sorted('held')).toBe('a b')
-    click('unflag')
+    click('#unflag')
     expect(sorted('held')).toBe('a b')
-    click('untag')
+    click('#untag')
     expect(sorted('held')).toBe('b')
-    click('flag')
+    click('#flag')
     expect(sorted('held')).toBe('a b')
-    click('retag')
+    click('#retag')
     expect(sorted('held')).toBe('a')
-    click('unflag')
+    click('#unflag')
     expect(sorted('held')).toBe('a')
 })
 
@@ -632,20 +629,15 @@ let rows = reactive([{ id: 'a', tone: 'calm hot', on: true }])
         [...(document.querySelector(`#${id}`) as HTMLElement).classList]
             .sort()
             .join(' ')
-    const click = (id: string) => {
-        ;(document.querySelector(`#${id}`) as HTMLElement).click()
-        flushSync()
-    }
-
     // `hot` is the row's own class, so the directive's first run, off, leaves it.
     expect(sorted('a')).toBe('calm hot on row')
-    click('move')
+    click('#move')
     expect(sorted('a')).toBe('loud row')
     expect(sorted('b')).toBe('calm on row')
-    click('heat')
+    click('#heat')
     expect(sorted('a')).toBe('hot loud row')
     expect(sorted('b')).toBe('calm hot on row')
-    click('cool')
+    click('#cool')
     expect(sorted('a')).toBe('loud row')
     expect(sorted('b')).toBe('calm on row')
 })
@@ -744,11 +736,6 @@ let wide = reactive('10px')
 
     expect(html).toContain('style="color: red; ; width: 10px"')
     const style = () => (document.querySelector('#out') as HTMLElement).style
-    const click = (id: string) => {
-        ;(document.querySelector(`#${id}`) as HTMLElement).click()
-        flushSync()
-    }
-
     // THE FIRST RUN OVER A SERVED PAGE WRITES NOTHING: every declaration is there already.
     const mountWork = measure(() => {
         mount()
@@ -757,20 +744,20 @@ let wide = reactive('10px')
     expect(mountWork.attributesSet).toBe(0)
     expect(mountWork.styleWrites).toBe(0)
 
-    click('blue')
+    click('#blue')
     expect(style().color).toBe('blue')
     expect(style().marginLeft).toBe('2px')
     expect(style().width).toBe('10px')
     // WHAT THE ATTRIBUTE DROPS COMES OFF; the directive's property stays.
-    click('bare')
+    click('#bare')
     expect(style().color).toBe('')
     expect(style().marginTop).toBe('')
     expect(style().width).toBe('10px')
     // BOTH DECLARE `width`: the directive's comes later in the merged list, as on the server, and
     // when it is emptied the attribute's still stands.
-    click('claim')
+    click('#claim')
     expect(style().width).toBe('10px')
-    click('narrow')
+    click('#narrow')
     expect(style().width).toBe('5px')
 })
 
@@ -796,23 +783,18 @@ let gap = reactive('4px')
     mount()
     flushSync()
     const style = () => (document.querySelector('#out') as HTMLElement).style
-    const click = (id: string) => {
-        ;(document.querySelector(`#${id}`) as HTMLElement).click()
-        flushSync()
-    }
-
     expect(style().marginTop).toBe('4px')
     expect(style().getPropertyPriority('color')).toBe('important')
-    click('empty')
+    click('#empty')
     expect(style().marginTop).toBe('1px')
     expect(style().marginLeft).toBe('')
-    click('wide')
+    click('#wide')
     expect(style().marginTop).toBe('6px')
     // THE DIRECTIVE COMES LATER, so the attribute's new longhand does not win over it.
-    click('left')
+    click('#left')
     expect(style().marginLeft).toBe('6px')
     expect(style().color).toBe('')
-    click('empty')
+    click('#empty')
     expect(style().marginLeft).toBe('9px')
     expect(style().marginTop).toBe('')
 })
@@ -965,7 +947,7 @@ const later = async () => 'done'
     mount()
     flushSync()
     ;(document.querySelector('#go') as HTMLElement).click()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Bun.sleep(0)
     flushSync()
     expect(document.querySelector('#out')?.textContent).toBe('done')
 })
@@ -1162,7 +1144,7 @@ let label = reactive('a')
 </script>
 
 <main>{#if label}<svg><text><textPath href="#{label}">a</textPath></text>{#if on}<circle id="dot" r="2" />{/if}</svg>{/if}<button id="flip" onclick={() => { on = !on }}>flip</button><button id="relabel" onclick={() => { label = 'b' }}>relabel</button></main>`)
-    const warned = hydrateWarnings(() => {
+    const warned = warningsWhile(() => {
         mount()
         flushSync()
         expect(document.querySelector('#dot')?.localName).toBe('circle')
@@ -1170,23 +1152,10 @@ let label = reactive('a')
         flushSync()
         ;(document.querySelector('#flip') as HTMLElement).click()
         flushSync()
-    })
+    }, 'abide:hydrate')
     expect({
         href: document.querySelector('textPath')?.getAttribute('href'),
         dot: document.querySelector('#dot')?.localName,
         warned,
     }).toEqual({ href: '#b', dot: undefined, warned: [] })
 })
-
-/** The `abide:hydrate` warnings `body` logs, with `console.warn` restored however it ends. */
-function hydrateWarnings(body: () => void): string[] {
-    const warned: string[] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
-    try {
-        body()
-    } finally {
-        console.warn = warn
-    }
-    return warned.filter((line) => line.includes('abide:hydrate'))
-}

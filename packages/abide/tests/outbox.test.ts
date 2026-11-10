@@ -49,13 +49,10 @@ afterEach(() => {
     sent.length = 0
 })
 
-const settle = (ms = 10): Promise<void> =>
-    new Promise((done) => setTimeout(done, ms))
-
 /** Sends the line and waits for it to land. */
 async function delivered(): Promise<void> {
     deliver()
-    await settle(30)
+    await Bun.sleep(30)
 }
 
 type Call = PromiseLike<unknown> & {
@@ -78,7 +75,7 @@ test('a GET with no answer settles to its stand-in until the network answers —
     expect(await note).toEqual({ from: 'device' })
     expect(note.synced()).toBe(false)
     network = true
-    await settle(30)
+    await Bun.sleep(30)
     expect(note()).toEqual({ from: 'server', path: '/rpc/getNote' })
     expect(note.synced()).toBe(true)
 })
@@ -92,7 +89,7 @@ test('a refresh with no answer keeps what the copy holds — 16.81', async () =>
     await note
     network = false
     ;(note as unknown as { refresh(): void }).refresh()
-    await settle()
+    await Bun.sleep(10)
     expect(note()).toEqual({ from: 'server', path: '/rpc/getNote' })
 })
 
@@ -113,7 +110,7 @@ test('an answer the worker kept is not synced until the network answers — 16.8
     expect(await note).toEqual({ from: 'kept' })
     expect(note.synced()).toBe(false)
     kept = false
-    await settle(30)
+    await Bun.sleep(30)
     expect(note()).toEqual({ from: 'server' })
     expect(note.synced()).toBe(true)
 })
@@ -130,7 +127,7 @@ test('a mutation with no answer is queued, sent again under its key, and lands i
         { offline: (args) => ({ from: 'device', ...args }) },
     )
     expect(await added).toEqual({ from: 'device', text: 'a' })
-    await settle()
+    await Bun.sleep(10)
     expect(added.synced()).toBe(false)
     expect(outbox().map((call) => call.method)).toEqual(['POST'])
     network = true
@@ -154,11 +151,11 @@ test('a call queued behind another is not sent ahead of it — 16.83, 46.3', asy
     const offline = { offline: () => ({ from: 'device' }) }
     network = false
     await addNote({ text: 'first' }, offline)
-    await settle()
+    await Bun.sleep(10)
     network = true
     sent.length = 0
     await addNote({ text: 'second' }, offline)
-    await settle()
+    await Bun.sleep(10)
     expect(sent.filter((send) => send.path === '/rpc/addNote')).toEqual([])
     expect(outbox().map((call) => call.args?.text)).toEqual(['first', 'second'])
     await delivered()
@@ -176,9 +173,9 @@ test('a refused call stays with its error and does not hold back the next — 46
     network = false
     const refusedCall = addNote({ text: 'bad' }, offline)
     await refusedCall
-    await settle()
+    await Bun.sleep(10)
     await tagNote({ tag: 'x' }, offline)
-    await settle()
+    await Bun.sleep(10)
     network = true
     answers.set(
         '/rpc/addNote',
@@ -214,9 +211,9 @@ test('a call refused 401 holds the line until retry — 46.6, 46.12', async () =
     const offline = { offline: () => ({ from: 'device' }) }
     network = false
     await addNote({ text: 'one' }, offline)
-    await settle()
+    await Bun.sleep(10)
     await addNote({ text: 'two' }, offline)
-    await settle()
+    await Bun.sleep(10)
     network = true
     let signedIn = false
     answers.set('/rpc/addNote', () =>
@@ -234,7 +231,7 @@ test('a call refused 401 holds the line until retry — 46.6, 46.12', async () =
     expect(adds()).toBe(1)
     signedIn = true
     for (const call of outbox(addNote as never)) call.retry()
-    await settle(30)
+    await Bun.sleep(30)
     expect(adds()).toBe(3)
     expect(outbox()).toEqual([])
 })
@@ -246,12 +243,12 @@ test("a call's discard drops it alone — 46.13", async () => {
     const offline = { offline: () => ({ from: 'device' }) }
     network = false
     await addNote({ text: 'one' }, offline)
-    await settle()
+    await Bun.sleep(10)
     await addNote({ text: 'two' }, offline)
-    await settle()
+    await Bun.sleep(10)
     const [first] = outbox()
     first?.discard()
-    await settle()
+    await Bun.sleep(10)
     expect(outbox().map((call) => call.args?.text)).toEqual(['two'])
 })
 
@@ -262,7 +259,7 @@ test('busy is true over a handler while the outbox sends its call — 46.11', as
     const addNote = wire('POST', '/rpc/addNote') as Caller
     network = false
     await addNote({ text: 'one' }, { offline: () => ({ from: 'device' }) })
-    await settle()
+    await Bun.sleep(10)
     network = true
     let release = (): void => {}
     answers.set('/rpc/addNote', () => Response.json({ ok: true }))
@@ -276,11 +273,11 @@ test('busy is true over a handler while the outbox sends its call — 46.11', as
     }) as unknown as typeof fetch
     try {
         deliver()
-        await settle()
+        await Bun.sleep(10)
         expect(busy(addNote as never)).toBe(true)
         expect(busy()).toBe(true)
         release()
-        await settle(30)
+        await Bun.sleep(30)
         expect(busy(addNote as never)).toBe(false)
     } finally {
         globalThis.fetch = unstubbed
@@ -298,9 +295,9 @@ test('outbox answers the calls a selection names — 46.1, 46.16', async () => {
     const offline = { offline: () => ({ from: 'device' }) }
     network = false
     await addNote({ text: 'a' }, offline)
-    await settle()
+    await Bun.sleep(10)
     await tagNote({ tag: 'x' }, offline)
-    await settle()
+    await Bun.sleep(10)
     expect(outbox().length).toBe(2)
     expect(outbox(tagNote as never).map((call) => call.args)).toEqual([
         { tag: 'x' },
@@ -323,7 +320,7 @@ test('a reader of outbox is woken as calls are queued and delivered — 46.17', 
     })
     network = false
     await addNote({ text: 'a' }, { offline: () => ({ from: 'device' }) })
-    await settle()
+    await Bun.sleep(10)
     flushSync()
     network = true
     await delivered()
@@ -346,7 +343,7 @@ test("a queued call carries its call's value, refused and retried — 46.18, 46.
         { offline: () => ({ from: 'device' }) },
     )
     await added
-    await settle()
+    await Bun.sleep(10)
     const queued = outbox()[0]
     if (queued === undefined) throw new Error('nothing was queued')
     expect(queued.value).toBe(added as unknown as typeof queued.value)
@@ -371,7 +368,7 @@ test("a queued call carries its call's value, refused and retried — 46.18, 46.
     expect(queued.value.error()?.name).toBe('Invalid')
     network = false
     queued.retry()
-    await settle(30)
+    await Bun.sleep(30)
     expect(queued.value.error()).toBeUndefined()
     expect(queued.value()).toEqual({ from: 'device' })
     expect(queued.value.synced()).toBe(false)
@@ -408,13 +405,13 @@ test('a GET copy another call patched offline reads again once the line is deliv
             },
         },
     )
-    await settle()
+    await Bun.sleep(10)
     expect(notes()).toEqual({ from: 'device', path: '/rpc/listNotes' })
     expect(notes.synced()).toBe(false)
     from = 'server, with the call'
     network = true
     await delivered()
-    await settle()
+    await Bun.sleep(10)
     expect(outbox()).toEqual([])
     expect(notes()).toEqual({
         from: 'server, with the call',

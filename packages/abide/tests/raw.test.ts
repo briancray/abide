@@ -12,10 +12,10 @@ import { afterAll, expect, test } from 'bun:test'
 
 import { measure } from '@abide/harness/abide'
 
-import { flushSync } from '#shared'
-
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
+import { warningsWhile } from './warningsWhile.ts'
 
 afterAll(closeTyped)
 afterAll(removeTemporaryModules)
@@ -38,25 +38,6 @@ async function mountCounted(
 }
 
 type Work = ReturnType<typeof measure>
-
-function warningsWhile(body: () => void): string[] {
-    const said: string[] = []
-    const warn = console.warn
-    console.warn = (...parts: unknown[]): void => {
-        said.push(parts.map(String).join(' '))
-    }
-    try {
-        body()
-    } finally {
-        console.warn = warn
-    }
-    return said
-}
-
-const click = (id: string): void => {
-    ;(document.querySelector(id) as HTMLElement).click()
-    flushSync()
-}
 
 // An element's children as one line — a comment by its data, a text node quoted, an element by
 // its tag and its text — so "the markup went in as elements" and "it went in as text" read apart.

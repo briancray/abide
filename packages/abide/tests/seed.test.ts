@@ -10,6 +10,7 @@ import { reactive } from '#shared/reactive/index.ts'
 
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
+import { warningsWhile } from './warningsWhile.ts'
 
 // SLOW ON PURPOSE. The render does not wait for it (41.4), so the call below arrives while the
 // render's load is still in flight — the case 41.13 has join rather than run again.
@@ -20,7 +21,7 @@ let runs = 0
 export const getInvoice = GET(async ({ id }: { id: string }) => {
     runs += 1
     const run = runs
-    await new Promise((done) => setTimeout(done, 150))
+    await Bun.sleep(150)
     return { id, run }
 })
 `
@@ -86,7 +87,7 @@ const FEED = `import { GET } from '@abide/abide/server'
 
 export const getFeed = GET(async function* () {
     for (const line of ['one', 'two', 'three']) {
-        await new Promise((done) => setTimeout(done, 100))
+        await Bun.sleep(100)
         yield line
     }
 })
@@ -334,21 +335,6 @@ test("an answer says how long its handler took, and whether the render's run ans
     expect(duration).toBeGreaterThanOrEqual(140)
 })
 
-/** The `abide:hydrate` lines `body` logs. */
-async function hydrateWarnings(body: () => unknown): Promise<string[]> {
-    const warned: string[] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => {
-        warned.push(args.map(String).join(' '))
-    }
-    try {
-        await body()
-    } finally {
-        console.warn = warn
-    }
-    return warned.filter((line) => line.includes('abide:hydrate'))
-}
-
 // 41.12 — A CALL THE BUFFER CANNOT ANSWER RUNS THE HANDLER AND WARNS, where the buffer can tell the call
 // was its to answer: the render left this handler an entry, for other args. A call for args an entry
 // already answered is a refresh, and is quiet. THE REVERT: drop the `missed` call for args with no
@@ -359,7 +345,7 @@ test('a call the render made with other args runs the handler and warns on abide
     const seed = seedFor('caller-miss')
     seed(handler, { id: 1 }, Promise.resolve('one'))
     seed(handler, { id: 2 }, Promise.resolve('two'))
-    const warned = await hydrateWarnings(async () => {
+    const warned = await warningsWhile(async () => {
         // 19.7's case: the render passed a number, and the query arrives as text.
         expect(takeSeed('caller-miss', handler, { id: '1' })).toBeUndefined()
         expect(await takeSeed('caller-miss', handler, { id: 1 })).toMatchObject(
@@ -369,7 +355,7 @@ test('a call the render made with other args runs the handler and warns on abide
         )
         // The refresh, while the entry for 2 still stands.
         expect(takeSeed('caller-miss', handler, { id: 1 })).toBeUndefined()
-    })
+    }, 'abide:hydrate')
     expect(warned.length).toBe(1)
     expect(warned[0]).toContain('/invoices/getInvoice')
     expect(warned[0]).toContain('41.12')
@@ -394,12 +380,12 @@ test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is no
         await over
         await under
         await Bun.sleep(0)
-        const warned = await hydrateWarnings(async () => {
+        const warned = await warningsWhile(async () => {
             expect(
                 takeSeed('caller-bound', handler, { size: 2 }),
             ).toBeUndefined()
             expect(takeSeed('caller-bound', handler, { size: 1 })).toBeDefined()
-        })
+        }, 'abide:hydrate')
         expect(warned.length).toBe(1)
         expect(warned[0]).toContain('ABIDE_MAX_STREAM_BUFFER_SIZE')
     } finally {

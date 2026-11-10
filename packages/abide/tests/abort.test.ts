@@ -9,8 +9,6 @@ import { GET } from '#server'
 import { flushSync } from '#shared'
 import { wire } from '#ui/wire.ts'
 
-const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
-
 type Loading = (() => unknown) & {
     busy(): boolean
     ready(): boolean
@@ -58,7 +56,7 @@ test('a load two signaled calls share ends when both abort, not the first — 16
 
     // What the handler answers after is a settle nobody asked for, and does not land.
     releases[0]?.()
-    await tick()
+    await Bun.sleep(0)
     expect(value.ready()).toBe(false)
     expect(releases.length).toBe(1)
 })
@@ -136,14 +134,14 @@ test('an aborted stream keeps the chunks it had and runs no further — 16.49', 
     ) => Loading
     const leaving = new AbortController()
     const value = rows(undefined, { signal: leaving.signal })
-    await tick()
+    await Bun.sleep(0)
     expect(value.peek()).toEqual(['first'])
     leaving.abort()
     flushSync()
     expect(value.busy()).toBe(false)
     release()
-    await tick()
-    await tick()
+    await Bun.sleep(0)
+    await Bun.sleep(0)
     expect(value.peek()).toEqual(['first'])
     expect(finished).toBe(false)
 })

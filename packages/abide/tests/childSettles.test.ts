@@ -18,7 +18,7 @@ export const getTick = GET(async ({ id }: { id: string }) => {
 })
 
 export const getSlow = GET(async ({ id }: { id: string }) => {
-    await new Promise((done) => setTimeout(done, 20))
+    await Bun.sleep(20)
     return { id, total: 3 }
 })
 `

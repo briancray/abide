@@ -473,7 +473,7 @@ test('the wire is the same Rpc: coalesced, narrowable, and a mutation calls agai
             id: '42',
             paid: 10,
         })
-        await new Promise((done) => setTimeout(done, 0))
+        await Bun.sleep(0)
         await pay({ id: '42', amount: 10 })
         expect(calls).toEqual([
             `POST ${RPC}/payInvoice`,
@@ -557,7 +557,7 @@ test('the wire takes a call the page already started, and fetches after that —
 
         // Taken once: a refresh is a call of its own.
         arrived.refresh()
-        await new Promise((done) => setTimeout(done, 0))
+        await Bun.sleep(0)
         expect(fetched).toEqual(['/rpc/getInvoice?id=7'])
     } finally {
         window.fetch = previous
@@ -600,14 +600,13 @@ test('a GET is sent force-cache until the page has an answer for its args, no-ca
             invalidate(): void
             catch(onFailed: () => void): Promise<unknown>
         }
-        const turn = () => new Promise((done) => setTimeout(done, 0))
         await getInvoice({ id: '1' }).catch(() => {})
         online = true
         asked.push('online')
         getInvoice({ id: '1' }).refresh()
-        await turn()
+        await Bun.sleep(0)
         getInvoice({ id: '1' }).refresh()
-        await turn()
+        await Bun.sleep(0)
         getInvoice({ id: '1' }).invalidate()
         await getInvoice({ id: '1' })
         await getInvoice({ id: '2' })
@@ -700,8 +699,7 @@ test('a copy the build marked as streaming holds each chunk as it lands — 16.3
         send('{"n":1}\n{"n"')
         const landed = await Promise.race([
             (async () => {
-                while (!rows.ready())
-                    await new Promise((done) => setTimeout(done, 0))
+                while (!rows.ready()) await Bun.sleep(0)
                 return rows()
             })(),
             Bun.sleep(2000).then(() => 'nothing before the answer closed'),
@@ -746,13 +744,13 @@ test('a streaming mutation coalesces until its stream closes, then calls again �
             stream: true,
         }) as () => PromiseLike<unknown> & { busy(): boolean }
         const first = send()
-        await new Promise((done) => setTimeout(done, 0))
+        await Bun.sleep(0)
         expect(first.busy()).toBe(true)
         expect(send()).toBe(first)
         expect(fetches).toBe(1)
         close()
         expect(await first).toEqual([{ n: 1 }])
-        await new Promise((done) => setTimeout(done, 0))
+        await Bun.sleep(0)
         const second = send()
         close()
         expect(await second).toEqual([{ n: 1 }])
@@ -850,11 +848,11 @@ test('hydration waits on the calls painted settled, and a failed one ends the wa
         paintedCallsLanded()?.then(() => {
             ended = true
         })
-        await new Promise((done) => setTimeout(done, 0))
+        await Bun.sleep(0)
         expect(ended).toBe(false)
         // The request failed: the promise settles and no response was ever set.
         painted.settle()
-        await new Promise((done) => setTimeout(done, 0))
+        await Bun.sleep(0)
         expect(ended).toBe(true)
 
         window.__abideCalls = {
@@ -922,8 +920,7 @@ test('a streaming copy over binary chunks holds each as a Uint8Array as it lands
         )()
         const landed = await Promise.race([
             (async () => {
-                while (!rows.ready())
-                    await new Promise((done) => setTimeout(done, 5))
+                while (!rows.ready()) await Bun.sleep(5)
                 return rows()
             })(),
             Bun.sleep(5000).then(() => 'nothing before the answer closed'),
