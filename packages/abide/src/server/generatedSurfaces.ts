@@ -19,7 +19,7 @@ import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
-import { parseRoutePattern, type Segment } from '#shared/routePattern.ts'
+import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
 import { answered } from './answerFailure.ts'
@@ -133,7 +133,7 @@ function openApiOf(handlers: Map<string, Mounted>): {
             | undefined
         const inPath = new Set<string>()
         const parameters: unknown[] = []
-        for (const segment of parseRoutePattern(each.address)) {
+        for (const segment of parseRoutePattern(each.address, each.matchers)) {
             if (segment.kind === 'static') continue
             inPath.add(segment.name)
             const declared = schema?.properties?.[segment.name] ?? {
@@ -148,10 +148,7 @@ function openApiOf(handlers: Map<string, Mounted>): {
                 schema:
                     segment.kind === 'rest'
                         ? declared
-                        : patterned(
-                              declared,
-                              patternOf(segment, each.matchers),
-                          ),
+                        : patterned(declared, segment.accepts.source),
             }
             if (segment.kind === 'optional')
                 parameter.description = 'May be left out, with its segment.'
@@ -471,15 +468,6 @@ function logCall(
     )
 }
 
-/** 20.23 — the anchored pattern a segment takes a part by: its matcher's, or 30.34's default. */
-function patternOf(segment: Segment, matchers: Record<string, string>): string {
-    return segment.matcher === undefined
-        ? PERIODLESS_PATTERN
-        : (matchers[segment.matcher] ?? PERIODLESS_PATTERN)
-}
-
-const PERIODLESS_PATTERN = '^[^.]+$'
-
 /** `declared` constrained to `pattern` too: beside a pattern it declares itself, not over it. */
 function patterned(declared: unknown, pattern: string): unknown {
     if (declared === null || typeof declared !== 'object') return { pattern }
@@ -503,11 +491,11 @@ function withPathPatterns(
     if (properties === undefined) return schema
     const constrained: Record<string, unknown> = { ...properties }
     let changed = false
-    for (const segment of parseRoutePattern(address)) {
+    for (const segment of parseRoutePattern(address, matchers)) {
         if (segment.kind === 'static') continue
         const declared = properties[segment.name]
         if (declared === undefined) continue
-        const pattern = patternOf(segment, matchers)
+        const pattern = segment.accepts.source
         constrained[segment.name] =
             segment.kind === 'rest' &&
             declared !== null &&
