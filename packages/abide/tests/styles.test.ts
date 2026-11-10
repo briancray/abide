@@ -32,6 +32,20 @@ test('every selector requires the token on its rightmost compound — 34.4, 34.5
     )
 })
 
+// 34.31 — THE VIEW-TRANSITION TREE HANGS OFF THE DOCUMENT ROOT, which never carries a token, so a
+// compound that is only a `::view-transition…` pseudo-element is left bare; one with a selector
+// ahead of it is scoped as any other. THE REVERT: drop the `VIEW_TRANSITION_PSEUDO` check in
+// `withToken`; the first reads `[a-t]::view-transition-group(*)`, which matches nothing.
+test('a bare view-transition pseudo-element carries no token — 34.31', () => {
+    const scoped = (css: string) => scopeCss(css, 'a-t')
+    expect(
+        scoped('::view-transition-group(*) { animation-duration: 0.2s }'),
+    ).toBe('::view-transition-group(*) { animation-duration: 0.2s }')
+    expect(scoped('.x::view-transition-new(a){x:y}')).toBe(
+        '.x[a-t]::view-transition-new(a){x:y}',
+    )
+})
+
 // A COMMENT IS NOT A COMBINATOR, and a newline is one. THE REVERT: count only a space, comments
 // included; the last space is inside the comment, the compound reads `it. */\n:global(.y)`, and
 // the rule the comment explains is scoped to `.y[a-t]` — dogfood's own `:global` example did this.
@@ -153,9 +167,9 @@ test('a stylesheet names a view transition by a rule, not by the words — 39.7'
     expect(namesViewTransition('.total { view-transition-name: total }')).toBe(
         true,
     )
-    expect(
-        namesViewTransition(':global(::view-transition-old(root)) { a: b }'),
-    ).toBe(true)
+    expect(namesViewTransition('::view-transition-old(root) { a: b }')).toBe(
+        true,
+    )
     expect(namesViewTransition('@view-transition { navigation: auto }')).toBe(
         true,
     )

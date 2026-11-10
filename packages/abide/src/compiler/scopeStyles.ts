@@ -284,7 +284,11 @@ function lastCombinator(selector: string): number {
 
 const PSEUDO_ELEMENT = /::|:(before|after|first-line|first-letter)\b/i
 
+// 34.31 — the `::view-transition…` tree hangs off the document root, which never carries a token.
+const VIEW_TRANSITION_PSEUDO = /^::view-transition/i
+
 function withToken(compound: string, attribute: string): string {
+    if (VIEW_TRANSITION_PSEUDO.test(compound)) return compound
     const pseudo = compound.search(PSEUDO_ELEMENT)
     if (pseudo === -1) return compound + attribute
     return compound.slice(0, pseudo) + attribute + compound.slice(pseudo)

@@ -654,7 +654,7 @@ type Reached = { readonly [REACHED]: true }
 | `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.17, 34.29, 34.30 |
 | `<script module>` | Module scope. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.17, 34.18, 34.21, 34.30 |
 | `<script server>` | Module scope on a server alone, declaring its file's private handlers and filing its hooks. | 16.28, 16.70, 34.3, 34.12, 34.17, 34.19, 34.20, 34.22, 34.28, 34.29, 34.30, 37.1 |
-| `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11 |
+| `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11, 34.31 |
 | `import './app.css'` | A stylesheet the component depends on. | 34.6 |
 | `:global(…)` | The per-selector escape from scoping. | 34.5 |
 

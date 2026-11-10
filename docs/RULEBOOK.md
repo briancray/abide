@@ -2405,6 +2405,9 @@ a compile error.
 34.30 A `</script>` inside a string, a template, a comment or a regular expression in a `<script>`,
 `<script module>` or `<script server>` block MUST be a compile error.
 
+34.31 A selector whose rightmost compound is a `::view-transition…` pseudo-element with nothing ahead
+of it MUST NOT carry the scope token.
+
 # 35. Pages, rendering and sinks
 
 35.1 A `layout.abide` MUST render every page whose route lies below its own through a slot.
