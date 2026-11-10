@@ -1,6 +1,6 @@
 import { log, POST, trace } from '@abide/abide/server'
 
-import { billing } from './lib/billing.server.ts'
+import { billing } from './lib/billing.ts'
 
 /** Answers at /ops/syncContact: syncs a contact, with its trace's lines. */
 export default POST(
