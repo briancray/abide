@@ -6,7 +6,8 @@
 // THE MOST SATURATED HUE, NOT THE AVERAGE: an icon is usually a mark on a ground, and the mean of a
 // teal stroke on a near-black square is a muddy gray neither of them is.
 
-const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10]
+import { pngSize } from './pngSize.ts'
+
 const HUE_BINS = 24
 
 /**
@@ -74,11 +75,10 @@ export function inkOn(accent: string): string {
 function decoded(
     png: Uint8Array,
 ): { data: Uint8Array; channels: number } | undefined {
-    for (let at = 0; at < SIGNATURE.length; at += 1)
-        if (png[at] !== SIGNATURE[at]) return undefined
+    const size = pngSize(png)
+    if (size === undefined) return undefined
+    const { width, height } = size
     const view = new DataView(png.buffer, png.byteOffset, png.byteLength)
-    let width = 0
-    let height = 0
     let channels = 0
     const compressed: Uint8Array[] = []
     let length = 0
@@ -87,8 +87,6 @@ function decoded(
         const type = String.fromCharCode(...png.subarray(at + 4, at + 8))
         const body = png.subarray(at + 8, at + 8 + size)
         if (type === 'IHDR') {
-            width = view.getUint32(at + 8)
-            height = view.getUint32(at + 12)
             const depth = body[8]
             const color = body[9]
             const interlaced = body[12]
