@@ -35,12 +35,15 @@ export function argsInURL(method: Method): boolean {
  * The request a call is: its URL, body, `fetch` init and the `key` both ends match it by.
  *
  * `route` is the handler's, compiled where the caller holds one; an address is compiled here.
+ * `idempotencyKey` is a queued mutation's (46.10), written as the header it is sent under every
+ * time; it is not part of `key`, which names the call rather than one send of it.
  */
 export function rpcRequest(
     method: Method,
     route: HandlerRoute | string,
     given: Record<string, unknown> | undefined,
     cache: RequestCache = 'no-cache',
+    idempotencyKey?: string,
 ): RpcRequest {
     const { path, rest } = (
         typeof route === 'string' ? new HandlerRoute(route) : route
@@ -59,14 +62,13 @@ export function rpcRequest(
     // the outbox's send asks `no-store`. `rpc.raw` is handed `no-cache`, under whatever `init` its
     // caller passes. `no-cache` rather than `no-store`: a `fetch` the app writes itself to the same
     // address still reads 21.8's `max-age`.
-    const init: RequestInit =
-        body === undefined
-            ? { method, cache }
-            : {
-                  method,
-                  cache,
-                  headers: { 'content-type': 'application/json' },
-                  body,
-              }
+    const init: RequestInit = { method, cache }
+    if (body !== undefined) {
+        init.headers = { 'content-type': 'application/json' }
+        init.body = body
+    }
+    // 46.10 — a queued mutation is sent under one key every time, so a resend is answered once.
+    if (idempotencyKey !== undefined)
+        init.headers = { ...init.headers, 'idempotency-key': idempotencyKey }
     return { method, url, body, init, key: `${method} ${url} ${body ?? ''}` }
 }

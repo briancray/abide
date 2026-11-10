@@ -226,11 +226,13 @@ async function sendLine(): Promise<void> {
 
 /** One send of a call, carrying the key it carries every time (46.10). */
 async function send(call: Kept): Promise<Answer> {
-    const request = rpcRequest(call.method, call.address, call.args, 'no-store')
-    request.init.headers = {
-        ...(request.init.headers as Record<string, string> | undefined),
-        'idempotency-key': call.id,
-    }
+    const request = rpcRequest(
+        call.method,
+        call.address,
+        call.args,
+        'no-store',
+        call.id,
+    )
     return await answerOf(request, false, undefined)
 }
 

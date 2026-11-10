@@ -37,7 +37,7 @@ import {
 } from '#shared/reactive/parameterDefaults.ts'
 import { standIn } from '#shared/reactive/producer.ts'
 import { declare, type Method } from '#shared/rpc.ts'
-import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
+import { rpcRequest } from '#shared/rpcRequest.ts'
 
 import { enqueue, undelivered } from './outboxQueue.ts'
 import { followRpc } from './socketWire.ts'
@@ -57,8 +57,17 @@ export function wire(
     // A first load is the worker's to answer from its copy, where one answers this page: anywhere
     // else the cache below is the browser's, which would hand back a week-stale answer as the server's.
     const answeredOnce = new Set<string>()
-    const requestOf = (args: Record<string, unknown> | undefined) => {
-        const request = rpcRequest(method, route, args)
+    const requestOf = (
+        args: Record<string, unknown> | undefined,
+        idempotencyKey?: string,
+    ) => {
+        const request = rpcRequest(
+            method,
+            route,
+            args,
+            'no-cache',
+            idempotencyKey,
+        )
         if (
             !answeredOnce.has(request.key) &&
             navigator.serviceWorker?.controller
@@ -75,8 +84,13 @@ export function wire(
         // 16.49, 16.81 — the load's own signal and stand-in, as the call starting it carried them.
         const starting = startingLoadCall()
         const signal = starting.signal
-        const request = requestOf(args)
         let offline = starting.offline
+        // 16.82, 46.10 — a mutation that may be queued carries the key it is sent under every time.
+        const queuedId =
+            offline !== undefined && method !== 'GET'
+                ? crypto.randomUUID()
+                : undefined
+        const request = requestOf(args, queuedId)
         // A reload no call started — a refresh, or the one `whenOnline` asks — that gets no answer
         // waits before asking again, where asking at once would get none on every tick.
         const retryIn = offline === undefined ? UNANSWERED_RETRY_MS : 0
@@ -87,11 +101,16 @@ export function wire(
         // A STAND-IN IS FOR A COPY HOLDING NOTHING: a reload that gets no answer over one this page
         // already holds keeps serving it (7.4, 7.19) rather than trading it for a default.
         const first = !answeredOnce.has(request.key)
-        // 16.82, 46.10 — a mutation that may be queued carries the key it is sent under every time.
         const queued =
-            offline !== undefined && method !== 'GET'
-                ? queuedCall(request, address, args)
-                : undefined
+            queuedId === undefined
+                ? undefined
+                : {
+                      id: queuedId,
+                      method,
+                      address,
+                      url: request.url,
+                      args: args as Record<string, JsonValue> | undefined,
+                  }
         let standing: { value: unknown } | undefined
         if (queued !== undefined) standing = standForLoadCall()
         const stoodIn = (failed: Answer): unknown => {
@@ -193,25 +212,6 @@ export function wire(
 
 /** How long a reload that got no answer waits to ask again where the browser says it is online. */
 const UNANSWERED_RETRY_MS = 5_000
-
-/** A mutation's call as the outbox keeps it, under the key it is sent with every time (46.10). */
-function queuedCall(
-    request: RpcRequest,
-    address: string,
-    args: Record<string, unknown> | undefined,
-): Parameters<typeof enqueue>[0] {
-    const id = crypto.randomUUID()
-    const headers = new Headers(request.init.headers)
-    headers.set('idempotency-key', id)
-    request.init.headers = headers
-    return {
-        id,
-        method: request.method,
-        address,
-        url: request.url,
-        args: args as Record<string, JsonValue> | undefined,
-    }
-}
 
 /**
  * The build's copy options as a value takes them, `structural` resolved to its function.
