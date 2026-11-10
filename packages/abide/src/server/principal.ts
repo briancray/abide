@@ -60,9 +60,13 @@ function signature(secret: string, payload: string): string {
 }
 
 /** The JWT header every seal carries, and the only one a seal is read under: HS256, never `none`. */
-const JWT_HEADER = Buffer.from(
-    JSON.stringify({ alg: 'HS256', typ: 'JWT' }),
-).toString('base64url')
+const JWT_HEADER = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+
+function base64url(text: string): string {
+    return new TextEncoder()
+        .encode(text)
+        .toBase64({ alphabet: 'base64url', omitPadding: true })
+}
 
 /** The claims as a JWT (RFC 7519): their own members, with `exp` and `iat` in seconds. */
 function seal(
@@ -70,13 +74,13 @@ function seal(
     expires: number,
     secret: string,
 ): string {
-    const payload = Buffer.from(
+    const payload = base64url(
         JSON.stringify({
             ...claims,
             iat: Math.floor(Date.now() / 1000),
             exp: Math.floor(expires / 1000),
         }),
-    ).toString('base64url')
+    )
     const signed = `${JWT_HEADER}.${payload}`
     return `${signed}.${signature(secret, signed)}`
 }
@@ -92,23 +96,26 @@ function unseal(sealed: string | null): Sealed | undefined {
     // ONE HEADER IS READ, abide's own: a token naming another `alg` — `none` above all — is no seal.
     if (header !== JWT_HEADER || payload === undefined || rest.length > 0)
         return undefined
-    const given = Buffer.from(signed ?? '', 'base64url')
-    let verified = false
-    for (const secret of secrets()) {
-        const expected = Buffer.from(
-            signature(secret, `${header}.${payload}`),
-            'base64url',
-        )
-        if (
-            expected.length === given.length &&
-            crypto.timingSafeEqual(expected, given)
-        )
-            verified = true
-    }
-    if (!verified) return undefined
     try {
+        const given = Uint8Array.fromBase64(signed ?? '', {
+            alphabet: 'base64url',
+        })
+        let verified = false
+        for (const secret of secrets()) {
+            const expected = new Bun.CryptoHasher('sha256', secret)
+                .update(`${header}.${payload}`)
+                .digest()
+            if (
+                expected.length === given.length &&
+                crypto.timingSafeEqual(expected, given)
+            )
+                verified = true
+        }
+        if (!verified) return undefined
         const opened: unknown = JSON.parse(
-            Buffer.from(payload, 'base64url').toString(),
+            new TextDecoder().decode(
+                Uint8Array.fromBase64(payload, { alphabet: 'base64url' }),
+            ),
         )
         if (!isRecord(opened)) return undefined
         const { exp, iat: _, ...claims } = opened
