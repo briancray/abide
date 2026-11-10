@@ -2,19 +2,8 @@
 // the window has opened `abideMenu` to the page; anywhere else `onMenu` never imports it.
 
 import { menuBridge } from './menuBridge.ts'
-import { MenuEntry, type MenuItem } from './menuItem.ts'
+import { MenuEntry, type MenuItem, type NativeMenuItem } from './menuItem.ts'
 import { navigate } from './navigate.ts'
-
-/** A menu item as the window builds it: an item the page answers carries the `id` it is told by. */
-type Told =
-    | 'separator'
-    | {
-          label: string
-          key: string | undefined
-          role: string | undefined
-          id: number | undefined
-          items: Told[] | undefined
-      }
 
 // The items the last report numbered, by their `id`.
 let numbered: Exclude<MenuItem, 'separator'>[] = []
@@ -25,7 +14,7 @@ export function reportMenu(menus: readonly MenuItem[]): void {
     const bridge = menuBridge()
     if (bridge === undefined) return
     numbered = []
-    const told: Told[] = []
+    const told: NativeMenuItem[] = []
     for (const menu of menus) told.push(tell(menu))
     if (!listening) {
         listening = true
@@ -40,10 +29,10 @@ export function reportMenu(menus: readonly MenuItem[]): void {
     bridge.postMessage(JSON.stringify(told))
 }
 
-function tell(item: MenuItem): Told {
+function tell(item: MenuItem): NativeMenuItem {
     if (item === 'separator') return item
     const answered = item.items === undefined && !('role' in item && item.role)
-    const told: Told = {
+    const told: NativeMenuItem = {
         label: item.label,
         key: item.key,
         role: 'role' in item ? item.role : undefined,

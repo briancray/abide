@@ -7,6 +7,8 @@
 
 import { FFIType } from 'bun:ffi'
 
+import type { NativeMenuItem } from '#shared/menuItem.ts'
+
 import {
     callBlock,
     created,
@@ -23,7 +25,7 @@ import {
 import type { DesktopSession } from './DesktopSession.ts'
 import { reportUnexpected } from './hooks.ts'
 import type { Launcher } from './launcherOptions.ts'
-import { installMenu, menuBar, type NativeItem } from './nativeMenu.ts'
+import { installMenu, menuBar } from './nativeMenu.ts'
 
 const DRAIN_MILLISECONDS = 8
 
@@ -151,7 +153,7 @@ export function openDesktopWindow(
     )
     // 38.88 — THE MENU BAR IS THE PAGE'S: the defaults until the page the window loads tells it
     // what its route exports, and again after every navigation it makes.
-    const showMenu = (told: NativeItem[]): void =>
+    const showMenu = (told: NativeMenuItem[]): void =>
         installMenu(menuBar(appName, options.connect, told), (item) => {
             if (item.role === 'connect')
                 return navigate(`${base}?focus=connect`)
@@ -184,7 +186,7 @@ export function openDesktopWindow(
                             showMenu(
                                 JSON.parse(
                                     stringOf(send(message, 'body')),
-                                ) as NativeItem[],
+                                ) as NativeMenuItem[],
                             )
                         } catch (thrown) {
                             reportUnexpected(thrown)

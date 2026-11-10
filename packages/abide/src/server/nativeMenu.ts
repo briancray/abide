@@ -3,7 +3,7 @@
 
 import { FFIType } from 'bun:ffi'
 
-import type { MenuRole } from '#shared/menuItem.ts'
+import type { MenuRole, NativeMenuItem } from '#shared/menuItem.ts'
 
 import {
     definedClass,
@@ -14,20 +14,6 @@ import {
     send,
     sendTyped,
 } from './appKit.ts'
-
-/**
- * A menu item as the window builds it: the defaults, and what a page told it (`reportMenu`), each
- * item the page answers numbered by `id`.
- */
-export type NativeItem =
-    | 'separator'
-    | {
-          label: string
-          key?: string | undefined
-          role?: MenuRole | undefined
-          id?: number | undefined
-          items?: NativeItem[] | undefined
-      }
 
 // 38.89 — A ROLE AppKit ALREADY ANSWERS is sent down the responder chain, so `copy` copies whatever
 // holds the selection and is grayed where nothing does. The rest are the launcher's own.
@@ -84,10 +70,10 @@ const NAMED_KEYS: Record<string, string> = {
 export function menuBar(
     appName: string,
     connect: boolean,
-    added: NativeItem[],
-): NativeItem[] {
+    added: NativeMenuItem[],
+): NativeMenuItem[] {
     const bar = defaultMenu(appName, connect)
-    const window = bar.pop() as NativeItem
+    const window = bar.pop() as NativeMenuItem
     for (const menu of added) {
         const named =
             menu === 'separator'
@@ -109,7 +95,7 @@ export function menuBar(
     return bar
 }
 
-function defaultMenu(appName: string, connect: boolean): NativeItem[] {
+function defaultMenu(appName: string, connect: boolean): NativeMenuItem[] {
     return [
         {
             label: appName,
@@ -129,7 +115,7 @@ function defaultMenu(appName: string, connect: boolean): NativeItem[] {
                 ...(connect
                     ? ([
                           { label: 'Connect…', role: 'connect', key: 'cmd+k' },
-                      ] as NativeItem[])
+                      ] as NativeMenuItem[])
                     : []),
                 { label: 'Disconnect', role: 'disconnect', key: 'cmd+shift+k' },
                 'separator',
@@ -172,7 +158,7 @@ function defaultMenu(appName: string, connect: boolean): NativeItem[] {
     ]
 }
 
-type Choice = Exclude<NativeItem, 'separator'>
+type Choice = Exclude<NativeMenuItem, 'separator'>
 
 // What each launcher-handled item fires, by the tag its `NSMenuItem` carries.
 let chosen: Choice[] = []
@@ -184,7 +170,7 @@ let target: Id = null
  * itself when it is picked.
  */
 export function installMenu(
-    menu: NativeItem[],
+    menu: NativeMenuItem[],
     choose: (item: Choice) => void,
 ): void {
     target ??= send(
@@ -222,7 +208,7 @@ export function installMenu(
     )
 }
 
-function menuItem(item: NativeItem): Id {
+function menuItem(item: NativeMenuItem): Id {
     if (item === 'separator')
         return send(objcClass('NSMenuItem'), 'separatorItem')
     const { keyEquivalent, modifiers } = shortcut(item.key)

@@ -37,6 +37,20 @@ export type MenuItem =
           items?: MenuItem[]
       }
 
+/**
+ * A menu item as the window builds it — what a page tells it (`reportMenu`) and the defaults it
+ * stands beside. An item the page answers carries the `id` it is told by.
+ */
+export type NativeMenuItem =
+    | 'separator'
+    | {
+          label: string
+          key?: string | undefined
+          role?: MenuRole | undefined
+          id?: number | undefined
+          items?: NativeMenuItem[] | undefined
+      }
+
 /** An item a page answers: each function `on` filed runs when it is picked. 38.91. */
 export class MenuEntry {
     label: string
