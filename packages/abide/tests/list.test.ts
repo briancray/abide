@@ -1092,6 +1092,46 @@ test('a new async source empties the rows the last one appended in one write', a
     ).toEqual(['b0'])
 })
 
+// A LIST WHOSE REGION HAS LEFT THE DOCUMENT STILL STOPS ITS ROWS when it empties: there is nothing
+// to clear, but every row was a live reader until then. Driven on the `List` itself: a page's
+// region leaves with its owner, whose scope stops the rows before any source can move.
+//
+// THE REVERT, run: return from `clearList` on a `null` parent ahead of the loop stopping the rows;
+// this reports 2 wakes where 0 are due.
+test('emptying a list out of the document stops its rows', () => {
+    const host = document.createElement('ul')
+    const open = document.createComment(REGION_OPEN)
+    const close = document.createComment(REGION_CLOSE)
+    host.append(open, close)
+    const tick = reactive(0)
+    let wakes = 0
+    const list = listAt(
+        { open, close },
+        false,
+        (item) => item,
+        () => ({
+            make: () => [document.createElement('li')],
+            mount: () => {
+                const scope = new Scope()
+                scope.watch(() => {
+                    tick()
+                    wakes += 1
+                })
+                return scope
+            },
+            update: noUpdate,
+        }),
+    )
+    list.hydrating = false
+    updateList(list, ['a', 'b'])
+    for (const node of [...host.childNodes]) node.remove()
+    updateList(list, [])
+    wakes = 0
+    tick.set(1)
+    flushSync()
+    expect(`wakes: ${wakes}`).toBe('wakes: 0')
+})
+
 // THE SIBLINGS ARE NOT THE REGION'S. A list sharing its parent with other nodes cannot clear the
 // parent, so it removes row by row and leaves what stands around it — and an emptied region
 // refills between anchors that are still where they were.
