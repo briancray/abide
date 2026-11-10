@@ -7,19 +7,23 @@
 // shell, for the reason that file already states: two arms differing in anything but the
 // implementation are two implementations of different pages.
 
-import { execFileSync } from 'node:child_process'
-
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import {
+    abideCardSource,
+    abideComponentSource,
+    abideLoopSource,
+    type Card,
+    cards,
+} from '../bench/renderCases.ts'
+import { compiledPage } from './compiledPage.ts'
 import { type Report, reportScript } from './reportScript.ts'
 
-const REPO = new URL('../../../', import.meta.url).pathname
 const REPORT = reportScript()
 const SIZES = [100, 1000]
 
 type Arm = { script: string; markup: string }
-type Card = { id: number; title: string; body: string; count: number }
 type Built = { size: number; list: Card[]; inline: Arm; nested: Arm }
 
 // A WRITE HANDLE ON EACH PAGE'S LIST, so a test can prove the mount BOUND the rows it adopted: a
@@ -30,37 +34,25 @@ const HANDLE = `let rows = reactive(CARDS)
     rows = next
 }`
 
-const pages = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { buildCompiledPage } from './packages/abide/bench/buildCompiledPage.ts'
-import { abideCardSource, abideComponentSource, abideLoopSource, cards } from './packages/abide/bench/renderCases.ts'
-const out = []
-const handled = (source) => {
-    if (!source.includes('let rows = reactive(CARDS)')) throw new Error('no list to put a handle on')
-    return source.replace('let rows = reactive(CARDS)', ${JSON.stringify(HANDLE)})
+const handled = (source: string): string => {
+    if (!source.includes('let rows = reactive(CARDS)'))
+        throw new Error('no list to put a handle on')
+    return source.replace('let rows = reactive(CARDS)', HANDLE)
 }
-for (const size of ${JSON.stringify(SIZES)}) {
+const pages: Built[] = []
+for (const size of SIZES) {
     const list = cards(size)
-    const flat = await buildCompiledPage(handled(abideLoopSource()).replace('CARDS', JSON.stringify(list)))
-    const nested = await buildCompiledPage(
-        handled(abideComponentSource()).replace('CARDS', JSON.stringify(list)),
-        { Card: abideCardSource() },
-    )
-    out.push({ size, list, inline: flat, nested })
+    const rows = JSON.stringify(list)
+    pages.push({
+        size,
+        list,
+        inline: compiledPage(handled(abideLoopSource()).replace('CARDS', rows)),
+        nested: compiledPage(
+            handled(abideComponentSource()).replace('CARDS', rows),
+            { Card: abideCardSource() },
+        ),
+    })
 }
-console.log(JSON.stringify(out))
-`,
-        ],
-        { cwd: REPO, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
-    )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as Built[]
 
 // WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
 // and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.

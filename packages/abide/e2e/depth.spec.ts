@@ -2,14 +2,12 @@
 // O(nodes) once, so the grid — which is two levels deep — could not have told. This is the case
 // that distinguishes them, and it is the only reason markers might still be right somewhere.
 
-import { execFileSync } from 'node:child_process'
-
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import { type Scheme, type Tree, tree, wide } from '../bench/depthTree.ts'
 import { type Report, reportScript } from './reportScript.ts'
 
-const REPO = new URL('../../../', import.meta.url).pathname
 const REPORT = reportScript()
 const CASES: [number, number][] = [
     [2, 200],
@@ -20,37 +18,15 @@ const CASES: [number, number][] = [
     [32, 2000],
 ]
 
-const trees = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { tree, wide } from './packages/abide/bench/depthTree.ts'
-const out = []
-for (const [d, n] of ${JSON.stringify(CASES)})
-    for (const s of ['structural', 'cursor', 'markers'])
-        out.push({ scheme: s, shape: 'deep', ...tree(d, n, s) })
+const SCHEMES: Scheme[] = ['structural', 'cursor', 'markers']
+const trees: ({ scheme: Scheme; shape: 'deep' | 'wide' } & Tree)[] = []
+for (const [depth, leaves] of CASES)
+    for (const scheme of SCHEMES)
+        trees.push({ scheme, shape: 'deep', ...tree(depth, leaves, scheme) })
 // WIDE: 500 parents x 4 bindings, four levels down. A single shared prefix hoists almost
 // nothing here, which is the case that would justify hoisting per subtree.
-for (const s of ['structural', 'cursor', 'markers'])
-    out.push({ scheme: s, shape: 'wide', ...wide(4, 500, 4, s) })
-console.log(JSON.stringify(out))
-`,
-        ],
-        { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
-    )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as {
-    scheme: string
-    shape: 'deep' | 'wide'
-    markup: string
-    script: string
-    bindings: number
-    depth: number
-}[]
+for (const scheme of SCHEMES)
+    trees.push({ scheme, shape: 'wide', ...wide(4, 500, 4, scheme) })
 
 // WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
 // and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.

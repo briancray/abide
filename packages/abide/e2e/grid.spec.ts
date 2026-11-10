@@ -9,14 +9,12 @@
 // sub-millisecond op timed once returns the clock rather than the code (43.11) — and because the
 // three schemes have to be INTERLEAVED, so all three are on one page, each under its own root.
 
-import { execFileSync } from 'node:child_process'
-
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import { type Grid, grid } from '../bench/gridPage.ts'
 import { type Report, reportScript } from './reportScript.ts'
 
-const REPO = new URL('../../../', import.meta.url).pathname
 const REPORT = reportScript()
 
 const SHAPES: [number, number][] = [
@@ -25,35 +23,19 @@ const SHAPES: [number, number][] = [
 ]
 const VARIANTS = ['two-markers', 'one-marker', 'no-markers'] as const
 
-const pages = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { grid } from './packages/abide/bench/gridPage.ts'
-const out = []
-for (const [r, c] of ${JSON.stringify(SHAPES)})
-    for (const v of ${JSON.stringify(VARIANTS)})
-        out.push({ variant: v, rows: r, columns: c, ...grid(r, c, v, 'dense') })
-console.log(JSON.stringify(out))
-`,
-        ],
-        // A dense 100x50 grid is ~700 KB of markup per variant, well past the default
-        // 1 MB stdout buffer — which fails as ENOBUFS and reads like a spawn problem.
-        { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
-    )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as {
-    variant: string
+const pages: ({
+    variant: (typeof VARIANTS)[number]
     rows: number
     columns: number
-    markup: string
-    script: string
-    cells: number
-}[]
+} & Grid)[] = []
+for (const [rows, columns] of SHAPES)
+    for (const variant of VARIANTS)
+        pages.push({
+            variant,
+            rows,
+            columns,
+            ...grid(rows, columns, variant, 'dense'),
+        })
 
 // WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
 // and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.

@@ -7,14 +7,18 @@
 // ON TOP is open a reactive subscription per run — real work, and named in the output rather than
 // buried in the ratio.
 
-import { execFileSync } from 'node:child_process'
-
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import {
+    abideSource,
+    cards,
+    vanillaMarkup,
+    vanillaWire,
+} from '../bench/renderCases.ts'
+import { compiledPage } from './compiledPage.ts'
 import { type Report, reportScript } from './reportScript.ts'
 
-const REPO = new URL('../../../', import.meta.url).pathname
 const REPORT = reportScript()
 const SIZES = [10, 100, 1000]
 
@@ -26,29 +30,19 @@ type Built = {
     vanillaScript: string
 }
 
-const pages = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { buildCompiledPage } from './packages/abide/bench/buildCompiledPage.ts'
-import { abideSource, cards, vanillaMarkup, vanillaWire } from './packages/abide/bench/renderCases.ts'
-const out = []
-for (const size of ${JSON.stringify(SIZES)}) {
+const pages: Built[] = []
+for (const size of SIZES) {
     const list = cards(size)
-    const page = await buildCompiledPage(abideSource(size).replace('CARDS', JSON.stringify(list)))
-    out.push({ size, ...page, vanillaMarkup: vanillaMarkup(list), vanillaScript: vanillaWire() })
-}
-console.log(JSON.stringify(out))
-`,
-        ],
-        { cwd: REPO, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
+    const built = compiledPage(
+        abideSource(size).replace('CARDS', JSON.stringify(list)),
     )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as Built[]
+    pages.push({
+        size,
+        ...built,
+        vanillaMarkup: vanillaMarkup(list),
+        vanillaScript: vanillaWire(),
+    })
+}
 
 type Measured = {
     abide: number
