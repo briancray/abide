@@ -78,7 +78,11 @@ const VALUE_ATTRIBUTE = /\svalue\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i
 // What ends an option's text where it has no `value`: the next tag that is not a comment.
 const OPTION_TEXT_END = /<(?!!--)/
 const COMMENT = /<!--[\s\S]*?-->/g
-const REFERENCE = /&(?:#(\d+)|#x([\da-f]+)|(amp|lt|gt|quot|apos));/gi
+// A numeric reference may drop its `;`, as HTML reads one; a named one here never does.
+const REFERENCE = /&(?:#(\d+);?|#x([\da-f]+);?|(amp|lt|gt|quot|apos);)/gi
+// What an option's text collapses and trims, which is ASCII whitespace alone: a no-break space is
+// text the browser keeps in `option.value`.
+const OPTION_SPACE = /[\t\n\f\r ]+/g
 const NAMED: Record<string, string> = {
     amp: '&',
     lt: '<',
@@ -116,8 +120,8 @@ export function selectedMarkup(markup: string, value: unknown): string {
             text = decoded(
                 (stop === -1 ? rest : rest.slice(0, stop)).replace(COMMENT, ''),
             )
-                .replace(/\s+/g, ' ')
-                .trim()
+                .replace(OPTION_SPACE, ' ')
+                .replace(/^ | $/g, '')
         }
         if (!selectHolds(value, text)) continue
         out += `${markup.slice(cut, end - 1)} selected>`
@@ -127,13 +131,27 @@ export function selectedMarkup(markup: string, value: unknown): string {
     return cut === 0 ? markup : out + markup.slice(cut)
 }
 
+/**
+ * `text` with its character references read as the browser reads them into `option.value`.
+ *
+ * NOT THE COMPILER'S DECODER (`decodeCharacterReferences`): its spec-exact table of named
+ * references is build-time and stays out of the client, so a named reference past these five
+ * reads as written. A numeric one is the spec's: zero, a surrogate or past U+10FFFF is U+FFFD,
+ * where `String.fromCodePoint` would throw out of the render.
+ */
 function decoded(text: string): string {
     if (!text.includes('&')) return text
     return text.replace(REFERENCE, (whole, decimal, hex, name) =>
         decimal !== undefined
-            ? String.fromCodePoint(Number(decimal))
+            ? characterAt(Number(decimal))
             : hex !== undefined
-              ? String.fromCodePoint(Number.parseInt(hex, 16))
+              ? characterAt(Number.parseInt(hex, 16))
               : (NAMED[(name as string).toLowerCase()] ?? whole),
     )
+}
+
+function characterAt(code: number): string {
+    return code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+        ? '\ufffd'
+        : String.fromCodePoint(code)
 }
