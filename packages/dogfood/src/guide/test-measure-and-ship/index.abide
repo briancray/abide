@@ -352,8 +352,6 @@ bun scripts/testRows.ts --scope all --filter reports`} />
             <tbody>
                 <tr><td><code>rowsCommand</code></td><td>the same command line for your own runner: <code>--list</code>, <code>--scope</code>, <code>--filter</code></td></tr>
                 <tr><td><code>RowItem</code> · <code>RowState</code></td><td>one entry a runner offers, and where it is in its run</td></tr>
-                <tr><td><code>BenchRow</code></td><td>one bench's figures and the claim between them</td></tr>
-                <tr><td><code>RunnerFailure</code> · <code>isRunnerFailure</code></td><td>the last line of a runner that died, and how to tell it from a row</td></tr>
                 <tr><td><code>inScope</code> · <code>matchesFilter</code></td><td>the selection, so a page filters with the function the runner selects with</td></tr>
             </tbody>
         </table>

@@ -1,6 +1,6 @@
-// WHAT THE BENCH AND TESTS PAGES READ, AND WHAT THE TWO RUNNERS WRITE. Both runners are
-// subprocesses printing one JSON row per line; the docs app pipes those lines to the page without
-// reading them, so this module is the whole of the contract between the two packages.
+// WHAT A ROW RUNNER WRITES AND A PAGE READS. A runner is a subprocess printing one JSON row per
+// line; the docs app pipes those lines to the page without reading them, so this module is the
+// whole of the contract between the two packages.
 //
 // PURE, AND IMPORTED BY THE PAGE: the filter a reader types and the filter the runner applies are
 // this one function, so "run what I can see" runs exactly the rows on screen.
@@ -13,23 +13,6 @@ export type RowItem = { id: string; section: string; name: string }
  * `broken` is the RUNNER failing — no report, a thrown bench — and is not a red result.
  */
 export type RowState = 'queued' | 'running' | 'done' | 'broken'
-
-export type BenchRow = {
-    id: string
-    state: RowState
-    unit: string
-    /** The code under measurement's figure, in `unit`. */
-    subject: number | null
-    /** The hand-written arm's figure, in `unit`. */
-    handWritten: number | null
-    /** subject / handWritten as the lane is allowed to say it: a number, or why there is none. */
-    claim: string
-    /** The operations batched into one sample — `null` for a row that counts rather than times. */
-    n: number | null
-    /** The A/A floor as a fraction — `null` for a row that counts rather than times. */
-    floor: number | null
-    note: string
-}
 
 export type TestRow = {
     id: string
@@ -53,18 +36,6 @@ export type TestCase = {
     milliseconds: number
     skipped: boolean
     failure: string | null
-}
-
-/**
- * The line the docs app writes after the rows it did send when a runner died part way.
- *
- * A stream whose head has gone out cannot fail with a status, and cut off it reads as a network
- * error that says nothing of the runner's own.
- */
-export type RunnerFailure = { failure: string }
-
-export function isRunnerFailure(line: object): line is RunnerFailure {
-    return typeof (line as { failure?: unknown }).failure === 'string'
 }
 
 /**

@@ -1249,13 +1249,6 @@ export const REFERENCE: readonly {
         typeOnly: true,
     },
     {
-        route: '/reference/harness-rows/types/BenchRow',
-        names: ['BenchRow'],
-        entry: '@abide/harness/rows',
-        group: 'The measurement harness',
-        typeOnly: true,
-    },
-    {
         route: '/reference/harness-rows/types/TestRow',
         names: ['TestRow'],
         entry: '@abide/harness/rows',
@@ -1268,20 +1261,6 @@ export const REFERENCE: readonly {
         entry: '@abide/harness/rows',
         group: 'The measurement harness',
         typeOnly: true,
-    },
-    {
-        route: '/reference/harness-rows/types/RunnerFailure',
-        names: ['RunnerFailure'],
-        entry: '@abide/harness/rows',
-        group: 'The measurement harness',
-        typeOnly: true,
-    },
-    {
-        route: '/reference/harness-rows/isRunnerFailure',
-        names: ['isRunnerFailure'],
-        entry: '@abide/harness/rows',
-        group: 'The measurement harness',
-        typeOnly: false,
     },
     {
         route: '/reference/harness-rows/inScope',

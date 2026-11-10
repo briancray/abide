@@ -868,11 +868,8 @@ rows a runner prints, and an adapter for an abide app.
 | --- | --- | --- | --- |
 | `RowItem` | `{ id: string; section: string; name: string }` | One entry a runner offers to run. | 43.26 |
 | `RowState` | `'queued' \| 'running' \| 'done' \| 'broken'` | Where a row is in its run. | 43.27 |
-| `BenchRow` | `{ id: string; state: RowState; unit: string; subject: number \| null; handWritten: number \| null; claim: string; n: number \| null; floor: number \| null; note: string }` | One bench's result against its hand-written arm. | 43.26 |
 | `TestRow` | `{ id: string; state: RowState; tests: number; failures: number; skipped: number; milliseconds: number; cases: TestCase[]; note: string }` | One test file's result. | 43.27 |
 | `TestCase` | `{ name: string; milliseconds: number; skipped: boolean; failure: string \| null }` | One test in a file, as its report gave it. | 43.27 |
-| `RunnerFailure` | `{ failure: string }` | The line written after a runner died part way. | — |
-| `isRunnerFailure` | `(line: object) => line is RunnerFailure` | Whether a line is a `RunnerFailure`. | — |
 | `inScope` | `(item: RowItem, scope: string) => boolean` | Whether an item falls in a `--scope`. | 43.26 |
 | `matchesFilter` | `(item: RowItem, filter: string) => boolean` | Whether an item matches a `--filter`. | 43.26 |
 
