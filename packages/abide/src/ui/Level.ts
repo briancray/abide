@@ -6,7 +6,12 @@ import {
     type ShareScope,
 } from '#shared/reactive/share.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
-import { type Disposer, unowned, watchTracked } from '#shared/reactive/watch.ts'
+import {
+    type Disposer,
+    reportThrow,
+    unowned,
+    watchTracked,
+} from '#shared/reactive/watch.ts'
 
 import { reconciled, reconcileHead, unpainted } from './reconcileHead.ts'
 import { isEmptyRegion, type Region } from './regions.ts'
@@ -51,6 +56,8 @@ export class Level {
      * reads at that moment.
      */
     head: (() => string) | undefined = undefined
+    /** What `head` read at the last reconcile — what it stands as once it throws (39.20). */
+    lastRead = ''
     /**
      * The heads of the components mounted in this level, after its own and in the order they
      * mounted. A COLLECTION, NOT A CLOSURE PER CONTRIBUTION: a `{#for}` of components with a
@@ -98,14 +105,24 @@ export class Level {
     ): [who: object, text: string][] {
         const chain: [object, string][] = []
         for (const level of levels) {
-            if (level.head !== undefined) chain.push([level, level.head()])
-            for (const one of level.contributed) chain.push([one, one.head()])
+            if (level.head !== undefined) chain.push([level, level.read()])
+            for (const one of level.contributed) chain.push([one, one.read()])
         }
         return chain
     }
 
+    /** This level's own head as it reads now, or as it last read once it has thrown (39.20). */
+    read(): string {
+        try {
+            this.lastRead = (this.head as () => string)()
+        } catch (thrown) {
+            this.head = headThrew(thrown, this.lastRead)
+        }
+        return this.lastRead
+    }
+
     /**
-     * Joins a component's `<head>` to this level's. Applied once the level is mounted where the
+     * Joins a component's `<head>` to this level's. Applied at the end of the turn where the
      * component builds its own markup; a region the server painted already carries the head the
      * server wrote. It follows what it reads from here (39.13): A WATCH WHETHER OR NOT IT READS
      * ANYTHING THAT MOVES, one per component carrying a `<head>`, where a flag would be a second
@@ -173,6 +190,17 @@ export class HeadContribution {
             reconcileLater(this.level.chain)
     }
 
+    /** This head as it reads now, or as it last did once it has thrown (39.20). */
+    read(): string {
+        try {
+            return this.head()
+        } catch (thrown) {
+            const kept = this.last ?? ''
+            this.head = headThrew(thrown, kept)
+            return kept
+        }
+    }
+
     /**
      * 39.14 — WITHDRAWN AS A LEAVING LEVEL'S IS: the chain is reconciled without it. Adopted first
      * where the server painted it and nothing has reconciled since, so what it painted is known to
@@ -187,6 +215,20 @@ export class HeadContribution {
         level.contributed.delete(this)
         reconcileLater(level.chain)
     }
+}
+
+/**
+ * 39.20 — A HEAD THAT THROWS STANDS AS IT LAST READ, reported once (12.6) and never read again: a
+ * throw out of a reconcile would leave every one after it throwing too — a navigation's, a
+ * stopping component's half way through its scope's siblings — for as long as the contributor
+ * stays mounted. Returns what the head is read as from here.
+ */
+function headThrew(thrown: unknown, kept: string): () => string {
+    reportThrow(
+        thrown,
+        'a <head> threw, and stands as it last read. RULEBOOK 39.20.',
+    )
+    return () => kept
 }
 
 /** The chains a contributor asked to reconcile since the head last was, each once. */
@@ -208,27 +250,9 @@ function reconcileLater(chain: HeadChain): void {
         const opened = unowned(() => reactive(0))
         watchTracked(() => {
             opened()
-            // TAKEN BEFORE ANY RECONCILES: a head that throws (a `<title>` reading a failed load)
-            // must not leave `STALE` holding chains that nothing will ask to bump `asked` again.
             const chains = [...STALE]
             STALE.clear()
-            let failed = false
-            let thrown: unknown
-            for (const chain of chains) {
-                try {
-                    chain.reconcile()
-                } catch (error) {
-                    if (!failed) thrown = error
-                    failed = true
-                }
-            }
-            // One chain's throw does not cost the others their reconcile. It goes on out to be
-            // reported as any effect's is (12.6, 12.7) and stops this watch (12.8), so the next ask
-            // opens another rather than bumping one nothing follows.
-            if (failed) {
-                asked = undefined
-                throw thrown
-            }
+            for (const chain of chains) chain.reconcile()
         })
         version = asked = opened
     }

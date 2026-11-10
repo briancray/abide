@@ -664,7 +664,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Path | Meaning | Rules |
 | --- | --- | --- |
-| `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16, 39.17 |
+| `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16, 39.17, 39.20 |
 | `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10, 39.18, 39.19 |
 | `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3, 30.34, 30.36 |
 | `[[name]]` | An optional segment. | 23.5, 30.4, 30.34, 30.36 |

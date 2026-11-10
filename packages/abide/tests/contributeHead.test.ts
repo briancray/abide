@@ -209,13 +209,14 @@ test('rows joining in one reconcile each own an equal keyless node — 39.16', (
     expect(document.head.querySelectorAll('style').length).toBe(2)
 })
 
-// A HEAD THAT THROWS COSTS ONE TURN'S RECONCILE, NOT EVERY ONE AFTER. A row's `<title>{x.name}</title>`
-// reading a failed load throws inside the one watch every chain reconciles through; that stops the
-// watch (12.8), and the next ask must open another. THE REVERT: reconcile `STALE` in place and clear
-// it after, with no reset of `asked` — the throw leaves `STALE` full, no later ask bumps the watch,
-// and this reports 2 reconciles and the leaving row's `.a` standing where 3 and `.b`, `.c` are due.
-test('a contributor that throws does not stop the head reconciling — 12.8, 39.16', () => {
-    document.head.innerHTML = '<title>page</title>'
+// A HEAD THAT THROWS STANDS AS IT LAST READ (39.20). A row's `<title>{x.name}</title>` reading a
+// failed load throws inside every reconcile of its chain — the end-of-turn one, and the synchronous
+// one a painted contributor's `stop` runs to adopt what it painted. THE REVERT: read `one.head()`
+// in `Level.contributors` — `p.stop()` throws out before `contributed.delete`, so this reports 1
+// stop thrown, 2 contributors left, 3 reconciles and `.p`, `.a` standing where 0, 1, 4 and `.b`
+// alone are due.
+test('a contributor that throws stands as it last read — 12.6, 39.16, 39.20', () => {
+    document.head.innerHTML = '<title>page</title><style>.p{}</style>'
     const levels: Level[] = []
     let reconciles = 0
     const level = new Level({
@@ -228,9 +229,10 @@ test('a contributor that throws does not stop the head reconciling — 12.8, 39.
     level.setHead(() => '<title>page</title>')
     const failing = reactive(false)
     const back = enterShare(level)
-    // The drain surfaces each throw as uncaught (12.7); here it is only counted.
+    // The drain surfaces each watch's throw as uncaught (12.7); here it is only counted.
     const report = globalThis.reportError
     globalThis.reportError = () => {}
+    let stopsThrown = 0
     let warned: string[]
     try {
         warned = warningsWhile(() => {
@@ -239,25 +241,44 @@ test('a contributor that throws does not stop the head reconciling — 12.8, 39.
                 return '<style>.a{}</style>'
             })
             flushSync()
+            // Painted, so nothing reconciles it until it stops.
+            const painted = document.createElement('style')
+            painted.textContent = '.p{}'
+            const p = contributeHead(region([painted]), () => {
+                if (failing()) throw new Error('failed load')
+                return '<style>.p{}</style>'
+            })
             failing.set(true)
             flushSync()
-            contributeHead(region([]), () => '<style>.b{}</style>')
+            try {
+                p?.stop()
+            } catch {
+                stopsThrown += 1
+            }
             flushSync()
             a?.stop()
-            contributeHead(region([]), () => '<style>.c{}</style>')
+            contributeHead(region([]), () => '<style>.b{}</style>')
             flushSync()
-        }, 'an effect threw')
+        }, 'threw')
     } finally {
         globalThis.reportError = report
         leaveShare(back)
     }
-    // A's own watch, and the reconcile it threw inside.
-    expect(warned.length).toBe(2)
     const styles = [...document.head.querySelectorAll('style')].map(
         (node) => node.textContent,
     )
-    expect({ reconciles, styles }).toEqual({
-        reconciles: 3,
-        styles: ['.b{}', '.c{}'],
+    // Warned: a's and p's own watches, and each one's first reconcile — none after.
+    expect({
+        warned: warned.length,
+        stopsThrown,
+        contributors: level.contributed.size,
+        reconciles,
+        styles,
+    }).toEqual({
+        warned: 4,
+        stopsThrown: 0,
+        contributors: 1,
+        reconciles: 4,
+        styles: ['.b{}'],
     })
 })

@@ -3082,6 +3082,11 @@ for a history step in that direction, and `push` for any other navigation.
 39.19 A browser whose view transitions take no types MUST run a navigation's `view-transition-name`
 transition without them.
 
+39.20 In a browser, a `<head>` contribution that throws when the head is reconciled MUST reach
+`onError` and warn as 12.6 has an `Effect`'s throw, once, MUST stand as what it last read until the
+page, layout or component that made it leaves, and MUST NOT keep the rest of the head from being
+reconciled.
+
 # 40. Documentation
 
 *Free-standing: these clauses govern the documentation system, which REGISTRY does not name — a

@@ -42,7 +42,7 @@ const WATCH_LOG = namedLogger('abide:watch')
  *
  * 12.6 — a read of a failed value inside an effect arrives here as the throw that read is.
  */
-function reportThrow(thrown: unknown, message: string): void {
+export function reportThrow(thrown: unknown, message: string): void {
     WATCH_LOG.warning(message, thrown)
     UNEXPECTED.report?.(thrown)
 }
