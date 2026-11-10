@@ -4,7 +4,7 @@ const USD = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
 })
 
-/** One formatter for every won deal's amount, built once rather than per amount. */
+/** One formatter for every won deal's amount, built once. */
 export const money = {
     format: (amount: number): string => USD.format(amount),
 }

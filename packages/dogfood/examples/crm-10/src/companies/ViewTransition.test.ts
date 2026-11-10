@@ -12,7 +12,7 @@ test("the list row and the company's heading share one name", async () => {
     }
 })
 
-test('the transition rule reaches the document, not one component', async () => {
+test('the transition rule reaches the document', async () => {
     await using app = await createApp()
     const page = await app.fetch(new Request('http://crm.invalid/companies'))
     const sheet = /href="([^"]+\.css)"/.exec(await page.text())?.[1]
