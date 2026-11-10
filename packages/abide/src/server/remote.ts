@@ -143,9 +143,11 @@ function requestFor(
     args: ReturnType<typeof callArgs>,
 ): { url: string; init: RequestInit } {
     const route = new HandlerRoute(address)
-    return args instanceof URLSearchParams
-        ? textRequest(method, route, args)
-        : rpcRequest(method, route, args)
+    if (args instanceof URLSearchParams) return textRequest(method, route, args)
+    // 30.3, 30.19 — refused as the message it is, as the text arm refuses it, before `rpcRequest`'s
+    // default throws it as a 422 whose message names no clause.
+    route.path(args, thrownError)
+    return rpcRequest(method, route, args)
 }
 
 function textRequest(
