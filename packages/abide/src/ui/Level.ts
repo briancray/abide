@@ -44,12 +44,6 @@ export class Level {
      */
     share: ShareScope | null = null
     /**
-     * Whether a component built on the client contributed a head while this level mounts, which is
-     * reconciled once its `mount` returns; `undefined` outside one, where it is reconciled at the
-     * end of the turn (`reconcileLater`).
-     */
-    unapplied: boolean | undefined = undefined
-    /**
      * This level's own head markup as it reads now; `undefined` for a level with no `<head>`.
      *
      * 39.14 — READ WHEN THE LEVEL LEAVES OR STAYS ABOVE ONE THAT DOES, which is why it is the
@@ -121,12 +115,11 @@ export class Level {
         const contribution = new HeadContribution(this, head)
         this.contributed.add(contribution)
         contribution.dispose = watchTracked(() => contribution.follow())
-        // Batched while this level mounts, and for an arm or a row mounted after it, with the rest of
-        // its turn.
+        // Batched with the rest of its turn, whether it joins as the level mounts or in an arm or a row
+        // after — a route change reconciles at once after its mount anyway (`LevelChain.replace`).
         if (isEmptyRegion(region)) {
             unpainted(contribution)
-            if (this.unapplied !== undefined) this.unapplied = true
-            else reconcileLater(this.chain)
+            reconcileLater(this.chain)
         }
         return contribution
     }
@@ -142,26 +135,16 @@ export class Level {
         scope.watch(() => own.follow())
     }
 
-    /**
-     * Runs `run` with this the level components add their `<head>` to (39.1) — and applies what
-     * those built on the client contributed once it returns, rather than once a component.
-     */
+    /** Runs `run` with this the level components add their `<head>` to (39.1). */
     mount<Result>(run: () => Result): Result {
         // 39.1 — THE LEVEL RIDES THE SHARE SCOPE, so a component finds it as it finds a shared key,
         // whether it mounts now or in an arm or a row after (`contributeHead`).
         const back = enterShare(this)
-        this.unapplied = false
-        let unapplied: boolean
-        let result: Result
         try {
-            result = run()
+            return run()
         } finally {
-            unapplied = this.unapplied
-            this.unapplied = undefined
             leaveShare(back)
         }
-        if (unapplied) this.reconcile()
-        return result
     }
 }
 

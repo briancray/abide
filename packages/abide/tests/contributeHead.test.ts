@@ -42,8 +42,8 @@ test("a level's head reads every row's contribution in one walk — 39.1", () =>
     expect(chain.length).toBe(1 + 100_000)
 })
 
-// THE REVERT: drop `this.unapplied = true` from `contribute`; the component's head is never written
-// and the title stays `Layout`. 39.16 — reconcile without dropping the contributors that left, and
+// THE REVERT: drop `reconcileLater(this.chain)` from `contribute`; the component's head is never
+// written and the title stays `Layout`. 39.16 — reconcile without dropping the contributors that left, and
 // the `x-frame` the page brought outlives it.
 test("a component's head lands with its level and leaves with it — 39.1, 39.14, 39.16", () => {
     document.head.innerHTML = '<title>Layout</title>'
@@ -52,7 +52,7 @@ test("a component's head lands with its level and leaves with it — 39.1, 39.14
     layout.setHead(() => '<title>Layout</title>')
     const page = new Level(chainOf(levels))
     levels.push(layout, page)
-    // An empty region is one the client builds, so its head is written once the level is mounted.
+    // An empty region is one the client builds, so its head is written at the end of the turn.
     page.mount(() => {
         contributeHead(
             region([]),
@@ -62,6 +62,7 @@ test("a component's head lands with its level and leaves with it — 39.1, 39.14
         // Not written a component at a time.
         expect(document.title).toBe('Layout')
     })
+    flushSync()
     expect(document.title).toBe('Framed')
     expect(document.head.querySelector('meta[name="description"]')).not.toBe(
         null,
@@ -201,6 +202,7 @@ test('rows joining in one reconcile each own an equal keyless node — 39.16', (
         for (let row = 0; row < 3; row += 1)
             rows.push(contributeHead(region([]), () => '<style>.x{}</style>'))
     })
+    flushSync()
     expect(document.head.querySelectorAll('style').length).toBe(3)
     rows[0]?.stop()
     flushSync()
