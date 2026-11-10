@@ -12,6 +12,9 @@ import { reconciled, reconcileHead, unpainted } from './reconcileHead.ts'
 import { isEmptyRegion, type Region } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
+/** The chain a level stands in, known only as what reconciles the head — see `Level`. */
+type HeadChain = { reconcile(): void }
+
 /**
  * ONE LEVEL OF A ROUTED CHAIN — a layout or the page — and the head it contributes (39.1, 39.14).
  *
@@ -22,7 +25,7 @@ import type { Scope } from './Scope.ts'
  */
 export class Level {
     /** The chain this level stands in: a live head yields to every level below it. */
-    chain: { reconcile(): void }
+    chain: HeadChain
     scope: Scope | undefined = undefined
     /**
      * Where this level's `<slot/>` is, learned when the level below it mounted there, and
@@ -42,7 +45,8 @@ export class Level {
     share: ShareScope | null = null
     /**
      * Whether a component built on the client contributed a head while this level mounts, which is
-     * reconciled once its `mount` returns; `undefined` outside one, where it is reconciled at once.
+     * reconciled once its `mount` returns; `undefined` outside one, where it is reconciled at the
+     * end of the turn (`reconcileLater`).
      */
     unapplied: boolean | undefined = undefined
     /**
@@ -61,7 +65,7 @@ export class Level {
      */
     contributed = new Set<HeadContribution>()
 
-    constructor(chain: { reconcile(): void }) {
+    constructor(chain: HeadChain) {
         this.chain = chain
     }
 
@@ -203,7 +207,7 @@ export class HeadContribution {
 }
 
 /** The chains a contributor asked to reconcile since the head last was, each once. */
-const STALE = new Set<{ reconcile(): void }>()
+const STALE = new Set<HeadChain>()
 /** Moved to wake the one watch that reconciles `STALE`; both opened by the first ask. */
 let asked: Reactive<number> | undefined
 
@@ -214,7 +218,7 @@ let asked: Reactive<number> | undefined
  * past a frame at ~400 rows of a keyless `<style>` and ~600 of a keyed `<link>`. A WATCH RATHER THAN A MICROTASK: a contribution made inside an
  * effect is written in that same drain, and `flushSync` ends the turn for this as for every effect.
  */
-function reconcileLater(chain: { reconcile(): void }): void {
+function reconcileLater(chain: HeadChain): void {
     let version = asked
     if (version === undefined) {
         // UNOWNED: whichever component asks first, the watch outlives it.
