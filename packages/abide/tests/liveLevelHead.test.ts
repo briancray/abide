@@ -91,9 +91,8 @@ async function arrive(
 }
 
 // NOT A REGRESSION GATE FOR A BUG THAT SHIPPED: `followHead` is the last unit of the level's markup,
-// so every component in it has contributed before its first run. THE REVERT: leave the level's own
-// contributions out of what `Level.headsAfter` answers below it; a tick writes `Layout 1` over
-// `Framed`.
+// so every component in it has contributed before its first run. THE REVERT: let the first contributor
+// holding a key keep it in `reconcileHead`'s `wanted`; `Layout 0` stands over `Framed`.
 test("a live layout head keeps its component's deeper key — 39.4, 39.13", async () => {
     await arrive(
         `<head><title>Layout {tick}</title></head>
@@ -111,7 +110,8 @@ import Frame from './Frame.abide'
     expect(document.title).toBe('Framed')
 })
 
-// THE REVERT: drop the `deeper` skip from `applyHead`; the page's `Page` loses to `Layout 1`.
+// THE REVERT: let the first contributor holding a key keep it in `reconcileHead`'s `wanted`; the
+// page's `Page` loses to `Layout 0`.
 test('a live layout head keeps the page below it — 39.4, 39.13', async () => {
     await arrive(
         `<head><title>Layout {tick}</title><meta name="description" content="d{tick}"></head>
@@ -137,8 +137,8 @@ ${TICKS}
 // A keyless node cannot replace by key, so a head written again on every change appended its
 // `<meta charset>` once a change and its moving keyless `<meta>` beside the one before it.
 //
-// THE REVERT: drop `last` from `Level.reapply`'s `applyHead` call; two ticks leave three
-// `<meta charset>`s where one is due.
+// THE REVERT: insert every keyless node `reconcileHead` writes rather than replacing the one its
+// contributor owned there; two ticks leave three `x-tick`s where one is due.
 test('a live level head replaces its own keyless nodes rather than adding beside them — 39.13, 39.15', async () => {
     await arrive(
         `<head><title>Layout {tick}</title><meta charset="utf-8"><meta http-equiv="x-tick" content="t{tick}"></head>
@@ -163,8 +163,8 @@ ${TICKS}
 // deeper (39.4), and replaces its own keyless nodes (39.15).
 //
 // THE REVERT: read the head once in `Level.contribute` in place of opening its watch;
-// the title stays `Framed 0`. Keep the watch and drop `last` from `Level.reapply`, and the `x-tick`s
-// number 3.
+// the title stays `Framed 0`. Keep the watch and insert rather than replace (as above), and the
+// `x-tick`s number 3.
 test("a component's live head follows its value — 39.13", async () => {
     await arrive(
         '<slot/>',
@@ -194,9 +194,7 @@ ${TICKS}
 
 // 39.4 — A COMPONENT'S LIVE HEAD IN A LAYOUT STILL YIELDS TO THE PAGE BELOW IT.
 //
-// THE REVERT: leave the levels below out of what `Level.headsAfter` answers; a tick writes
-// `Framed 1` over `Page`. Apply `Level.mount`'s components with no `below`, and the layout's
-// `Framed 0` lands over the page's title before any tick.
+// THE REVERT: as above; the layout's `Framed 0` lands over the page's title before any tick.
 test("a component's live head in a layout keeps the page below it — 39.4, 39.13", async () => {
     await arrive(
         `<script>
@@ -221,8 +219,8 @@ ${TICKS}
 // 39.14, 39.16 — A COMPONENT'S HEAD LEAVES WITH ITS REGION: an `{#if}` closing over it hands its key
 // back to the page's and takes its keyless nodes with it, and a tick after writes nothing.
 //
-// THE REVERT: make `HeadContribution.stop` a no-op, or emit no `own` for it; the title stays
-// `Framed 0` after the close. Drop the keyless removal from `withdrawHead`, and one `x-tick` stays.
+// THE REVERT: make `HeadContribution.stop` a no-op; the title stays `Framed 0` after the close.
+// Keep the nodes of a contributor that left in `reconcileHead`, and one `x-tick` stays.
 test("a component's head is withdrawn with its region — 39.14, 39.16", async () => {
     await arrive(
         '<slot/>',
@@ -257,7 +255,8 @@ ${TICKS}
 // 39.14 — A KEY A LIVE HEAD STOPS WRITING IS WITHDRAWN as a leaving contributor's is: back to the
 // nearest outer contributor's value, or removed where none has the key.
 //
-// THE REVERT: skip the withdrawal at the end of `applyHead` (`restoreKeys`); `k0` stays the page's.
+// THE REVERT: skip removing a key no contributor wants any more (`reconcileHead`'s `keyedNodes`
+// walk); `k1` stays the page's.
 test('a live head whose key moves withdraws the key it left — 39.13, 39.14', async () => {
     await arrive(
         '<head><meta name="k0" content="layout"></head><slot/>',
@@ -285,8 +284,7 @@ ${TICKS}
 // 39.13 — A COMPONENT MOUNTED AFTER ITS LEVEL CONTRIBUTES THEN: an `{#if}` opening over it titles the
 // document, its live head follows, and it leaves with the arm.
 //
-// THE REVERT: contribute only while the level mounts (`unapplied !== undefined` in
-// `contributeHead`); the title stays `Page`.
+// THE REVERT: drop `reconcileLater(this.chain)` from `Level.contribute`; the title stays `Page`.
 test('a component mounted after its level contributes its head then — 39.13, 39.14', async () => {
     await arrive(
         '<slot/>',
@@ -322,8 +320,7 @@ ${TICKS}
 
 // 39.13, 39.16 — A ROW THE LIST GREW BY CONTRIBUTES, and a row removed takes its keyless node.
 //
-// THE REVERT: as above; no `x-row` is ever written, `[]` where `['a', 'b']` is due. Drop the
-// immediate `applyHead` from `Level.contribute`, and the same.
+// THE REVERT: as above; no `x-row` is ever written, `[]` where `['a', 'b']` is due.
 test('a row grown after its level contributes its head, and leaves with it — 39.13, 39.16', async () => {
     await arrive(
         '<slot/>',
