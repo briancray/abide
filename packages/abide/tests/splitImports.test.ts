@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { splitImports } from '#compiler/splitImports.ts'
+import { splitImports, withoutProps } from '#compiler/splitImports.ts'
 
 test('imports hoist and a dynamic import stays', () => {
     const r = splitImports(
@@ -109,4 +109,25 @@ test('a statement-leading assert is not an import attribute', () => {
             "import data from './d.json' assert { type: 'json' }\nconst a = 1\n",
         ).imports,
     ).toBe("import data from './d.json' assert { type: 'json' }\n")
+})
+
+// 33 — `props` leaves the abide import that names it, read off the tokens: a clause over several
+// lines loses it too, an alias keeps it, and the line break after the statement stays — the regex
+// this replaced ate it where `props` stood in a block's last import, and the next block's first
+// import was glued onto that line.
+test('withoutProps drops props from the abide import and keeps the line it stood on', () => {
+    expect(
+        withoutProps(
+            "import {\n    props,\n    untrack,\n} from '@abide/abide'\nimport { props as p } from '@abide/abide'\n",
+        ),
+    ).toBe(
+        "import { untrack } from '@abide/abide'\nimport { props as p } from '@abide/abide'\n",
+    )
+    expect(
+        withoutProps("import { untrack, props } from '@abide/abide'\n") +
+            withoutProps("import { reactive } from '@abide/abide'\n"),
+    ).toBe(
+        "import { untrack } from '@abide/abide'\nimport { reactive } from '@abide/abide'\n",
+    )
+    expect(withoutProps("import { props } from '@abide/abide'\n")).toBe('\n')
 })

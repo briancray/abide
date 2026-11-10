@@ -289,6 +289,16 @@ export type ImportBinding = {
     written: string
 }
 
+/** One static import statement, as `importStatements` reads it. */
+export type ImportStatement = {
+    start: number
+    end: number
+    specifier: string
+    typeOnly: boolean
+    attributes: string
+    bindings: ImportBinding[]
+}
+
 /**
  * Every static import statement a script makes: where it stands, what it names, and each binding,
  * read off the one tokenizer — so a comment or a line break inside the clause is trivia, as it is
@@ -297,15 +307,8 @@ export type ImportBinding = {
  * `attributes` is the statement's text after its specifier, a `with { … }` or nothing. A statement of
  * no shape this reads answers no bindings.
  */
-export function importStatements(script: string): {
-    start: number
-    end: number
-    specifier: string
-    typeOnly: boolean
-    attributes: string
-    bindings: ImportBinding[]
-}[] {
-    const found: ReturnType<typeof importStatements> = []
+export function importStatements(script: string): ImportStatement[] {
+    const found: ImportStatement[] = []
     if (!script.includes('import')) return found
     for (const span of importSpans(script)) {
         if (span.dynamic || !script.startsWith('import', span.start)) continue
@@ -386,6 +389,35 @@ export function importStatements(script: string): {
         })
     }
     return found
+}
+
+/**
+ * 34.22 — what is left of an import once the bindings `drops` answers for are taken out:
+ * `undefined` where none is, `''` where every one is, and the statement over the rest otherwise,
+ * spelled from its tokens.
+ */
+export function keptImport(
+    statement: ImportStatement,
+    drops: (statement: ImportStatement, binding: ImportBinding) => boolean,
+): string | undefined {
+    const parts: string[] = []
+    const named: string[] = []
+    for (const binding of statement.bindings) {
+        if (drops(statement, binding)) continue
+        // The default's own slot and a namespace stand outside the braces; `{ default as x }` in.
+        if (
+            (binding.imported === 'default' &&
+                binding.written === binding.local) ||
+            binding.imported === '*'
+        )
+            parts.push(binding.written)
+        else named.push(binding.written)
+    }
+    const kept = parts.length + named.length
+    if (kept === statement.bindings.length) return undefined
+    if (kept === 0) return ''
+    if (named.length > 0) parts.push(`{ ${named.join(', ')} }`)
+    return `import ${statement.typeOnly ? 'type ' : ''}${parts.join(', ')} from '${statement.specifier}'${statement.attributes === '' ? '' : ` ${statement.attributes}`}`
 }
 
 // The attribute a static import is read by: as text (34.21), or as a mount of routes (23.19).
@@ -494,18 +526,17 @@ export type Lane = 'component' | 'source'
  */
 export function withoutProps(imports: string): string {
     if (!imports.includes('props')) return imports
-    return imports
-        .replace(
-            /^import \{([^}]*)\} from ('@abide\/abide'|"@abide\/abide")\s*;?$/gm,
-            (_statement, clause: string, specifier: string) => {
-                const kept: string[] = []
-                for (const name of clause.split(','))
-                    if (name.trim() !== 'props' && name.trim() !== '')
-                        kept.push(name.trim())
-                return kept.length === 0
-                    ? ''
-                    : `import { ${kept.join(', ')} } from ${specifier}`
-            },
+    let out = ''
+    let from = 0
+    for (const statement of importStatements(imports)) {
+        if (statement.specifier !== '@abide/abide') continue
+        const kept = keptImport(
+            statement,
+            (_statement, binding) => binding.written === 'props',
         )
-        .replace(/\n{2,}/g, '\n')
+        if (kept === undefined) continue
+        out += imports.slice(from, statement.start) + kept
+        from = statement.end
+    }
+    return (out + imports.slice(from)).replace(/\n{2,}/g, '\n')
 }

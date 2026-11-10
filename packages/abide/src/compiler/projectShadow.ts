@@ -15,7 +15,9 @@ import {
     attributedImports,
     IMPORT_ATTRIBUTES,
     type ImportBinding,
+    type ImportStatement,
     importStatements,
+    keptImport,
     newlinesIn,
     SOURCE_SUFFIX,
 } from './splitImports.ts'
@@ -99,43 +101,12 @@ export function projectShadow(file: AbideFile): Projection {
     return projection
 }
 
-type ImportStatement = ReturnType<typeof importStatements>[number]
-
 /** 34.22 — a binding as two blocks importing the same thing agree on it. */
 function bindingKey(
     statement: ImportStatement,
     binding: ImportBinding,
 ): string {
     return `${statement.specifier}|${statement.attributes}|${binding.imported}|${binding.local}`
-}
-
-/**
- * 34.22 — what is left of an import once the bindings `drops` answers for are taken out:
- * `undefined` where none is, `''` where every one is, and the statement over the rest otherwise,
- * spelled from its tokens.
- */
-function keptImport(
-    statement: ImportStatement,
-    drops: (statement: ImportStatement, binding: ImportBinding) => boolean,
-): string | undefined {
-    const parts: string[] = []
-    const named: string[] = []
-    for (const binding of statement.bindings) {
-        if (drops(statement, binding)) continue
-        // The default's own slot and a namespace stand outside the braces; `{ default as x }` in.
-        if (
-            (binding.imported === 'default' &&
-                binding.written === binding.local) ||
-            binding.imported === '*'
-        )
-            parts.push(binding.written)
-        else named.push(binding.written)
-    }
-    const kept = parts.length + named.length
-    if (kept === statement.bindings.length) return undefined
-    if (kept === 0) return ''
-    if (named.length > 0) parts.push(`{ ${named.join(', ')} }`)
-    return `import ${statement.typeOnly ? 'type ' : ''}${parts.join(', ')} from '${statement.specifier}'${statement.attributes === '' ? '' : ` ${statement.attributes}`}`
 }
 
 function project(file: AbideFile): Projection {
