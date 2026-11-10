@@ -1,6 +1,7 @@
 import { type Batched, claimOf, ratio } from '../report/index.ts'
 
-const milliseconds = (nanoseconds: number) =>
+/** `nanoseconds` as the milliseconds a bench line prints. */
+export const milliseconds = (nanoseconds: number) =>
     `${(nanoseconds / 1e6).toFixed(3)} ms`
 
 /**

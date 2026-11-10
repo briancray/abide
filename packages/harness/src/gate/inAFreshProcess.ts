@@ -12,9 +12,8 @@ const DEFAULT_TIMEOUT_MILLISECONDS = 30_000
  * it: it is taken in a child.
  *
  * PART OF THE VOCABULARY RATHER THAN OF THIS PACKAGE'S TESTS, which is where it started and where
- * it could not do its job. Every allocation gate in the framework needs this same preload-free
- * invocation, and a helper sitting in `packages/harness/tests/` is one `packages/abide/tests/` can
- * only reach by copying. It belongs beside `gate()` for the same reason `gate()` is a fifth
+ * it could not do its job. A gate needing this same preload-free invocation in another package
+ * could only reach a helper sitting in `packages/harness/tests/` by copying it. It belongs beside `gate()` for the same reason `gate()` is a fifth
  * entry: both need `bun:test`, and neither is a lane.
  *
  * It is also the only place a HANG can be gated. `bun test`'s own per-test timeout is a timer, so

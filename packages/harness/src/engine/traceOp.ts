@@ -119,15 +119,15 @@ async function traced(
         })),
     )
 
-    const since = (name: string): number =>
-        ((after[name] ?? 0) - (before[name] ?? 0)) * 1e9
+    const delta = (name: string): number =>
+        (after[name] ?? 0) - (before[name] ?? 0)
+    const since = (name: string): number => delta(name) * 1e9
     return {
         op,
         measures,
         counters: {
-            recalcStyle:
-                (after.RecalcStyleCount ?? 0) - (before.RecalcStyleCount ?? 0),
-            layout: (after.LayoutCount ?? 0) - (before.LayoutCount ?? 0),
+            recalcStyle: delta('RecalcStyleCount'),
+            layout: delta('LayoutCount'),
             paint,
             forcedLayout,
         },

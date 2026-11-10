@@ -3,7 +3,7 @@
 // block each, and exit 1 after listing every arm over its ceiling and every ceiling naming no arm
 // or no bench.
 
-import { runBenches } from './runBenches.ts'
+import { milliseconds, runBenches } from './runBenches.ts'
 
 const over: string[] = []
 for (const bench of await runBenches(process.cwd(), process.argv[2])) {
@@ -13,7 +13,7 @@ for (const bench of await runBenches(process.cwd(), process.argv[2])) {
     if (bench.case === '') continue
     let times = ''
     for (const [arm, nanoseconds] of Object.entries(bench.arms))
-        times += `${times === '' ? '' : ' · '}${arm} ${(nanoseconds / 1e6).toFixed(3)} ms`
+        times += `${times === '' ? '' : ' · '}${arm} ${milliseconds(nanoseconds)}`
     console.log(
         `${bench.file} ${bench.name}: ${bench.case}\n    ${times}\n    ${bench.claim}`,
     )

@@ -204,6 +204,12 @@ const TEXT_NODE = 3
 const COMMENT_NODE = 8
 const DOCUMENT_FRAGMENT_NODE = 11
 
+/** A write to a text node's or a comment's data, and whether it wrote what was already there. */
+function tallyDataWrite(receiver: CharacterData, value: unknown): void {
+    live.dataWrites += 1
+    if (receiver.data === String(value)) live.redundantDataWrites += 1
+}
+
 function tallyNode(node: unknown): void {
     if (typeof node === 'string') {
         // A string handed to `append` becomes a text node the call created.
@@ -281,6 +287,7 @@ function tallyBefore(
 ): void {
     switch (role) {
         case 'insertArgs':
+        case 'removeArgs':
             for (const argument of args) tallyNode(argument)
             return
         case 'insertFirstArg':
@@ -290,9 +297,6 @@ function tallyBefore(
             return
         case 'insertSecondArg':
             tallyNode(args[1])
-            return
-        case 'removeArgs':
-            for (const argument of args) tallyNode(argument)
             return
         case 'removeReceiver':
             tallyNode(receiver)
@@ -325,19 +329,14 @@ function tallyBefore(
         case 'styleObject':
             // Counted by the proxy the getter hands back, not here.
             return
-        case 'data': {
-            live.dataWrites += 1
-            if ((receiver as CharacterData).data === String(args[0]))
-                live.redundantDataWrites += 1
+        case 'data':
+            tallyDataWrite(receiver as CharacterData, args[0])
             return
-        }
         case 'textContent': {
             // On a text node or a comment this IS a data write, and counting it as a
             // subtree replacement would report a creation that never happened.
             if (isCharacterData(receiver)) {
-                live.dataWrites += 1
-                if ((receiver as CharacterData).data === String(args[0]))
-                    live.redundantDataWrites += 1
+                tallyDataWrite(receiver as CharacterData, args[0])
                 return
             }
             tallyChildren(receiver)

@@ -1,4 +1,5 @@
 import { underBun } from './environment.ts'
+import type { Sample } from './Sample.ts'
 
 /**
  * Which JS engine this is, read off the user agent rather than probed.
@@ -14,7 +15,7 @@ import { underBun } from './environment.ts'
  * panel that measures in the reader's own browser meets all three engines. Reporting `v8` for
  * Safari would let `ratio()` compare two of them.
  */
-export function substrate(): 'jsc' | 'v8' | 'spidermonkey' | 'unknown' {
+export function substrate(): Sample['substrate'] {
     // Bun IS JSC, and it is the one case with no user agent worth reading.
     if (underBun()) return 'jsc'
     const agent = globalThis.navigator?.userAgent ?? ''

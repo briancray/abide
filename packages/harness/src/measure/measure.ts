@@ -1,4 +1,4 @@
-// A CASE IS ARMED AND DISARMED, and `measure()` is those two around a body.
+// A CASE IS ARMED AND DISARMED around a body, with the published counters zeroed before and copied after.
 
 import { arm, blankWork, disarm } from './install.ts'
 import { PUBLISHED_WORK_KEY, type PublishedWork } from './PUBLISHED_WORK.ts'
@@ -18,17 +18,14 @@ function sources(): PublishedWork | null {
     return record as PublishedWork
 }
 
-let openCase: Work | null = null
-
 /**
- * Opens a case: starts counting DOM calls and zeroes every published counter.
+ * Zeroes every published counter as a case opens.
  *
  * ONLY A FIELD THAT IS THERE AND IS A NUMBER IS ZEROED. Writing a field the source never declared
  * would create it at 0 and read it back at 0, and every gate asserting it would pass against a
  * counter nothing increments — so a missing field stays missing, and `publishedBy` names it.
  */
-function armCase(): void {
-    const record = blankWork()
+function zeroPublished(): void {
     const published = sources()
     if (published)
         for (const source in published) {
@@ -36,16 +33,10 @@ function armCase(): void {
             for (const field in counters)
                 if (typeof counters[field] === 'number') counters[field] = 0
         }
-    openCase = record
-    arm(record)
 }
 
-/** Closes the open case and returns its `Work`, with every published source copied in. */
-function disarmCase(): Work {
-    const record = openCase
-    if (!record) throw new Error('disarmCase() was called with no case armed.')
-    disarm()
-    openCase = null
+/** Copies every published source's numbers into `record` as its case closes. */
+function copyPublished(record: Work): void {
     const published = sources()
     if (published) {
         const copied: PublishedWork = {}
@@ -60,21 +51,22 @@ function disarmCase(): Work {
         }
         record.published = copied
     }
-    return record
 }
 
 /** Runs `body` inside an armed case and returns the `Work` it did. */
 export function measure(body: () => void): Work {
-    armCase()
+    const record = blankWork()
+    zeroPublished()
+    arm(record)
+    // The case is closed before a throw leaves, or the next `measure()` reports that one is
+    // already armed and the real failure is two frames down.
     try {
         body()
-    } catch (error) {
-        // The case is closed before the throw leaves, or the next `measure()` reports
-        // that one is already armed and the real failure is two frames down.
-        disarmCase()
-        throw error
+    } finally {
+        disarm()
     }
-    return disarmCase()
+    copyPublished(record)
+    return record
 }
 
 /**

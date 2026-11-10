@@ -75,7 +75,7 @@ export type Batched = {
     n: number
     reps: number
     warmup: number
-    substrate: ReturnType<typeof substrate>
+    substrate: Sample['substrate']
     /**
      * |control ratio − 1|.
      *
