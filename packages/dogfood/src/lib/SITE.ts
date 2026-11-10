@@ -465,6 +465,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]`',
                         '`abide-bridge install [--claude <path>] [--env NAME=VALUE]… [-- <options>]`',
                         '`abide-bridge uninstall`',
+                        '`abide-bridge forget [<site>]`',
                         '`Clients`',
                         'rpc › `clients`',
                         'Generated surfaces › `clients`',

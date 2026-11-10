@@ -248,12 +248,22 @@ import Section from '#src/lib/Section.abide'
             <code>maxBudgetUsd</code>, <code>betas</code> and <code>disallowedTools</code>. Permissions,
             directories and settings are not the site's to set.</p>
 
-        <p><code>tools</code> asks for Claude Code's built-in tools, and the visitor decides.
-            A tool runs only where they granted it after the command's <code>--</code>, and the
-            bridge tells them about any it was asked for and not given. Anything else after
-            <code>--</code> goes to Claude Code as written, and overrides what the site set.</p>
+        <p><code>tools</code> asks for tools of the visitor's machine, and the visitor decides.
+            Name a built-in tool, such as <code>WebSearch</code>, or a tool of an MCP server the
+            visitor configured, as Claude Code names it: <code>mcp__calendar__meetings</code>, or
+            <code>mcp__calendar</code> for all of that server's. A tool runs only where they granted
+            it after the command's <code>--</code>, and the bridge tells them about any it was asked
+            for and not given. Anything else after <code>--</code> goes to Claude Code as written,
+            and overrides what the site set.</p>
 
-        <Code code={`bunx @abide/bridge <site> <code> -- --tools WebSearch,WebFetch`} />
+        <Code code={`bunx @abide/bridge <site> <code> -- --tools WebSearch,mcp__calendar__meetings`} />
+
+        <p>The site names tools, never servers: a server is a command that runs on the visitor's
+            machine. The bridge finds it in their own Claude Code configuration, the user scope
+            <code>claude mcp add --scope user</code> writes, or in each <code>--mcp-config</code>
+            they pass instead. It reads them again at every turn, so a server added mid-visit is
+            used at the next question, and a turn gets only the servers of the tools it was
+            given.</p>
 
         <p><code>bunx @abide/bridge</code> runs <code>abide-bridge &lt;site&gt; &lt;code&gt;</code>.
             <code>--claude &lt;path&gt;</code> names the Claude Code to run where
@@ -266,22 +276,38 @@ import Section from '#src/lib/Section.abide'
             visitor who runs it as shown gives the tools. One minted without them grants none.</p>
 
         <p>The visitor pairs once per visit by running a command, which dials out to the site.
-            Asking with nothing paired is refused 409.</p>
+            Asking with nothing paired is refused 409. Every status carries a command, paired or
+            not, and a bridge paired with it takes the place of the one paired, so a page can offer
+            a reconnect without waiting for the old bridge to go.</p>
 
-        <p>On a Mac the visitor can pair with a click instead. Each status carries a
-            <code>link</code> beside its command, the same pairing in the <code>abide-bridge</code>
-            scheme, and a visitor who has run this once opens it from the page:</p>
+        <p>Each status also carries <code>missing</code>: the tools the pairing asked for that
+            the paired bridge reports it cannot give, because the visitor did not grant one or has
+            no server for it. Show the visitor what to add from it.</p>
+
+        <p>On macOS, Linux and Windows the visitor can pair with a click instead. Each status
+            carries a <code>link</code> beside its command, the same pairing in the
+            <code>abide-bridge</code> scheme, and a visitor who has run this once opens it from the
+            page:</p>
 
         <Code code={`bunx @abide/bridge install`} />
 
-        <p>That builds a small app under their own Application Support folder, nowhere in
-            Applications, and registers it for the scheme. <code>abide-bridge install</code> takes
-            the same <code>--claude</code>, <code>--env</code> and options after <code>--</code> as
-            the command, and keeps them: every link it opens runs Claude Code with them, and no link
-            can set either. Opening a link asks them every time, naming the site, the tools and the
-            bridge release it asks for, and the options and variable names install kept, and then
-            runs that release, as the command would. A link only proves the site minted its code,
-            never that this visitor asked for it, so no answer is kept for a site.
+        <p>That registers a handler for the scheme under the visitor's own home: a small app in
+            Application Support on macOS, a desktop entry on Linux, the visitor's own registry
+            classes on Windows. <code>abide-bridge install</code> takes the same
+            <code>--claude</code>, <code>--env</code> and options after <code>--</code> as the
+            command, and keeps them: every link it opens runs Claude Code with them, and no link can
+            set either. Opening a link asks first, naming the site, the tools and the bridge release
+            it asks for, any tool whose server they lack, and the options and variable names install
+            kept, and then runs that release, as the command would. A Linux desktop with neither
+            <code>zenity</code> nor <code>kdialog</code> cannot ask, so it pairs nothing from a
+            link.</p>
+
+        <p>The visitor can answer Always Allow. A link only proves the site minted its code, never
+            that this visitor asked for it, so the bridge keeps the answer for the site and for whom
+            the code was minted: the signed-in member, or the browser when nobody is. A later link
+            pairs unasked only where its code was minted for the same one and asks for no new tool.
+            A code someone else minted and put in front of them is asked about.
+            <code>abide-bridge forget</code> asks again for one site, or every one, and
             <code>abide-bridge uninstall</code> takes away everything install wrote.</p>
 
         <p>A bridge that loses the site says so once, and not again until the site takes a report.
@@ -296,8 +322,8 @@ import Section from '#src/lib/Section.abide'
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
-                <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired with the command to run and the link to open, then paired.</td></tr>
-                <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, command, link, install }'}</code>. <code>install</code> is the command that installs the app the link opens, at the release the command runs.</td></tr>
+                <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
+                <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
                 <tr><td><code>claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>
                 <tr><td><code>/__abide/bridge</code></td><td>Where the visitor's bridge connects. It opens the first time a command is minted.</td></tr>
             </tbody>

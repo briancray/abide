@@ -4,6 +4,7 @@
 // `post_invoices_whoami`, and a turn that says what it answered.
 
 import { afterAll, afterEach, beforeAll, expect, jest, test } from 'bun:test'
+import { rm } from 'node:fs/promises' // bun has no recursive remove of its own
 
 import { spawned } from '@abide/harness/gate'
 
@@ -15,7 +16,13 @@ import {
     RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS,
     SILENCE_MILLISECONDS,
 } from '../../bridge/src/bridge.ts'
-import { PAIRING_SCHEME, pairingOf } from '../../bridge/src/pairingLink.ts'
+import type { Answer } from '../../bridge/src/desktop.ts'
+import { consented, holderOf } from '../../bridge/src/opened.ts'
+import {
+    type Pairing,
+    PAIRING_SCHEME,
+    pairingOf,
+} from '../../bridge/src/pairingLink.ts'
 import { readLines } from '../../bridge/src/readLines.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
 import { mintCode } from '../src/server/bridgeRelay.ts'
@@ -36,6 +43,16 @@ const FAKE_CLAUDE = `${FIXTURES}fakeClaudeCode.ts`
 const BRIDGE = new URL('../../bridge/', import.meta.url).pathname
 const RECORD = `${Bun.env.TMPDIR ?? '/tmp'}/abide-assistant-${process.pid}.json`
 const SERVER = new URL('../src/server', import.meta.url).pathname
+// The directories `scratch` made, removed once the file is done.
+const SCRATCH: string[] = []
+// What a visitor gave install, where they gave it nothing.
+const SETTINGS_KEPT_NONE = {
+    bun: 'bun',
+    claude: 'claude',
+    path: '',
+    claudeArgs: [],
+    env: {},
+}
 
 const INVOICES = `import { cookies, POST } from '@abide/abide/server'
 
@@ -98,6 +115,8 @@ export const bridge = GET(() => claudeCode.bridge(), { ...HIDDEN, timeout: Infin
 export const command = GET(() => claudeCode.bridgeCommand(), HIDDEN)
 
 export const granting = GET(() => claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
+
+export const asking = GET(() => claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
 
 export const ask = POST(
     async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code' | 'own'; maxTurns?: number; config?: Record<string, unknown> }) {
@@ -163,6 +182,8 @@ afterEach(() => {
 })
 
 afterAll(async () => {
+    for (const directory of SCRATCH)
+        await rm(directory, { recursive: true, force: true })
     stop()
     api?.kill()
     removeTemporaryModules()
@@ -212,6 +233,7 @@ async function pairBridge(
     caller: string,
     code?: string,
     claudeArgs: string[] = [],
+    env: Record<string, string> = {},
 ): Promise<{ running: Bun.Subprocess; saysNext: () => Promise<string> }> {
     const running = Bun.spawn(
         [
@@ -223,7 +245,7 @@ async function pairBridge(
             FAKE_CLAUDE,
             ...(claudeArgs.length === 0 ? [] : ['--', ...claudeArgs]),
         ],
-        { stderr: 'pipe', env: environment },
+        { stderr: 'pipe', env: { ...environment, ...env } },
     )
     bridges.push(running)
     const reader = (running.stderr as ReadableStream<Uint8Array>).getReader()
@@ -264,11 +286,20 @@ function ask(
     })
 }
 
-/** The browser `caller`'s bridge status stream, one `BridgeStatus` a step. */
+/** A `BridgeStatus`, as the stream carries it. */
+type Status = {
+    paired: boolean
+    missing: string[]
+    command: string
+    link: string
+}
+
+/** The browser `caller`'s bridge status stream, one `BridgeStatus` a step, from the handler at `address`. */
 async function statusOf(
     caller: string,
-): Promise<AsyncGenerator<{ paired: boolean; command?: string }>> {
-    const answer = await Bun.fetch(`${base}/bridge`, {
+    address = 'bridge',
+): Promise<AsyncGenerator<Status>> {
+    const answer = await Bun.fetch(`${base}/${address}`, {
         headers: { ...asPage(caller), accept: 'application/jsonl' },
     })
     return (async function* () {
@@ -277,10 +308,7 @@ async function statusOf(
             buffered += new TextDecoder().decode(chunk)
             let newline = buffered.indexOf('\n')
             while (newline !== -1) {
-                yield JSON.parse(buffered.slice(0, newline)) as {
-                    paired: boolean
-                    command?: string
-                }
+                yield JSON.parse(buffered.slice(0, newline)) as Status
                 buffered = buffered.slice(newline + 1)
                 newline = buffered.indexOf('\n')
             }
@@ -289,16 +317,14 @@ async function statusOf(
 }
 
 /** The next status `lines` yields, or a throw where none comes within 5 seconds. */
-async function nextStatus(
-    lines: AsyncGenerator<{ paired: boolean; command?: string }>,
-): Promise<{ paired: boolean; command?: string }> {
+async function nextStatus(lines: AsyncGenerator<Status>): Promise<Status> {
     const next = await Promise.race([
         lines.next(),
         Bun.sleep(5_000).then(() => {
             throw new Error('the status stream said nothing more')
         }),
     ])
-    return next.value as { paired: boolean; command?: string }
+    return next.value as Status
 }
 
 async function events(answer: Response): Promise<unknown[]> {
@@ -519,7 +545,7 @@ test('the bridge status turns ready the moment the bridge connects — 44.20', a
         `bunx @abide/bridge@${BRIDGE_VERSION} ${base} `,
     )
     await pairBridge('two', first.command.split(' ').at(-1))
-    expect((await lines.next()).value).toEqual({ paired: true })
+    expect((await lines.next()).value).toMatchObject({ paired: true })
     await lines.return(undefined)
 }, 30_000)
 
@@ -561,7 +587,7 @@ test('a pairing answers only the sign-in that minted its code, and an open statu
     const lines = await statusOf('switch')
     const unpaired = await nextStatus(lines)
     await pairBridge('switch', unpaired.command?.split(' ').at(-1))
-    expect(await nextStatus(lines)).toEqual({ paired: true })
+    expect(await nextStatus(lines)).toMatchObject({ paired: true })
     expect(await done(await ask('switch', 'code', 'who am I?'))).toMatchObject({
         type: 'done',
     })
@@ -574,7 +600,7 @@ test('a pairing answers only the sign-in that minted its code, and an open statu
     expect(`${bos.status} ${await bos.text()}`).toStartWith('409')
 
     await pairBridge('switch', turned.command?.split(' ').at(-1))
-    expect(await nextStatus(lines)).toEqual({ paired: true })
+    expect(await nextStatus(lines)).toMatchObject({ paired: true })
     await lines.return(undefined)
     expect(await done(await ask('switch', 'code', 'who am I?'))).toMatchObject({
         type: 'done',
@@ -596,7 +622,7 @@ test('an open status follows a sign-out to the caller it rotates to — 44.34, 2
         'leaving',
         (await nextStatus(lines)).command?.split(' ').at(-1),
     )
-    expect(await nextStatus(lines)).toEqual({ paired: true })
+    expect(await nextStatus(lines)).toMatchObject({ paired: true })
     const out = await Bun.fetch(`${base}/account/signOut`, {
         method: 'POST',
         headers: asPage('leaving'),
@@ -609,7 +635,7 @@ test('an open status follows a sign-out to the caller it rotates to — 44.34, 2
     const turned = await nextStatus(lines)
     expect(turned.paired).toBe(false)
     await pairBridge(rotated, turned.command?.split(' ').at(-1))
-    expect(await nextStatus(lines)).toEqual({ paired: true })
+    expect(await nextStatus(lines)).toMatchObject({ paired: true })
     await lines.return(undefined)
     expect(
         (await events(await ask(rotated, 'code', 'who am I?'))).at(-1),
@@ -744,7 +770,7 @@ test('a pairing link carries what its command does, and its code pairs — 44.40
     })
     await pairBridge('nine', read?.code)
     const lines = await statusOf('nine')
-    expect((await lines.next()).value).toEqual({ paired: true })
+    expect((await lines.next()).value).toMatchObject({ paired: true })
     await lines.return(undefined)
 }, 30_000)
 
@@ -808,6 +834,222 @@ test('a bridge stopped by a signal kills its Claude Code run — 44.30', async (
     if (alive) process.kill(pid, 'SIGKILL')
     await reader.cancel()
     expect(alive).toBe(false)
+}, 30_000)
+
+/** A directory of the test's own, holding `files`, removed once the file's tests are done. */
+async function scratch(files: Record<string, unknown>): Promise<string> {
+    const directory = `${Bun.env.TMPDIR ?? '/tmp'}/abide-bridge-${process.pid}-${crypto.randomUUID()}`
+    for (const [name, content] of Object.entries(files))
+        await Bun.write(`${directory}/${name}`, JSON.stringify(content))
+    SCRATCH.push(directory)
+    return directory
+}
+
+/** The status `lines` yields first that `holds`, or a throw where none does within 5 seconds a step. */
+async function statusWhere(
+    lines: AsyncGenerator<Status>,
+    holds: (status: Status) => boolean,
+): Promise<Status> {
+    for (;;) {
+        const status = await nextStatus(lines)
+        if (holds(status)) return status
+    }
+}
+
+/** The pairing a status's link asks for, as the bridge's link handler reads it. */
+function pairingIn(status: { link: string }): Pairing {
+    return pairingOf(status.link) as Pairing
+}
+
+// 44.15, 44.29, 44.58 — THE VISITOR'S OWN MCP SERVERS, AS THE TOOLS GIVEN NAME THEM: the visitor passed
+// two servers and granted one tool of one and all of the other; the site asked for the one tool. The
+// turn gets that server alone, its tool approved, and the `--mcp-config` is never Claude Code's own.
+// THE REVERT: hand `grant.servers` every configured server, and `mail` is in the turn's config.
+test('a turn gets the MCP servers of the tools it was given, and no other — 44.15, 44.29, 44.58', async () => {
+    const directory = await scratch({
+        'sources.json': {
+            mcpServers: {
+                calendar: { command: 'calendar-server' },
+                mail: { command: 'mail-server' },
+            },
+        },
+    })
+    await pairBridge('servers', undefined, [
+        '--mcp-config',
+        `${directory}/sources.json`,
+        '--tools',
+        'mcp__calendar__meetings,mcp__mail',
+    ])
+    await events(
+        await ask('servers', 'code', 'who am I?', undefined, {
+            tools: ['mcp__calendar__meetings'],
+        }),
+    )
+    const { args, config } = (await Bun.file(RECORD).json()) as {
+        args: string[]
+        config: { mcpServers: Record<string, unknown> }
+    }
+    expect(Object.keys(config.mcpServers).sort()).toEqual(['app', 'calendar'])
+    expect(config.mcpServers.calendar).toEqual({ command: 'calendar-server' })
+    const allowed = args.indexOf('--allowedTools')
+    expect(args.slice(allowed + 1, allowed + 3)).toEqual([
+        'mcp__app',
+        'mcp__calendar__meetings',
+    ])
+    expect(args[args.indexOf('--tools') + 1]).toBe('')
+    expect(args).not.toContain(`${directory}/sources.json`)
+}, 30_000)
+
+// 44.58, 44.60, 44.61 — WHAT THE PAIRING ASKED FOR AND CANNOT BE GIVEN REACHES THE PAGE, and a server added
+// since is found at the next turn: the visitor's Claude Code configuration — read where they passed no
+// `--mcp-config` — holds no `calendar`, so the status says `mcp__calendar__meetings` is missing; with it
+// added, the next turn runs with it and the status says nothing is. THE REVERTS: drop the `missing`
+// report the bridge makes once it pairs, and the status never says the tool is missing; read the
+// configuration once per bridge rather than per turn, and the turn runs without `calendar`; say the
+// paired code's missing tools rather than each stream's own, and the stream asking for none hears of one.
+test('the status says what the pairing asked for that the bridge cannot give — 44.58, 44.60, 44.61', async () => {
+    const home = await scratch({ '.claude.json': { mcpServers: {} } })
+    const lines = await statusOf('missing', 'asking')
+    const unpaired = await nextStatus(lines)
+    expect(unpaired).toMatchObject({ paired: false, missing: [] })
+    const [command = '', granted = ''] = unpaired.command.split(' -- ')
+    expect(granted).toBe('--tools WebSearch,mcp__calendar__meetings')
+    expect(pairingIn(unpaired).tools).toEqual([
+        'WebSearch',
+        'mcp__calendar__meetings',
+    ])
+    await pairBridge('missing', command.split(' ').at(-1), granted.split(' '), {
+        CLAUDE_CONFIG_DIR: home,
+    })
+    expect(
+        (await statusWhere(lines, (status) => status.missing.length > 0))
+            .missing,
+    ).toEqual(['mcp__calendar__meetings'])
+    // A second stream on the page whose code asks for no tool is told of none missing.
+    const askingNone = await statusOf('missing')
+    expect(
+        await statusWhere(askingNone, (status) => status.paired),
+    ).toMatchObject({ missing: [] })
+    await askingNone.return(undefined)
+
+    await Bun.write(
+        `${home}/.claude.json`,
+        JSON.stringify({
+            mcpServers: { calendar: { command: 'calendar-server' } },
+        }),
+    )
+    await events(
+        await ask('missing', 'code', 'who am I?', undefined, {
+            tools: ['WebSearch', 'mcp__calendar__meetings'],
+        }),
+    )
+    const { config } = (await Bun.file(RECORD).json()) as {
+        config: { mcpServers: Record<string, unknown> }
+    }
+    expect(config.mcpServers.calendar).toEqual({ command: 'calendar-server' })
+    expect(
+        await statusWhere(lines, (status) => status.missing.length === 0),
+    ).toMatchObject({ paired: true, missing: [] })
+    await lines.return(undefined)
+}, 30_000)
+
+// 44.59 — A PAIRED PAGE STILL OFFERS A PAIRING, and the bridge it pairs takes the standing one's place
+// at once: no waiting out the old one's grace (44.22, 44.26). THE REVERT: mint no code while a bridge
+// is paired, and the paired status carries no command to run.
+test('a paired status carries a command that replaces the paired bridge — 44.59', async () => {
+    const lines = await statusOf('again')
+    const first = await nextStatus(lines)
+    const { running: standing } = await pairBridge(
+        'again',
+        first.command.split(' ').at(-1),
+    )
+    const paired = await statusWhere(lines, (status) => status.paired)
+    expect(paired.command).not.toBe(first.command)
+    await pairBridge('again', paired.command.split(' ').at(-1))
+    expect(
+        await Promise.race([
+            standing.exited,
+            Bun.sleep(5_000).then(() => 'still running'),
+        ]),
+    ).toBe(0)
+    expect(
+        (await events(await ask('again', 'code', 'who am I?'))).at(-1),
+    ).toMatchObject({ type: 'done' })
+    await lines.return(undefined)
+}, 30_000)
+
+// 44.63 — WHO A CODE WAS MINTED FOR, without spending it: the same for every code one browser mints signed
+// out, and for every code one sign-in mints at any browser, and different for anyone else. THE REVERT:
+// name the browser alone whoever is signed in, and Ann at two browsers is two holders.
+test('a code names who it was minted for, without being spent — 44.63', async () => {
+    const holder = async (caller: string): Promise<string | undefined> =>
+        holderOf({
+            site: base,
+            code: await pairingCode(caller),
+            version: BRIDGE_VERSION,
+            tools: [],
+        })
+    const signedOut = await holder('held-one')
+    expect(signedOut).toBeString()
+    expect(await holder('held-one')).toBe(signedOut)
+    expect(await holder('held-two')).not.toBe(signedOut)
+    await signIn('held-ann-here', 'ann')
+    await signIn('held-ann-there', 'ann')
+    await signIn('held-bob', 'bob')
+    const ann = await holder('held-ann-here')
+    expect(await holder('held-ann-there')).toBe(ann)
+    expect(await holder('held-bob')).not.toBe(ann)
+    expect(ann).not.toBe(signedOut)
+
+    const code = await pairingCode('held-one')
+    expect(
+        await holderOf({ site: base, code, version: '1.0.0', tools: [] }),
+    ).toBe(signedOut)
+    await pairBridge('held-one', code)
+    const spent = await Bun.fetch(`${base}${BRIDGE_ADDRESS}?holder=${code}`)
+    expect(spent.status).toBe(403)
+    await spent.text()
+}, 30_000)
+
+// 44.62, 44.42 — A SITE ALWAYS ALLOWED PAIRS UNASKED ONLY FOR WHOEVER IT WAS ALLOWED FOR. The visitor
+// answers always to a link minted for their browser; the next link minted there pairs unasked, while
+// one minted at another browser — an attacker's own code, put in front of them — and one asking for a
+// tool beyond the ones allowed are both asked. THE REVERT: have `allowsUnasked` match the site alone,
+// and the attacker's link pairs unasked: asked twice rather than three times.
+test('an always-allowed site pairs unasked only for the holder it was allowed for — 44.42, 44.62', async () => {
+    const allowed = `${await scratch({})}/allowed.json`
+    const asked: boolean[] = []
+    const answers: Answer[] = ['always', 'deny', 'once']
+    const visitor = async (
+        _question: string,
+        offerAlways: boolean,
+    ): Promise<Answer> => {
+        asked.push(offerAlways)
+        return answers.shift() ?? 'deny'
+    }
+    const link = async (caller: string, tools: string[] = []) => ({
+        site: base,
+        code: await pairingCode(caller),
+        version: BRIDGE_VERSION,
+        tools,
+    })
+    const consent = async (pairing: Pairing): Promise<boolean> =>
+        consented(pairing, SETTINGS_KEPT_NONE, allowed, visitor, () => {})
+    expect(await consent(await link('victim'))).toBe(true)
+    expect(await consent(await link('victim'))).toBe(true)
+    expect(await consent(await link('attacker'))).toBe(false)
+    expect(await consent(await link('victim', ['WebSearch']))).toBe(true)
+    expect(asked).toEqual([true, true, true])
+    // A code the site names no holder for is asked, and never offered always.
+    expect(
+        await consent({
+            site: base,
+            code: 'unminted',
+            version: BRIDGE_VERSION,
+            tools: [],
+        }),
+    ).toBe(false)
+    expect(asked).toEqual([true, true, true, false])
 }, 30_000)
 
 // 44.3 — a transcript ending on the model's own turn is refused before any provider is reached.

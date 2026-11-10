@@ -382,11 +382,11 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.33 |
-| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. | 44.16, 44.29 |
-| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; link: string; install: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the built-in tools it is given, and the command that installs the app the link opens. | 44.14, 44.32, 44.33, 44.40, 44.56 |
-| `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40 |
-| `BridgeStatus` | `{ paired: boolean; command: string \| undefined; link: string \| undefined; install: string \| undefined }` | Whether a bridge is paired, and the command and the link that pair one where none is, with the command that installs the app the link opens. | 44.20, 44.40, 44.56 |
-| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 16.57, 16.78 |
+| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the tools of the visitor's machine it asks for. | 44.15, 44.16, 44.29, 44.58 |
+| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; link: string; install: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the tools it is given, and the command that installs what opens the link. | 44.14, 44.32, 44.33, 44.40, 44.56 |
+| `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40, 44.59, 44.60 |
+| `BridgeStatus` | `{ paired: boolean; missing: string[]; command: string; link: string; install: string }` | Whether a bridge is paired, the tools it cannot make available, and the command and the link that pair one, with the command that installs what opens the link. | 44.20, 44.40, 44.56, 44.59, 44.60 |
+| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 16.57, 16.78 |
 
 # Ambient values
 
@@ -933,6 +933,7 @@ site's `claudeCode`.
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | This machine's Claude Code, paired with the browser a site minted the code for. | 44.15, 44.16, 44.24, 44.25, 44.27, 44.30, 44.44, 44.45, 44.46, 44.47 |
-| `abide-bridge install [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | The app that opens a site's `abide-bridge` links on this machine, registered. | 44.41, 44.42, 44.43, 44.44 |
+| `abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | This machine's Claude Code, paired with the browser a site minted the code for. | 44.15, 44.16, 44.24, 44.25, 44.27, 44.29, 44.30, 44.44, 44.45, 44.46, 44.47, 44.58, 44.61 |
+| `abide-bridge install [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | What opens a site's `abide-bridge` links on this machine, registered. | 44.41, 44.42, 44.43, 44.44, 44.62, 44.64, 44.65 |
 | `abide-bridge uninstall` | `abide-bridge install`, undone. | 44.43 |
+| `abide-bridge forget [<site>]` | The sites a link pairs with unasked, made to ask again. | 44.62, 44.66 |

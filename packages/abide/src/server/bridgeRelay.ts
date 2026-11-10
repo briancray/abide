@@ -4,9 +4,12 @@
 //
 //   GET  /__abide/bridge?code=…   the pairing, answered by a server-sent stream of what the bridge is
 //                                 to do: the token it posts with, each turn, each tool reply, a cancel.
+//   GET  /__abide/bridge?holder=… who a code was minted for, as an opaque string, without spending it
+//                                 (44.63): what a bridge always allowing a site checks a link against.
 //   GET  /__abide/bridge          the same stream, resumed by the token after it dropped (44.26).
 //   POST /__abide/bridge          what the bridge reports, one frame per line: a turn's events, the
-//                                 MCP requests its Claude Code made, the turn's end or failure.
+//                                 MCP requests its Claude Code made, the turn's end or failure, and
+//                                 the tools the pairing asked for that it cannot give (44.61).
 //
 // A PAIRING IS TO A BROWSER — the `abide-caller` its page carries (26.5) — and to whoever was signed
 // in there when its code was minted (44.33), for as long as the bridge's stream is open, or
@@ -24,6 +27,7 @@ import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import type { ProviderEvent } from './assistant.ts'
 import { Inbox } from './Inbox.ts'
+import { holderOf } from './principal.ts'
 import { randomToken } from './randomToken.ts'
 import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
 import { onSignInChanged } from './signInChanged.ts'
@@ -53,14 +57,24 @@ type Bridge = {
     idle: ReturnType<typeof setTimeout> | undefined
     // Set while the stream is dropped and the pairing waits to be resumed (44.26).
     held: ReturnType<typeof setTimeout> | undefined
+    // What its code asked for of the visitor's machine, and of that what it reported it cannot give.
+    asked: string[]
+    missing: string[]
 }
+
+/** A pairing as a status stream says it: whether a bridge is paired, the code that pairs one, and what it cannot give. */
+export type PairingState = { paired: boolean; code: string; missing: string[] }
 
 /** How long a pairing code stands unused. */
 const CODE_LIFETIME = 10 * 60_000
 // How long a bridge outlives the last page watching it, so a reload does not end it.
 const IDLE_GRACE = 30_000
 
-const CODES = new Map<string, { key: string; expires: number }>()
+// Each code minted and unspent: the pairing it is for, who it was minted for, and what it asks.
+const CODES = new Map<
+    string,
+    { key: string; expires: number; holder: string; tools: string[] }
+>()
 const BY_KEY = new Map<string, Bridge>()
 const BY_TOKEN = new Map<string, Bridge>()
 const WATCHERS = new Map<string, Set<() => void>>()
@@ -89,17 +103,26 @@ function pairingKey(caller: string, signedIn: string): string {
 // 44.19 — the relay answers once the app has handed out a pairing code, and never before.
 let minted = false
 
-/** A single-use pairing code for `caller` signed in as `signedIn`, and when it stops standing. 44.14. */
+/**
+ * A single-use pairing code for `caller` signed in as `signedIn`, asking for `tools` of the visitor's
+ * machine, and when it stops standing. 44.14.
+ */
 export function mintCode(
     caller: string,
     signedIn: string,
+    tools: readonly string[] = [],
 ): { code: string; expires: number } {
     const now = Date.now()
     for (const [code, pairing] of CODES)
         if (pairing.expires <= now) CODES.delete(code)
     const code = randomToken(12, 'base64url')
     const expires = now + CODE_LIFETIME
-    CODES.set(code, { key: pairingKey(caller, signedIn), expires })
+    CODES.set(code, {
+        key: pairingKey(caller, signedIn),
+        expires,
+        holder: holderOf(caller, signedIn),
+        tools: [...tools],
+    })
     minted = true
     return { code, expires }
 }
@@ -167,9 +190,10 @@ export async function* runTurn({
 }
 
 /**
- * The pairing of `caller` signed in as `signedIn` as it changes, until `signal` aborts: the code that
- * pairs it while unpaired, then `undefined` the moment a bridge connects, and a code again if it goes. A
- * code that expires while nothing is paired is replaced with a fresh one. 44.20.
+ * The pairing of `caller` signed in as `signedIn` as it changes, until `signal` aborts: whether a bridge
+ * is paired, what it reported it cannot give of `tools`, and always a code asking for `tools` that pairs
+ * one — in place of the one paired, where one is (44.59). A code that expires or is spent is replaced
+ * with a fresh one. 44.20.
  *
  * 44.34 — IT FOLLOWS WHOEVER SIGNS IN AT THE BROWSER: a sign-in or a sign-out made since is the
  * pairing it watches from then on, and the code it offers is that sign-in's.
@@ -177,8 +201,9 @@ export async function* runTurn({
 export async function* pairingStatus(
     caller: string,
     signedIn: string,
+    tools: readonly string[],
     signal: AbortSignal,
-): AsyncGenerator<string | undefined> {
+): AsyncGenerator<PairingState> {
     // A change landing while the loop was not waiting — paused at its `yield` — stays queued, so it
     // looks again; a look that finds nothing new yields nothing.
     const changes = new Inbox<undefined>()
@@ -193,8 +218,8 @@ export async function* pairingStatus(
     let unwatch = (): void => {}
     let unfollow = (): void => {}
     let pairing: { code: string; expires: number } | undefined
-    // `null` until the first is said; `undefined` says paired.
-    let said: string | undefined | null = null
+    // `undefined` until the first is said.
+    let said: string | undefined
     signal.addEventListener('abort', rouse)
     try {
         while (!signal.aborted) {
@@ -207,20 +232,28 @@ export async function* pairingStatus(
                 watchingKey = key
                 pairing = undefined
             }
-            const paired = BY_KEY.has(key)
+            const bridge = BY_KEY.get(key)
             if (
-                !paired &&
-                (pairing === undefined || pairing.expires <= Date.now())
+                pairing === undefined ||
+                pairing.expires <= Date.now() ||
+                !CODES.has(pairing.code)
             )
-                pairing = mintCode(caller, signedIn)
-            const code = paired ? undefined : pairing?.code
-            if (code !== said) {
-                said = code
-                yield code
+                pairing = mintCode(caller, signedIn, tools)
+            const state: PairingState = {
+                paired: bridge !== undefined,
+                code: pairing.code,
+                // 44.60 — of what this stream's code asks for: two on one page may ask for different tools.
+                missing:
+                    bridge === undefined
+                        ? []
+                        : missingOf(tools, bridge.missing),
             }
-            const renew = paired
-                ? undefined
-                : setTimeout(rouse, (pairing?.expires ?? 0) - Date.now())
+            const saying = `${state.paired} ${state.code} ${state.missing.join(',')}`
+            if (saying !== said) {
+                said = saying
+                yield state
+            }
+            const renew = setTimeout(rouse, pairing.expires - Date.now())
             await waiting.next()
             clearTimeout(renew)
         }
@@ -338,18 +371,15 @@ export async function answerBridge(request: Request): Promise<unknown> {
 }
 
 function pair(request: Request): Response {
-    const code = new URL(request.url).searchParams.get('code')
+    const query = new URL(request.url).searchParams
+    const holder = query.get('holder')
+    if (holder !== null) return holderAnswer(holder)
+    const code = query.get('code')
     if (code === null) return resume(request)
-    const pairing = CODES.get(code)
+    const pairing = standingCode(code)
     // 44.14 — a code pairs once.
     CODES.delete(code)
-    if (pairing === undefined || pairing.expires <= Date.now())
-        return answered(
-            refuse(
-                403,
-                'This pairing code was not issued here, or it has been used, or it has expired.',
-            ),
-        )
+    if (pairing === undefined) return unknownCode()
     const standing = BY_KEY.get(pairing.key)
     if (standing !== undefined) {
         standing.frames.push({ type: 'bye' })
@@ -363,12 +393,43 @@ function pair(request: Request): Response {
         watched: WATCHERS.has(pairing.key),
         idle: undefined,
         held: undefined,
+        asked: pairing.tools,
+        missing: [],
     }
     BY_KEY.set(bridge.key, bridge)
     BY_TOKEN.set(bridge.token, bridge)
-    bridge.frames.push({ type: 'paired', token: bridge.token })
+    bridge.frames.push({
+        type: 'paired',
+        token: bridge.token,
+        tools: pairing.tools,
+    })
     wakeWatchers(bridge.key)
     return attach(bridge, request)
+}
+
+// 44.63 — WHO A CODE WAS MINTED FOR, read without spending it: a code minted for someone else names
+// someone else, which is what a bridge always allowing a site refuses to pair unasked.
+function holderAnswer(code: string): Response {
+    const pairing = standingCode(code)
+    if (pairing === undefined) return unknownCode()
+    return Response.json({ holder: pairing.holder })
+}
+
+/** What `code` was minted with, while it is unspent and unexpired. */
+function standingCode(code: string) {
+    const pairing = CODES.get(code)
+    return pairing === undefined || pairing.expires <= Date.now()
+        ? undefined
+        : pairing
+}
+
+function unknownCode(): Response {
+    return answered(
+        refuse(
+            403,
+            'This pairing code was not issued here, or it has been used, or it has expired.',
+        ),
+    )
 }
 
 /** The bridge the request's bearer token was handed when it paired. */
@@ -404,13 +465,23 @@ function attach(bridge: Bridge, request: Request): Response {
 }
 
 type BridgeReport = {
-    type: 'event' | 'mcp' | 'end' | 'fail'
+    type: 'event' | 'mcp' | 'end' | 'fail' | 'missing'
     turn: string
+    tools?: string[]
     event?: unknown
     id?: number
     method?: string
     params?: unknown
     message?: string
+}
+
+/** The tools of `asked` that `reported` names: a bridge says what it cannot give of no other. */
+function missingOf(asked: readonly string[], reported: unknown): string[] {
+    const missing: string[] = []
+    if (Array.isArray(reported))
+        for (const tool of asked)
+            if (reported.includes(tool)) missing.push(tool)
+    return missing
 }
 
 async function relay(request: Request): Promise<Response> {
@@ -432,9 +503,15 @@ async function relay(request: Request): Promise<Response> {
         }
     }
     for (const report of reports) {
+        // 44.60 — what the pairing asked for and the bridge cannot give, as the page's status says it.
+        if (report.type === 'missing') {
+            bridge.missing = missingOf(bridge.asked, report.tools)
+            wakeWatchers(bridge.key)
+            continue
+        }
         const turn = bridge.turns.get(report.turn)
         if (turn === undefined) continue
-        turn.push(item(report.type, report))
+        turn.push(item(report.type as TurnItem['kind'], report))
     }
     return new Response(null, { status: 204 })
 }

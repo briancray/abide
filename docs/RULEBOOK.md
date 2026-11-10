@@ -3499,9 +3499,9 @@ and MUST refuse 409 where none is paired.
 44.14 A code `claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that asked for
 it, once, and MUST NOT pair once it has expired.
 
-44.15 A bridge MUST run Claude Code with no MCP server but the bridge's own, in an empty directory
-removed when the run ends, and with no built-in tool and no setting source the visitor did not pass
-it after `--`.
+44.15 A bridge MUST run Claude Code with no MCP server but the bridge's own and the visitor's servers
+of the MCP tools 44.29 makes available to the turn, in an empty directory removed when the run ends,
+and with no built-in tool and no setting source the visitor did not pass it after `--`.
 
 44.16 A bridge MUST lay each option a site sets but `tools` (44.29) on as Claude Code's flag of that
 name, MUST fail a turn whose config sets any option `ClaudeCodeConfig` does not name, and MUST lay
@@ -3515,7 +3515,7 @@ was made in.
 44.19 `/__abide/bridge` MUST be closed until `claudeCode` has minted a pairing code in that process.
 
 44.20 `claudeCode.bridge` MUST yield a `BridgeStatus` whenever the asking browser's pairing changes,
-and MUST yield a fresh command where the standing one's code expires unpaired.
+and MUST yield a fresh command where the standing one's code expires or pairs.
 
 44.21 A failure the Messages API reports to `claudeApi`, or a bridge reports to `claudeCode`, MUST
 refuse 502.
@@ -3541,9 +3541,11 @@ redial it as 44.25 says.
 44.28 A `Provider` MUST yield a tool call's `tool` event when the model starts writing the call,
 and its `input` event, with the same `id`, once the call is written.
 
-44.29 A built-in tool MUST be available to a turn only where the site's `tools` names it and the
-visitor's `--tools` does, MUST be approved without asking unless the visitor passed `--allowedTools`,
-and the bridge MUST say once each tool the site asked for that the visitor did not grant.
+44.29 A tool of the visitor's machine — built-in by its name, or an MCP tool as `mcp__<server>__<tool>`
+— MUST be available to a turn only where the site's `tools` names it and the visitor's `--tools`
+names it or, for an MCP tool, `mcp__<server>`, and an MCP tool only where 44.58 finds its server; it
+MUST be approved without asking unless the visitor passed `--allowedTools`, and the bridge MUST say
+once each tool the site asked for that it cannot make available.
 
 44.30 A bridge stopped by `SIGTERM`, `SIGINT` or `SIGHUP` MUST end every Claude Code run it started
 before it exits.
@@ -3555,7 +3557,7 @@ signal 44.57 hands its provider aborted, else `failed` where its provider threw,
 line, else `stopped` where its caller stopped reading.
 
 44.32 A command `claudeCode.bridgeCommand` or `claudeCode.bridge` mints with `tools` MUST grant
-those built-in tools after its `--` as `--tools`, and one minted without `tools` MUST carry no `--`.
+those tools after its `--` as `--tools`, and one minted without `tools` MUST carry no `--`.
 
 44.33 A pairing MUST be to the claims the principal was sealed with (26.11), or to none, where its
 code was minted, and `claudeCode` and `claudeCode.bridge` MUST read it as absent to a request from
@@ -3583,22 +3585,24 @@ its type, in its place in its turn.
 as one text piece.
 
 44.40 A pairing `claudeCode.bridgeCommand` or `claudeCode.bridge` mints MUST carry, beside its command,
-a link in the `abide-bridge` scheme naming the same site, code, bridge release and built-in tools.
+a link in the `abide-bridge` scheme naming the same site, code, bridge release and tools.
 
 44.41 A bridge MUST open only a link of the `abide-bridge` scheme whose site is https or loopback and
 whose release is a version alone, and MUST run the release it names.
 
-44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, every time, naming
-the site, the built-in tools and the bridge release the link asks for, and the options and the names
-of the variables `abide-bridge install` kept (44.44).
+44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, save where 44.62
+pairs it unasked, naming the site, the tools and the bridge release the link asks for, and the
+options and the names of the variables `abide-bridge install` kept (44.44), and MUST offer to always
+allow the site only where `/__abide/bridge` named a holder for the link's code (44.63).
 
-44.43 `abide-bridge install` MUST write the app that opens links under the visitor's own Application
-Support and register it there, and `abide-bridge uninstall` MUST unregister it and remove all
-install wrote.
+44.43 `abide-bridge install` MUST write what opens links under the visitor's own home — Application
+Support on macOS, `XDG_DATA_HOME` on Linux, `LOCALAPPDATA` on Windows — and register it with that
+desktop for the visitor alone, and `abide-bridge uninstall` MUST unregister it and remove all install
+wrote.
 
 44.44 `abide-bridge install` MUST keep the Claude Code options after its `--` and each `--env
 NAME=VALUE` it is given, and a bridge opening an `abide-bridge` link MUST run Claude Code with those
-options ahead of the link's built-in tools and with those variables set, and a link MUST NOT set either.
+options ahead of the link's tools and with those variables set, and a link MUST NOT set either.
 
 44.45 A bridge MUST say that `/__abide/bridge` did not take a report once, and not again until a
 report is taken, and MUST NOT say it while it redials per 44.25.
@@ -3638,6 +3642,35 @@ names, reading its `items` where its `files` hold none.
 44.57 `assistant` MUST hand its `Provider` a `limits.signal` that aborts once the request's signal
 aborts or once the `signal` its caller passed does, and once that signal aborts MUST end the
 conversation without waiting for the provider to, refused with `aborted` at status 499.
+
+44.58 A bridge MUST find the visitor's MCP servers, at each turn, in each `--mcp-config` the visitor
+passed after `--`, or where they passed none, in the user scope of their Claude Code configuration,
+and MUST NOT find the bridge's own server's name there.
+
+44.59 A `BridgeStatus` MUST carry a command and a link whether or not a bridge is paired, and a bridge
+pairing by its code MUST take the place of the one paired.
+
+44.60 A `BridgeStatus` MUST carry as `missing` each tool its pairing's code asked for that the paired
+bridge last reported it cannot make available (44.29), and none while no bridge is paired.
+
+44.61 A bridge MUST report to `/__abide/bridge` the tools its pairing's code asked for that it cannot
+make available once it pairs, and again before a turn wherever they changed.
+
+44.62 A bridge opening an `abide-bridge` link MUST pair without asking only where the visitor chose to
+always allow its site for the holder `/__abide/bridge` names for its code (44.63), and the link asks
+for no tool beyond those allowed when they chose.
+
+44.63 `/__abide/bridge` MUST name, for a code minted and unspent, a holder without spending the code —
+the same for every code minted to one sign-in, or signed out to one browser, and different for any
+other — and MUST refuse 403 any other code.
+
+44.64 A bridge opening an `abide-bridge` link on a desktop it cannot ask on MUST NOT pair.
+
+44.65 A bridge opening an `abide-bridge` link MUST name, in the question 44.42 asks, each MCP tool the
+link asks for whose server 44.58 does not find.
+
+44.66 `abide-bridge forget` MUST stop always allowing the site it names, or every site where it names
+none.
 
 # 45. Offline
 

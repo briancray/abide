@@ -27,12 +27,15 @@ const answer = reactive(() => {
     <ul class="fields">
         <li><span>your claude code</span><strong>paired</strong></li>
     </ul>
+    <div class="row">
+        <a href={pairing.at(-1)?.link}>Reconnect</a>
+    </div>
 {:else if pairing.at(-1)}
     <pre class="rounded-md border border-rule bg-raised p-snug
         text-chrome">{pairing.at(-1)?.command}</pre>
     <div class="row">
         <a href={pairing.at(-1)?.link}>Open in abide bridge</a>
-        <span class="status">on macOS, after
+        <span class="status">after
             <code>bunx @abide/bridge install</code></span>
     </div>
 {:else}

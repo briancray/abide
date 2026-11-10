@@ -8,16 +8,28 @@ import { tmpdir } from 'node:os' // bun exposes no temporary directory of its ow
 import { spawned } from '@abide/harness/gate'
 
 import {
+    allowAlways,
+    allowedSites,
+    allowsUnasked,
+    forget,
+} from '../../bridge/src/allowedSites.ts'
+import { linuxQuestion } from '../../bridge/src/desktop.ts'
+import { grantOf, visitorServers } from '../../bridge/src/grant.ts'
+import {
     appIn,
+    desktopEntry,
     handlerIn,
     IDENTIFIER,
     install,
+    registryCommands,
     uninstall,
+    withoutDefault,
 } from '../../bridge/src/install.ts'
 import {
     bridgeArguments,
     question,
     searchPath,
+    unservedOf,
 } from '../../bridge/src/opened.ts'
 import {
     type Pairing,
@@ -78,6 +90,8 @@ test('a link that would be read as more than a pairing is refused — 44.41', ()
         linkOf({ ...GOOD, code: 'a b' }),
         linkOf({ ...GOOD, tools: 'Bash(rm:*)' }),
         linkOf({ ...GOOD, tools: 'WebSearch --add-dir /' }),
+        linkOf({ ...GOOD, tools: 'mcp__calendar meetings' }),
+        linkOf({ ...GOOD, tools: 'mcp__calendar;rm' }),
         GOOD.site,
         `other://pair?${new URLSearchParams(GOOD)}`,
         `${PAIRING_SCHEME}://elsewhere?${new URLSearchParams(GOOD)}`,
@@ -95,7 +109,7 @@ test('the question names the site, every tool and the release it asks for — 44
     expect(asked).toContain(`@abide/bridge ${PAIRING.version}`)
     expect(asked).not.toContain('gave install')
     expect(question({ ...PAIRING, tools: [] }, SETTINGS)).toContain(
-        'none of this Mac’s',
+        'none of this computer’s',
     )
 })
 
@@ -148,6 +162,190 @@ test('a link runs with the options install kept, ahead of its tools — 44.44', 
         '--mcp-config',
         '/Users/me/sources.mcp.json',
     ])
+})
+
+// 44.29 — AN MCP TOOL IS A TOOL TOO: a link asks for one by Claude Code's name for it, or for all of a
+// server's, and nothing else of a server — never the command that starts it.
+test('a link asks for MCP tools by name, or for all of a server’s — 44.29, 44.41', () => {
+    expect(
+        pairingOf(
+            linkOf({
+                ...GOOD,
+                tools: 'WebSearch,mcp__calendar__meetings,mcp__mail',
+            }),
+        )?.tools,
+    ).toEqual(['WebSearch', 'mcp__calendar__meetings', 'mcp__mail'])
+})
+
+// 44.29 — THE SITE ASKS, THE VISITOR GRANTS, THE VISITOR'S OWN CONFIGURATION SERVES: an MCP tool is given
+// where the visitor granted it or all of its server's, and its server is one they configured; a site
+// can never name `app`, the bridge's own. THE REVERT: give an MCP tool whose server is not configured,
+// and `mcp__drive__files` is given rather than unserved.
+test('an MCP tool is given only where granted and its server configured — 44.29', () => {
+    const configured = new Map<string, unknown>([
+        ['calendar', { command: 'calendar-server' }],
+        ['mail', { command: 'mail-server' }],
+    ])
+    const grant = grantOf(
+        [
+            'WebSearch',
+            'WebFetch',
+            'mcp__calendar__meetings',
+            'mcp__mail__send',
+            'mcp__drive__files',
+            'mcp__calendar__invite',
+        ],
+        new Set([
+            'WebSearch',
+            'mcp__calendar__meetings',
+            'mcp__mail',
+            'mcp__drive__files',
+        ]),
+        configured,
+    )
+    expect(grant).toEqual({
+        builtIn: ['WebSearch'],
+        mcp: ['mcp__calendar__meetings', 'mcp__mail__send'],
+        servers: {
+            calendar: { command: 'calendar-server' },
+            mail: { command: 'mail-server' },
+        },
+        ungranted: ['WebFetch', 'mcp__calendar__invite'],
+        unserved: ['mcp__drive__files'],
+    })
+})
+
+// 44.58 — THE VISITOR'S SERVERS, BY THE NAME THEIR TOOLS CARRY: from each `--mcp-config` they passed, a
+// file or JSON written out, never naming the bridge's own `app`.
+test('the visitor’s MCP servers are read from what they passed — 44.58', async () => {
+    const directory = temporaryModule({}, `${tmpdir()}/`)
+    await Bun.write(
+        `${directory}/sources.json`,
+        JSON.stringify({ mcpServers: { 'my.calendar': { command: 'c' } } }),
+    )
+    const servers = await visitorServers([
+        `${directory}/sources.json`,
+        JSON.stringify({ mcpServers: { app: { command: 'x' }, mail: {} } }),
+    ])
+    expect([...servers.keys()]).toEqual(['my_calendar', 'mail'])
+    await expect(visitorServers([`${directory}/none.json`])).rejects.toThrow(
+        'none.json',
+    )
+})
+
+// 44.65 — THE QUESTION NAMES WHAT CANNOT BE GIVEN: an MCP tool the link asks for whose server the visitor's
+// Claude Code is not configured with, and how to add it.
+test('the question names each MCP tool whose server the visitor lacks — 44.65', async () => {
+    const pairing = {
+        ...PAIRING,
+        tools: ['WebSearch', 'mcp__calendar__meetings', 'mcp__mail'],
+    }
+    const sources = JSON.stringify({ mcpServers: { mail: {} } })
+    const unserved = await unservedOf(pairing, {
+        ...SETTINGS,
+        claudeArgs: ['--mcp-config', sources],
+    })
+    expect(unserved).toEqual(['mcp__calendar__meetings'])
+    const asked = question(pairing, SETTINGS, unserved)
+    expect(asked).toContain('no calendar MCP server')
+    expect(asked).toContain('claude mcp add --scope user')
+    expect(question(pairing, SETTINGS)).not.toContain('MCP server')
+})
+
+// 44.62, 44.66 — WHAT IS ALWAYS ALLOWED IS KEPT PER SITE AND HOLDER, grows by the tools allowed since,
+// and is forgotten by site or whole.
+test('a site is always allowed per holder, and forgotten — 44.62, 44.66', async () => {
+    const file = `${temporaryModule({}, `${tmpdir()}/`)}/allowed.json`
+    expect(await allowedSites(file)).toEqual([])
+    await allowAlways(file, 'https://a.example', 'h1', ['WebSearch'])
+    await allowAlways(file, 'https://a.example', 'h1', ['mcp__calendar'])
+    await allowAlways(file, 'https://b.example', 'h2', [])
+    await allowAlways(file, 'http://localhost:3000/app', 'h3', [])
+    const sites = await allowedSites(file)
+    expect(
+        allowsUnasked(sites, 'https://a.example', 'h1', [
+            'mcp__calendar',
+            'WebSearch',
+        ]),
+    ).toBe(true)
+    expect(allowsUnasked(sites, 'https://a.example', 'h2', [])).toBe(false)
+    expect(allowsUnasked(sites, 'https://a.example', 'h1', ['WebFetch'])).toBe(
+        false,
+    )
+    expect(await forget(file, 'https://a.example/')).toBe(1)
+    // A bare name is the site kept under either scheme.
+    expect(await forget(file, 'localhost:3000/app/')).toBe(1)
+    expect(await allowedSites(file)).toEqual([
+        { site: 'https://b.example', holder: 'h2', tools: [] },
+    ])
+    expect(await forget(file)).toBe(1)
+    expect(await allowedSites(file)).toEqual([])
+})
+
+// 44.43 — UNINSTALL UNSETS THE DEFAULT `xdg-mime` SET, which it has no command for: the entry is taken
+// out of the scheme's line, and the line goes where it named no other.
+test('uninstall takes the desktop entry out of mimeapps.list — 44.43', () => {
+    const list = [
+        '[Default Applications]',
+        'text/html=firefox.desktop',
+        'x-scheme-handler/abide-bridge=abide-bridge.desktop',
+        '',
+    ].join('\n')
+    expect(withoutDefault(list)).toBe(
+        '[Default Applications]\ntext/html=firefox.desktop\n',
+    )
+    expect(
+        withoutDefault(
+            'x-scheme-handler/abide-bridge=abide-bridge.desktop;other.desktop;',
+        ),
+    ).toBe('x-scheme-handler/abide-bridge=other.desktop;')
+    const another = list.replace('abide-bridge.desktop', 'x.desktop')
+    expect(withoutDefault(another)).toBe(another)
+})
+
+// 44.43 — LINUX AND WINDOWS OPEN THE SCHEME AS THEIR DESKTOPS DO: a desktop entry claiming
+// `x-scheme-handler/abide-bridge`, its `Exec` quoting each path; registry classes under the visitor's
+// own hive starting the handler with the link.
+test('Linux and Windows register the scheme to start the handler with the link — 44.43', () => {
+    // A quoted `"` is `\"`, and the string escape doubles that backslash; a `%` is doubled.
+    const entry = desktopEntry('/home/me/.bun/bin/bun', '/home/me/a "b"%/x')
+    expect(entry).toContain(
+        'Exec="/home/me/.bun/bin/bun" "/home/me/a \\\\"b\\\\"%%/x/handler/opened.js" %u',
+    )
+    expect(entry).toContain(`MimeType=x-scheme-handler/${PAIRING_SCHEME};`)
+    expect(entry).toContain('NoDisplay=true')
+    const commands = registryCommands(
+        'C:\\bun\\bun.exe',
+        'C:\\Users\\me\\abide-bridge',
+    )
+    expect(commands.at(-1)).toEqual([
+        'reg',
+        'add',
+        `HKCU\\Software\\Classes\\${PAIRING_SCHEME}\\shell\\open\\command`,
+        '/ve',
+        '/d',
+        '"C:\\bun\\bun.exe" "C:\\Users\\me\\abide-bridge\\handler\\opened.js" "%1"',
+        '/f',
+    ])
+    expect(commands[1]).toContain('URL Protocol')
+})
+
+// 44.64 — A QUESTION THAT CANNOT BE SHOWN IS A NO: a Linux desktop asks with `zenity`, else `kdialog`,
+// and offers always as a third button only where it was offered; with neither there is no question.
+test('a Linux desktop asks with zenity or kdialog, or not at all — 44.64', () => {
+    const zenity = linuxQuestion('q', true, (tool) => tool === 'zenity')
+    expect(zenity?.[0]).toBe('zenity')
+    expect(zenity).toContain('--extra-button')
+    expect(
+        linuxQuestion('q', false, (tool) => tool === 'zenity'),
+    ).not.toContain('--extra-button')
+    expect(linuxQuestion('q', true, (tool) => tool === 'kdialog')).toContain(
+        '--yesnocancel',
+    )
+    expect(linuxQuestion('q', false, (tool) => tool === 'kdialog')).toContain(
+        '--yesno',
+    )
+    expect(linuxQuestion('q', true, () => false)).toBeUndefined()
 })
 
 afterAll(removeTemporaryModules)

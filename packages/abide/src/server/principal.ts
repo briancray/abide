@@ -242,6 +242,18 @@ export function signedInAs(): string {
 }
 
 /**
+ * Who a pairing code minted for `caller` signed in as `signedIn` is minted for, as a bridge is told it
+ * (44.63): one string per sign-in — signed by the principal secret, so no claim is read off it — or,
+ * signed out, one per browser, and never the same for two.
+ */
+export function holderOf(caller: string, signedIn: string): string {
+    const [secret] = secrets()
+    return signedIn === 'null' || secret === undefined
+        ? `browser.${new Bun.CryptoHasher('sha256').update(caller).digest('base64url')}`
+        : `account.${signature(secret, signedIn)}`
+}
+
+/**
  * Signs this caller in with `claims`, sealing them into the cookie.
  *
  * 26.8, 26.21 — AUTHENTICATES THIS CALLER, before the headers are out, leaving `caller` where it

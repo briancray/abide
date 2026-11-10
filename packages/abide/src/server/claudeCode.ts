@@ -5,8 +5,9 @@
 //
 // CONFIGURED BY CLAUDE CODE'S OWN OPTION NAMES, which the bridge lays on as their flags, and only the ones
 // that shape the answer. What would give a site power over the visitor's machine — permissions,
-// directory, settings — is not an option here at all, and its built-in `tools` are a request the visitor
-// grants or does not: the bridge decides (44.15, 44.16, 44.29).
+// directory, settings, an MCP server — is not an option here at all, and its `tools`, built-in or of
+// the visitor's own MCP servers, are a request the visitor grants or does not: the bridge decides
+// (44.15, 44.16, 44.29).
 
 import type {
     AssistantContent,
@@ -25,7 +26,10 @@ import { mcpFailure } from './generatedSurfaces.ts'
 import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
 
-/** The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. */
+/**
+ * The Claude Code options a site may set for a turn, and the tools of the visitor's machine it asks
+ * for: built-in by name, or of the visitor's own MCP servers as `mcp__<server>__<tool>`.
+ */
 export type ClaudeCodeConfig = {
     model?: string
     fallbackModel?: string
@@ -38,18 +42,20 @@ export type ClaudeCodeConfig = {
     tools?: string[]
 }
 
-/** The built-in tools a pairing command grants, as the visitor would after its `--`. 44.32. */
+/** The tools a pairing command grants, as the visitor would after its `--`. 44.32. */
 type PairingOptions = Pick<ClaudeCodeConfig, 'tools'>
 
 /**
- * Whether this browser's bridge is connected, and the command and the link that pair one where it is
- * not, with the command that installs the app the link opens.
+ * Whether this browser's bridge is connected, the tools it asked for that the bridge cannot give, and
+ * the command and the link that pair one — in place of the one connected, where one is — with the
+ * command that installs what opens the link.
  */
 export type BridgeStatus = {
     paired: boolean
-    command: string | undefined
-    link: string | undefined
-    install: string | undefined
+    missing: string[]
+    command: string
+    link: string
+    install: string
 }
 
 /** The visitor's own Claude Code, reached through the bridge paired to their browser. */
@@ -125,7 +131,11 @@ function bridgeCommand(options: PairingOptions = {}): {
     install: string
     expires: number
 } {
-    const { code, expires } = mintCode(askingCaller(), signedInAs())
+    const { code, expires } = mintCode(
+        askingCaller(),
+        signedInAs(),
+        options.tools,
+    )
     return { ...commandFor(code, options), expires }
 }
 
@@ -150,26 +160,20 @@ function commandFor(
 }
 
 /**
- * This browser's pairing as it changes: unpaired with the command to run and the link to open, then
- * paired the moment a bridge connects, and unpaired again if it goes — following whoever signs in at
- * the browser since. 44.20, 44.34.
+ * This browser's pairing as it changes: unpaired, then paired the moment a bridge connects, and
+ * unpaired again if it goes — following whoever signs in at the browser since — each status with the
+ * command to run and the link to open. 44.20, 44.34, 44.59, 44.60.
  */
 async function* bridge(
     options: PairingOptions = {},
 ): AsyncGenerator<BridgeStatus> {
-    for await (const code of pairingStatus(
+    for await (const { paired, code, missing } of pairingStatus(
         askingCaller(),
         signedInAs(),
+        options.tools ?? [],
         request().signal,
     ))
-        yield code === undefined
-            ? {
-                  paired: true,
-                  command: undefined,
-                  link: undefined,
-                  install: undefined,
-              }
-            : { paired: false, ...commandFor(code, options) }
+        yield { paired, missing, ...commandFor(code, options) }
 }
 
 /** The visitor's own Claude Code as a provider, with the pairing that reaches it. */
