@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.126.1
+
+### Patch Changes
+
+- 4c4c572: An array mutator whose arguments `await` compiles: `items.push(...(await load()))` in a `.abide` file evaluates its arguments before the copy is taken, rather than inside the mutator's own function, which is not async, so the build no longer fails with `"await" can only be used inside an "async" function` — and a write made while they are pending is kept (31.9).
+- 4c4c572: `imagePiece` draws a JPEG at any size, so a photo's EXIF — a phone's GPS among it — is not sent with it and its orientation is applied (44.52). `imageFiles` hands back a pasted or dropped HEIC or HEIF, which `imagePiece` draws as a JPEG wherever the browser can decode one, and refuses where it cannot (44.55, 44.54).
+
 ## 0.126.0
 
 ### Minor Changes
