@@ -2539,7 +2539,8 @@ reach `onError` as 37.5's error does.
 process.
 
 37.10 Under `abide start` and the executable's `start`, a rejection nothing handled and a throw
-nothing caught MUST stop the app through `App.stop`, and the process MUST then exit with 1.
+nothing caught MUST stop the app through `App.stop`, and the process MUST then exit with 1 — save
+37.28's abort, which MUST NOT stop it.
 
 37.11 Under `abide start` and the executable's `start`, `SIGTERM` and `SIGINT` MUST stop the app
 through `App.stop`, and the process MUST then exit with 0.
@@ -2596,6 +2597,10 @@ and once, handed the call's method and URL beside it.
 
 37.27 An `onRefusal` MUST NOT change the `Failed` the call refuses with, nor keep the call from
 refusing with it.
+
+37.28 A `DOMException` named `AbortError` that 37.5, 37.8, 37.17 or 12.6 would hand `onError` MUST
+NOT reach it, on a server as in a browser: an abort is asked for, as 37.25's aborted call is, and is
+no failure.
 
 # 38. Commands
 

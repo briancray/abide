@@ -753,7 +753,7 @@ type Reached = { readonly [REACHED]: true }
 | `Lane` | `'page' \| 'handler' \| 'file' \| 'openapi' \| 'mcp' \| 'bridge' \| 'socket' \| 'abide'` | What answers a request a `middleware` rung is handed. | 37.19 |
 | `onStart` | `(fn: (start: () => Promise<void>) => void \| Promise<void>) => () => void` | Wraps the boot. | 37.4, 37.6, 37.13 |
 | `onStop` | `(fn: (stop: () => Promise<void>) => void \| Promise<void>) => () => void` | Mirrors it for teardown. | 37.4, 37.6, 37.13 |
-| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route, or in the browser below the calling component. | 37.5, 37.8, 37.13, 37.16, 37.17, 37.18, 37.21, 12.6 |
+| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route, or in the browser below the calling component. | 37.5, 37.8, 37.13, 37.16, 37.17, 37.18, 37.21, 37.28, 12.6 |
 | `onRefusal` | `(fn: (refusal: Failed<string, unknown>, call: { method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string }) => unknown) => () => void` | What the browser hands each refusal a call over http is answered with, below the calling component. | 37.13, 37.22, 37.23, 37.24, 37.25, 37.26, 37.27 |
 | `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's config defaults. | 27.6, 37.7, 37.13 |
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2, 37.7, 37.13 |

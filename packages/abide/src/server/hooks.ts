@@ -12,6 +12,7 @@
 // `App` in it boots under the same hooks (42.12's sharing, from the other side).
 
 import { type Failed, isFailed } from '#shared/Failed.ts'
+import { isAbort } from '#shared/isAbort.ts'
 import { namedLogger } from '#shared/log.ts'
 import type { Rung } from '#shared/Middleware.ts'
 import { aborted, refuse } from '#shared/refuse.ts'
@@ -313,9 +314,11 @@ export function reportUnexpected(error: unknown): void {
 /**
  * Hands an error to every `onError` hook, writing nothing of its own.
  *
- * 12.6 — the half of 37.5 a failure already warned on its own namespace is owed.
+ * 12.6 — the half of 37.5 a failure already warned on its own namespace is owed. An abort is
+ * written and handed to none (37.28).
  */
 export function handOnError(error: unknown): void {
+    if (isAbort(error)) return
     // 37.5 — NEAREST ROUTE FIRST, over the route the request matched; outside every request, or
     // before one matched, the root's alone.
     const route = currentRequestScope()?.route

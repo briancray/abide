@@ -2,6 +2,8 @@
 // per command that serves. `createApp` installs neither, so a test or a script keeps bun's default of
 // failing loudly.
 
+import { isAbort } from '#shared/isAbort.ts'
+
 import type { App } from './createApp.ts'
 import { reportUnexpected } from './hooks.ts'
 
@@ -27,7 +29,8 @@ export function keepServing(): void {
  *
  * A FAULT NOBODY AWAITED stops it too, after `onError` has it: the app's state is no longer one
  * anything vouched for, and a supervisor restarting a clean process is the recovery. The exit code
- * is what tells the supervisor which of the two it was.
+ * is what tells the supervisor which of the two it was. An abort was asked for and vouches for the
+ * state as it found it, so it is written and the app serves on (37.28).
  *
  * 37.12 — A SECOND SIGNAL WHILE STOPPING ENDS THE PROCESS AT ONCE, so a drain that never finishes
  * is still one keystroke from over.
@@ -52,7 +55,7 @@ export function stopOnSignalOrFault(app: App): void {
         })
     const fault = (error: unknown): void => {
         reportUnexpected(error)
-        if (!stopping) stopThenExit(1)
+        if (!stopping && !isAbort(error)) stopThenExit(1)
     }
     process.on('unhandledRejection', fault)
     process.on('uncaughtException', fault)

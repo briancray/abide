@@ -7,9 +7,10 @@
 // WHAT NOTHING CAUGHT IS THE BROWSER'S OWN ACCOUNT: the window's `error` event and its
 // `unhandledrejection`, which a call's refusal no handler awaited or caught arrives as. 12.6's
 // throws are handed through `UNEXPECTED` as they are on a server, and the one of them that then
-// surfaces as uncaught (12.7) is not handed a second time.
+// surfaces as uncaught (12.7) is not handed a second time. An abort is handed to none (37.28).
 
 import { BrowserHooks } from './BrowserHooks.ts'
+import { isAbort } from './isAbort.ts'
 import { UNEXPECTED } from './UNEXPECTED.ts'
 
 const HOOKS = new BrowserHooks<[error: unknown]>(
@@ -38,7 +39,7 @@ function listen(): void {
 function handedUnexpected(error: unknown): void {
     if (SURFACING.length === 0) setTimeout(() => (SURFACING.length = 0))
     SURFACING.push(error)
-    HOOKS.hand(error)
+    hand(error)
 }
 
 function surfaced(error: unknown): void {
@@ -47,5 +48,10 @@ function surfaced(error: unknown): void {
         SURFACING.splice(at, 1)
         return
     }
-    HOOKS.hand(error)
+    hand(error)
+}
+
+// 37.28 — every browser route to the hooks passes here, so an abort reaches none of them.
+function hand(error: unknown): void {
+    if (!isAbort(error)) HOOKS.hand(error)
 }

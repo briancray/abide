@@ -32,8 +32,8 @@ onStop(async (stop) => {
 // its body runs where it is declared — at boot.
 const FAULT = `import { POST } from '@abide/abide/server'
 
-export default POST((args: { reason: string }) => {
-    void Promise.reject(new Error(args.reason))
+export default POST((args: { reason: string; abort?: boolean }) => {
+    void Promise.reject(args.abort ? new DOMException(args.reason, 'AbortError') : new Error(args.reason))
     return 'answered'
 })
 `
@@ -125,6 +125,28 @@ test('a rejection nobody awaited reaches onError, then stops the app and exits 1
     expect(await Bun.file(mark).text()).toBe('stopped;')
     expect(await Bun.readableStreamToText(served.stderr)).toContain(
         'nobody awaited this',
+    )
+}, 30_000)
+
+// 37.28 — AN ABORT NOBODY AWAITED IS WRITTEN, AND THE APP SERVES ON until it is told to go. THE
+// REVERT: drop `isAbort`'s check from `stopOnSignalOrFault`'s `fault`; the process exits 1 inside
+// the bound rather than reading `still running`.
+test('an abort nobody awaited is written and does not stop the app — 37.10, 37.28', async () => {
+    const mark = `${app}/abort.txt`
+    const { base, served } = await started(mark)
+    const answer = await Bun.fetch(`${base}/probe/fault`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"reason":"superseded","abort":true}',
+    })
+    expect(await answer.json()).toBe('answered')
+    const early = await exitWithin(served, 2_000)
+    served.kill('SIGTERM')
+    const code = await exitWithin(served, 10_000)
+    served.kill('SIGKILL')
+    expect({ early, code }).toEqual({ early: 'still running', code: 0 })
+    expect(await Bun.readableStreamToText(served.stderr)).toContain(
+        'superseded',
     )
 }, 30_000)
 

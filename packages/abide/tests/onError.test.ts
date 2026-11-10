@@ -4,6 +4,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
+import { handOnError, onError as onServerError } from '#server/hooks.ts'
 import { flushSync, reactive } from '#shared'
 import { onError } from '#shared/onError.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
@@ -100,6 +101,37 @@ test('a disposer that threw reaches onError — 12.6, 37.17', () => {
     STATE.fail.set(true)
     flushSync()
     expect(heard()).toEqual(['inner:disposer', 'outer:disposer'])
+})
+
+// THE REVERT: drop `isAbort`'s check from `surfaced`, and the list reads the abort twice over.
+test('an abort nothing caught reaches no onError — 37.28', () => {
+    const event = new Event('unhandledrejection') as Event & { reason: unknown }
+    event.reason = new DOMException('superseded', 'AbortError')
+    dispatchEvent(event)
+    dispatchEvent(
+        new ErrorEvent('error', {
+            error: new DOMException('stopped', 'AbortError'),
+        }),
+    )
+    expect(heard()).toEqual([])
+})
+
+// THE REVERT: drop `isAbort`'s check from `handedUnexpected`, and the list reads the abort, once per hook.
+test('an abort 12.6 hands reaches no onError — 37.28', () => {
+    UNEXPECTED.report?.(new DOMException('disposed', 'AbortError'))
+    expect(heard()).toEqual([])
+})
+
+// THE SERVER'S, THE SAME RULE: a root `onError` hears a failure and not an abort. THE REVERT: drop
+// `isAbort`'s check from `handOnError`, and the list reads the abort before the failure.
+test('an abort reaches no server onError, as a failure does — 37.28, 37.5', () => {
+    const unfile = onServerError(
+        (error) => void STATE.heard.push(`server:${(error as Error).message}`),
+    )
+    handOnError(new DOMException('left', 'AbortError'))
+    handOnError(new Error('failed'))
+    unfile()
+    expect(heard()).toEqual(['server:failed'])
 })
 
 // THE REVERT: drop the `try` around each hook in `hand`, and the inner hook's throw ends the walk:
