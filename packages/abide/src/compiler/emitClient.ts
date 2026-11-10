@@ -210,13 +210,12 @@ export function emitClient(
     // grew by — applying a head there is a parse and a walk of `document.head` a row. So a file that
     // is both routed and invoked titles the document as a page and leaves it alone as a row.
     const routed = selfFill === 'routed' || selfFill === 'both'
-    const head = routed ? headSink(file) : undefined
-    const headMarkup =
-        head === undefined ? "''" : renderMarkup(head, lowering, CLIENT_LANE)
-    const heads = headMarkup !== "''"
+    const head = headSink(file)
+    const headMarkup = renderMarkup(head, lowering, CLIENT_LANE)
+    const heads = routed && headMarkup !== "''"
     // 39.13 — A HEAD THAT READS SOMETHING LIVE FOLLOWS IT, from a watch the page's scope owns — live
     // by the rule `emitRegion` binds by. One that reads nothing that moves is applied once.
-    const liveHeads = head !== undefined && heads && readsLive(head, lowering)
+    const liveHeads = heads && readsLive(head, lowering)
     // 39.14 — THE HEAD IS LEFT ON THE LEVEL the router handed in, painted or not, for the router
     // to read when this level leaves or a level under it does. One thunk, which the apply below
     // reads too, so the markup expression is emitted once.
@@ -231,28 +230,17 @@ export function emitClient(
     // level it stands in (`contributeHead`), a row grown later included. Asked of the
     // region before the fill makes it look painted; owned by the component's scope as its first
     // unit, so the head leaves with the region — and, 39.13, follows its value until then.
-    const ownHead = routed ? undefined : headSink(file)
-    const ownMarkup =
-        ownHead === undefined
-            ? "''"
-            : renderMarkup(ownHead, lowering, CLIENT_LANE)
     const contributed =
-        ownMarkup === "''"
+        routed || headMarkup === "''"
             ? ''
-            : `const __headed = ${lowering.use('contributeHead')}(${REGION_ROOT}, () => ${ownMarkup})\n`
+            : `const __headed = ${lowering.use('contributeHead')}(${REGION_ROOT}, () => ${headMarkup})\n`
     if (contributed !== '') lines.unshift(`${SCOPE}.own(__headed)`)
     const builds = carriesOwnMarkup && page.positions.length > 0
     let fills = contributed
-    if (applied !== '' || builds) {
-        const build = builds
-            ? `function __build(__parent) {\n    ${emitMaker(page, lowering)}\n}\n`
-            : ''
-        // THE HEAD GOES BEFORE THE FILL, so the guard is written out where there is one to apply.
-        fills +=
-            applied === ''
-                ? `${registered}${build}${lowering.use('fillEmpty')}(${REGION_ROOT}, __build)\n`
-                : `${registered}${build}if (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) { ${applied}${builds ? `${lowering.use('fillRegion')}(${REGION_ROOT}, __build)` : ''} }\n`
-    }
+    // THE HEAD GOES BEFORE THE FILL, so the guard is written out where there is one to apply.
+    if (applied !== '')
+        fills += `${registered}${builds ? buildFunction(page, lowering) : ''}if (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) { ${applied}${builds ? `${lowering.use('fillRegion')}(${REGION_ROOT}, __build)` : ''} }\n`
+    else if (builds) fills += filledEmpty(page, lowering)
 
     // NOTHING LIVE IS NO MODULE: every unit the page's region pushes is a binding, a listener or a
     // region, so an empty `lines` is a page with nothing live anywhere in it.
@@ -312,11 +300,7 @@ ${mount}`
 
     // 10.5 on the other side, and the same scope: the child's `mount` is called from inside the
     // parent's, so the chain a key is looked up is the component tree here too.
-    // 10.5 — CAPTURED WHERE A DEFERRED MOUNT CAN NEED IT. A row or an arm mounted after the fact
-    // runs from a `watch` effect, with nothing on the stack; this is the scope it resumes.
-    const captured = page.defersSetup
-        ? `const ${SHARE_AT} = ${lowering.use('currentShare')}()\n`
-        : ''
+    const captured = capturedShare(page, lowering)
     const { opened, closed } = shareScope(lowering, '')
     // Ahead of the imports, which are read off what the lowering was asked for.
     const levelMarkup = `${[...defs, ...helpers].join('\n')}\n${fills}${captured}${bindings}`
@@ -416,6 +400,25 @@ if (${ROUTED}) { ${ROUTED}.leaveMarkup(__markup, ${SETTLED_AT}); return${declare
 return __markup(${REGION_ROOT})`
 }
 
+// The region's nodes made from what was placed (`emitMaker`), as the `__build` a fill calls.
+function buildFunction(sink: Cursor, lowering: Lowering): string {
+    return `function __build(__parent) {\n    ${emitMaker(sink, lowering)}\n}\n`
+}
+
+// 32.17 — a region that fills itself where no server painted it, a page's and an inline
+// component's alike.
+function filledEmpty(sink: Cursor, lowering: Lowering): string {
+    return `${buildFunction(sink, lowering)}${lowering.use('fillEmpty')}(${REGION_ROOT}, __build)\n`
+}
+
+// 10.5 — CAPTURED WHERE A DEFERRED MOUNT CAN NEED IT. A row or an arm mounted after the fact
+// runs from a `watch` effect, with nothing on the stack; this is the scope it resumes.
+function capturedShare(sink: Cursor, lowering: Lowering): string {
+    return sink.defersSetup
+        ? `const ${SHARE_AT} = ${lowering.use('currentShare')}()\n`
+        : ''
+}
+
 /**
  * One unit of a component's mount, guarded apart from the others.
  *
@@ -449,14 +452,8 @@ function clientComponent(
     const setup =
         component.setup === null ? '' : `${lowering.setup(component.setup)}\n`
     const owning = scopedSetup(setup, lowering)
-    const fill =
-        sink.positions.length === 0
-            ? ''
-            : `function __build(__parent) {\n    ${emitMaker(sink, lowering)}\n}
-${lowering.use('fillEmpty')}(${REGION_ROOT}, __build)\n`
-    const captured = sink.defersSetup
-        ? `const ${SHARE_AT} = ${lowering.use('currentShare')}()\n`
-        : ''
+    const fill = sink.positions.length === 0 ? '' : filledEmpty(sink, lowering)
+    const captured = capturedShare(sink, lowering)
     const bindings = scopeBindings(owning, chain, lines, lowering)
     // 10.5, 32.46 — its own share scope per instance, as on the server (`serverComponent`).
     const { opened, closed } = shareScope(lowering, '')
