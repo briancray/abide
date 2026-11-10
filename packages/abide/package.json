@@ -57,7 +57,6 @@
     "sideEffects": [
         "./src/server/**",
         "./src/shared/WORK.ts",
-        "./src/shared/outbox.ts",
         "./src/shared/reactive/Reactive.ts",
         "./src/ui/outboxQueue.ts"
     ],

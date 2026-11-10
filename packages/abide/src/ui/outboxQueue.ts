@@ -17,11 +17,20 @@ import {
 } from '#shared/answerOf.ts'
 import { failedFrom, isFailed, problemOf } from '#shared/Failed.ts'
 import type { Problem } from '#shared/Failed.ts'
-import { showLine, type ShownCall, showSending } from '#shared/outbox.ts'
+import {
+    anySending,
+    showLine,
+    type ShownCall,
+    showSending,
+} from '#shared/outbox.ts'
+import { OUTBOX_SENDING } from '#shared/OUTBOX_SENDING.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import { isReactive, type Reactive, reactive } from '#shared/reactive/index.ts'
 import { produceInto, refuseInto, standIn } from '#shared/reactive/producer.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
+
+// 46.11 — a bare `busy` hears the call this queue has in flight.
+OUTBOX_SENDING.any = anySending
 
 const DATABASE = 'abide-outbox'
 /** The `localStorage` key set while the line holds a call, so a page with none opens no database. */

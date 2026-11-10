@@ -9,7 +9,6 @@
 
 import type { Failed } from './Failed.ts'
 import type { JsonValue } from './JsonValue.ts'
-import { OUTBOX_SENDING } from './OUTBOX_SENDING.ts'
 import { ambient, type Reactive, type Selection } from './reactive/index.ts'
 import { matchesPattern } from './reactive/matchesPattern.ts'
 import type { Method } from './rpc.ts'
@@ -54,8 +53,15 @@ const LINE = ambient<ShownCall[]>([])
 /** The call in flight, or `undefined` where none is. */
 const SENDING = ambient<Matched | undefined>(undefined)
 
-// 46.11 — a bare `busy` hears a call in flight, which no value holds.
-OUTBOX_SENDING.any = () => SENDING() !== undefined
+/**
+ * 46.11 — whether a call is in flight, which a bare `busy` hears and no value holds.
+ *
+ * Installed by `outboxQueue`, the one writer of what it reads, so a bundle with no queue keeps no
+ * outbox at load.
+ */
+export function anySending(): boolean {
+    return SENDING() !== undefined
+}
 
 /** 46.1 — shows the queue's line, oldest first. */
 export function showLine(calls: ShownCall[]): void {

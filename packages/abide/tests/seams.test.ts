@@ -59,6 +59,38 @@ const count = reactive(0, { schema: jsonSchema({ type: 'number' }) })
     expect(`a schema: ${await carries('declared.ts')}`).toBe('a schema: true')
 })
 
+// 38.94 — A BARE `busy` HEARS THE OUTBOX ONLY WHERE A QUEUE IS LOADED: the probe is installed by
+// `outboxQueue`, the one writer of what it reads, so `#shared/outbox.ts` writes nothing at load and
+// leaves `sideEffects`. The marker is the install's own property write, `.any=`, which a minifier
+// leaves alone. THE REVERT: install the probe at `outbox.ts`'s load and list it in `sideEffects`
+// again; `no queue: true`, and every bundle reaching the barrel builds the outbox's two cells.
+test('a client entry with no outbox queue does not install the outbox probe — 38.94, 46.11', async () => {
+    const dir = temporaryModule({
+        'bare.ts': `import { busy, reactive } from '@abide/abide'
+;(globalThis as { seen?: unknown }).seen = [reactive(0)(), busy()]
+`,
+        'queued.ts': `import { busy } from '@abide/abide'
+import { wire } from '@abide/abide/wire'
+;(globalThis as { seen?: unknown }).seen = [wire, busy()]
+`,
+    })
+    const installs = async (entry: string): Promise<boolean> => {
+        const built = await Bun.build({
+            entrypoints: [`${dir}/${entry}`],
+            target: 'browser',
+            minify: true,
+        })
+        if (!built.success)
+            throw new AggregateError(built.logs, `${entry} did not build`)
+        const text = await (
+            built.outputs[0] as { text(): Promise<string> }
+        ).text()
+        return text.includes('.any=')
+    }
+    expect(`no queue: ${await installs('bare.ts')}`).toBe('no queue: false')
+    expect(`a queue: ${await installs('queued.ts')}`).toBe('a queue: true')
+})
+
 // "A STATIC PAGE SHIPS NO RUNTIME", ASSERTED AT THE BUNDLE — which is where it is about to stop
 // being self-evident.
 //
