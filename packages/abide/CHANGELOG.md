@@ -1,5 +1,15 @@
 # @abide/abide
 
+## 0.126.0
+
+### Minor Changes
+
+- 5eb1a76: `claudeCode`'s `tools` asks for the visitor's own MCP tools as well as built-in ones — `mcp__calendar__meetings`, or `mcp__calendar` for all of a server's — granted the same way, through the command or the link (44.29). A `BridgeStatus` now always carries a command and a link, paired or not, and pairing with one replaces the bridge already paired, so a page can offer a reconnect (44.59). It also carries `missing`: the tools the pairing asked for that the visitor's bridge cannot give (44.60). `/__abide/bridge` names who a code was minted for, without spending it, for a bridge that always allows a site (44.63).
+
+### Patch Changes
+
+- d61b26b: An abort (a `DOMException` named `AbortError`: a superseded call's, a stopped stream's) reaches no `onError`, the browser's or the server's — 37.28, as 37.25 keeps an aborted call from `onRefusal`. The server still writes it to its log, and under `abide start` an abort nothing handled no longer stops the app (37.10).
+
 ## 0.125.2
 
 ### Patch Changes

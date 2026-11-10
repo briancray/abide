@@ -58,7 +58,7 @@
     },
     "peerDependencies": {
         "@playwright/test": "^1.64.0",
-        "@abide/abide": ">=0.125.2"
+        "@abide/abide": ">=0.126.0"
     },
     "peerDependenciesMeta": {
         "@playwright/test": {
