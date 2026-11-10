@@ -9,10 +9,8 @@ import { tmpdir } from 'node:os' // bun exposes no temporary directory of its ow
 
 import { DOCS_SITE } from '#compiler/DOCS_SITE.ts'
 
-import { appFixture } from './builtApp.ts'
+import { appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const SAVED = `<script>
 import { reactive } from '@abide/abide'

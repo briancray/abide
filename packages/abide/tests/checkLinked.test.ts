@@ -14,10 +14,8 @@ import { symlinkSync, unlinkSync } from 'node:fs' // bun exposes no symlink of i
 import { checkSource } from '#compiler/checkApp.ts'
 import { openChecker } from '#compiler/compileApp.ts'
 
-import { appFixture } from './builtApp.ts'
+import { appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
-
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 afterAll(() => removeTemporaryModules())
 

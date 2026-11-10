@@ -9,6 +9,8 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
+import { spawned } from '@abide/harness/gate'
+
 import { decodeMappings, segmentAt } from '#server/sourceMappings.ts'
 
 import { addressOf, BIN } from './builtApp.ts'
@@ -682,16 +684,13 @@ test('a dev server given no port takes the next free one from 3000 — 38.63', a
 // prints an address.
 test('a dev server given a taken port does not move off it — 38.64', async () => {
     const release = holdPort(3000)
-    const pinned = Bun.spawn(['bun', BIN, 'dev', '--root', app], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-        env: { ...withoutPort(), PORT: '3000' },
-    })
     try {
-        expect(await pinned.exited).not.toBe(0)
-        expect(await new Response(pinned.stderr).text()).toContain('EADDRINUSE')
+        const pinned = await spawned(['bun', BIN, 'dev', '--root', app], {
+            env: { ...withoutPort(), PORT: '3000' },
+        })
+        expect(pinned.exitCode).not.toBe(0)
+        expect(pinned.stderr).toContain('EADDRINUSE')
     } finally {
-        pinned.kill()
         release?.()
     }
 }, 30_000)

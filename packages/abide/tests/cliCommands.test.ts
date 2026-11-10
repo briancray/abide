@@ -7,10 +7,8 @@ import { spawned } from '@abide/harness/gate'
 
 import { buildFiles } from '#server/appBuild.ts'
 
-import { builtStylesheet, handlerFiles, serveApp } from './builtApp.ts'
+import { BIN, builtStylesheet, handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from '@abide/abide/server'
 

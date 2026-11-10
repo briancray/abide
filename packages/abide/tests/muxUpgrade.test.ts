@@ -5,6 +5,8 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
+import { spawned } from '@abide/harness/gate'
+
 import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -131,15 +133,11 @@ test('abide start logs each mux connection on abide:socket — 18.1', async () =
             address = /http:\/\/[^\s]+/.exec(seen)
         }
         const url = new URL(address[0])
-        const opening = Bun.spawn(
-            [
-                'bun',
-                '-e',
-                `const ws = new WebSocket(${JSON.stringify(`ws://${url.host}/__abide/socket`)}); ws.onopen = () => { ws.close(); process.exit(0) }`,
-            ],
-            { stdout: 'pipe', stderr: 'pipe' },
-        )
-        await opening.exited
+        await spawned([
+            'bun',
+            '-e',
+            `const ws = new WebSocket(${JSON.stringify(`ws://${url.host}/__abide/socket`)}); ws.onopen = () => { ws.close(); process.exit(0) }`,
+        ])
         while (!/abide:socket.*open/.test(seen)) {
             const { value, done } = await Promise.race([
                 reader.read(),

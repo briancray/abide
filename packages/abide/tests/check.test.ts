@@ -13,10 +13,8 @@ import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/Diagnostics.ts'
 
-import { appFixture } from './builtApp.ts'
+import { appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
-
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const TYPO = `<script>
 import { props } from '@abide/abide'
