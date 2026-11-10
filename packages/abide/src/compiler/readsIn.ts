@@ -68,6 +68,7 @@ import {
     unionMembers,
     valueTypeOf,
 } from './reactiveTypes.ts'
+import { referencesIn } from './referencesIn.ts'
 import { sharedModuleWrites } from './sharedModuleWrites.ts'
 import { trackingWarnings } from './trackingWarnings.ts'
 
@@ -228,16 +229,7 @@ export async function readsIn(
         }),
     )
     const nodes = await Promise.all(
-        reactive.map(async (symbol) => {
-            if (symbol === undefined) return []
-            const references = await checker.getReferencesToSymbolInFile(
-                shadowPath,
-                symbol,
-            )
-            return Promise.all(
-                references.map((reference) => reference.resolve()),
-            )
-        }),
+        reactive.map((symbol) => referencesIn(checker, shadowPath, symbol)),
     )
     const owned = await ownMembers(checker, nodes.flat(), (node) =>
         valueTypeOf(checker, node),
@@ -849,18 +841,7 @@ async function rowReads(
     if (bound.length === 0) return reads
     const symbols = await checker.getSymbolAtLocation(bound)
     const found = await Promise.all(
-        symbols.map(async (symbol) =>
-            symbol === undefined
-                ? []
-                : await Promise.all(
-                      (
-                          await checker.getReferencesToSymbolInFile(
-                              shadowPath,
-                              symbol,
-                          )
-                      ).map((reference) => reference.resolve()),
-                  ),
-        ),
+        symbols.map((symbol) => referencesIn(checker, shadowPath, symbol)),
     )
     for (let at = 0; at < found.length; at += 1) {
         const name = bound[at] as Node
@@ -1102,18 +1083,7 @@ async function propsReads(
 
     const symbols = await checker.getSymbolAtLocation(bound)
     const found = await Promise.all(
-        symbols.map(async (symbol) =>
-            symbol === undefined
-                ? []
-                : await Promise.all(
-                      (
-                          await checker.getReferencesToSymbolInFile(
-                              shadowPath,
-                              symbol,
-                          )
-                      ).map((reference) => reference.resolve()),
-                  ),
-        ),
+        symbols.map((symbol) => referencesIn(checker, shadowPath, symbol)),
     )
     const owned = await ownMembers(checker, found.flat(), (node) =>
         checker.getTypeAtLocation(node),

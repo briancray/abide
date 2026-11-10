@@ -11,6 +11,7 @@ import type {
 import { classifyRead, FUNCTIONS } from './classifyRead.ts'
 import type { Finding } from './Diagnostics.ts'
 import type { Span } from './projectShadow.ts'
+import { referencesIn } from './referencesIn.ts'
 
 // 34.18 — A PLAIN `let` IN A `<script module>` THAT A `<script>` WRITES AS IT SETS UP. The block is
 // module scope (34.2), which a server shares across every request, and setup runs inside a render —
@@ -61,12 +62,7 @@ export async function sharedModuleWrites(
     if (shared.length === 0) return []
     const warnings: Finding[] = []
     for (const { name, symbol } of shared) {
-        const references = await checker.getReferencesToSymbolInFile(
-            shadowPath,
-            symbol,
-        )
-        for (const reference of references) {
-            const node = await reference.resolve()
+        for (const node of await referencesIn(checker, shadowPath, symbol)) {
             if (node === undefined) continue
             const at = node.getStart()
             if (at < scripts.start || at >= scripts.end) continue
