@@ -2,16 +2,9 @@ import { listOf } from '#shared/listOf.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 
 import { HYDRATE_LOG, Mismatch, warnMismatch } from './Mismatch.ts'
-import { reconcile } from './reconcile.ts'
+import { clearList, reconcile } from './reconcile.ts'
 import { isEmptyRegion, type Region, removeUntil } from './regions.ts'
-import {
-    dropRow,
-    makeRow,
-    paintedRow,
-    type Row,
-    type RowSetUp,
-    rowsIn,
-} from './rows.ts'
+import { makeRow, paintedRow, type Row, type RowSetUp, rowsIn } from './rows.ts'
 
 /**
  * The state of one `{#for}` block, shared by its reconcile and its async append.
@@ -222,8 +215,7 @@ function appendRows(list: List, source: AsyncIterable<unknown>): void {
     if (list.pumping === source) return
     // A NEW SOURCE IS A NEW LIST. What the last one appended is stopped and removed, or its
     // readers wake for the life of the page writing into nodes the next source appends after.
-    for (const row of list.rows) dropRow(row)
-    list.rows = []
+    clearList(list)
     stopPump(list)
     list.pumping = source
     // A FLOATING PROMISE IS THE ONE FAILURE THIS SEAM CANNOT WARN ABOUT. `pump` awaits the app's

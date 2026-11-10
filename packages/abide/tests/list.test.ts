@@ -1070,6 +1070,61 @@ test('emptying a list clears its region in one write', () => {
     expect(`removals: ${removals}`).toBe('removals: 0')
 })
 
+// A NEW ASYNC SOURCE EMPTIES WHAT THE LAST ONE APPENDED THE SAME WAY — one write, not a removal a
+// row — because it is the same job as an empty array, and `clearList` is the one that does it.
+//
+// THE REVERT, run: `for (const row of list.rows) dropRow(row)` in place of `clearList` in
+// `appendRows`. The document is identical; this reports 50 removals where 0 are due.
+test('a new async source empties the rows the last one appended in one write', async () => {
+    document.body.innerHTML = '<ul id="streamed"></ul>'
+    const host = document.getElementById('streamed') as HTMLElement
+    const open = document.createComment(REGION_OPEN)
+    const close = document.createComment(REGION_CLOSE)
+    host.append(open, close)
+    async function* count(
+        prefix: string,
+        many: number,
+    ): AsyncGenerator<string> {
+        for (let at = 0; at < many; at += 1) yield `${prefix}${at}`
+    }
+    const list = listAt(
+        { open, close },
+        false,
+        (item) => item,
+        () => ({
+            make: (parent: Node, item: { data: unknown }) => {
+                const row = (parent.ownerDocument as Document).createElement(
+                    'li',
+                )
+                row.textContent = String(item.data)
+                return [row]
+            },
+            mount: () => new Scope(),
+            update: noUpdate,
+        }),
+    )
+    updateList(list, count('a', 50))
+    await Bun.sleep(0)
+    expect(host.querySelectorAll('li').length).toBe(50)
+
+    const remove = Element.prototype.remove
+    let removals = 0
+    Element.prototype.remove = function (this: Element) {
+        removals += 1
+        remove.call(this)
+    }
+    try {
+        updateList(list, count('b', 1))
+    } finally {
+        Element.prototype.remove = remove
+    }
+    expect(`removals: ${removals}`).toBe('removals: 0')
+    await Bun.sleep(0)
+    expect(
+        [...host.querySelectorAll('li')].map((node) => node.textContent),
+    ).toEqual(['b0'])
+})
+
 // THE SIBLINGS ARE NOT THE REGION'S. A list sharing its parent with other nodes cannot clear the
 // parent, so it removes row by row and leaves what stands around it — and an emptied region
 // refills between anchors that are still where they were.

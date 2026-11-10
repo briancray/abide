@@ -24,7 +24,7 @@ import { dropRow, makeRow, moveRow, type Row, updateRow } from './rows.ts'
  */
 export function reconcile(list: List, data: unknown[]): void {
     if (data.length === 0) {
-        clear(list)
+        clearList(list)
         return
     }
     const region = list.region
@@ -188,9 +188,10 @@ export function reconcile(list: List, data: unknown[]): void {
  *
  * NOTHING WANTED IS ITS OWN SHAPE: there is no key to match and no order to keep, so the map,
  * the survivor walk and the placement walk all answer nothing. Every row is still STOPPED first,
- * as `dropRow` would, so a binding cannot wake over a node that is already gone.
+ * as `dropRow` would, so a binding cannot wake over a node that is already gone. An empty array
+ * and a new async source (`appendRows`) both start from here.
  */
-function clear(list: List): void {
+export function clearList(list: List): void {
     const parent = list.region.close.parentNode
     if (parent === null) return
     beginLayer(LAYER_RECONCILE)
