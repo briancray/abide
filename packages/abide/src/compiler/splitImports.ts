@@ -1,6 +1,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { COMPONENT_QUERY, TEXT_SUFFIX } from '#server/MODULE_QUERIES.ts'
+import { SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { isContextualKeyword, type Token, tokenize } from './tokenize.ts'
 
@@ -529,7 +530,7 @@ export function withoutProps(imports: string): string {
     let out = ''
     let from = 0
     for (const statement of importStatements(imports)) {
-        if (statement.specifier !== '@abide/abide') continue
+        if (statement.specifier !== SHARED_SPECIFIER) continue
         const kept = keptImport(
             statement,
             (_statement, binding) => binding.written === 'props',

@@ -44,6 +44,8 @@ export function holdsReactive(position: Position | undefined): boolean {
     return kind === 'elementBind' || kind === 'componentBind'
 }
 
+const startOf = (position: Position): number => position.start
+
 /**
  * Every template position a projection holds, ascending, and the checker node each one is.
  *
@@ -56,8 +58,6 @@ export function holdsReactive(position: Position | undefined): boolean {
  * after it, and ends past its span. The spans never nest, so at most one position holds a node, and
  * a setup's span is as many nodes as it has statements.
  */
-const startOf = (position: Position): number => position.start
-
 export class PositionTable {
     readonly all: readonly Position[]
 

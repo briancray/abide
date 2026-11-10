@@ -524,7 +524,6 @@ function forPieces(header: string, at: number): Piece[] | undefined {
     return pieces
 }
 
-/** How much whitespace `text` opens with. */
 /** An expression whose source `raw` starts at `rawAt`, written back as `raw` where it is refused. */
 function expressionOf(raw: string, rawAt: number, fit: Fit): Expression {
     return {
@@ -650,10 +649,7 @@ function entriesOf(printed: string): Map<string, string> {
 /** The indent `bun fmt` printed the probe's body at — the unit the markup is indented by. */
 function unitOf(probe: string | undefined): string {
     const body = probe?.split('\n')[1]
-    const unit =
-        body === undefined
-            ? ''
-            : body.slice(0, body.length - body.trimStart().length)
+    const unit = body === undefined ? '' : body.slice(0, leadingSpace(body))
     return unit === '' ? '  ' : unit
 }
 
@@ -746,7 +742,7 @@ function emit(
 
     const lineIndent = (): string => {
         const line = out.slice(out.lastIndexOf('\n') + 1)
-        return line.slice(0, line.length - line.trimStart().length)
+        return line.slice(0, leadingSpace(line))
     }
     const resolve = (): void => {
         if (pending === undefined) return

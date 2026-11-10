@@ -4,14 +4,14 @@ import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
 import { holdsSlot } from './classifyTemplate.ts'
 import type { Finding } from './Diagnostics.ts'
-import { type AbideFile, scriptBodies } from './parseAbide.ts'
+import { abideBindings } from './hookCalls.ts'
+import { type AbideFile, leadingSpace, scriptBodies } from './parseAbide.ts'
 import {
     type Origin,
     type Projection,
     projectShadow,
     type Span,
 } from './projectShadow.ts'
-import { importedNames } from './splitImports.ts'
 import type { InlineComponent, Setup, TemplateNode } from './TemplateNode.ts'
 import { nesting, type Token, tokenize } from './tokenize.ts'
 
@@ -140,7 +140,7 @@ export class Lowering {
         this.answer = answer
         this.holdsSlot = holdsSlot(file.template)
         this.checking = checking
-        this.importsRaw = importsAbideRaw(file)
+        this.importsRaw = abideBindings(scriptBodies(file)).has('raw')
         this.chunks = chunks
         this.routed = routed
     }
@@ -396,7 +396,7 @@ export class Lowering {
     ): string | undefined {
         const source = this.projection.text
         const text = source.slice(span.start, span.end)
-        const from = span.start + (text.length - text.trimStart().length)
+        const from = span.start + leadingSpace(text)
         const to = span.start + text.trimEnd().length
         const read = this.answer.reads[this.answer.firstRead(from)]
         if (
@@ -586,7 +586,7 @@ export class Lowering {
         // 31.3's position, as a span: the operand with its whitespace off, so a read covering
         // exactly that is the name standing alone.
         const text = source.slice(from, to)
-        const wholeFrom = from + (text.length - text.trimStart().length)
+        const wholeFrom = from + leadingSpace(text)
         const wholeTo = from + text.trimEnd().length
         if (holds) {
             const path = this.boundPath(span, origins, base)
@@ -955,14 +955,6 @@ export class Lowering {
             : `((${STORED}) => (${name}.set(${writePath}${STORED})), ${STORED}))(${stored})`
         return short ? `${current} ${op} ${write}` : write
     }
-}
-
-function importsAbideRaw(file: AbideFile): boolean {
-    for (const body of scriptBodies(file))
-        for (const { name, specifier } of importedNames(body))
-            if (name === 'raw' && specifier.startsWith('@abide/abide'))
-                return true
-    return false
 }
 
 function isRawCallee(read: Read): boolean {
