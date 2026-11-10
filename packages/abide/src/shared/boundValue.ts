@@ -3,6 +3,7 @@
 // on an element and on a component alike.
 // THE BRAND IS READ FIRST (1.6): a `Reactive` is callable and has members of its own.
 
+import { numericReferenceCharacter } from './numericReferenceCharacter.ts'
 import { isReactive } from './reactive/isReactive.ts'
 import { pairReactive } from './reactive/pairReactive.ts'
 
@@ -136,22 +137,16 @@ export function selectedMarkup(markup: string, value: unknown): string {
  *
  * NOT THE COMPILER'S DECODER (`decodeCharacterReferences`): its spec-exact table of named
  * references is build-time and stays out of the client, so a named reference past these five
- * reads as written. A numeric one is the spec's: zero, a surrogate or past U+10FFFF is U+FFFD,
- * where `String.fromCodePoint` would throw out of the render.
+ * reads as written. A numeric one is the spec's — the
+ * compiler's own `numericReferenceCharacter`, windows-1252 remap included.
  */
 function decoded(text: string): string {
     if (!text.includes('&')) return text
     return text.replace(REFERENCE, (whole, decimal, hex, name) =>
         decimal !== undefined
-            ? characterAt(Number(decimal))
+            ? numericReferenceCharacter(Number(decimal))
             : hex !== undefined
-              ? characterAt(Number.parseInt(hex, 16))
+              ? numericReferenceCharacter(Number.parseInt(hex, 16))
               : (NAMED[(name as string).toLowerCase()] ?? whole),
     )
-}
-
-function characterAt(code: number): string {
-    return code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
-        ? '\ufffd'
-        : String.fromCodePoint(code)
 }

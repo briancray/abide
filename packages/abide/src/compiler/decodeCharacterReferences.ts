@@ -1,3 +1,5 @@
+import { numericReferenceCharacter } from '#shared/numericReferenceCharacter.ts'
+
 import { CHARACTER_REFERENCES } from './CHARACTER_REFERENCES.ts'
 
 // STATIC TEMPLATE TEXT AS THE CHARACTERS IT STANDS FOR, decoded at BUILD time by the HTML spec's
@@ -15,15 +17,6 @@ import { CHARACTER_REFERENCES } from './CHARACTER_REFERENCES.ts'
 // followed by each character that moves the rule, every number to 0x11F in each spelling, and the
 // range edges — with no difference; WHATWG has frozen the list. It stays in the compiler: two
 // thousand entries no page needs, and nothing a client bundle reaches may import it.
-
-// The remap for a numeric reference in 0x80–0x9F, indexed from 0x80; 0 is none, and the number
-// stands for itself.
-const WINDOWS_1252 = [
-    0x20ac, 0, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030,
-    0x0160, 0x2039, 0x0152, 0, 0x017d, 0, 0, 0x2018, 0x2019, 0x201c, 0x201d,
-    0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0, 0x017e,
-    0x0178,
-]
 
 // `&CounterClockwiseContourIntegral;` less its `&`.
 const LONGEST_NAME = 32
@@ -91,11 +84,7 @@ function numericReference(
     }
     if (end === start) return undefined
     if (text[end] === ';') end += 1
-    if (code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff))
-        code = 0xfffd
-    else if (code >= 0x80 && code <= 0x9f)
-        code = (WINDOWS_1252[code - 0x80] as number) || code
-    return { text: String.fromCodePoint(code), end }
+    return { text: numericReferenceCharacter(code), end }
 }
 
 function digitOf(char: number, hex: boolean): number {

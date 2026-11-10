@@ -12,6 +12,16 @@ test('a numeric reference no code point holds reads as U+FFFD rather than throwi
     )
 })
 
+// THE REVERT: drop the windows-1252 remap; `&#128;` reads as U+0080 and the `€` option is not
+// selected — the one the browser's `option.value` says is.
+test('a numeric reference in 0x80–0x9F reads through the windows-1252 remap — 32.61', () => {
+    const markup = '<select><option value="&#128;">a</option></select>'
+    expect(selectedMarkup(markup, '€')).toBe(
+        '<select><option value="&#128;" selected>a</option></select>',
+    )
+    expect(selectedMarkup(markup, '\u0080')).toBe(markup)
+})
+
 // THE REVERT: require the `;`; `&#169` reads as written and nothing is selected.
 test('a numeric reference with no semicolon is read — 32.61', () => {
     expect(selectedMarkup('<option value="&#169">x</option>', '©')).toBe(
