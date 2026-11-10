@@ -13,7 +13,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { tokenize } from './tokenize.ts'
 
 /** The name a param file declares: its file name before `.param.ts`. */
-export function paramNameOf(path: string): string {
+function paramNameOf(path: string): string {
     return path.slice(path.lastIndexOf('/') + 1, -'.param.ts'.length)
 }
 

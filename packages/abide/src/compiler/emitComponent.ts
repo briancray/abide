@@ -1,8 +1,9 @@
 import type { JsonValue } from '#shared/JsonValue.ts'
-import { SERVER_SPECIFIER, SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
+import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { Cursor, placeTemplate } from './Cursor.ts'
+import { abideBindings } from './hookCalls.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { privateExports } from './projectShadow.ts'
@@ -16,7 +17,7 @@ import {
     SERVER_LANE,
 } from './renderMarkup.ts'
 import { insideShare, SETTLED_AT, shareScope } from './shareScope.ts'
-import { importStatements, splitImports, withoutProps } from './splitImports.ts'
+import { splitImports, withoutProps } from './splitImports.ts'
 import type { TemplateNode } from './TemplateNode.ts'
 
 // The name the body is bound to while a component's head contributions land (`HEADS`).
@@ -177,16 +178,9 @@ ${level}${closed}
  */
 function readsBareProbe(file: AbideFile, markup: string): boolean {
     let names = ''
-    for (const script of scriptBodies(file))
-        for (const statement of importStatements(script))
-            if (statement.specifier === SHARED_SPECIFIER && !statement.typeOnly)
-                for (const binding of statement.bindings)
-                    if (
-                        !binding.typeOnly &&
-                        (binding.imported === 'busy' ||
-                            binding.imported === 'ready')
-                    )
-                        names += `${names === '' ? '' : '|'}${binding.local}`
+    for (const [local, imported] of abideBindings(scriptBodies(file)))
+        if (imported === 'busy' || imported === 'ready')
+            names += `${names === '' ? '' : '|'}${local}`
     return (
         names !== '' &&
         new RegExp(`(?<![\\w$.])(?:${names})\\(\\s*\\)`).test(markup)

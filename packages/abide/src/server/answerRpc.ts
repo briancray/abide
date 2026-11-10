@@ -21,12 +21,7 @@ import {
     type ErrorPages,
     handlerHeaders,
 } from './answerFailure.ts'
-import {
-    answerValue,
-    isValues,
-    namesEtag,
-    sseHeaders,
-} from './answerValue.ts'
+import { answerValue, isValues, namesEtag, sseHeaders } from './answerValue.ts'
 import { collapsed } from './argsContract.ts'
 import { positiveSetting } from './config.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'

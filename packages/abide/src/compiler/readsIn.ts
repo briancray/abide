@@ -802,6 +802,18 @@ async function routeReads(
     return reads
 }
 
+/** Each identifier `name` binds: itself, or every name an object or array pattern destructures. */
+function patternNames(
+    name: Node | undefined,
+    visit: (identifier: Node & { text: string }) => void,
+): void {
+    if (name === undefined) return
+    if (isIdentifier(name)) visit(name)
+    else if (isObjectBindingPattern(name) || isArrayBindingPattern(name))
+        for (const element of name.elements)
+            patternNames((element as { name?: Node }).name, visit)
+}
+
 /**
  * 32.67 — every read of a `{#for}` row's item, which a client lowering reads off the row's record or
  * its cell inside the row's mount (`Lowering.readItemsAs`), so the value a kept key is handed is
@@ -824,20 +836,13 @@ async function rowReads(
     if (items.size === 0) return reads
     const bound: Node[] = []
     const loops: Node[] = []
-    const bind = (name: Node | undefined, loop: Node): void => {
-        if (name === undefined) return
-        if (isIdentifier(name)) {
-            bound.push(name)
-            loops.push(loop)
-            return
-        }
-        if (isObjectBindingPattern(name) || isArrayBindingPattern(name))
-            for (const element of name.elements)
-                bind((element as { name?: Node }).name, loop)
-    }
     const visit = (node: Node): void => {
         const declared = rowItemOf(node, items)
-        if (declared !== undefined) bind(declared, node)
+        if (declared !== undefined)
+            patternNames(declared, (name) => {
+                bound.push(name)
+                loops.push(node)
+            })
         node.forEachChild(visit)
     }
     sourceFile.forEachChild(visit)
@@ -911,16 +916,8 @@ function refuseDeclared(
 ): void {
     if (file.components.length === 0) return
     const names = new Set<string>()
-    const bind = (name: Node | undefined): void => {
-        if (name === undefined) return
-        if (isIdentifier(name)) {
-            names.add(name.text)
-            return
-        }
-        if (isObjectBindingPattern(name) || isArrayBindingPattern(name))
-            for (const element of name.elements)
-                bind((element as { name?: Node }).name)
-    }
+    const bind = (name: Node | undefined): void =>
+        patternNames(name, (identifier) => names.add(identifier.text))
     for (const statement of statements) {
         if (statement.getStart() >= scriptsEnd) break
         if (isVariableStatement(statement))

@@ -339,7 +339,6 @@ export async function withDependencies(
     return { sources: all, handlers, positions, trees }
 }
 
-/** Whether a page or an error page has anything to paint: a template, or a head. 23.3, 35.14. */
 /** `source` at `placed`, with what its own text says it paints and calls. */
 export function placedSource(
     source: ParsedSource,
@@ -355,6 +354,7 @@ export function placedSource(
     }
 }
 
+/** Whether a page or an error page has anything to paint: a template, or a head. 23.3, 35.14. */
 export function paints(file: AbideFile): boolean {
     return file.template.length > 0 || file.head.length > 0
 }

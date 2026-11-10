@@ -10,6 +10,7 @@ import {
     closeTagAt,
     ELSE_IF,
     forSeparators,
+    leadingSpace,
     parseAbide,
 } from './parseAbide.ts'
 import { sameTemplate } from './sameTemplate.ts'
@@ -524,10 +525,6 @@ function forPieces(header: string, at: number): Piece[] | undefined {
 }
 
 /** How much whitespace `text` opens with. */
-function leadingSpace(text: string): number {
-    return text.length - text.trimStart().length
-}
-
 /** An expression whose source `raw` starts at `rawAt`, written back as `raw` where it is refused. */
 function expressionOf(raw: string, rawAt: number, fit: Fit): Expression {
     return {

@@ -1260,7 +1260,7 @@ function forBlock(
     return block
 }
 
-function leadingSpace(text: string): number {
+export function leadingSpace(text: string): number {
     return text.length - text.trimStart().length
 }
 
