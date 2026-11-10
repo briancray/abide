@@ -38,14 +38,9 @@ export const SECTIONS: readonly {
         : group,
 )
 
-// THE SITE MAP READ BY ROUTE, walked once: every page in reading order, and the section each is in.
+// THE SITE MAP READ BY ROUTE, walked once: every page in reading order.
 const ORDER: SitePage[] = []
-const SECTION_OF = new Map<string, string>()
-for (const group of SECTIONS)
-    for (const page of group.pages) {
-        ORDER.push(page)
-        SECTION_OF.set(page.route, group.section)
-    }
+for (const group of SECTIONS) for (const page of group.pages) ORDER.push(page)
 
 /** The page at `route`, which every docs page is — a route `SITE` does not list throws. */
 export function pageAt(route: string): SitePage {

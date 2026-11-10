@@ -4,8 +4,9 @@ import { inline, slugify } from '#src/lib/inline.ts'
 // and never an edit here. A clause and a group are anchored by their own number — `#41.10`, `#41` —
 // which is the address an editor or a citation links to.
 //
-// The paragraph split and the clause match are `dogfood/scripts/rulebookClauses.ts`'s, the reading
-// the citation gates use; `tests/rulebookPage.test.ts` holds the two to the same ids.
+// The clause match is `dogfood/scripts/rulebookClauses.ts`'s, the reading the citation gates use, and
+// `tests/rulebookPage.test.ts` holds the two to the same ids. The paragraph split is not: a page
+// also breaks before a heading that opens with no blank line above it.
 
 const CLAUSE = /^(\d+\.\d+)\s+([\s\S]*)$/
 const GROUP = /^# (\d+)\.\s+(.*)$/

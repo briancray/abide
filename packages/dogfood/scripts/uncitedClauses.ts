@@ -25,6 +25,8 @@ const SCANNED = [
     'packages/abide/tests',
     'packages/abide/e2e',
     'packages/abide/bench',
+    'packages/dogfood/src',
+    'packages/dogfood/scripts',
     'packages/dogfood/tests',
     'packages/harness/src',
     'packages/harness/tests',
@@ -34,7 +36,7 @@ const SCANNED = [
 ]
 
 /**
- * The clause numbers any scanned `.ts` file mentions.
+ * The clause numbers any scanned `.ts` or `.abide` file mentions.
  *
  * Every `\d.\d` in the file, comment or not. A citation in a string or an identifier is a false
  * POSITIVE here — it marks a clause as cited when nothing meant to cite it — and that only ever
@@ -42,7 +44,7 @@ const SCANNED = [
  */
 async function citedInSources(): Promise<Set<string>> {
     const cited = new Set<string>()
-    const files = new Bun.Glob('**/*.ts')
+    const files = new Bun.Glob('**/*.{ts,abide}')
     for (const directory of SCANNED) {
         const base = new URL(`${directory}/`, ROOT)
         for await (const path of files.scan(base.pathname)) {
