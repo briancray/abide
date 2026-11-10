@@ -45,6 +45,7 @@ import {
     type Walk,
 } from './argsSchemaOf.ts'
 import { type Diagnosis, diagnosisAt, type Diagnostics } from './Diagnostics.ts'
+import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 import { isReactiveCall, METHODS, optionNamed } from './reactiveOptions.ts'
 import {
     abideIn,
@@ -104,8 +105,9 @@ async function exportsIn(
     // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalizes a path to
     // the disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back
     // `/users/…/code` and a string compared against `import.meta.url` never matched.
-    const methodsPath = (await project.program.getSourceFile(METHODS_SOURCE))
-        ?.path
+    const methodsPath = (
+        await project.program.getSourceFile(FRAMEWORK_SOURCES.methods)
+    )?.path
     const abide = await abideIn(project)
     return allSettled(
         modules.map(async ({ path, file }) => {
@@ -216,10 +218,6 @@ async function exportsIn(
     )
 }
 
-/** Where abide declares the five methods: `GET` is `declare('GET')` there and nowhere else. */
-const METHODS_SOURCE = Bun.fileURLToPath(
-    new URL('../shared/rpc.ts', import.meta.url),
-)
 /** What declared an export: one of the five methods. */
 type Declared = Mount['method']
 type DeclaredExport = Pick<

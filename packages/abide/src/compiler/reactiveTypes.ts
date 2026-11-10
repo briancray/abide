@@ -18,6 +18,7 @@ import {
 } from 'typescript/unstable/async'
 
 import { aliasedSymbol } from './aliasedSymbol.ts'
+import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 
 // WHAT THE CHECKER SAYS A NAME HOLDS, asked by both of the session's jobs over one snapshot: the
 // read classifier (`readsIn`), which asks whether a name is a `Reactive`, and the handler reader
@@ -77,24 +78,6 @@ async function everyPresentMember(
     return present
 }
 
-// Where abide declares `Reactive`, `props`, `route`, `Selection` and `onConfig`, found in the project
-// the way `METHODS_SOURCE` is.
-const REACTIVE_SOURCE = Bun.fileURLToPath(
-    new URL('../shared/reactive/Reactive.ts', import.meta.url),
-)
-const PROPS_SOURCE = Bun.fileURLToPath(
-    new URL('../shared/props.ts', import.meta.url),
-)
-const ROUTE_SOURCE = Bun.fileURLToPath(
-    new URL('../shared/route.ts', import.meta.url),
-)
-const SELECTION_SOURCE = Bun.fileURLToPath(
-    new URL('../shared/reactive/index.ts', import.meta.url),
-)
-const HOOKS_SOURCE = Bun.fileURLToPath(
-    new URL('../server/hooks.ts', import.meta.url),
-)
-
 /**
  * Abide's own `Reactive`, `Selection`, `props`, `route` and `onConfig` declarations, as this
  * project's checker names them.
@@ -121,11 +104,11 @@ export type Abide = {
 
 export async function abideIn(project: Project): Promise<Abide> {
     const [declares, props, selects, route, hooks] = await Promise.all([
-        project.program.getSourceFile(REACTIVE_SOURCE),
-        project.program.getSourceFile(PROPS_SOURCE),
-        project.program.getSourceFile(SELECTION_SOURCE),
-        project.program.getSourceFile(ROUTE_SOURCE),
-        project.program.getSourceFile(HOOKS_SOURCE),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.reactive),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.props),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.selection),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.route),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.hooks),
     ])
     let selection: CheckedSymbol | undefined
     for (const statement of selects?.statements ?? [])

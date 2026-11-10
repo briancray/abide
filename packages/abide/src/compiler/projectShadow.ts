@@ -4,6 +4,7 @@ import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
 import { isEventName } from '#shared/isEventName.ts'
 
 import { isComponentTag, propKeyOf } from './classifyTemplate.ts'
+import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
@@ -667,9 +668,7 @@ const PROP = '__prop'
 const RECORD = '__record'
 export const INLINE_PROPS = '__inlineProps'
 const INLINE_PROPS_IMPORT = `
-import { props as ${INLINE_PROPS} } from ${JSON.stringify(
-    Bun.fileURLToPath(new URL('../shared/props.ts', import.meta.url)),
-)}
+import { props as ${INLINE_PROPS} } from ${JSON.stringify(FRAMEWORK_SOURCES.props)}
 `
 /**
  * The props type of a component with no `props` call.
@@ -687,16 +686,10 @@ const BIND_WRITES = '__bindWrites'
 const BOUND = '__bound'
 
 /** 33.6 — the type a written prop's cell is checked as, which is the framework's own. */
-const REACTIVE = `import(${JSON.stringify(
-    Bun.fileURLToPath(
-        new URL('../shared/reactive/Reactive.ts', import.meta.url),
-    ),
-)}).Reactive`
+const REACTIVE = `import(${JSON.stringify(FRAMEWORK_SOURCES.reactive)}).Reactive`
 
 /** 23.9 — the params a page's own route promises, which the framework spells. */
-const ROUTE_PARAMS = `import(${JSON.stringify(
-    Bun.fileURLToPath(new URL('../shared/url.ts', import.meta.url)),
-)}).RouteParams`
+const ROUTE_PARAMS = `import(${JSON.stringify(FRAMEWORK_SOURCES.url)}).RouteParams`
 
 /**
  * Ambient declarations of the helpers the shadow and the checked program call.

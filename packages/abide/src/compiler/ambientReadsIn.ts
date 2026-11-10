@@ -12,6 +12,7 @@ import {
 import type { Checker } from 'typescript/unstable/async'
 
 import { aliasedSymbol } from './aliasedSymbol.ts'
+import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 import {
     isWrittenInPlace,
     optionNamed,
@@ -27,29 +28,26 @@ import {
 // abide's imported under another name is. A read reached through a function the body calls is not
 // seen, and is the same limit 14.16 has.
 
-const besideThis = (relative: string): string =>
-    Bun.fileURLToPath(new URL(relative, import.meta.url))
-
 // Where abide declares each ambient, and whether only its `.nonce` belongs to the request.
 const AMBIENTS: { path: string; name: string; nonce: boolean }[] = [
     {
-        path: besideThis('../server/requestScope.ts'),
+        path: FRAMEWORK_SOURCES.requestScope,
         name: 'request',
         nonce: false,
     },
     {
-        path: besideThis('../server/requestScope.ts'),
+        path: FRAMEWORK_SOURCES.requestScope,
         name: 'response',
         nonce: false,
     },
     {
-        path: besideThis('../shared/principal.ts'),
+        path: FRAMEWORK_SOURCES.principal,
         name: 'principal',
         nonce: false,
     },
-    { path: besideThis('../shared/cookies.ts'), name: 'cookies', nonce: false },
-    { path: besideThis('../shared/csp.ts'), name: 'csp', nonce: true },
-    { path: besideThis('../shared/route.ts'), name: 'route', nonce: false },
+    { path: FRAMEWORK_SOURCES.cookies, name: 'cookies', nonce: false },
+    { path: FRAMEWORK_SOURCES.csp, name: 'csp', nonce: true },
+    { path: FRAMEWORK_SOURCES.route, name: 'route', nonce: false },
 ]
 
 /** The modules that declare abide's per-request ambients, each once. */
