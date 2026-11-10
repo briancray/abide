@@ -572,7 +572,7 @@ export function declare(method: Method): Declare {
                 rpc.timeout ?? RPC_SERVER.timeout(),
                 options?.offline as ((args: unknown) => unknown) | undefined,
             )
-            RPC_SERVER.reached?.(rpc, args, reached)
+            RPC_SERVER.reached?.(rpc, args, reached, route)
             return reached
         }
         // THE HANDLER'S OWN MEMBERS, handed the pattern. A `Keyed` narrows by it and a `Reactive`'s

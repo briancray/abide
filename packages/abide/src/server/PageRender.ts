@@ -9,7 +9,7 @@
 // when requests interleave — `RPC_SERVER.reached` is one slot for every request in flight.
 
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
-import { HandlerRoute } from '#shared/HandlerRoute.ts'
+import type { HandlerRoute } from '#shared/HandlerRoute.ts'
 import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
 import type { Rpc } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
@@ -52,10 +52,6 @@ export function callsInRender(): number {
 // 41.29 — the seed sink of a render no page hydrates: every call is left to run when it is made.
 const SEEDS_NOTHING: SeedSink = () => false
 
-// Each handler's route, compiled once rather than per render that calls it — as its `Rpc` keeps its
-// own; compiled again only where it was mounted at another address since.
-const ROUTE_OF = new WeakMap<object, HandlerRoute>()
-
 /** A page's render: the seed sink its calls report into, and the calls the browser will make. */
 export class PageRender {
     readonly calls: PageCall[] = []
@@ -69,23 +65,21 @@ export class PageRender {
      * Records a call the render made: into the seed buffer (41.13), and — where the handler is
      * mounted — as the request the browser will make for it, for the early-call script (41.20). Once
      * per render, as the browser's `Rpc` makes it once, and the seed sink is what says which is the
-     * once.
+     * once. `route` is the one the `Rpc` compiled for its address — `undefined` on a handler nothing
+     * mounted (16.10).
      */
-    record(rpc: object, args: unknown, reached: unknown): void {
+    record(
+        rpc: object,
+        args: unknown,
+        reached: unknown,
+        route: HandlerRoute | undefined,
+    ): void {
         callsInRenders += 1
         if (!this.seed(rpc, args, reached)) return
-        // 16.10 — the address the browser's own call is made at, stamped under the mount by
-        // `mountHandlers` — and `undefined` on a handler nothing mounted.
-        const { address, method } = rpc as Rpc<unknown, unknown>
-        if (address === undefined) return
-        let route = ROUTE_OF.get(rpc)
-        if (route?.address !== address) {
-            route = new HandlerRoute(address)
-            ROUTE_OF.set(rpc, route)
-        }
+        if (route === undefined) return
         this.calls.push({
             request: rpcRequest(
-                method,
+                (rpc as Rpc<unknown, unknown>).method,
                 route,
                 args as Record<string, unknown> | undefined,
             ),
@@ -171,8 +165,9 @@ export function recordInRender(
     rpc: object,
     args: unknown,
     reached: unknown,
+    route: HandlerRoute | undefined,
 ): void {
-    currentRequestScope()?.page?.record(rpc, args, reached)
+    currentRequestScope()?.page?.record(rpc, args, reached, route)
 }
 
 /**

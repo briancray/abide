@@ -1,3 +1,5 @@
+import type { HandlerRoute } from './HandlerRoute.ts'
+
 /**
  * What an `Rpc` asks of the server it runs on, as slots the server fills.
  *
@@ -11,7 +13,14 @@
 export const RPC_SERVER: {
     request: () => Request
     raw: ((request: Request) => Promise<Response>) | null
-    reached: ((rpc: object, args: unknown, value: unknown) => void) | null
+    reached:
+        | ((
+              rpc: object,
+              args: unknown,
+              value: unknown,
+              route: HandlerRoute | undefined,
+          ) => void)
+        | null
     /**
      * `ABIDE_RPC_TIMEOUT`, the `timeout` of a handler that names none.
      *
