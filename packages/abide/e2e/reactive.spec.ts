@@ -7,20 +7,13 @@
 // which is the thing CLAUDE.md records as inverting between engines. At full size only under
 // `bun run bench` — `BENCH_SIZING`.
 
-import { execFileSync } from 'node:child_process'
-
 import { test } from '@playwright/test'
 
 import type { ReactiveBenchRow } from '../bench/reactiveCases.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
+import { builtBench } from './builtBench.ts'
 
-const REPO = new URL('../../../', import.meta.url).pathname
-
-const built = execFileSync(
-    'bun',
-    ['packages/abide/bench/buildBench.ts', 'reactive'],
-    { cwd: REPO, encoding: 'utf8' },
-).trim()
+const built = builtBench('reactive')
 
 // WEBKIT CANNOT PRICE THESE INSIDE A GATE, and the refusal that says so is the
 // instrument working rather than a fault to route around. 43.11 asks a sample to be 100x

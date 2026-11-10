@@ -5,11 +5,9 @@
 // THE REVERT: split the attribute's text on `;` by hand in `declarationsOf`. The font family then
 // reads `a` where `"a;b"` is due.
 
-import { execFileSync } from 'node:child_process'
-
 import { expect, test } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
+import { compiledPage } from './compiledPage.ts'
 
 const PAGE_SOURCE = `<script>
 import { reactive } from '@abide/abide'
@@ -21,22 +19,7 @@ let wide = reactive('10px')
 <p id="out" style={look} style:width={wide}>x</p>
 <button id="quoted" onclick={() => { look = 'font-family: "a;b"; color: blue' }}>quoted</button>`
 
-const compiled = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { buildCompiledPage } from './packages/abide/bench/buildCompiledPage.ts'
-console.log(JSON.stringify(await buildCompiledPage(${JSON.stringify(PAGE_SOURCE)})))
-`,
-        ],
-        { cwd: REPO, encoding: 'utf8' },
-    )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as { markup: string; script: string }
+const compiled = compiledPage(PAGE_SOURCE)
 
 test('a style group parses its attribute as the browser does — 32.71', async ({
     page,

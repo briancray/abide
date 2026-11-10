@@ -29,11 +29,9 @@
 // because both calls move one node and the emulator has no `moveBefore` to tell apart. That is
 // the whole reason this file is in the browser lane rather than beside them.
 
-import { execFileSync } from 'node:child_process'
-
 import { expect, test } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
+import { compiledPage } from './compiledPage.ts'
 
 // THREE ROWS AND A REVERSE, so the middle row is a survivor that genuinely moves: in a reverse of
 // three, `b` keeps its place in the order but every sibling around it is rewritten, which is the
@@ -51,22 +49,7 @@ const rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 </ul>
 <button id="go" onclick={() => rows.set([...rows()].reverse())}>reverse</button>`
 
-const compiled = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { buildCompiledPage } from './packages/abide/bench/buildCompiledPage.ts'
-console.log(JSON.stringify(await buildCompiledPage(${JSON.stringify(PAGE_SOURCE)})))
-`,
-        ],
-        { cwd: REPO, encoding: 'utf8' },
-    )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as { markup: string; script: string }
+const compiled = compiledPage(PAGE_SOURCE)
 
 test('a reordered row keeps the state a rebuild would destroy', async ({
     page,

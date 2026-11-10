@@ -9,11 +9,9 @@
 // written by hand with nothing added. Two engines, because `:empty` and comment handling are
 // exactly the kind of thing that differs.
 
-import { execFileSync } from 'node:child_process'
-
 import { expect, test } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
+import { compiledPage } from './compiledPage.ts'
 
 // TWO KINDS OF REGION IN ONE PAGE. `#list`, `#filled` and `#blank` are STATIC markup holding
 // slots — a text slot, a slot whose value is empty, a listener — and there the compiler may add
@@ -45,22 +43,7 @@ const REFERENCE =
     '<ol id="rows"><li>one</li><li>two</li><li>three</li></ol>' +
     '<section id="deep"><div class="mid"><article><p class="leaf">deep</p></article></div></section>'
 
-const compiled = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { buildCompiledPage } from './packages/abide/bench/buildCompiledPage.ts'
-console.log(JSON.stringify(await buildCompiledPage(${JSON.stringify(PAGE_SOURCE)})))
-`,
-        ],
-        { cwd: REPO, encoding: 'utf8' },
-    )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as { markup: string; script: string }
+const compiled = compiledPage(PAGE_SOURCE)
 
 type Answers = Record<string, number | string>
 

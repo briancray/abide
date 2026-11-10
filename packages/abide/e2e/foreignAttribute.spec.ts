@@ -7,11 +7,9 @@
 // THE REVERT: `addAttribute` writing through `setAttribute` alone. Both attributes then report no
 // namespace (`null`).
 
-import { execFileSync } from 'node:child_process'
-
 import { expect, test } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
+import { compiledPage } from './compiledPage.ts'
 
 const PAGE_SOURCE = `<script>
 import { reactive } from '@abide/abide'
@@ -31,22 +29,7 @@ let target = reactive('#live')
 
 <g><use xlink:href="#dot"/><use xlink:href={target}/></g>`
 
-const compiled = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { buildCompiledPage } from './packages/abide/bench/buildCompiledPage.ts'
-console.log(JSON.stringify(await buildCompiledPage(${JSON.stringify(PAGE_SOURCE)}, { Dot: ${JSON.stringify(DOT_SOURCE)} })))
-`,
-        ],
-        { cwd: REPO, encoding: 'utf8' },
-    )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as { markup: string; script: string }
+const compiled = compiledPage(PAGE_SOURCE, { Dot: DOT_SOURCE })
 
 test('an xlink attribute the client builds inside an svg is XLink’s — 32.70', async ({
     page,

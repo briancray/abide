@@ -2,16 +2,12 @@
 // the page caught — a call's refusal no handler awaited or caught, and an effect's throw — once
 // each, and does not hear what the page caught. Only a browser says what an unhandled rejection
 // and an uncaught throw are, so only one can say the hook hears exactly those.
-//
-// `node:child_process` rather than `Bun.spawn`: playwright runs on node.
 
-import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import type { ChildProcess } from 'node:child_process'
 
 import { expect, test } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
+import { servedFixture } from './servedFixture.ts'
 
 // ONE TREE AND ONE WORKER PER PROJECT, for `routing.spec.ts`'s reason.
 test.describe.configure({ mode: 'default' })
@@ -70,47 +66,14 @@ let server: ChildProcess | undefined
 let base = ''
 
 test.beforeAll(async ({}, testInfo) => {
-    const app = join(
-        REPO,
-        `.test-modules/e2e-on-error-${testInfo.project.name}`,
-    )
-    rmSync(app, { recursive: true, force: true })
-    mkdirSync(`${app}/data`, { recursive: true })
-    mkdirSync(`${app}/claims`, { recursive: true })
-    writeFileSync(
-        `${app}/package.json`,
-        JSON.stringify({
-            name: 'on-error-fixture',
-            type: 'module',
-            imports: { '#src/*': './*' },
-        }),
-    )
-    writeFileSync(`${app}/data/claim.handler.ts`, HANDLER)
-    writeFileSync(`${app}/claims/layout.abide`, LAYOUT)
-    writeFileSync(`${app}/claims/index.abide`, PAGE)
-    const cli = join(REPO, 'packages/abide/bin/abide.ts')
-    execFileSync(
-        'bun',
-        [cli, 'build', '--root', app, '--out', `${app}/.abide`],
-        { cwd: REPO, encoding: 'utf8' },
-    )
-    const started = spawn(
-        'bun',
-        [cli, 'start', '--root', app, '--out', `${app}/.abide`, '--port', '0'],
-        { cwd: REPO, stdio: ['ignore', 'pipe', 'inherit'] },
-    )
-    server = started
-    base = await new Promise<string>((resolve, reject) => {
-        let said = ''
-        started.stdout?.on('data', (chunk: Buffer) => {
-            said += chunk.toString()
-            const found = /(http:\/\/localhost:\d+)/.exec(said)
-            if (found !== null) resolve(found[1] as string)
-        })
-        started.on('exit', (code) =>
-            reject(new Error(`abide start exited ${code}: ${said}`)),
-        )
-    })
+    ;({ base, server } = await servedFixture(
+        `e2e-on-error-${testInfo.project.name}`,
+        {
+            'data/claim.handler.ts': HANDLER,
+            'claims/layout.abide': LAYOUT,
+            'claims/index.abide': PAGE,
+        },
+    ))
 })
 
 test.afterAll(() => {

@@ -18,11 +18,9 @@
 // for is the SIGN and the ORDER of the two ratios, and whether the relocation case stays
 // a relocation. What it DOES assert is each arm's final row order.
 
-import { execFileSync } from 'node:child_process'
-
 import { expect, test } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
+import { builtBench } from './builtBench.ts'
 
 type Row = {
     case: string
@@ -41,14 +39,7 @@ type Row = {
     wrong: string[]
 }
 
-const built = execFileSync(
-    'bun',
-    ['packages/abide/bench/buildBench.ts', 'list'],
-    { cwd: REPO, encoding: 'utf8' },
-)
-    .trim()
-    .split('\n')
-    .pop() as string
+const built = builtBench('list')
 
 // WEBKIT CANNOT PRICE THESE INSIDE A GATE, and the refusal that says so is the
 // instrument working rather than a fault to route around. 43.11 asks a sample to be 100x

@@ -14,6 +14,8 @@ import { execFileSync } from 'node:child_process'
 
 import { expect, test } from '@playwright/test'
 
+import { compiledPage } from './compiledPage.ts'
+
 const REPO = new URL('../../../', import.meta.url).pathname
 
 const PAGE_SOURCE = `<script>
@@ -45,22 +47,7 @@ const measureLane = execFileSync(
     { cwd: REPO, encoding: 'utf8' },
 ).trim()
 
-const compiled = JSON.parse(
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `
-import { buildCompiledPage } from './packages/abide/bench/buildCompiledPage.ts'
-console.log(JSON.stringify(await buildCompiledPage(${JSON.stringify(PAGE_SOURCE)})))
-`,
-        ],
-        { cwd: REPO, encoding: 'utf8' },
-    )
-        .trim()
-        .split('\n')
-        .pop() as string,
-) as { markup: string; script: string }
+const compiled = compiledPage(PAGE_SOURCE)
 
 type Counts = Record<string, number | null>
 

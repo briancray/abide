@@ -4,16 +4,12 @@
 //
 // CHROMIUM ALONE: playwright drives a service worker in chromium, and its webkit leaves
 // `navigator.serviceWorker` unregistered under automation.
-//
-// `node:child_process` rather than `Bun.spawn`: playwright runs on node.
 
-import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import type { ChildProcess } from 'node:child_process'
 
 import { expect, type Page, test } from '@playwright/test'
 
-const REPO = new URL('../../../', import.meta.url).pathname
+import { servedFixture } from './servedFixture.ts'
 
 // ONE TREE AND ONE WORKER PER PROJECT, for `routing.spec.ts`'s reason.
 test.describe.configure({ mode: 'default' })
@@ -41,23 +37,15 @@ let base = ''
 // Playwright's "no fixtures" spelling — see `routing.spec.ts`.
 test.beforeAll(async ({}, testInfo) => {
     if (testInfo.project.name !== 'abide') return
-    const app = join(REPO, `.test-modules/e2e-offline-${testInfo.project.name}`)
-    rmSync(app, { recursive: true, force: true })
-    mkdirSync(`${app}/about`, { recursive: true })
-    mkdirSync(`${app}/never`, { recursive: true })
-    mkdirSync(`${app}/note`, { recursive: true })
-    mkdirSync(`${app}/data/lib`, { recursive: true })
-    mkdirSync(`${app}/outbox`, { recursive: true })
-    mkdirSync(`${app}/meetings/new`, { recursive: true })
-    // 13.7 UNDER THE WORKER — a tagged list a write's page refreshes without reading it, and how many
-    // times the server was asked for it.
-    writeFileSync(
-        `${app}/data/lib/meetings.ts`,
-        "export const meetings: string[] = ['dune']\nexport const asked = { count: 0 }\n",
-    )
-    writeFileSync(
-        `${app}/data/getMeetings.handler.ts`,
-        `import { GET } from '@abide/abide/server'
+    // ON BY DEFAULT (45.14): nothing in the environment asks for the worker.
+    ;({ base, server } = await servedFixture(
+        `e2e-offline-${testInfo.project.name}`,
+        {
+            // 13.7 UNDER THE WORKER — a tagged list a write's page refreshes without
+            // reading it, and how many times the server was asked for it.
+            'data/lib/meetings.ts':
+                "export const meetings: string[] = ['dune']\nexport const asked = { count: 0 }\n",
+            'data/getMeetings.handler.ts': `import { GET } from '@abide/abide/server'
 import { asked, meetings } from './lib/meetings.ts'
 
 export default GET(() => {
@@ -65,28 +53,19 @@ export default GET(() => {
     return [...meetings]
 }, { tags: ['meetings'] })
 `,
-    )
-    writeFileSync(
-        `${app}/data/getMeetingsAsked.handler.ts`,
-        `import { GET } from '@abide/abide/server'
+            'data/getMeetingsAsked.handler.ts': `import { GET } from '@abide/abide/server'
 import { asked } from './lib/meetings.ts'
 
 export default GET(() => asked.count)
 `,
-    )
-    writeFileSync(
-        `${app}/data/addMeeting.handler.ts`,
-        `import { POST } from '@abide/abide/server'
+            'data/addMeeting.handler.ts': `import { POST } from '@abide/abide/server'
 import { meetings } from './lib/meetings.ts'
 
 export default POST((args: { title: string }) => {
     meetings.push(args.title)
 })
 `,
-    )
-    writeFileSync(
-        `${app}/meetings/index.abide`,
-        `<script>
+            'meetings/index.abide': `<script>
 import { reactive } from '@abide/abide'
 import getMeetings from '#src/data/getMeetings.handler.ts'
 
@@ -94,10 +73,7 @@ const meetings = reactive(() => getMeetings())
 </script>
 
 <main id="meetings"><p id="listed">{meetings.ready() ? meetings().join(',') : ''}</p><a id="to-new" href="/meetings/new">new</a></main>`,
-    )
-    writeFileSync(
-        `${app}/meetings/new/index.abide`,
-        `<script>
+            'meetings/new/index.abide': `<script>
 import { navigate, refresh } from '@abide/abide'
 import addMeeting from '#src/data/addMeeting.handler.ts'
 
@@ -109,15 +85,11 @@ async function add() {
 </script>
 
 <main id="new"><button id="add" onclick={add}>add</button></main>`,
-    )
-    // 46 — A WRITE MADE OFFLINE, counted by the key it is sent under, so a call delivered twice says so.
-    writeFileSync(
-        `${app}/data/lib/added.ts`,
-        'export const added = new Map<string, number>()\n',
-    )
-    writeFileSync(
-        `${app}/data/addNote.handler.ts`,
-        `import { POST, request } from '@abide/abide/server'
+            // 46 — A WRITE MADE OFFLINE, counted by the key it is sent under, so a call
+            // delivered twice says so.
+            'data/lib/added.ts':
+                'export const added = new Map<string, number>()\n',
+            'data/addNote.handler.ts': `import { POST, request } from '@abide/abide/server'
 import { added } from './lib/added.ts'
 
 export default POST((args: { text: string }) => {
@@ -126,18 +98,12 @@ export default POST((args: { text: string }) => {
     return { text: args.text, from: 'server' }
 })
 `,
-    )
-    writeFileSync(
-        `${app}/data/getAdded.handler.ts`,
-        `import { GET } from '@abide/abide/server'
+            'data/getAdded.handler.ts': `import { GET } from '@abide/abide/server'
 import { added } from './lib/added.ts'
 
 export default GET(() => [...added.values()])
 `,
-    )
-    writeFileSync(
-        `${app}/outbox/index.abide`,
-        `<script>
+            'outbox/index.abide': `<script>
 import { outbox, reactive } from '@abide/abide'
 import addNote from '#src/data/addNote.handler.ts'
 
@@ -150,24 +116,15 @@ async function add() {
 </script>
 
 <main id="outboxed"><button id="add" onclick={add}>add</button><p id="said">{said}</p><p id="waiting">{outbox().length}</p><p id="kept">{outbox().map((call) => call.value().from + (call.value.synced() ? ' saved' : ' not saved')).join(',')}</p></main>`,
-    )
-    writeFileSync(
-        `${app}/data/getNote.handler.ts`,
-        `import { GET } from '@abide/abide/server'
+            'data/getNote.handler.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(() => ({ text: 'a saved note' }))
 `,
-    )
-    writeFileSync(
-        `${app}/data/getTags.handler.ts`,
-        `import { GET } from '@abide/abide/server'
+            'data/getTags.handler.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(() => ['kept', 'offline'])
 `,
-    )
-    writeFileSync(
-        `${app}/note/index.abide`,
-        `<script>
+            'note/index.abide': `<script>
 import { reactive } from '@abide/abide'
 import getNote from '#src/data/getNote.handler.ts'
 import getTags from '#src/data/getTags.handler.ts'
@@ -177,49 +134,14 @@ const tags = getTags()
 </script>
 
 <main id="note"><p id="text">{note().text}</p><ul id="tags">{#for tag of tags.ready() ? tags : []}<li>{tag}</li>{/for}</ul></main>`,
-    )
-    writeFileSync(
-        `${app}/package.json`,
-        JSON.stringify({
-            name: 'offline-fixture',
-            type: 'module',
-            imports: { '#src/*': './*' },
-        }),
-    )
-    writeFileSync(`${app}/layout.abide`, LAYOUT)
-    writeFileSync(`${app}/index.abide`, HOME)
-    writeFileSync(
-        `${app}/about/index.abide`,
-        '<main id="about"><h1>About</h1><a id="to-home" href="/">home</a><a id="to-tab" href="/about?tab=2">tab</a></main>',
-    )
-    writeFileSync(
-        `${app}/never/index.abide`,
-        '<main id="never"><h1>Never visited</h1></main>',
-    )
-    const cli = join(REPO, 'packages/abide/bin/abide.ts')
-    execFileSync(
-        'bun',
-        [cli, 'build', '--root', app, '--out', `${app}/.abide`],
-        { cwd: REPO, encoding: 'utf8' },
-    )
-    const started = spawn(
-        'bun',
-        [cli, 'start', '--root', app, '--out', `${app}/.abide`, '--port', '0'],
-        // ON BY DEFAULT (45.14): nothing in the environment asks for the worker.
-        { cwd: REPO, stdio: ['ignore', 'pipe', 'inherit'] },
-    )
-    server = started
-    base = await new Promise<string>((resolve, reject) => {
-        let said = ''
-        started.stdout?.on('data', (chunk: Buffer) => {
-            said += chunk.toString()
-            const found = /(http:\/\/localhost:\d+)/.exec(said)
-            if (found !== null) resolve(found[1] as string)
-        })
-        started.on('exit', (code) =>
-            reject(new Error(`abide start exited ${code}: ${said}`)),
-        )
-    })
+            'layout.abide': LAYOUT,
+            'index.abide': HOME,
+            'about/index.abide':
+                '<main id="about"><h1>About</h1><a id="to-home" href="/">home</a><a id="to-tab" href="/about?tab=2">tab</a></main>',
+            'never/index.abide':
+                '<main id="never"><h1>Never visited</h1></main>',
+        },
+    ))
 })
 
 test.afterAll(() => {
