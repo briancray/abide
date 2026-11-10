@@ -70,8 +70,7 @@ test('a prop re-reads when the caller value moves, and nothing is rebuilt — 33
     expect(child.textContent).toBe('USD 1240.00')
 
     const work = measure(() => {
-        ;(document.querySelector('button') as HTMLElement).click()
-        flushSync()
+        click('button')
     })
 
     expect(child.textContent).toBe('USD 1860.00')
@@ -115,12 +114,10 @@ const first = amount * 2
     )
     mount()
     flushSync()
-    ;(document.querySelector('#show') as HTMLElement).click()
-    flushSync()
+    click('#show')
     expect(document.querySelector('#in')?.textContent).toBe('0 0')
     const work = measure(() => {
-        ;(document.querySelector('#more') as HTMLElement).click()
-        flushSync()
+        click('#more')
     })
     expect(document.querySelector('#in')?.textContent).toBe('1 0')
     expect(work.wakes).toBe(1)
@@ -160,11 +157,9 @@ let chosen = reactive<string | undefined>(undefined)
         document.querySelector('strong')?.textContent ?? ''
     mount()
     expect(text()).toBe('USD 3.00')
-    document.querySelector('button')?.click()
-    flushSync()
+    click('button')
     expect(text()).toBe('EUR 3.00')
-    document.querySelector('button')?.click()
-    flushSync()
+    click('button')
     expect(text()).toBe('USD 3.00')
 })
 
@@ -223,8 +218,7 @@ const { title, ...rest } = props<{ title: string; note: string; count?: number }
     mount()
     flushSync()
     const work = measure(() => {
-        document.querySelector('button')?.click()
-        flushSync()
+        click('button')
     })
     expect(document.querySelector('b')?.textContent).toBe('t second none')
     // The child's own read woke, and nothing was rebuilt to answer it.
@@ -318,8 +312,7 @@ const { 'data-note': note } = props<{ 'data-note': string }>()
     expect(html).toContain('<b>first</b>')
     mount()
     flushSync()
-    document.querySelector('button')?.click()
-    flushSync()
+    click('button')
     expect(document.querySelector('i')?.textContent).toBe('1')
     expect(document.querySelector('button')?.getAttribute('data-note')).toBe(
         'second',
@@ -391,8 +384,7 @@ let rows = reactive(['one'])
     )
     mount()
     flushSync()
-    ;(document.querySelector('#add') as HTMLElement).click()
-    flushSync()
+    click('#add')
 
     const painted = document.querySelectorAll('li')[0] as HTMLElement
     const grown = document.querySelectorAll('li')[1] as HTMLElement
@@ -533,8 +525,7 @@ let titles = reactive(['one', 'two'])
     flushSync()
     const first: unknown = document.querySelector('li')
 
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
 
     const rows = [...document.querySelectorAll('li')].map(
         (row) => row.textContent,
@@ -567,8 +558,7 @@ let titles = reactive<string[]>([])
     document.head.innerHTML = ''
     mount()
     flushSync()
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
 
     expect(document.querySelectorAll('li')).toHaveLength(3)
     expect(document.head.querySelectorAll('meta[charset]')).toHaveLength(0)
@@ -599,11 +589,9 @@ let titles = reactive(['a'])
     flushSync()
     const text = (): (string | null)[] =>
         [...document.querySelectorAll('li')].map((row) => row.textContent)
-    ;(document.querySelector('#grow') as HTMLElement).click()
-    flushSync()
+    click('#grow')
     expect(text()).toEqual(['a', 'b', 'c'])
-    ;(document.querySelector('#reverse') as HTMLElement).click()
-    flushSync()
+    click('#reverse')
     expect(text()).toEqual(['c', 'b', 'a'])
 })
 
@@ -636,8 +624,7 @@ let titles = reactive(['one'])
     )
     mount()
     flushSync()
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
 
     expect(
         [...document.querySelectorAll('li')].map((row) => row.textContent),
@@ -736,13 +723,11 @@ let mark = reactive('')
     const one = rows?.one as { wakes: number; disposed: number }
     const two = rows?.two as { wakes: number; disposed: number }
 
-    ;(document.querySelector('#drop') as HTMLElement).click()
-    flushSync()
+    click('#drop')
     expect(two.disposed).toBe(two.wakes)
 
     const before = { one: one.wakes, two: two.wakes }
-    ;(document.querySelector('#bump') as HTMLElement).click()
-    flushSync()
+    click('#bump')
     expect(one.wakes).toBe(before.one + 1)
     expect(two.wakes).toBe(before.two)
 })
@@ -770,8 +755,7 @@ import List from './List.abide'
         { List: LIST },
     )
     mount()
-    ;(document.querySelector('#grow') as HTMLElement).click()
-    flushSync()
+    click('#grow')
     expect(
         [...document.querySelectorAll('#grown li')].map((li) => li.textContent),
     ).toEqual(['a', 'b'])
@@ -812,8 +796,7 @@ test("a child's write goes where the caller bound it — 33.6, 33.7", async () =
     const text = (id: string): string =>
         (document.getElementById(id) as Element).textContent ?? ''
     const step = (id: string): void => {
-        ;(document.querySelector(`#${id} .step`) as HTMLElement).click()
-        flushSync()
+        click(`#${id} .step`)
     }
 
     step('bound')
@@ -869,8 +852,7 @@ const amp = 'amp;'
     expect(html).toContain('<b class="card">AT+T|AT+T 0|+amp;</b>')
     mount()
     flushSync()
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
     const cards = document.querySelectorAll('.card')
     expect(cards[0]?.textContent).toBe('AT+T|AT+T 1|+amp;')
     expect(cards[1]?.textContent).toBe('AT+T|AT+T 1|+amp;')
@@ -905,8 +887,7 @@ let show = reactive(false)
     expect(html).toContain('<b class="flag">boolean:true|string:</b>')
     mount()
     flushSync()
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
     const flags = document.querySelectorAll('.flag')
     expect(flags[1]?.textContent).toBe('boolean:true|string:')
 })
@@ -968,8 +949,7 @@ test('a probe on a prop asks what the caller passed — 33.27', async () => {
     flushSync()
     const text = (id: string): string =>
         (document.getElementById(id) as Element).textContent ?? ''
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
     expect([
         text('name'),
         text('expression'),

@@ -10,8 +10,8 @@ import { compileApp } from '#compiler/compileApp.ts'
 import { emitSource } from '#compiler/emitSource.ts'
 import { render } from '#server'
 import { placement } from '#server/placement.ts'
-import { flushSync } from '#shared'
 
+import { click } from './click.ts'
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
@@ -49,8 +49,7 @@ test("the root layout's <html> and <body> attributes are the document's, live â€
     expect(html.match(/<body/g)?.length).toBe(1)
     document.body.className = 'light'
     mount()
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
     expect(document.body.className).toBe('dark')
 })
 

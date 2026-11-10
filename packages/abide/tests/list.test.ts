@@ -17,6 +17,7 @@ import { List, listAt, updateList } from '#ui/List.ts'
 import { noUpdate } from '#ui/rows.ts'
 import { EMPTY_SCOPE, Scope } from '#ui/Scope.ts'
 
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import {
     clientOf,
@@ -82,8 +83,7 @@ test('a two-row swap moves one node', async () => {
     const before = document.querySelectorAll('#list li')[2] as HTMLElement
 
     const work = measure(() => {
-        ;(document.querySelector('#swap') as HTMLElement).click()
-        flushSync()
+        click('#swap')
     })
 
     expect(order()).toEqual(['grace', 'ada', 'katherine', 'dorothy'])
@@ -118,8 +118,7 @@ function arrive() {
 <ul id="room">{#for turn of room}<li>{turn.text}</li>{/for}</ul>
 <button id="arrive" onclick={arrive}>arrive</button>`)
     const work = measure(() => {
-        ;(document.querySelector('#arrive') as HTMLElement).click()
-        flushSync()
+        click('#arrive')
     })
     const rows = [...document.querySelectorAll('#room li')]
     expect([
@@ -142,8 +141,7 @@ test('a full reverse puts every row in the right place', async () => {
         ]),
     )
 
-    ;(document.querySelector('#reverse') as HTMLElement).click()
-    flushSync()
+    click('#reverse')
 
     expect(order()).toEqual(['dorothy', 'katherine', 'grace', 'ada'])
     // Every row is the node it was. A reconcile that rebuilt would pass the order check above and
@@ -154,10 +152,8 @@ test('a full reverse puts every row in the right place', async () => {
 
 test('the rows survive a swap with their bindings', async () => {
     await mountPage(PAGE)
-    ;(document.querySelector('#swap') as HTMLElement).click()
-    flushSync()
-    ;(document.querySelector('#reverse') as HTMLElement).click()
-    flushSync()
+    click('#swap')
+    click('#reverse')
     expect(order()).toEqual(['dorothy', 'katherine', 'ada', 'grace'])
     expect(
         (document.querySelector('#list li') as HTMLElement).textContent,
@@ -207,8 +203,7 @@ test('a row with several top-level nodes mounts and reorders whole', async () =>
     ])
 
     const first = document.querySelector('#pairs dt') as HTMLElement
-    ;(document.querySelector('#rev') as HTMLElement).click()
-    flushSync()
+    click('#rev')
 
     // BOTH nodes of each row moved, and together: a `<dd>` left behind its `<dt>` is the failure
     // this shape has that a single-element row cannot.
@@ -262,8 +257,7 @@ test('a binding below a row’s first child is reached, in both row shapes', asy
     const { mount } = await renderPage(NESTED)
     mount()
 
-    ;(document.querySelector('#bump') as HTMLElement).click()
-    flushSync()
+    click('#bump')
 
     expect(
         [...document.querySelectorAll('#deep b')].map(
@@ -309,18 +303,15 @@ test('a row that left stops reading', async () => {
     mount()
 
     const three = measure(() => {
-        ;(document.querySelector('#tick') as HTMLElement).click()
-        flushSync()
+        click('#tick')
     })
     expect(three.bindingRuns).toBe(3)
 
-    ;(document.querySelector('#drop') as HTMLElement).click()
-    flushSync()
+    click('#drop')
     expect(document.querySelectorAll('#leaving li').length).toBe(1)
 
     const one = measure(() => {
-        ;(document.querySelector('#tick') as HTMLElement).click()
-        flushSync()
+        click('#tick')
     })
     expect(one.bindingRuns).toBe(1)
 })
@@ -392,8 +383,7 @@ test('a refetch that keeps every key and replaces every value keeps every row �
         'Katherine Johnson',
         'Dorothy Vaughan',
     ])
-    ;(document.querySelector('#refetch') as HTMLElement).click()
-    flushSync()
+    click('#refetch')
 
     expect(refetched()).toEqual([
         'ADA LOVELACE',
@@ -413,8 +403,7 @@ test('a row given a new value between two that survive keeps its neighbors', asy
     const first = document.querySelectorAll('#refetched li')[0] as HTMLElement
     const last = document.querySelectorAll('#refetched li')[3] as HTMLElement
 
-    ;(document.querySelector('#middle') as HTMLElement).click()
-    flushSync()
+    click('#middle')
 
     expect(refetched()).toEqual([
         'Ada Lovelace',
@@ -458,8 +447,7 @@ test('a kept key over a new object keeps its row, its text updated and its focus
     input.focus()
     expect(document.activeElement).toBe(input)
 
-    ;(document.querySelector('#rename') as HTMLElement).click()
-    flushSync()
+    click('#rename')
 
     expect(textOf('grace')).toBe('Grace Brewster Hopper')
     expect(document.querySelector('#list li[data-id="grace"]')).toBe(row)
@@ -490,8 +478,7 @@ test('a row reading its item is written before it is inserted — 32.67', async 
         attributes: true,
         characterData: true,
     })
-    ;(document.querySelector('#grow') as HTMLElement).click()
-    flushSync()
+    click('#grow')
     const records = observer.takeRecords().length
     observer.disconnect()
     expect(textOf('b')).toBe('B')
@@ -522,8 +509,7 @@ function finish() {
 <p id="heard">{heard}</p>
 <button id="finish" onclick={finish}>finish</button>`)
     const row = document.querySelector('#list li') as HTMLElement
-    ;(document.querySelector('#finish') as HTMLElement).click()
-    flushSync()
+    click('#finish')
     row.click()
     flushSync()
     expect(document.querySelector('#list li')).toBe(row)
@@ -585,8 +571,7 @@ test('a kept row flipping a run between raw markup and text keeps writing the ru
         'text',
         'suffix',
     ]) {
-        ;(document.querySelector(`#${id}`) as HTMLElement).click()
-        flushSync()
+        click(`#${id}`)
         steps.push(shown())
     }
     expect(steps).toEqual([
@@ -623,10 +608,8 @@ let other = reactive('one')
 <button id="follow" onclick={() => { rows = rows.map((row) => ({ ...row, follows: true })) }}>follow</button>
 <button id="other" onclick={() => { other = 'two' }}>other</button>`)
     const row = document.querySelector('#list li') as HTMLElement
-    ;(document.querySelector('#follow') as HTMLElement).click()
-    flushSync()
-    ;(document.querySelector('#other') as HTMLElement).click()
-    flushSync()
+    click('#follow')
+    click('#other')
     expect(document.querySelector('#list li')).toBe(row)
     expect([row.textContent, row.title]).toEqual(['two', 'two'])
 })
@@ -656,13 +639,10 @@ let selected = reactive('b')
     ) as List
     const cells = (): string =>
         `${list.rows.filter((row) => row.item !== null).length} of ${list.rows.length} rows hold a cell`
-    ;(document.querySelector('#grow') as HTMLElement).click()
-    flushSync()
+    click('#grow')
     expect(cells()).toBe('0 of 4 rows hold a cell')
-    ;(document.querySelector('#relabel') as HTMLElement).click()
-    flushSync()
-    ;(document.querySelector('#select') as HTMLElement).click()
-    flushSync()
+    click('#relabel')
+    click('#select')
     expect(cells()).toBe('1 of 4 rows hold a cell')
     expect(
         [...document.querySelectorAll('#list li')].map(
@@ -683,8 +663,7 @@ test('a destructured row takes a new value in place — 32.67', async () => {
     expect(document.querySelector('#list input')).toBeNull()
     const row = document.querySelector('#list li[data-id="grace"]') as Element
     const work = measure(() => {
-        ;(document.querySelector('#rename') as HTMLElement).click()
-        flushSync()
+        click('#rename')
     })
     expect(textOf('grace')).toBe('Grace Brewster Hopper')
     expect(document.querySelector('#list li[data-id="grace"]')).toBe(row)
@@ -704,8 +683,7 @@ test('a kept key over a new object creates and moves no node, as the vanilla arm
 
     await mountPage(EDITED)
     const work = measure(() => {
-        ;(document.querySelector('#rename') as HTMLElement).click()
-        flushSync()
+        click('#rename')
     })
 
     const counted = (of: typeof work): string =>
@@ -740,8 +718,7 @@ test('a row whose value is NaN is not remade or rewritten', async () => {
 
     const before = [...document.querySelectorAll('#nums li')]
     const work = measure(() => {
-        ;(document.querySelector('#append') as HTMLElement).click()
-        flushSync()
+        click('#append')
     })
     const after = [...document.querySelectorAll('#nums li')]
 
@@ -852,18 +829,15 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
 
         // One reconcile. The shadowed row is stopped and removed rather than left standing, so the
         // list is the length the subject is — and stays it on the second write.
-        ;(document.querySelector('#touch') as HTMLElement).click()
-        flushSync()
+        click('#touch')
         expect(rows()).toEqual(['first', 'second', 'third'])
-        ;(document.querySelector('#touch') as HTMLElement).click()
-        flushSync()
+        click('#touch')
         expect(rows()).toEqual(['first', 'second', 'third'])
 
         // THE WAKE-UP COUNT, which is the half no output can show: a row nothing stopped wakes on
         // every write for the life of the page and writes into nodes outside the region.
         const woke = measure(() => {
-            ;(document.querySelector('#bump') as HTMLElement).click()
-            flushSync()
+            click('#bump')
         })
         expect(woke.bindingRuns).toBe(3)
     }, 'abide:hydrate')
@@ -1136,11 +1110,9 @@ let rows = reactive(['a', 'b', 'c'])
         [...document.querySelectorAll(`${selector} li`)].map(
             (node) => node.textContent ?? '',
         )
-    ;(document.querySelector('#clear') as HTMLElement).click()
-    flushSync()
+    click('#clear')
     expect([text('#shared'), text('#alone')]).toEqual([['head', 'tail'], []])
-    ;(document.querySelector('#fill') as HTMLElement).click()
-    flushSync()
+    click('#fill')
     expect([text('#shared'), text('#alone')]).toEqual([
         ['head', 'x', 'y', 'tail'],
         ['x', 'y'],
@@ -1154,12 +1126,10 @@ let rows = reactive(['a', 'b', 'c'])
 test('an emptied list stops reading', async () => {
     const { mount } = await renderPage(LEAVING)
     mount()
-    ;(document.querySelector('#empty') as HTMLElement).click()
-    flushSync()
+    click('#empty')
     expect(document.querySelectorAll('#leaving li').length).toBe(0)
     const woke = measure(() => {
-        ;(document.querySelector('#tick') as HTMLElement).click()
-        flushSync()
+        click('#tick')
     })
     expect(`binding runs: ${woke.bindingRuns}`).toBe('binding runs: 0')
 })
@@ -1451,8 +1421,7 @@ test('a {#for} with no key takes the property its value names on `by`', async ()
     const before = document.querySelectorAll('#list li')[2] as HTMLElement
 
     const work = measure(() => {
-        ;(document.querySelector('#swap') as HTMLElement).click()
-        flushSync()
+        click('#swap')
     })
 
     expect(order()).toEqual(['grace', 'ada', 'katherine', 'dorothy'])
@@ -1465,8 +1434,7 @@ test('a {#for} with no key takes the function its value declares on `by`, and re
     await mountPage(byPage('(row) => row.id'))
     const nodes = nodesById()
 
-    ;(document.querySelector('#reverse') as HTMLElement).click()
-    flushSync()
+    click('#reverse')
 
     expect(order()).toEqual(['dorothy', 'katherine', 'grace', 'ada'])
     for (const [id, node] of nodes)
@@ -1479,8 +1447,7 @@ test('a {#for} over a value computed from one declaring `by` stays positional', 
     await mountPage(byPage(`'id'`, 'rows.slice()'))
     const nodes = nodesById()
 
-    ;(document.querySelector('#reverse') as HTMLElement).click()
-    flushSync()
+    click('#reverse')
 
     expect(order()).toEqual(['dorothy', 'katherine', 'grace', 'ada'])
     for (const [id, node] of nodes)
@@ -1503,8 +1470,7 @@ test('a row patched in place shows the patch', async () => {
 <button id="reverse"`,
         ),
     )
-    ;(document.querySelector('#rename') as HTMLElement).click()
-    flushSync()
+    click('#rename')
     expect(
         document.querySelector('#list li[data-id="grace"]')?.textContent,
     ).toBe('Grace Brewster Hopper')
@@ -1533,8 +1499,7 @@ test('a patch updates the one row it wrote to in place — 32.33, 32.67', async 
     const nodes = nodesById()
 
     const work = measure(() => {
-        ;(document.querySelector('#patch') as HTMLElement).click()
-        flushSync()
+        click('#patch')
     })
 
     expect(textOf('grace')).toBe('Grace Brewster Hopper, New York')
@@ -1558,8 +1523,7 @@ const rows = reactive(() => [...byId.values()])
 
 <ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.n}</li>{/for}</ul>
 <button id="patch" onclick={() => byId.patch((held) => { const row = held.get('a'); if (row) row.n = 9 })}>p</button>`)
-    ;(document.querySelector('#patch') as HTMLElement).click()
-    flushSync()
+    click('#patch')
     expect(textOf('a')).toBe('9')
     expect(textOf('b')).toBe('2')
 })
@@ -1573,8 +1537,7 @@ test('a list over an array computed from a patched value shows the patch', async
             `list[2].name = 'Katherine G. Johnson'`,
         ),
     )
-    ;(document.querySelector('#patch') as HTMLElement).click()
-    flushSync()
+    click('#patch')
     expect(textOf('katherine')).toBe('Katherine G. Johnson, Hampton')
 })
 
@@ -1582,8 +1545,7 @@ test('a list over an array computed from a patched value shows the patch', async
 // `place` — so the whole path down to it is what the patch marks.
 test('a patch nested below a row updates that row', async () => {
     await mountPage(PATCHED('rows', `list[0].place.city = 'Marylebone'`))
-    ;(document.querySelector('#patch') as HTMLElement).click()
-    flushSync()
+    click('#patch')
     expect(textOf('ada')).toBe('Ada Lovelace, Marylebone')
 })
 
@@ -1597,8 +1559,7 @@ test('a patch that adds a row makes that row alone', async () => {
     const nodes = nodesById()
 
     const work = measure(() => {
-        ;(document.querySelector('#patch') as HTMLElement).click()
-        flushSync()
+        click('#patch')
     })
 
     expect(order()).toEqual(['ada', 'grace', 'katherine', 'dorothy'])
@@ -1624,8 +1585,7 @@ let rows = reactive([
 
 <ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.name}, {row.place.city}</li>{/for}</ul>
 <button id="patch" onclick={() => rows.patch((list) => { list[0].place.city = 'Crystal City'; void list[1].place })}>patch</button>`)
-    ;(document.querySelector('#patch') as HTMLElement).click()
-    flushSync()
+    click('#patch')
     expect(textOf('ada')).toBe('Ada, Crystal City')
     expect(textOf('grace')).toBe('Grace, Crystal City')
 })
@@ -1651,8 +1611,7 @@ function more() {
 test('a row that binds nothing allocates no scope, hydrated or made', async () => {
     const { mount } = await renderPage(STATIC_ROWS)
     const page = mount() as Scope
-    ;(document.querySelector('#more') as HTMLElement).click()
-    flushSync()
+    click('#more')
     expect(document.querySelectorAll('#static-rows li').length).toBe(5)
     const list = (page.children ?? []).find(
         (child): child is List => child instanceof List,

@@ -29,6 +29,7 @@ import {
 import { reconcileHead } from '#ui/reconcileHead.ts'
 import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
 
+import { click } from './click.ts'
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { warningsWhile } from './warningsWhile.ts'
@@ -173,8 +174,7 @@ test('a page the server painted hydrates, and the one navigated to builds itself
     await r.hydrate()
     flushSync()
     expect(document.querySelector('#home h1')?.textContent).toBe('Home')
-    ;(document.querySelector('#bump') as HTMLElement).click()
-    flushSync()
+    click('#bump')
     expect(document.querySelector('#home p')?.textContent).toBe('1')
 
     // NAVIGATED TO: the server is asked, and the module fills the region it was handed.
@@ -398,8 +398,7 @@ test("a shell's own body markup stays outside the page region — 41.9", async (
     const r = router(mounts)
     await r.hydrate()
     flushSync()
-    ;(document.querySelector('#bump') as HTMLElement).click()
-    flushSync()
+    click('#bump')
     expect(document.querySelector('#home p')?.textContent).toBe('1')
 
     await navigate('/invoices/42')
@@ -1193,8 +1192,7 @@ const theme = reactive.share('theme', () => reactive('page-own'))
     await r.hydrate()
     flushSync()
     expect(document.querySelector('#first')?.textContent).toBe('dark')
-    ;(document.querySelector('#lighten') as HTMLElement).click()
-    flushSync()
+    click('#lighten')
     expect(document.querySelector('#first')?.textContent).toBe('light')
 
     await navigate('/second')
@@ -1237,11 +1235,9 @@ test('a page hydrates inside the layout the server painted — 35.1', async () =
     expect(chrome.querySelector('#home h1')?.textContent).toBe('Home')
     // AND BOTH ARE ALIVE: the layout's own binding and the page's, which is the pair a
     // composition that rendered but never mounted would fail.
-    ;(document.querySelector('#open') as HTMLElement).click()
-    flushSync()
+    click('#open')
     expect(document.querySelector('#open')?.textContent).toBe('menu 1')
-    ;(document.querySelector('#bump') as HTMLElement).click()
-    flushSync()
+    click('#bump')
     expect(document.querySelector('#home p')?.textContent).toBe('1')
 
     // 41.11 — THE SAME NODE AFTER A NAVIGATION, not an identical one. A marker on the element
@@ -1504,8 +1500,7 @@ test('a navigation that moves only the query keeps the page — 30.23, 30.24, 30
     const r = router(await pages())
     await r.hydrate()
     flushSync()
-    ;(document.querySelector('#bump') as HTMLElement).click()
-    flushSync()
+    click('#bump')
     const scope = r.levels.scopeAt(-1)
     const scrolled: unknown[] = []
     const scrollTo = globalThis.scrollTo
@@ -1562,8 +1557,7 @@ test('back over a fragment of the standing page neither asks nor remounts, and m
     await r.hydrate()
     flushSync()
     const stop = listenForRoutes(r)
-    ;(document.querySelector('#bump') as HTMLElement).click()
-    flushSync()
+    click('#bump')
     const scope = r.levels.scopeAt(-1)
 
     // What the browser does for Forward onto `/#setup`: the bar moved before `popstate` is
@@ -1744,26 +1738,22 @@ test("a kept layout's slot mounts the current page whenever it opens — 35.1, 1
     expect(document.querySelector('#edit')?.textContent).toBe('edit 0')
     const editing = r.levels.scopeAt(-1)
     expect(editing?.stops.length).toBeGreaterThan(0)
-    ;(document.querySelector('#fold') as HTMLElement).click()
-    flushSync()
+    click('#fold')
     expect(document.querySelector('#edit')).toBeNull()
     expect(r.levels.depth).toBe(1)
     expect(editing?.stops.length).toBe(0)
 
-    ;(document.querySelector('#fold') as HTMLElement).click()
-    flushSync()
+    click('#fold')
     expect(document.querySelector('#edit')?.textContent).toBe('edit 0')
     expect(document.querySelector('#profile')).toBeNull()
 
-    ;(document.querySelector('#fold') as HTMLElement).click()
-    flushSync()
+    click('#fold')
     await r.go('/users/2')
     flushSync()
     expect(document.querySelector('#who')?.textContent).toBe('user 2')
     expect(document.querySelector('#profile')).toBeNull()
 
-    ;(document.querySelector('#fold') as HTMLElement).click()
-    flushSync()
+    click('#fold')
     expect(document.querySelector('#profile')?.textContent).toBe('profile 2')
     expect(document.querySelector('#edit')).toBeNull()
     expect(r.levels.depth).toBe(2)

@@ -438,8 +438,7 @@ let on = reactive(false)
     }, 'abide:hydrate')
     expect(work?.nodesCreated).toBe(0)
     expect(warned).toEqual([])
-    ;(document.querySelector('#flip') as HTMLElement).click()
-    flushSync()
+    click('#flip')
     expect(document.querySelector('b')?.textContent).toBe('on')
 })
 
@@ -485,8 +484,7 @@ const kind = 'card'
     expect(out.getAttribute('title')).toBe('calm')
 
     const work = measure(() => {
-        ;(document.querySelector('#go') as HTMLElement).click()
-        flushSync()
+        click('#go')
     })
     expect(out.getAttribute('title')).toBe('urgent')
     expect(out.textContent).toBe('urgent')
@@ -530,8 +528,7 @@ let late = reactive(false)
 
     const out = document.querySelector('#out') as HTMLElement
     const work = measure(() => {
-        ;(document.querySelector('#go') as HTMLElement).click()
-        flushSync()
+        click('#go')
     })
     // THE WHOLE LIST, not the one name: `contains('overdue')` is true of an element whose `badge`
     // the write took with it, which is exactly the failure the class list is chosen to avoid.
@@ -678,8 +675,7 @@ let rows = reactive([{ id: 'a', sel: true, cls: 'a' }])
     updated.mount()
     flushSync()
     const updateWork = measure(() => {
-        ;(document.querySelector('#swap') as HTMLElement).click()
-        flushSync()
+        click('#swap')
     })
     expect(document.querySelector('#a')?.className).toBe('a sel')
     expect(updateWork.classWrites).toBe(0)
@@ -704,8 +700,7 @@ let rows = reactive([{ id: 'a', tone: 'calm' }, { id: 'b', tone: 'calm' }])
     mount()
     flushSync()
     const work = measure(() => {
-        ;(document.querySelector('#retone') as HTMLElement).click()
-        flushSync()
+        click('#retone')
     })
     expect(
         [...document.querySelectorAll('li')].map((li) => li.className),
@@ -988,8 +983,7 @@ let b = reactive('B')
     flushSync()
 
     // THE BINDING AFTER THE REFUSAL IS LIVE.
-    ;(document.querySelector('#go') as HTMLElement).click()
-    flushSync()
+    click('#go')
     expect(document.querySelector('#two')?.textContent).toBe('bB2')
     // And so is the listener, which stands in a later unit again.
     expect(document.querySelector('#one')?.textContent).toBe('aA')
@@ -1018,8 +1012,7 @@ let count = reactive(0)
     flushSync()
     const out = document.querySelector('#out') as HTMLElement
     expect(out.textContent).toBe('AT&T 0')
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
     expect(out.textContent).toBe('AT&T 1')
 })
 
@@ -1080,8 +1073,7 @@ const slotted = '#38;'
     })
     expect(mountWork.attributesSet).toBe(0)
 
-    ;(document.querySelector('#go') as HTMLElement).click()
-    flushSync()
+    click('#go')
     expect(title('named')).toBe('AT&T 1')
     expect(title('bare')).toBe('AT&T 1')
     expect(title('numeric')).toBe('AT&T 1')
@@ -1123,8 +1115,7 @@ let rows = reactive([1])
         flushSync()
     })
     expect(mountWork.attributesSet).toBe(0)
-    ;(document.querySelector('#go') as HTMLElement).click()
-    flushSync()
+    click('#go')
     expect(read('r2')).toEqual(['¬in & 2|', '∉x &notin', '&notin & 2'])
 })
 
@@ -1148,10 +1139,8 @@ let label = reactive('a')
         mount()
         flushSync()
         expect(document.querySelector('#dot')?.localName).toBe('circle')
-        ;(document.querySelector('#relabel') as HTMLElement).click()
-        flushSync()
-        ;(document.querySelector('#flip') as HTMLElement).click()
-        flushSync()
+        click('#relabel')
+        click('#flip')
     }, 'abide:hydrate')
     expect({
         href: document.querySelector('textPath')?.getAttribute('href'),

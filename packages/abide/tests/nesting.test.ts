@@ -315,8 +315,7 @@ let name = reactive('ada')
     expect(document.querySelector('b')).toBeNull()
 
     // WIRED, not merely present: the rebuilt arm's binding wakes with the rest of the page.
-    ;(document.querySelector('#rename') as HTMLElement).click()
-    flushSync()
+    click('#rename')
     expect((document.querySelector('#body') as HTMLElement).textContent).toBe(
         'hello ada!',
     )
@@ -395,8 +394,7 @@ let msg = reactive('')
 
     const hold = document.querySelector('#hold') as HTMLElement
     expect(hold.textContent).toBe('x')
-    ;(document.querySelector('#say') as HTMLElement).click()
-    flushSync()
+    click('#say')
     expect(hold.textContent).toBe('hix')
 })
 
@@ -438,8 +436,7 @@ function swap() {
 
     const list = document.querySelector('#list') as HTMLElement
     expect(list.textContent).toBe('ab')
-    ;(document.querySelector('#swap') as HTMLElement).click()
-    flushSync()
+    click('#swap')
     expect(list.textContent).toBe('ba')
     // Each row is its anchor, its run and its `<span>`, in that order, and nothing is left over.
     const kinds: string[] = []
@@ -1079,8 +1076,7 @@ function add() {
     expect(document.querySelectorAll('#list li')).toHaveLength(1)
 
     const said = await warningsWhile(async () => {
-        ;(document.querySelector('#add') as HTMLElement).click()
-        flushSync()
+        click('#add')
     })
     expect(said).toEqual([])
 
@@ -1124,8 +1120,7 @@ function add() {
         (node) => node.nodeType === 3,
     )
 
-    ;(document.querySelector('#add') as HTMLElement).click()
-    flushSync()
+    click('#add')
 
     const grown = document.querySelectorAll('#list li span')[1] as Element
     const grownRun = [...grown.childNodes].filter((node) => node.nodeType === 3)
@@ -1287,8 +1282,7 @@ function add() {
 <button id="add" onclick={add}>add</button>`
 
         await mountPage(source)
-        ;(document.querySelector('#add') as HTMLElement).click()
-        flushSync()
+        click('#add')
 
         // THE TWO ROWS CARRY THE SAME DATA, so the only difference a comparison can find is the
         // BUILD — which is the whole question. Every field is equal in both for exactly this.

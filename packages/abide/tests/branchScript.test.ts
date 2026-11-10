@@ -5,8 +5,8 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { parseAbide } from '#compiler'
-import { flushSync } from '#shared'
 
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage, TYPED_ROOT, typedSession } from './typed.ts'
 
@@ -76,8 +76,7 @@ test("a row's script is set up for that row, on the server and after hydration",
 test("a row's script runs once for the row, and once for a row added after", async () => {
     await mountSource(ROWS)
     const hydrated = { ...runs() }
-    ;(document.querySelector('#add') as HTMLElement).click()
-    flushSync()
+    click('#add')
     expect(labels()).toEqual(['ADA!', 'GRACE!', 'KATHERINE!'])
     expect(runs().katherine).toBe(1)
     // The rows that stood were not set up again by the add.
@@ -92,8 +91,7 @@ test("a row's script runs once for the row, and once for a row added after", asy
 test("a row's script tracks nothing it reads", async () => {
     await mountSource(ROWS)
     const before = { ...runs() }
-    ;(document.querySelector('#shout') as HTMLElement).click()
-    flushSync()
+    click('#shout')
     expect(runs()).toEqual(before)
     // What the script computed stands: it was set up, not bound.
     expect(labels()).toEqual(['ADA!', 'GRACE!'])
@@ -138,12 +136,10 @@ test("an arm's script runs once each time the arm is swapped in", async () => {
     expect(html).toContain('>hello ada<')
     expect(text('#greeting')).toBe('hello ada')
     const hydrated = runs().arm as number
-    ;(document.querySelector('#toggle') as HTMLElement).click()
-    flushSync()
+    click('#toggle')
     expect(text('#closed')).toBe('closed')
     expect(runs().arm).toBe(hydrated)
-    ;(document.querySelector('#toggle') as HTMLElement).click()
-    flushSync()
+    click('#toggle')
     expect(text('#greeting')).toBe('hello ada')
     expect(runs().arm).toBe(hydrated + 1)
 })
@@ -173,8 +169,7 @@ test("a value an arm's script declares is read and written by name", async () =>
     const html = await mountSource(ARM_VALUE)
     expect(html).toContain('>3<')
     expect(text('#inner')).toBe('3')
-    ;(document.querySelector('#bump') as HTMLElement).click()
-    flushSync()
+    click('#bump')
     expect(text('#inner')).toBe('4')
 })
 

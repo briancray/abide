@@ -13,6 +13,7 @@ import { markupNodes } from '#ui/parseMarkup.ts'
 import { Scope, underBoundary } from '#ui/Scope.ts'
 import { TryRegion } from '#ui/TryRegion.ts'
 
+import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
 import { warningsWhile } from './warningsWhile.ts'
@@ -409,8 +410,7 @@ const { ok } = props<{ ok: boolean }>()
 ]
 
 const fix = (): void => {
-    ;(document.querySelector('button') as HTMLElement).click()
-    flushSync()
+    click('button')
 }
 
 // 32.16 — A CATCH A COMPONENT RAISED RECOVERS when what the component read is fixed: the retry mounts
