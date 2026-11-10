@@ -2,7 +2,6 @@
 // The `abide` CLI: `commands.ts`'s list over the app on disk, and the commands that need the source
 // and the compiler, which a compiled app's executable does not hold.
 
-import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existence check or realpath of its own
 import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory creation, rename or recursive directory removal of its own
 import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { brotliCompress, constants } from 'node:zlib' // bun's brotli is `CompressionStream`, which compresses on the main thread — 1390 ms against this pool's 300 ms over the docs bundle
@@ -45,6 +44,7 @@ import { executableName } from '#server/executableName.ts'
 import { iconAccent } from '#server/iconAccent.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { skipped } from '#server/placement.ts'
+import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { serveDev } from '#server/serveDev.ts'
@@ -743,11 +743,7 @@ async function check(
 function namedDirectories(positionals: string[]): string[] {
     const named: string[] = []
     for (const directory of positionals.slice(1))
-        named.push(
-            existsSync(directory)
-                ? realpathSync(resolve(directory))
-                : resolve(directory),
-        )
+        named.push(realOrAsGiven(resolve(directory)))
     return named
 }
 

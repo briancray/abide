@@ -21,7 +21,12 @@ import {
     type ErrorPages,
     handlerHeaders,
 } from './answerFailure.ts'
-import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
+import {
+    answerValue,
+    isValues,
+    namesEtag,
+    sseHeaders,
+} from './answerValue.ts'
 import { collapsed } from './argsContract.ts'
 import { positiveSetting } from './config.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'
@@ -33,11 +38,6 @@ import { prefers } from './prefers.ts'
 import { currentRequestScope, unreap, writtenStatus } from './requestScope.ts'
 import type { Outcome } from './seedBuffer.ts'
 import { versionOf } from './versionOf.ts'
-
-// 16.58 — the environment's `timeout`, for every call a handler that names none makes.
-export function environmentTimeout(): number | undefined {
-    return positiveSetting('ABIDE_RPC_TIMEOUT', undefined)
-}
 
 /**
  * The `Response` to a call of `found` made over http, `params` being what its route matched.
@@ -105,16 +105,6 @@ export async function answerRpc(
     return admitting(answer, admitted)
 }
 
-/** Whether a handler's value is a stream of chunks, which answers as its own framing. */
-function streams(value: unknown): boolean {
-    return (
-        value instanceof ReadableStream ||
-        (value !== null &&
-            typeof value === 'object' &&
-            Symbol.asyncIterator in (value as object))
-    )
-}
-
 /** The answer with the crossing origin allowed, where the handler admits it. 21.19. */
 function admitting(answer: Response, admitted: string | null): Response {
     if (admitted !== null)
@@ -141,7 +131,7 @@ async function answerOutcome(
             value instanceof ArrayBuffer ||
             ArrayBuffer.isView(value)
         ) &&
-        (streams(value) || (entry as { peek(): unknown }).peek() === value)
+        (isValues(value) || (entry as { peek(): unknown }).peek() === value)
             ? entry
             : undefined
     // 21.3 — what the handler wrote through `response` is laid over it at the exit (21.10).
@@ -166,7 +156,7 @@ async function answerOutcome(
         offline &&
         found.method === 'GET' &&
         !isFailed(value) &&
-        !streams(value) &&
+        !isValues(value) &&
         framing !== 'jsonl' &&
         framing !== 'sse' &&
         writtenStatus() < 300
@@ -194,7 +184,7 @@ async function answerOutcome(
     if (
         etag !== undefined &&
         followers !== undefined &&
-        !streams(outcome.value) &&
+        !isValues(outcome.value) &&
         prefers(request, 'text/event-stream', 'application/json')
     ) {
         const events = handlerHeaders()

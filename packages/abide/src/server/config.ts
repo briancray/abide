@@ -116,7 +116,7 @@ function coerce(text: string, standing: unknown): unknown {
  *
  * 27.3 — a layer under the other two, so a config or an environment that carries one wins.
  */
-function derived(): Record<string, string> {
+export function derived(): Record<string, string> {
     const manifest = APP_PACKAGE.current
     const name = manifest.name ?? 'app'
     return {

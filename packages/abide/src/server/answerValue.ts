@@ -22,7 +22,8 @@ import {
 
 const ENCODER = new TextEncoder()
 
-function isValues(
+/** Whether a handler's value is a stream of chunks, which answers as its own framing. */
+export function isValues(
     value: unknown,
 ): value is AsyncIterable<unknown> | ReadableStream<unknown> {
     return (

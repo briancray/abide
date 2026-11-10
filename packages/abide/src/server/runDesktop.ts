@@ -5,7 +5,7 @@
 // loopback for the window alone. What the window shows is the `DesktopSession`'s; the window itself
 // is `openDesktopWindow`'s.
 
-import { dataDirectory } from './config.ts'
+import { dataDirectory, derived as appDerived } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type AppOrigin, bootEntered, enterApp } from './createApp.ts'
 import { DesktopSession } from './DesktopSession.ts'
@@ -14,6 +14,7 @@ import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
 import { launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
 import { openDesktopWindow } from './openDesktopWindow.ts'
+import { plainAnswer } from './plainAnswer.ts'
 import { randomToken } from './randomToken.ts'
 import { type Component, renderDocument } from './render.ts'
 import { runCompiled } from './runCompiled.ts'
@@ -68,10 +69,9 @@ async function launch(
         bootEntered(load),
     )
     const token = randomToken(16, 'hex')
+    // 27.3 — the same derived layer `resolve` starts from, under what was given.
     const derived = (): Record<string, string | undefined> => ({
-        APP_NAME: origin.package.name ?? 'app',
-        APP_VERSION: origin.package.version ?? '0.0.0',
-        APP_DATA_DIR: directory,
+        ...appDerived(),
         ...process.env,
         ...session.remembered.values,
     })
@@ -82,7 +82,7 @@ async function launch(
         async fetch(request) {
             const url = new URL(request.url)
             if (!url.pathname.startsWith(`/${token}/`))
-                return new Response('not found', { status: 404 })
+                return plainAnswer('not found', 404)
             const action = url.pathname.slice(token.length + 2)
             if (
                 options.start &&

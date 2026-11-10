@@ -8,7 +8,7 @@ import { RENDER_LOG } from '#shared/log.ts'
 import { coversPrefix, partsOf } from '#shared/matchRoute.ts'
 import { coversRoute, parseRoutePattern } from '#shared/routePattern.ts'
 
-import type { AppSources } from './answerRequest.ts'
+import type { AppSources, RankedError } from './answerRequest.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { leavePageRender } from './PageRender.ts'
 import { prefers } from './prefers.ts'
@@ -17,8 +17,6 @@ import { currentRequestScope } from './requestScope.ts'
 
 /** What a page's failure is painted from: the error pages, and the document they go into. */
 export type ErrorPages = Pick<AppSources, 'errors' | 'errorDocument'>
-
-type RankedError = ErrorPages['errors'][number]
 
 /**
  * The headers a handler's answer starts from: JSON, never stored, varying on `Origin`.

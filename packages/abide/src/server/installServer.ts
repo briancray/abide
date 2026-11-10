@@ -15,8 +15,7 @@ import { PRINCIPAL } from '#shared/principal.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 
-import { environmentTimeout } from './answerRpc.ts'
-import { configuredMount, derivedAppName } from './config.ts'
+import { configuredMount, derivedAppName, positiveSetting } from './config.ts'
 import { cspRung, nonce } from './csp.ts'
 import { handOnError } from './hooks.ts'
 import { recordInRender } from './PageRender.ts'
@@ -38,7 +37,8 @@ export function installServer(): void {
     Object.assign(PRINCIPAL, SERVER_PRINCIPAL)
     // 16.11 — the request a handler's rung is handed.
     RPC_SERVER.request = request
-    RPC_SERVER.timeout = environmentTimeout
+    // 16.58 — the environment's `timeout`, for every call a handler that names none makes.
+    RPC_SERVER.timeout = () => positiveSetting('ABIDE_RPC_TIMEOUT', undefined)
     RPC_SERVER.reached = recordInRender
     RPC_SERVER.handled = handlerTook
 }

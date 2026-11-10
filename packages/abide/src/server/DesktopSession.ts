@@ -1,8 +1,6 @@
 // 38.71-38.75 — WHAT THE DESKTOP WINDOW SHOWS, apart from the window: the app booted here, one
 // connected to elsewhere, or neither — and what the launcher did last, kept across launches.
 
-import { mkdir } from 'node:fs/promises' // bun exposes no directory creation of its own
-
 import { isFailed } from '#shared/Failed.ts'
 
 import { configuredMount } from './config.ts'
@@ -33,7 +31,6 @@ const CONNECT_TIMEOUT_MILLISECONDS = 5000
  */
 export class DesktopSession {
     private readonly stateFile: string
-    private readonly directory: string
     private readonly boot: () => Promise<App>
     readonly remembered: Remembered
     /** What the window shows: the app served here, one elsewhere, or neither. */
@@ -46,7 +43,6 @@ export class DesktopSession {
         boot: () => Promise<App>,
         remembered: Remembered,
     ) {
-        this.directory = directory
         this.stateFile = `${directory}/desktop.json`
         this.boot = boot
         this.remembered = remembered
@@ -183,7 +179,7 @@ export class DesktopSession {
     }
 
     private async remember(): Promise<void> {
-        await mkdir(this.directory, { recursive: true })
+        // `Bun.write` makes the directory the file is in.
         await Bun.write(
             this.stateFile,
             JSON.stringify(this.remembered, null, 4),
