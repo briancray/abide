@@ -3,11 +3,13 @@
 
 import { expect, test } from 'bun:test'
 
-import { flushSync } from '#shared/reactive/index.ts'
+import { flushSync, reactive } from '#shared/reactive/index.ts'
 import { enterShare, leaveShare } from '#shared/reactive/share.ts'
 import { contributeHead, type HeadContribution, Level } from '#ui/Level.ts'
 import { reconcileHead } from '#ui/reconcileHead.ts'
 import type { Region } from '#ui/regions.ts'
+
+import { warningsWhile } from './warningsWhile.ts'
 
 /** What a level reconciles through: the head of `levels`, as a `LevelChain` reconciles its own. */
 const chainOf = (levels: Level[]) => ({
@@ -203,4 +205,57 @@ test('rows joining in one reconcile each own an equal keyless node — 39.16', (
     rows[0]?.stop()
     flushSync()
     expect(document.head.querySelectorAll('style').length).toBe(2)
+})
+
+// A HEAD THAT THROWS COSTS ONE TURN'S RECONCILE, NOT EVERY ONE AFTER. A row's `<title>{x.name}</title>`
+// reading a failed load throws inside the one watch every chain reconciles through; that stops the
+// watch (12.8), and the next ask must open another. THE REVERT: reconcile `STALE` in place and clear
+// it after, with no reset of `asked` — the throw leaves `STALE` full, no later ask bumps the watch,
+// and this reports 2 reconciles and the leaving row's `.a` standing where 3 and `.b`, `.c` are due.
+test('a contributor that throws does not stop the head reconciling — 12.8, 39.16', () => {
+    document.head.innerHTML = '<title>page</title>'
+    const levels: Level[] = []
+    let reconciles = 0
+    const level = new Level({
+        reconcile: () => {
+            reconciles += 1
+            Level.reconcile(levels)
+        },
+    })
+    levels.push(level)
+    level.setHead(() => '<title>page</title>')
+    const failing = reactive(false)
+    const back = enterShare(level)
+    // The drain surfaces each throw as uncaught (12.7); here it is only counted.
+    const report = globalThis.reportError
+    globalThis.reportError = () => {}
+    let warned: string[]
+    try {
+        warned = warningsWhile(() => {
+            const a = contributeHead(region([]), () => {
+                if (failing()) throw new Error('failed load')
+                return '<style>.a{}</style>'
+            })
+            flushSync()
+            failing.set(true)
+            flushSync()
+            contributeHead(region([]), () => '<style>.b{}</style>')
+            flushSync()
+            a?.stop()
+            contributeHead(region([]), () => '<style>.c{}</style>')
+            flushSync()
+        }, 'an effect threw')
+    } finally {
+        globalThis.reportError = report
+        leaveShare(back)
+    }
+    // A's own watch, and the reconcile it threw inside.
+    expect(warned.length).toBe(2)
+    const styles = [...document.head.querySelectorAll('style')].map(
+        (node) => node.textContent,
+    )
+    expect({ reconciles, styles }).toEqual({
+        reconciles: 3,
+        styles: ['.b{}', '.c{}'],
+    })
 })

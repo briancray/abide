@@ -192,13 +192,14 @@ export function reconcile(list: List, data: unknown[]): void {
  * and a new async source (`appendRows`) both start from here.
  */
 export function clearList(list: List): void {
-    const parent = list.region.close.parentNode
-    if (parent === null) return
     beginLayer(LAYER_RECONCILE)
     try {
         for (const row of list.rows) row.scope.stop()
         list.rows = []
-        emptyRegion(list.region, parent)
+        // A region already out of the document has nothing left to empty, but its rows were
+        // still live readers until the loop above.
+        const parent = list.region.close.parentNode
+        if (parent !== null) emptyRegion(list.region, parent)
     } finally {
         endLayer(LAYER_RECONCILE)
     }

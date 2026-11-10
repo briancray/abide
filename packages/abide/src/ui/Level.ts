@@ -221,8 +221,27 @@ function reconcileLater(chain: { reconcile(): void }): void {
         const opened = unowned(() => reactive(0))
         watchTracked(() => {
             opened()
-            for (const stale of STALE) stale.reconcile()
+            // TAKEN BEFORE ANY RECONCILES: a head that throws (a `<title>` reading a failed load)
+            // must not leave `STALE` holding chains that nothing will ask to bump `asked` again.
+            const chains = [...STALE]
             STALE.clear()
+            let failed = false
+            let thrown: unknown
+            for (const chain of chains) {
+                try {
+                    chain.reconcile()
+                } catch (error) {
+                    if (!failed) thrown = error
+                    failed = true
+                }
+            }
+            // One chain's throw does not cost the others their reconcile. It goes on out to be
+            // reported as any effect's is (12.6, 12.7) and stops this watch (12.8), so the next ask
+            // opens another rather than bumping one nothing follows.
+            if (failed) {
+                asked = undefined
+                throw thrown
+            }
         })
         version = asked = opened
     }
