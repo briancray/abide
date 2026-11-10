@@ -16,9 +16,3 @@ const company = reactive(() => getCompany({ id: route.params.id }))
     <li><span>pipeline</span><strong>{company.pipeline}</strong></li>
 </ul>
 <CompanyTabs />
-
-<style>
-::view-transition-group(*) {
-    animation-duration: 0.5s;
-}
-</style>

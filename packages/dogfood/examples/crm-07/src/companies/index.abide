@@ -16,7 +16,8 @@ const companies = reactive(() => listCompanies())
 </ul>
 
 <style>
-::view-transition-group(*) {
+/* The transition hangs off the document, which carries no component's scope (34.5). */
+:global(::view-transition-group(*)) {
     animation-duration: 0.5s;
 }
 </style>
