@@ -12,6 +12,7 @@
 
 import { encodeMappings, type Segment } from '#server/sourceMappings.ts'
 
+import { lineAt, lineStarts } from './lineOf.ts'
 import type { LoweredChunk } from './Lowering.ts'
 import type { Origin } from './projectShadow.ts'
 import { mapBack } from './ShadowMap.ts'
@@ -169,26 +170,4 @@ function standsAlone(output: string, start: number, end: number): boolean {
         !NAME.test(output[start - 1] ?? ' ') &&
         !/[\w$]/.test(output[end] ?? ' ')
     )
-}
-
-function lineStarts(text: string): number[] {
-    const starts = [0]
-    for (
-        let at = text.indexOf('\n');
-        at !== -1;
-        at = text.indexOf('\n', at + 1)
-    )
-        starts.push(at + 1)
-    return starts
-}
-
-function lineAt(starts: readonly number[], offset: number): number {
-    let low = 0
-    let high = starts.length - 1
-    while (low < high) {
-        const middle = (low + high + 1) >>> 1
-        if ((starts[middle] as number) <= offset) low = middle
-        else high = middle - 1
-    }
-    return low
 }

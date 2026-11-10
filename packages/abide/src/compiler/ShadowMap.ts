@@ -1,3 +1,4 @@
+import { lastAtOrBefore } from './lastAtOrBefore.ts'
 import type { Origin, Span } from './projectShadow.ts'
 
 /** What a `.abide`'s checked module is registered with the checker as, beside the `.abide`. */
@@ -137,21 +138,21 @@ export class ShadowMap {
     }
 }
 
+const atOf = (origin: Origin): number => origin.at
+
 /** The start of the run holding `position`, plus how far in; scaffolding is the run before's end. */
 export function mapBack(origins: readonly Origin[], position: number): number {
-    let low = 0
-    let high = origins.length
-    while (low < high) {
-        const middle = (low + high) >>> 1
-        if ((origins[middle] as Origin).at <= position) low = middle + 1
-        else high = middle
-    }
-    const origin = origins[low - 1]
+    const origin = origins[lastAtOrBefore(origins, atOf, position)]
     if (origin === undefined) return 0
     return origin.source + Math.min(position - origin.at, origin.length)
 }
 
-/** The strict `mapBack`: where the run holding `position` was copied from, or `undefined`. */
+/**
+ * The strict `mapBack`: where the run holding `position` was copied from, or `undefined`.
+ *
+ * A scan rather than `mapBack`'s search: a key's copied run and the empty run pinned after it start
+ * at one offset (38.116), and the search lands on the empty one, which holds nothing.
+ */
 function copiedFrom(
     origins: readonly Origin[],
     position: number,

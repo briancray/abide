@@ -1,5 +1,6 @@
 import type { Node } from 'typescript/unstable/ast'
 
+import { lastAtOrBefore } from './lastAtOrBefore.ts'
 import type { Span } from './projectShadow.ts'
 
 /**
@@ -55,6 +56,8 @@ export function holdsReactive(position: Position | undefined): boolean {
  * after it, and ends past its span. The spans never nest, so at most one position holds a node, and
  * a setup's span is as many nodes as it has statements.
  */
+const startOf = (position: Position): number => position.start
+
 export class PositionTable {
     readonly all: readonly Position[]
 
@@ -74,14 +77,7 @@ export class PositionTable {
 
     /** The position whose span holds `offset`, or `undefined` where none does. */
     holding(offset: number): Position | undefined {
-        let low = 0
-        let high = this.all.length
-        while (low < high) {
-            const middle = (low + high) >>> 1
-            if ((this.all[middle] as Position).start <= offset) low = middle + 1
-            else high = middle
-        }
-        const position = this.all[low - 1]
+        const position = this.all[lastAtOrBefore(this.all, startOf, offset)]
         return position === undefined || offset >= position.end
             ? undefined
             : position
