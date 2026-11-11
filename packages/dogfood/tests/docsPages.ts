@@ -87,12 +87,19 @@ export function cardsOf(page: DocsPage): Card[] {
         const files = new Map<string, string>()
         const listed =
             /files=\{\{([\s\S]*?)\}\}/.exec(attributes as string)?.[1] ?? ''
+        const app = /\bapp="([^"]+)"/.exec(attributes as string)?.[1]
+        // A server file's text is read by the card on the server, by its path in the chapter app.
+        const server =
+            /serverFiles=\{\[([\s\S]*?)\]\}/.exec(attributes as string)?.[1] ??
+            ''
+        for (const [, shown] of server.matchAll(/'([^']+)'/g))
+            files.set(shown as string, `examples/${app}/${shown}`)
         for (const [, shown, source] of listed.matchAll(FILE_ENTRY))
             files.set(shown as string, imported.get(source as string) ?? '')
         cards.push({
             id,
             route: page.route,
-            app: /\bapp="([^"]+)"/.exec(attributes as string)?.[1],
+            app,
             component: imported.get(tag as string) ?? '',
             files,
         })

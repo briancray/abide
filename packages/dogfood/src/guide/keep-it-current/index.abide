@@ -3,7 +3,6 @@ import { url } from '@abide/abide'
 import getForecastSource from 'crm-04/src/pipeline/getForecast.handler.ts' with { type: 'text' }
 import getStageSource from 'crm-04/src/pipeline/getStage.handler.ts' with { type: 'text' }
 import getTargetSource from 'crm-04/src/pipeline/getTarget.handler.ts' with { type: 'text' }
-import crmDatabaseSource from 'crm-04/src/pipeline/lib/crmDatabase.ts' with { type: 'text' }
 import dealDetailSource from 'crm-04/src/pipeline/lib/DealDetail.abide' with { type: 'text' }
 import DealFeed from 'crm-04/src/pipeline/lib/DealFeed.abide'
 import dealFeedSource from 'crm-04/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
@@ -32,11 +31,15 @@ import stageTilesSource from 'crm-04/src/pipeline/lib/StageTiles.abide' with { t
 import stageTilesBenchSource from 'crm-04/src/pipeline/lib/StageTiles.bench.ts' with { type: 'text' }
 import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
 import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
+import TargetLog from 'crm-04/src/pipeline/lib/TargetLog.abide'
+import targetLogSource from 'crm-04/src/pipeline/lib/TargetLog.abide' with { type: 'text' }
+import targetLogTestSource from 'crm-04/src/pipeline/lib/TargetLog.test.ts' with { type: 'text' }
 import targetStoreSource from 'crm-04/src/pipeline/lib/targetStore.ts' with { type: 'text' }
 import TeamTarget from 'crm-04/src/pipeline/lib/TeamTarget.abide'
 import teamTargetSource from 'crm-04/src/pipeline/lib/TeamTarget.abide' with { type: 'text' }
 import teamTargetTestSource from 'crm-04/src/pipeline/lib/TeamTarget.test.ts' with { type: 'text' }
 import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
+import listTargetsSource from 'crm-04/src/pipeline/listTargets.handler.ts' with { type: 'text' }
 import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
 import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
 import setTargetSource from 'crm-04/src/pipeline/setTarget.handler.ts' with { type: 'text' }
@@ -45,7 +48,6 @@ import winDealSource from 'crm-04/src/pipeline/winDeal.handler.ts' with { type: 
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
-import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
@@ -322,7 +324,6 @@ import Snippet from '#src/lib/Snippet.abide'
                 'src/pipeline/lib/targetStore.ts': targetStoreSource,
                 'src/pipeline/getTarget.handler.ts': getTargetSource,
                 'src/pipeline/setTarget.handler.ts': setTargetSource,
-                'src/pipeline/lib/crmDatabase.ts': crmDatabaseSource,
                 'src/pipeline/lib/TeamTarget.test.ts': teamTargetTestSource,
             }}
         >
@@ -365,17 +366,27 @@ import Snippet from '#src/lib/Snippet.abide'
     </Section>
 
     <Section title="A `database` keeps what a restart would lose">
-        <p>The two handlers above keep the target in the CRM's own SQLite file, which
-            <code>database</code>, from <code>@abide/abide/server</code>, opens:</p>
+        <Example
+            id="crm-04-database"
+            app="crm-04"
+            title={"`database(name, { migrations })` — the server's own SQLite file"}
+            summary="Every target the team has set, read from a file on the server. Set one, and the list still holds it after a restart."
+            serverFiles={['src/pipeline/lib/crmDatabase.server.ts']}
+            files={{
+                'src/pipeline/lib/TargetLog.abide': targetLogSource,
+                'src/pipeline/listTargets.handler.ts': listTargetsSource,
+                'src/pipeline/setTarget.handler.ts': setTargetSource,
+                'src/pipeline/lib/TargetLog.test.ts': targetLogTestSource,
+            }}
+        >
+            <TargetLog />
+        </Example>
 
-        <Snippet source={crmDatabaseSource} path="src/pipeline/lib/crmDatabase.ts" />
-
-        <p><code>database</code> hands back a function. Its first call opens
-            <code>crm.sqlite</code> in <code>APP_DATA_DIR</code>, and every call after hands back
-            the same <code>bun:sqlite</code> <code>Database</code>, so a handler writes plain SQL
-            against it:</p>
-
-        <Snippet source={setTargetSource} path="src/pipeline/setTarget.handler.ts" from={['crmDatabase()']} />
+        <p><code>database</code>, from <code>@abide/abide/server</code>, hands back a function. Its
+            first call opens <code>crm.sqlite</code> in <code>APP_DATA_DIR</code>, and every call
+            after hands back the same <code>bun:sqlite</code> <code>Database</code>, so a handler
+            writes plain SQL against it. Each chapter's app has its own <code>APP_DATA_DIR</code>,
+            named for the app, so two apps never share the file.</p>
 
         <p>Each migration runs once, in order, and the file remembers how many it has run. A new
             column is one more string at the end of the list, never an edit to one already there.
