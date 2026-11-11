@@ -78,3 +78,12 @@ test("an sse answer is read by the format's fields — 18.27", async () => {
     expect(refused).toBeUndefined()
     expect(chunks).toEqual([1, [1, 2], { n: 3 }])
 })
+
+// 16.32 — A FRAMING IS READ OFF THE TYPE'S ESSENCE, as `carriesBytes` reads it: case-folded and
+// less its parameters, since a media type is case-insensitive. THE REVERT: match `startsWith` on the
+// type as given; `Text/Event-Stream` reads `null` and its answer is read as bytes.
+test('a framing is read off the type case-insensitively — 16.32', () => {
+    expect(framingOf('Text/Event-Stream; charset=utf-8')).toBe('sse')
+    expect(framingOf('Application/JSONL')).toBe('jsonl')
+    expect(framingOf('application/jsonlines')).toBeNull()
+})

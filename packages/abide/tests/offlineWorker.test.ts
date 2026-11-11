@@ -523,7 +523,7 @@ test('every type framingOf frames is one the worker leaves unsaved — 45.4, 16.
         )[1] as string,
     ) as string[]
     const said: string[] = []
-    for (const [, type] of body.matchAll(/startsWith\('([^']+)'\)/g))
+    for (const [, type] of body.matchAll(/=== '([^']+)'/g))
         said.push(
             `${type}: framed ${framingOf(type) !== null}, unsaved ${streamed.includes(type as string)}`,
         )

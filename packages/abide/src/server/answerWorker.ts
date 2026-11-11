@@ -247,7 +247,7 @@ function directivesOf(response) {
 function kept(response) {
     if (response.status !== 200) return false
     if (directivesOf(response).has('no-store')) return false
-    const type = response.headers.get('content-type') ?? ''
+    const type = (response.headers.get('content-type') ?? '').toLowerCase()
     return !STREAMED.some((streamed) => type.startsWith(streamed))
 }
 

@@ -13,14 +13,12 @@ import { REFUSAL_KEY } from './REFUSAL_KEY.ts'
 /** The two framings a streamed JSON answer is read in. 17.6. */
 export type Framed = 'jsonl' | 'sse'
 
-/** How an answer at `type` is framed, or `null` where it is not framed at all. */
+/** How an answer at `type` is framed, or `null` where it is not framed at all — compared as `essenceOf`. */
 export function framingOf(type: string | null | undefined): Framed | null {
-    if (
-        type?.startsWith('application/jsonl') ||
-        type?.startsWith('application/x-ndjson')
-    )
+    const essence = essenceOf(type)
+    if (essence === 'application/jsonl' || essence === 'application/x-ndjson')
         return 'jsonl'
-    if (type?.startsWith('text/event-stream')) return 'sse'
+    if (essence === 'text/event-stream') return 'sse'
     return null
 }
 
