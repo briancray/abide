@@ -24,6 +24,7 @@ import {
     noAnswer,
     unanswered,
 } from '#shared/answerOf.ts'
+import { CONTINUE_KEY } from '#shared/CONTINUE_KEY.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { isFailed } from '#shared/Failed.ts'
 import { answerChunks } from '#shared/framing.ts'
@@ -41,7 +42,7 @@ import { rpcRequest } from '#shared/rpcRequest.ts'
 import { startedEarly } from '#shared/takeEarlyCall.ts'
 
 import { enqueue, undelivered } from './outboxQueue.ts'
-import { followRpc, streamOverMux } from './socketWire.ts'
+import { continueOverMux, followRpc, streamOverMux } from './socketWire.ts'
 
 /** The browser's `Rpc` for a handler: the server's declaration over a body that fetches. */
 export function wire(
@@ -166,21 +167,37 @@ export function wire(
         // this runs while the call that started the load still has its signal set.
         const signal = startingLoadCall().signal
         const request = requestOf(args)
+        const restart = (): void =>
+            (value as (args: unknown) => { refresh(): void })(args).refresh()
         // 16.93 — A `GET` IS READ OVER THE MUX, holding no http connection while it streams, save
-        // one the page's early-call script already started (41.20) and one the mux sends back.
+        // one the page's early-call script already started (41.20, 16.97) and one the mux sends back.
         const muxed =
             method === 'GET' && !startedEarly(request.key)
-                ? await streamOverMux(address, request.url, signal, () =>
-                      (value as (args: unknown) => { refresh(): void })(
-                          args,
-                      ).refresh(),
-                  )
+                ? await streamOverMux(address, request.url, signal, restart)
                 : undefined
         const answer = muxed ?? (await answerOf(request, true, signal))
         if (answer.ok) answeredOnce.add(request.key)
         follow(args, answer)
         if (answer.body !== undefined && answer.body !== null) {
-            yield* answerChunks(answer.body, answer.framing)
+            // 16.97 — THE EARLY CALL HANDS THE REST TO THE MUX in its last line, which is read to the
+            // end of its body rather than cancelled, so the http leg finishes as an answer does.
+            let token: string | undefined
+            for await (const chunk of answerChunks(
+                answer.body,
+                answer.framing,
+            )) {
+                const continuation = continuationOf(chunk)
+                if (continuation === undefined) yield chunk
+                else token = continuation
+            }
+            if (token === undefined) return
+            const rest = await continueOverMux(address, token, signal, restart)
+            if (rest.body !== undefined && rest.body !== null) {
+                yield* answerChunks(rest.body, rest.framing)
+                return
+            }
+            const refused = answered(rest, request)
+            if (isFailed(refused)) throw refused
             return
         }
         const value = answered(answer, request)
@@ -219,6 +236,15 @@ export function wire(
     // 16.9 — the address `rpc.url` and `rpc.raw` build on.
     rpc.address = address
     return rpc
+}
+
+/** The token a chunk carries where it is an early call's continuation rather than a chunk (16.97). */
+function continuationOf(chunk: unknown): string | undefined {
+    if (typeof chunk !== 'object' || chunk === null) return undefined
+    const token = (chunk as Record<string, unknown>)[CONTINUE_KEY]
+    return typeof token === 'string' && Object.hasOwn(chunk, CONTINUE_KEY)
+        ? token
+        : undefined
 }
 
 /** How long a reload that got no answer waits to ask again where the browser says it is online. */

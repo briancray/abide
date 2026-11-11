@@ -51,9 +51,10 @@ test.afterAll(() => {
     server?.kill()
 })
 
-// THE GATE: once every stream is flowing, the fetches the page holds open. THE REVERT: read every
-// stream with `answerOf` in `wire`'s `streamed` (skip `streamOverMux`); 3 are open where 0 are due,
-// and `networkidle` never comes.
+// THE GATE: once every stream is flowing, the fetches the page holds open — the page's early calls
+// (41.20) handed to the mux after their first chunk (16.97). THE REVERTS: skip `handedOff` in
+// `answerRpc`, or read every stream with `answerOf` in `wire`'s `streamed`; 3 are open where 0 are
+// due, and `networkidle` never comes.
 test(`a page reading ${STREAMS} streams holds no http connection while they stream — 16.93`, async ({
     page,
 }) => {

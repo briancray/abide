@@ -5,7 +5,9 @@
 // WIRE-ONLY, per 16.13: `maxBodySize`, the `crossOrigin` preflight, and the text a URL or a form
 // carried the args as.
 
+import { CONTINUE_HEADER } from '#shared/CONTINUE_HEADER.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
+import { framingOf } from '#shared/framing.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
 import { deadlineOf } from '#shared/reactive/producer.ts'
@@ -25,6 +27,7 @@ import { answerValue, isValues, namesEtag, sseHeaders } from './answerValue.ts'
 import { collapsed } from './argsContract.ts'
 import { ownOrigin, positiveSetting } from './config.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'
+import { handedOff } from './handedOff.ts'
 import { failureOf } from './hooks.ts'
 import { type Invocation, invokeHandler, originGate } from './invokeHandler.ts'
 import type { Mounted } from './mountHandlers.ts'
@@ -95,7 +98,16 @@ export async function answerRpc(
     if (outcome.settled && outcome.value instanceof Response)
         answer.headers.append('vary', 'origin')
     else invoked.timed()
-    return admitting(answer, admitted)
+    // 16.97 — AN EARLY CALL OF A STREAM goes over http to its first chunk, and over the mux after it.
+    return admitting(
+        request.headers.has(CONTINUE_HEADER) &&
+            answer.status === 200 &&
+            answer.body !== null &&
+            framingOf(answer.headers.get('content-type')) === 'jsonl'
+            ? handedOff(answer)
+            : answer,
+        admitted,
+    )
 }
 
 /** The answer with the crossing origin allowed, where the handler admits it. 21.19. */

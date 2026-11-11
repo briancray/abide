@@ -513,6 +513,24 @@ export function streamOverMux(
 }
 
 /**
+ * The rest of an early-called stream, parked under `token` once its first chunk went over http: read
+ * over the mux `address` is carried over, or over http where the mux sends it back. 16.97.
+ */
+export async function continueOverMux(
+    address: string,
+    token: string,
+    signal: AbortSignal | undefined,
+    restart: () => void,
+): Promise<Answer> {
+    const mux = muxFor(address)
+    const parked = parkedRequest(mux.url, token)
+    return (
+        (await mux.stream(parked.url, signal, restart)) ??
+        (await answerOf(parked, true, signal))
+    )
+}
+
+/**
  * Follows a loaded `GET`'s copy over the mux, raising its version and resetting its expiry.
  *
  * `version` and `lifeMs` are what the answer named, read off its headers by the wire.

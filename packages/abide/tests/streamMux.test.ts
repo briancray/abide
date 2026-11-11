@@ -4,6 +4,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
+import { handedOff } from '#server/handedOff.ts'
 import { takeParked } from '#server/parkedAnswers.ts'
 import { streamOverMux } from '#server/streamOverMux.ts'
 import { flushSync } from '#shared'
@@ -239,4 +240,49 @@ test('a stream reads no further while the socket holds a frame unsent — 18.30,
     ending.abort()
     resume()
     await pumped
+})
+
+// 16.97 — AN EARLY-CALLED STREAM IS ANSWERED OVER HTTP TO ITS FIRST CHUNK, then handed to the mux: the
+// http body ends while the run streams on, its last line the token the rest is taken by, and the rest
+// is the same run's. THE REVERT: return the answer unwrapped from `handedOff`; the http body is still
+// open after its first chunk and no token is read, so `ended` is false.
+test('an early-called stream ends its http leg after its first chunk, and the rest is taken by token — 16.97', async () => {
+    let send = (_line: string): void => {}
+    let close = (): void => {}
+    const run = new ReadableStream<Uint8Array>({
+        start(controller) {
+            send = (line) => controller.enqueue(encoder.encode(line))
+            close = () => controller.close()
+        },
+    })
+    const http = handedOff(
+        new Response(run, {
+            headers: { 'content-type': 'application/x-ndjson' },
+        }),
+    )
+    send('{"at":1}\n{"at"')
+    const reader = (http.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let read = ''
+    let ended = false
+    for (let turns = 0; turns < 3 && !ended; turns += 1) {
+        const next = await Promise.race([
+            reader.read(),
+            Bun.sleep(50).then(() => undefined),
+        ])
+        if (next === undefined) continue
+        if (next.done) ended = true
+        else read += decoder.decode(next.value)
+    }
+    expect(ended).toBe(true)
+    const [first, continuation] = read.trim().split('\n')
+    expect(JSON.parse(first as string)).toEqual({ at: 1 })
+    const token = (JSON.parse(continuation as string) as Record<string, string>)
+        .$continue as string
+    send(':2}\n')
+    close()
+    const rest = takeParked(
+        new Request(`${ORIGIN}/__abide/parked?token=${token}`),
+    ) as Response
+    expect(await rest.text()).toBe('{"at":2}\n')
 })

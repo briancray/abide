@@ -1283,7 +1283,7 @@ upgrade.
 
 16.94 A `GET` call 16.93 reads whose answer carries a cookie or the `abide-principal` header, is a
 redirect or is a binary MUST be taken over http as the answer the mux began, and MUST NOT run its
-handler again; a call 41.20's script started MUST be made over http.
+handler again.
 
 16.95 A `GET` call 16.93 reads whose connection to the socket mux closes MUST refuse as 16.79 has it
 where its answer's status had not arrived, and MUST fail its stream where it had, save where 18.25
@@ -1291,6 +1291,10 @@ opens the connection again, which MUST make the call again as 9.7 has a refresh 
 
 16.96 A `GET` call 16.93 reads MUST NOT read its answer's body further while a frame of it the
 connection was sent is held unsent, and MUST count toward 18.31's bound while it is read.
+
+16.97 A `GET` call 41.20's script started whose answer is a jsonl stream MUST be answered over http
+only until its first chunk and the chunks ready with it, or a second without one, and MUST read the
+rest of that run over the socket mux.
 
 # 17. Response helpers
 
@@ -3466,8 +3470,7 @@ key.
 run, before it builds any of their markup.
 
 41.20 A `render` MUST write one inline script into the head once setup has run and before any
-markup, starting each `Rpc` call the setup made, save one answering a stream, as the request the
-browser's `Rpc` makes for it.
+markup, starting each `Rpc` call the setup made as the request the browser's `Rpc` makes for it.
 
 41.21 The browser's `Rpc` MUST take a call 41.20's script started in place of making it, once.
 
