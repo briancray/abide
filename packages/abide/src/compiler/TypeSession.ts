@@ -1,16 +1,9 @@
-import type { CompletionInfo } from 'typescript/unstable/async'
-
 import type { AppLayout } from './appLayout.ts'
 import { appLints } from './appLints.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { type DiagnosedSource, diagnoseSources } from './diagnoseSources.ts'
 import type { Diagnosis } from './Diagnostics.ts'
-import {
-    completionAt,
-    type Inspection,
-    type LoweredFile,
-    type References,
-} from './LoweredFile.ts'
+import type { Inspection, LoweredFile } from './LoweredFile.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { reactiveReads } from './reactiveReads.ts'
 import type { ParsedSource } from './readSources.ts'
@@ -43,11 +36,6 @@ export class TypeSession {
         return new TypeSession(await ShadowHost.open(tsconfig, root))
     }
 
-    /** The `tsconfig` the session was opened on, which a file outside its project is refused by. */
-    get tsconfig(): string {
-        return this.host.tsconfig
-    }
-
     /** The app's root, real. */
     get root(): string {
         return this.host.root
@@ -56,11 +44,6 @@ export class TypeSession {
     /** How many snapshots this session has taken (`ShadowHost.snapshots`). */
     get snapshots(): number {
         return this.host.snapshots
-    }
-
-    /** `path` below the app's root, where it lies under it (23.14). */
-    belowRoot(path: string): string {
-        return this.host.belowRoot(path)
     }
 
     /** Records the paths a watcher saw move, for the next snapshot to invalidate. */
@@ -117,16 +100,6 @@ export class TypeSession {
         return this.host.lowered(path)
     }
 
-    /** The members or markup that may be written at `offset` in a `.abide` (`completionAt`). */
-    complete(
-        path: string,
-        text: string,
-        offset: number,
-        triggerCharacter?: string,
-    ): Promise<CompletionInfo | undefined> {
-        return completionAt(this.lowered(path), text, offset, triggerCharacter)
-    }
-
     /** The name at `offset` in a `.abide` as its last lowering holds it (`LoweredFile.inspect`). */
     async inspect(
         path: string,
@@ -134,15 +107,6 @@ export class TypeSession {
         offset: number,
     ): Promise<Inspection | undefined> {
         return this.lowered(path)?.inspect(text, offset)
-    }
-
-    /** Every place the name at `offset` in a `.abide` is written (`LoweredFile.references`). */
-    async references(
-        path: string,
-        text: string,
-        offset: number,
-    ): Promise<References | undefined> {
-        return this.lowered(path)?.references(text, offset)
     }
 
     /** Closes the checker, and ends its process. */
