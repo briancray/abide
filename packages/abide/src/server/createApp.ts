@@ -54,6 +54,7 @@ import {
     upgraded,
 } from './muxUpgrade.ts'
 import { packageDirectory } from './packageDirectory.ts'
+import { takeParked } from './parkedAnswers.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { presumePrincipal } from './principal.ts'
 import { realOrAsGiven } from './realOrAsGiven.ts'
@@ -318,6 +319,9 @@ export async function bootEntered(
         if (stopping) return plainAnswer('the app is stopping', 503)
         const request = belowMount(given)
         if (request instanceof Response) return request
+        // 16.94 — an answer already made, whose rungs and handler ran as the mux asked for it.
+        const parked = takeParked(request)
+        if (parked !== undefined) return parked
         inFlight += 1
         const started = performance.now()
         try {

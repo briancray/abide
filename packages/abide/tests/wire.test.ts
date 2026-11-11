@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { buildFiles } from '#server/appBuild.ts'
+import { takeParked } from '#server/parkedAnswers.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
@@ -904,7 +905,9 @@ test('a binary answer decodes back to a Uint8Array in the browser — 16.34', as
 test('a streaming copy over binary chunks holds each as a Uint8Array as it lands — 16.3, 16.46', async () => {
     const window = globalThis as { fetch: typeof fetch }
     const previous = window.fetch
-    window.fetch = ((input: string, init?: RequestInit) =>
+    // 16.94 — the binary is parked by the loopback's server half, in this process, and taken here.
+    window.fetch = (async (input: string, init?: RequestInit) =>
+        takeParked(new Request(input, init)) ??
         Bun.fetch(input, init)) as typeof fetch
     try {
         const rows = (

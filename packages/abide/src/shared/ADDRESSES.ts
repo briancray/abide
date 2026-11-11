@@ -39,6 +39,8 @@ export const HEALTH_ADDRESS = `${ABIDE_ADDRESS}/health`
 export const BRIDGE_ADDRESS = `${ABIDE_ADDRESS}/bridge`
 /** Where a browser's `pairing` reads its own pairing with a bridge, as it changes (44.67). */
 export const PAIRING_ADDRESS = `${ABIDE_ADDRESS}/pairing`
+/** Where a browser takes, over http, an answer the socket mux began and could not carry (16.94). */
+export const PARKED_ADDRESS = `${ABIDE_ADDRESS}/parked`
 
 /**
  * The socket the dev reload client holds open.

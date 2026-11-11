@@ -2,8 +2,13 @@
 // reads is followed (18.3). Each copy is kept in step with the value it was answered from: the value
 // where the version it holds is not the server's, and the writes of each patch over it (18.6, 18.11).
 
-import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
-import { type Answer, answerFrom, noAnswer } from '#shared/answerOf.ts'
+import { PARKED_ADDRESS, SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import {
+    type Answer,
+    answerFrom,
+    answerOf,
+    noAnswer,
+} from '#shared/answerOf.ts'
 import { applyPatch } from '#shared/applyPatch.ts'
 import { mounted } from '#shared/mount.ts'
 import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
@@ -19,6 +24,7 @@ import {
     produceInto,
     writtenLocally,
 } from '#shared/reactive/producer.ts'
+import type { RpcRequest } from '#shared/rpcRequest.ts'
 
 import { Backoff } from './Backoff.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
@@ -140,6 +146,20 @@ class Following {
 
 const ENCODER = new TextEncoder()
 
+/** The http request that takes the answer parked under `token` at the app the socket `mux` is to. 16.94. */
+function parkedRequest(mux: string, token: string): RpcRequest {
+    const url = new URL(mounted(PARKED_ADDRESS), mux)
+    url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
+    url.searchParams.set('token', token)
+    return {
+        method: 'GET',
+        url: url.href,
+        body: undefined,
+        init: { method: 'GET', cache: 'no-store' },
+        key: '',
+    }
+}
+
 /**
  * A streaming `GET`'s call read over the mux, as the http answer it stands in for is read: settled
  * with its head as an `Answer`, whose body is then fed the text each `lines` frame carries.
@@ -157,6 +177,9 @@ class MuxStream {
     body: ReadableStreamDefaultController<Uint8Array> | null
     // A new run in place of this one, for a connection reopened under another caller (18.25).
     restart: () => void
+    // The address of the socket it is read over, and the load's own signal.
+    mux: string
+    signal: AbortSignal | undefined
 
     constructor(
         id: number,
@@ -164,7 +187,11 @@ class MuxStream {
         settle: (answer: Answer | Promise<Answer> | undefined) => void,
         fail: (reason: unknown) => void,
         restart: () => void,
+        mux: string,
+        signal: AbortSignal | undefined,
     ) {
+        this.mux = mux
+        this.signal = signal
         this.id = id
         this.url = url
         this.sent = false
@@ -213,8 +240,20 @@ class MuxStream {
         // A body that broke reads as a connection that broke, as a fetch's would.
         else if (frame.op === 'error' && this.body !== null)
             this.body.error(new TypeError('the stream broke'))
-        // A refusal before its head, or `http`: the call is made over http instead.
-        else this.settle(undefined)
+        // 16.94 — AN ANSWER THE MUX BEGAN AND COULD NOT CARRY is taken over http by its token, the
+        // run that made it going on; one it never began is the call's to make there.
+        else if (frame.op === 'http')
+            this.settle(
+                frame.http === undefined
+                    ? undefined
+                    : answerOf(
+                          parkedRequest(this.mux, frame.http),
+                          true,
+                          this.signal,
+                      ),
+            )
+        // A failure before its head is no answer (16.79), and never a second run of the handler.
+        else this.settle(noAnswer())
         return true
     }
 
@@ -299,6 +338,8 @@ class Mux {
                 settle,
                 fail,
                 restart,
+                this.url,
+                signal,
             )
             this.streams.set(stream.id, stream)
             // 16.48 — the load's own ending: the server stops it, and the read throws as a fetch's.

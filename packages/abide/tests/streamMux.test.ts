@@ -4,6 +4,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
+import { takeParked } from '#server/parkedAnswers.ts'
 import { streamOverMux } from '#server/streamOverMux.ts'
 import { flushSync } from '#shared'
 import { resetSocketWire } from '#ui/socketWire.ts'
@@ -21,13 +22,29 @@ const answering = new Map<
     { send(line: string): void; close(): void; cancelled: boolean }
 >()
 
-/** The server's answer to a call: a jsonl body fed from the test, a binary, or a stream that refuses last. */
+// How often the handler behind each address ran.
+const ran = new Map<string, number>()
+
+/**
+ * The server's answer to a call: a jsonl body fed from the test, a binary, a stream that signs in, or
+ * one that refuses last — or, 16.94, an answer the mux parked, taken by its token.
+ */
 async function answer(request: Request): Promise<Response> {
+    const parked = takeParked(request)
+    if (parked !== undefined) return parked
     const url = new URL(request.url)
+    ran.set(url.pathname, (ran.get(url.pathname) ?? 0) + 1)
     const n = url.searchParams.get('n') ?? ''
     if (url.pathname.endsWith('/bytes'))
         return new Response(new Uint8Array([1, 2]), {
             headers: { 'content-type': 'application/octet-stream' },
+        })
+    if (url.pathname.endsWith('/signin'))
+        return new Response('{"at":1}\n{"at":2}\n', {
+            headers: {
+                'content-type': 'application/x-ndjson',
+                'set-cookie': 'abide-principal=sealed; Path=/',
+            },
         })
     const fed = {
         send: (_line: string): void => {},
@@ -162,13 +179,22 @@ test('a stream whose load is aborted stops the server answering it — 16.48, 16
     expect(fed.cancelled).toBe(true)
 })
 
-// A BINARY IS SENT BACK TO HTTP, which a text frame cannot carry: the copy fetches it there, once.
-test('a stream answering a binary is read over http instead — 16.93', async () => {
-    const before = fetched
+// 16.94 — AN ANSWER THE MUX CANNOT CARRY IS TAKEN OVER HTTP, AND THE HANDLER RUNS ONCE: a binary, which
+// a text frame cannot carry, and a stream that writes a cookie, which a socket cannot deliver. THE
+// REVERT: send `http` with no token in `streamOverMux`, as the mux did before it parked them; the
+// browser calls again over http, and each handler runs 2 times where 1 is due.
+test('an answer the mux cannot carry is taken over http, its handler run once — 16.94', async () => {
     const bytes = wire('GET', `${ORIGIN}/bytes`, { stream: true }) as () => Copy
     const chunks = (await bytes()) as Uint8Array[]
     expect([...(chunks[0] as Uint8Array)]).toEqual([1, 2])
-    expect(fetched).toBe(before + 1)
+    const signin = wire('GET', `${ORIGIN}/signin`, {
+        stream: true,
+    }) as () => Copy
+    expect(await signin()).toEqual([{ at: 1 }, { at: 2 }])
+    expect({ bytes: ran.get('/bytes'), signin: ran.get('/signin') }).toEqual({
+        bytes: 1,
+        signin: 1,
+    })
 })
 
 // 18.30 — PUMPED AT THE SOCKET'S PACE: a frame bun buffered rather than sent holds the next read off

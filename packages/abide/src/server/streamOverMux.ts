@@ -5,11 +5,11 @@
 // back is that answer's head, then its body's text as it lands, then its end: the browser reads them
 // as the response it would have read, so nothing past this point knows which lane carried it.
 //
-// AN ANSWER THE MUX CANNOT CARRY is sent back to http, and the browser makes the call there: one
-// whose headers have to reach the browser — a cookie, or the `abide-principal` a sign-in writes
-// (26.24) — which a socket whose headers went out with its upgrade cannot deliver (22.10); a binary,
-// which a text frame does not carry; and a redirect, which only a fetch follows. A `GET` is safe, so
-// the call made twice answers as once.
+// AN ANSWER THE MUX CANNOT CARRY goes to http without being made again (16.94): one whose headers
+// have to reach the browser — a cookie, or the `abide-principal` a sign-in writes (26.24) — which a
+// socket whose headers went out with its upgrade cannot deliver (22.10); a binary, which a text frame
+// does not carry; and a redirect, which only a fetch follows. Its `Response` is parked, its run going
+// on, and the browser is sent the token that takes it over http (`parkedAnswers`).
 
 import { carriesBytes } from '#shared/framing.ts'
 import type { StreamHead } from '#shared/muxFrames.ts'
@@ -17,6 +17,7 @@ import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 
 import { Frame, type Peer } from './Followers.ts'
+import { park } from './parkedAnswers.ts'
 import { RECEIVED_FROM } from './requestScope.ts'
 
 // The upgrade's own headers, which say nothing about a `GET` made from it.
@@ -67,7 +68,14 @@ export async function streamOverMux(
     const headers = new Headers(upgrade.headers)
     for (const name of UPGRADE_HEADERS) headers.delete(name)
     headers.set('accept', 'application/x-ndjson')
-    const request = new Request(url, { headers, signal })
+    // THE RUN'S OWN SIGNAL, which the stream's ends abort until the answer is parked: from then on it
+    // is the http request that takes it whose hanging up ends it.
+    const run = new AbortController()
+    let parked = false
+    signal.addEventListener('abort', () => {
+        if (!parked) run.abort()
+    })
+    const request = new Request(url, { headers, signal: run.signal })
     // 22.12 — the call came from where the upgrade did.
     if (RECEIVED_FROM.has(upgrade))
         RECEIVED_FROM.set(request, RECEIVED_FROM.get(upgrade) ?? null)
@@ -80,8 +88,16 @@ export async function streamOverMux(
         (status >= 300 && status < 400) ||
         (status < 300 && carriesBytes(response.headers.get('content-type')))
     ) {
-        void response.body?.cancel()
-        carrier.peer.send(id, HTTP)
+        parked = true
+        carrier.peer.send(
+            id,
+            new Frame(
+                'http',
+                undefined,
+                undefined,
+                JSON.stringify(park(response, run)),
+            ),
+        )
         return
     }
     const head: StreamHead = {

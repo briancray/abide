@@ -1281,8 +1281,9 @@ MUST be refused as it is declared.
 socket mux, answered as the request the call names made with the headers of the connection's
 upgrade.
 
-16.94 A `GET` call 16.93 reads MUST be made over http instead where its answer carries a cookie or
-the `abide-principal` header, is a redirect or is a binary, and where 41.20's script started it.
+16.94 A `GET` call 16.93 reads whose answer carries a cookie or the `abide-principal` header, is a
+redirect or is a binary MUST be taken over http as the answer the mux began, and MUST NOT run its
+handler again; a call 41.20's script started MUST be made over http.
 
 16.95 A `GET` call 16.93 reads whose connection to the socket mux closes MUST refuse as 16.79 has it
 where its answer's status had not arrived, and MUST fail its stream where it had, save where 18.25

@@ -58,8 +58,11 @@ export type ServerFrame = {
     error?: Problem
     /**
      * 16.93 — a stream's head, then its body's text as it lands under `lines`, then `end`; or `http`,
-     * where the answer is one the mux cannot carry and the call is made over http instead.
+     * where the answer is one the mux cannot carry, taken over http by its token — or, carrying none,
+     * one the mux never began, which the call makes over http itself.
      */
     head?: StreamHead
     lines?: string
+    /** 16.94 — the token that takes, over http, the answer the mux began and could not carry. */
+    http?: string
 }
