@@ -1,16 +1,18 @@
 <script>
-import { navigate, reactive, route } from '@abide/abide'
+import { reactive, route } from '@abide/abide'
 
 const TABS = ['deals', 'notes']
 
-const tab = reactive(() => route.url.searchParams.get('tab') ?? 'deals')
+const query = route.query({ tab: 'deals' })
 let draft = reactive('')
 </script>
 
 <div class="tabs">
     {#for name of TABS}
-        <button aria-selected={tab === name}
-            onclick={() => navigate(`?tab=${name}`, { replace: true })}
+        <button aria-selected={query.tab === name}
+            onclick={() => {
+                query.tab = name
+            }}
         >{name}</button>
     {/for}
 </div>

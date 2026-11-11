@@ -22,12 +22,17 @@ export function navigate(
     options: NavigateOptions = {},
 ): Promise<void> {
     const router = CURRENT_ROUTER.current
-    if (router === null)
-        return Promise.reject(
-            new Error(
-                'navigate() was called with no router in this document. A browser gets one from the routes the build emitted; a server render has no document to navigate (RULEBOOK 30.7).',
-            ),
-        )
+    if (router === null) return Promise.reject(noRouter('navigate()'))
     // 30.38 — A NUMBER IS A STEP THROUGH THE HISTORY, as `history.go` takes one.
     return typeof to === 'number' ? router.step(to) : router.go(to, options)
+}
+
+/**
+ * What a navigation with no router in the document is refused with — `navigate`'s, and a
+ * `route.query` write's (30.46).
+ */
+export function noRouter(caller: string): Error {
+    return new Error(
+        `${caller} was called with no router in this document. A browser gets one from the routes the build emitted; a server render has no document to navigate (RULEBOOK 30.7).`,
+    )
 }

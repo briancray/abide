@@ -6,10 +6,12 @@
 
 import type { Params } from './matchRoute.ts'
 import { ambient } from './reactive/index.ts'
+import type { Reactive } from './reactive/Reactive.ts'
+import { type QueryDefaults, type QueryOf, routeQuery } from './routeQuery.ts'
 
 /**
  * The current address: its `url`, `params`, pattern `name`, its `index` in this document's history,
- * and whether it is `navigating`.
+ * whether it is `navigating`, and its `query` read through a set of defaults.
  */
 export const route = {
     url: ambient<URL>(),
@@ -22,6 +24,15 @@ export const route = {
      */
     index: ambient(0),
     navigating: ambient(false),
+    /**
+     * 30.41 — the query as one value of the defaults' shape, written by navigating. A FUNCTION, not
+     * a sixth value: each caller names the members it owns (30.45).
+     */
+    query<Defaults extends QueryDefaults>(
+        defaults: Defaults,
+    ): Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>> {
+        return routeQuery(route.url, defaults)
+    },
 }
 
 /**

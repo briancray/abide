@@ -430,6 +430,14 @@ type Reached = { readonly [REACHED]: true }
 | `route.name` | `Reactive<string>` | The resolution path, the same under any mount path. | 23.1, 23.6, 23.14, 31.15 |
 | `route.index` | `Reactive<number>` | The place of the entry the address bar stands at in the history this app's router wrote. | 23.1, 23.28, 23.29, 31.15 |
 | `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1, 31.15 |
+| `route.query` | `<Defaults extends Record<string, string \| number \| boolean \| readonly string[]>>(defaults: Defaults) => Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>` | The address's query as one value of its defaults' shape. | 30.41, 30.42, 30.43, 30.44, 30.45, 30.46, 30.47, 31.8 |
+
+The alias `route.query` widens its defaults through is declared rather than listed, not being a
+name an app writes:
+
+```ts
+type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends string ? string : Defaults[Name] extends number ? number : Defaults[Name] extends boolean ? boolean : string[] }
+```
 
 ## `online`
 
@@ -557,13 +565,13 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal or a public file's address. | 30.1, 30.2, 30.8, 30.19, 30.26 |
+| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>] : [params?: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>]) => string` | Builds an address from a route literal or a public file's address. | 30.1, 30.2, 30.6, 30.8, 30.19, 30.26, 30.40 |
 | `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
 | `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
 | `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
 | `OptionalNames<P>` | `string` | The optional segment names. | 30.4 |
 | `RestNames<P>` | `string` | The rest segment names. | 30.5 |
-| `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6, 30.28 |
+| `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6, 30.28, 30.40 |
 | `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept, narrowed where `abide check` declares a matcher's literals. | 30.3, 30.4, 30.5 |
 | `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as, narrowed where `abide check` declares a matcher's literals. | 23.9 |
 | `Routes` | `interface Routes {}` | The app's route literals and public file addresses, which `abide check` declares. | 30.26 |

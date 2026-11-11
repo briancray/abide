@@ -67,6 +67,19 @@ const listed: boolean = route.name.startsWith('/routed') && !route.navigating
 
 <p>{id} {rest.join('/')} {wrong} {named} {listed} {route.url.pathname}</p>`
 
+const QUERIED = `<script>
+import { route } from '@abide/abide'
+
+const query = route.query({ watch: 0, tab: 'all', open: false, tags: [] as string[] })
+const watch: number = query.watch
+const wrong: string = query.watch
+</script>
+
+<button onclick={() => { query.watch = query.watch + 1 }}>next</button>
+<button onclick={() => { query = { tab: 'mine' } }}>mine</button>
+<button onclick={() => { query = { tab: 3 } }}>bad</button>
+<p>{watch} {wrong} {query.open} {query.tags.join(',')}</p>`
+
 const LINKED = `<script>
 import { url } from '@abide/abide'
 
@@ -307,6 +320,7 @@ beforeAll(async () => {
         'lib/Optional.abide': OPTIONAL,
         'routed/[id]/[...rest]/index.abide': ROUTED,
         'linked/index.abide': LINKED,
+        'queried/index.abide': QUERIED,
         'public/fonts/face.woff2': 'a face',
         'configured/index.abide': CONFIGURED,
         'configured/elsewhere/index.abide': `<script server>
@@ -466,6 +480,24 @@ test('route.params in a page is typed by its own route — 23.9', () => {
         ),
     ).toEqual([{ ...place(ROUTED, 'wrong'), code: 2322 }])
     expect(inFile('routed/layout.abide')).toEqual([])
+})
+
+// 30.41 — THE QUERY IS TYPED BY ITS DEFAULTS, and written by name as any `Reactive` is (31.4, 31.8):
+// a set of some members and a write through one check clean, and a read or a set of the wrong type
+// does not. THE REVERT, run: answer `Reactive<QueryDefaults>` from `route.query`; four findings land
+// on the right lines' neighbours — the typed read, `query.watch + 1` — and the set of `tab: 3` is
+// not among them.
+test('route.query is typed by its defaults, read and written by name — 30.41', () => {
+    expect(
+        inFile('queried/index.abide').map(({ line, column, code }) => ({
+            line,
+            column,
+            code,
+        })),
+    ).toEqual([
+        { ...place(QUERIED, 'wrong'), code: 2322 },
+        { ...place(QUERIED, 'tab: 3', 0), code: 2322 },
+    ])
 })
 
 // 30.26 — A LINK NAMES A PAGE OR A PUBLIC FILE THE APP HAS. `/routed/[id]` is the stale literal a

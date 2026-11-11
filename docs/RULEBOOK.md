@@ -1885,7 +1885,8 @@ segment.
 
 30.5 A `RestNames<P>` segment MUST map to an optional key taking an array as well as a scalar.
 
-30.6 The `Query` argument MUST be last.
+30.6 The `Query` argument MUST follow the params, and the defaults 30.40 compares it with MUST
+follow the `Query`.
 
 30.7 `navigate` MUST navigate, and MUST NOT reload the document.
 
@@ -1981,6 +1982,30 @@ the routes 30.9 ranks after that route.
 negative, and MUST settle once the entry the next history step arrives at is arrived at, per 30.29.
 
 30.39 `navigate` given 0 MUST settle at once, and MUST NOT reload the document.
+
+30.40 `url` MUST leave out of the address each member of its `Query` whose spelling under 30.28 is
+the spelling of the member of the same name in its defaults.
+
+30.41 `route.query` MUST read each member its defaults name from `route.url`'s query as its
+default's type: a number as a number, `true` or `false` as a boolean, text as text, and a list as
+every repeat of the name as text, a name with no `=` being the empty list per 30.28.
+
+30.42 A member `route.url` does not carry, or whose text 30.41 cannot read as its default's type,
+MUST read as its default.
+
+30.43 A write to the value `route.query` answers MUST set each member its defaults name to what the
+write carries, and a member the write leaves out or leaves `undefined` to its default.
+
+30.44 A write to the value `route.query` answers MUST be one `navigate`, with `replace` and
+`keepScroll`, to `route.url` with its query rewritten, each member at its default left out per 30.40.
+
+30.45 A write to the value `route.query` answers MUST leave every member of `route.url`'s query its
+defaults do not name as it stands.
+
+30.46 A write to the value `route.query` answers where `navigate` has no router MUST throw.
+
+30.47 A change to `route.url` that leaves every member the defaults name reading as it did MUST NOT
+wake a reader of the value `route.query` answers.
 
 # 31. Reading and writing by name
 

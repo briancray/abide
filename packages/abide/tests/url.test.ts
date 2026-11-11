@@ -27,8 +27,8 @@ test('a rest takes an array, a scalar, or nothing — 30.5', () => {
     expect(url('/docs/[...path]')).toBe('/docs')
 })
 
-// 30.6 — the query half is last, a list its member repeated.
-test('the query argument is last — 30.6', () => {
+// 30.6 — the query half follows the params, a list its member repeated.
+test('the query argument follows the params — 30.6', () => {
     expect(
         url('/search', {}, { q: 'ink', tag: ['a', 'b'], skip: undefined }),
     ).toBe('/search?q=ink&tag=a&tag=b')

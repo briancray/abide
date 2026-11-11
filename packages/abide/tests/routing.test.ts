@@ -2208,3 +2208,55 @@ test('navigate(0) settles at once and does not reload — 30.39', async () => {
         history.go = go
     }
 })
+
+const QUERY_HOME = `<script>
+import { route } from '@abide/abide'
+
+let query = route.query({ watch: 0, tab: 'all' })
+</script>
+
+<main id="home"><h1>Home</h1><p id="watch">{query.watch}</p><p id="tab">{query.tab}</p>
+<button id="next" onclick={() => { query.watch = query.watch + 1 }}>next</button>
+<button id="mine" onclick={() => { query = { tab: 'mine' } }}>mine</button></main>`
+
+// 30.43, 30.44 — A WRITE BY NAME IS ONE NAVIGATION IN PLACE: a field write (31.8) and a set each
+// replace the standing entry once, push none, and ask no `middleware` (30.24). Counted, because a
+// write that navigated twice, or pushed, leaves the same address and the same page.
+// THE REVERT, run: drop `replace: true` from `queryWrite`; this reports 2 entries pushed and a
+// history 2 longer.
+test('a route.query write is one navigation, replacing the entry — 30.43, 30.44', async () => {
+    history.replaceState(null, '', '/?keep=1&tab=open')
+    const r = router(await pages(undefined, QUERY_HOME))
+    await r.hydrate()
+    const entries = history.length
+    const replace = history.replaceState
+    const push = history.pushState
+    let replaced = 0
+    let pushed = 0
+    history.replaceState = function (this: History, ...given) {
+        replaced += 1
+        return replace.apply(this, given)
+    }
+    history.pushState = function (this: History, ...given) {
+        pushed += 1
+        return push.apply(this, given)
+    }
+    try {
+        click('#next')
+        expect(location.search).toBe('?keep=1&watch=1&tab=open')
+        expect(document.querySelector('#watch')?.textContent).toBe('1')
+        click('#mine')
+        expect(location.search).toBe('?keep=1&tab=mine')
+        expect(document.querySelector('#watch')?.textContent).toBe('0')
+        expect(document.querySelector('#tab')?.textContent).toBe('mine')
+        expect({ replaced, pushed, grew: history.length - entries }).toEqual({
+            replaced: 2,
+            pushed: 0,
+            grew: 0,
+        })
+        expect(asked).toEqual([])
+    } finally {
+        history.replaceState = replace
+        history.pushState = push
+    }
+})

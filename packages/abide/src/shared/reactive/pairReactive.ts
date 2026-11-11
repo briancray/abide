@@ -1,6 +1,6 @@
-// 32.6 — A `{ get, set }` PAIR AS A `Reactive`, for the one place a pair has to be one: a `bind:` on
+// 32.6 — A `{ get, set }` PAIR AS A `Reactive`, for the places a pair has to be one: a `bind:` on
 // a component, whose child's prop cell adopts what it is bound to (11.12) and writes through it
-// (11.59). Its value is what `get` answers, recomputed as whatever `get` reads changes; its `set` is
+// (11.59), and `route.query`, read off the address and written by navigating (30.41, 30.44). Its value is what `get` answers, recomputed as whatever `get` reads changes; its `set` is
 // the pair's, and nothing stands here — the value moves when what `get` reads does, as an element's
 // `bind:value={{get, set}}` does.
 //
@@ -25,14 +25,21 @@ const PAIR_PROTOTYPE = brandedPrototype({
 })
 
 /**
- * A `Reactive` whose value is what `pair.get` answers and whose `set` writes through `pair.set`.
+ * A `Reactive` whose value is what `pair.get` answers and whose `set` writes through `pair.set`,
+ * gated by `identity` where one is given (5.1).
  *
  * The prototype is set ON THE CELL'S OWN CALLABLE, which is what an adoption writes through and
  * what a scoped forwarder (`scoped.ts`) forwards to — re-seating the forwarder instead would drop
  * the `[CELL]` getter its prototype carries.
  */
-export function pairReactive(pair: Pair): Reactive<unknown> {
-    const over = reactive(() => pair.get())
+export function pairReactive(
+    pair: Pair,
+    identity?: (next: unknown, previous: unknown) => unknown,
+): Reactive<unknown> {
+    const over = reactive(
+        () => pair.get(),
+        identity === undefined ? undefined : { identity },
+    )
     const callable = (over as unknown as Callable)[CELL]
         .callable as unknown as {
         [PAIR]: Pair
