@@ -11,6 +11,8 @@
 import { mkdtemp, rm } from 'node:fs/promises' // bun exposes no recursive removal or temporary directory
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
 
+import { spawned } from '@abide/harness/gate'
+
 import { SITE } from '../src/lib/SITE.ts'
 import { CHAPTER_FEATURES } from './CHAPTER_FEATURES.ts'
 
@@ -47,7 +49,9 @@ export async function forwarded(): Promise<Map<string, string>> {
 
     const temporary = await mkdtemp(`${tmpdir()}/abide-starter-`)
     try {
-        const scaffolded = Bun.spawn(
+        // `spawned`, because `examples.test.ts` runs this in a `--parallel` worker: a deadline, and a
+        // failure that names the command and carries its stderr.
+        const scaffolded = await spawned(
             [
                 process.execPath,
                 Bun.fileURLToPath(
@@ -56,10 +60,10 @@ export async function forwarded(): Promise<Map<string, string>> {
                 'scaffold',
                 'starter',
             ],
-            { cwd: temporary, stdout: 'ignore' },
+            { cwd: temporary },
         )
-        if ((await scaffolded.exited) !== 0)
-            throw new Error('abide scaffold failed')
+        if (scaffolded.exitCode !== 0)
+            throw new Error(`abide scaffold failed: ${scaffolded.stderr}`)
         const starter = `${temporary}/starter`
         const rootFiles = new Map<string, string>()
         for (const file of [
