@@ -17,7 +17,7 @@ import {
 } from './classifyTemplate.ts'
 import { type Cursor, placed, type PlacedNode } from './Cursor.ts'
 import { guardedSetup } from './guardedSetup.ts'
-import { invocationProps, passedName } from './invocationProps.ts'
+import { inlineDefinitions, invocationProps } from './invocationProps.ts'
 import { type Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { shareScope } from './shareScope.ts'
@@ -444,7 +444,7 @@ function invocationMarkup(
     // browser to fill when the value lands (`invokeLanded`).
     let record = `{ ${props.join(', ')} }`
     if (node.attributes.some((attribute) => attribute.name === '...'))
-        record = `${lowering.use('slotValue')}(() => (${record}))`
+        record = slotValueOf(lowering, `(${record})`)
     return `${lowering.use('renderComponent')}(${lowering.chosenTag(node) ?? node.tag}, ${record}, ${HEADS})`
 }
 
@@ -527,21 +527,17 @@ export function rowMarkup(
 }
 
 /**
- * The statements declaring a region's inline components on the server: the ones its body declares
- * (32.43), each under its name, and the ones an invocation in it is passed (32.50), each under
- * `passedName`.
+ * The statements declaring a region's inline components on the server (`inlineDefinitions`).
  *
  * 32.42 — DECLARED WHERE THE REGION IS BUILT, so each is a closure over every name in scope there:
  * the setup's, a row's item, an arm's own, an enclosing component's props.
  */
 export function definitions(sink: Cursor, lowering: Lowering): string {
     let out = ''
-    for (const component of sink.components)
-        out += `${serverComponent(component, lowering)}\n`
-    for (const at of sink.positions)
-        if (at.kind === 'region' && at.holder.kind === 'element')
-            for (const passed of at.holder.passed)
-                out += `const ${passedName(passed)} = ${serverComponent(passed, lowering)}\n`
+    for (const line of inlineDefinitions(sink, (component) =>
+        serverComponent(component, lowering),
+    ))
+        out += `${line}\n`
     return out
 }
 

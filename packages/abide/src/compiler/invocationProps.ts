@@ -10,6 +10,7 @@
 // one, whatever the child declares (33.8).
 
 import { propKeyOf } from './classifyTemplate.ts'
+import type { Cursor } from './Cursor.ts'
 import type { Lowering } from './Lowering.ts'
 import { holdsReactive } from './PositionTable.ts'
 import type { ElementNode, InlineComponent } from './TemplateNode.ts'
@@ -64,4 +65,22 @@ export function invocationProps(
  */
 export function passedName(component: InlineComponent): string {
     return `__passed${component.at}`
+}
+
+/**
+ * The statements declaring a region's inline components, in the one order both lanes write them:
+ * the ones its body declares (32.43), each under its name, then the ones an invocation in it is
+ * passed (32.50), each under `passedName`. `define` is the lane's function expression for one.
+ */
+export function inlineDefinitions(
+    sink: Cursor,
+    define: (component: InlineComponent) => string,
+): string[] {
+    const out: string[] = []
+    for (const component of sink.components) out.push(define(component))
+    for (const at of sink.positions)
+        if (at.kind === 'region' && at.holder.kind === 'element')
+            for (const passed of at.holder.passed)
+                out.push(`const ${passedName(passed)} = ${define(passed)}`)
+    return out
 }

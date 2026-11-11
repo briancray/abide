@@ -156,6 +156,28 @@ export function bodiesOf(node: TemplateNode): readonly Body[] {
     return node.branches
 }
 
+/** An attribute, its name folded once. */
+export function attribute(
+    name: string,
+    value: string,
+    expression: boolean,
+): Attribute {
+    return { name, lowerName: name.toLowerCase(), value, expression }
+}
+
+/** A file's own template as the outermost body: no setup or style of its own (those are the file's). */
+export function fileBody(file: {
+    template: TemplateNode[]
+    components: InlineComponent[]
+}): Body {
+    return {
+        children: file.template,
+        setup: null,
+        style: null,
+        components: file.components,
+    }
+}
+
 /**
  * Visits `body` and every body under it, in the file's order: a body, then what it declares, then
  * the bodies its nodes hold.

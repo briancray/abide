@@ -57,12 +57,7 @@ export function emitSource(
     // component's token is added only where a component-level `<style>` requires it.
     const token = scopeToken(relative)
     const componentStyled = file.styles.length > 0
-    const bodies = markScoped(
-        file.template,
-        token,
-        componentStyled ? [token] : [],
-        file.components,
-    )
+    const bodies = markScoped(file, token, componentStyled ? [token] : [])
     let sheet: string | undefined
     let transitions = false
     if (componentStyled || bodies.length > 0) {

@@ -9,6 +9,8 @@
 
 import { isComponentTag, isSlot } from './classifyTemplate.ts'
 import {
+    attribute,
+    fileBody,
     type InlineComponent,
     type TemplateNode,
     visitBodies,
@@ -49,14 +51,12 @@ export function scopeToken(relative: string): string {
  * where it is declared, and its own `<style>` is a body's.
  */
 export function markScoped(
-    nodes: TemplateNode[],
+    file: { template: TemplateNode[]; components: InlineComponent[] },
     token: string,
     tokens: string[],
-    components: InlineComponent[],
 ): { css: string; token: string }[] {
     const bodies: { css: string; token: string }[] = []
-    const file = { children: nodes, setup: null, style: null, components }
-    visitBodies(file, tokens, (body, around) => {
+    visitBodies(fileBody(file), tokens, (body, around) => {
         const own = bodyTokens(body.style, token, around, bodies)
         for (const node of body.children) {
             // A child's own elements are the child's; what the caller passes between its tags is
@@ -69,12 +69,7 @@ export function markScoped(
             )
                 continue
             for (const each of own)
-                node.attributes.push({
-                    name: each,
-                    lowerName: each,
-                    value: '',
-                    expression: false,
-                })
+                node.attributes.push(attribute(each, '', false))
         }
         return own
     })

@@ -364,8 +364,8 @@ test('abide check holds an inline component to its props and a passed one to its
 })
 
 // 32.45, 32.47 — THE FILE'S `<style>` REACHES THE ELEMENTS ITS INLINE COMPONENT WRITES, and its own
-// `<style>` is a body's, reaching its elements and no other. THE REVERT: pass `markScoped` none of
-// the file's components in `emitApp` — the `<li>` carries no token, and `.row` matches nothing.
+// `<style>` is a body's, reaching its elements and no other. THE REVERT: build `fileBody` with none of
+// the file's components — the `<li>` carries no token, and `.row` matches nothing.
 test('an inline component is scoped by its file and by its own style — 32.45, 32.47', async () => {
     const compiled = await compileApp(app)
     const server = compiled.files['index.abide']?.server ?? ''

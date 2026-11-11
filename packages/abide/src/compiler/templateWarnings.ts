@@ -8,6 +8,7 @@ import type { AbideFile } from './parseAbide.ts'
 import {
     bodiesOf,
     type Body,
+    fileBody,
     type ForBlock,
     type TemplateNode,
     visitBodies,
@@ -68,16 +69,7 @@ export function templateWarnings(
     }
     // Not the `<head>`: it is applied as markup each time it changes (39.1), so no row in it keeps
     // state for a reorder to hand to another item.
-    visitBodies(
-        {
-            children: file.template,
-            setup: null,
-            style: null,
-            components: file.components,
-        },
-        undefined,
-        check,
-    )
+    visitBodies(fileBody(file), undefined, check)
     return warnings
 }
 

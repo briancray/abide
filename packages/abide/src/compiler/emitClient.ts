@@ -33,7 +33,7 @@ import {
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { moduleImports } from './emitComponent.ts'
 import { IN_SETUP, setupRethrow } from './guardedSetup.ts'
-import { invocationProps, passedName } from './invocationProps.ts'
+import { inlineDefinitions, invocationProps } from './invocationProps.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import {
     type ItemUses,
@@ -45,6 +45,7 @@ import type { AbideFile } from './parseAbide.ts'
 import {
     chosenArm,
     CLIENT_LANE,
+    concat,
     headSink,
     mergedValue,
     renderMarkup,
@@ -466,25 +467,16 @@ ${fill}${captured}${bindings}${owning.closed}${closed}
 }
 
 /**
- * The statements declaring a region's inline components on the client: the ones its body declares
- * (32.43), each under its name, and the ones an invocation in it is passed (32.50), each under
- * `passedName`.
+ * The statements declaring a region's inline components on the client (`inlineDefinitions`).
  *
  * DECLARED IN THE REGION EVEN WHERE NOTHING IN IT IS READ, a row's included: one function a row
  * mount, which `inlineRowShare.ts` prices inside the noise of the mount around it. Hoisting the
  * ones that read nothing of the row would be a scope analysis and a branch with no ratio to earn it.
  */
 function definitions(sink: Cursor, region: RegionEmission): string[] {
-    const out: string[] = []
-    for (const component of sink.components)
-        out.push(clientComponent(component, region))
-    for (const at of sink.positions)
-        if (at.kind === 'region' && at.holder.kind === 'element')
-            for (const passed of at.holder.passed)
-                out.push(
-                    `const ${passedName(passed)} = ${clientComponent(passed, region)}`,
-                )
-    return out
+    return inlineDefinitions(sink, (component) =>
+        clientComponent(component, region),
+    )
 }
 
 /**
@@ -1079,7 +1071,7 @@ function builtRun(
         markup.push(`${lowering.use('escapeText')}(${value})`)
         raw.push(`${lowering.use('isRaw')}(${value})`)
     }
-    const whole = text.length === 0 ? "''" : text.join(' + ')
+    const whole = concat(text)
     if (raw.length === 0) {
         lines.push(make(whole))
         return lines
@@ -1552,9 +1544,9 @@ function emitList(
     // it: a row nested in this one takes `ROW_ROOT` for its own record.
     const record = `${name}_row`
 
-    let rowRegion = region.nested()
+    const rowRegion = region.nested()
     const mounted = lowering.readItemsAs(block, 'own', record, () => {
-        rowRegion = emitRegion(row, region.nested())
+        emitRegion(row, rowRegion)
     })
     let local = ''
     const setUp =

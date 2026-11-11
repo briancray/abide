@@ -1,5 +1,6 @@
 import { importedNames } from './splitImports.ts'
 import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
+import { skipQuoted } from './tokenize.ts'
 
 /**
  * What the markup at a cursor is waiting for: a block keyword after `{#`, `{:` or `{/`, a component
@@ -26,13 +27,14 @@ export function templateContext(
     let depth = 0
     let braceAt = -1
     let tagAt = -1
+    // A quote is stepped over to its close — and a close at or past the cursor ends the scan inside it.
     for (let at = markup; at < offset; at += 1) {
         const char = text[at]
         if (depth > 0) {
             if (char === '{') depth += 1
             else if (char === '}') depth -= 1
             else if (char === '"' || char === "'" || char === '`')
-                at = quoteEnd(text, at, offset)
+                at = skipQuoted(text, at) - 1
             continue
         }
         if (char === '{') {
@@ -40,8 +42,7 @@ export function templateContext(
             braceAt = at
         } else if (tagAt !== -1) {
             if (char === '>') tagAt = -1
-            else if (char === '"' || char === "'")
-                at = quoteEnd(text, at, offset)
+            else if (char === '"' || char === "'") at = skipQuoted(text, at) - 1
         } else if (char === '<' && /[A-Za-z/]/.test(text[at + 1] ?? '')) {
             tagAt = at
         } else if (char === '<' && at + 1 === offset) tagAt = at
@@ -100,16 +101,6 @@ function markupStart(text: string, offset: number): number {
         start = text.indexOf('>', close) + 1
         opened.lastIndex = start
     }
-}
-
-/** The offset of the quote closing the one at `at`, or the last one before `limit`. */
-function quoteEnd(text: string, at: number, limit: number): number {
-    const quote = text[at]
-    for (let next = at + 1; next < limit; next += 1) {
-        if (text[next] === '\\') next += 1
-        else if (text[next] === quote) return next
-    }
-    return limit
 }
 
 /**

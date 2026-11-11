@@ -500,11 +500,8 @@ function headerPieces(inner: string, at: number): Piece[] {
  * and the `by` that stand at depth zero — or `undefined` where it has no `of`.
  */
 function forPieces(header: string, at: number): Piece[] | undefined {
-    const { of, comma, by } = forSeparators(header)
+    const { of, by, item, index } = forSeparators(header)
     if (of === undefined) return undefined
-    const item = header.slice(0, (comma ?? of).start).trim()
-    const index =
-        comma === undefined ? '' : header.slice(comma.end, of.start).trim()
     const subject = header.slice(
         of.end,
         by === undefined ? header.length : by.start,

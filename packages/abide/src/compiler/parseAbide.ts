@@ -11,6 +11,7 @@ import { importedNames } from './splitImports.ts'
 import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
 import {
     type Attribute,
+    attribute,
     bodiesOf,
     type Branch,
     type ElementNode,
@@ -119,13 +120,6 @@ type Origins = {
  */
 const ARM = null
 
-/** The innermost open level that is a control block's arm, or 0 when none is open. */
-function armLevel(open: (string | null)[]): number {
-    let level = open.length - 1
-    while (level > 0 && open[level] !== ARM) level -= 1
-    return level
-}
-
 /** The name a block's own tags spell — `if` for `{#if}` and `{/if}`. */
 function blockName(block: TemplateNode | InlineComponent): string {
     return block.kind === 'block' ? block.block : 'component'
@@ -186,12 +180,13 @@ function refuseCrossing(
     }
 }
 
-/** Pops `open` and `stack` together down to `level`, closing whatever the arm still holds open. */
-function unwindTo(
-    level: number,
-    open: (string | null)[],
-    stack: TemplateNode[][],
-): void {
+/**
+ * Pops `open` and `stack` together down to the innermost open control block's arm (the floor when
+ * none is open), closing whatever the arm still holds open.
+ */
+function unwindToArm(open: (string | null)[], stack: TemplateNode[][]): void {
+    let level = open.length - 1
+    while (level > 0 && open[level] !== ARM) level -= 1
     while (open.length > level) {
         open.pop()
         stack.pop()
@@ -242,6 +237,21 @@ export function parseAbide(source: string): AbideFile {
     // once the tree is whole (`fileComponents`).
     const declared = new Map<TemplateNode[], InlineComponent[]>()
     let at = 0
+    // A control block's arm is a level of its own, beside the element levels.
+    const openArm = (arm: TemplateNode[]): void => {
+        stack.push(arm)
+        open.push(ARM)
+    }
+    // A block opened by the tag at `opened`, its first arm open.
+    const openBlock = (
+        block: TemplateNode | InlineComponent,
+        opened: number,
+        arm: TemplateNode[],
+    ): void => {
+        blocks.push(block)
+        openedAt.push(opened)
+        openArm(arm)
+    }
 
     while (at < source.length) {
         const children = stack[stack.length - 1] as TemplateNode[]
@@ -461,10 +471,7 @@ export function parseAbide(source: string): AbideFile {
                 const here = declared.get(children)
                 if (here === undefined) declared.set(children, [component])
                 else here.push(component)
-                blocks.push(component)
-                openedAt.push(at)
-                stack.push(component.children)
-                open.push(ARM)
+                openBlock(component, at, component.children)
                 at = end + 1
                 continue
             }
@@ -480,10 +487,7 @@ export function parseAbide(source: string): AbideFile {
                     branches: [branch],
                 }
                 children.push(block)
-                blocks.push(block)
-                openedAt.push(at)
-                stack.push(branch.children)
-                open.push(ARM)
+                openBlock(block, at, branch.children)
                 at = end + 1
                 continue
             }
@@ -514,10 +518,9 @@ export function parseAbide(source: string): AbideFile {
                 // popping one level left `open` naming that element while `stack` held the
                 // new arm — so its close tag popped the arm and every node after it landed
                 // in the first arm, which renders on the opposite condition.
-                unwindTo(armLevel(open), open, stack)
+                unwindToArm(open, stack)
                 block.branches.push(branch)
-                stack.push(branch.children)
-                open.push(ARM)
+                openArm(branch.children)
                 at = end + 1
                 continue
             }
@@ -531,10 +534,7 @@ export function parseAbide(source: string): AbideFile {
                     error: '',
                 }
                 children.push(block)
-                blocks.push(block)
-                openedAt.push(at)
-                stack.push(body.children)
-                open.push(ARM)
+                openBlock(block, at, body.children)
                 at = end + 1
                 continue
             }
@@ -551,14 +551,13 @@ export function parseAbide(source: string): AbideFile {
                         `abide: {${inner}} stands outside a {#try}, and only a {#try} has a catch or a finally arm. RULEBOOK 32.56.`,
                         at,
                     )
-                unwindTo(armLevel(open), open, stack)
+                unwindToArm(open, stack)
                 // The finally arm is a third branch until `{/try}` folds it into the other two.
                 if (inner.startsWith(':catch'))
                     block.error = inner.slice(6).trim()
                 const branch = newBranch(inner === ':finally' ? FINALLY : '')
                 block.branches.push(branch)
-                stack.push(branch.children)
-                open.push(ARM)
+                openArm(branch.children)
                 at = end + 1
                 continue
             }
@@ -569,10 +568,7 @@ export function parseAbide(source: string): AbideFile {
                     origins,
                 )
                 children.push(block)
-                blocks.push(block)
-                openedAt.push(at)
-                stack.push(block.children)
-                open.push(ARM)
+                openBlock(block, at, block.children)
                 at = end + 1
                 continue
             }
@@ -596,7 +592,7 @@ export function parseAbide(source: string): AbideFile {
                 // either, and the `<p>` landed inside the if-arm and vanished whenever the
                 // condition was false. Closing whatever the block still holds open is what the
                 // close tag of the element AROUND it would have to do anyway.
-                unwindTo(armLevel(open), open, stack)
+                unwindToArm(open, stack)
                 if (block.kind === 'block' && block.block === 'try') {
                     const after = closeTry(block)
                     const around = stack[stack.length - 1] as TemplateNode[]
@@ -1165,6 +1161,10 @@ export function forSeparators(header: string): {
     of: Token | undefined
     comma: Token | undefined
     by: Token | undefined
+    /** The header before the `,` (or the `of`), trimmed — `''` where there is no `of`. */
+    item: string
+    /** The header between the `,` and the `of`, trimmed — `''` where either is missing. */
+    index: string
 } {
     const tokens = tokenize(header)
     let depth = 0
@@ -1189,7 +1189,11 @@ export function forSeparators(header: string): {
         )
             by = token
     }
-    return { of, comma, by }
+    if (of === undefined) return { of, comma, by, item: '', index: '' }
+    const item = header.slice(0, (comma ?? of).start).trim()
+    const index =
+        comma === undefined ? '' : header.slice(comma.end, of.start).trim()
+    return { of, comma, by, item, index }
 }
 
 /**
@@ -1211,16 +1215,13 @@ function forBlock(
     origins: Origins,
 ): ForBlock {
     const source = header.text
-    const { of, comma, by } = forSeparators(source)
+    const { of, comma, by, item, index } = forSeparators(source)
     // A `{#for}` with nothing to iterate rendered as a block over the subject '' — zero rows,
     // forever, with nothing saying why (32.22 is an ABSENT subject, not a missing one).
     if (of === undefined)
         throw new Error(
             `abide: {#for ${source}} has no \` of \`, so there is nothing to iterate. Write {#for item of list}.`,
         )
-    const item = source.slice(0, (comma ?? of).start).trim()
-    const index =
-        comma === undefined ? '' : source.slice(comma.end, of.start).trim()
     // Refused here rather than papered over in each emitter: `{#for , i of rows}` has no binding
     // for the row, and `for (const  of …)` is a syntax error in a file nobody wrote.
     if (item === '')
@@ -1480,14 +1481,6 @@ function pushQuoted(
             ),
         )
     }
-}
-
-function attribute(
-    name: string,
-    value: string,
-    expression: boolean,
-): Attribute {
-    return { name, lowerName: name.toLowerCase(), value, expression }
 }
 
 /**
