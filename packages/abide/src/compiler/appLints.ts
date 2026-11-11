@@ -31,6 +31,7 @@ export async function appLints(
     const unkeyed: Diagnosis[] = []
     await host.ask(async (project) => {
         const checker = project.checker
+        // As the checker names them, for `Abide`'s reason (`reactiveTypes.ts`).
         const ambientPaths = new Map<string, string>()
         const declared = await Promise.all(
             AMBIENT_SOURCES.map((source) =>

@@ -78,9 +78,7 @@ const RESTATED = new Set([
     '`Produced`',
 ])
 
-async function specSections(): Promise<
-    Map<string, Map<string, string | undefined>>
-> {
+function specSections(): Map<string, Map<string, string | undefined>> {
     const sections = new Map<string, Map<string, string | undefined>>()
     for (const { name, signature, section } of capabilities) {
         const seen = sections.get(name) ?? new Map<string, string | undefined>()
@@ -91,9 +89,9 @@ async function specSections(): Promise<
     return sections
 }
 
-async function specCapabilities(): Promise<string[]> {
+function specCapabilities(): string[] {
     const keys = new Set<string>()
-    for (const [name, seen] of await specSections()) {
+    for (const [name, seen] of specSections()) {
         if (seen.size < 2 || RESTATED.has(name)) keys.add(name)
         else for (const section of seen.keys()) keys.add(`${section} › ${name}`)
     }
@@ -105,7 +103,7 @@ async function specCapabilities(): Promise<string[]> {
 // invisible unless the two are compared, which nothing did.
 test('a restated capability is restated identically', async () => {
     const drifted: string[] = []
-    for (const [name, seen] of await specSections()) {
+    for (const [name, seen] of specSections()) {
         if (!RESTATED.has(name)) continue
         const signatures = [...seen.values()].filter((one) => one !== undefined)
         if (new Set(signatures).size > 1) drifted.push(name)
@@ -125,7 +123,7 @@ test('every registry capability is covered by a guide that is written', async ()
         if (page.stub) continue
         for (const name of page.covers ?? []) covered.add(name)
     }
-    const uncovered = (await specCapabilities())
+    const uncovered = specCapabilities()
         .filter((name) => !covered.has(name))
         .sort()
     expect(uncovered).toEqual([...UNWRITTEN].sort())
@@ -142,11 +140,11 @@ test('every unwritten capability is claimed by some stub', async () => {
 })
 
 test('nothing claims to cover a capability the registry does not have', async () => {
-    const capabilities = new Set(await specCapabilities())
+    const known = new Set(specCapabilities())
     const unknown: string[] = []
     for (const page of await docsPages())
         for (const name of page.covers ?? [])
-            if (!capabilities.has(name)) unknown.push(`${page.route}: ${name}`)
+            if (!known.has(name)) unknown.push(`${page.route}: ${name}`)
     expect(unknown).toEqual([])
 })
 
@@ -483,7 +481,7 @@ function binder(signature: string): string {
     return ''
 }
 
-async function declaredTypes(): Promise<Set<string>> {
+function declaredTypes(): Set<string> {
     const declared = new Set<string>()
     for (const line of registry.split('\n')) {
         const heading = /^#{1,4}\s+`?([A-Za-z_$][\w$]*)/.exec(line)
@@ -529,7 +527,7 @@ async function declaredTypes(): Promise<Set<string>> {
 }
 
 test('every type a signature names is declared somewhere', async () => {
-    const declared = await declaredTypes()
+    const declared = declaredTypes()
     const dangling: string[] = []
     for (const { name, signature } of capabilities) {
         for (const match of withoutLiterals(signature ?? '').matchAll(

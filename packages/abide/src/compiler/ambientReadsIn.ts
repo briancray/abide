@@ -58,8 +58,8 @@ export const AMBIENT_SOURCES: string[] = [
 /**
  * Where a `global` reactive's body reads a per-request ambient, in source order.
  *
- * `paths` maps each of `AMBIENT_SOURCES` to the path the checker names it by (`declaredExports` has
- * the reason: the checker folds case on a case-insensitive disk).
+ * `paths` maps each of `AMBIENT_SOURCES` to the path the checker names it by (`Abide` in
+ * `reactiveTypes.ts` has the reason: the checker folds case on a case-insensitive disk).
  */
 export async function ambientReadsIn(
     checker: Checker,

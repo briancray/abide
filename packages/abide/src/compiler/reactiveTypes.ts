@@ -79,15 +79,15 @@ async function everyPresentMember(
 }
 
 /**
- * Abide's own `Reactive`, `Selection`, `props`, `route` and `onConfig` declarations, as this
- * project's checker names them.
+ * Abide's own `Reactive` and `Selection` declarations, and its `props`, `route`, `onConfig`,
+ * `methods` and `structural` files, as this project's checker names them.
  *
  * 31.3 — A `Reactive` IS TOLD BY ITS DECLARATION, never by how it prints. Every instantiation of
  * abide's `Reactive` carries the symbol of the one type literal it is declared as, whatever alias
  * or re-export the app reached it through — so `type Counter = Reactive<number>` is one, and an
  * app's own type that happens to be spelled `Reactive` is not. `undefined` where the project never
- * reaches abide, and then nothing in it is one. `props`, `onConfig`, `methods` and `structural` are
- * abide's files AS THE CHECKER NAMES THEM, not as this module does: it canonicalizes a path to the
+ * reaches abide, and then nothing in it is one. `props`, `route`, `onConfig`, `methods` and
+ * `structural` are abide's files AS THE CHECKER NAMES THEM, not as this module does: it canonicalizes a path to the
  * disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back `/users/…/code` and a
  * string compared against `import.meta.url` never matched.
  */

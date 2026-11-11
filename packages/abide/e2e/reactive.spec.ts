@@ -10,7 +10,7 @@
 import { test } from '@playwright/test'
 
 import { buildBench } from '../bench/buildBench.ts'
-import type { ReactiveBenchRow } from '../bench/reactiveRun.ts'
+import type { runReactive } from '../bench/reactiveRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const built = await buildBench('reactive')
@@ -35,18 +35,15 @@ test('the reactive core against the hand-written arm, in this engine', async ({
     await page.goto('about:blank')
     await page.setContent('<!doctype html><html><body></body></html>')
 
-    const rows = (await page.evaluate(
+    const rows = await page.evaluate(
         (sizing) =>
             (
                 globalThis as unknown as {
-                    __REACTIVE_BENCH__: (
-                        budget: number,
-                        sizing?: typeof BENCH_SIZING,
-                    ) => ReactiveBenchRow[]
+                    __REACTIVE_BENCH__: typeof runReactive
                 }
             ).__REACTIVE_BENCH__(20_000_000_000, sizing),
         BENCH_SIZING,
-    )) as ReactiveBenchRow[]
+    )
     if (BENCH_SIZING) return
     const { formatReactive } = await import('../bench/reactiveRun.ts')
     console.log(`\n=== ${testInfo.project.name} ===\n${formatReactive(rows)}`)
