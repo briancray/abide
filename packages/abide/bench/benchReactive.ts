@@ -1,6 +1,6 @@
-// THE REACTIVE CORE, PRICED AGAINST THE HAND-WRITTEN ARM under bun's JSC. The cases
-// live in `reactiveCases.ts` so the browser injectable runs the same bytes; see there
-// for why the substrate matters more than the numbers.
+// THE REACTIVE CORE, PRICED AGAINST THE HAND-WRITTEN ARM under bun's JSC. The run and its
+// report live in `reactiveRun.ts` so the browser injectable runs the same bytes; see
+// `reactiveInjectable.ts` for why the substrate matters more than the numbers.
 
 import { reactive, watch } from '@abide/abide'
 import {
@@ -13,7 +13,7 @@ import {
 
 import { countExportedNames } from './countExportedNames.ts'
 import { reactiveCoreLines } from './reactiveCoreLines.ts'
-import { runReactive } from './reactiveRun.ts'
+import { formatReactive, runReactive } from './reactiveRun.ts'
 
 async function machinery(): Promise<void> {
     const { abide: abideLines, vanilla: vanillaLines } =
@@ -35,22 +35,8 @@ console.log(
     'Every ratio is abide / vanilla. Over 1.00x means abide is slower.\n',
 )
 
-for (const row of runReactive()) {
-    console.log(`── ${row.case}`)
-    console.log(`  distinguishes: ${row.distinguishes}`)
-    console.log(
-        `  abide ${row.abide.toFixed(1)} ns   vanilla ${row.vanilla.toFixed(1)} ns   ${row.claim}`,
-    )
-    console.log(
-        `  n=${row.n} reps=${row.reps} substrate=${row.substrate} A/A floor=${(row.floor * 100).toFixed(2)}%`,
-    )
-    if (row.workDisagreement.length > 0)
-        console.log(
-            `  WORK DISAGREES — ${row.workDisagreement.join('; ')}\n  The arms are not doing the same job, so the ratio prices two different jobs.`,
-        )
-    else console.log(`  work agrees: ${JSON.stringify(row.work)}`)
-    console.log('')
-}
+// The batcher's own two-second ceiling: bun's clock is fine enough to reach n inside it.
+console.log(formatReactive(runReactive(2_000_000_000)))
 
 /**
  * Ceiling on the mount-112 / mount-16 ratio; above it the subscribe path is not linear.

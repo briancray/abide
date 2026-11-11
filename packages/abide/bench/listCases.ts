@@ -339,3 +339,21 @@ export const listCases = (): Case[] => [
 ]
 
 export type { Case }
+
+/** One case's reading: each arm per op, the two ratios, and the work each was checked on. */
+export type Row = {
+    case: string
+    distinguishes: string
+    abide: number
+    vanilla: number
+    careless: number
+    costClaim: string
+    buysClaim: string
+    n: number
+    floor: number
+    buysN: number
+    buysFloor: number
+    substrate: string
+    workDisagreement: string[]
+    wrong: string[]
+}

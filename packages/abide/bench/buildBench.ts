@@ -6,6 +6,8 @@
 // Built in memory rather than into `dist/`: every spec loads in both engine projects at once, and
 // two workers writing one file is a reader that can catch it half-written.
 
+import type { batch, claimOf, emulatedDom, ratio } from '@abide/harness/report'
+
 /** Builds `bench/<name>Injectable.ts` into an IIFE and returns its source. */
 export async function buildBench(name: string): Promise<string> {
     const built = await Bun.build({
@@ -19,4 +21,12 @@ export async function buildBench(name: string): Promise<string> {
     if (!built.success)
         throw new AggregateError(built.logs, `${name} did not build`)
     return (built.outputs[0] as Blob).text()
+}
+
+/** What `buildBench('report')` leaves on the page's `globalThis.__REPORT__`. */
+export type Report = {
+    batch: typeof batch
+    claimOf: typeof claimOf
+    emulatedDom: typeof emulatedDom
+    ratio: typeof ratio
 }

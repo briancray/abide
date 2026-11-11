@@ -6,8 +6,7 @@
 // A spec injects the source with `addInitScript({ content })` and reads
 // `__HARNESS_MEASURE__` off the page. Built in memory rather than into `dist/`: every
 // spec loads in both engine projects at once, and two workers writing one file is a
-// reader that can catch it half-written. `bun scripts/buildInjectable.ts` writes
-// `dist/measure.js` and prints its path.
+// reader that can catch it half-written.
 
 const ENTRY = new URL('../src/measure/injectable.ts', import.meta.url).pathname
 
@@ -22,10 +21,4 @@ export async function buildInjectable(): Promise<string> {
     if (!built.success)
         throw new AggregateError(built.logs, 'measure did not build')
     return (built.outputs[0] as Blob).text()
-}
-
-if (import.meta.main) {
-    const path = new URL('../dist/measure.js', import.meta.url).pathname
-    await Bun.write(path, await buildInjectable())
-    console.log(path)
 }

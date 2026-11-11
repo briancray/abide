@@ -826,7 +826,7 @@ rows a runner prints, and an adapter for an abide app.
 | `shares` | `(trace: Trace, spec: SharesSpec) => Shares` | The fraction of an op one layer took. | 43.13, 43.14 |
 | `SharesSpec` | `{ layer: string; of: string; threshold: 'frame' \| 'interaction' }` | The layer, the op it is a share of, and the threshold it is judged against. | 43.13 |
 | `Shares` | `{ op: string; layer: string; layerNanoseconds: number; opNanoseconds: number; ceilingCpu: number; ceilingObserved: number; threshold: 'frame' \| 'interaction'; underOneFrame: boolean; overTheThreshold: boolean }` | What `shares` hands back. | 43.14 |
-| `measuresNamed` | `(trace: Trace, name: string) => { startNanoseconds: number; endNanoseconds: number }[]` | Every user-timing measure in a trace with one name. | — |
+| `measuresNamed` | `(trace: Trace, name: string) => Trace['measures']` | Every user-timing measure in a trace with one name. | — |
 | `durationOf` | `(trace: Trace, name: string) => number` | The summed duration of the measures in a trace with one name. | — |
 
 ## `@abide/harness/server` — bytes, turns and allocations

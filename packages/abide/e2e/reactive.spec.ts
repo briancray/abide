@@ -15,18 +15,8 @@ import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const built = await buildBench('reactive')
 
-// WEBKIT CANNOT PRICE THESE INSIDE A GATE, and the refusal that says so is the
-// instrument working rather than a fault to route around. 43.11 asks a sample to be 100x
-// the clock's MEASURED resolution; webkit reports 1,000,000 ns where chromium is ~100 µs
-// and bun is 41 ns, so the bar is 100 ms a sample. Growing n to clear it runs to `MAX_N`,
-// and ten reps of that measured ~28 s for ONE case — and `reactiveCases()` has thirty-one,
-// which is a quarter of an hour on one spec.
-//
-// SO THE NUMBER IS NOT LOST, IT IS MOVED. This lane answers in the engines whose clock
-// can carry it inside a gate; a webkit reading is a `bun run bench` question, taken
-// deliberately and with a budget to match. Reported as a skip rather than a failure
-// because nothing here is broken — the engine's clock is the substrate, and 43.11's
-// whole point is that an instrument says when it cannot price something.
+// WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
+// and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.
 test.skip(
     ({ browserName }) => browserName === 'webkit',
     'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
@@ -36,7 +26,8 @@ test('the reactive core against the hand-written arm, in this engine', async ({
     page,
 }, testInfo) => {
     // A browser clock is ~100 µs where bun's is 41 ns, so every case batches to a far
-    // larger n and the whole run is minutes rather than seconds.
+    // larger n and the whole run is minutes rather than seconds — and the batcher's default
+    // two-second ceiling is not enough to reach it, so the budget handed in is twenty.
     test.setTimeout(15 * 60 * 1000)
     await page.addInitScript({ content: built })
     // `setContent` on a page still on its initial `about:blank` reruns no init script
@@ -49,21 +40,14 @@ test('the reactive core against the hand-written arm, in this engine', async ({
             (
                 globalThis as unknown as {
                     __REACTIVE_BENCH__: (
+                        budget: number,
                         sizing?: typeof BENCH_SIZING,
                     ) => ReactiveBenchRow[]
                 }
-            ).__REACTIVE_BENCH__(sizing),
+            ).__REACTIVE_BENCH__(20_000_000_000, sizing),
         BENCH_SIZING,
     )) as ReactiveBenchRow[]
     if (BENCH_SIZING) return
-
-    const lines = [`\n=== ${testInfo.project.name} ===`]
-    for (const row of rows) {
-        lines.push(
-            `${row.case}\n  abide ${row.abide.toFixed(1)} ns   vanilla ${row.vanilla.toFixed(1)} ns   ${row.claim}   [n=${row.n} floor=${(row.floor * 100).toFixed(2)}% ${row.substrate}]`,
-        )
-        if (row.workDisagreement.length > 0)
-            lines.push(`  WORK DISAGREES — ${row.workDisagreement.join('; ')}`)
-    }
-    console.log(lines.join('\n'))
+    const { formatReactive } = await import('../bench/reactiveRun.ts')
+    console.log(`\n=== ${testInfo.project.name} ===\n${formatReactive(rows)}`)
 })

@@ -5,10 +5,10 @@
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import { buildBench, type Report } from '../bench/buildBench.ts'
 import { type Scheme, type Tree, tree, wide } from '../bench/depthTree.ts'
-import { type Report, reportScript } from './reportScript.ts'
 
-const REPORT = await reportScript()
+const REPORT = await buildBench('report')
 const CASES: [number, number][] = [
     [2, 200],
     [8, 200],

@@ -10,7 +10,11 @@
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
-import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
+import { buildBench, type Report } from '../bench/buildBench.ts'
+import {
+    buildCompiledPage,
+    type CompiledPage,
+} from '../bench/buildCompiledPage.ts'
 import {
     abideCardSource,
     abideComponentSource,
@@ -18,13 +22,16 @@ import {
     type Card,
     cards,
 } from '../bench/renderCases.ts'
-import { type Report, reportScript } from './reportScript.ts'
 
-const REPORT = await reportScript()
+const REPORT = await buildBench('report')
 const SIZES = [100, 1000]
 
-type Arm = { script: string; markup: string }
-type Built = { size: number; list: Card[]; inline: Arm; nested: Arm }
+type Built = {
+    size: number
+    list: Card[]
+    inline: CompiledPage
+    nested: CompiledPage
+}
 
 // A WRITE HANDLE ON EACH PAGE'S LIST, so a test can prove the mount BOUND the rows it adopted: a
 // `{#for}` hydrating server rows writes nothing until a value changes, so a slot blanked before

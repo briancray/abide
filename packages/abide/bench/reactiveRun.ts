@@ -27,7 +27,8 @@ export type ReactiveBenchRow = {
 
 /** Batches every reactive case, abide against the hand-written arm, and returns one row per case. */
 export function runReactive(
-    sizing?: Pick<BatchSpec, 'reps' | 'warmup' | 'budgetNanoseconds'>,
+    budgetNanoseconds: number,
+    sizing?: Pick<BatchSpec, 'reps' | 'warmup'>,
 ): ReactiveBenchRow[] {
     const rows: ReactiveBenchRow[] = []
     for (const kase of reactiveCases()) {
@@ -35,6 +36,7 @@ export function runReactive(
             case: kase.name,
             arms: { vanilla: kase.vanilla, abide: kase.abide },
             emulated: emulatedDom(),
+            budgetNanoseconds,
             ...sizing,
         })
         const counted = kase.work()
@@ -64,4 +66,26 @@ export function runReactive(
         })
     }
     return rows
+}
+
+/** The rows as the report both lanes print: each case's two arms, its claim, and whether the work agrees. */
+export function formatReactive(rows: ReactiveBenchRow[]): string {
+    const lines: string[] = []
+    for (const row of rows) {
+        lines.push(`── ${row.case}`)
+        lines.push(`  distinguishes: ${row.distinguishes}`)
+        lines.push(
+            `  abide ${row.abide.toFixed(1)} ns   vanilla ${row.vanilla.toFixed(1)} ns   ${row.claim}`,
+        )
+        lines.push(
+            `  n=${row.n} reps=${row.reps} substrate=${row.substrate} A/A floor=${(row.floor * 100).toFixed(2)}%`,
+        )
+        if (row.workDisagreement.length > 0)
+            lines.push(
+                `  WORK DISAGREES — ${row.workDisagreement.join('; ')}\n  The arms are not doing the same job, so the ratio prices two different jobs.`,
+            )
+        else lines.push(`  work agrees: ${JSON.stringify(row.work)}`)
+        lines.push('')
+    }
+    return lines.join('\n')
 }

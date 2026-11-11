@@ -8,16 +8,8 @@
 // carries the refusals that matter here: it measures the clock's resolution rather
 // than assuming it, and a browser's is ~100 µs against bun's 41 ns.
 
-import type { BatchSpec } from '@abide/harness/report'
-
 import { runReactive } from './reactiveRun.ts'
 
-function run(sizing?: Pick<BatchSpec, 'reps' | 'warmup'>) {
-    // A browser clock is ~2,400x coarser than bun's, so n grows far higher and
-    // the default two-second ceiling is not enough to reach it.
-    return runReactive({ budgetNanoseconds: 20_000_000_000, ...sizing })
-}
-
 ;(
-    globalThis as unknown as { __REACTIVE_BENCH__: typeof run }
-).__REACTIVE_BENCH__ = run
+    globalThis as unknown as { __REACTIVE_BENCH__: typeof runReactive }
+).__REACTIVE_BENCH__ = runReactive

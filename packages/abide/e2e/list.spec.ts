@@ -21,23 +21,7 @@
 import { expect, test } from '@playwright/test'
 
 import { buildBench } from '../bench/buildBench.ts'
-
-type Row = {
-    case: string
-    distinguishes: string
-    abide: number
-    vanilla: number
-    careless: number
-    costClaim: string
-    buysClaim: string
-    n: number
-    floor: number
-    buysN: number
-    buysFloor: number
-    substrate: string
-    workDisagreement: string[]
-    wrong: string[]
-}
+import type { Row } from '../bench/listCases.ts'
 
 const built = await buildBench('list')
 

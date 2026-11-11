@@ -16,24 +16,7 @@ import {
     type Sample,
 } from '@abide/harness/report'
 
-import { listCases } from './listCases.ts'
-
-type Row = {
-    case: string
-    distinguishes: string
-    abide: number
-    vanilla: number
-    careless: number
-    costClaim: string
-    buysClaim: string
-    n: number
-    floor: number
-    buysN: number
-    buysFloor: number
-    substrate: string
-    workDisagreement: string[]
-    wrong: string[]
-}
+import { listCases, type Row } from './listCases.ts'
 
 function run(): Row[] {
     const rows: Row[] = []

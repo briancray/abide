@@ -10,6 +10,7 @@
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import { buildBench, type Report } from '../bench/buildBench.ts'
 import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
 import {
     abideSource,
@@ -17,9 +18,8 @@ import {
     vanillaMarkup,
     vanillaWire,
 } from '../bench/renderCases.ts'
-import { type Report, reportScript } from './reportScript.ts'
 
-const REPORT = await reportScript()
+const REPORT = await buildBench('report')
 const SIZES = [10, 100, 1000]
 
 type Built = {

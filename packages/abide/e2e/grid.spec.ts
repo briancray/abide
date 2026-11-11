@@ -12,10 +12,10 @@
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import { buildBench, type Report } from '../bench/buildBench.ts'
 import { type Grid, grid } from '../bench/gridPage.ts'
-import { type Report, reportScript } from './reportScript.ts'
 
-const REPORT = await reportScript()
+const REPORT = await buildBench('report')
 
 const SHAPES: [number, number][] = [
     [50, 20],

@@ -6,13 +6,11 @@
 
 import { batch, claimOf, emulatedDom, ratio } from '@abide/harness/report'
 
-;(
-    globalThis as unknown as {
-        __REPORT__: {
-            batch: typeof batch
-            claimOf: typeof claimOf
-            emulatedDom: typeof emulatedDom
-            ratio: typeof ratio
-        }
-    }
-).__REPORT__ = { batch, claimOf, emulatedDom, ratio }
+import type { Report } from './buildBench.ts'
+
+;(globalThis as unknown as { __REPORT__: Report }).__REPORT__ = {
+    batch,
+    claimOf,
+    emulatedDom,
+    ratio,
+}

@@ -50,8 +50,7 @@
         "./package.json": "./package.json"
     },
     "scripts": {
-        "typecheck": "bun check",
-        "build:injectable": "bun scripts/buildInjectable.ts"
+        "typecheck": "bun check"
     },
     "dependencies": {
         "@happy-dom/global-registrator": "^21.0.4"

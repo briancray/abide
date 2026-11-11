@@ -7,8 +7,8 @@
 // would be a second answer to "what does this address serve", and the whole point of driving the
 // built app is that a card measured here is the card a reader gets.
 
-// The CLI-driving helpers are the framework tests' own: harness scripts are not a lane, and a second
-// copy of "build, start on port 0, read the origin back" is one more place for the two to disagree.
+// The CLI-driving helpers are the framework tests' own: the bench and `packDocs` reuse them so
+// "build, start on port 0, read the origin back" has one spelling, not a second to disagree with.
 import { buildApp, startApp } from '../tests/builtApp.ts'
 
 const DOGFOOD = new URL('../../dogfood/', import.meta.url).pathname
