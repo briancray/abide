@@ -151,6 +151,11 @@ import Section from '#src/lib/Section.abide'
             was built with (6.2). There is no <code>setTimeout</code> to clear: a second copy starts
             the two seconds over (6.11), and the timer stops with the component (6.14), so a link
             copied from a panel that then closes writes nothing afterwards.</p>
+
+        <p>What is written back is a fresh copy of the value as it was built (6.15), so a
+            <code>patch</code> on an opening list or record never changes what comes back. That
+            makes the opening value plain data: one a copy cannot stand for, such as a class
+            instance, is refused where the value is built (6.16).</p>
     </Section>
 
     <Section title="After a write, reload only the entries it changed">

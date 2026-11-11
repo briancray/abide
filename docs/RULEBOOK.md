@@ -351,6 +351,12 @@ constructed with, MUST leave no write back standing.
 6.14 The write back 6.2 arms MUST stop once the value is released: the setup or request that built
 it ended.
 
+6.15 Each write back 6.2 makes of a `ttl` MUST write a fresh copy of the value it was constructed
+with, as that value stood at construction.
+
+6.16 A `reactive` with no producer declaring `ttl` MUST refuse at construction an opening value
+`structuredClone` throws on or copies without its prototype.
+
 # 7. Triggers
 
 7.1 Every `Reactive` MUST carry `s.refresh` and `s.invalidate`.

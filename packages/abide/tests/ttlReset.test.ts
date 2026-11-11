@@ -150,6 +150,53 @@ test('the timer stops with the owner that built the value, and a later write arm
     expect(`after the ttl: ${copied()}`).toBe('after the ttl: true')
 })
 
+// 6.15: THE WRITE BACK IS A COPY OF THE OPENING VALUE AS IT WAS BUILT. A `patch` changes the held
+// object in place, and the held object is the opening one until something else is written — so a
+// write back of that reference would restore the patch it was meant to undo.
+//
+// THE REVERT: write `rewind.initial` back in `rewindLater`'s timer instead of a clone of
+// `rewind.snapshot`, and `after the ttl: investor,speaker` where `investor` is due; write
+// `rewind.snapshot` itself, uncloned, and `after the second ttl: investor,mentor`.
+test('the write back is a copy of the opening value as built, whatever a patch did to it — 6.15', async () => {
+    const tags = reactive(['investor'], { ttl: 30 })
+    tags.patch((held) => {
+        held.push('speaker')
+    })
+    await Bun.sleep(60)
+    expect(`after the ttl: ${tags().join()}`).toBe('after the ttl: investor')
+    // A fresh copy each time, so patching the first write back cannot reach the second.
+    tags.patch((held) => {
+        held.push('mentor')
+    })
+    await Bun.sleep(60)
+    expect(`after the second ttl: ${tags().join()}`).toBe(
+        'after the second ttl: investor',
+    )
+})
+
+// 6.16: AN OPENING VALUE NO COPY CAN STAND FOR IS REFUSED WHERE IT IS BUILT, rather than written
+// back as something else — a class instance copied as a plain object loses its methods silently.
+//
+// THE REVERT: drop the prototype comparison from `openingSnapshot`, and the `Draft` instance is
+// built where a throw is due — `Received function did not throw`.
+test('an opening value structuredClone cannot copy whole is refused at construction — 6.16', () => {
+    class Draft {
+        text = ''
+        empty(): boolean {
+            return this.text === ''
+        }
+    }
+    const refusal = 'structuredClone cannot copy whole'
+    expect(() => reactive(new Draft(), { ttl: 1_000 })).toThrow(refusal)
+    expect(() => reactive({ run: () => 1 }, { ttl: 1_000 })).toThrow(refusal)
+    // Plain data, a primitive and a built-in structuredClone keeps are all taken.
+    reactive({ stage: 'won' }, { ttl: 1_000 })
+    reactive(0, { ttl: 1_000 })
+    reactive(new Date(0), { ttl: 1_000 })
+    // A value with a producer writes nothing back, so it has nothing to copy.
+    reactive(() => new Draft(), { ttl: 1_000 })
+})
+
 // 6.4: A VALUE WRITTEN AND NEVER ENDED DOES NOT KEEP THE PROCESS ALIVE — a module's flag, set by the
 // last thing a script does.
 //

@@ -102,7 +102,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `identity` | `(next: Stored, previous: Stored) => unknown` | What makes it the same value. | 5.1, 5.2, 5.3, 5.4, 5.5, 9.3, 11.17, 18.4 |
 | `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`. | 5.4, 5.5, 18.4 |
 | `by` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.22, 18.4, 18.15, 32.32 |
-| `ttl` | `number` | The life of a production, of a keyed entry, or of a write to a value with no producer. | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13, 6.14, 11.6, 11.35, 11.45, 11.48, 11.49, 11.69 |
+| `ttl` | `number` | The life of a production, of a keyed entry, or of a write to a value with no producer. | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13, 6.14, 6.15, 6.16, 11.6, 11.35, 11.45, 11.48, 11.49, 11.69 |
 | `poll` | `number` | How often the value refreshes itself, in milliseconds. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25 |
 | `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.4, 11.28, 11.30, 11.40, 11.41, 11.56, 11.60, 11.68, 11.72 |
 | `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.39, 11.53, 11.67 |
