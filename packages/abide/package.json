@@ -58,7 +58,8 @@
         "./src/server/**",
         "./src/shared/WORK.ts",
         "./src/shared/reactive/Reactive.ts",
-        "./src/ui/outboxQueue.ts"
+        "./src/ui/outboxQueue.ts",
+        "./src/ui/socketWire.ts"
     ],
     "dependencies": {
         "typescript": "^7.0.2"

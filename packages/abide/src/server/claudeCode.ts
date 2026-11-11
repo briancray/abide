@@ -24,11 +24,17 @@ import { declare } from '#shared/rpc.ts'
 
 import { blocksOf, forwardOf, type Provider } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
-import { mintCode, pairingStatus, runTurn } from './bridgeRelay.ts'
+import {
+    mintCode,
+    pairingNow,
+    pairingStatus,
+    runTurn,
+    watchFollowedPairing,
+} from './bridgeRelay.ts'
 import { callerOf } from './callerOf.ts'
 import { config, ownOrigin } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
-import { mountedOwn } from './mountHandlers.ts'
+import { followedOwn, mountedOwn } from './mountHandlers.ts'
 import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
 
@@ -176,29 +182,36 @@ export const claudeCode: typeof claudeCodeProvider & {
 } = Object.assign(claudeCodeProvider, { bridge, bridgeCommand })
 
 // 44.67 — THE PAIRING A BROWSER'S `pairing` READS, as a handler abide mounts rather than one each app
-// writes: `claudeCode.bridge` for the asking browser, granting the tools `ABIDE_BRIDGE_TOOLS` names.
+// writes: the asking browser's pairing as it stands, granting the tools `ABIDE_BRIDGE_TOOLS` names.
 // 44.75 — THE SERVER DECIDES THEM: the parameter is declared only so the value is keyed and the call
 // runs it (1.7, as `health`'s is), and whatever a request names in it is never read. 44.68 — on no
-// generated surface. 44.69 — a pairing idles for minutes, so it is exempt from `ABIDE_RPC_TIMEOUT`
-// as the handler an app wrote would have to be.
+// generated surface.
+//
+// 44.69, 18.36 — NOT A STREAM: a page follows it over the mux it already holds, and is sent a refresh
+// whenever the pairing changes or its code expires, so no http connection is held while it watches.
 const pairingHandler = declare('GET')(
-    (_none: undefined) => {
-        const tools = config.peek()?.ABIDE_BRIDGE_TOOLS
-        return bridge(
-            typeof tools === 'string' && tools !== ''
-                ? { tools: tools.split(',') }
-                : {},
+    (_none: undefined): BridgeStatus => {
+        const configured = config.peek()?.ABIDE_BRIDGE_TOOLS
+        const tools =
+            typeof configured === 'string' && configured !== ''
+                ? configured.split(',')
+                : []
+        const { paired, code, missing } = pairingNow(
+            askingCaller(),
+            signedInAs(),
+            tools,
         )
+        return {
+            paired,
+            missing,
+            ...commandFor(code, tools.length === 0 ? {} : { tools }),
+        }
     },
-    {
-        timeout: Infinity,
-        clients: { ui: false, mcp: false, cli: false, openapi: false },
-    },
+    { clients: { ui: false, mcp: false, cli: false, openapi: false } },
 )
 
-/** The handler `/__abide/pairing` is answered by. */
-export const PAIRING_MOUNT = mountedOwn(
-    PAIRING_ADDRESS,
-    'pairing',
-    pairingHandler,
+/** The handler `/__abide/pairing` is answered by, followed over the mux. */
+export const PAIRING_MOUNT = followedOwn(
+    mountedOwn(PAIRING_ADDRESS, 'pairing', pairingHandler),
+    watchFollowedPairing,
 )

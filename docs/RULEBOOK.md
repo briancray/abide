@@ -3725,8 +3725,8 @@ and MUST yield a fresh command where the standing one's code expires or pairs.
 44.21 A failure the Messages API reports to `claudeApi`, or a bridge reports to `claudeCode`, MUST
 refuse 502.
 
-44.22 A bridge `claudeCode.bridge` has watched MUST be sent away once nothing watches it and it has
-run no turn for 30 seconds.
+44.22 A bridge a `claudeCode.bridge` stream or a subscription to `/__abide/pairing` has watched MUST
+be sent away once neither watches it and it has run no turn for 30 seconds.
 
 44.23 A post to `/__abide/bridge` carrying a line that is not JSON MUST be refused 400, and none of
 its lines MUST be relayed.
@@ -3878,13 +3878,14 @@ link asks for whose server 44.58 does not find.
 44.66 `abide-bridge forget` MUST stop always allowing the site it names, or every site where it names
 none.
 
-44.67 `/__abide/pairing` MUST answer the asking browser's `BridgeStatus` stream as `claudeCode.bridge`
-yields it, granting the tools `ABIDE_BRIDGE_TOOLS` names separated by commas, and none where it
-names none.
+44.67 `/__abide/pairing` MUST answer the asking browser's `BridgeStatus` as it stands, with the code
+it answered last while that is unspent and unexpired, granting the tools `ABIDE_BRIDGE_TOOLS` names
+separated by commas, and none where it names none.
 
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
-44.69 `/__abide/pairing` MUST NOT be refused at the `timeout` `ABIDE_RPC_TIMEOUT` sets.
+44.69 A subscription to `/__abide/pairing` MUST be sent a refresh whenever the asking browser's
+pairing changes, and where the code it was last answered with expires or pairs.
 
 44.70 `pairing`'s `status` MUST be the last `BridgeStatus` `/__abide/pairing` answered the browser,
 and MUST be `undefined` where a server builds it.
@@ -3898,9 +3899,9 @@ or `status` is paired, and `install` otherwise.
 44.73 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard, and once written
 MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `click`.
 
-44.74 A `pairing` built in a component's setup MUST, once that component is disposed, stop reading
-`/__abide/pairing`, remove the blur listener a `start` added, and clear every timer `start` and
-`copyInstall` set.
+44.74 A `pairing` built in a component's setup MUST, once that component is disposed, stop reading and
+following `/__abide/pairing` where no other `pairing` reads it, remove the blur listener a `start`
+added, and clear every timer `start` and `copyInstall` set.
 
 44.75 `/__abide/pairing` MUST NOT grant a tool the request asking it names.
 

@@ -2,6 +2,11 @@
 // `/__abide/pairing`, the handler abide mounts (44.67), so an app writes neither the handler nor the
 // click.
 //
+// 44.69 — READ ONCE, THEN FOLLOWED over the mux the page already holds, which sends a refresh
+// whenever the pairing changes or its code expires (18.36) — so watching a pairing for the life of
+// a page holds no http connection. ONE COPY PER PAGE, however many `pairing` read it: a follow is one
+// per handler and args (18.3), and it ends with the last reader (44.74).
+//
 // THE CLICK OPENS AN `abide-bridge:` LINK, and a browser cannot say whether a link of a scheme opened
 // anything. The app that opens it taking focus blurs the page, so a click that blurs nothing and pairs
 // nothing within `PAIR_WAIT` had no app to open it, and `step` offers the command that installs one
@@ -12,13 +17,13 @@
 import { PAIRING_ADDRESS } from './ADDRESSES.ts'
 import { answered, answerOf } from './answerOf.ts'
 import type { BridgeStatus } from './BridgeStatus.ts'
-import { isFailed } from './Failed.ts'
-import { answerChunks } from './framing.ts'
 import { isServer } from './isServer.ts'
 import { mounted } from './mount.ts'
+import { MUX_FOLLOWS } from './MUX_FOLLOWS.ts'
+import { onPrincipalRotated } from './principalRotated.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
-import { owned } from './reactive/watch.ts'
+import { owned, unowned } from './reactive/watch.ts'
 import { rpcRequest } from './rpcRequest.ts'
 
 /** How long a click waits for the page to blur, or the bridge to pair, before offering the install. */
@@ -34,13 +39,14 @@ export function pairing(): {
     start: () => void
     copyInstall: () => Promise<void>
 } {
-    const reading = new AbortController()
-    // 44.70 — a server renders no pairing: the stream is the browser's, and a render would wait on it.
-    const statuses = reactive(async function* () {
-        if (!isServer()) yield* statusesOf(reading.signal)
-    })
+    // 44.70 — a server renders no pairing: the copy is the browser's, and a render would wait on it.
+    const read = isServer() ? undefined : readPairing()
     const status = reactive(() =>
-        (statuses() as BridgeStatus[]).at(-1),
+        read !== undefined &&
+        read.copy.ready() &&
+        read.copy.error() === undefined
+            ? read.copy()
+            : undefined,
     ) as Reactive<BridgeStatus | undefined>
     const step = reactive<'click' | 'waiting' | 'install'>('click')
     const copied = reactive(false)
@@ -57,8 +63,10 @@ export function pairing(): {
         onBlur = undefined
     }
     // 44.74.
+    let disposed = false
     owned(() => {
-        reading.abort()
+        disposed = true
+        read?.release()
         stopWaiting()
         clearTimeout(copying)
         copying = undefined
@@ -70,7 +78,7 @@ export function pairing(): {
         // 44.71, 44.72.
         start() {
             const link = current()?.link
-            if (link === undefined || reading.signal.aborted) return
+            if (link === undefined || disposed) return
             stopWaiting()
             step.set('waiting')
             let blurred = false
@@ -92,7 +100,7 @@ export function pairing(): {
             if (install === undefined || navigator.clipboard === undefined)
                 return
             await navigator.clipboard.writeText(install)
-            if (reading.signal.aborted) return
+            if (disposed) return
             copied.set(true)
             clearTimeout(copying)
             copying = setTimeout(() => {
@@ -104,26 +112,68 @@ export function pairing(): {
     }
 }
 
+/** The page's one copy of its pairing, and how many `pairing` read it. */
+let reading:
+    | {
+          copy: Reactive<BridgeStatus>
+          readers: number
+          aborted: AbortController
+      }
+    | undefined
+// Whether a sign-in in any tab reads the pairing again (26.24): heard once a page reads one.
+let listening = false
+
 /**
- * The statuses `/__abide/pairing` answers this browser, as they land — `wire`'s stream less the
- * follow, as `seededDocument` is its call: the mux carries no production of abide's own.
+ * The page's copy of `/__abide/pairing` — made by the first reader, released by the last — and what
+ * releases this reader's hold on it.
  */
-async function* statusesOf(signal: AbortSignal): AsyncGenerator<BridgeStatus> {
-    // 44.75 — no tools: the server's `ABIDE_BRIDGE_TOOLS` decides what a pairing grants.
-    const request = rpcRequest('GET', mounted(PAIRING_ADDRESS), undefined)
-    try {
-        const answer = await answerOf(request, true, signal)
-        if (answer.body !== undefined && answer.body !== null) {
-            yield* answerChunks(
-                answer.body,
-                answer.framing,
-            ) as AsyncIterable<BridgeStatus>
-            return
+function readPairing(): {
+    copy: Reactive<BridgeStatus>
+    release: () => void
+} {
+    if (reading === undefined) {
+        const address = mounted(PAIRING_ADDRESS)
+        const aborted = new AbortController()
+        // UNOWNED: it outlives the reader that made it, and ends with the last one.
+        const copy: Reactive<BridgeStatus> = unowned(() =>
+            reactive(async () => {
+                // 44.74 — a refresh the follow sends after the last reader went reads nothing.
+                if (aborted.signal.aborted) return copy.peek()
+                // 44.75 — no tools: the server's `ABIDE_BRIDGE_TOOLS` decides what a pairing grants.
+                const request = rpcRequest('GET', address, undefined)
+                const answer = await answerOf(request, false, aborted.signal)
+                if (answer.ok && !aborted.signal.aborted)
+                    MUX_FOLLOWS.follow?.(
+                        address,
+                        undefined,
+                        answer.version,
+                        answer.life,
+                        () => copy,
+                    )
+                return answered(answer, request) as BridgeStatus
+            }),
+        )
+        reading = { copy, readers: 0, aborted }
+        // 44.34 — WHOEVER SIGNS IN AT THE BROWSER IS THE PAIRING READ FROM THEN ON: the mux reopens
+        // as them (18.25), and the copy reads the pairing again as them.
+        if (!listening) {
+            listening = true
+            onPrincipalRotated(() => reading?.copy.refresh(), true)
         }
-        const value = answered(answer, request)
-        if (isFailed(value)) throw value
-    } catch (thrown) {
-        // 44.74 — a pairing read until its scope was disposed ends there, not in a failure.
-        if (!signal.aborted) throw thrown
+    }
+    const held = reading
+    held.readers += 1
+    let released = false
+    return {
+        copy: held.copy,
+        release() {
+            if (released) return
+            released = true
+            held.readers -= 1
+            if (held.readers > 0 || reading !== held) return
+            reading = undefined
+            held.aborted.abort()
+            MUX_FOLLOWS.unfollow?.(mounted(PAIRING_ADDRESS), undefined)
+        },
     }
 }

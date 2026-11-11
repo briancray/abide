@@ -6,6 +6,7 @@ import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
 import { type Answer, answerFrom, noAnswer } from '#shared/answerOf.ts'
 import { applyPatch } from '#shared/applyPatch.ts'
 import { mounted } from '#shared/mount.ts'
+import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
@@ -316,6 +317,15 @@ class Mux {
         })
     }
 
+    /** Stops following `id`, telling the server where the socket is open. */
+    unfollow(id: number): void {
+        if (
+            this.subscriptions.delete(id) &&
+            this.socket?.readyState === WebSocket.OPEN
+        )
+            this.socket.send(JSON.stringify({ op: 'unsub', id }))
+    }
+
     private send(stream: MuxStream): void {
         stream.sent = true
         this.socket?.send(JSON.stringify(stream.frame()))
@@ -490,3 +500,17 @@ export function followRpc(
     queueMicrotask(() => stepping.inStep())
     following.expireAfter(lifeMs)
 }
+
+/** Stops following the copy for `address` and `args`, which `followRpc` started. */
+export function unfollowRpc(address: string, args: unknown): void {
+    const key = `${address} ${canonicalKey(args)}`
+    const following = FOLLOWING.get(key)
+    if (following === undefined) return
+    FOLLOWING.delete(key)
+    clearTimeout(following.expiry)
+    muxFor(address).unfollow(following.id)
+}
+
+// 18.36 — a handler abide mounts itself is followed through these, where this module is loaded.
+MUX_FOLLOWS.follow = followRpc
+MUX_FOLLOWS.unfollow = unfollowRpc

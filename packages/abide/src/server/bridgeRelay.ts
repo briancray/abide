@@ -26,9 +26,10 @@ import { answered } from './answerFailure.ts'
 import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import type { ProviderEvent } from './assistant.ts'
+import { callerOf } from './callerOf.ts'
 import { fileIn } from './fileIn.ts'
 import { Inbox } from './Inbox.ts'
-import { holderOf } from './principal.ts'
+import { holderOf, signedInAs } from './principal.ts'
 import { randomToken } from './randomToken.ts'
 import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
 import { onSignInChanged } from './signInChanged.ts'
@@ -263,6 +264,66 @@ export async function* pairingStatus(
         unwatch()
         unfollow()
     }
+}
+
+// 44.69 — EACH PAIRING'S STANDING CODE, by its pairing and the tools it asks for, with the timer that
+// tells whoever follows it once it expires: what `/__abide/pairing` answers, rather than a code per call.
+const STANDING = new Map<
+    string,
+    { code: string; expires: number; expiry: ReturnType<typeof setTimeout> }
+>()
+
+/**
+ * The pairing of `caller` signed in as `signedIn` as it stands, with a code asking for `tools` that
+ * pairs one — the one it answered last, while that is unspent and unexpired. 44.67.
+ *
+ * 44.69 — A CODE THAT EXPIRES IS SAID TO WHOEVER FOLLOWS THE PAIRING, which reads it again and is
+ * answered a fresh one; one a bridge spends is said by the pairing that spends it (`wakeWatchers`).
+ */
+export function pairingNow(
+    caller: string,
+    signedIn: string,
+    tools: readonly string[],
+): PairingState {
+    const key = pairingKey(caller, signedIn)
+    const at = `${key}\n${tools.join(',')}`
+    let standing = STANDING.get(at)
+    if (
+        standing === undefined ||
+        standing.expires <= Date.now() ||
+        !CODES.has(standing.code)
+    ) {
+        if (standing !== undefined) clearTimeout(standing.expiry)
+        const { code, expires } = mintCode(caller, signedIn, tools)
+        const expiry = setTimeout(() => {
+            if (STANDING.get(at)?.code === code) STANDING.delete(at)
+            wakeWatchers(key)
+        }, expires - Date.now())
+        // Nothing to say once the process is stopping.
+        expiry.unref()
+        standing = { code, expires, expiry }
+        STANDING.set(at, standing)
+    }
+    const bridge = BY_KEY.get(key)
+    return {
+        paired: bridge !== undefined,
+        code: standing.code,
+        missing: bridge === undefined ? [] : missingOf(tools, bridge.missing),
+    }
+}
+
+/**
+ * Watches the pairing a follow of `/__abide/pairing` reads, in its connection's scope — the browser
+ * and the sign-in its upgrade carried — refreshing that follow alone whenever the pairing changes.
+ *
+ * 18.36, 44.69 — and 44.22: a page following is a page watching, so the bridge goes idle once none does.
+ */
+export function watchFollowedPairing(
+    poke: (member: 'refresh') => void,
+): () => void {
+    const caller = callerOf()
+    if (caller === undefined) return () => {}
+    return watchPairing(pairingKey(caller, signedInAs()), () => poke('refresh'))
 }
 
 /** Registers `wake` to run whenever the pairing filed under `key` changes; the returned function undoes it. */

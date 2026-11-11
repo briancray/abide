@@ -1,7 +1,7 @@
 // 44.67-44.75 — `pairing`, a browser's pairing with a Claude Code bridge and the click that pairs one,
-// over `/__abide/pairing`. The browser half runs against a `fetch` that answers the statuses a test
-// pushes, a `location.assign` that records the link, and fake timers, so a blur and the wait are the
-// test's to decide.
+// over `/__abide/pairing`. The browser half runs against a `fetch` that answers the status a test
+// pushed last, a mux whose refresh a push sends, a `location.assign` that records the link, and fake
+// timers, so a blur and the wait are the test's to decide.
 
 import { afterEach, beforeEach, expect, jest, spyOn, test } from 'bun:test'
 
@@ -9,9 +9,9 @@ import { GET } from '#server'
 import { config } from '#server/config.ts'
 import { PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { BridgeStatus } from '#shared/BridgeStatus.ts'
+import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
 import { pairing } from '#shared/pairing.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
-import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -24,13 +24,19 @@ const UNPAIRED: BridgeStatus = {
     install: 'bunx @abide/bridge@1.0.0 install',
 }
 
-let push: (status: BridgeStatus) => void = () => {}
+// What `/__abide/pairing` answers next, the copy the mux would refresh, and how often it was unfollowed.
+let answering: BridgeStatus = UNPAIRED
+let followed: (() => unknown) | undefined
+let unfollowed = 0
 let asked: { url: string; signal: AbortSignal | undefined }[] = []
 const realFetch = globalThis.fetch
 
 beforeEach(() => {
     asked = []
-    // `/__abide/pairing` answering one jsonl line per status the test pushes.
+    answering = UNPAIRED
+    followed = undefined
+    unfollowed = 0
+    // `/__abide/pairing` answering the status a test last pushed, once per read.
     globalThis.fetch = (async (
         input: RequestInfo | URL,
         init?: RequestInit,
@@ -39,24 +45,23 @@ beforeEach(() => {
             url: String(input),
             signal: init?.signal ?? undefined,
         })
-        const encoder = new TextEncoder()
-        const body = new ReadableStream<Uint8Array>({
-            start(controller) {
-                push = (status) =>
-                    controller.enqueue(
-                        encoder.encode(`${JSON.stringify(status)}\n`),
-                    )
-                init?.signal?.addEventListener('abort', () =>
-                    controller.error(init.signal?.reason),
-                )
-            },
-        })
-        return new Response(body, {
-            headers: { 'content-type': 'application/jsonl' },
-        })
+        return Response.json(answering)
     }) as typeof fetch
+    // 18.36 — the mux's browser half: a pushed status is the refresh it would be sent.
+    MUX_FOLLOWS.follow = (_address, _args, _version, _life, entry) => {
+        followed = entry
+    }
+    MUX_FOLLOWS.unfollow = () => {
+        unfollowed += 1
+    }
     spyOn(location, 'assign').mockImplementation(() => {})
 })
+
+/** What `/__abide/pairing` answers from now, and the refresh the mux sends where it is followed. */
+function push(status: BridgeStatus): void {
+    answering = status
+    ;(followed?.() as { refresh(): void } | undefined)?.refresh()
+}
 
 /** A clipboard that records into `written` what is written to it, until the test ends. */
 function clipboardWrites(written: string[]): void {
@@ -74,6 +79,8 @@ afterEach(() => {
     // The DOM's own clipboard, an accessor on the prototype, again.
     delete (navigator as { clipboard?: unknown }).clipboard
     globalThis.fetch = realFetch
+    MUX_FOLLOWS.follow = null
+    MUX_FOLLOWS.unfollow = null
     jest.useRealTimers()
     jest.restoreAllMocks()
 })
@@ -95,11 +102,21 @@ async function landed(
     pair: ReturnType<typeof pairing>,
     status: BridgeStatus,
 ): Promise<void> {
-    push(status)
+    // Pushed once the first read is followed: before, the read in flight answers what stood.
+    if (answering !== status) {
+        for (let turn = 0; turn < 50 && followed === undefined; turn++)
+            await Bun.sleep(0)
+        push(status)
+    }
     for (let turn = 0; turn < 50; turn++) {
         await Promise.resolve()
         await new Promise((done) => queueMicrotask(() => done(undefined)))
-        if (pair.status.ready() && pair.status()?.link === status.link) return
+        if (
+            pair.status.ready() &&
+            pair.status()?.link === status.link &&
+            pair.status()?.paired === status.paired
+        )
+            return
     }
     await Bun.sleep(1)
     expect(pair.status()).toEqual(status)
@@ -111,6 +128,24 @@ test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44
     expect(pair.status()).toEqual(UNPAIRED)
     expect(asked[0]?.url).toBe(PAIRING_ADDRESS)
     dispose()
+})
+
+// 44.69 — READ ONCE AND FOLLOWED: a pairing that changes is read again when the mux says so, and two
+// `pairing` on one page share the one read and the one follow. THE REVERT: skip `MUX_FOLLOWS.follow`
+// in `pairing.ts`; the pushed status never lands and `landed` reports the unpaired one.
+test('a pairing is read again when its follow is refreshed, one read for every reader — 44.69', async () => {
+    const one = built()
+    const two = built()
+    await landed(one.pair, UNPAIRED)
+    expect(two.pair.status()).toEqual(UNPAIRED)
+    expect(asked).toHaveLength(1)
+    await landed(one.pair, { ...UNPAIRED, paired: true })
+    expect(two.pair.status()?.paired).toBe(true)
+    expect(asked).toHaveLength(2)
+    one.dispose()
+    expect(unfollowed).toBe(0)
+    two.dispose()
+    expect(unfollowed).toBe(1)
 })
 
 test('a click that blurs the page offers the click again; one that does not offers the install — 44.71, 44.72', async () => {
@@ -161,10 +196,11 @@ test('copyInstall copies the install command and holds copied — 44.73', async 
     dispose()
 })
 
-// 44.74 — A DISPOSED PAIRING LEAVES NOTHING RUNNING: its read of `/__abide/pairing`, the blur listener a
-// click added and the timers a click and a copy set — asserted by what the timers would have written,
-// since bun's `jest.getTimerCount` still counts a cleared one. THE REVERT: drop the `owned(…)` call in
-// `pairing.ts`; this reports `blur listeners: 1, step: install, copied: false, read aborted: false`.
+// 44.74 — A DISPOSED PAIRING LEAVES NOTHING RUNNING: its read of `/__abide/pairing` and its follow, the
+// blur listener a click added and the timers a click and a copy set — asserted by what the timers
+// would have written, since bun's `jest.getTimerCount` still counts a cleared one. THE REVERT: drop
+// the `owned(…)` call in `pairing.ts`; this reports `blur listeners: 1, step: install, copied: false,
+// read aborted: false, unfollowed: 0`.
 test('dispose stops the read and clears the blur listener and both timers — 44.74', async () => {
     const { pair, dispose } = built()
     await landed(pair, UNPAIRED)
@@ -198,11 +234,13 @@ test('dispose stops the read and clears the blur listener and both timers — 44
     // Past both waits: a timer left standing would have moved `step` and `copied` by now.
     jest.advanceTimersByTime(5000)
     expect(
-        `blur listeners: ${listeningAfter}, step: ${pair.step()}, copied: ${pair.copied()}, read aborted: ${asked[0]?.signal?.aborted}`,
-    ).toBe('blur listeners: 0, step: waiting, copied: true, read aborted: true')
+        `blur listeners: ${listeningAfter}, step: ${pair.step()}, copied: ${pair.copied()}, read aborted: ${asked[0]?.signal?.aborted}, unfollowed: ${unfollowed}`,
+    ).toBe(
+        'blur listeners: 0, step: waiting, copied: true, read aborted: true, unfollowed: 1',
+    )
 })
 
-/** The first status `/__abide/pairing` answers the browser `caller` at `query`, with `tools` declared. */
+/** The status `/__abide/pairing` answers the browser `caller` at `query`, with `tools` declared. */
 async function firstStatus(
     caller: string,
     query: string,
@@ -214,23 +252,12 @@ async function firstStatus(
     config.invalidate()
     try {
         await using app = await inMemoryApp({})
-        const watching = new AbortController()
         const answer = await app.fetch(
-            new Request(`http://site${PAIRING_ADDRESS}${query}`, {
-                headers: { accept: 'application/jsonl' },
-                signal: watching.signal,
-            }),
+            new Request(`http://site${PAIRING_ADDRESS}${query}`),
             { caller },
         )
         expect(answer.status).toBe(200)
-        const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
-        const decoder = new TextDecoder()
-        let read = ''
-        while (!read.includes('\n'))
-            read += decoder.decode((await reader.read()).value)
-        watching.abort()
-        await reader.cancel().catch(() => {})
-        return JSON.parse(read.split('\n')[0] as string) as BridgeStatus
+        return (await answer.json()) as BridgeStatus
     } finally {
         if (declared === undefined) delete process.env.ABIDE_BRIDGE_TOOLS
         else process.env.ABIDE_BRIDGE_TOOLS = declared
@@ -265,42 +292,6 @@ test('/__abide/pairing grants no tool a request names — 44.75', async () => {
         undefined,
     )
     expect(granted(status)).toBe('command: no grant, link: no tools')
-})
-
-// 44.69 — A PAIRING IDLES PAST AN OPERATOR'S `ABIDE_RPC_TIMEOUT`. THE REVERT: drop `timeout: Infinity`
-// from the handler in `claudeCode.ts`; the stream is refused at the timeout and this reports `504`.
-test('/__abide/pairing outlives ABIDE_RPC_TIMEOUT — 44.69', async () => {
-    await using app = await inMemoryApp({})
-    const configured = RPC_SERVER.timeout
-    RPC_SERVER.timeout = () => 20
-    try {
-        const watching = new AbortController()
-        const answer = await app.fetch(
-            new Request(`http://site${PAIRING_ADDRESS}`, {
-                headers: { accept: 'application/jsonl' },
-                signal: watching.signal,
-            }),
-            { caller: 'idle-browser' },
-        )
-        const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
-        const decoder = new TextDecoder()
-        let read = ''
-        while (!read.includes('\n'))
-            read += decoder.decode((await reader.read()).value)
-        const after = await Promise.race([
-            reader.read().then(
-                (next) =>
-                    next.done ? 'ended' : decoder.decode(next.value).trim(),
-                () => 'ended',
-            ),
-            Bun.sleep(200).then(() => 'open'),
-        ])
-        watching.abort()
-        await reader.cancel().catch(() => {})
-        expect(after).toBe('open')
-    } finally {
-        RPC_SERVER.timeout = configured
-    }
 })
 
 test('/__abide/pairing is on no generated surface — 44.68', async () => {

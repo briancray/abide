@@ -290,8 +290,9 @@ import Section from '#src/lib/Section.abide'
         <Code code={`bunx @abide/bridge install`} />
 
         <p><code>pairing()</code> is that click, and the page needs no handler of its own for it.
-            It reads this browser's statuses from <code>/__abide/pairing</code>, which abide mounts
-            and keeps off MCP and OpenAPI, and hands back <code>status</code>, the latest one.
+            It reads this browser's status from <code>/__abide/pairing</code>, which abide mounts
+            and keeps off MCP and OpenAPI, and follows it over the socket the page already holds,
+            so <code>status</code> is always the latest and no connection waits on it.
             <code>start</code> opens its link. A browser cannot tell whether a link opened anything,
             but the app opening it blurs the page, so a click that blurs nothing and pairs nothing
             within 2.5 seconds sets <code>step</code> to <code>install</code>.
@@ -337,7 +338,7 @@ import Section from '#src/lib/Section.abide'
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
                 <tr><td><code>pairing</code></td><td>This browser's pairing in a page: <code>status</code>, <code>step</code> and <code>copied</code>, with <code>start</code> to pair with a click and <code>copyInstall</code> to copy the install command.</td></tr>
-                <tr><td><code>/__abide/pairing</code></td><td>Where <code>pairing</code> reads this browser's statuses. On no generated surface.</td></tr>
+                <tr><td><code>/__abide/pairing</code></td><td>Where <code>pairing</code> reads this browser's status, followed over the socket. On no generated surface.</td></tr>
                 <tr><td><code>ABIDE_BRIDGE_TOOLS</code></td><td>The tools <code>/__abide/pairing</code> grants, separated by commas. Unset, none.</td></tr>
                 <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
