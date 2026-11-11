@@ -389,6 +389,8 @@ export class Cell {
     declare isEffect: boolean
     declare isMirror: boolean
     declare adopter: Tracked | null
+    declare enclosing: Subscriber | null
+    declare opens: boolean
     /**
      * The mark: `CLEAN`, `CHECK` or `DIRTY`.
      *
@@ -615,6 +617,8 @@ export class Cell {
         this.isEffect = false
         this.isMirror = false
         this.adopter = null
+        this.enclosing = null
+        this.opens = false
         this.callable = null
         this.stream = streaming ? newStream(null) : null
         this.plain = this.expiry === null && this.stream === null

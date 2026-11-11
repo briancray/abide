@@ -77,6 +77,15 @@ export type Subscriber = {
      * this is the edge `markProbes` follows to reach the adopter's guards instead (11.50).
      */
     adopter: Tracked | null
+    /**
+     * The effect whose run opened this one, and `null` on every other reader.
+     *
+     * 12.18 — what the drain settles first. A block's arm or row is mounted inside that block's own
+     * update, so this is the block, and its own is the block around it.
+     */
+    enclosing: Subscriber | null
+    /** Whether an effect has been opened during a run of this one — see `openerQueued`. */
+    opens: boolean
     /** Read on the last run, in order. Rebuilt only from the point a run diverges. */
     sources: Tracked[]
     /**
@@ -174,6 +183,8 @@ export function newSubscriber(
         isEffect: true,
         isMirror,
         adopter,
+        enclosing: null,
+        opens: false,
         notify: unwired,
     }
 }

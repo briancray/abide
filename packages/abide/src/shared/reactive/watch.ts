@@ -94,6 +94,22 @@ const OWNING: { stops: Disposer[] | undefined; free: boolean } = {
     free: false,
 }
 
+/**
+ * The effect whose run is on the stack, which is what a watch opened now records as `enclosing`.
+ *
+ * 12.18 — APART FROM `TRACKING.reader`, because a block swaps its arm untracked (14.1): the reader
+ * is `null` exactly where the arm's watches open, and this is still the block.
+ */
+const RUNNING: { effect: Subscriber | null } = { effect: null }
+
+/** Records the effect running now as `reader`'s `enclosing`, and that it has opened one. */
+function opened(reader: Subscriber): void {
+    const enclosing = RUNNING.effect
+    if (enclosing === null) return
+    reader.enclosing = enclosing
+    enclosing.opens = true
+}
+
 /** Collects every watch opened from here into `stops`; answers the collector it replaced. */
 export function collectWatches(
     stops: Disposer[] | undefined,
@@ -201,6 +217,7 @@ export function watchOver(
     // The sources are declared rather than tracked. `detach` still tears this down: it truncates
     // from the cursor, and the cursor of a body that never tracked is zero.
     const reader: Subscriber = newSubscriber(sources, adopter)
+    opened(reader)
     // 11.32 — the scope a rerun reads through: see `watchTracked`.
     const scope = currentScope()
     reader.notify = (): void => {
@@ -220,11 +237,14 @@ export function watchOver(
         // it calls there running untracked.
         const previous = TRACKING.reader
         TRACKING.reader = null
+        const outer = RUNNING.effect
+        RUNNING.effect = reader
         try {
             WORK.wakes += 1
             dispose = runInScope(scope, effect, undefined)
         } catch (thrown) {
             TRACKING.reader = previous
+            RUNNING.effect = outer
             reader.running = false
             // `NotLanded` is not an effect that failed, it is one whose turn has not
             // come — and the source that has not landed is one this reader is already
@@ -238,6 +258,7 @@ export function watchOver(
             return
         }
         TRACKING.reader = previous
+        RUNNING.effect = outer
         reader.running = false
     }
     for (let index = 0; index < sources.length; index += 1)
@@ -248,6 +269,7 @@ export function watchOver(
     return (): void => {
         if (!reader.alive) return
         reader.alive = false
+        reader.enclosing = null
         detach(reader)
         if (typeof dispose === 'function') runDisposer(dispose)
     }
@@ -272,6 +294,7 @@ export function watchTracked(effect: Effect): Disposer {
     // `void`, not `undefined`: see `Effect`.
     let dispose: Disposer | void
     const reader: Subscriber = newSubscriber([], null)
+    opened(reader)
     // 11.32 — A RERUN READS THROUGH THE SCOPE THE WATCH WAS OPENED IN, not the ambient one. The
     // drain that reruns it runs in whichever request's turn scheduled it, so without this an
     // effect a load aborted (11.63) reruns reading — and subscribing to — another request's
@@ -287,6 +310,8 @@ export function watchTracked(effect: Effect): Disposer {
         // avoid, so the list is walked rather than cleared.
         const previous = TRACKING.reader
         TRACKING.reader = reader
+        const outer = RUNNING.effect
+        RUNNING.effect = reader
         reader.cursor = 0
         reader.probeCursor = 0
         reader.running = true
@@ -296,6 +321,7 @@ export function watchTracked(effect: Effect): Disposer {
         } catch (thrown) {
             reader.running = false
             TRACKING.reader = previous
+            RUNNING.effect = outer
             if (reader.cursor < reader.sources.length) truncate(reader)
             if (reader.probeCursor < reader.probeSources.length)
                 truncateProbes(reader)
@@ -312,6 +338,7 @@ export function watchTracked(effect: Effect): Disposer {
         }
         reader.running = false
         TRACKING.reader = previous
+        RUNNING.effect = outer
         if (reader.cursor < reader.sources.length) truncate(reader)
         if (reader.probeCursor < reader.probeSources.length)
             truncateProbes(reader)
@@ -324,6 +351,7 @@ export function watchTracked(effect: Effect): Disposer {
             return
         }
         reader.alive = false
+        reader.enclosing = null
         detach(reader)
         if (typeof dispose === 'function') runDisposer(dispose)
     }

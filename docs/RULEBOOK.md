@@ -747,6 +747,9 @@ whether or not the stopped run had closed.
 one current where it is first reached, save the instance a request builds of it under 11.67, which
 that request owns.
 
+12.18 Where one turn wakes an `Effect` and an `Effect` whose run opened it, directly or through
+others, the opener MUST run, or be found to read nothing that changed, before the `Effect` it opened.
+
 # 13. Selections
 
 13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, one `Rpc`, or a set of `tags`.

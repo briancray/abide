@@ -414,6 +414,21 @@ const PENDING: (Subscriber | null)[] = []
 let pendingCount = 0
 let pendingAt = 0
 /**
+ * Whether this drain has queued an effect another was opened inside — `settleEnclosing`'s cue.
+ *
+ * A TURN THAT WAKES NO BLOCK IS THE COMMON ONE, and it walks no chain: a row's bindings woken under
+ * a `{#for}` nothing woke would each climb every block and level above them to find all of them
+ * clean. Cleared with the queue, never per entry, so it only ever over-asks.
+ */
+let openerQueued = false
+
+/** Queues `reader` for the drain, once per turn. Marked here, so the caller saw it `CLEAN`. */
+function queueEffect(reader: Subscriber): void {
+    PENDING[pendingCount] = reader
+    pendingCount += 1
+    if (reader.opens) openerQueued = true
+}
+/**
  * Whether a drain is already in flight.
  *
  * A write made from inside an effect appends to the queue the outer drain is walking rather than
@@ -527,10 +542,7 @@ function markReaders(cell: Cell, wanted: number): void {
                 continue
             }
             // Queued once. An upgrade from `CHECK` to `DIRTY` finds it already there.
-            if (was === CLEAN) {
-                PENDING[pendingCount] = reader
-                pendingCount += 1
-            }
+            if (was === CLEAN) queueEffect(reader)
             continue
         }
         const below = reader as unknown as Cell
@@ -664,6 +676,36 @@ function resolveEffect(reader: Subscriber): void {
 }
 
 /**
+ * Settles every effect enclosing `reader` that this turn woke, outermost first.
+ *
+ * 12.18 — A BLOCK UPDATES BEFORE WHAT IT HOLDS, which the queue's order cannot promise: an inner
+ * block reached through a derived value is queued by whichever of the block's sources subscribed
+ * first, and a reader list keeps no order (`dropReader`). One that the update takes down is no
+ * longer `alive`, and the drain's own test skips it. The whole chain rather than the nearest:
+ * a `{#for}` between two `{#if}`s may not have been woken by what woke the `{#if}` above it.
+ *
+ * 12.7 — the throw of an enclosing effect is reported here rather than unwound: unwound, it would
+ * take with it the reader the drain had already released, which nothing would queue again.
+ */
+function settleEnclosing(reader: Subscriber): void {
+    for (;;) {
+        let outermost: Subscriber | null = null
+        for (
+            let above = reader.enclosing;
+            above !== null;
+            above = above.enclosing
+        )
+            if (above.state !== CLEAN) outermost = above
+        if (outermost === null) return
+        try {
+            resolveEffect(outermost)
+        } catch (thrown) {
+            reportError(thrown)
+        }
+    }
+}
+
+/**
  * Wakes the probe readers of everything downstream whose floor moved.
  *
  * A PROBE MOVED, AND NO VALUE DID. Going loading on a refresh, coming back on a settle,
@@ -703,10 +745,7 @@ function markAsked(asked: Subscriber[]): void {
         const was = reader.state
         reader.state = DIRTY
         if (reader.isEffect) {
-            if (was === CLEAN) {
-                PENDING[pendingCount] = reader
-                pendingCount += 1
-            }
+            if (was === CLEAN) queueEffect(reader)
             continue
         }
         const below = reader as unknown as Cell
@@ -838,6 +877,8 @@ function drainPending(): void {
                 // against a body call. Released BEFORE the run, so a throw resumes past it.
                 PENDING[pendingAt] = null
                 pendingAt += 1
+                if (openerQueued && reader.enclosing !== null)
+                    settleEnclosing(reader)
                 // A DIRECT READER OF WHAT WAS WRITTEN is `DIRTY`, which is the overwhelming
                 // shape and asks nothing: there is no source to interrogate, because the
                 // mark says one of them already produced.
@@ -854,6 +895,7 @@ function drainPending(): void {
     }
     pendingAt = 0
     pendingCount = 0
+    openerQueued = false
     draining = false
 }
 
