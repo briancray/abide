@@ -1,5 +1,57 @@
 # @abide/abide
 
+## 0.126.2
+
+### Patch Changes
+
+- 4920103: call and watch build their request through one requestFor, the shell its args through one argWords ([`0141da2`](https://github.com/briancray/abide/commit/0141da236993e13b73b8f3ba71a69ed49eae311c))
+- 4920103: FRAMEWORK_SOURCES — the framework modules the checker names by file, in one leaf ([`1c0bf1c`](https://github.com/briancray/abide/commit/1c0bf1c3970abbec45e010d335a9b9310623bdf6))
+- 4920103: one Backoff for the mux's redial and the outbox's resend — 18.33, 46.8 ([`2d04e02`](https://github.com/briancray/abide/commit/2d04e02da6ef249fb366ad1dbd79544422509ae0))
+- 4920103: one leadingSpace, one pattern-name walk, readsBareProbe reads abideBindings ([`37b2b60`](https://github.com/briancray/abide/commit/37b2b6093d847279ce90674148d716984cb85936))
+- 4920103: Mismatch writes 41.10's tail once ([`3a49b44`](https://github.com/briancray/abide/commit/3a49b440e2b9259b8c27240891b444e8fae535b4))
+- 4920103: one placed() sink, components given at construction ([`3bb7659`](https://github.com/briancray/abide/commit/3bb76598c739335d16742404091bbffa254e997e))
+- 4920103: Level.mount only enters the share — its head batch was reconcileLater's twice ([`40d77e8`](https://github.com/briancray/abide/commit/40d77e80db2286db5623adeb866aef41819043ff))
+- 4920103: a new async source empties the list through clearList, one write rather than a removal a row ([`40dcb78`](https://github.com/briancray/abide/commit/40dcb78a058516ec0a0c93d57b282531bc076d37))
+- 4920103: Router.follow arrives through arriveAt, one Found type ([`49f4de0`](https://github.com/briancray/abide/commit/49f4de0d1f435e4d95dc5e39f57b6cc4da7f6df2))
+- 4920103: one NativeMenuItem in #shared for the menu a page tells the window and the window builds ([`4e46c08`](https://github.com/briancray/abide/commit/4e46c08ea3788aa2f64e122ba3582d8b2cab6026))
+- 4920103: a head that throws is reported once, and a painted level stands as the server wrote it — 39.20 ([`542f651`](https://github.com/briancray/abide/commit/542f6511929659c98f667acb98758b7e45128c8c))
+- 4920103: one HMAC for seal and unseal, own-origin compared directly, two names untangled ([`57b347f`](https://github.com/briancray/abide/commit/57b347f46c864a6ca59f2bc3a8dd281d2dc952a6))
+- 4920103: an option's value decodes as the browser reads it — no RangeError out of a render — 32.61 ([`5d17032`](https://github.com/briancray/abide/commit/5d1703202c461196912d871f6a57e94a25c57a16))
+- 4920103: HeadContribution's doc covers a level's own head; followHead's first run as it now is ([`75e96c4`](https://github.com/briancray/abide/commit/75e96c42ec36b4da18aa63e06769c9c10ea85a22))
+- 4920103: one pngSize reads a PNG's signature and header for the manifest and the icon accent ([`784d229`](https://github.com/briancray/abide/commit/784d229234666b5db6a7cc97868fbd8805af4b56))
+- 4920103: withoutProps reads the import off its tokens — no import glued onto the line above ([`7feb22c`](https://github.com/briancray/abide/commit/7feb22cb0c045b72b55c58bbbfb09e509db07efb))
+- 4920103: the bare-busy probe is installed by the queue, so outbox.ts leaves sideEffects — 38.94, 46.11 ([`8a52546`](https://github.com/briancray/abide/commit/8a52546a8929ca4562bb4c48fdc9e9a76913a4ca))
+- 4920103: emitClient renders the head once, one self-fill and one captured share ([`9500563`](https://github.com/briancray/abide/commit/95005630700fa7b81d257ac87e79546f237a27a3))
+- 4920103: ABIDE.md says why markdown is untrusted — raw HTML and a javascript: link both run script ([`952cda3`](https://github.com/briancray/abide/commit/952cda39e00664e28668a8a4c74189c72f5c4763))
+- 4920103: compiledPage sends the page on stdin — a 1000-card page is past Linux's per-argument cap ([`a632030`](https://github.com/briancray/abide/commit/a632030015e0741a81f68aab2706312c01e20fe0))
+- 4920103: ownOrigin is 36.2's own origin, for the origin gate and the pairing link alike ([`b189c98`](https://github.com/briancray/abide/commit/b189c984a37da9fb98d2c48e71642324ded7f016))
+- 4920103: one HeadChain for the chain a level reconciles through ([`b4be6c9`](https://github.com/briancray/abide/commit/b4be6c9a38302700313153a66aa42dad4626d401))
+- 4920103: a head reconciles once a turn, not once a row — 39.13, 39.16 ([`b4c1935`](https://github.com/briancray/abide/commit/b4c193556268aaf3a15238a213e81456e5fe2e8f))
+- 4920103: a render's recorded call takes the route its Rpc compiled — ROUTE_OF leaves ([`b5cc651`](https://github.com/briancray/abide/commit/b5cc65135b7accc7185698bcb501a242801b62ea))
+- 4920103: one stream predicate, one derived layer, one realpath fallback ([`b93d149`](https://github.com/briancray/abide/commit/b93d1490d365f07cadcd6ba917cb43807c60901a))
+- 4920103: a load timeout past what a timer holds no longer refuses at once — 16.59; one array-mutator list, one unref test ([`bbf1d2f`](https://github.com/briancray/abide/commit/bbf1d2f1cfc0b2deb25483eefd506a57239bd0d4))
+- 4920103: round-2 leftovers — leadingSpace at its four inline copies, importsRaw via abideBindings ([`c5725cf`](https://github.com/briancray/abide/commit/c5725cfc2fab9213e40b7e776c3541e66f6363b6))
+- 4920103: lineOf is the one line index, one lastAtOrBefore search ([`c7bcc6e`](https://github.com/briancray/abide/commit/c7bcc6e24c85c528f5a8fca26fe0504834647801))
+- 4920103: one referencesIn — a symbol's references in a file, resolved ([`ca9b594`](https://github.com/briancray/abide/commit/ca9b5949162d62917492eb4982a654773a9f6206))
+- 4920103: randomToken and the principal seal encode with Uint8Array's base64/hex, not Buffer ([`e209c02`](https://github.com/briancray/abide/commit/e209c0260e7599eda1c0b3413d54642521748693))
+- 4920103: a head that throws costs one turn's reconcile, not every one after — 12.8, 39.16 ([`e69a244`](https://github.com/briancray/abide/commit/e69a24480fd10f72a27790d16f5a97aa9cc15fcd))
+- 4920103: generatedSurfaces reads each segment's pattern from parseRoutePattern — 20.23 ([`f2dd7f8`](https://github.com/briancray/abide/commit/f2dd7f88c5f2f6ff27623c9647aab585c535aa89))
+- 4920103: filledPath folds into filledSegments, log reads numberFromText, remote reads framingOf ([`f6e5806`](https://github.com/briancray/abide/commit/f6e5806c6e66359fe02ea6c82cc9cc7384d50e54))
+- 4920103: rpcRequest writes the 46.10 idempotency-key itself ([`fefb779`](https://github.com/briancray/abide/commit/fefb779593eb2dc38fe0547d994904e137099c5e))
+- e957231: A blank `ABIDE_MAX_LOG_BUFFER_COUNT=` falls back to the default buffer rather than reading as 0 and keeping no log records.
+- ba23c6f: `abide call` and the shell print the RULEBOOK 30.3 message when JSON args (or no args) leave out a route parameter, as they already did for `name=value` args, instead of a bare "Unprocessable Content".
+- a1d0354: Rows that each contribute to the document `<head>` reconcile it once a turn rather than once per row, so growing a list of 1,600 such rows no longer costs hundreds of milliseconds. And equal keyless head contributions from rows mounted together each keep a node of their own, rather than two rows adopting one (39.16).
+- 3dad985: A `<head>` whose markup throws (a `<title>` reading a failed load) now stands as it last read and is reported once, rather than throwing out of every later head reconcile — a navigation, a component leaving — for as long as it stays mounted (39.20).
+- 3cc3acb: A `{#for}` over an async source that is replaced empties the rows the last source appended in one write, rather than removing them one at a time.
+- e957231: A handler `timeout` longer than a timer can hold (2³¹−1 ms, about 25 days) no longer ends the load at once with a 504: the timer is capped rather than overflowing to 1 ms (16.59).
+- f2cd7b7: A server-rendered `<select>` reads a numeric reference in 0x80–0x9F through the windows-1252 remap, as the browser does: `&#128;` is `€`, so `bind:value` marks the option the browser's `option.value` says it holds.
+- e957231: A client bundle that never queues a write no longer carries the outbox: its busy probe is installed by the queue rather than on import, so an app with no handlers drops it (38.94).
+- 3cc3acb: The outbox restarts its retry wait from the floor when the page becomes visible, as the socket mux already did, so a queued write is retried promptly when a reader returns to the tab (46.8).
+- b93aad7: A `.abide` file whose last `@abide/abide` import names `props` no longer compiles to an import joined onto the next import's line, which was a syntax error, and an import of `props` split over several lines is now read as one.
+- e957231: The server render of a bound `<select>` reads its options' character references as a browser does: an out-of-range numeric reference such as `&#9999999;` becomes U+FFFD rather than throwing a `RangeError` out of the render, a reference without its `;` is read, and only ASCII whitespace is collapsed, so a no-break space in option text survives.
+- 424f31b: `trace.span` stays open until a thenable its body returns settles, not only a native `Promise` — a `PromiseLike` from a client library no longer logs a 0 ms span or a 0 ms `server-timing` entry. A `Reactive` is still taken as a value and closes the span at once (24.8, 1.6).
+- 2743db3: A `<style>` selector that is only a `::view-transition…` pseudo-element, such as `::view-transition-group(*)`, is left without the component's scope token, so it reaches the document's transition instead of matching nothing. 34.31
+
 ## 0.126.1
 
 ### Patch Changes
