@@ -15,7 +15,7 @@
 import { rm } from 'node:fs/promises' // bun has no recursive remove of its own
 
 import type { HandlerSettings } from './opened.ts'
-import { PAIRING_SCHEME } from './pairingLink.ts'
+import { PAIRING_SCHEME } from './PAIRING_SCHEME.ts'
 
 const APP_NAME = 'abide bridge'
 export const IDENTIFIER = 'abide.bridge'

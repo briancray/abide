@@ -114,7 +114,7 @@ function siteFlags(config: Omit<ClaudeCodeConfig, 'tools'>): string[] {
  * Every flag but the protocol's: the site's, then the visitor's — so theirs wins where both set one —
  * then the tools the site asked for and the visitor granted (44.29), and no setting source where the
  * visitor named none.
- * Beside them, what the site was given of this machine (`grantOf`).
+ * Beside them, what the site was given of this machine (`grantFor`).
  */
 async function launchFlags(
     config: ClaudeCodeConfig,

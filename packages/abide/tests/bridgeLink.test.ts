@@ -31,11 +31,8 @@ import {
     searchPath,
     unservedOf,
 } from '../../bridge/src/opened.ts'
-import {
-    type Pairing,
-    PAIRING_SCHEME,
-    pairingOf,
-} from '../../bridge/src/pairingLink.ts'
+import { PAIRING_SCHEME } from '../../bridge/src/PAIRING_SCHEME.ts'
+import { type Pairing, pairingOf } from '../../bridge/src/pairingLink.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAIRING: Pairing = {

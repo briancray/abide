@@ -3,8 +3,7 @@
 // release that speaks the site's relay and the tools of this machine it asks for — and nothing more,
 // and the handler asks the visitor before it runs one (44.42).
 
-// abide's `BRIDGE_SCHEME`, spelled out for `BRIDGE_PATH`'s reason — a test holds the two equal.
-export const PAIRING_SCHEME = 'abide-bridge'
+import { PAIRING_SCHEME } from './PAIRING_SCHEME.ts'
 
 /** One pairing a link asks for. */
 export type Pairing = {

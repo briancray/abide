@@ -9,15 +9,15 @@
 
 import type { ProviderEvent } from '@abide/abide/server'
 
+import { BRIDGE_PATH } from './BRIDGE_PATH.ts'
 import { claudeTurn, type TurnRequest } from './claudeTurn.ts'
 import { grantFor, withheldNotices } from './grant.ts'
+import { HEARTBEAT_MILLISECONDS } from './HEARTBEAT_MILLISECONDS.ts'
 import { siteOf } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
+import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
 import { siteTls } from './siteTls.ts'
 
-// abide's `BRIDGE_ADDRESS`, spelled out because the bridge carries no abide at run time — a test
-// holds the two equal.
-export const BRIDGE_PATH = '/__abide/bridge'
 // How long reports gather before they are posted, so a streamed reply is not a post per token.
 const BATCH_MILLISECONDS = 15
 // 44.24 — how long a relayed MCP request waits for the site's reply.
@@ -25,11 +25,6 @@ const REPLY_MILLISECONDS = 120_000
 // 44.25 — the first wait before redialing a dropped stream, doubled per failed dial up to the last.
 const FIRST_REDIAL_MILLISECONDS = 250
 const LAST_REDIAL_MILLISECONDS = 8_000
-// abide's `RESUME_MILLISECONDS`, spelled out for `BRIDGE_PATH`'s reason: past it the site no longer
-// holds the pairing, and a redial is refused.
-export const RESUME_MILLISECONDS = 60_000
-// abide's `HEARTBEAT_MILLISECONDS`, spelled out for `BRIDGE_PATH`'s reason.
-export const HEARTBEAT_MILLISECONDS = 15_000
 // 44.27 — how long the stream may go without a line before it is taken for dropped.
 export const SILENCE_MILLISECONDS = 3 * HEARTBEAT_MILLISECONDS
 

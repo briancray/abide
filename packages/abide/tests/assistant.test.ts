@@ -10,20 +10,15 @@ import { spawned } from '@abide/harness/gate'
 
 import { POST } from '#server'
 
-import {
-    BRIDGE_PATH,
-    HEARTBEAT_MILLISECONDS as BRIDGE_HEARTBEAT_MILLISECONDS,
-    RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS,
-    SILENCE_MILLISECONDS,
-} from '../../bridge/src/bridge.ts'
+import { SILENCE_MILLISECONDS } from '../../bridge/src/bridge.ts'
+import { BRIDGE_PATH } from '../../bridge/src/BRIDGE_PATH.ts'
 import type { Answer } from '../../bridge/src/desktop.ts'
+import { HEARTBEAT_MILLISECONDS as BRIDGE_HEARTBEAT_MILLISECONDS } from '../../bridge/src/HEARTBEAT_MILLISECONDS.ts'
 import { consented, holderOf } from '../../bridge/src/opened.ts'
-import {
-    type Pairing,
-    PAIRING_SCHEME,
-    pairingOf,
-} from '../../bridge/src/pairingLink.ts'
+import { PAIRING_SCHEME } from '../../bridge/src/PAIRING_SCHEME.ts'
+import { type Pairing, pairingOf } from '../../bridge/src/pairingLink.ts'
 import { readLines } from '../../bridge/src/readLines.ts'
+import { RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS } from '../../bridge/src/RESUME_MILLISECONDS.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
 import { mintCode } from '../src/server/bridgeRelay.ts'
 import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'

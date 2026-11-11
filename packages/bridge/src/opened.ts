@@ -17,7 +17,7 @@ import {
     allowedSites,
     allowsUnasked,
 } from './allowedSites.ts'
-import { BRIDGE_PATH } from './bridge.ts'
+import { BRIDGE_PATH } from './BRIDGE_PATH.ts'
 import { type Answer, ask, notify } from './desktop.ts'
 import { grantFor, serversNamed } from './grant.ts'
 import { type Pairing, pairingOf } from './pairingLink.ts'

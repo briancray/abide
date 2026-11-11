@@ -52,7 +52,7 @@ export function takeFlag(
 }
 
 /** The tools the visitor granted, each `--tools` value split on commas and spaces. */
-export function grantedOf(values: string[] | undefined): Set<string> {
+function grantedOf(values: string[] | undefined): Set<string> {
     const granted = new Set<string>()
     for (const value of values ?? [])
         for (const tool of value.split(/[\s,]+/))
@@ -61,7 +61,7 @@ export function grantedOf(values: string[] | undefined): Set<string> {
 }
 
 /** The server an MCP tool name is of — `calendar` for `mcp__calendar__meetings` or `mcp__calendar` — or `undefined` for a built-in. */
-export function serverOf(tool: string): string | undefined {
+function serverOf(tool: string): string | undefined {
     if (!tool.startsWith('mcp__')) return undefined
     const rest = tool.slice('mcp__'.length)
     const end = rest.indexOf('__')
