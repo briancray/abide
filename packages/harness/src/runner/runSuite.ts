@@ -164,6 +164,8 @@ export async function runSuite(spec: {
     const pointed = spec.reportTo(report)
     passSignalsOn()
     const startedAt = Bun.nanoseconds()
+    // Not `spawned`: a suite leads a detached group, and a deadline signals that whole group
+    // SIGINT then SIGKILL — the teardown playwright's `webServer` needs — where `spawned` kills one pid.
     const child = Bun.spawn({
         cmd: [...spec.command, ...pointed.args],
         cwd: spec.cwd,

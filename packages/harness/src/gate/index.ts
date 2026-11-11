@@ -49,8 +49,8 @@ export type GateSpec = {
     worth: Record<string, number | string>
 }
 
-// The reverts double the gate count and some are not cheap, so they are opt-in.
-// Whether that becomes a nightly rather than a flag is not decided here.
+// The reverts double the gate count and some are not cheap, so they are opt-in:
+// `bun run test:gates` sets `HARNESS_VERIFY_GATES`.
 const VERIFYING = process.env.HARNESS_VERIFY_GATES === '1'
 
 /**

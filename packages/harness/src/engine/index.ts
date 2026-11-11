@@ -3,9 +3,6 @@
 // Read over CDP, so chromium only, and driven from the playwright side — an engine
 // number is not available inside a case body, and that is a property of the lane
 // rather than a gap.
-//
-// `harness/report` is a FOURTH entry and is not a fourth lane: a lane is a DEPENDENCY
-// partition, and the leaf depends on nothing.
 
 export {
     durationOf,

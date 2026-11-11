@@ -24,7 +24,7 @@ const MIN_CLOCK_MULTIPLE = 100
 // CLEARING THE CLOCK IS NOT THE SAME AS BEING WARM, and the bar only knows about the
 // clock. Bun's is ~41 ns, so the bar is ~4 µs a sample and a 40 ns op clears it at
 // n in the hundreds — which is below where JSC promotes the body out of its baseline
-// tier. Measured on one publish into a capped ring (a case since removed with the ring): 85.5 ns a call at n=488 and 4.4 at
+// tier. Measured on one publish into a capped ring: 85.5 ns a call at n=488 and 4.4 at
 // n=2,000,000, the SAME code, a 19x spread chosen by the sample size.
 //
 // IT IS NOT A UNIFORM BIAS, so it cannot be divided out. Swept across n, a write with one
@@ -207,21 +207,18 @@ export function batch(spec: BatchSpec): Batched {
     const reps = spec.reps ?? DEFAULT_REPS
     const warmup = spec.warmup ?? DEFAULT_WARMUP
 
-    // GROW UNTIL THE SAMPLE CLEARS THE BAR, and the growth probe is the run itself.
-    // A probe taken BEFORE the warm-up reps grows against cold code and then the
-    // timed reps come in under the bar anyway — measured: an arm that needed n=512
-    // cold reported 1208 ns warm, a third of the bar, and the batcher would have
-    // thrown on a sample size it had chosen itself.
-    // A CHEAP PROBE FINDS THE STARTING n, and the full run is what proves it. Growing
-    // by rerunning warm-up and every rep at each step costs the whole rep set once
-    // per doubling — it is what made the browser case unfinishable — and growing off
-    // a COLD probe alone undershoots, because the timed reps come back faster than
-    // the probe that chose n. So: probe cheaply, run fully, and grow again if the run
-    // misses the bar.
     // BEFORE THE GROWTH PROBE, so the probe chooses n against warm code too — a probe
-    // taken cold picks an n the warm run then comes in under.
+    // taken cold picks an n the warm run then comes in under. Measured: an arm that
+    // needed n=512 cold reported 1208 ns warm, a third of the bar, and the batcher
+    // would have thrown on a sample size it had chosen itself.
     for (const lane of lanes) warm(lane.body)
 
+    // GROW UNTIL THE SAMPLE CLEARS THE BAR: a CHEAP PROBE FINDS THE STARTING n, and
+    // the full run is what proves it. Growing by rerunning warm-up and every rep at
+    // each step costs the whole rep set once per doubling — it is what made the
+    // browser case unfinishable — and growing off a probe alone undershoots, because
+    // the timed reps come back faster than the probe that chose n. So: probe cheaply,
+    // run fully, and grow again if the run misses the bar.
     let n = spec.n ?? 1
     if (spec.n === undefined) {
         while (n < MAX_N) {

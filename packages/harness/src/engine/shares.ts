@@ -47,11 +47,8 @@ export type Shares = {
 }
 
 /** Every measure in the trace with this name, in trace order. */
-export function measuresNamed(
-    trace: Trace,
-    name: string,
-): { startNanoseconds: number; endNanoseconds: number }[] {
-    const found: { startNanoseconds: number; endNanoseconds: number }[] = []
+export function measuresNamed(trace: Trace, name: string): Trace['measures'] {
+    const found: Trace['measures'] = []
     for (const measure of trace.measures)
         if (measure.name === name) found.push(measure)
     return found
@@ -78,22 +75,13 @@ export function durationOf(trace: Trace, name: string): number {
 /**
  * The fraction of one op a named layer took, with the op as the stated denominator.
  *
- * Throws on a withdrawn `within`, a denominator that is not exactly one measure, a missing
+ * Throws on a denominator that is not exactly one measure, a missing
  * layer, a layer running outside the op, or an op of zero length.
  */
 export function shares(trace: Trace, spec: SharesSpec): Shares {
-    // `within` is WITHDRAWN, and it is refused rather than ignored. It was there to
-    // compose — a fraction of click -> paint times a fraction of navigation -> paint
-    // — but the reconcile does not run inside navigation -> paint; hydration does.
-    // Multiplying a fraction of an INTERACTION op by a fraction of a FIRST-LOAD op
-    // produces a number describing no op at all, and the two chains never meet.
-    if ('within' in spec)
-        throw new Error(
-            `shares("${spec.of}") was given a \`within\`. Composition is sound down ONE nesting chain, and first load and interaction are two: a first-load ceiling and an interaction ceiling are separate numbers, and neither bounds the other.`,
-        )
-
     const denominators = measuresNamed(trace, spec.of)
-    if (denominators.length !== 1)
+    const [op] = denominators
+    if (op === undefined || denominators.length !== 1)
         throw new Error(
             `shares("${spec.of}") found ${denominators.length} measures named "${spec.of}" in the trace of "${trace.op}". The denominator is one op somebody waits on.`,
         )
@@ -103,12 +91,7 @@ export function shares(trace: Trace, spec: SharesSpec): Shares {
             `shares("${spec.of}") found no measure named "${spec.layer}". The code under test emits the marks; the sampler at ~1 ms cannot resolve a layer inside a 1.45 ms op.`,
         )
 
-    const op = denominators[0] as {
-        startNanoseconds: number
-        endNanoseconds: number
-    }
-    // CONTAINMENT IS CHECKED, not assumed — the assumption the withdrawn `within`
-    // violated silently. A layer that also runs OUTSIDE the op — a second flush, an
+    // CONTAINMENT IS CHECKED, not assumed. A layer that also runs OUTSIDE the op — a second flush, an
     // idle pass — is a throw, not a smaller fraction.
     let layerNanoseconds = 0
     for (const run of numerators) {

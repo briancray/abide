@@ -11,10 +11,10 @@ const DEFAULT_TIMEOUT_MILLISECONDS = 30_000
  * all under `--parallel`. So a gate on either refusal cannot be taken in the suite that states
  * it: it is taken in a child.
  *
- * PART OF THE VOCABULARY RATHER THAN OF THIS PACKAGE'S TESTS, which is where it started and where
- * it could not do its job. A gate needing this same preload-free invocation in another package
- * could only reach a helper sitting in `packages/harness/tests/` by copying it. It belongs beside `gate()` for the same reason `gate()` is a fifth
- * entry: both need `bun:test`, and neither is a lane.
+ * PART OF THE VOCABULARY RATHER THAN OF THIS PACKAGE'S TESTS: a gate needing this same
+ * preload-free invocation in another package could only reach a helper sitting in
+ * `packages/harness/tests/` by copying it. It sits beside `gate()` because both need `bun:test`,
+ * and neither is a lane.
  *
  * It is also the only place a HANG can be gated. `bun test`'s own per-test timeout is a timer, so
  * a body that starves the event loop outruns it and the suite reports nothing at all — no failed

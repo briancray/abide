@@ -23,26 +23,6 @@ function traceOf(
     }
 }
 
-// The stage's own gate. `within` was there to compose — a fraction of click -> paint
-// times a fraction of navigation -> paint — and the reconcile does not run inside
-// navigation -> paint; hydration does. Reverted — accept it and multiply — the
-// product describes no op at all, and a first-load ceiling gets quoted as bounding
-// an interaction.
-test('shares() refuses a `within`', () => {
-    const trace = traceOf([
-        ['click-to-paint', 0, 1_450_000],
-        ['reconcile', 100_000, 180_000],
-    ])
-    expect(() =>
-        shares(trace, {
-            layer: 'reconcile',
-            of: 'click-to-paint',
-            threshold: 'frame',
-            within: 'navigation-to-paint',
-        } as Parameters<typeof shares>[1]),
-    ).toThrow(/first load and interaction are two/)
-})
-
 // A DENOMINATOR THAT IS OPTIONAL IS A DENOMINATOR SOMEBODY OMITS. Two reactive-core
 // rewrites landed as no-ops because the path they improved is 0.055 of a 1.45 ms op.
 test('shares() prices the layer against the whole op somebody waits on', () => {
@@ -88,8 +68,7 @@ test('an op over the threshold reports both ceilings', () => {
     expect(answer.ceilingObserved).toBe(answer.ceilingCpu)
 })
 
-// CONTAINMENT IS CHECKED, not assumed — the assumption the withdrawn `within`
-// violated silently. Reverted — sum every measure of that name — a second flush or
+// CONTAINMENT IS CHECKED, not assumed. Reverted — sum every measure of that name — a second flush or
 // an idle pass outside the op comes back as a SMALLER fraction, which is the wrong
 // direction and reads as good news.
 test('a layer running outside the op is a throw, not a smaller fraction', () => {

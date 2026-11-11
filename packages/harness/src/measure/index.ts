@@ -3,9 +3,6 @@
 // is what lets a hand-written arm and the arm under test share one clock and one
 // batch size. This lane has nothing under test in its import graph, and that is
 // the whole reason the harness is a package of its own.
-//
-// `harness/report` is a FOURTH entry and is not a fourth lane: a lane is a DEPENDENCY
-// partition, and the leaf depends on nothing.
 
 import { batch, type Batched, type BatchSpec } from '../report/batch.ts'
 import { emulatedDom, underBun } from '../report/environment.ts'
