@@ -10,7 +10,7 @@ function counted(): number[] {
     return STAGES.map((stage) => LOADS[stage] ?? 0)
 }
 
-test('qualifying a lead reloads the two stages its handler names, and no other', async () => {
+test('qualifying a lead reloads lead and qualified alone', async () => {
     using _board = await mount(QualifyBoard({}))
     await Bun.sleep(600)
     const before = counted()

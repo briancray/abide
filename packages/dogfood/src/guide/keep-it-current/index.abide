@@ -169,7 +169,7 @@ import Section from '#src/lib/Section.abide'
         </table>
     </Section>
 
-    <Section title="A write names the stages it changes, and every tab reloads them">
+    <Section title="`refreshes` reloads every tab showing what a write changed">
         <Example
             id="crm-04-refreshes"
             app="crm-04"
