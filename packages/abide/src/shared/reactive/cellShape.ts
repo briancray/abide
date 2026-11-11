@@ -379,8 +379,9 @@ export class Cell {
      */
     declare ringBase: number
     /**
-     * `null` on every value that declares no `ttl`, and on every value 6.2 makes it inert
-     * for. Its presence is also what holds `direct` false — see `serve`.
+     * `null` on every value that declares no `ttl`, and on every value with no producer, whose
+     * `ttl` is 6.2's write back rather than an expiry. Its presence is also what holds `direct`
+     * false — see `serve`.
      */
     declare expiry: Expiry | null
     declare ordinal: number
@@ -569,8 +570,8 @@ export class Cell {
         this.schema = (options?.schema ?? null) as Schema<unknown> | null
         this.ring = EMPTY_RING
         this.ringBase = 0
-        // 6.2 DECIDED ONCE, here rather than per production: a body is what makes a value a
-        // producer, and a plain state is the one this must not reach. See `expiryFor`.
+        // DECIDED ONCE, here rather than per production: a body is what makes a value a producer,
+        // and a plain state's `ttl` is 6.2's write back, not an expiry. See `expiryFor`.
         this.expiry = expiryFor(
             options?.ttl,
             // A store is a producer too (8.2): there is somewhere to get the value back from, so

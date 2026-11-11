@@ -7,6 +7,9 @@ import dealDetailSource from 'crm-04/src/pipeline/lib/DealDetail.abide' with { t
 import DealFeed from 'crm-04/src/pipeline/lib/DealFeed.abide'
 import dealFeedSource from 'crm-04/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
 import dealFeedTestSource from 'crm-04/src/pipeline/lib/DealFeed.test.ts' with { type: 'text' }
+import DealLink from 'crm-04/src/pipeline/lib/DealLink.abide'
+import dealLinkSource from 'crm-04/src/pipeline/lib/DealLink.abide' with { type: 'text' }
+import dealLinkTestSource from 'crm-04/src/pipeline/lib/DealLink.test.ts' with { type: 'text' }
 import DealNote from 'crm-04/src/pipeline/lib/DealNote.abide'
 import dealNoteSource from 'crm-04/src/pipeline/lib/DealNote.abide' with { type: 'text' }
 import dealNoteTestSource from 'crm-04/src/pipeline/lib/DealNote.test.ts' with { type: 'text' }
@@ -123,10 +126,31 @@ import Section from '#src/lib/Section.abide'
             <tbody>
                 <tr><td><code>s.refresh</code></td><td>reloads one value now, serving what is held until the new one lands</td></tr>
                 <tr><td><code>s.invalidate</code></td><td>marks one value stale; the next read loads</td></tr>
-                <tr><td><code>ttl</code></td><td><code>{'{ ttl: 60_000 }'}</code> lets a value expire a minute after it loaded. Expiry wakes nobody, and the next read loads</td></tr>
+                <tr><td><code>ttl</code></td><td><code>{'{ ttl: 60_000 }'}</code> lets a value expire a minute after it loaded. Expiry wakes nobody, and the next read loads. On a value with nothing to load from, it is how long a write stands: see the next card</td></tr>
                 <tr><td><code>poll</code></td><td><code>{'{ poll: 60_000 }'}</code> refreshes a value every minute for as long as the component or request that built it stands, skipping a minute its load is still running</td></tr>
             </tbody>
         </table>
+    </Section>
+
+    <Section title="A confirmation goes back to how it started">
+        <Example
+            id="crm-04-ttl-reset"
+            app="crm-04"
+            title={'`reactive(false, { ttl: 2_000 })` — a flag that falls back on its own'}
+            summary="A deal with a button that copies its link. Copy it, and watch the button."
+            files={{
+                'src/pipeline/lib/DealLink.abide': dealLinkSource,
+                'src/pipeline/lib/DealLink.test.ts': dealLinkTestSource,
+            }}
+        >
+            <DealLink />
+        </Example>
+
+        <p><code>copied</code> has no handler and no body behind it, so its <code>ttl</code> has
+            nothing to load. Instead, two seconds after a write, the value is written back to what it
+            was built with (6.2). There is no <code>setTimeout</code> to clear: a second copy starts
+            the two seconds over (6.11), and the timer stops with the component (6.14), so a link
+            copied from a panel that then closes writes nothing afterwards.</p>
     </Section>
 
     <Section title="After a write, reload only the entries it changed">
@@ -180,10 +204,15 @@ import Section from '#src/lib/Section.abide'
             <DealSearch />
         </Example>
 
-        <p>Every keystroke is a new <code>q</code>, and so a new key. <code>debounce: 300</code>
-            holds the search back until the keys stop for 300 ms, so six keystrokes are one request.
-            The results already held stay on screen meanwhile, and the test counts the searches to
-            prove it.</p>
+        <p>The debounce is on the query, not on the search. <code>q</code> takes each keystroke and
+            changes once the keys stop for 300 ms, and <code>found</code> is a derived value that calls
+            <code>searchDeals</code> with it, so it runs only when <code>q</code> changes: six
+            keystrokes are one request, with no debounced function to write. The results already held
+            stay on screen meanwhile, and the test counts the searches to prove it.</p>
+
+        <p>The same option on <code>found</code> would hold back its run instead (5.11). Put it on
+            the value the typing writes where several things read it, so they all wait for the same
+            pause.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>

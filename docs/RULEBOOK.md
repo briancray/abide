@@ -320,12 +320,13 @@ window held MUST start one reload when the window closes.
 
 6.1 A `ttl` expiry MUST wake no reader.
 
-6.2 `ttl` on a value with no producer MUST be inert.
+6.2 `ttl` on a value with no producer MUST write the value it was constructed with back to it, `ttl`
+milliseconds after a write to it.
 
 6.3 An implementation MUST hold at most one expiry timer per value declaring `ttl`, armed no later
 than the deadline of the production it serves, and none where that deadline is never reached.
 
-6.4 A `ttl` expiry timer MUST NOT hold the process open.
+6.4 A `ttl` timer, an expiry's or the one 6.2 arms, MUST NOT hold the process open.
 
 6.5 A read finding the standing production past its `ttl` MUST NOT serve it.
 
@@ -339,6 +340,16 @@ than the deadline of the production it serves, and none where that deadline is n
 
 6.10 A streaming producer's `ttl` MUST run from its run's close, and MUST NOT reach the run in
 flight.
+
+6.11 A write to a value 6.2 governs MUST restart its `ttl` from that write.
+
+6.12 A write to a value 6.2 governs, which the value's `identity` matches against the value it was
+constructed with, MUST leave no write back standing.
+
+6.13 A write to a value 6.2 governs that a gate refused MUST leave its `ttl` where it stood.
+
+6.14 The write back 6.2 arms MUST stop once the value is released: the setup or request that built
+it ended.
 
 # 7. Triggers
 

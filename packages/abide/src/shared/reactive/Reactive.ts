@@ -143,8 +143,8 @@ export type ReactiveOptions<
     /**
      * The life of a production, in milliseconds.
      *
-     * RULEBOOK 6.1 through 6.6. Inert on a value with no producer (6.2), which is decided
-     * once — see `expiryFor`.
+     * RULEBOOK 6.1 through 6.14. On a value with no producer it is how long a write stands before
+     * the value it was built with is written back (6.2) — see `REWIND_PROTOTYPE`.
      */
     ttl?: number
     /**
@@ -2371,7 +2371,7 @@ function armNext(cell: Cell, expiry: Expiry): void {
  *
  * WHETHER THERE IS A PRODUCER TO RUN AGAIN: a body, or a store (8.2), which is somewhere to get the
  * value back from. A value with neither holds what the app put there, and a deadline or a trigger
- * has nothing to reload it with (6.2, 7.6).
+ * has nothing to reload it with (7.6) — its `ttl` writes back instead (6.2).
  */
 function reloads(cell: Cell): boolean {
     return cell.body !== null || cell.store !== null
@@ -2410,7 +2410,7 @@ function beginLoad(cell: Cell): void {
 /**
  * Whether a deadline reaches the standing production.
  *
- * WHETHER A DEADLINE REACHES THE STANDING PRODUCTION: there is a producer to reload it (6.2), 6.7
+ * WHETHER A DEADLINE REACHES THE STANDING PRODUCTION: there is a producer to reload it, 6.7
  * has not already released it, and it is being served — which is what keeps a value whose load is
  * in flight from arming against the production that load is replacing.
  *
@@ -2451,8 +2451,8 @@ function sweepExpiry(cell: Cell): void {
  *
  * A VALUE WITH NO BODY REACHES HERE AND TURNS ROUND, one frame per read, and that is
  * deliberate: `setDirect` tests one field, and telling one from a body value there would put a
- * second load on the path every value in the design walks. 6.2 is the same sentence from the other side — with no body
- * there is nothing to call, so what the app put there stands.
+ * second load on the path every value in the design walks. With no producer there is nothing to
+ * call, so nothing here drops what the app put there — 6.2's write back is its `set`'s.
  */
 function expire(cell: Cell): void {
     if (!reloads(cell)) return
@@ -3887,6 +3887,91 @@ const SIMPLE_PROTOTYPE = brandedPrototype({
 })
 
 /**
+ * What 6.2 keeps for a value with no producer that declares `ttl`: the value it opened on, and its
+ * one timer.
+ */
+type Rewind = {
+    initial: unknown
+    ms: number
+    timer: ReturnType<typeof setTimeout> | null
+    released: boolean
+}
+
+const REWIND: unique symbol = Symbol('abide.rewind')
+
+type Rewinding = Callable & { [REWIND]: Rewind }
+
+/** Stands in for the value a `patch` wrote, which is never the opening one. */
+const PATCHED: unique symbol = Symbol('abide.patched')
+
+/**
+ * The member prototype of a value 6.2 writes back: whatever `seatOf` would seat it on, with the
+ * clock moved after each write.
+ *
+ * A PROTOTYPE, NOT A FIELD ON THE CELL, for `pairReactive`'s reason: `seat` leaves a seat it does not
+ * own alone, so this one stands for the value's life, and the write it wraps is still the one the
+ * value's state calls for — a short write, an adoption's or the members'. A value declaring no `ttl`
+ * never meets it.
+ */
+const REWIND_PROTOTYPE = brandedPrototype({
+    set(this: Rewinding, value: unknown): unknown {
+        const seated = seatOf(this[CELL]) as typeof MEMBERS
+        const answer = seated.set.call(this, value)
+        // 6.13 — a refusal (4.18) leaves the clock where it was.
+        if (answer === undefined) rewindLater(this, value)
+        return answer
+    },
+    patch(this: Rewinding, mutate: (value: unknown) => void): void {
+        const seated = seatOf(this[CELL]) as typeof MEMBERS
+        seated.patch.call(this, mutate)
+        rewindLater(this, PATCHED)
+    },
+})
+
+/**
+ * Arms the write back to the opening value `ms` after this write, or stands it down where this
+ * write was the opening value (6.11, 6.12).
+ */
+function rewindLater(callable: Rewinding, written: unknown): void {
+    const rewind = callable[REWIND]
+    if (rewind.released) return
+    const identity = callable[CELL].declaredIdentityFn
+    if (
+        written !== PATCHED &&
+        (identity === null
+            ? Object.is(written, rewind.initial)
+            : identity(written, rewind.initial))
+    ) {
+        if (rewind.timer !== null) clearTimeout(rewind.timer)
+        rewind.timer = null
+        return
+    }
+    armTimer(rewind, rewind.ms, () => {
+        rewind.timer = null
+        const value = callable as unknown as Reactive<unknown>
+        value.set(rewind.initial)
+    })
+}
+
+/**
+ * Gives `callable`, already seated on `REWIND_PROTOTYPE`, its record, and hands its timer to the
+ * owner building it (6.14).
+ *
+ * The timer names the callable, so a timer left standing past the setup or request that built the
+ * value keeps the value alive until it fires — and fires a write into a value nothing reads.
+ */
+function rewindOnTtl(callable: Callable, initial: unknown, ms: number): void {
+    const rewind: Rewind = { initial, ms, timer: null, released: false }
+    ;(callable as Rewinding)[REWIND] = rewind
+    if (owning())
+        owned(() => {
+            rewind.released = true
+            if (rewind.timer !== null) clearTimeout(rewind.timer)
+            rewind.timer = null
+        })
+}
+
+/**
  * Marks `cell`'s owner as stopped, and releases it where nothing reads it.
  *
  * 12.14 — what a component's setup or a request built a derived value in has ended. A value
@@ -3992,7 +4077,10 @@ export function createReactive<
     // BEFORE THE FIELD, not after: an engine keys its inline caches on the shape a
     // property was added to, and re-pointing the prototype afterwards invalidates the
     // transition the store just built.
-    Object.setPrototypeOf(self, seatOf(cell))
+    // 6.2 — a value with no producer that declares `ttl` writes itself back, on a seat of its own.
+    const ttl = options?.ttl
+    const rewinds = ttl !== undefined && !reloads(cell)
+    Object.setPrototypeOf(self, rewinds ? REWIND_PROTOTYPE : seatOf(cell))
     self[CELL] = cell
     cell.callable = self as unknown as Reactive<unknown>
     if (cell.tags !== null) tagCell(cell)
@@ -4021,6 +4109,7 @@ export function createReactive<
         else if (initial !== NO_INITIAL) open(cell, initial)
     } else if (deferred) cell.loading = true
     else startProducer(cell)
+    if (rewinds) rewindOnTtl(self, initial, ttl)
     // 7.20, 7.23, 7.24 — a `Keyed` takes `poll` off its entries' options and polls them itself.
     const poll = options?.poll
     if (poll !== undefined) {

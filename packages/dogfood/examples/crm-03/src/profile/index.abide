@@ -3,6 +3,8 @@ import AddressField from './lib/AddressField.abide'
 import CallLog from './lib/CallLog.abide'
 import ContactCard from './lib/ContactCard.abide'
 import ContactFields from './lib/ContactFields.abide'
+import ContactPanel from './lib/ContactPanel.abide'
+import ContactRename from './lib/ContactRename.abide'
 import FollowUp from './lib/FollowUp.abide'
 import PhoneField from './lib/PhoneField.abide'
 import ProfileSummary from './lib/ProfileSummary.abide'
@@ -15,6 +17,8 @@ import Tags from './lib/Tags.abide'
 <main>
     <h1>Profile</h1>
     <ContactCard />
+    <ContactRename />
+    <ContactPanel />
     <StageBadges />
     <ContactFields />
     <PhoneField />
