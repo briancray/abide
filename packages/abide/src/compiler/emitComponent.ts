@@ -3,6 +3,7 @@ import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { placed } from './Cursor.ts'
+import { guardedSetup } from './guardedSetup.ts'
 import { abideBindings } from './hookCalls.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
@@ -160,10 +161,11 @@ ${deferred()}
     }
 ${build}`
               : build
+    // Before the imports are read off what the lowering was asked for (`setupThrown`).
+    const guarded = guardedSetup(lowering, componentBody, level)
     return `${moduleImports(lowering, () => SERVER_SPECIFIER, [moduleSetup, serverSetup, setup])}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}${serverBody}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
-${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : ''}${opened}${componentBody}
-${level}${closed}
+${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : ''}${opened}${guarded}${closed}
 }
 `
 }

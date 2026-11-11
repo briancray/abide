@@ -23,6 +23,8 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     // 32.23's abort, which only the server lane can need: a client binding is its own `watch`
     // and gets one from 2.12. Emitted on both sides because `renderMarkup` is both sides.
     'slotValue',
+    // 34.32 — a setup's read of an unlanded value, named, which every setup's `try` rethrows.
+    'setupThrown',
     // 32.5, 32.8 — what a `bind:` operand holds, which the markup writes into the tag.
     'boundValue',
     'groupHolds',

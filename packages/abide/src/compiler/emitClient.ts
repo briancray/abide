@@ -32,6 +32,7 @@ import {
 } from './Cursor.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { moduleImports } from './emitComponent.ts'
+import { IN_SETUP, setupRethrow } from './guardedSetup.ts'
 import { invocationProps, passedName } from './invocationProps.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import {
@@ -343,11 +344,12 @@ function scopedSetup(
     const resume = share ? `${share.resume}\n` : ''
     const leave = share ? `; ${share.leave}` : ''
     return {
-        opened: `${resume}const ${SCOPE} = new ${lowering.use('Scope')}()\nconst __owner = ${collect}(${SCOPE}.stops)\ntry {\n`,
-        handed: `${collect}(undefined)\n`,
+        opened: `${resume}const ${SCOPE} = new ${lowering.use('Scope')}()\nconst __owner = ${collect}(${SCOPE}.stops)\nlet ${IN_SETUP} = true\ntry {\n`,
+        handed: `${collect}(undefined)\n${IN_SETUP} = false\n`,
         // A SETUP THAT THROWS answers no scope for anything to hold, so it is stopped here — under
         // a `{#try}` every retry would otherwise leave one more watch running.
-        closed: `\n} catch (thrown) {\n${SCOPE}.stop()\nthrow thrown\n} finally { ${collect}(__owner)${leave} }`,
+        // 34.32 — and a setup's read of a value still in flight is named as one (`setupThrown`).
+        closed: `\n} catch (thrown) {\n${SCOPE}.stop()\n${setupRethrow(lowering)}\n} finally { ${collect}(__owner)${leave} }`,
         declared: true,
     }
 }
