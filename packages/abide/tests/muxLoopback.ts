@@ -8,6 +8,17 @@ import { streamOverMux } from '#server/streamOverMux.ts'
 
 type Answer = (request: Request) => Promise<Response>
 
+// THE BROWSER'S COOKIE, which its socket's upgrade carries and a request it makes over http has to as
+// well: what an answer the mux parks is filed under (16.98).
+const LOOPBACK_COOKIE = 'abide-caller=loopback-browser'
+
+/** `request` as the loopback's browser makes it: carrying its cookie. */
+export function fromLoopbackBrowser(request: Request): Request {
+    const headers = new Headers(request.headers)
+    headers.set('cookie', LOOPBACK_COOKIE)
+    return new Request(request, { headers })
+}
+
 // What answers a `stream` frame: the `fetch` standing at the time, unless one was installed.
 let answering: Answer | undefined
 
@@ -22,7 +33,9 @@ class LoopbackSocket {
     private readonly upgrade: Request
 
     constructor(url: string) {
-        this.upgrade = new Request(url.replace(/^ws/, 'http'))
+        this.upgrade = new Request(url.replace(/^ws/, 'http'), {
+            headers: { cookie: LOOPBACK_COOKIE },
+        })
         queueMicrotask(() => {
             this.readyState = LoopbackSocket.OPEN
             this.onopen?.()

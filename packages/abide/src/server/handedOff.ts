@@ -17,7 +17,7 @@ const NEWLINE = 10
 const ENCODER = new TextEncoder()
 
 /** `answer`, a jsonl stream, sent over http until its first line, then handed off. */
-export function handedOff(answer: Response): Response {
+export function handedOff(answer: Response, request: Request): Response {
     const body = answer.body as ReadableStream<Uint8Array>
     const reader = body.getReader()
     // What ends the run once it is parked: the leg that took it hanging up, or nobody taking it.
@@ -110,6 +110,8 @@ export function handedOff(answer: Response): Response {
                 },
             }),
             run,
+            // 16.98 — filed under the caller and the sign-in of the request it answered.
+            request,
         )
         controller.enqueue(
             ENCODER.encode(`${JSON.stringify({ [CONTINUE_KEY]: token })}\n`),

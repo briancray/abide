@@ -158,7 +158,7 @@ export class MuxConnection {
     }
 
     /** Answers the streaming `GET` `url` names as `id`, in place of whatever `id` was. 16.93. */
-    private stream(id: number, url: string): void {
+    private stream(id: number, url: string, token: string | undefined): void {
         const subscriptions = this.subscriptions
         const ending = new AbortController()
         const stop = (): void => ending.abort()
@@ -171,6 +171,7 @@ export class MuxConnection {
             this.scope.request as Request,
             this.mux.app?.answer,
             AbortSignal.any([ending.signal, this.hangUp.signal]),
+            token,
         )
             .catch((thrown: unknown) => {
                 if (!ending.signal.aborted) this.peer.send(id, refusal(thrown))
@@ -231,7 +232,8 @@ export class MuxConnection {
                 return
             }
         }
-        if (frame.op === 'stream') return this.stream(id, frame.url ?? '')
+        if (frame.op === 'stream')
+            return this.stream(id, frame.url ?? '', frame.token)
         const followed =
             frame.op === 'sub' ? this.mux.followedAt(address) : undefined
         if (followed === undefined) {

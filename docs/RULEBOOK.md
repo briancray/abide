@@ -1292,9 +1292,20 @@ opens the connection again, which MUST make the call again as 9.7 has a refresh 
 16.96 A `GET` call 16.93 reads MUST NOT read its answer's body further while a frame of it the
 connection was sent is held unsent, and MUST count toward 18.31's bound while it is read.
 
-16.97 A `GET` call 41.20's script started whose answer is a jsonl stream MUST be answered over http
-only until its first chunk and the chunks ready with it, or a second without one, and MUST read the
-rest of that run over the socket mux.
+16.97 A `GET` call 41.20's script started whose answer is a jsonl stream, carrying no cookie or
+`abide-principal` header, to a request carrying a caller, MUST be answered over http only until its
+first chunk and the chunks ready with it, or a second without one, and MUST read the rest of that
+run over the socket mux.
+
+16.98 An answer of a `GET` call that 16.94 or 16.97 hands from one leg to the other MUST be given
+only to a request carrying the caller and the sign-in the request it answered carried, and any other
+request for it MUST be answered 404, as one naming no such answer is.
+
+16.99 A `GET` call taking an answer 16.98 governs MUST name it in a header and not in its URL, and
+the answer MUST be sent `cache-control: no-store`.
+
+16.100 A `GET` call 16.93 reads whose answer 16.94 would hand to http, over a connection whose
+upgrade carried no caller, MUST refuse as 16.79 has it.
 
 # 17. Response helpers
 

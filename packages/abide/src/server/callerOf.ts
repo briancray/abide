@@ -29,11 +29,17 @@ export function callerOf(): string | undefined {
     const scope = currentRequestScope()
     if (scope === undefined) return undefined
     if (scope.caller !== undefined) return scope.caller
-    const header = scope.request?.headers.get('cookie') ?? null
-    if (header === null) return undefined
-    const given = new Bun.CookieMap(header).get(CALLER_COOKIE) ?? undefined
+    if (scope.request === undefined) return undefined
+    const given = callerCookieOf(scope.request)
     scope.caller = given
     return given
+}
+
+/** The caller `request`'s `abide-caller` cookie names, or `undefined`; read off the request alone. */
+export function callerCookieOf(request: Request): string | undefined {
+    const header = request.headers.get('cookie')
+    if (header === null) return undefined
+    return new Bun.CookieMap(header).get(CALLER_COOKIE) ?? undefined
 }
 
 /**

@@ -13,6 +13,7 @@
 
 import { carriesBytes } from '#shared/framing.ts'
 import type { StreamHead } from '#shared/muxFrames.ts'
+import { PARKED_HEADER } from '#shared/PARKED_HEADER.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 
@@ -55,6 +56,7 @@ export async function streamOverMux(
     upgrade: Request,
     answer: ((request: Request) => Promise<Response>) | undefined,
     signal: AbortSignal,
+    parkedToken?: string,
 ): Promise<void> {
     const url = URL.parse(named, upgrade.url)
     if (
@@ -68,6 +70,8 @@ export async function streamOverMux(
     const headers = new Headers(upgrade.headers)
     for (const name of UPGRADE_HEADERS) headers.delete(name)
     headers.set('accept', 'application/x-ndjson')
+    // 16.99 — a parked answer's token, presented as the browser would present it over http.
+    if (parkedToken !== undefined) headers.set(PARKED_HEADER, parkedToken)
     // THE RUN'S OWN SIGNAL, which the stream's ends abort until the answer is parked: from then on it
     // is the http request that takes it whose hanging up ends it.
     const run = new AbortController()
@@ -89,14 +93,18 @@ export async function streamOverMux(
         (status < 300 && carriesBytes(response.headers.get('content-type')))
     ) {
         parked = true
+        const token = park(response, run, request)
+        // 16.100 — no caller to file it under is no answer, never a second run.
         carrier.peer.send(
             id,
-            new Frame(
-                'http',
-                undefined,
-                undefined,
-                JSON.stringify(park(response, run)),
-            ),
+            token === undefined
+                ? new Frame('error', undefined, undefined, undefined)
+                : new Frame(
+                      'http',
+                      undefined,
+                      undefined,
+                      JSON.stringify(token),
+                  ),
         )
         return
     }

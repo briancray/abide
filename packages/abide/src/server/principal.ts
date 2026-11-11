@@ -251,6 +251,16 @@ export function signedInAs(): string {
     return identityOf(openedSeal(within('claudeCode')))
 }
 
+/** Who `request` is signed in as, as `signedInAs` says it, read off its own cookie alone. 16.98. */
+export function signedInBy(request: Request): string {
+    const header = request.headers.get('cookie')
+    return identityOf(
+        (header === null
+            ? undefined
+            : unseal(new Bun.CookieMap(header).get(PRINCIPAL_COOKIE))) ?? null,
+    )
+}
+
 /**
  * Who a pairing code minted for `caller` signed in as `signedIn` is minted for, as a bridge is told it
  * (44.63): one string per sign-in — signed by the principal secret, so no claim is read off it — or,

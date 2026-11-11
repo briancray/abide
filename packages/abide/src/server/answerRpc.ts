@@ -10,6 +10,7 @@ import { type Failed, isFailed } from '#shared/Failed.ts'
 import { framingOf } from '#shared/framing.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
+import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { deadlineOf } from '#shared/reactive/producer.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
@@ -25,6 +26,7 @@ import {
 } from './answerFailure.ts'
 import { answerValue, isValues, namesEtag, sseHeaders } from './answerValue.ts'
 import { collapsed } from './argsContract.ts'
+import { callerCookieOf } from './callerOf.ts'
 import { ownOrigin, positiveSetting } from './config.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'
 import { handedOff } from './handedOff.ts'
@@ -100,11 +102,16 @@ export async function answerRpc(
     else invoked.timed()
     // 16.97 — AN EARLY CALL OF A STREAM goes over http to its first chunk, and over the mux after it.
     return admitting(
+        // 16.97 — and only where the rest can be filed under who asked, as it was when it asked: a
+        // request with a caller, whose answer writes no cookie and signs no one in or out.
         request.headers.has(CONTINUE_HEADER) &&
             answer.status === 200 &&
             answer.body !== null &&
-            framingOf(answer.headers.get('content-type')) === 'jsonl'
-            ? handedOff(answer)
+            framingOf(answer.headers.get('content-type')) === 'jsonl' &&
+            callerCookieOf(request) !== undefined &&
+            !answer.headers.has('set-cookie') &&
+            !answer.headers.has(PRINCIPAL_HEADER)
+            ? handedOff(answer, request)
             : answer,
         admitted,
     )

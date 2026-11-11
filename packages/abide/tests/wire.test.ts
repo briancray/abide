@@ -19,7 +19,7 @@ import {
     builtHandlers,
     serveApp,
 } from './builtApp.ts'
-import { installMuxLoopback } from './muxLoopback.ts'
+import { fromLoopbackBrowser, installMuxLoopback } from './muxLoopback.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 // A STRING NO BROWSER MAY EVER RECEIVE. The handler module imports it, the page imports the
@@ -907,7 +907,7 @@ test('a streaming copy over binary chunks holds each as a Uint8Array as it lands
     const previous = window.fetch
     // 16.94 — the binary is parked by the loopback's server half, in this process, and taken here.
     window.fetch = (async (input: string, init?: RequestInit) =>
-        takeParked(new Request(input, init)) ??
+        takeParked(fromLoopbackBrowser(new Request(input, init))) ??
         Bun.fetch(input, init)) as typeof fetch
     try {
         const rows = (

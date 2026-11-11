@@ -19,6 +19,8 @@ export type BrowserFrame = {
     version?: number | undefined
     /** 16.93 — the address a streaming `GET`'s call names, args and all, for `stream`. */
     url?: string
+    /** 16.99 — the token of a parked answer `url` takes, presented as its header rather than in it. */
+    token?: string
 }
 
 /**

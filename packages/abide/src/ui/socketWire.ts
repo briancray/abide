@@ -13,6 +13,7 @@ import { applyPatch } from '#shared/applyPatch.ts'
 import { mounted } from '#shared/mount.ts'
 import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
+import { PARKED_HEADER } from '#shared/PARKED_HEADER.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { type Reactive } from '#shared/reactive/index.ts'
@@ -146,16 +147,22 @@ class Following {
 
 const ENCODER = new TextEncoder()
 
-/** The http request that takes the answer parked under `token` at the app the socket `mux` is to. 16.94. */
+/**
+ * The http request that takes the answer parked under `token` at the app the socket `mux` is to: the
+ * token in its header, never its URL (16.99).
+ */
 function parkedRequest(mux: string, token: string): RpcRequest {
     const url = new URL(mounted(PARKED_ADDRESS), mux)
     url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
-    url.searchParams.set('token', token)
     return {
         method: 'GET',
         url: url.href,
         body: undefined,
-        init: { method: 'GET', cache: 'no-store' },
+        init: {
+            method: 'GET',
+            cache: 'no-store',
+            headers: { [PARKED_HEADER]: token },
+        },
         key: '',
     }
 }
@@ -180,6 +187,8 @@ class MuxStream {
     // The address of the socket it is read over, and the load's own signal.
     mux: string
     signal: AbortSignal | undefined
+    // 16.99 — the token of the parked answer it takes, sent beside its address rather than in it.
+    token: string | undefined
 
     constructor(
         id: number,
@@ -189,9 +198,11 @@ class MuxStream {
         restart: () => void,
         mux: string,
         signal: AbortSignal | undefined,
+        token: string | undefined,
     ) {
         this.mux = mux
         this.signal = signal
+        this.token = token
         this.id = id
         this.url = url
         this.sent = false
@@ -202,7 +213,9 @@ class MuxStream {
     }
 
     frame(): BrowserFrame {
-        return { op: 'stream', id: this.id, url: this.url }
+        return this.token === undefined
+            ? { op: 'stream', id: this.id, url: this.url }
+            : { op: 'stream', id: this.id, url: this.url, token: this.token }
     }
 
     /** Takes a frame of its answer; returns whether the stream is over. */
@@ -328,6 +341,7 @@ class Mux {
         url: string,
         signal: AbortSignal | undefined,
         restart: () => void,
+        token?: string,
     ): Promise<Answer | undefined> {
         if (this.socket?.readyState !== WebSocket.OPEN && !navigator.onLine)
             return Promise.resolve(noAnswer())
@@ -340,6 +354,7 @@ class Mux {
                 restart,
                 this.url,
                 signal,
+                token,
             )
             this.streams.set(stream.id, stream)
             // 16.48 — the load's own ending: the server stops it, and the read throws as a fetch's.
@@ -525,7 +540,7 @@ export async function continueOverMux(
     const mux = muxFor(address)
     const parked = parkedRequest(mux.url, token)
     return (
-        (await mux.stream(parked.url, signal, restart)) ??
+        (await mux.stream(parked.url, signal, restart, token)) ??
         (await answerOf(parked, true, signal))
     )
 }

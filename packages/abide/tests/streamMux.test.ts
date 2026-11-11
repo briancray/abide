@@ -5,13 +5,13 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { handedOff } from '#server/handedOff.ts'
-import { takeParked } from '#server/parkedAnswers.ts'
+import { park, takeParked } from '#server/parkedAnswers.ts'
 import { streamOverMux } from '#server/streamOverMux.ts'
 import { flushSync } from '#shared'
 import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
 
-import { installMuxLoopback } from './muxLoopback.ts'
+import { fromLoopbackBrowser, installMuxLoopback } from './muxLoopback.ts'
 
 // AN ORIGIN OF THIS FILE'S OWN, for `followWire.test.ts`'s reason: the muxes are process-wide.
 const ORIGIN = 'http://stream-mux.test'
@@ -70,10 +70,18 @@ async function answer(request: Request): Promise<Response> {
 // What the copies asked over http, and of that what is still open.
 let fetched = 0
 let open = 0
+// Every address the copies fetched, and what they presented a parked answer's token in.
+const asked: { url: string; parked: string | null }[] = []
 const unstubbedFetch = globalThis.fetch
 globalThis.fetch = (async (input: RequestInfo, init?: RequestInit) => {
     fetched += 1
-    const answered = await answer(new Request(String(input), init))
+    asked.push({
+        url: String(input),
+        parked: new Headers(init?.headers).get('abide-parked'),
+    })
+    const answered = await answer(
+        fromLoopbackBrowser(new Request(String(input), init)),
+    )
     open += 1
     const body = answered.body as ReadableStream<Uint8Array>
     return new Response(
@@ -196,6 +204,14 @@ test('an answer the mux cannot carry is taken over http, its handler run once �
         bytes: 1,
         signin: 1,
     })
+    // 16.98 — taken by a token in its header, and no address it asked names one. THE REVERT: put the
+    // token back in `parkedRequest`'s query; the URLs carry `token=` and no header does.
+    const taking = asked.filter((one) => one.url.includes('/__abide/parked'))
+    expect(taking.length).toBe(2)
+    for (const one of taking) {
+        expect(one.url).not.toContain('?')
+        expect(one.parked).toBeString()
+    }
 })
 
 // 18.30 — PUMPED AT THE SOCKET'S PACE: a frame bun buffered rather than sent holds the next read off
@@ -259,6 +275,7 @@ test('an early-called stream ends its http leg after its first chunk, and the re
         new Response(run, {
             headers: { 'content-type': 'application/x-ndjson' },
         }),
+        asking('ada'),
     )
     send('{"at":1}\n{"at"')
     const reader = (http.body as ReadableStream<Uint8Array>).getReader()
@@ -281,8 +298,50 @@ test('an early-called stream ends its http leg after its first chunk, and the re
         .$continue as string
     send(':2}\n')
     close()
-    const rest = takeParked(
-        new Request(`${ORIGIN}/__abide/parked?token=${token}`),
-    ) as Response
+    const rest = takeParked(claim('ada', token)) as Response
     expect(await rest.text()).toBe('{"at":2}\n')
+})
+
+/** A request from the browser at `caller`. */
+function asking(caller: string, headers: Record<string, string> = {}): Request {
+    return new Request(`${ORIGIN}/ticks`, {
+        headers: { cookie: `abide-caller=${caller}`, ...headers },
+    })
+}
+
+/** What the browser at `caller` asks `/__abide/parked` with, presenting `token`. */
+function claim(caller: string, token: string): Request {
+    return new Request(`${ORIGIN}/__abide/parked`, {
+        headers: { cookie: `abide-caller=${caller}`, 'abide-parked': token },
+    })
+}
+
+// 16.98 — A PARKED ANSWER IS ITS OWN BROWSER'S: the right token from another browser is answered as a
+// token that names nothing — 404, and the answer stays for its own — and the answer taken is not
+// stored. THE REVERT: drop the owner test from `takeParked`; bo is served ada's answer, 200 and her
+// cookie, where 404 is due.
+test('a parked answer is refused to another browser presenting its token — 16.98', async () => {
+    const run = new AbortController()
+    const token = park(
+        new Response('{"at":1}\n', {
+            headers: {
+                'content-type': 'application/x-ndjson',
+                'set-cookie': 'abide-principal=ada-seal; Path=/',
+            },
+        }),
+        run,
+        asking('ada'),
+    ) as string
+    const stolen = takeParked(claim('bo', token)) as Response
+    expect(stolen.status).toBe(404)
+    expect(stolen.headers.get('set-cookie')).toBeNull()
+    expect((takeParked(claim('bo', 'not-a-token')) as Response).status).toBe(
+        404,
+    )
+    const taken = takeParked(claim('ada', token)) as Response
+    expect(taken.status).toBe(200)
+    expect(taken.headers.get('cache-control')).toBe('no-store')
+    expect(await taken.text()).toBe('{"at":1}\n')
+    // Taken once.
+    expect((takeParked(claim('ada', token)) as Response).status).toBe(404)
 })
