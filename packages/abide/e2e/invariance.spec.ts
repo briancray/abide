@@ -11,7 +11,7 @@
 
 import { expect, test } from '@playwright/test'
 
-import { compiledPage } from './compiledPage.ts'
+import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
 
 // TWO KINDS OF REGION IN ONE PAGE. `#list`, `#filled` and `#blank` are STATIC markup holding
 // slots — a text slot, a slot whose value is empty, a listener — and there the compiler may add
@@ -43,7 +43,7 @@ const REFERENCE =
     '<ol id="rows"><li>one</li><li>two</li><li>three</li></ol>' +
     '<section id="deep"><div class="mid"><article><p class="leaf">deep</p></article></div></section>'
 
-const compiled = compiledPage(PAGE_SOURCE)
+const compiled = await buildCompiledPage(PAGE_SOURCE)
 
 type Answers = Record<string, number | string>
 

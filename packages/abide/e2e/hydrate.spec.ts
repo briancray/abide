@@ -3,9 +3,8 @@
 // and which lands first decides whether a value is settled or in flight where the page adopts. Only
 // a browser with a real network races them, so only one can say the page adopted the arm it shows.
 
-import type { ChildProcess } from 'node:child_process'
-
 import { expect, type Page, test } from '@playwright/test'
+import type { Subprocess } from 'bun'
 
 import { servedFixture } from './servedFixture.ts'
 
@@ -42,7 +41,7 @@ const pressed = reactive('')
 
 <main>{#if value.busy()}<button id="act" class="cancel" onclick={() => pressed.set('cancel')}>cancel</button>{:else}<button id="act" class="buy" onclick={() => pressed.set('buy')}>buy {value().word}</button>{/if}<p id="pressed">{pressed()}</p></main>`
 
-let server: ChildProcess | undefined
+let server: Subprocess | undefined
 let base = ''
 
 // Playwright's "no fixtures" spelling — see `routing.spec.ts`.

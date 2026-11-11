@@ -10,13 +10,10 @@
 // compiled page must not create or move nodes to change a number. A threshold on ms here would be
 // a threshold on somebody else's machine under somebody else's load.
 
-import { execFileSync } from 'node:child_process'
-
 import { expect, test } from '@playwright/test'
 
-import { compiledPage } from './compiledPage.ts'
-
-const REPO = new URL('../../../', import.meta.url).pathname
+import { buildInjectable } from '../../harness/scripts/buildInjectable.ts'
+import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
 
 const PAGE_SOURCE = `<script>
 import { reactive } from '@abide/abide'
@@ -41,13 +38,9 @@ document.querySelector('#go').addEventListener('click', () => {
 })
 `
 
-const measureLane = execFileSync(
-    'bun',
-    ['packages/harness/scripts/buildInjectable.ts'],
-    { cwd: REPO, encoding: 'utf8' },
-).trim()
+const measureLane = await buildInjectable()
 
-const compiled = compiledPage(PAGE_SOURCE)
+const compiled = await buildCompiledPage(PAGE_SOURCE)
 
 type Counts = Record<string, number | null>
 

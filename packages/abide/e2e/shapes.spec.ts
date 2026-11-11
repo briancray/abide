@@ -3,10 +3,10 @@
 
 import { test } from '@playwright/test'
 
+import { buildBench } from '../bench/buildBench.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
-import { builtBench } from './builtBench.ts'
 
-const built = builtBench('shapes')
+const built = await buildBench('shapes')
 
 test('callable shapes in this engine', async ({ page }, testInfo) => {
     test.setTimeout(10 * 60 * 1000)

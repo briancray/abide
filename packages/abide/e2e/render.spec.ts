@@ -10,16 +10,16 @@
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
 import {
     abideSource,
     cards,
     vanillaMarkup,
     vanillaWire,
 } from '../bench/renderCases.ts'
-import { compiledPage } from './compiledPage.ts'
 import { type Report, reportScript } from './reportScript.ts'
 
-const REPORT = reportScript()
+const REPORT = await reportScript()
 const SIZES = [10, 100, 1000]
 
 type Built = {
@@ -33,7 +33,7 @@ type Built = {
 const pages: Built[] = []
 for (const size of SIZES) {
     const list = cards(size)
-    const built = compiledPage(
+    const built = await buildCompiledPage(
         abideSource(size).replace('CARDS', JSON.stringify(list)),
     )
     pages.push({

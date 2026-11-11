@@ -3,9 +3,8 @@
 // each, and does not hear what the page caught. Only a browser says what an unhandled rejection
 // and an uncaught throw are, so only one can say the hook hears exactly those.
 
-import type { ChildProcess } from 'node:child_process'
-
 import { expect, test } from '@playwright/test'
+import type { Subprocess } from 'bun'
 
 import { servedFixture } from './servedFixture.ts'
 
@@ -62,7 +61,7 @@ async function claimCaught() {
 <p id="caught-said">{caught}</p>
 </main>`
 
-let server: ChildProcess | undefined
+let server: Subprocess | undefined
 let base = ''
 
 test.beforeAll(async ({}, testInfo) => {

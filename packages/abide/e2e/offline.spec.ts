@@ -5,9 +5,8 @@
 // CHROMIUM ALONE: playwright drives a service worker in chromium, and its webkit leaves
 // `navigator.serviceWorker` unregistered under automation.
 
-import type { ChildProcess } from 'node:child_process'
-
 import { expect, type Page, test } from '@playwright/test'
+import type { Subprocess } from 'bun'
 
 import { servedFixture } from './servedFixture.ts'
 
@@ -31,7 +30,7 @@ let count = reactive(0)
 
 <main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="to-about" href="/about">about</a><a id="to-never" href="/never">never</a></main>`
 
-let server: ChildProcess | undefined
+let server: Subprocess | undefined
 let base = ''
 
 // Playwright's "no fixtures" spelling — see `routing.spec.ts`.

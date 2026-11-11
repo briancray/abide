@@ -3,43 +3,24 @@
 // the case builds would move if that were false.
 //
 // It needs no served app — `page.setContent` is the page — which is why this project
-// carries no `webServer`. Playwright runs on node and cannot import a lane, so the
-// bun half is taken by spawning bun on `bunSideCounts.ts` rather than by writing the
-// expectations out a second time: two transcriptions of one case agree by editing,
-// not by construction.
-
-import { execFileSync } from 'node:child_process'
+// carries no `webServer`. The bun half is taken in a CHILD, by spawning bun on
+// `bunSideCounts.ts`, rather than in this worker: it registers happy-dom over the
+// process's globals, which every later spec in the worker would then run inside. And it
+// is read off the same `CASES` rather than written out a second time: two transcriptions
+// of one case agree by editing, not by construction.
 
 import { expect, test } from '@playwright/test'
 
+import { buildInjectable } from '../scripts/buildInjectable.ts'
 import { CASES } from './CASES.ts'
 
-const REPO = new URL('../../../', import.meta.url).pathname
-
 /** The patch set and per-case counts under bun, read off `bunSideCounts.ts`. */
-function bunSide(): {
+const underBun: {
     patchSet: string[]
     cases: Record<string, unknown>
-} {
-    return JSON.parse(
-        execFileSync('bun', ['packages/harness/scripts/bunSideCounts.ts'], {
-            cwd: REPO,
-            encoding: 'utf8',
-        }),
-    )
-}
-
-/** Builds the measure lane's injectable and returns its path. */
-function injectable(): string {
-    return execFileSync(
-        'bun',
-        ['packages/harness/scripts/buildInjectable.ts'],
-        { cwd: REPO, encoding: 'utf8' },
-    ).trim()
-}
-
-const underBun = bunSide()
-const built = injectable()
+} =
+    await Bun.$`${process.execPath} ${new URL('../scripts/bunSideCounts.ts', import.meta.url).pathname}`.json()
+const built = await buildInjectable()
 
 test.beforeEach(async ({ page }) => {
     await page.addInitScript({ path: built })

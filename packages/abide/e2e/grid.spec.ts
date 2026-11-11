@@ -15,7 +15,7 @@ import { expect, test } from '@playwright/test'
 import { type Grid, grid } from '../bench/gridPage.ts'
 import { type Report, reportScript } from './reportScript.ts'
 
-const REPORT = reportScript()
+const REPORT = await reportScript()
 
 const SHAPES: [number, number][] = [
     [50, 20],

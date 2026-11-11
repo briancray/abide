@@ -7,7 +7,7 @@
 
 import { expect, test } from '@playwright/test'
 
-import { compiledPage } from './compiledPage.ts'
+import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
 
 const PAGE_SOURCE = `<script>
 import { reactive } from '@abide/abide'
@@ -19,7 +19,7 @@ let wide = reactive('10px')
 <p id="out" style={look} style:width={wide}>x</p>
 <button id="quoted" onclick={() => { look = 'font-family: "a;b"; color: blue' }}>quoted</button>`
 
-const compiled = compiledPage(PAGE_SOURCE)
+const compiled = await buildCompiledPage(PAGE_SOURCE)
 
 test('a style group parses its attribute as the browser does — 32.71', async ({
     page,

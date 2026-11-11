@@ -12,10 +12,10 @@
 // the page it reported to reloaded out from under the run. The copy sits as deep in the repo as
 // the app does, so its tsconfig's `extends` and every workspace import resolve the same.
 
-import { type ChildProcess, spawn } from 'node:child_process'
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 import { expect, test } from '@playwright/test'
+import type { Subprocess } from 'bun'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const BIN = `${REPO}packages/abide/bin/abide.ts`
@@ -26,7 +26,7 @@ const ROOT = `${COPY}/src`
 // standing on.
 const BAR = `${ROOT}/lib/SiteBar.abide`
 
-let dev: ChildProcess | undefined
+let dev: Subprocess<'ignore', 'pipe', 'ignore'> | undefined
 let base = ''
 let original = ''
 
@@ -52,21 +52,33 @@ test.beforeAll(async ({}, testInfo) => {
     ])
         cpSync(`${APP}/${kept}`, `${COPY}/${kept}`, { recursive: true })
     original = readFileSync(BAR, 'utf8')
-    dev = spawn('bun', [BIN, 'dev', '--root', ROOT, '--port', '0'], {
-        cwd: REPO,
-        stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    base = await new Promise<string>((resolve, reject) => {
-        let seen = ''
-        dev?.stdout?.on('data', (chunk: Buffer) => {
-            seen += chunk.toString()
-            const found = /http:\/\/[^\s]+/.exec(seen)
-            if (found) resolve(new URL(found[0]).origin)
-        })
-        dev?.on('exit', (code) => {
-            reject(new Error(`abide dev exited with ${code}: ${seen}`))
-        })
-    })
+    dev = Bun.spawn(
+        [process.execPath, BIN, 'dev', '--root', ROOT, '--port', '0'],
+        {
+            cwd: REPO,
+            stdout: 'pipe',
+            stderr: 'ignore',
+        },
+    )
+    // The pipe is DRAINED once the banner names the address, not released: a server whose stdout
+    // nobody reads blocks, or dies, on the next line it logs.
+    const reader = dev.stdout.pipeThrough(new TextDecoderStream()).getReader()
+    let seen = ''
+    for (;;) {
+        const { done, value } = await reader.read()
+        if (done)
+            throw new Error(
+                `abide dev exited with ${await dev.exited}: ${seen}`,
+            )
+        seen += value
+        const found = /http:\/\/[^\s]+/.exec(seen)
+        if (found === null) continue
+        base = new URL(found[0]).origin
+        void (async () => {
+            while (!(await reader.read()).done);
+        })()
+        break
+    }
 })
 
 test.afterAll(() => {

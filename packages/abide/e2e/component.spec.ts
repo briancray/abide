@@ -10,6 +10,7 @@
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
 import {
     abideCardSource,
     abideComponentSource,
@@ -17,10 +18,9 @@ import {
     type Card,
     cards,
 } from '../bench/renderCases.ts'
-import { compiledPage } from './compiledPage.ts'
 import { type Report, reportScript } from './reportScript.ts'
 
-const REPORT = reportScript()
+const REPORT = await reportScript()
 const SIZES = [100, 1000]
 
 type Arm = { script: string; markup: string }
@@ -46,8 +46,10 @@ for (const size of SIZES) {
     pages.push({
         size,
         list,
-        inline: compiledPage(handled(abideLoopSource()).replace('CARDS', rows)),
-        nested: compiledPage(
+        inline: await buildCompiledPage(
+            handled(abideLoopSource()).replace('CARDS', rows),
+        ),
+        nested: await buildCompiledPage(
             handled(abideComponentSource()).replace('CARDS', rows),
             { Card: abideCardSource() },
         ),

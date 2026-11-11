@@ -34,14 +34,14 @@ async function sources(
 }
 
 // Every package's own source, relative to `packages/`: the framework (its tests, benches and
-// browser specs are its own), the harness, the docs app's source and scripts, and the bridge. The
-// dogfood's playwright specs are left out — they run on node, under rules this file does not hold
-// them to.
+// browser specs are its own), the harness, the docs app's source, scripts and browser specs, and the
+// bridge.
 const AUTHORED = [
     'abide/**/*.ts',
     'harness/**/*.ts',
     'dogfood/src/**/*.ts',
     'dogfood/scripts/**/*.ts',
+    'dogfood/e2e/**/*.ts',
     'bridge/**/*.ts',
 ]
 
@@ -89,8 +89,8 @@ test('framework code imports by seam, never through its own public specifier', a
 // CLAUDE.md, "checks": A TEST NEVER WAITS ON A CHILD SYNCHRONOUSLY. A `bun test --parallel` worker can
 // lose a child's exit, and a synchronous wait then spins for good where no timeout can reach it —
 // the gate hangs and reports nothing. `spawned` from `harness/gate` awaits with a deadline instead.
-// `execSync` and `execFileSync` are the same wait spelled by `node:child_process`. The dogfood's
-// playwright specs (`dogfood/e2e`) run on node, outside `bun test`, and are not in the globs.
+// `execSync` and `execFileSync` are the same wait spelled by `node:child_process`. A playwright
+// spec runs in a bun worker too (`bunx --bun playwright test`), so the browser specs are in the globs.
 // THE REVERT: write one `Bun.spawn[S]ync(` into any test; it is named here, and an
 // `exec[S]ync(` or `execFile[S]ync(` is too.
 test('no test waits on a child process synchronously', async () => {
@@ -103,6 +103,9 @@ test('no test waits on a child process synchronously', async () => {
         'abide/bench/**/*.ts',
         'dogfood/tests/**/*.ts',
         'dogfood/scripts/**/*.ts',
+        'abide/e2e/**/*.ts',
+        'harness/e2e/**/*.ts',
+        'dogfood/e2e/**/*.ts',
     ])
         for (const { path, text } of await sources(PACKAGES, pattern))
             for (const line of text.split('\n'))
@@ -132,8 +135,6 @@ const JUSTIFIED = /\/\/\s*\S/
 test('every node: import names the bun api it stands in for', async () => {
     const bare: string[] = []
     for (const { path, text } of await sources(ABIDE)) {
-        // A playwright spec runs on node, where there is no bun api to stand in for.
-        if (path.startsWith('e2e/')) continue
         const lines = text.split('\n')
         for (let index = 0; index < lines.length; index += 1) {
             const line = lines[index] ?? ''

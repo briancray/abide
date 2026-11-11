@@ -9,7 +9,7 @@
 
 import { expect, test } from '@playwright/test'
 
-import { compiledPage } from './compiledPage.ts'
+import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
 
 const PAGE_SOURCE = `<script>
 import { reactive } from '@abide/abide'
@@ -29,7 +29,7 @@ let target = reactive('#live')
 
 <g><use xlink:href="#dot"/><use xlink:href={target}/></g>`
 
-const compiled = compiledPage(PAGE_SOURCE, { Dot: DOT_SOURCE })
+const compiled = await buildCompiledPage(PAGE_SOURCE, { Dot: DOT_SOURCE })
 
 test('an xlink attribute the client builds inside an svg is XLink’s — 32.70', async ({
     page,
