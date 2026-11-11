@@ -5,7 +5,6 @@
 import { reactive, watch } from '@abide/abide'
 import {
     batch,
-    type Batched,
     claimOf,
     emulatedDom,
     ratio,
@@ -13,35 +12,8 @@ import {
 } from '@abide/harness/report'
 
 import { countExportedNames } from './countExportedNames.ts'
-import { type Case, reactiveCases } from './reactiveCases.ts'
 import { reactiveCoreLines } from './reactiveCoreLines.ts'
-
-function report(measured: Batched, work: Case['work']): void {
-    const counted = work()
-    const vanillaSample = {
-        ...(measured.samples.vanilla as Sample),
-        work: counted.vanilla,
-    }
-    const abideSample = {
-        ...(measured.samples.abide as Sample),
-        work: counted.abide,
-    }
-    const result = ratio(abideSample, vanillaSample, { floor: measured.floor })
-    const vanillaNs = vanillaSample.nanoseconds
-    const abideNs = abideSample.nanoseconds
-    const claim = claimOf(result)
-    console.log(
-        `  abide ${abideNs.toFixed(1)} ns   vanilla ${vanillaNs.toFixed(1)} ns   ${claim}`,
-    )
-    console.log(
-        `  n=${measured.n} reps=${measured.reps} substrate=${measured.substrate} A/A floor=${(measured.floor * 100).toFixed(2)}%`,
-    )
-    if (result.workDisagreement.length > 0)
-        console.log(
-            `  WORK DISAGREES — ${result.workDisagreement.join('; ')}\n  The arms are not doing the same job, so the ratio prices two different jobs.`,
-        )
-    else console.log(`  work agrees: ${JSON.stringify(counted.abide)}`)
-}
+import { runReactive } from './reactiveRun.ts'
 
 async function machinery(): Promise<void> {
     const { abide: abideLines, vanilla: vanillaLines } =
@@ -58,22 +30,25 @@ async function machinery(): Promise<void> {
     )
 }
 
-const CASES = reactiveCases()
-
 console.log('THE REACTIVE CORE AGAINST THE HAND-WRITTEN ARM')
 console.log(
     'Every ratio is abide / vanilla. Over 1.00x means abide is slower.\n',
 )
 
-for (const kase of CASES) {
-    console.log(`── ${kase.name}`)
-    console.log(`  distinguishes: ${kase.distinguishes}`)
-    const measured = batch({
-        case: kase.name,
-        arms: { vanilla: kase.vanilla, abide: kase.abide },
-        emulated: emulatedDom(),
-    })
-    report(measured, kase.work)
+for (const row of runReactive()) {
+    console.log(`── ${row.case}`)
+    console.log(`  distinguishes: ${row.distinguishes}`)
+    console.log(
+        `  abide ${row.abide.toFixed(1)} ns   vanilla ${row.vanilla.toFixed(1)} ns   ${row.claim}`,
+    )
+    console.log(
+        `  n=${row.n} reps=${row.reps} substrate=${row.substrate} A/A floor=${(row.floor * 100).toFixed(2)}%`,
+    )
+    if (row.workDisagreement.length > 0)
+        console.log(
+            `  WORK DISAGREES — ${row.workDisagreement.join('; ')}\n  The arms are not doing the same job, so the ratio prices two different jobs.`,
+        )
+    else console.log(`  work agrees: ${JSON.stringify(row.work)}`)
     console.log('')
 }
 

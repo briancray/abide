@@ -23,7 +23,7 @@ const underBun: {
 const built = await buildInjectable()
 
 test.beforeEach(async ({ page }) => {
-    await page.addInitScript({ path: built })
+    await page.addInitScript({ content: built })
     // A `setContent` on a page still sitting on its initial `about:blank` does not
     // rerun init scripts — nothing navigated — so every counter reads undefined and
     // the gate fails on the instrument rather than on the claim. The navigation is

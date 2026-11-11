@@ -10,7 +10,7 @@
 import { test } from '@playwright/test'
 
 import { buildBench } from '../bench/buildBench.ts'
-import type { ReactiveBenchRow } from '../bench/reactiveCases.ts'
+import type { ReactiveBenchRow } from '../bench/reactiveRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const built = await buildBench('reactive')
@@ -38,7 +38,7 @@ test('the reactive core against the hand-written arm, in this engine', async ({
     // A browser clock is ~100 µs where bun's is 41 ns, so every case batches to a far
     // larger n and the whole run is minutes rather than seconds.
     test.setTimeout(15 * 60 * 1000)
-    await page.addInitScript({ path: built })
+    await page.addInitScript({ content: built })
     // `setContent` on a page still on its initial `about:blank` reruns no init script
     // — nothing navigated — so the injection would be silently absent.
     await page.goto('about:blank')

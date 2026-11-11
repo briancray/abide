@@ -13,7 +13,7 @@ test('shared allocations, current against candidate, in this engine', async ({
     page,
 }, testInfo) => {
     test.setTimeout(15 * 60 * 1000)
-    await page.addInitScript({ path: built })
+    await page.addInitScript({ content: built })
     await page.goto('about:blank')
     await page.setContent('<!doctype html><html><body></body></html>')
     const rows = (await page.evaluate(

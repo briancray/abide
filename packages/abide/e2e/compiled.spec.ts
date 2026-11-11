@@ -49,7 +49,7 @@ test('the compiled page against the hand-written one, in this engine', async ({
 }, testInfo) => {
     // The init script is rerun on every navigation, and `run` navigates once per arm — which is
     // also what stops the two arms from sharing a JavaScript context.
-    await page.addInitScript({ path: measureLane })
+    await page.addInitScript({ content: measureLane })
 
     // A FRESH NAVIGATION PER ARM. `setContent` replaces the document but KEEPS the JavaScript
     // context, so `__MOUNT__` defined by the compiled arm was still on the global when the

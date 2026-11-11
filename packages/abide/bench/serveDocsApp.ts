@@ -1,5 +1,6 @@
 // THE DOCS, BUILT AND SERVED, for what drives them from the outside: `bun run bench:share`
-// (`nameTheShare.ts`) navigates between real docs addresses and prices the layers of each op.
+// (`nameTheShare.ts`) navigates between real docs addresses and prices the layers of each op, and
+// `scripts/packDocs.ts` reads `/abide.md` off them for the published package.
 //
 // A SUBPROCESS RUNNING THE REAL COMMAND. The docs are an abide app now, so what a script drives
 // has to be `abide start` over `abide build`'s output — a second server reading the same files

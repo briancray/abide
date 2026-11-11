@@ -1,14 +1,14 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// SIX PROJECTS, THREE QUESTIONS. The dogfood app is served at the root and again under
-// a sub-path — the sub-path arm is what catches a URL the framework built by assuming
-// '/'. The abide pair is the framework's own browser specs and benches, and the harness
-// pair is the measure lane's both-substrates gate; both need a browser and no app, and
-// run in each of the two engines a reader actually brings.
+// SEVEN PROJECTS. The dogfood app is served at the root and again under a sub-path — the
+// sub-path arm is what catches a URL the framework built by assuming '/' — and `cards` drives
+// each chapter app's own browser specs against it. The abide pair is the framework's own browser
+// specs and benches, and the harness pair is the measure lane's both-substrates gate; both need
+// a browser and no app, and run in each of the two engines a reader actually brings.
 //
 // ONE CONFIG, BECAUSE `webServer` IS A WHOLE-RUN OPTION rather than a per-project one: the
-// browser pairs serve nothing and the app pair serves everything, so they are told apart
-// by project name rather than by a config each.
+// browser pairs serve nothing and the app projects need everything served, so they are told
+// apart by project name rather than by a config each.
 const PORT = 3131
 const BASE = `http://localhost:${PORT}`
 // THE SUB-PATH ARM IS A SERVER OF ITS OWN. `APP_URL`'s path is the mount (36.2, 16.10), and one

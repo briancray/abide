@@ -1463,17 +1463,3 @@ export const reactiveCases = (): Case[] => [
     equalWriteAgainstCareless(100, false),
     equalWriteAgainstCareless(100, true),
 ]
-
-/** One case's reading in the page's engine, as `__REACTIVE_BENCH__` hands it back to the spec. */
-export type ReactiveBenchRow = {
-    case: string
-    abide: number
-    vanilla: number
-    claim: string
-    n: number
-    floor: number
-    substrate: string
-    workDisagreement: string[]
-}
-
-export type { Case }
