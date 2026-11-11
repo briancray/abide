@@ -114,16 +114,25 @@ function parsedPattern(pattern: string): Segment[] {
 
 /**
  * An address from a route literal and its params, resolved against the mount, with an optional
- * query.
+ * query and the defaults its members are left out at.
  */
 export function url<P extends RouteLiteral>(
     pattern?: P,
     ...rest: HasParams<P> extends true
-        ? [params: ParamsOf<P>, queryParams?: Query]
-        : [params?: ParamsOf<P>, queryParams?: Query]
+        ? [
+              params: ParamsOf<P>,
+              queryParams?: Query,
+              defaults?: Record<string, unknown>,
+          ]
+        : [
+              params?: ParamsOf<P>,
+              queryParams?: Query,
+              defaults?: Record<string, unknown>,
+          ]
 ): string {
     const params = (rest[0] ?? {}) as Record<string, unknown>
     const query = rest[1]
+    const defaults = rest[2]
     const address = mounted(
         filledSegments(
             parsedPattern(pattern ?? '/'),
@@ -131,12 +140,27 @@ export function url<P extends RouteLiteral>(
             `url('${pattern}')`,
         ),
     )
-    // 30.6 — the query half, last; 30.28 — in the spelling an `Rpc`'s args are written in.
+    // 30.6 — the query half after the params; 30.28 — in the spelling an `Rpc`'s args are written
+    // in; 30.40 — a member spelled as its default left out, a `URLSearchParams` as much as a record.
     const search =
         query === undefined
             ? ''
             : query instanceof URLSearchParams
-              ? query.toString()
-              : queryText(query)
+              ? defaults === undefined
+                  ? query.toString()
+                  : queryText(membersOf(query), defaults)
+              : queryText(query, defaults)
     return search === '' ? address : `${address}?${search}`
+}
+
+/** A `URLSearchParams` as a record: a name given once its text, and one given more its list. */
+function membersOf(query: URLSearchParams): Record<string, unknown> {
+    // NO PROTOTYPE, so a member named `constructor` or `__proto__` is a member like any other.
+    const members: Record<string, unknown> = Object.create(null)
+    for (const name of query.keys()) {
+        if (name in members) continue
+        const values = query.getAll(name)
+        members[name] = values.length === 1 ? values[0] : values
+    }
+    return members
 }

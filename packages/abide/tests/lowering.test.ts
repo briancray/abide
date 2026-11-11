@@ -6,7 +6,7 @@ import { emitComponent } from '#compiler'
 import { REACTIVE_MEMBERS } from '#compiler/REACTIVE_MEMBERS.ts'
 import { ROUTE_MEMBERS } from '#compiler/ROUTE_MEMBERS.ts'
 import { tokenize } from '#compiler/tokenize.ts'
-import { reactive } from '#shared'
+import { isReactive, reactive } from '#shared'
 import { route } from '#shared/route.ts'
 import { writePath } from '#shared/writePath.ts'
 
@@ -1027,10 +1027,13 @@ test('the compiler’s member list is the runtime’s', () => {
     )
 })
 
-// 31.15 — `ROUTE_MEMBERS` IS A COPY OF `route`'s OWN KEYS, for the reason above: a value added to
+// 31.15 — `ROUTE_MEMBERS` IS A COPY OF `route`'s OWN VALUES, for the reason above: a value added to
 // `route` without it lowers `route.newValue` as a plain member read, handing the author the
-// `Reactive` where the value was meant.
+// `Reactive` where the value was meant. `route.query` is a function, called rather than read (30.41).
 // THE REVERT: drop 'index' from `ROUTE_MEMBERS`; this reports 4 against 5.
 test('the compiler’s route members are route’s', () => {
-    expect(Object.keys(route).sort()).toEqual([...ROUTE_MEMBERS].sort())
+    const values = Object.keys(route).filter((name) =>
+        isReactive(route[name as keyof typeof route]),
+    )
+    expect(values.sort()).toEqual([...ROUTE_MEMBERS].sort())
 })

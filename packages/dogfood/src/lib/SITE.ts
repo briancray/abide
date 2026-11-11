@@ -300,6 +300,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`route.url`',
                         '`route.index`',
                         '`route.navigating`',
+                        '`route.query`',
                         '`view-transition-name`',
                         '`APP_URL`',
                         '`/__abide/**`',
