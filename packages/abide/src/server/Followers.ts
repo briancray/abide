@@ -15,6 +15,7 @@ import { followServed } from '#shared/reactive/producer.ts'
 import { unowned } from '#shared/reactive/watch.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
+import { fileIn } from './fileIn.ts'
 import type { FollowedHandler } from './mountHandlers.ts'
 import { heldByApp } from './requestScope.ts'
 import { EVENT_STREAM_OPENER, streamEvent } from './streamEvent.ts'
@@ -172,13 +173,8 @@ export class Followers {
             }
             this.handlers.set(rpc, handlerFollowers)
         }
-        const byKey = handlerFollowers.byKey
-        let followers = byKey.get(key)
-        if (followers === undefined) {
-            followers = new Set()
-            byKey.set(key, followers)
-        }
-        followers.add(follower)
+        // A key nobody follows leaves, or the index grows with every key ever followed.
+        const unfile = fileIn(handlerFollowers.byKey, key, follower, undefined)
         const all = handlerFollowers.all
         all.add(follower)
         if (this.following++ === 0) RPC_SERVER.following.add(this)
@@ -186,9 +182,7 @@ export class Followers {
             follower.stopFeed?.()
             if (all.delete(follower) && --this.following === 0)
                 RPC_SERVER.following.delete(this)
-            // A key nobody follows leaves, or the index grows with every key ever followed.
-            if (followers.delete(follower) && followers.size === 0)
-                byKey.delete(key)
+            unfile()
         }
     }
 

@@ -3,9 +3,10 @@
 // built (41.1), and a value is stringified once — so one compression is the whole answer, with its
 // length known, where a stream compressed as it arrived had to be flushed at every chunk.
 //
-// WHAT EACH LANE SENDS BESIDE THE BYTES is here too, so the two cannot drift. A document names
-// `accept-encoding` in `vary` through `DOCUMENT_HEADERS`, which its `HEAD` and error answers carry as
-// well; a JSON answer names it here. Both say their length: `abide dev` relays a body chunk by chunk
+// WHAT EACH LANE SENDS BESIDE THE BYTES. The JSON lane names `accept-encoding` in `vary` here; the
+// bytes lane leaves it to the CALLER's headers — `DOCUMENT_HEADERS` for a page or an error page,
+// which its `HEAD` carries as well, and `answerValue`'s own append for a document `page()` hands
+// back. Both say their length: `abide dev` relays a body chunk by chunk
 // from its worker (38.35), and a relayed body with no declared length goes out chunked.
 // BUN'S GZIP parts from zlib's past ~130 KB, which only the off-loop lane reaches — so that lane takes
 // zlib's, the loop keeps bun's, and the two make the same bytes.

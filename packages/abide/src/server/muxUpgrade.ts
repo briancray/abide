@@ -116,14 +116,7 @@ export function listenerOptions(
               unix?: string | undefined
           }
         | undefined,
-):
-    | { unix: string; maxRequestBodySize: number }
-    | {
-          port?: number
-          hostname?: string
-          idleTimeout: number
-          maxRequestBodySize: number
-      } {
+) {
     if (at?.unix !== undefined)
         return { unix: at.unix, maxRequestBodySize: Number.MAX_SAFE_INTEGER }
     return {

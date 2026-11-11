@@ -57,6 +57,13 @@ function signature(secret: string, signed: string): Uint8Array {
     return new Bun.CryptoHasher('sha256', secret).update(signed).digest()
 }
 
+/** `signature` as unpadded base64url, the spelling a JWT and a holder carry it in. */
+function signatureText(secret: string, signed: string): string {
+    return new Bun.CryptoHasher('sha256', secret)
+        .update(signed)
+        .digest('base64url')
+}
+
 /** The JWT header every seal carries, and the only one a seal is read under: HS256, never `none`. */
 const JWT_HEADER = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
 
@@ -80,7 +87,7 @@ function seal(
         }),
     )
     const signed = `${JWT_HEADER}.${payload}`
-    return `${signed}.${signature(secret, signed).toBase64({ alphabet: 'base64url', omitPadding: true })}`
+    return `${signed}.${signatureText(secret, signed)}`
 }
 
 /**
@@ -253,7 +260,7 @@ export function holderOf(caller: string, signedIn: string): string {
     const [secret] = secrets()
     return signedIn === 'null' || secret === undefined
         ? `browser.${new Bun.CryptoHasher('sha256').update(caller).digest('base64url')}`
-        : `account.${signature(secret, signedIn).toBase64({ alphabet: 'base64url', omitPadding: true })}`
+        : `account.${signatureText(secret, signedIn)}`
 }
 
 /**

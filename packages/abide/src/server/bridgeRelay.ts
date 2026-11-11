@@ -26,6 +26,7 @@ import { answered } from './answerFailure.ts'
 import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import type { ProviderEvent } from './assistant.ts'
+import { fileIn } from './fileIn.ts'
 import { Inbox } from './Inbox.ts'
 import { holderOf } from './principal.ts'
 import { randomToken } from './randomToken.ts'
@@ -228,7 +229,7 @@ export async function* pairingStatus(
                 unwatch()
                 unfollow()
                 unwatch = watchPairing(key, rouse)
-                unfollow = followSignIn(caller, follow)
+                unfollow = fileIn(FOLLOWERS, caller, follow, undefined)
                 watchingKey = key
                 pairing = undefined
             }
@@ -274,38 +275,6 @@ function watchPairing(key: string, wake: () => void): () => void {
         bridge.idle = undefined
     }
     return unwatch
-}
-
-/** Registers `follow` to hear who signs in at `caller` from here on; the returned function undoes it. */
-function followSignIn(
-    caller: string,
-    follow: (caller: string, signedIn: string) => void,
-): () => void {
-    return fileIn(FOLLOWERS, caller, follow, undefined)
-}
-
-/**
- * Files `member` in the set `sets` holds under `key`; the returned function takes it out, and drops
- * the set — then calls `emptied` — once it was the last.
- */
-function fileIn<Member>(
-    sets: Map<string, Set<Member>>,
-    key: string,
-    member: Member,
-    emptied: (() => void) | undefined,
-): () => void {
-    let members = sets.get(key)
-    if (members === undefined) {
-        members = new Set()
-        sets.set(key, members)
-    }
-    members.add(member)
-    return () => {
-        members.delete(member)
-        if (members.size > 0) return
-        sets.delete(key)
-        emptied?.()
-    }
 }
 
 // 44.22 — A BRIDGE A PAGE WATCHED, THAT NO PAGE WATCHES NOW AND THAT IS ANSWERING NO TURN, is sent
