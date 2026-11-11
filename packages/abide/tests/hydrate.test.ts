@@ -257,6 +257,65 @@ const width = reactive(() => Promise.resolve('40px'))
     )
 })
 
+// 32.11, 32.23 — A COMPONENT SPREAD OVER A VALUE STILL IN FLIGHT. A spread's keys are the props
+// the child destructures, so its record is read when the invocation is made, and an unlanded value
+// threw `NotLanded` out of `spreadProps` — out of the server's render (41.4: no document) and out of
+// the browser's mount, where a client navigation stopped at the tag and nothing after it mounted.
+// Aborted, the invocation leaves its region as the empty pair and is made when the value lands.
+const TIP = `<script>
+import { props } from '@abide/abide'
+
+const { title, tone } = props<{ title: string; tone: string }>()
+</script>
+
+<b class="tip">{title}/{tone}</b>`
+
+const SPREAD_PAGE = `<script>
+import { reactive } from '@abide/abide'
+import Tip from './Tip.abide'
+
+let detail = reactive(() => Promise.resolve({ title: 'late' }))
+let Shown = reactive(() => Tip)
+</script>
+
+<main><p id="plain"><Tip {...{ title: detail.title }} {...{ tone: 'warm' }}/></p><p id="chosen"><Shown {...detail} tone="cool"/></p><p id="after">after</p><button id="move" onclick={() => { detail = { title: 'moved' } }}>move</button></main>`
+
+const tips = (): (string | null)[] =>
+    [...document.querySelectorAll('.tip')].map((tip) => tip.textContent)
+
+// THE REVERT: hand `renderComponent` the record as written in `invocationMarkup` and `render`
+// throws `NotLanded` — no document; emit the client invocation without `invokeLanded` and the mount
+// throws at the first tag, leaving `#after` unbound and the tips empty for the life of the page.
+test('a render and a hydration continue past a spread still in flight — 32.23, 41.4', async () => {
+    const { html, mount } = await renderPage(SPREAD_PAGE, { Tip: TIP })
+    expect(html).toContain('<p id="after">after</p>')
+    expect(tips()).toEqual([])
+
+    mount()
+    await Bun.sleep(0)
+    flushSync()
+    expect(tips()).toEqual(['late/warm', 'late/cool'])
+
+    // 33.5 — still a live read once made.
+    click('#move')
+    flushSync()
+    expect(tips()).toEqual(['moved/warm', 'moved/cool'])
+})
+
+// THE REPORTED SHAPE: a client navigation mounts into a region nobody painted, so nothing the
+// server landed is seeded and the spread is in flight at the mount. The tags after it still mount.
+test('a mount into an empty region continues past a spread still in flight — 32.23', async () => {
+    const { mount } = await renderPage(SPREAD_PAGE, { Tip: TIP })
+    document.body.innerHTML = '<!--[--><!--]-->'
+    mount()
+    expect(document.querySelector('#after')?.textContent).toBe('after')
+    expect(tips()).toEqual([])
+
+    await Bun.sleep(0)
+    flushSync()
+    expect(tips()).toEqual(['late/warm', 'late/cool'])
+})
+
 // 32.37 — `disabled="false"` IS A DISABLED BUTTON. A whole-value attribute was written as its text,
 // so `disabled={busy}` shipped every button disabled whatever `busy` held, and the docs' own cards
 // were written around it. Presence is the answer for an attribute HTML reads by presence; text for

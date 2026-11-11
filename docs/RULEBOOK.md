@@ -2413,6 +2413,9 @@ a compile error.
 34.31 A selector whose rightmost compound is a `::view-transition…` pseudo-element with nothing ahead
 of it MUST NOT carry the scope token.
 
+34.32 A `NotLanded` a component `<script>` setup or a branch-local `<script>` throws MUST reach its
+caller as an error naming the setup's read, and MUST NOT reach it as a `NotLanded`.
+
 # 35. Pages, rendering and sinks
 
 35.1 A `layout.abide` MUST render every page whose route lies below its own through a slot.

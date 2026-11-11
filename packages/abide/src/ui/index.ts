@@ -45,6 +45,8 @@ export { bindGroup } from './bindGroup.ts'
 export { bindProperty } from './bindProperty.ts'
 export { bindSpread } from './bindSpread.ts'
 export { escapeless } from './escapeless.ts'
+// 32.23 — an invocation whose `{...expr}` has not landed, made once it has.
+export { invokeLanded } from './invokeLanded.ts'
 // 39.1 — a component's `<head>`, joined to the routed level mounting it.
 export { contributeHead } from './Level.ts'
 export { listAt, updateList } from './List.ts'

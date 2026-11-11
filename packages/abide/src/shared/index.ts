@@ -117,6 +117,8 @@ export { safeUrl } from './safeUrl.ts'
 // EMITTED CODE'S, not an author's — no REGISTRY row, the way `escapeText` and `listOf` have
 // none. A markup position that aborts on an unlanded read (32.23) is the compiler's business.
 export { slotValue } from './slotValue.ts'
+// EMITTED CODE'S — 34.32's naming of a setup's read of an unlanded value.
+export { setupThrown } from './setupThrown.ts'
 // EMITTED CODE'S — 32.11's spread, as props and as markup.
 export { spreadAttributes, spreadProps } from './spread.ts'
 // 30.1 — the address builder, and the types that read a route literal for it.

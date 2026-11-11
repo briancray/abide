@@ -16,6 +16,7 @@ import {
     type MergeGroup,
 } from './classifyTemplate.ts'
 import { type Cursor, placed, type PlacedNode } from './Cursor.ts'
+import { guardedSetup } from './guardedSetup.ts'
 import { invocationProps, passedName } from './invocationProps.ts'
 import { type Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -217,12 +218,13 @@ function renderPosition(
         // 14.8 — the row's branch-local `<script>`, run at the head of each row, untracked like the
         // component's own setup (14.7) since the render tracks nothing.
         // 32.43 — and the components it declares, each closing over the row.
-        const setup = `${node.setup === null ? '' : `${lowering.setup(node.setup)}\n`}${lane.declarations(at.inner[0] as Cursor, lowering)}`
+        const setup = node.setup === null ? '' : lowering.setup(node.setup)
+        const rowBody = `${lane.declarations(at.inner[0] as Cursor, lowering)}__out += ${row}`
         return `${OPEN_ANCHOR} + ((__list) => {
         if (!Array.isArray(__list)) return ''
         let __out = ''
         let ${index} = 0
-        for (const ${item} of __list) { ${setup}__out += ${row}; ${index} += 1 }
+        for (const ${item} of __list) { ${guardedSetup(lowering, setup, rowBody)}; ${index} += 1 }
         return __out
     })(${listOf}(${guarded})) + ${CLOSE_ANCHOR}`
     }
@@ -269,12 +271,17 @@ function renderPosition(
         // EACH ARM IS ITS OWN REGION ROOT — one sink apiece, so two arms may hold the same slot
         // names and neither can see the other's.
         // 14.8 — an arm's branch-local `<script>` runs before its markup, in a scope of its own.
-        const bodies = node.branches.map((branch, arm) =>
-            scoped(
-                `${branch.setup === null ? '' : `${lowering.setup(branch.setup)}\n`}${lane.declarations(at.inner[arm] as Cursor, lowering)}`,
-                renderMarkup(at.inner[arm] as Cursor, lowering, lane),
-            ),
-        )
+        const bodies = node.branches.map((branch, arm) => {
+            const declarations = lane.declarations(
+                at.inner[arm] as Cursor,
+                lowering,
+            )
+            const markup = renderMarkup(at.inner[arm] as Cursor, lowering, lane)
+            // 34.32 — inside the `try` that names the setup's read of an unlanded value.
+            return branch.setup === null
+                ? scoped(declarations, markup)
+                : `(() => {\n${guardedSetup(lowering, lowering.setup(branch.setup), `${declarations}\nreturn ${markup}`)}\n})()`
+        })
         // 41.24 — EACH ARM OPENS ON ITS OWN ANCHOR, which on the server names it. The floor and an
         // aborted chain paint nothing, and the plain open is all an empty region needs.
         let expression = `(${chosenArm(node.branches, lowering, (arm) => `${lane.armAnchor(arm)} + (${bodies[arm]})`, OPEN_ANCHOR)})`
@@ -432,7 +439,13 @@ function invocationMarkup(
         props.push(
             `${JSON.stringify(CHILDREN)}: () => ${scoped(definitions(at.inner[0] as Cursor, lowering), `(${renderMarkup(at.inner[0] as Cursor, lowering, SERVER_LANE)})`)}`,
         )
-    return `${lowering.use('renderComponent')}(${lowering.chosenTag(node) ?? node.tag}, { ${props.join(', ')} }, ${HEADS})`
+    // 32.11, 32.23 — A SPREAD WHOSE VALUE HAS NOT LANDED CANNOT SAY WHICH KEYS IT PASSES, so the
+    // record it is read into aborts as a slot does, and the invocation writes its pair alone for the
+    // browser to fill when the value lands (`invokeLanded`).
+    let record = `{ ${props.join(', ')} }`
+    if (node.attributes.some((attribute) => attribute.name === '...'))
+        record = `${lowering.use('slotValue')}(() => (${record}))`
+    return `${lowering.use('renderComponent')}(${lowering.chosenTag(node) ?? node.tag}, ${record}, ${HEADS})`
 }
 
 /**
@@ -552,7 +565,7 @@ function serverComponent(
     // standing side by side are two instances, each creating what no ancestor holds (10.6).
     const { opened, closed } = shareScope(lowering, '')
     return `function ${component.name}(${PROPS} = {}) {
-${opened}${head}${setup}${definitions(sink, lowering)}return { head: '', body: ${renderMarkup(sink, lowering, SERVER_LANE)}, document: undefined }${closed}
+${opened}${head}${guardedSetup(lowering, setup, `${definitions(sink, lowering)}return { head: '', body: ${renderMarkup(sink, lowering, SERVER_LANE)}, document: undefined }`)}${closed}
 }`
 }
 

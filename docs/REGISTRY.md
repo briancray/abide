@@ -114,7 +114,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- | --- |
 | `s` | `() => Stored` | Read the current value. | 2.1, 2.2, 2.3, 2.4, 2.9 |
 | `s.peek` | `() => Stored \| undefined` | Read what is held without joining the flow. | 2.10, 2.11 |
-| `NotLanded` | `Error & { name: 'NotLanded'; source: object }` | What a read throws where nothing has landed yet. | 2.9, 2.12, 2.13, 2.14, 7.8 |
+| `NotLanded` | `Error & { name: 'NotLanded'; source: object }` | What a read throws where nothing has landed yet. | 2.9, 2.12, 2.13, 2.14, 7.8, 34.32 |
 | `s.then` | `<Result>(onSettled?: (value: Stored) => Result \| PromiseLike<Result>, onFailed?: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Result>` | The settling, as a promise. | 1.4, 2.7, 2.8 |
 | `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Stored \| Result>` | The settling's refusal path. | 1.4, 1.5 |
 | `s.finally` | `(onSettled: () => void) => Promise<Stored>` | The settling's end, whichever way it went. | 1.4, 1.5 |
@@ -202,13 +202,13 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Context | Meaning | Rules |
 | --- | --- | --- |
 | template expression | The flow itself. | 14.1, 14.2, 14.11, 14.17, 14.19, 32.25, 32.57 |
-| branch-local `<script>` | An item's own setup scope. | 14.8, 34.7, 34.8, 34.9, 34.10 |
+| branch-local `<script>` | An item's own setup scope. | 14.8, 34.7, 34.8, 34.9, 34.10, 34.32 |
 | `reactive` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16, 14.17, 14.19 |
 | `reactive` body, keyed | The keyed body's own scope. | 14.4 |
 | block body binding | A live read, like a prop. | 14.5 |
 | `watch` effect, bare | The effect's own scope. | 14.6, 14.14, 14.16, 14.19 |
 | `watch` effect, over sources | The scope its sources narrow. | 12.3, 14.6 |
-| component `<script>` setup | The component's own setup scope. | 14.7, 14.12, 14.13 |
+| component `<script>` setup | The component's own setup scope. | 14.7, 14.12, 14.13, 34.32 |
 | event handler | Not the flow. | 14.9 |
 | `Transformer`, `Disposer`, middleware, lifecycle hooks | Not the flow. | 14.10 |
 
@@ -652,7 +652,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.17, 34.29, 34.30 |
+| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.17, 34.29, 34.30, 34.32 |
 | `<script module>` | Module scope. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.17, 34.18, 34.21, 34.30 |
 | `<script server>` | Module scope on a server alone, declaring its file's private handlers and filing its hooks. | 16.28, 16.70, 34.3, 34.12, 34.17, 34.19, 34.20, 34.22, 34.28, 34.29, 34.30, 37.1 |
 | `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11, 34.31 |
