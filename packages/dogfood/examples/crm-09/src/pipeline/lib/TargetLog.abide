@@ -1,0 +1,28 @@
+<script>
+import { reactive } from '@abide/abide'
+
+import listTargets from '../listTargets.handler.ts'
+import setTarget from '../setTarget.handler.ts'
+import { dollars } from './dollars.ts'
+
+let next = reactive<number | undefined>(600_000)
+const targets = reactive(() => listTargets())
+
+async function record() {
+    if (next === undefined) return
+    await setTarget({ target: next })
+    // The log is the file's now, so read it again.
+    targets.refresh()
+}
+</script>
+
+<div class="row">
+    <input type="number" step="50000" aria-label="new target" bind:value={next}>
+    <button onclick={record}>Set target</button>
+</div>
+
+<ul class="fields stacked">
+    {#for row of targets.ready() ? targets : [] by row.id}
+        <li><span>{row.setAt}</span><strong>{dollars(row.target)}</strong></li>
+    {/for}
+</ul>

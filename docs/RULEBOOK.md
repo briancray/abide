@@ -85,6 +85,7 @@ These are immutable. A change to them is a change to what this document is.
 - [44. The assistant](#44)
 - [45. Offline](#45)
 - [46. Outbox](#46)
+- [47. Databases](#47)
 
 ## Terms
 
@@ -2570,7 +2571,7 @@ calls a navigation request's nor `empty` with a bodiless 404, and MUST NOT set u
 
 36.3 `NODE_ENV` MUST be read verbatim, and MUST be defaulted from the command where unset.
 
-36.4 `APP_DATA_DIR` MUST be a path, and abide MUST NOT create it.
+36.4 `APP_DATA_DIR` MUST be a path, and abide MUST NOT create it save as 47.2 states.
 
 36.5 `ABIDE_PRINCIPAL_SECRET` MUST accept a comma-separated list.
 
@@ -3921,3 +3922,38 @@ keep it, as a write made here (3.10).
 
 46.20 A page MUST NOT open the store 46.2 keeps `outbox` in where `outbox` held no call when it last
 changed.
+
+# 47. Databases
+
+47.1 `database` MUST open its database at the first call of the opener it returns, and every later
+call MUST hand back that same `Database` until 47.10 closes it.
+
+47.2 `database` MUST open the file `<name>.sqlite` in `APP_DATA_DIR`, and MUST create
+`APP_DATA_DIR` where it does not exist.
+
+47.3 `database` MUST throw for a name holding anything but letters, digits, `_`, `-` and `.`, or
+opening with `.`.
+
+47.4 Where `NODE_ENV` is `test`, `database` MUST open an empty database in memory in place of 47.2's
+file, one per opener.
+
+47.5 `database` MUST open with the `WAL` journal, foreign keys enforced, and a busy timeout of 5000
+milliseconds.
+
+47.6 `database` MUST run, in the order given, each migration past the count the file's
+`user_version` holds, and MUST then set `user_version` to the count of migrations.
+
+47.7 The migrations `database` runs per 47.6 MUST run in one transaction, and one that throws MUST
+leave the file as it was opened, and the opener MUST throw, naming the migration.
+
+47.8 A migration MUST be run as SQL where it is a string, and MUST be called with the `Database`
+where it is a function.
+
+47.9 `database` MUST throw, and MUST NOT hand back the `Database`, where the file's `user_version`
+exceeds its count of migrations.
+
+47.10 `database` MUST close the `Database` it opened inside `App.stop`'s teardown, filed as an
+`onStop` per 37.4 and 37.7 that closes once the teardown it wraps has run.
+
+47.11 An opener whose `Database` 47.10 closed, or whose open threw, MUST open it again when next
+called.

@@ -37,12 +37,16 @@ import stageTilesSource from 'crm-04/src/pipeline/lib/StageTiles.abide' with { t
 import stageTilesBenchSource from 'crm-04/src/pipeline/lib/StageTiles.bench.ts' with { type: 'text' }
 import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
 import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
+import TargetLog from 'crm-04/src/pipeline/lib/TargetLog.abide'
+import targetLogSource from 'crm-04/src/pipeline/lib/TargetLog.abide' with { type: 'text' }
+import targetLogTestSource from 'crm-04/src/pipeline/lib/TargetLog.test.ts' with { type: 'text' }
 import targetStoreSource from 'crm-04/src/pipeline/lib/targetStore.ts' with { type: 'text' }
 import TeamTarget from 'crm-04/src/pipeline/lib/TeamTarget.abide'
 import teamTargetSource from 'crm-04/src/pipeline/lib/TeamTarget.abide' with { type: 'text' }
 import teamTargetTestSource from 'crm-04/src/pipeline/lib/TeamTarget.test.ts' with { type: 'text' }
 import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
 import qualifyLeadSource from 'crm-04/src/pipeline/qualifyLead.handler.ts' with { type: 'text' }
+import listTargetsSource from 'crm-04/src/pipeline/listTargets.handler.ts' with { type: 'text' }
 import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
 import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
 import setTargetSource from 'crm-04/src/pipeline/setTarget.handler.ts' with { type: 'text' }
@@ -433,6 +437,41 @@ import Section from '#src/lib/Section.abide'
             <code>ttl</code> beside it, and passes what it reads through a <code>schema</code> when
             given one: a restore skips the value's own, so an entry an older build wrote is a miss
             rather than a wrong value.</p>
+    </Section>
+
+    <Section title="A `database` keeps what a restart would lose">
+        <Example
+            id="crm-04-database"
+            app="crm-04"
+            title={"`database(name, { migrations })` — the server's own SQLite file"}
+            summary="Every target the team has set, read from a file on the server. Set one, and the list still holds it after a restart."
+            serverFiles={['src/pipeline/lib/crmDatabase.server.ts']}
+            files={{
+                'src/pipeline/lib/TargetLog.abide': targetLogSource,
+                'src/pipeline/listTargets.handler.ts': listTargetsSource,
+                'src/pipeline/setTarget.handler.ts': setTargetSource,
+                'src/pipeline/lib/TargetLog.test.ts': targetLogTestSource,
+            }}
+        >
+            <TargetLog />
+        </Example>
+
+        <p><code>database</code>, from <code>@abide/abide/server</code>, hands back a function. Its
+            first call opens <code>crm.sqlite</code> in <code>APP_DATA_DIR</code>, and every call
+            after hands back the same <code>bun:sqlite</code> <code>Database</code>, so a handler
+            writes plain SQL against it. Each chapter's app has its own <code>APP_DATA_DIR</code>,
+            named for the app, so two apps never share the file.</p>
+
+        <p>Each migration runs once, in order, and the file remembers how many it has run. A new
+            column is one more string at the end of the list, never an edit to one already there.
+            A migration can be a function too, for rows a first boot seeds. If one throws, none of
+            that boot's migrations are kept, and a file a newer build migrated is refused rather
+            than opened.</p>
+
+        <p>Under <code>bun test</code> each database is an empty one in memory, so a test never
+            writes the file the app serves. The app closes the file as it stops. A
+            <code>sqliteStore</code> takes what the function hands back, so a store and the app's
+            own tables can share one file.</p>
     </Section>
     <Section title="Next">
         <ul>

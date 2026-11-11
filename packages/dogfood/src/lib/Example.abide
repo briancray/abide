@@ -12,6 +12,22 @@ const resultsOf = GET(async ({ app }: { app: string }) => {
         ? ((await results.json()) as ExampleResults)
         : null
 })
+
+// 16.29 — A SERVER FILE'S TEXT IS READ HERE, never imported into the page: the browser's bundle is
+// fenced from every server file, and its source is shown to a reader the way the app's tarball
+// already ships it (40.41). Only a server file of a chapter app, by a path below its root.
+const SERVER_FILE = /^src\/(?:[\w-]+\/)*[\w-]+\.server\.ts$/
+const serverSources = GET(
+    async ({ app, paths }: { app: string; paths: string[] }) => {
+        const directory = await exampleDirectory(app)
+        const sources: Record<string, string> = {}
+        if (directory === undefined) return sources
+        for (const path of paths)
+            if (SERVER_FILE.test(path))
+                sources[path] = await Bun.file(`${directory}/${path}`).text()
+        return sources
+    },
+)
 </script>
 
 <script>
@@ -23,18 +39,32 @@ import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
 import { highlight, sideOf } from './highlight.ts'
 import { inline } from './inline.ts'
 
-const { id, title, summary, files, app } = props<{
+const {
+    id,
+    title,
+    summary,
+    files,
+    serverFiles = [],
+    app,
+} = props<{
     /** The example's name: its anchor on the page. */
     id: string
     title: string
     summary: string
     /** Each file the example is made of, by the path a reader is shown, to its text. */
     files: Record<string, string>
+    /** Server files of the chapter app, by their path in it, whose text is read on the server. */
+    serverFiles?: string[]
     /** The chapter app the files are from, which the card links to and offers as a download. */
     app?: string
 }>()
 
-const paths = Object.keys(files)
+const paths = [...serverFiles, ...Object.keys(files)]
+const shownSources = reactive(() =>
+    app !== undefined && serverFiles.length > 0
+        ? serverSources({ app, paths: serverFiles })
+        : ({} as Record<string, string>),
+)
 let open = reactive(0)
 
 const kindOf = (path: string) =>
@@ -104,6 +134,6 @@ const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
                 <p class="ex-results">Not run in this build. Run <code>bun run examples:results</code>.</p>
             {/if}
         {/if}
-        <pre hidden={open !== index}><code>{raw(highlight((files[path] ?? '').trimEnd()))}</code></pre>
+        <pre hidden={open !== index}><code>{raw(highlight((files[path] ?? shownSources?.[path] ?? '').trimEnd()))}</code></pre>
     {/for}
 </figure>

@@ -556,6 +556,12 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
 | `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.10, 41.15, 41.24, 45.10 |
 
+## `database`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `database` | `(name: string, options?: { migrations?: (string \| ((database: Database) => void))[] }) => () => Database` | The opener of the app's `bun:sqlite` database `name`, from `@abide/abide/server`. | 36.4, 47.1, 47.2, 47.3, 47.4, 47.5, 47.6, 47.7, 47.8, 47.9, 47.10, 47.11 |
+
 ## `csp`
 
 | Name | Signature | Meaning | Rules |

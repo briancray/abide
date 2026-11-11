@@ -720,6 +720,13 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: true,
     },
     {
+        route: '/reference/database',
+        names: ['database'],
+        entry: '@abide/abide/server',
+        group: 'Helpers',
+        typeOnly: false,
+    },
+    {
         route: '/reference/csp',
         names: ['csp'],
         entry: '@abide/abide',
