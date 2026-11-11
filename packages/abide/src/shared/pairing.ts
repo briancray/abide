@@ -27,7 +27,7 @@ const PAIR_WAIT = 2500
 const COPIED_FOR = 1200
 
 /** This browser's pairing with a Claude Code bridge, and the click that pairs one. */
-export function pairing(options: { tools?: string[] } = {}): {
+export function pairing(): {
     status: Reactive<BridgeStatus | undefined>
     step: Reactive<'click' | 'waiting' | 'install'>
     copied: Reactive<boolean>
@@ -37,7 +37,7 @@ export function pairing(options: { tools?: string[] } = {}): {
     const reading = new AbortController()
     // 44.70 — a server renders no pairing: the stream is the browser's, and a render would wait on it.
     const statuses = reactive(async function* () {
-        if (!isServer()) yield* statusesOf(options.tools, reading.signal)
+        if (!isServer()) yield* statusesOf(reading.signal)
     })
     const status = reactive(() =>
         (statuses() as BridgeStatus[]).at(-1),
@@ -108,15 +108,9 @@ export function pairing(options: { tools?: string[] } = {}): {
  * The statuses `/__abide/pairing` answers this browser, as they land — `wire`'s stream less the
  * follow, as `seededDocument` is its call: the mux carries no production of abide's own.
  */
-async function* statusesOf(
-    tools: string[] | undefined,
-    signal: AbortSignal,
-): AsyncGenerator<BridgeStatus> {
-    const request = rpcRequest(
-        'GET',
-        mounted(PAIRING_ADDRESS),
-        tools?.length ? { tools: tools.join(',') } : undefined,
-    )
+async function* statusesOf(signal: AbortSignal): AsyncGenerator<BridgeStatus> {
+    // 44.75 — no tools: the server's `ABIDE_BRIDGE_TOOLS` decides what a pairing grants.
+    const request = rpcRequest('GET', mounted(PAIRING_ADDRESS), undefined)
     try {
         const answer = await answerOf(request, true, signal)
         if (answer.body !== undefined && answer.body !== null) {

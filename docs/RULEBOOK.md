@@ -3725,14 +3725,15 @@ link asks for whose server 44.58 does not find.
 none.
 
 44.67 `/__abide/pairing` MUST answer the asking browser's `BridgeStatus` stream as `claudeCode.bridge`
-yields it, granting the tools its `tools` arg names separated by commas.
+yields it, granting the tools `ABIDE_BRIDGE_TOOLS` names separated by commas, and none where it
+names none.
 
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
 44.69 `/__abide/pairing` MUST NOT be refused at the `timeout` `ABIDE_RPC_TIMEOUT` sets.
 
 44.70 `pairing`'s `status` MUST be the last `BridgeStatus` `/__abide/pairing` answered the browser,
-asked with the `tools` `pairing` was given, and MUST be `undefined` where a server builds it.
+and MUST be `undefined` where a server builds it.
 
 44.71 `pairing`'s `start` MUST do nothing while `status` holds no `BridgeStatus`, and otherwise MUST
 set `step` to `waiting` and navigate the page to the status's `link`.
@@ -3746,6 +3747,8 @@ MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `c
 44.74 A `pairing` built in a component's setup MUST, once that component is disposed, stop reading
 `/__abide/pairing`, remove the blur listener a `start` added, and clear every timer `start` and
 `copyInstall` set.
+
+44.75 `/__abide/pairing` MUST NOT grant a tool the request asking it names.
 
 # 45. Offline
 

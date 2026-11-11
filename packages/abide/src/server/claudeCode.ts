@@ -26,7 +26,7 @@ import { blocksOf, forwardOf, type Provider } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import { mintCode, pairingStatus, runTurn } from './bridgeRelay.ts'
 import { callerOf } from './callerOf.ts'
-import { ownOrigin } from './config.ts'
+import { config, ownOrigin } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
 import { mountedOwn } from './mountHandlers.ts'
 import { signedInAs } from './principal.ts'
@@ -176,12 +176,20 @@ export const claudeCode: typeof claudeCodeProvider & {
 } = Object.assign(claudeCodeProvider, { bridge, bridgeCommand })
 
 // 44.67 — THE PAIRING A BROWSER'S `pairing` READS, as a handler abide mounts rather than one each app
-// writes: `claudeCode.bridge` for the asking browser, granting the comma-separated `tools` it was
-// asked with. 44.68 — on no generated surface. 44.69 — a pairing idles for minutes, so it is exempt
-// from `ABIDE_RPC_TIMEOUT` as the handler an app wrote would have to be.
+// writes: `claudeCode.bridge` for the asking browser, granting the tools `ABIDE_BRIDGE_TOOLS` names.
+// 44.75 — THE SERVER DECIDES THEM: the parameter is declared only so the value is keyed and the call
+// runs it (1.7, as `health`'s is), and whatever a request names in it is never read. 44.68 — on no
+// generated surface. 44.69 — a pairing idles for minutes, so it is exempt from `ABIDE_RPC_TIMEOUT`
+// as the handler an app wrote would have to be.
 const pairingHandler = declare('GET')(
-    (args: { tools?: string } | undefined) =>
-        bridge(args?.tools ? { tools: args.tools.split(',') } : {}),
+    (_none: undefined) => {
+        const tools = config.peek()?.ABIDE_BRIDGE_TOOLS
+        return bridge(
+            typeof tools === 'string' && tools !== ''
+                ? { tools: tools.split(',') }
+                : {},
+        )
+    },
     {
         timeout: Infinity,
         clients: { ui: false, mcp: false, cli: false, openapi: false },

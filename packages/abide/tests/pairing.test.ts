@@ -1,4 +1,4 @@
-// 44.67-44.74 — `pairing`, a browser's pairing with a Claude Code bridge and the click that pairs one,
+// 44.67-44.75 — `pairing`, a browser's pairing with a Claude Code bridge and the click that pairs one,
 // over `/__abide/pairing`. The browser half runs against a `fetch` that answers the statuses a test
 // pushes, a `location.assign` that records the link, and fake timers, so a blur and the wait are the
 // test's to decide.
@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, expect, jest, spyOn, test } from 'bun:test'
 
 import { GET } from '#server'
+import { config } from '#server/config.ts'
 import { PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { BridgeStatus } from '#shared/BridgeStatus.ts'
 import { pairing } from '#shared/pairing.ts'
@@ -78,13 +79,13 @@ afterEach(() => {
 })
 
 /** A `pairing` built as a component's setup builds one, with the stops its dispose runs. */
-function built(tools?: string[]): {
+function built(): {
     pair: ReturnType<typeof pairing>
     dispose: () => void
 } {
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const pair = pairing(tools === undefined ? {} : { tools })
+    const pair = pairing()
     collectWatches(previous)
     return { pair, dispose: () => stops.forEach((stop) => stop()) }
 }
@@ -104,11 +105,11 @@ async function landed(
     expect(pair.status()).toEqual(status)
 }
 
-test('reads the browser’s pairing off /__abide/pairing, asking for its tools — 44.70', async () => {
-    const { pair, dispose } = built(['WebSearch', 'WebFetch'])
+test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44.70', async () => {
+    const { pair, dispose } = built()
     await landed(pair, UNPAIRED)
     expect(pair.status()).toEqual(UNPAIRED)
-    expect(asked[0]?.url).toBe(`${PAIRING_ADDRESS}?tools=WebSearch%2CWebFetch`)
+    expect(asked[0]?.url).toBe(PAIRING_ADDRESS)
     dispose()
 })
 
@@ -201,30 +202,69 @@ test('dispose stops the read and clears the blur listener and both timers — 44
     ).toBe('blur listeners: 0, step: waiting, copied: true, read aborted: true')
 })
 
-test('/__abide/pairing answers the asking browser’s pairing, granting its tools — 44.67', async () => {
-    await using app = await inMemoryApp({})
-    const watching = new AbortController()
-    const answer = await app.fetch(
-        new Request(`http://site${PAIRING_ADDRESS}?tools=WebSearch,WebFetch`, {
-            headers: { accept: 'application/jsonl' },
-            signal: watching.signal,
-        }),
-        { caller: 'one-browser' },
-    )
-    expect(answer.status).toBe(200)
-    const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
-    const decoder = new TextDecoder()
-    let read = ''
-    while (!read.includes('\n'))
-        read += decoder.decode((await reader.read()).value)
-    watching.abort()
-    await reader.cancel().catch(() => {})
-    const status = JSON.parse(read.split('\n')[0] as string) as BridgeStatus
+/** The first status `/__abide/pairing` answers the browser `caller` at `query`, with `tools` declared. */
+async function firstStatus(
+    caller: string,
+    query: string,
+    tools: string | undefined,
+): Promise<BridgeStatus> {
+    const declared = process.env.ABIDE_BRIDGE_TOOLS
+    if (tools === undefined) delete process.env.ABIDE_BRIDGE_TOOLS
+    else process.env.ABIDE_BRIDGE_TOOLS = tools
+    config.invalidate()
+    try {
+        await using app = await inMemoryApp({})
+        const watching = new AbortController()
+        const answer = await app.fetch(
+            new Request(`http://site${PAIRING_ADDRESS}${query}`, {
+                headers: { accept: 'application/jsonl' },
+                signal: watching.signal,
+            }),
+            { caller },
+        )
+        expect(answer.status).toBe(200)
+        const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
+        const decoder = new TextDecoder()
+        let read = ''
+        while (!read.includes('\n'))
+            read += decoder.decode((await reader.read()).value)
+        watching.abort()
+        await reader.cancel().catch(() => {})
+        return JSON.parse(read.split('\n')[0] as string) as BridgeStatus
+    } finally {
+        if (declared === undefined) delete process.env.ABIDE_BRIDGE_TOOLS
+        else process.env.ABIDE_BRIDGE_TOOLS = declared
+        config.invalidate()
+    }
+}
+
+/** What a status's command and link grant, as one line. */
+function granted(status: BridgeStatus): string {
+    const tools = new URL(status.link).searchParams.get('tools')
+    return `command: ${status.command.split(' -- ')[1] ?? 'no grant'}, link: ${tools ?? 'no tools'}`
+}
+
+test('/__abide/pairing answers the asking browser’s pairing, granting ABIDE_BRIDGE_TOOLS — 44.67', async () => {
+    const status = await firstStatus('one-browser', '', 'WebSearch,WebFetch')
     expect(status.paired).toBe(false)
-    expect(status.command).toEndWith(' -- --tools WebSearch,WebFetch')
-    expect(new URL(status.link).searchParams.get('tools')).toBe(
-        'WebSearch,WebFetch',
+    expect(granted(status)).toBe(
+        'command: --tools WebSearch,WebFetch, link: WebSearch,WebFetch',
     )
+    expect(granted(await firstStatus('two-browser', '', undefined))).toBe(
+        'command: no grant, link: no tools',
+    )
+})
+
+// 44.75 — THE TOOLS ARE THE SERVER'S TO DECIDE: a request naming some is granted none of them. THE
+// REVERT: have the handler in `claudeCode.ts` split `args.tools` into `bridge`'s `tools` again; this
+// reports `command: --tools WebSearch, link: WebSearch`.
+test('/__abide/pairing grants no tool a request names — 44.75', async () => {
+    const status = await firstStatus(
+        'asking-browser',
+        '?tools=WebSearch',
+        undefined,
+    )
+    expect(granted(status)).toBe('command: no grant, link: no tools')
 })
 
 // 44.69 — A PAIRING IDLES PAST AN OPERATOR'S `ABIDE_RPC_TIMEOUT`. THE REVERT: drop `timeout: Infinity`
