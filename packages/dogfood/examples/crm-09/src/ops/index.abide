@@ -17,6 +17,7 @@ import { online, refresh, watch } from '@abide/abide'
 
 import CallLog from './lib/CallLog.abide'
 import Console from './lib/Console.abide'
+import DealScores from './lib/DealScores.abide'
 import FollowUps from './lib/FollowUps.abide'
 import Health from './lib/Health.abide'
 import OfflineBanner from './lib/OfflineBanner.abide'
@@ -43,6 +44,8 @@ watch(() => {
     <Pool />
     <h2>Follow-ups</h2>
     <FollowUps />
+    <h2>Deal scores</h2>
+    <DealScores />
     <h2>Health</h2>
     <Health />
     <h2>Sync</h2>
