@@ -505,24 +505,38 @@ export async function serveLanguage(
         return true
     }
 
-    let buffer = new Uint8Array(0)
+    // CHUNKS ARE COLLECTED, AND JOINED ONCE A MESSAGE IS WHOLE: joining each chunk onto what is
+    // pending copies a message once per chunk it arrives in, which is quadratic in its size.
+    let buffer: Uint8Array = new Uint8Array(0)
+    const pending: Uint8Array[] = []
+    let pendingLength = 0
+    // What `buffer` must hold before a join is worth making: the message's whole length once its
+    // header has been read, and anything at all until then.
+    let wanted = 0
     const decoder = new TextDecoder()
     for await (const chunk of input) {
-        const joined = new Uint8Array(buffer.length + chunk.length)
-        joined.set(buffer)
-        joined.set(chunk, buffer.length)
-        buffer = joined
+        pending.push(chunk)
+        pendingLength += chunk.length
+        if (buffer.length + pendingLength < wanted) continue
+        buffer = joined(buffer, pending, pendingLength)
+        pending.length = 0
+        pendingLength = 0
         for (;;) {
             const header = decoder.decode(buffer.subarray(0, 256))
             const end = header.indexOf(HEADER_END)
-            if (end === -1) break
+            if (end === -1) {
+                wanted = 0
+                break
+            }
             const length = Number(/Content-Length: (\d+)/i.exec(header)?.[1])
             const start = end + HEADER_END.length
-            if (buffer.length < start + length) break
+            wanted = start + length
+            if (buffer.length < wanted) break
             const message = JSON.parse(
-                decoder.decode(buffer.subarray(start, start + length)),
+                decoder.decode(buffer.subarray(start, wanted)),
             ) as Message
-            buffer = buffer.slice(start + length)
+            buffer = buffer.subarray(wanted)
+            wanted = 0
             if (!(await handle(message))) {
                 await closeAll(checkers)
                 return
@@ -530,6 +544,23 @@ export async function serveLanguage(
         }
     }
     await closeAll(checkers)
+}
+
+/** `head` with every chunk of `rest` after it, copied once — `head` itself where nothing follows. */
+function joined(
+    head: Uint8Array,
+    rest: Uint8Array[],
+    restLength: number,
+): Uint8Array {
+    if (rest.length === 1 && head.length === 0) return rest[0] as Uint8Array
+    const out = new Uint8Array(head.length + restLength)
+    out.set(head)
+    let at = head.length
+    for (const chunk of rest) {
+        out.set(chunk, at)
+        at += chunk.length
+    }
+    return out
 }
 
 async function closeAll(checkers: Map<string, KeptChecker>): Promise<void> {
