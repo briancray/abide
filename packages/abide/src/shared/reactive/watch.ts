@@ -164,14 +164,35 @@ export function owning(): boolean {
 export function unowned<Result>(open: () => Result): Result {
     const previous = OWNING.free
     OWNING.free = true
-    // 12.18 — NOR IS IT ENCLOSED by the effect it happened to open in: it outlives that one, and
-    // linked, it would hold that effect's whole scope reachable and wait on its every update.
+    try {
+        // 12.18 — NOR IS IT ENCLOSED by the effect it happened to open in: it outlives that one,
+        // and linked, it would hold that effect's whole scope reachable and wait on its every update.
+        return openedUnder(null, open)
+    } finally {
+        OWNING.free = previous
+    }
+}
+
+/** The effect whose run is on the stack, or `null` — what a watch opened now is enclosed by. */
+export function runningEffect(): Subscriber | null {
+    return RUNNING.effect
+}
+
+/**
+ * Runs `open`, and answers what it answers, with every watch it opens enclosed by `effect`.
+ *
+ * 12.18 — FOR WHAT IS OPENED ON AN EFFECT'S BEHALF AFTER ITS RUN HAS ENDED: a row an async
+ * `{#for}` appends arrives after an `await`, where nothing is running.
+ */
+export function openedUnder<Result>(
+    effect: Subscriber | null,
+    open: () => Result,
+): Result {
     const outer = RUNNING.effect
-    RUNNING.effect = null
+    RUNNING.effect = effect
     try {
         return open()
     } finally {
-        OWNING.free = previous
         RUNNING.effect = outer
     }
 }

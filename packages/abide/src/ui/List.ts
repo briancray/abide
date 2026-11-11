@@ -1,5 +1,6 @@
 import { listOf } from '#shared/listOf.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
+import { openedUnder, runningEffect } from '#shared/reactive/watch.ts'
 
 import { HYDRATE_LOG, Mismatch, warnMismatch } from './Mismatch.ts'
 import { clearList, reconcile } from './reconcile.ts'
@@ -230,6 +231,9 @@ function appendRows(list: List, source: AsyncIterable<unknown>): void {
 }
 
 async function pump(list: List, source: AsyncIterable<unknown>): Promise<void> {
+    // 12.18 — TAKEN BEFORE THE FIRST `await`, while the `{#for}`'s update that started this is
+    // still running: a row arrives after it, where nothing is.
+    const enclosing = runningEffect()
     const region = list.region
     const iterator = source[Symbol.asyncIterator]()
     list.iterator = iterator
@@ -251,14 +255,17 @@ async function pump(list: List, source: AsyncIterable<unknown>): Promise<void> {
             return
         }
         // Appended, so its position IS the index it arrived at.
+        const index = at
         list.rows.push(
-            makeRow(
-                list.setUp,
-                parent,
-                region.close,
-                list.key(item, at),
-                item,
-                at,
+            openedUnder(enclosing, () =>
+                makeRow(
+                    list.setUp,
+                    parent,
+                    region.close,
+                    list.key(item, index),
+                    item,
+                    index,
+                ),
             ),
         )
         at += 1
