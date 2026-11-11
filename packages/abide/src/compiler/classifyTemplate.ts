@@ -102,7 +102,7 @@ export type ClassifiedAttribute = {
     // 32.9 — the node itself, which a server has none of: written out it was `bind:element=""`,
     // inert and a tell. The client does not set it either; what the value takes is the element.
     | { kind: 'element' }
-    // 32.79, 32.80 — a measurement of the element, which a server has none of either (32.84): the
+    // 32.79, 32.80, 32.86 — a measurement of the element, which a server has none of either (32.84): the
     // client writes the value from a shared observer and never reads it back into the element.
     | { kind: 'measured'; measure: MeasuredBind }
     // 32.4 — a native listener on the element itself, reached by the same walk a text node is. The
@@ -500,7 +500,7 @@ type ValueBind = (typeof VALUE_BINDS)[number]
  * 32.84, 32.72 — the server writes nothing for one, and it owns no attribute: `<input size="20"
  * bind:size={box}>` is the attribute and a measurement, two things rather than two owners of one.
  */
-const MEASURED_BINDS = ['size', 'visible'] as const
+const MEASURED_BINDS = ['size', 'visible', 'rect'] as const
 type MeasuredBind = (typeof MEASURED_BINDS)[number]
 
 /** The measured bind a folded attribute name is, or `undefined` for any other attribute. */

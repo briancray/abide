@@ -102,6 +102,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`bind:files`',
                         '`bind:size`',
                         '`bind:visible`',
+                        '`bind:rect`',
                         '`bind:value={{get, set}}`',
                         '`{#if cond}`',
                         '`{#try}`',

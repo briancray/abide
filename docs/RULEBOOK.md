@@ -2253,7 +2253,8 @@ element, and a style property MUST resolve as the server's merged attribute does
 declarations first, then each directive's in the tag's order.
 
 32.72 An element MUST be a build error where a `bind:` and something else both write its value: the
-attribute a `bind:name` names, save `bind:size` and `bind:visible`, `checked` beside `bind:group`,
+attribute a `bind:name` names, save `bind:size`, `bind:visible` and `bind:rect`, `checked` beside
+`bind:group`,
 an `<option selected>` inside a `<select bind:value>`, or text inside a `<textarea bind:value>`.
 
 32.73 `bind:files` MUST hold a list of the input's files, with or without `multiple`, MUST write the
@@ -2261,7 +2262,7 @@ files picked back on change, and MUST hand the input a list written to it; the s
 nothing for it.
 
 32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files`, `size`,
-`visible` and `element` MUST be a build error.
+`visible`, `rect` and `element` MUST be a build error.
 
 32.75 A `bind:` on an element MUST write its operand before any `on<event>` listener on that
 element, written or spread, runs for the same event, wherever the two are written in the tag.
@@ -2288,18 +2289,35 @@ observation of a size the value does not already hold.
 32.80 `bind:visible` MUST write whether the element intersects the viewport, at each observation.
 
 32.81 `abide check` MUST hold the `set` of a `bind:size` to a record of a numeric `width` and
-`height`, and of a `bind:visible` to a boolean, and MUST NOT require a `get` of either.
+`height`, of a `bind:rect` to a record of a numeric `x`, `y`, `top`, `left`, `right`, `bottom`,
+`width` and `height`, and of a `bind:visible` to a boolean, and MUST NOT require a `get` of any of
+the three.
 
-32.82 Every `bind:size` in a document MUST be observed by one shared observer, and every
-`bind:visible` by one other.
+32.82 Every `bind:size` in a document MUST be observed by one shared observer, every `bind:visible`
+by one other, and every `bind:rect` by a third.
 
 32.83 A `bind:size` or a `bind:visible` MUST NOT write its value before the first observation of its
 element, and MUST NOT read the element's layout to write it.
 
-32.84 The server MUST write nothing for a `bind:size` or a `bind:visible`.
+32.84 The server MUST write nothing for a `bind:size`, a `bind:visible` or a `bind:rect`.
 
-32.85 An element's `bind:size` and `bind:visible` MUST stop observing it when the nodes holding it
-leave.
+32.85 An element's `bind:size`, `bind:visible` and `bind:rect` MUST stop observing it when the nodes
+holding it leave.
+
+32.86 `bind:rect` MUST write the element's rectangle in the viewport — `x`, `y`, `top`, `left`,
+`right`, `bottom`, `width` and `height`, as `getBoundingClientRect` reports them — as one record,
+after a resize of the element, a scroll of the document or of any element in it, or a resize of the
+window, where the value does not already hold that rectangle.
+
+32.87 `bind:rect` MUST NOT be written for a move of its element that no resize of the element,
+scroll or resize of the window accompanies.
+
+32.88 Every `bind:rect` in a document MUST share one scroll listener and one window resize listener,
+added with the first `bind:rect` and removed with the last.
+
+32.89 The triggers 32.86 names that arrive before the next animation frame MUST be answered by one
+read of every `bind:rect` element's rectangle in that frame, every read before any write, and
+`bind:rect` MUST NOT read an element's rectangle outside such a frame.
 
 # 33. Props
 
