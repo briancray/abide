@@ -243,12 +243,14 @@ function reconcileLater(chain: HeadChain): void {
     if (version === undefined) {
         // UNOWNED: whichever component asks first, the watch outlives it.
         const opened = unowned(() => reactive(0))
-        watchTracked(() => {
-            opened()
-            const chains = [...STALE]
-            STALE.clear()
-            for (const chain of chains) chain.reconcile()
-        })
+        unowned(() =>
+            watchTracked(() => {
+                opened()
+                const chains = [...STALE]
+                STALE.clear()
+                for (const chain of chains) chain.reconcile()
+            }),
+        )
         version = asked = opened
     }
     if (STALE.size === 0) version.set((version.peek() as number) + 1)

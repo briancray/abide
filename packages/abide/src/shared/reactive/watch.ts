@@ -164,10 +164,15 @@ export function owning(): boolean {
 export function unowned<Result>(open: () => Result): Result {
     const previous = OWNING.free
     OWNING.free = true
+    // 12.18 — NOR IS IT ENCLOSED by the effect it happened to open in: it outlives that one, and
+    // linked, it would hold that effect's whole scope reachable and wait on its every update.
+    const outer = RUNNING.effect
+    RUNNING.effect = null
     try {
         return open()
     } finally {
         OWNING.free = previous
+        RUNNING.effect = outer
     }
 }
 
