@@ -8,7 +8,7 @@
 // directory at `/holdings/[symbol=TICKER]` share the segment, and a page that took `BRK.B` under a
 // layout whose segment refused it would be wrapped by a layout no address of its own reaches.
 
-import { parseRoutePattern } from '#shared/routePattern.ts'
+import { parseRoutePattern, type Segment } from '#shared/routePattern.ts'
 
 import type { Diagnostics } from './Diagnostics.ts'
 import { matcherOf } from './paramFile.ts'
@@ -17,11 +17,16 @@ import { matcherOf } from './paramFile.ts'
 export type MountedTree = { directory: string; at: string; params: string[] }
 
 /** A file with a route: its path, the name refusals give it, and the position it answers by. */
-type Routed = {
+export type Routed = {
     path: string
     relative: string
     position: string
     route: string
+}
+
+/** 19.1 — a segment with its parameter's name erased: the literal, or `[kind]`. */
+export function segmentShape(segment: Segment): string {
+    return segment.kind === 'static' ? segment.name : `[${segment.kind}]`
 }
 
 /**
@@ -64,7 +69,7 @@ export async function matchersOf(
         let shape = ''
         let at = 0
         for (const segment of parseRoutePattern(file.route)) {
-            shape += `/${segment.kind === 'static' ? segment.name : `[${segment.kind}]`}`
+            shape += `/${segmentShape(segment)}`
             const index = at
             at += 1
             if (segment.kind === 'static') continue

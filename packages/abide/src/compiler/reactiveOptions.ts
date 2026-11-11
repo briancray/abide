@@ -30,7 +30,14 @@ export function reactiveOptions(
         !(isReactiveCall(call) || isDeclaredOverBody(call))
     )
         return undefined
-    const options = call.arguments[1]
+    return inlineOptions(call)
+}
+
+/** A call's options — its second argument — where it is an object written inline, else `undefined`. */
+export function inlineOptions(
+    call: Node & { arguments?: readonly Node[] },
+): ObjectLiteralExpression | undefined {
+    const options = call.arguments?.[1]
     return options !== undefined && isObjectLiteralExpression(options)
         ? options
         : undefined

@@ -15,6 +15,7 @@
 import { mkdir, rename, rm, utimes, writeFile } from 'node:fs/promises' // bun exposes no directory creation, rename, removal, mtime write or exclusive create of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 
+import { ABIDE_DIRECTORY } from './ABIDE_DIRECTORY.ts'
 import type { Compilation } from './abideModules.ts'
 import type { AppSources } from './answerRequest.ts'
 import type { Manifest } from './manifestOf.ts'
@@ -41,8 +42,6 @@ export type BuildFiles = {
 const ABIDE_BIN = Bun.fileURLToPath(
     new URL('../../bin/abide.ts', import.meta.url),
 )
-// The framework's own source is part of what made a build: a compiler change is a new build.
-const FRAMEWORK = Bun.fileURLToPath(new URL('../..', import.meta.url))
 const POLL_MS = 50
 // A test build no process has reused for this long is swept by the next one that builds.
 const UNUSED_FOR_MS = 24 * 60 * 60 * 1000
@@ -260,8 +259,8 @@ export async function sourceHash(root: string): Promise<string> {
     const app = packageDirectory(root)
     const paths = [
         ...filesUnder(root),
-        ...filesUnder(`${FRAMEWORK}src`),
-        ...filesUnder(`${FRAMEWORK}bin`),
+        ...filesUnder(`${ABIDE_DIRECTORY}src`),
+        ...filesUnder(`${ABIDE_DIRECTORY}bin`),
         `${app}/package.json`,
         `${app}/tsconfig.json`,
     ]

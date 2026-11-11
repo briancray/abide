@@ -19,7 +19,12 @@ import { abideImportsOf, componentGraph } from './componentGraph.ts'
 import { type Diagnosis, Diagnostics } from './Diagnostics.ts'
 import type { HandlerFile } from './handlersUnder.ts'
 import { hookCalls, hooksIn } from './hookCalls.ts'
-import { matchersOf, type MountedTree } from './matchersOf.ts'
+import {
+    matchersOf,
+    type MountedTree,
+    type Routed,
+    segmentShape,
+} from './matchersOf.ts'
 import { mountsOf } from './mountsOf.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { type ParsedSource, parseSources } from './readSources.ts'
@@ -159,12 +164,7 @@ export async function appLayout(root: string): Promise<AppLayout> {
     const { routes, errors } = routesOf(sources, refusals)
     // 23.26 — every routed file's matchers, a layout's among them for 23.27's sake though no table
     // carries a layout's own.
-    const routed: {
-        path: string
-        relative: string
-        position: string
-        route: string
-    }[] = []
+    const routed: Routed[] = []
     const relativeToPath = new Map<string, string>()
     for (const source of sources) {
         if (source.route === undefined) continue
@@ -523,6 +523,6 @@ function routesOf(
 export function shapeOf(route: string): string {
     let shape = ''
     for (const segment of parseRoutePattern(route))
-        shape += `/${segment.kind === 'static' ? segment.name : `[${segment.kind}]`}`
+        shape += `/${segmentShape(segment)}`
     return shape === '' ? '/' : shape
 }

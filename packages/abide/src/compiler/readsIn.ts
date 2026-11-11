@@ -738,8 +738,15 @@ function valueLeaves(node: Node, leaves: Node[]): void {
     }
 }
 
-// 23.1 — the five values `route` holds, each a `Reactive` of its own.
-const ROUTE_MEMBERS = new Set(['url', 'params', 'name', 'index', 'navigating'])
+// 23.1 — the five values `route` holds, each a `Reactive` of its own. A copy of `route`'s keys,
+// held to them by a test in `lowering.test.ts`.
+export const ROUTE_MEMBERS = new Set([
+    'url',
+    'params',
+    'name',
+    'index',
+    'navigating',
+])
 
 /**
  * 31.15 — `route`'s five values, each read by name as a name bound to a `Reactive` is.

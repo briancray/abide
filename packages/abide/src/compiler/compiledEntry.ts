@@ -1,3 +1,4 @@
+import { ABIDE_DIRECTORY } from '#server/ABIDE_DIRECTORY.ts'
 import { tablePath } from '#server/abideModules.ts'
 import type { AppPackage } from '#server/config.ts'
 import type { SourceMaps } from '#server/installSourceMaps.ts'
@@ -24,7 +25,6 @@ const RUNNERS = {
         ),
     },
 }
-const PACKAGE = Bun.fileURLToPath(new URL('../../', import.meta.url))
 
 /**
  * Abide's own package entries, by the specifier an app imports each with, to the module behind it.
@@ -46,7 +46,7 @@ function abideEntries(): Map<string, string> {
             entry === '.'
                 ? abidePackage.name
                 : `${abidePackage.name}/${entry.slice(2)}`,
-            `${PACKAGE}${path.slice(2)}`,
+            `${ABIDE_DIRECTORY}${path.slice(2)}`,
         )
     }
     return specifiers

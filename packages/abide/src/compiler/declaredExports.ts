@@ -25,7 +25,6 @@ import {
     type Type,
     TypeFlags,
     type TypeReference,
-    type UnionOrIntersectionType,
 } from 'typescript/unstable/async'
 
 import type { Mount } from '#server/mountHandlers.ts'
@@ -46,11 +45,17 @@ import {
 } from './argsSchemaOf.ts'
 import { type Diagnosis, diagnosisAt, type Diagnostics } from './Diagnostics.ts'
 import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
-import { isReactiveCall, METHODS, optionNamed } from './reactiveOptions.ts'
+import {
+    inlineOptions,
+    isReactiveCall,
+    METHODS,
+    optionNamed,
+} from './reactiveOptions.ts'
 import {
     abideIn,
     boundInitializer,
     isReactiveMember,
+    unionMembers,
     valueTypeOf,
 } from './reactiveTypes.ts'
 import type { ShadowHost } from './ShadowHost.ts'
@@ -108,6 +113,9 @@ async function exportsIn(
     const methodsPath = (
         await project.program.getSourceFile(FRAMEWORK_SOURCES.methods)
     )?.path
+    const structuralPath = (
+        await project.program.getSourceFile(FRAMEWORK_SOURCES.structural)
+    )?.path
     const abide = await abideIn(project)
     return allSettled(
         modules.map(async ({ path, file }) => {
@@ -137,6 +145,7 @@ async function exportsIn(
                             checker,
                             target,
                             methodsPath,
+                            structuralPath,
                         )
                         const unread: Diagnosis[] = []
                         for (const value of declared?.unread ?? []) {
@@ -246,6 +255,7 @@ async function declaringMethod(
     checker: Checker,
     symbol: CheckedSymbol,
     methodsPath: string | undefined,
+    structuralPath: string | undefined,
 ): Promise<
     | {
           method: Declared
@@ -305,7 +315,7 @@ async function declaringMethod(
         return undefined
     const declared =
         method.name === 'GET'
-            ? await declaredCopy(checker, call)
+            ? await declaredCopy(checker, call, structuralPath)
             : { copy: undefined, unread: [] }
     const body = await handlerBodyOf(checker, call.arguments[0])
     // 16.32 — A HANDLER RETURNING AN ASYNC GENERATOR ANSWERS A STREAM, and the browser's copy has to
@@ -390,16 +400,17 @@ function literalDefaults(node: Node | undefined): Defaults | null {
 async function declaredCopy(
     checker: Checker,
     declaring: CallExpression,
+    structuralPath: string | undefined,
 ): Promise<{ copy: CopyOptions | undefined; unread: Node[] }> {
     const unread: Node[] = []
-    const handed = await boundValue(checker, declaring.arguments[0])
+    const handed = await declarationOf(checker, declaring.arguments[0])
     const built =
         handed !== undefined &&
         isCallExpression(handed) &&
         isReactiveCall(handed)
             ? handed
             : declaring
-    const options = await boundValue(checker, built.arguments[1])
+    const options = await declarationOf(checker, built.arguments[1])
     if (options === undefined || !isObjectLiteralExpression(options))
         return { copy: undefined, unread }
     const copy: CopyOptions = {}
@@ -411,7 +422,7 @@ async function declaredCopy(
         if (name === 'identity') {
             if (
                 isIdentifier(value) &&
-                (await isAbideStructural(checker, value))
+                (await isAbideStructural(checker, value, structuralPath))
             )
                 copy.identity = 'structural'
         } else if (name === 'by' || name === 'tags') {
@@ -503,17 +514,15 @@ async function isGenerator(
  */
 async function isResponse(returned: Type | undefined): Promise<boolean> {
     if (returned === undefined) return false
-    if (returned.flags & TypeFlags.Union) {
-        for (const member of await (
-            returned as UnionOrIntersectionType
-        ).getTypes())
-            if (await isResponse(member)) return true
-        return false
-    }
-    return (await returned.getSymbol())?.name === 'Response'
+    for (const member of await unionMembers(returned))
+        if ((await member.getSymbol())?.name === 'Response') return true
+    return false
 }
 
-/** `boundValue`, and a function declaration where the name is one. */
+/**
+ * A node, or where it is a name, what the name was initialized with — or the function declaration,
+ * where the name is one.
+ */
 async function declarationOf(
     checker: Checker,
     node: Node | undefined,
@@ -527,16 +536,6 @@ async function declarationOf(
     if (declared !== undefined && isFunctionDeclaration(declared))
         return declared
     return boundInitializer(checker, named)
-}
-
-/** A node, or where it is a name, what the name was initialized with. */
-async function boundValue(
-    checker: Checker,
-    node: Node | undefined,
-): Promise<Node | undefined> {
-    if (node === undefined || !isIdentifier(node)) return node
-    const named = await checker.getSymbolAtLocation(node)
-    return named === undefined ? undefined : boundInitializer(checker, named)
 }
 
 /**
@@ -575,15 +574,15 @@ async function stringLiteralsOf(
 async function isAbideStructural(
     checker: Checker,
     named: Node,
+    structuralPath: string | undefined,
 ): Promise<boolean> {
+    if (structuralPath === undefined) return false
     const symbol = await checker.getSymbolAtLocation(named)
     if (symbol === undefined) return false
     const target = await aliasedSymbol(checker, symbol)
     return (
         target.name === 'structural' &&
-        (target.valueDeclaration?.path ?? '').endsWith(
-            '/shared/reactive/structural.ts',
-        )
+        target.valueDeclaration?.path === structuralPath
     )
 }
 
@@ -597,9 +596,8 @@ async function isAbideStructural(
 function describedAs(
     call: Node & { arguments?: readonly Node[] },
 ): string | undefined {
-    const options = call.arguments?.[1]
-    if (options === undefined || !isObjectLiteralExpression(options))
-        return undefined
+    const options = inlineOptions(call)
+    if (options === undefined) return undefined
     const description = optionNamed(options, 'description')
     return description !== undefined &&
         (isStringLiteral(description) ||
@@ -653,9 +651,8 @@ function declaredFor(
     call: Node & { arguments?: readonly Node[] },
     surface: 'ui' | 'cli' | 'mcp',
 ): boolean | undefined {
-    const options = call.arguments?.[1]
-    if (options === undefined || !isObjectLiteralExpression(options))
-        return undefined
+    const options = inlineOptions(call)
+    if (options === undefined) return undefined
     const clients = optionNamed(options, 'clients')
     if (clients === undefined || !isObjectLiteralExpression(clients))
         return undefined
@@ -708,9 +705,7 @@ async function nestedReactiveIn(
 ): Promise<string | undefined> {
     if (type === undefined || walk.depth >= DEEPEST) return undefined
     if (type.flags & TypeFlags.Union) {
-        for (const member of await (
-            type as UnionOrIntersectionType
-        ).getTypes()) {
+        for (const member of await unionMembers(type)) {
             const found = await nestedReactiveIn(
                 checker,
                 reactive,
