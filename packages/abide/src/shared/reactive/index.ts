@@ -16,6 +16,7 @@
 import type { Failed } from '../Failed.ts'
 import type { Issues } from '../Issues.ts'
 import { OUTBOX_SENDING } from '../OUTBOX_SENDING.ts'
+import type { Rpc } from '../rpc.ts'
 import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
 import { isReactive } from './isReactive.ts'
@@ -351,12 +352,18 @@ export function reactive<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
     initial: Accepted | PromiseLike<Accepted>,
     options?: Shaping<Accepted, Shaped, never, Gate>,
 ): Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>
-/** A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.9). */
-export function reactive<Accepted>(): Reactive<
-    Kept<Accepted>,
-    Accepted,
-    Refused<Accepted>
->
+/**
+ * A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.9).
+ *
+ * 4.19 — `reactive<typeof save>()` IS THE VALUE A CALL OF `save` IS, so the value a call is written to
+ * carries its value and its failures, as `Issues<typeof save>` reads its args (19.26). The tuple
+ * keeps a union from distributing, which typed `reactive<User | undefined>()` as two values.
+ */
+export function reactive<Accepted>(): [Accepted] extends [
+    Rpc<infer Value, infer Args, infer Failures, infer Produced>,
+]
+    ? ReturnType<Rpc<Value, Args, Failures, Produced>>
+    : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>
 export function reactive(
     // A REST TUPLE rather than two parameters, so the count of what was passed is read: 4.14 has no
     // argument land nothing where 4.15 has `undefined` land `undefined`.

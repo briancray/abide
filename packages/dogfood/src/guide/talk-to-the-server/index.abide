@@ -189,8 +189,14 @@ import Section from '#src/lib/Section.abide'
 
         <p><code>args</code> gates the arguments before the handler runs. A request that fails it
             is refused with 422 and a <code>ValidationError</code>, whose data is
-            <code>Issues&lt;T&gt;</code>: the messages, keyed by the field's path. The card lists each
-            field with its first message, and <code>issues.company</code> is the company's.</p>
+            <code>Issues&lt;T&gt;</code>: the messages, keyed by the field's path.</p>
+
+        <p>The form keeps the call. <code>saving = createDeal(…)</code> holds the value the call
+            hands back, so <code>saving.busy()</code> is true while it is in flight and
+            <code>saving.issues()</code> is the refusal's issues, or <code>undefined</code> when there
+            are none. The next press replaces the call, and its answer replaces the last one's.
+            <code>reactive&lt;typeof createDeal&gt;()</code> types the value as the call, so
+            <code>saving.issues()?.company</code> is the company's messages.</p>
 
         <p><code>amount</code> starts as a number, so its field binds as one and the handler is
             handed a number.</p>

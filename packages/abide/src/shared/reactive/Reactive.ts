@@ -250,6 +250,15 @@ export type Reactive<
     busy(): boolean
     ready(): boolean
     error(): Failures | undefined
+    /**
+     * The issues of the standing `ValidationError`, or `undefined` (3.15).
+     *
+     * READ OFF `Failures`, so an `Rpc` call's is `Issues<Args>` and a gated value's `Issues<Accepted>`,
+     * and a value no gate refuses answers `undefined` alone.
+     */
+    issues():
+        | Extract<Failures, { name: 'ValidationError'; data: unknown }>['data']
+        | undefined
     synced(): boolean
     /**
      * Narrows a caught error to this value's failure of that name.
@@ -1492,6 +1501,9 @@ function adopt(cell: Cell, inner: Cell): Error | undefined {
     // flight goes busy while the mirror's `unserve` finds nothing to lose and wakes no guard, so
     // `{paid.busy() ? 'paying…' : ''}` never painted the load it was asking about.
     const wasBusy = standing !== null && busyNow(standing.source)
+    // 11.50 FOR `error` MOVES WITH IT TOO: a call its `args` gate refused is adopted already failed,
+    // and nothing it produces later would tell `{saving.issues()}` the refusal had arrived.
+    const wasFailure = failureOf(cell)
     if (standing !== null) standing.stop()
     // 11.17: the adopted value's `identity` is inherited where the outer declared none —
     // THIS inner's, so a re-adoption onto another one does not keep the first one's.
@@ -1508,7 +1520,11 @@ function adopt(cell: Cell, inner: Cell): Error | undefined {
     // own rather than a branch on every value's write path — see `acceptIntoStream` for what such a
     // branch costs under V8 even where nothing takes it.
     seat(cell)
-    if (!cell.loading && busyNow(inner) !== wasBusy) probesMoved(cell)
+    if (
+        !cell.loading &&
+        (busyNow(inner) !== wasBusy || failureOf(cell) !== wasFailure)
+    )
+        probesMoved(cell)
     return undefined
 }
 
@@ -1547,6 +1563,7 @@ function follow(cell: Cell, stream: Stream, inner: Cell): Error | undefined {
     cell.generation += 1
     // 11.19 as `adopt` has it: following a call in flight is a busy move nothing mints.
     const wasBusy = standing !== null && busyNow(standing.source)
+    const wasFailure = failureOf(cell)
     if (standing !== null) unfollow(cell)
     // What `standWrite`'s identity gate compares against is what is served now.
     heldValue(cell)
@@ -1565,7 +1582,11 @@ function follow(cell: Cell, stream: Stream, inner: Cell): Error | undefined {
         return undefined
     })
     cell.adoption = { source: inner, stop }
-    if (!cell.loading && busyNow(inner) !== wasBusy) probesMoved(cell)
+    if (
+        !cell.loading &&
+        (busyNow(inner) !== wasBusy || failureOf(cell) !== wasFailure)
+    )
+        probesMoved(cell)
     return undefined
 }
 
@@ -3575,6 +3596,15 @@ const MEMBERS = {
         // because a refusal marks the VALUE readers and this body never read the value.
         probe(cell)
         return failureOf(cell)
+    },
+    issues(this: Callable): unknown {
+        const cell = this[CELL]
+        // 3.3 as `error` has it: the issues move exactly when the standing refusal does.
+        probe(cell)
+        const failure = failureOf(cell)
+        return isFailedNamed(failure, 'ValidationError')
+            ? (failure as Failed<'ValidationError', unknown>).data
+            : undefined
     },
     /**
      * The shared `isFailedNamed`, since this member reads no cell.

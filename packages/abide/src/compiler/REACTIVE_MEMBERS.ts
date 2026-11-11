@@ -22,6 +22,7 @@ export const REACTIVE_MEMBERS: ReadonlySet<string> = new Set([
     'error',
     'invalidate',
     'isError',
+    'issues',
     'patch',
     'peek',
     'ready',
