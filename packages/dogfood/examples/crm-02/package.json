@@ -26,6 +26,6 @@
         "@abide/harness": "workspace:*",
         "@types/bun": "latest",
         "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.3"
+        "tailwindcss": "^4.3.5"
     }
 }

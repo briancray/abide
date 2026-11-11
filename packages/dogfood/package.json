@@ -29,11 +29,11 @@
         "crm-08": "workspace:*",
         "crm-09": "workspace:*",
         "crm-10": "workspace:*",
-        "zod": "^4.6.5"
+        "zod": "^4.6.7"
     },
     "devDependencies": {
         "bun-plugin-tailwind": "^0.1.2",
         "@abide/harness": "workspace:*",
-        "tailwindcss": "^4.3.3"
+        "tailwindcss": "^4.3.5"
     }
 }
