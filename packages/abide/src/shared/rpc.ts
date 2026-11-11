@@ -42,7 +42,7 @@ import {
     type OptionalParameter,
     type Reactive,
     reactive,
-    refreshSwept,
+    refresh,
     type Refusals,
     type Shaping,
     STREAMING,
@@ -237,8 +237,9 @@ export type RpcOptions<
     crossOrigin?: boolean | string[]
     maxBodySize?: number
     /**
-     * 16.89 — the `tags` a run of the handler `refresh`es once it answers without a refusal, or
-     * what returns them for the call's `Args`, as a value's own `tags` is written.
+     * 16.89 — the `tags` a run of a mutation `refresh`es once it answers without a refusal, or
+     * what returns them for the call's `Args`, as a value's own `tags` is written. Never a
+     * `GET`'s (16.92).
      */
     refreshes?: string[] | ((args: Args) => string[])
 }
@@ -262,6 +263,15 @@ type Held<Accepted> = Accepted extends
     ? never
     : Accepted | PromiseLike<Accepted>
 
+/** A handler's options: `RpcOptions` for a mutation, less `refreshes` for a `GET` (16.92). */
+type OptionsOf<
+    Writes extends boolean,
+    Args,
+    Answers extends readonly unknown[],
+> = [Writes] extends [true]
+    ? RpcOptions<Args, Answers>
+    : Omit<RpcOptions<Args, Answers>, 'refreshes'>
+
 /**
  * The signature `GET` and the four mutations share: a handler in, its `Rpc` out.
  *
@@ -270,8 +280,10 @@ type Held<Accepted> = Accepted extends
  * and type the `Rpc` as holding the value's own getter. The plain arms are `reactive`'s own
  * overloads, in its order and for its reason, and take its options beside the address's (16.6) —
  * which is why a value handed in takes the address's alone: it has decided its own.
+ *
+ * 16.92 — `Writes` is false for `GET` alone, whose options have no `refreshes`.
  */
-type Declare = {
+type Declare<Writes extends boolean> = {
     <
         Stored,
         Args,
@@ -281,7 +293,7 @@ type Declare = {
         Answers extends readonly unknown[] = unknown[],
     >(
         handler: Keyed<Stored, Args, Accepted, Failures, Produced>,
-        options?: RpcOptions<Args, Answers>,
+        options?: OptionsOf<Writes, Args, Answers>,
     ): Rpc<Stored, Args, Failures | RungRefusals<Answers>, Produced>
     <
         Stored,
@@ -291,7 +303,7 @@ type Declare = {
         Answers extends readonly unknown[] = unknown[],
     >(
         handler: Reactive<Stored, Accepted, Failures, Produced>,
-        options?: RpcOptions<undefined, Answers>,
+        options?: OptionsOf<Writes, undefined, Answers>,
     ): Rpc<Stored, undefined, Failures | RungRefusals<Answers>, Produced>
     // 11.2 — a stream whose parameter is optional is keyed, for `reactive`'s reason.
     <
@@ -309,7 +321,7 @@ type Declare = {
             Gate,
             ArgsGate
         > &
-            RpcOptions<Parameters<Body>[0], Answers>,
+            OptionsOf<Writes, Parameters<Body>[0], Answers>,
     ): Rpc<
         Kept<Shaped>,
         Parameters<Body>[0],
@@ -327,7 +339,7 @@ type Declare = {
             AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>) &
             Plain,
         options?: Shaping<Chunk[], Shaped, never, Gate> &
-            RpcOptions<undefined, Answers>,
+            OptionsOf<Writes, undefined, Answers>,
     ): Rpc<
         Kept<Shaped>,
         undefined,
@@ -347,7 +359,7 @@ type Declare = {
         ) => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>) &
             Plain,
         options?: Shaping<Chunk[], Shaped, Args, Gate, ArgsGate> &
-            RpcOptions<Args, Answers>,
+            OptionsOf<Writes, Args, Answers>,
     ): Rpc<
         Kept<Shaped>,
         Args,
@@ -370,7 +382,7 @@ type Declare = {
             Gate,
             ArgsGate
         > &
-            RpcOptions<Parameters<Body>[0], Answers>,
+            OptionsOf<Writes, Parameters<Body>[0], Answers>,
     ): Rpc<
         Kept<Shaped>,
         Parameters<Body>[0],
@@ -393,7 +405,7 @@ type Declare = {
     >(
         handler: (() => Computed) & Plain,
         options?: Shaping<Awaited<Computed>, Shaped, never, Gate> &
-            RpcOptions<undefined, Answers>,
+            OptionsOf<Writes, undefined, Answers>,
     ): Rpc<
         Kept<Shaped>,
         undefined,
@@ -413,7 +425,7 @@ type Declare = {
     >(
         handler: Held<Accepted>,
         options?: Shaping<Accepted, Shaped, never, Gate> &
-            RpcOptions<undefined, Answers>,
+            OptionsOf<Writes, undefined, Answers>,
     ): Rpc<
         Kept<Shaped>,
         undefined,
@@ -429,7 +441,7 @@ type Declare = {
     >(
         handler: ((args: Args) => Computed) & Plain,
         options?: Shaping<Awaited<Computed>, Shaped, Args, Gate, ArgsGate> &
-            RpcOptions<Args, Answers>,
+            OptionsOf<Writes, Args, Answers>,
     ): Rpc<
         Kept<Shaped>,
         Args,
@@ -453,8 +465,15 @@ const UNREACHED: Record<
 }
 
 /** Builds the handler declarer for one method — what `GET`, `POST` and the rest are. */
-export function declare(method: Method): Declare {
+export function declare<Declared extends Method>(
+    method: Declared,
+): Declare<Declared extends 'GET' ? false : true> {
     return ((handler: unknown, options?: RpcOptions): unknown => {
+        // 16.92 — for a caller the types did not reach.
+        if (method === 'GET' && options?.refreshes !== undefined)
+            throw new Error(
+                'abide: a `GET` was declared with `refreshes`, which only a mutation takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
+            )
         // 16.6, and 16.7's `ttl` of 0 on a mutation: each call is a write, so nothing a previous
         // call produced is served to the next one. 13.16 — and marked, so a sweep never sends it again.
         const cacheOptions =
@@ -535,12 +554,12 @@ export function declare(method: Method): Declare {
                           ? answer
                           : (args: unknown) =>
                                 answerThenRefresh(answer(args), () =>
-                                    refreshSwept(
-                                        typeof refreshes === 'function'
-                                            ? refreshes(args)
-                                            : refreshes,
-                                        rpc,
-                                    ),
+                                    refresh({
+                                        tags:
+                                            typeof refreshes === 'function'
+                                                ? refreshes(args)
+                                                : refreshes,
+                                    }),
                                 ),
                       cacheOptions,
                   )
@@ -695,14 +714,14 @@ export function declare(method: Method): Declare {
                     : { key: () => '', at: () => value },
             )
         return rpc
-    }) as Declare
+    }) as Declare<Declared extends 'GET' ? false : true>
 }
 
-export const GET: Declare = declare('GET')
-export const POST: Declare = declare('POST')
-export const PUT: Declare = declare('PUT')
-export const PATCH: Declare = declare('PATCH')
-export const DELETE: Declare = declare('DELETE')
+export const GET: Declare<false> = declare('GET')
+export const POST: Declare<true> = declare('POST')
+export const PUT: Declare<true> = declare('PUT')
+export const PATCH: Declare<true> = declare('PATCH')
+export const DELETE: Declare<true> = declare('DELETE')
 
 /** The handler's mount address, or a throw naming where one comes from. */
 function addressOf(rpc: { address: string | undefined }): string {

@@ -200,7 +200,7 @@ import Section from '#src/lib/Section.abide'
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
             <tbody>
-                <tr><td><code>refreshes</code></td><td>the tags a handler refreshes each time it answers; any method takes it, and a handler's own followers are never sent it</td></tr>
+                <tr><td><code>refreshes</code></td><td>the tags a write refreshes each time it answers. <code>POST</code>, <code>PUT</code>, <code>PATCH</code> and <code>DELETE</code> take it; <code>GET</code> does not, since a read changes nothing to refresh</td></tr>
             </tbody>
         </table>
     </Section>

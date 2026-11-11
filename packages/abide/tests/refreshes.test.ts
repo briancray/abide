@@ -1,11 +1,11 @@
-// 16.89 TO 16.91 — A HANDLER'S `refreshes`, called in process: what it reloads is counted as BODY
+// 16.89 TO 16.92 — A MUTATION'S `refreshes`, called in process: what it reloads is counted as BODY
 // RUNS of the values tagged, never read off their values, since a reload landing an equal value
 // reads the same. The tags carry a prefix no other file uses: the selection index is process-wide,
-// and `bun run test:serial` runs every file in one process. 16.92 is the mux's, in `follow.test.ts`.
+// and `bun run test:serial` runs every file in one process. What reaches a browser is `follow.test.ts`'s.
 
 import { expect, test } from 'bun:test'
 
-import { POST, reactive, refuse, watch } from '#server'
+import { GET, POST, reactive, refuse, watch } from '#server'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -160,4 +160,17 @@ test('a streamed answer refreshes once it closes, and not where it fails — 16.
     expect(`after the close: +${runs.boats - before}`).toBe(
         'after the close: +1',
     )
+})
+
+// 16.92 — A `GET` TAKES NO `refreshes`: its options lack the key, so the declaration is a type
+// error, and a caller the types did not reach is refused where it declares. THE REVERT for the type:
+// hand `GET` the mutations' options, and the `@ts-expect-error` below is unused, failing
+// `bun run typecheck`. For the refusal: drop the check in `declare`; nothing is thrown.
+test('a GET declared with refreshes is refused — 16.92', () => {
+    expect(() =>
+        // @ts-expect-error — `refreshes` is a mutation's option alone.
+        GET(() => 1, { refreshes: ['refreshes:cars'] }),
+    ).toThrow('RULEBOOK 16.92')
+    const untyped = { refreshes: ['refreshes:cars'] } as object
+    expect(() => GET(() => 1, untyped)).toThrow('RULEBOOK 16.92')
 })
