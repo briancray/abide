@@ -5,6 +5,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { tokenize } from '../../abide/src/compiler/tokenize.ts'
 import { rulebookClauses } from '../scripts/rulebookClauses.ts'
 import { cellsOf } from '../src/lib/cellsOf.ts'
+import { registryRows } from '../src/lib/referenceOf.ts'
 
 // REGISTRY.md holds signatures and RULEBOOK.md holds requirements, and the split is only worth
 // having if it STAYS split. Prose at the top of a document does not make it stay — a rule written
@@ -276,25 +277,13 @@ test('every clause is cited by a registry row', async () => {
 // A rulebook GROUP that states no requirement, or a REGISTRY section no group governs, is a place
 // where a rule can go missing without anything saying so. A row-for-row count cannot see it: a
 // section with no table rows passes a count without being read.
-test('every registry section is governed by some clause', async () => {
-    const registry = await Bun.file(new URL('REGISTRY.md', DOCS)).text()
+test('every registry section is governed by some clause', () => {
     const sections = new Map<string, string[]>()
-    let section = ''
-    for (const line of registry.split('\n')) {
-        if (line.startsWith('## ')) {
-            section = line.slice(3).trim()
-            continue
-        }
-        if (line.startsWith('# ')) section = line.slice(2).trim()
-        if (!line.startsWith('| `') && !line.startsWith('| formatting'))
-            continue
-        const cells = line
-            .replace(/^\|/, '')
-            .replace(/(?<!\\)\|$/, '')
-            .split(/(?<!\\)\|/)
-        const cited = cells.at(-1)?.trim() ?? ''
-        sections.set(section, [...(sections.get(section) ?? []), cited])
-    }
+    for (const row of registryRows(registry))
+        sections.set(row.section, [
+            ...(sections.get(row.section) ?? []),
+            row.cells.at(-1) ?? '',
+        ])
     const ungoverned: string[] = []
     for (const [name, cells] of sections) {
         if (cells.some((cell) => cell !== '—' && cell !== '')) continue

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { EXCERPT } from '../src/lib/highlight.ts'
+import { EXCERPT, withoutExcerpt } from '../src/lib/highlight.ts'
 import {
     attributeOf,
     type DocsPage,
@@ -69,9 +69,7 @@ test('a fence claiming a whole file agrees with every fence of that address', as
     for (const page of await docsPages())
         for (const fence of fencesOf(page)) {
             if (!isAddress(fence.caption)) continue
-            const address = fence.caption.endsWith(EXCERPT)
-                ? fence.caption.slice(0, -EXCERPT.length)
-                : fence.caption
+            const address = withoutExcerpt(fence.caption)
             const list = byAddress.get(address) ?? []
             list.push({ where: page.route, fence })
             byAddress.set(address, list)

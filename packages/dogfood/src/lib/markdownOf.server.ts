@@ -6,7 +6,7 @@
 // tables, code under a caption, and an example card, whose running component is left out and whose
 // files are written as captioned fences.
 
-import { EXCERPT } from './highlight.ts'
+import { withoutExcerpt } from './highlight.ts'
 import { markdownAddressOf } from './sitePages.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
@@ -146,12 +146,7 @@ function fence(caption: string, pre: Element | undefined): string {
     const code = pre && find(pre, (node) => node.tag === 'code')
     const language =
         /\blanguage-(\w+)/.exec(code?.attributes.class ?? '')?.[1] ||
-        (/\.(\w+)$/.exec(
-            caption.endsWith(EXCERPT)
-                ? caption.slice(0, -EXCERPT.length)
-                : caption,
-        )?.[1] ??
-            '')
+        (/\.(\w+)$/.exec(withoutExcerpt(caption))?.[1] ?? '')
     const text = pre === undefined ? '' : textOf(pre)
     return `\`\`\`${language}${caption ? ` ${caption}` : ''}\n${text.replace(/\n$/, '')}\n\`\`\``
 }

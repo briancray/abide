@@ -39,6 +39,13 @@ export function languageOf(path: string): string {
 /** What a caption marks a slice of a file with, which is never part of its path. */
 export const EXCERPT = ' — excerpt'
 
+/** A caption without its excerpt mark: the path it names. */
+export function withoutExcerpt(caption: string): string {
+    return caption.endsWith(EXCERPT)
+        ? caption.slice(0, -EXCERPT.length)
+        : caption
+}
+
 /**
  * Which side a caption names, as the spine colors it: a file path, or one of four words.
  *
@@ -46,7 +53,7 @@ export const EXCERPT = ' — excerpt'
  * server's, and everything else — a `.abide` file always — is BOTH SIDES.
  */
 export function sideOf(caption: string): 'server' | 'abide' | 'browser' {
-    const address = caption.replace(EXCERPT, '')
+    const address = withoutExcerpt(caption)
     if (
         address.endsWith('.abide') ||
         address === 'abide' ||

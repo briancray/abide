@@ -149,14 +149,16 @@ export function servedDocs(): Promise<{ base: string; stop: () => void }> {
 let markdown: Promise<Map<string, string>> | undefined
 
 /**
- * `work` over every page, eight in flight, answered in reading order. One page after another was
- * most of a gate's wall clock; every page at once is more sockets than the served app will hold.
+ * Each page's body as the built app answers `addressOfRoute(route)`, keyed by route — eight in
+ * flight. One page after another was most of a gate's wall clock; every page at once is more
+ * sockets than the served app will hold.
  */
-async function eightAtATime(
-    pages: DocsPage[],
-    work: (page: DocsPage) => Promise<string>,
-): Promise<string[]> {
-    const answers: string[] = []
+async function rendered(
+    addressOfRoute: (route: string) => string,
+): Promise<Map<string, string>> {
+    const { base } = await servedDocs()
+    const pages = await docsPages()
+    const texts: string[] = []
     let next = 0
     const workers: Promise<void>[] = []
     for (let lane = 0; lane < 8; lane += 1)
@@ -164,27 +166,19 @@ async function eightAtATime(
             (async () => {
                 while (next < pages.length) {
                     const at = next++
-                    answers[at] = await work(pages[at] as DocsPage)
+                    const address = addressOfRoute(
+                        (pages[at] as DocsPage).route,
+                    )
+                    const answer = await Bun.fetch(`${base}${address}`)
+                    if (!answer.ok)
+                        throw new Error(
+                            `docs: ${address} answered ${answer.status}`,
+                        )
+                    texts[at] = await answer.text()
                 }
             })(),
         )
     await Promise.all(workers)
-    return answers
-}
-
-/** Each page's body as the built app answers `addressOf(route)`, keyed by route. */
-async function rendered(
-    addressOf: (route: string) => string,
-): Promise<Map<string, string>> {
-    const { base } = await servedDocs()
-    const pages = await docsPages()
-    const texts = await eightAtATime(pages, async (page) => {
-        const address = addressOf(page.route)
-        const answer = await Bun.fetch(`${base}${address}`)
-        if (!answer.ok)
-            throw new Error(`docs: ${address} answered ${answer.status}`)
-        return answer.text()
-    })
     const bodies = new Map<string, string>()
     for (let at = 0; at < pages.length; at += 1)
         bodies.set((pages[at] as DocsPage).route, texts[at] as string)

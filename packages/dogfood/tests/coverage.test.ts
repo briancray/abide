@@ -14,10 +14,7 @@ import {
 } from '../scripts/referencePages.ts'
 import { cellsOf } from '../src/lib/cellsOf.ts'
 import { REFERENCE } from '../src/lib/REFERENCE.ts'
-import {
-    registryRows as registryRowsOf,
-    scopeOf,
-} from '../src/lib/referenceOf.ts'
+import { registryRows, scopeOf } from '../src/lib/referenceOf.ts'
 import { SITE } from '../src/lib/SITE.ts'
 import { DOCUMENTS, sidebarGroupsOf } from '../src/lib/siteSections.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
@@ -34,13 +31,9 @@ import {
 // for the whole load against the chapter apps' suites, inside its own five seconds.
 beforeAll(() => renderedMarkdown(), 60_000)
 
-const REGISTRY = new URL('../../../docs/REGISTRY.md', import.meta.url)
-
-type RegistryRow = {
-    name: string
-    signature: string | undefined
-    section: string
-}
+const registry = await Bun.file(
+    new URL('../../../docs/REGISTRY.md', import.meta.url),
+).text()
 
 // Every name in the FIRST column of a REGISTRY table is a capability or a variant an app
 // author can reach. This reads REGISTRY.md rather than a copied list, so a capability
@@ -51,19 +44,20 @@ type RegistryRow = {
 // reading that as a signature is what would make one capability restated in two tables
 // look like two capabilities that disagree. The QUALIFIER is the nearest `##`, trimmed
 // to its first code span: "## `memo` — the loaded value" is `memo`.
-async function registryRows(): Promise<RegistryRow[]> {
-    const rows: RegistryRow[] = []
-    for (const row of registryRowsOf(await Bun.file(REGISTRY).text())) {
-        const name = row.cells[0]
-        if (name === undefined || !name.startsWith('`')) continue
-        const signed = /^(Type )?Signature$/.test(row.header[1] ?? '')
-        rows.push({
-            name,
-            signature: signed ? (row.cells[1] ?? '') : undefined,
-            section: row.qualifier,
-        })
-    }
-    return rows
+const capabilities: {
+    name: string
+    signature: string | undefined
+    section: string
+}[] = []
+for (const row of registryRows(registry)) {
+    const name = row.cells[0]
+    if (name === undefined || !name.startsWith('`')) continue
+    const signed = /^(Type )?Signature$/.test(row.header[1] ?? '')
+    capabilities.push({
+        name,
+        signature: signed ? (row.cells[1] ?? '') : undefined,
+        section: row.qualifier,
+    })
 }
 
 // A name in two sections is TWO CAPABILITIES by default — `Args` is a memo key, a room
@@ -88,7 +82,7 @@ async function specSections(): Promise<
     Map<string, Map<string, string | undefined>>
 > {
     const sections = new Map<string, Map<string, string | undefined>>()
-    for (const { name, signature, section } of await registryRows()) {
+    for (const { name, signature, section } of capabilities) {
         const seen = sections.get(name) ?? new Map<string, string | undefined>()
         if (!seen.has(section) || signature !== undefined)
             seen.set(section, signature)
@@ -491,14 +485,14 @@ function binder(signature: string): string {
 
 async function declaredTypes(): Promise<Set<string>> {
     const declared = new Set<string>()
-    for (const line of (await Bun.file(REGISTRY).text()).split('\n')) {
+    for (const line of registry.split('\n')) {
         const heading = /^#{1,4}\s+`?([A-Za-z_$][\w$]*)/.exec(line)
         if (heading?.[1]) declared.add(heading[1])
         // A fenced `type X = …`, which is where the adoption unwrap is spelled out.
         const alias = /^type\s+([A-Za-z_$][\w$]*)/.exec(line)
         if (alias?.[1]) declared.add(alias[1])
     }
-    for (const { name, signature } of await registryRows()) {
+    for (const { name, signature } of capabilities) {
         const own = /^`?([A-Za-z_$][\w$]*)/.exec(name)?.[1]
         if (own) declared.add(own)
         // The LEADING `<…>` only, matched to its own closing angle — a default can
@@ -537,7 +531,7 @@ async function declaredTypes(): Promise<Set<string>> {
 test('every type a signature names is declared somewhere', async () => {
     const declared = await declaredTypes()
     const dangling: string[] = []
-    for (const { name, signature } of await registryRows()) {
+    for (const { name, signature } of capabilities) {
         for (const match of withoutLiterals(signature ?? '').matchAll(
             /\b([A-Z][A-Za-z0-9]*)\b/g,
         )) {
@@ -724,7 +718,7 @@ test('the reference on disk is what the registry and the exports generate', asyn
 // than agreed with. THE REVERT: drop `flushSync` from `REFERENCE.ts`, and it is named.
 test('every export the registry names has a reference page', async () => {
     const named = new Set<string>()
-    for (const row of registryRowsOf(await Bun.file(REGISTRY).text())) {
+    for (const row of registryRows(registry)) {
         const options = /`([^`]+)`/.exec(row.subsection ?? '')?.[1]
         if (options) named.add(`${row.scope}\0${options}`)
         if (row.header[0] !== 'Name') continue
@@ -752,7 +746,7 @@ test('every registry row is on exactly one reference page', async () => {
     const key = (cells: string[]): string =>
         cells.slice(0, -1).join(' | ').replace(/\s+/g, ' ')
     const written = new Map<string, number>()
-    for (const row of registryRowsOf(await Bun.file(REGISTRY).text()))
+    for (const row of registryRows(registry))
         written.set(key(row.cells), (written.get(key(row.cells)) ?? 0) + 1)
     const found = new Map<string, string[]>()
     for (const [route, body] of await renderedMarkdown()) {
