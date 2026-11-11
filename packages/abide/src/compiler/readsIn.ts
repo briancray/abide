@@ -69,6 +69,7 @@ import {
     valueTypeOf,
 } from './reactiveTypes.ts'
 import { referencesIn } from './referencesIn.ts'
+import { ROUTE_MEMBERS } from './ROUTE_MEMBERS.ts'
 import { sharedModuleWrites } from './sharedModuleWrites.ts'
 import { trackingWarnings } from './trackingWarnings.ts'
 
@@ -737,16 +738,6 @@ function valueLeaves(node: Node, leaves: Node[]): void {
             return
     }
 }
-
-// 23.1 — the five values `route` holds, each a `Reactive` of its own. A copy of `route`'s keys,
-// held to them by a test in `lowering.test.ts`.
-export const ROUTE_MEMBERS = new Set([
-    'url',
-    'params',
-    'name',
-    'index',
-    'navigating',
-])
 
 /**
  * 31.15 — `route`'s five values, each read by name as a name bound to a `Reactive` is.

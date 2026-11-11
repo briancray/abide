@@ -14,7 +14,7 @@ import {
     parseAbide,
 } from './parseAbide.ts'
 import { sameTemplate } from './sameTemplate.ts'
-import { isBlank, isSpace, slotEnd, tokenize } from './tokenize.ts'
+import { isBlank, isSpace, NEWLINE_RUN, slotEnd, tokenize } from './tokenize.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 // 38.125, 38.126 — A `.abide` IS FORMATTED AS PIECES, and `bun fmt` formats every piece that is code: a
@@ -324,7 +324,7 @@ function piecesOf(source: string, codeBlocks: Set<number>): Piece[] {
 function pushText(pieces: Piece[], text: string): void {
     const alone = isBlank(text)
     let from = 0
-    for (const match of text.matchAll(/[ \t\r\n]*\n[ \t\r\n]*/g)) {
+    for (const match of text.matchAll(NEWLINE_RUN)) {
         if (match.index > from)
             pieces.push({ kind: 'text', text: text.slice(from, match.index) })
         pieces.push({ kind: 'break', text: match[0], place: 'markup', alone })

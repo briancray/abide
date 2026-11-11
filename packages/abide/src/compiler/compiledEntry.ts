@@ -7,22 +7,16 @@ import { SERVER_TABLE } from '#server/TABLES.ts'
 import abidePackage from '../../package.json' with { type: 'json' }
 
 // What the executable starts from: `abide compile`'s, and `abide bundle`'s window over it (38.70).
-const INSTALL_SOURCE_MAPS = Bun.fileURLToPath(
-    new URL('../server/installSourceMaps.ts', import.meta.url),
-)
+const INSTALL_SOURCE_MAPS = `${ABIDE_DIRECTORY}src/server/installSourceMaps.ts`
 
 const RUNNERS = {
     compiled: {
         name: 'runCompiled',
-        path: Bun.fileURLToPath(
-            new URL('../server/runCompiled.ts', import.meta.url),
-        ),
+        path: `${ABIDE_DIRECTORY}src/server/runCompiled.ts`,
     },
     desktop: {
         name: 'runDesktop',
-        path: Bun.fileURLToPath(
-            new URL('../server/runDesktop.ts', import.meta.url),
-        ),
+        path: `${ABIDE_DIRECTORY}src/server/runDesktop.ts`,
     },
 }
 

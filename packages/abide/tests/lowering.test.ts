@@ -4,7 +4,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { emitComponent } from '#compiler'
 import { REACTIVE_MEMBERS } from '#compiler/REACTIVE_MEMBERS.ts'
-import { ROUTE_MEMBERS } from '#compiler/readsIn.ts'
+import { ROUTE_MEMBERS } from '#compiler/ROUTE_MEMBERS.ts'
 import { tokenize } from '#compiler/tokenize.ts'
 import { reactive } from '#shared'
 import { route } from '#shared/route.ts'

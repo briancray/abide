@@ -21,6 +21,8 @@ import {
 
 import type { JsonValue } from '#shared/JsonValue.ts'
 
+import { unionMembers } from './reactiveTypes.ts'
+
 type Schema = { [keyword: string]: JsonValue }
 
 /**
@@ -269,9 +271,7 @@ function literalsOf(literals: Type[]): Schema {
 }
 
 async function holdsUndefined(type: Type): Promise<boolean> {
-    if (type.flags & (TypeFlags.Undefined | TypeFlags.Void)) return true
-    if (!(type.flags & TypeFlags.Union)) return false
-    for (const member of await (type as UnionOrIntersectionType).getTypes())
+    for (const member of await unionMembers(type))
         if (member.flags & (TypeFlags.Undefined | TypeFlags.Void)) return true
     return false
 }

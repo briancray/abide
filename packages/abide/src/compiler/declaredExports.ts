@@ -44,7 +44,6 @@ import {
     type Walk,
 } from './argsSchemaOf.ts'
 import { type Diagnosis, diagnosisAt, type Diagnostics } from './Diagnostics.ts'
-import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 import {
     inlineOptions,
     isReactiveCall,
@@ -52,6 +51,7 @@ import {
     optionNamed,
 } from './reactiveOptions.ts'
 import {
+    type Abide,
     abideIn,
     boundInitializer,
     isReactiveMember,
@@ -107,15 +107,6 @@ async function exportsIn(
     refusals: Diagnostics,
 ): Promise<(DeclaredExport[] | undefined)[]> {
     const checker = project.checker
-    // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalizes a path to
-    // the disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back
-    // `/users/…/code` and a string compared against `import.meta.url` never matched.
-    const methodsPath = (
-        await project.program.getSourceFile(FRAMEWORK_SOURCES.methods)
-    )?.path
-    const structuralPath = (
-        await project.program.getSourceFile(FRAMEWORK_SOURCES.structural)
-    )?.path
     const abide = await abideIn(project)
     return allSettled(
         modules.map(async ({ path, file }) => {
@@ -144,8 +135,7 @@ async function exportsIn(
                         const declared = await declaringMethod(
                             checker,
                             target,
-                            methodsPath,
-                            structuralPath,
+                            abide,
                         )
                         const unread: Diagnosis[] = []
                         for (const value of declared?.unread ?? []) {
@@ -254,8 +244,7 @@ type DeclaredExport = Pick<
 async function declaringMethod(
     checker: Checker,
     symbol: CheckedSymbol,
-    methodsPath: string | undefined,
-    structuralPath: string | undefined,
+    abide: Abide,
 ): Promise<
     | {
           method: Declared
@@ -309,13 +298,13 @@ async function declaringMethod(
     const description = describedAs(call)
     if (
         !METHODS.has(method.name) ||
-        methodsPath === undefined ||
-        method.valueDeclaration?.path !== methodsPath
+        abide.methods === undefined ||
+        method.valueDeclaration?.path !== abide.methods
     )
         return undefined
     const declared =
         method.name === 'GET'
-            ? await declaredCopy(checker, call, structuralPath)
+            ? await declaredCopy(checker, call, abide)
             : { copy: undefined, unread: [] }
     const body = await handlerBodyOf(checker, call.arguments[0])
     // 16.32 — A HANDLER RETURNING AN ASYNC GENERATOR ANSWERS A STREAM, and the browser's copy has to
@@ -400,7 +389,7 @@ function literalDefaults(node: Node | undefined): Defaults | null {
 async function declaredCopy(
     checker: Checker,
     declaring: CallExpression,
-    structuralPath: string | undefined,
+    abide: Abide,
 ): Promise<{ copy: CopyOptions | undefined; unread: Node[] }> {
     const unread: Node[] = []
     const handed = await declarationOf(checker, declaring.arguments[0])
@@ -422,7 +411,7 @@ async function declaredCopy(
         if (name === 'identity') {
             if (
                 isIdentifier(value) &&
-                (await isAbideStructural(checker, value, structuralPath))
+                (await isAbideStructural(checker, value, abide))
             )
                 copy.identity = 'structural'
         } else if (name === 'by' || name === 'tags') {
@@ -574,15 +563,15 @@ async function stringLiteralsOf(
 async function isAbideStructural(
     checker: Checker,
     named: Node,
-    structuralPath: string | undefined,
+    abide: Abide,
 ): Promise<boolean> {
-    if (structuralPath === undefined) return false
+    if (abide.structural === undefined) return false
     const symbol = await checker.getSymbolAtLocation(named)
     if (symbol === undefined) return false
     const target = await aliasedSymbol(checker, symbol)
     return (
         target.name === 'structural' &&
-        target.valueDeclaration?.path === structuralPath
+        target.valueDeclaration?.path === abide.structural
     )
 }
 

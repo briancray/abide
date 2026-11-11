@@ -296,6 +296,13 @@ function endsOperand(kind: SyntaxKind): boolean {
 }
 
 /**
+ * A run of `isSpace`'s whitespace holding a newline — the run a text node renders as one space.
+ *
+ * Global, for `matchAll` and `replace`, neither of which leaves `lastIndex` behind.
+ */
+export const NEWLINE_RUN = /[\t\n\f\r ]*\n[\t\n\f\r ]*/g
+
+/**
  * Whether `char` is HTML's ASCII whitespace.
  *
  * HTML's ASCII WHITESPACE — every position this is asked about is template grammar, not
@@ -321,9 +328,8 @@ export function isBlank(text: string): boolean {
 }
 
 /**
- * The index just past the CSS string opening at `open`.
- *
- * A `;` or a `:` inside one is the value's own.
+ * The index just past the string opening at `open` (any quote; a `\` escapes the next character),
+ * or the source's end where it never closes.
  */
 export function skipQuoted(source: string, open: number): number {
     const quote = source[open]

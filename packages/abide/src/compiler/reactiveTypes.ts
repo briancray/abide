@@ -86,8 +86,10 @@ async function everyPresentMember(
  * abide's `Reactive` carries the symbol of the one type literal it is declared as, whatever alias
  * or re-export the app reached it through — so `type Counter = Reactive<number>` is one, and an
  * app's own type that happens to be spelled `Reactive` is not. `undefined` where the project never
- * reaches abide, and then nothing in it is one. `props` and `onConfig` are abide's files as the
- * checker names them.
+ * reaches abide, and then nothing in it is one. `props`, `onConfig`, `methods` and `structural` are
+ * abide's files AS THE CHECKER NAMES THEM, not as this module does: it canonicalizes a path to the
+ * disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back `/users/…/code` and a
+ * string compared against `import.meta.url` never matched.
  */
 export type Abide = {
     /** 23.9 — abide's `route`, as the file the checker names it. */
@@ -100,16 +102,23 @@ export type Abide = {
     props: string | undefined
     /** 27.13 — abide's `onConfig`, as the file the checker names it. */
     onConfig: string | undefined
+    /** 16.73 — the file declaring the five methods. */
+    methods: string | undefined
+    /** 18.4 — the file declaring `structural`. */
+    structural: string | undefined
 }
 
 export async function abideIn(project: Project): Promise<Abide> {
-    const [declares, props, selects, route, hooks] = await Promise.all([
-        project.program.getSourceFile(FRAMEWORK_SOURCES.reactive),
-        project.program.getSourceFile(FRAMEWORK_SOURCES.props),
-        project.program.getSourceFile(FRAMEWORK_SOURCES.selection),
-        project.program.getSourceFile(FRAMEWORK_SOURCES.route),
-        project.program.getSourceFile(FRAMEWORK_SOURCES.hooks),
-    ])
+    const [declares, props, selects, route, hooks, methods, structural] =
+        await Promise.all([
+            project.program.getSourceFile(FRAMEWORK_SOURCES.reactive),
+            project.program.getSourceFile(FRAMEWORK_SOURCES.props),
+            project.program.getSourceFile(FRAMEWORK_SOURCES.selection),
+            project.program.getSourceFile(FRAMEWORK_SOURCES.route),
+            project.program.getSourceFile(FRAMEWORK_SOURCES.hooks),
+            project.program.getSourceFile(FRAMEWORK_SOURCES.methods),
+            project.program.getSourceFile(FRAMEWORK_SOURCES.structural),
+        ])
     let selection: CheckedSymbol | undefined
     for (const statement of selects?.statements ?? [])
         if (
@@ -139,6 +148,8 @@ export async function abideIn(project: Project): Promise<Abide> {
         selection,
         props: props?.path,
         onConfig: hooks?.path,
+        methods: methods?.path,
+        structural: structural?.path,
     }
 }
 

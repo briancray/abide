@@ -39,9 +39,7 @@ export type BuildFiles = {
 }
 
 // The CLI, spawned rather than imported: the compiler is not reachable from the server seam.
-const ABIDE_BIN = Bun.fileURLToPath(
-    new URL('../../bin/abide.ts', import.meta.url),
-)
+const ABIDE_BIN = `${ABIDE_DIRECTORY}bin/abide.ts`
 const POLL_MS = 50
 // A test build no process has reused for this long is swept by the next one that builds.
 const UNUSED_FOR_MS = 24 * 60 * 60 * 1000

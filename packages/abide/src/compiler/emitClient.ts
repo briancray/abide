@@ -467,19 +467,6 @@ ${fill}${captured}${bindings}${owning.closed}${closed}
 }
 
 /**
- * The statements declaring a region's inline components on the client (`inlineDefinitions`).
- *
- * DECLARED IN THE REGION EVEN WHERE NOTHING IN IT IS READ, a row's included: one function a row
- * mount, which `inlineRowShare.ts` prices inside the noise of the mount around it. Hoisting the
- * ones that read nothing of the row would be a scope analysis and a branch with no ratio to earn it.
- */
-function definitions(sink: Cursor, region: RegionEmission): string[] {
-    return inlineDefinitions(sink, (component) =>
-        clientComponent(component, region),
-    )
-}
-
-/**
  * Whether a placed region reads anything that moves.
  *
  * 39.13 — by `emitRegion`'s own rule: a nested region, a live text run, or an attribute
@@ -605,7 +592,15 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
         // 32.43 — A REGION THAT MOUNTS NOTHING INVOKES NOTHING, so what it declares is reached
         // from nowhere and is not declared: a row declaring a component it never invokes stays a
         // row whose mount is the shared empty one.
-        if (lines.length > 0) region.defs = definitions(sink, region)
+        //
+        // DECLARED IN THE REGION EVEN WHERE NOTHING IN IT IS READ, a row's included: one function a
+        // row mount, which `inlineRowShare.ts` prices inside the noise of the mount around it.
+        // Hoisting the ones that read nothing of the row would be a scope analysis and a branch with
+        // no ratio to earn it.
+        if (lines.length > 0)
+            region.defs = inlineDefinitions(sink, (component) =>
+                clientComponent(component, region),
+            )
     })
     return region
 }

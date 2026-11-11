@@ -12,7 +12,7 @@ import { COMPILER_OPTIONS } from './writeDefaultProject.ts'
 
 // THE STARTER'S OWN FILES, as files: a real document, a real page and the agent notes, copied as
 // they stand. What depends on the name, or what a packer drops (`filesFor`), is written here.
-const STARTER = Bun.fileURLToPath(new URL('../../scaffold/', import.meta.url))
+const STARTER = `${ABIDE_DIRECTORY}scaffold/`
 
 // THE ABIDE THAT WROTE THE PROJECT is the one it depends on. Installed from a registry, that is its
 // version; run from a checkout, no registry has that version, and the only spelling that installs

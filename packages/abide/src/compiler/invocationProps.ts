@@ -63,7 +63,7 @@ export function invocationProps(
  * is written, which is unique in its file. Its own name is the function expression's, so its body
  * still invokes itself (32.44).
  */
-export function passedName(component: InlineComponent): string {
+function passedName(component: InlineComponent): string {
     return `__passed${component.at}`
 }
 
