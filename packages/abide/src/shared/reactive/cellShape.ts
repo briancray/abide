@@ -731,9 +731,13 @@ export function simpleShape(cell: Cell): void {
 }
 
 /**
- * The record `value` keeps its state on, for a reader outside the core: `value` is a `Reactive`, and
- * this is the cast from what an app holds to the record, so no module outside the core spells it.
- * The core's own paths read `[CELL]` inline.
+ * The record `value` keeps its state on: `value` is a `Reactive`, and this is the cast from what an
+ * app holds to the record, for a module that already value-imports `cellShape`.
+ *
+ * A module importing `cellShape` TYPE-ONLY (`byOf`, `watch`, `pairReactive`, `scoped`) spells
+ * `(x as Callable)[CELL]` itself, which keeps `cellShape`'s value graph out of its own; the core's
+ * paths read `[CELL]` inline; and `producer.isStreaming` reads `?.[CELL]`, which this cast would
+ * not allow.
  */
 export function cellOf(value: unknown): Cell {
     return (value as Callable)[CELL]

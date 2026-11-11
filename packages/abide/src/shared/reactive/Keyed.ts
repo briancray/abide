@@ -17,7 +17,12 @@ import {
     PARAMETER_DEFAULTS,
 } from './argsContract.ts'
 import { CELL } from './CELL.ts'
-import { type Callable, type Cell, refuseBothCaps } from './cellShape.ts'
+import {
+    type Callable,
+    type Cell,
+    cellOf,
+    refuseBothCaps,
+} from './cellShape.ts'
 import { armTimer, armWindow } from './Expiry.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
@@ -88,7 +93,7 @@ export function isKeyed(
  * The args are the entry's body argument and its cell already holds them for every run.
  */
 function argsOf(entry: unknown): unknown {
-    return (entry as Callable)[CELL].args
+    return cellOf(entry).args
 }
 
 // One entry of `Lifetime.followed`, which is in recency order: what an eviction needs beside when
@@ -264,7 +269,6 @@ class StartWindow {
     }
 
     open(): void {
-        if (this.timer !== null) clearTimeout(this.timer)
         armWindow(this, this.ms, () => {
             this.timer = null
             const held = this.pending

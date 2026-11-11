@@ -163,10 +163,6 @@ function timeLoad(attended: Attended, milliseconds: number | undefined): void {
     const expire = (): void => {
         if (loadOf(reached) === load) abandonLoad(reached, refuse(504))
     }
-    const arm = (): void => {
-        if (clock.timer !== null) clearTimeout(clock.timer)
-        armTimer(clock, milliseconds, expire)
-    }
     let settled = false
     const end = (): void => {
         settled = true
@@ -178,11 +174,11 @@ function timeLoad(attended: Attended, milliseconds: number | undefined): void {
         try {
             for await (const _ of reached as AsyncIterable<unknown>) {
                 if (settled || loadOf(reached) !== load) return
-                arm()
+                armTimer(clock, milliseconds, expire)
             }
         } catch {}
     }
-    arm()
+    armTimer(clock, milliseconds, expire)
     // 9.6 — a value behind rungs only turns out to stream once the onion resolves, so the question
     // is asked then, by the one wait that also hears a value settle or refuse.
     streamingOrSettled(reached).then((settled) => {

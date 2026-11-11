@@ -1199,11 +1199,10 @@ function releaseHeld(cell: Cell, cap: Cap): void {
 }
 
 function openWindow(cell: Cell, cap: Cap): void {
-    // 5.13 NEEDS THIS: a debounce calls in here on every production inside its window, and
-    // the reset is what "until the changes stop" means. Without it each write arms its own
-    // timer and the first to fire releases — a fixed delay from the FIRST change, which
+    // 5.13 NEEDS `armTimer`'s clear: a debounce calls in here on every production inside its
+    // window, and the reset is what "until the changes stop" means. Without it each write arms its
+    // own timer and the first to fire releases — a fixed delay from the FIRST change, which
     // reads identically to a debounce under any run of writes made in one turn.
-    if (cap.timer !== null) clearTimeout(cap.timer)
     // `armTimer` for 6.4's reason, which a window shares with a deadline: a timer never holds the
     // process open. The keyed window arms through the same `armWindow`, so the two agree.
     armWindow(cap, cap.ms, () => {
@@ -3209,27 +3208,11 @@ function warnStore(cell: Cell, what: string, failed: unknown): void {
 }
 
 /**
- * Restores a value from its store at construction, falling back on a miss.
- *
- * 8.4: A SYNCHRONOUS `get` IS NOT A LOAD — the value is there at construction and nothing is
- * pending. An unsettled one is a load like any other, and a write made while it is out supersedes
- * it the way a write supersedes any load: `generation` moves, and the answer lands nowhere.
- */
-function restoreFirst(
-    cell: Cell,
-    persisted: Persisted,
-    initial: unknown,
-): void {
-    askStore(cell, persisted, (value) =>
-        settleRestore(cell, persisted, value, initial),
-    )
-}
-
-/**
  * Asks the store for the value and hands what it answers to `land` — `undefined` for a miss.
  *
- * A synchronous answer lands now (8.4); an unsettled one is a load, superseded as any is — a write
- * moves `generation`, and the answer lands nowhere. A rejection is a miss, warned (8.15).
+ * 8.4: A SYNCHRONOUS `get` IS NOT A LOAD — the answer lands now, and at construction nothing is
+ * pending. An unsettled one is a load, superseded as any is — a write moves `generation`, and the
+ * answer lands nowhere. A rejection is a miss, warned (8.15).
  */
 function askStore(
     cell: Cell,
@@ -4028,8 +4011,11 @@ export function createReactive<
     // 8.3 AND 8.14: a store answers first, where the value is constructed, and whatever it misses
     // falls back to what the value would have done without one.
     if (cell.store !== null) {
-        restoreFirst(cell, cell.store, initial)
-        watchStore(cell, cell.store, cached)
+        const store = cell.store
+        askStore(cell, store, (value) =>
+            settleRestore(cell, store, value, initial),
+        )
+        watchStore(cell, store, cached)
     } else if (body === null) {
         if (initial === undefined) landOpening(cell)
         else if (initial !== NO_INITIAL) open(cell, initial)

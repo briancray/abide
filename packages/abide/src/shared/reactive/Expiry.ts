@@ -85,7 +85,8 @@ export function expiryFor(
  *
  * 6.3: ONE TIMER, AND THIS IS ONLY ITS PLUMBING — which deadline is nearest is a question about
  * the cell (its body, whether 6.7 has already run) and is answered in `Reactive.ts`
- * where those live. What is here is the part every arming shares. Widened to anything holding one
+ * where those live. What is here is the part every arming shares, and arming a holder that
+ * already stands a timer replaces that timer rather than adding a second. Widened to anything holding one
  * timer, because a keyed `ttl` (11.48) arms the same kind: one per holder.
  *
  * 6.4: A TIMER MUST NOT HOLD THE PROCESS OPEN, and the feature test is the isomorphism rather
@@ -105,6 +106,8 @@ export function armTimer(
     delay: number,
     fire: () => void,
 ): void {
+    if (expiry.timer !== null) clearTimeout(expiry.timer)
+    expiry.timer = null
     if (delay === Number.POSITIVE_INFINITY) return
     const timer = setTimeout(
         fire,

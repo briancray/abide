@@ -2,8 +2,8 @@
 // milliseconds, which is what an app otherwise writes as a `setInterval` in `onStart` and a
 // `clearInterval` in `onStop` — and then has to remember for every value, keyed entry and request.
 //
-// NO FIELD ON THE CELL. The timer's stop is handed to whatever ends the value — its owner, or its
-// `Keyed` — so a value declaring no `poll` carries nothing for it, and the read and write paths
+// NO FIELD ON THE CELL. The timer's stop is handed to the owner building the value, through
+// `ownedPoll`, so a value declaring no `poll` carries nothing for it, and the read and write paths
 // never see it. A `Keyed` polls with ONE timer over the entries it holds at each tick, so an entry
 // its `ttl` evicted is out of the walk by being out of the map.
 

@@ -23,7 +23,7 @@ function inSetup(build: () => void): () => void {
 // 7.20 AND 7.23: THE BODY RUNS ON THE CLOCK, AND STOPS WITH ITS OWNER. A value built in a setup is
 // refreshed every `poll` while the setup stands, and never once it has ended.
 //
-// THE REVERT: drop the `owned(stop)` from `createReactive`, and `after the owner ended: 5` where `0`
+// THE REVERT: drop the `owned(...)` from `ownedPoll`, and `after the owner ended: 5` where `0`
 // is due.
 test('poll runs the body on its interval and stops with the owner that built it — 7.20, 7.23', async () => {
     let runs = 0
@@ -75,7 +75,7 @@ test('poll does not refresh a value whose load is still in flight — 7.21', asy
 
 // 7.20 AND 7.23 ON A KEYED VALUE: ONE CLOCK OVER THE ENTRIES IT HOLDS, stopped with the `Keyed`.
 //
-// THE REVERT: drop the `owned(stop)` from `createKeyed`, and each entry ran 3 more times after it
+// THE REVERT: drop the `owned(...)` from `ownedPoll`, and each entry ran 3 more times after it
 // ended, `after: 10,10` where `7,7` was due.
 test('poll on a keyed value refreshes every entry it holds, and stops with it — 7.20, 7.23', async () => {
     const runs = new Map<number, number>()
