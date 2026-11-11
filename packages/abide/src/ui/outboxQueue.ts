@@ -59,7 +59,7 @@ type Shelf = {
 }
 
 /** The line, oldest first, as this tab last read it. */
-let LINE: Kept[] = []
+let keptLine: Kept[] = []
 /** Whether this tab is sending. */
 let sending = false
 /** 46.6 — a call refused 401 holds the line until `principal` changes or `retry` is called. */
@@ -86,7 +86,7 @@ const channel =
 /** The calls not yet delivered: what is waiting, as against what was refused. */
 export function undelivered(): number {
     let count = 0
-    for (const call of LINE) if (call.error === undefined) count += 1
+    for (const call of keptLine) if (call.error === undefined) count += 1
     return count
 }
 
@@ -106,7 +106,7 @@ export function resetOutbox(): void {
     backoff.reset()
     held = false
     waiting = false
-    LINE = []
+    keptLine = []
     VALUES.clear()
     shelf = memoryShelf()
     publish()
@@ -146,7 +146,7 @@ export async function enqueue(
     }
     const reached = standing.value
     if (isReactive(reached)) VALUES.set(call.id, reached as Reactive<unknown>)
-    LINE.push(kept)
+    keptLine.push(kept)
     publish()
     changed()
     // 46.14 — a call waiting on the network is one the browser must not clear to make room.
@@ -180,12 +180,12 @@ async function sendLine(): Promise<void> {
     sending = true
     try {
         // Another tab may have sent or queued since this one last read the line.
-        LINE = await shelf.load()
+        keptLine = await shelf.load()
         publish()
-        for (const call of [...LINE]) {
+        for (const call of [...keptLine]) {
             if (call.error !== undefined) continue
             // 46.13 — a call discarded since the line was read is not sent.
-            if (!LINE.some((each) => each.id === call.id)) continue
+            if (!keptLine.some((each) => each.id === call.id)) continue
             showSending(call)
             const answer = await send(call)
             showSending(undefined)
@@ -210,7 +210,7 @@ async function sendLine(): Promise<void> {
                 continue
             }
             await shelf.remove(call.seq as number)
-            LINE = LINE.filter((each) => each.id !== call.id)
+            keptLine = keptLine.filter((each) => each.id !== call.id)
             publish()
             produceInto(valueStanding(call), value)
             VALUES.delete(call.id)
@@ -265,9 +265,9 @@ function publish(): void {
             for (const listener of DRAINED) listener()
         })
     waiting = now
-    mark(LINE.length !== 0)
+    mark(keptLine.length !== 0)
     const calls: ShownCall[] = []
-    for (const call of LINE) {
+    for (const call of keptLine) {
         const id = call.id
         calls.push({
             id,
@@ -312,14 +312,14 @@ function changed(): void {
 }
 
 async function reread(): Promise<void> {
-    LINE = await shelf.load()
+    keptLine = await shelf.load()
     publish()
 }
 
 /** 46.12 — sends the call `id` names again, at once, and lets go of a line 46.6 held. */
 async function retry(id: string): Promise<void> {
     held = false
-    for (const call of LINE)
+    for (const call of keptLine)
         if (call.id === id && call.error !== undefined) {
             call.error = undefined
             await shelf.put(call)
@@ -337,13 +337,13 @@ async function retry(id: string): Promise<void> {
 /** 46.13 — drops the call `id` names, sent or not. */
 async function discard(id: string): Promise<void> {
     const kept: Kept[] = []
-    for (const call of LINE) {
+    for (const call of keptLine) {
         if (call.id === id) {
             await shelf.remove(call.seq as number)
             VALUES.delete(call.id)
         } else kept.push(call)
     }
-    LINE = kept
+    keptLine = kept
     publish()
     changed()
 }

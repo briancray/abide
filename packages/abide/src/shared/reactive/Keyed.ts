@@ -23,7 +23,7 @@ import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
 import { parameterDefaults } from './parameterDefaults.ts'
-import { armPoll, refreshIdle, refuseBadPoll } from './poll.ts'
+import { ownedPoll, refreshIdle, refuseBadPoll } from './poll.ts'
 import {
     abandonDeferred,
     createReactive,
@@ -380,10 +380,9 @@ export function createKeyed<
     // 7.20, 7.23 — one timer over the entries held at each tick: an evicted entry is out of the map.
     if (poll !== undefined) {
         refuseBadPoll(`${label}()`, poll)
-        const stop = armPoll(poll, () => {
+        ownedPoll(poll, () => {
             for (const entry of entries.values()) refreshIdle(entry)
         })
-        if (owning()) owned(stop)
     }
 
     function askMembership(): void {

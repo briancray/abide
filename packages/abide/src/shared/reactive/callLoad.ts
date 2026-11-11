@@ -8,8 +8,8 @@
 // and only a called one ever fills it, so the table is what keeps a plain `reactive` paying nothing.
 
 import { beginLoadCall, endLoadCall, reachedInLoadCall } from '../loadCall.ts'
-import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
 import { aborted, refuse } from '../refuse.ts'
+import { armTimer } from './Expiry.ts'
 // Through the barrel first, for the cycle it names: rpc reaches this module ahead of the barrel.
 import { isReactive, STREAMING } from './index.ts'
 import {
@@ -156,21 +156,21 @@ function timeLoad(attended: Attended, milliseconds: number | undefined): void {
     attended.timed = true
     const reached = attended.value
     const load = attended.load
-    let timer: ReturnType<typeof setTimeout> | undefined
+    // `armTimer`'s, so the clock is capped at what `setTimeout` holds and never holds the process open.
+    const clock: { timer: ReturnType<typeof setTimeout> | null } = {
+        timer: null,
+    }
+    const expire = (): void => {
+        if (loadOf(reached) === load) abandonLoad(reached, refuse(504))
+    }
     const arm = (): void => {
-        clearTimeout(timer)
-        // PAST WHAT `setTimeout` HOLDS a delay runs after 1 ms, which would refuse the load at once.
-        timer = setTimeout(
-            () => {
-                if (loadOf(reached) === load) abandonLoad(reached, refuse(504))
-            },
-            Math.min(milliseconds, LONGEST_DELAY),
-        )
+        if (clock.timer !== null) clearTimeout(clock.timer)
+        armTimer(clock, milliseconds, expire)
     }
     let settled = false
     const end = (): void => {
         settled = true
-        clearTimeout(timer)
+        if (clock.timer !== null) clearTimeout(clock.timer)
     }
     // A CHUNK IS PROGRESS, and the run's close ends the loop (2.6). What the run failed with is the
     // load's to answer, so the loop only stops on it.

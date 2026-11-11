@@ -114,7 +114,7 @@ test('a poll that is not a positive number is refused at construction — 7.25',
 // 7.22: A POLLED VALUE NOBODY ENDS DOES NOT KEEP THE PROCESS ALIVE. A module-level value polls for
 // the life of the process, and a script or a test run that builds one still exits.
 //
-// THE REVERT: drop the `unref` from `armPoll`, and the child never exits — `did not finish in 5000 ms`.
+// THE REVERT: drop the `unref` from `ownedPoll`, and the child never exits — `did not finish in 5000 ms`.
 test('a poll does not hold the process open — 7.22', async () => {
     const source = `import { reactive } from '${import.meta.dir}/../src/shared/index.ts'
 reactive(() => 1, { poll: 50, global: true })()

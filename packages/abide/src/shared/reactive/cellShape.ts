@@ -732,7 +732,8 @@ export function simpleShape(cell: Cell): void {
 
 /**
  * The record `value` keeps its state on, for a reader outside the core: `value` is a `Reactive`, and
- * this is the one cast from what an app holds to the record, rather than one per reader.
+ * this is the cast from what an app holds to the record, so no module outside the core spells it.
+ * The core's own paths read `[CELL]` inline.
  */
 export function cellOf(value: unknown): Cell {
     return (value as Callable)[CELL]

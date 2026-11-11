@@ -27,7 +27,7 @@ export type ShareScope = {
 // The instance being rendered or mounted, or `null` outside one. A dynamic scope like
 // `TRACKING.reader` is, and for the same reason: the call is made in an author's own setup, which
 // cannot be handed a parameter.
-let CURRENT: ShareScope | null = null
+let standingShare: ShareScope | null = null
 
 /**
  * The app's registry of shared keys, declaration-merged (10.3).
@@ -43,7 +43,7 @@ export function share<Key extends string, Value>(
     key: Key,
     create: () => Reactive<Value>,
 ): Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value> {
-    const scope = CURRENT
+    const scope = standingShare
     if (scope === null)
         throw new Error(
             `abide: reactive.share('${key}') was called outside a component instance, and the scope it would get or create in is that instance. RULEBOOK 10.5.`,
@@ -68,8 +68,8 @@ export function share<Key extends string, Value>(
  * routed level opening its own scope (39.1); every other scope carries its parent's down.
  */
 export function enterShare(level?: unknown): ShareScope | null {
-    const previous = CURRENT
-    CURRENT = {
+    const previous = standingShare
+    standingShare = {
         parent: previous,
         values: new Map(),
         level: level ?? previous?.level,
@@ -78,20 +78,20 @@ export function enterShare(level?: unknown): ShareScope | null {
 }
 
 export function leaveShare(previous: ShareScope | null): void {
-    CURRENT = previous
+    standingShare = previous
 }
 
 /**
  * The share scope current now, for an instance to capture at mount and a deferred mount to resume.
  *
  * 10.5 THROUGH A MOUNT THAT HAPPENS LATER. A row the list grows by is mounted from a `watch`
- * effect, not from inside its caller's mount — so nothing is on the stack and `CURRENT` is null,
+ * effect, not from inside its caller's mount — so nothing is on the stack and `standingShare` is null,
  * and a child that shares would open a chain of its own and miss the key its page holds. The
  * instance captures its own scope at mount and the deferred mount resumes it, which is what makes
  * a row added after the click a descendant of the same page as the rows the server wrote.
  */
 export function currentShare(): ShareScope | null {
-    return CURRENT
+    return standingShare
 }
 
 /**
@@ -106,18 +106,18 @@ export function inShare<First, Second, Result>(
     first: First,
     second: Second,
 ): Result {
-    const previous = CURRENT
-    CURRENT = scope
+    const previous = standingShare
+    standingShare = scope
     try {
         return run(first, second)
     } finally {
-        CURRENT = previous
+        standingShare = previous
     }
 }
 
 /** Makes a captured share scope current again, and returns the previous one to restore. */
 export function resumeShare(scope: ShareScope | null): ShareScope | null {
-    const previous = CURRENT
-    CURRENT = scope
+    const previous = standingShare
+    standingShare = scope
     return previous
 }

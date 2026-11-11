@@ -40,7 +40,7 @@ import { isThenable } from './isThenable.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
 import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
-import { armPoll, refreshIdle, refuseBadPoll } from './poll.ts'
+import { ownedPoll, refreshIdle, refuseBadPoll } from './poll.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
 import { runInScope } from './scoping.ts'
@@ -763,8 +763,8 @@ function markAsked(asked: Subscriber[]): void {
  * below it, so a probe read can never be inside this walk.
  */
 function probesMoved(cell: Cell): void {
-    PROBE_PASS += 1
-    markProbes(cell, PROBE_PASS)
+    probePasses += 1
+    markProbes(cell, probePasses)
     if (draining || pendingCount === 0) return
     schedule()
 }
@@ -907,7 +907,7 @@ function drainPending(): void {
 function produce(cell: Cell, produced: unknown): number {
     // 3.11 — A PRODUCTION THE PRODUCER MADE puts the value back in step; one a write here made is
     // `writtenHere`'s to report, after it lands.
-    if (cell.local && WRITING === 0) producedAgain(cell)
+    if (cell.local && writingDepth === 0) producedAgain(cell)
     // 7.9: AN ACCEPTED PRODUCTION SETTLES THE RELOAD AN INVALIDATE OWED — ahead of the gate, since
     // a write 5.2 collapses was still accepted. Left standing, the next read unserved this value
     // and reloaded over it. A look above (`OWES_ABOVE`) is not this value's mark and stays: 11.8
@@ -2511,7 +2511,7 @@ function readIndirect(cell: Cell): unknown {
  * `true`, so the full traversal is the ALL-IDLE graph — the spinner read that renders
  * no spinner, every frame.
  */
-let PROBE_PASS = 0
+let probePasses = 0
 
 /**
  * Whether this value or anything it reads or adopts is loading.
@@ -2591,8 +2591,8 @@ function failureOf(cell: Cell): unknown {
 function busyNow(cell: Cell): boolean {
     if (cell.loading) return true
     if (cell.sources.length === 0 && cell.adoption === null) return false
-    PROBE_PASS += 1
-    return walkBusy(cell, PROBE_PASS)
+    probePasses += 1
+    return walkBusy(cell, probePasses)
 }
 
 /**
@@ -2661,8 +2661,8 @@ function probe(cell: Cell): void {
 function readyNow(cell: Cell): boolean {
     if (!cell.servable) return false
     if (cell.sources.length === 0 && cell.adoption === null) return true
-    PROBE_PASS += 1
-    return walkReady(cell, PROBE_PASS)
+    probePasses += 1
+    return walkReady(cell, probePasses)
 }
 
 /**
@@ -2687,8 +2687,8 @@ function walkSynced(cell: Cell, pass: number): boolean {
 function syncedNow(cell: Cell): boolean {
     if (cell.local) return false
     if (cell.sources.length === 0 && cell.adoption === null) return true
-    PROBE_PASS += 1
-    return walkSynced(cell, PROBE_PASS)
+    probePasses += 1
+    return walkSynced(cell, probePasses)
 }
 
 /**
@@ -2697,7 +2697,7 @@ function syncedNow(cell: Cell): boolean {
  * A COUNT RATHER THAN A FLAG, so a write made from inside another's gate — a `transform` writing a
  * second value — leaves the outer one's mark standing when it returns.
  */
-let WRITING = 0
+let writingDepth = 0
 
 /** 3.10 — marks a value with a producer as written here, telling the guards that asked. */
 function writtenHere(cell: Cell): void {
@@ -2715,11 +2715,11 @@ function producedAgain(cell: Cell): void {
 
 /** `accept`, as a write made here rather than a production. */
 function acceptHere(cell: Cell, value: unknown): unknown {
-    WRITING += 1
+    writingDepth += 1
     try {
         return accept(cell, value)
     } finally {
-        WRITING -= 1
+        writingDepth -= 1
     }
 }
 
@@ -2732,12 +2732,12 @@ function acceptHere(cell: Cell, value: unknown): unknown {
 function setOverProducer(cell: Cell, value: unknown): unknown {
     const ordinal = cell.ordinal
     cell.generation += 1
-    WRITING += 1
+    writingDepth += 1
     let answer: unknown
     try {
         answer = setThroughGates(cell, value)
     } finally {
-        WRITING -= 1
+        writingDepth -= 1
     }
     if (
         answer === undefined &&
@@ -2836,28 +2836,29 @@ function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
         // the tracking protocol, so without this a `CHECK` mark arriving from further
         // upstream would have nothing to resolve against.
         const waiter: Subscriber = newSubscriber([cell], null)
+        const finish = (): void => {
+            waiter.alive = false
+            dropProbeReader(cell, waiter)
+        }
         waiter.notify = (): void => {
             // THE WAITER PULLS. A value built from a source that has just landed is marked and
             // not yet rerun — nothing else reads it — so asking whether it is busy before
             // pulling it answers from the run that aborted, and the await never settles.
             if (cell.state !== CLEAN) resolve(cell)
             if (untilStreaming && cell.stream !== null) {
-                waiter.alive = false
-                dropProbeReader(cell, waiter)
+                finish()
                 settle(STREAMING)
                 return
             }
             if (busyNow(cell)) return
             if (cell.servable) {
-                waiter.alive = false
-                dropProbeReader(cell, waiter)
+                finish()
                 settle(heldValue(cell))
                 return
             }
             const failure = failureOf(cell)
             if (failure !== undefined) {
-                waiter.alive = false
-                dropProbeReader(cell, waiter)
+                finish()
                 fail(failure)
             }
         }
@@ -3188,14 +3189,12 @@ function readStore(cell: Cell, persisted: Persisted): unknown {
     try {
         return persisted.store.get()
     } catch (failed) {
-        warnStore(
-            cell,
-            'could not be read, and is taken as a miss. RULEBOOK 8.15',
-            failed,
-        )
+        warnStore(cell, STORE_UNREAD, failed)
         return undefined
     }
 }
+
+const STORE_UNREAD = 'could not be read, and is taken as a miss. RULEBOOK 8.15'
 
 /**
  * The logger a store failure warns through.
@@ -3221,26 +3220,37 @@ function restoreFirst(
     persisted: Persisted,
     initial: unknown,
 ): void {
+    askStore(cell, persisted, (value) =>
+        settleRestore(cell, persisted, value, initial),
+    )
+}
+
+/**
+ * Asks the store for the value and hands what it answers to `land` — `undefined` for a miss.
+ *
+ * A synchronous answer lands now (8.4); an unsettled one is a load, superseded as any is — a write
+ * moves `generation`, and the answer lands nowhere. A rejection is a miss, warned (8.15).
+ */
+function askStore(
+    cell: Cell,
+    persisted: Persisted,
+    land: (value: unknown) => void,
+): void {
     const answer = readStore(cell, persisted)
     if (!isThenable(answer)) {
-        settleRestore(cell, persisted, answer, initial)
+        land(answer)
         return
     }
     beginLoad(cell)
     const generation = cell.generation
     answer.then(
         (value) => {
-            if (cell.generation === generation)
-                settleRestore(cell, persisted, value, initial)
+            if (cell.generation === generation) land(value)
         },
         (failed: unknown) => {
             if (cell.generation !== generation) return
-            warnStore(
-                cell,
-                'could not be read, and is taken as a miss. RULEBOOK 8.15',
-                failed,
-            )
-            settleRestore(cell, persisted, undefined, initial)
+            warnStore(cell, STORE_UNREAD, failed)
+            land(undefined)
         },
     )
 }
@@ -3331,28 +3341,7 @@ function rereadStore(cell: Cell, persisted: Persisted): void {
         restore(cell, persisted, persisted.unconfirmed)
         return
     }
-    const answer = readStore(cell, persisted)
-    if (!isThenable(answer)) {
-        settleReread(cell, persisted, answer)
-        return
-    }
-    beginLoad(cell)
-    const generation = cell.generation
-    answer.then(
-        (value) => {
-            if (cell.generation !== generation) return
-            settleReread(cell, persisted, value)
-        },
-        (failed: unknown) => {
-            if (cell.generation !== generation) return
-            warnStore(
-                cell,
-                'could not be read, and is taken as a miss. RULEBOOK 8.15',
-                failed,
-            )
-            settleReread(cell, persisted, undefined)
-        },
-    )
+    askStore(cell, persisted, (value) => settleReread(cell, persisted, value))
 }
 
 /**
@@ -3818,12 +3807,12 @@ const STREAM_PROTOTYPE = brandedPrototype({
             if (cycle !== undefined) throw cycle
             return undefined
         }
-        WRITING += 1
+        writingDepth += 1
         let answer: unknown
         try {
             answer = writeStream(cell, value)
         } finally {
-            WRITING -= 1
+            writingDepth -= 1
         }
         if (answer === undefined) writtenHere(cell)
         return answer
@@ -3900,7 +3889,7 @@ const SIMPLE_PROTOTYPE = brandedPrototype({
             cell.value = value
             cell.ordinal += 1
             // 3.10 — a write over a producer is one `synced` hears. Never a production here, so no
-            // `WRITING` count: the short write does not reach `produce`.
+            // `writingDepth` count: the short write does not reach `produce`.
             if (cell.body !== null) writtenHere(cell)
             // `setDirect`, with `plain` known true by `simple`.
             cell.direct = cell.state === CLEAN
@@ -4051,10 +4040,9 @@ export function createReactive<
     if (poll !== undefined) {
         refuseBadPoll(label, poll)
         if (reloads(cell)) {
-            const stop = armPoll(poll, () =>
+            ownedPoll(poll, () =>
                 refreshIdle(self as unknown as Reactive<unknown>),
             )
-            if (owning()) owned(stop)
         }
     }
     return self as unknown as Reactive<Stored, Accepted, Failures, Produced>

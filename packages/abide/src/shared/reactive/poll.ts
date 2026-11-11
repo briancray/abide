@@ -9,7 +9,7 @@
 
 import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
 import { unrefTimer } from './unrefTimer.ts'
-import type { Disposer } from './watch.ts'
+import { owned, owning } from './watch.ts'
 
 /**
  * Throws where `poll` is not a positive number of milliseconds (7.25).
@@ -25,16 +25,17 @@ export function refuseBadPoll(label: string, poll: number | undefined): void {
 }
 
 /**
- * Runs `tick` every `poll` milliseconds, never holding the process open, and answers its stop.
+ * Runs `tick` every `poll` milliseconds, never holding the process open, stopped with the owner
+ * building it — a setup or a request — where there is one.
  *
  * 7.22 FOLLOWS 6.4's FEATURE TEST (`unrefTimer`). `Infinity` arms nothing; a finite interval past what a timer holds runs
  * at the longest one it does.
  */
-export function armPoll(poll: number, tick: () => void): Disposer {
-    if (poll === Number.POSITIVE_INFINITY) return () => {}
+export function ownedPoll(poll: number, tick: () => void): void {
+    if (poll === Number.POSITIVE_INFINITY) return
     const timer = setInterval(tick, Math.min(poll, LONGEST_DELAY))
     unrefTimer(timer)
-    return () => clearInterval(timer)
+    if (owning()) owned(() => clearInterval(timer))
 }
 
 /**
