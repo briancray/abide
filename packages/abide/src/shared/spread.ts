@@ -2,7 +2,9 @@
 //
 // ON A COMPONENT, props: one accessor per key the value carries when the invocation is made, each
 // re-reading the value, so a prop stays a live read (33.5) as an explicit one is. The keys are read
-// once — a prop type with an index signature is where they are enumerated per read (33.11).
+// once — a prop type with an index signature is where they are enumerated per read (33.11). Read
+// before the value has landed, they throw `NotLanded` out of the record, and the invocation waits
+// for it rather than the mount around it aborting (32.23, `invokeLanded` and `renderComponent`).
 //
 // ON AN ELEMENT, attributes: what the server writes into the tag, and what the client keeps writing.
 // A key the element names explicitly is the explicit attribute's (33.12's rule, held for elements

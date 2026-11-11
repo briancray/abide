@@ -432,7 +432,13 @@ function invocationMarkup(
         props.push(
             `${JSON.stringify(CHILDREN)}: () => ${scoped(definitions(at.inner[0] as Cursor, lowering), `(${renderMarkup(at.inner[0] as Cursor, lowering, SERVER_LANE)})`)}`,
         )
-    return `${lowering.use('renderComponent')}(${lowering.chosenTag(node) ?? node.tag}, { ${props.join(', ')} }, ${HEADS})`
+    // 32.11, 32.23 — A SPREAD WHOSE VALUE HAS NOT LANDED CANNOT SAY WHICH KEYS IT PASSES, so the
+    // record it is read into aborts as a slot does, and the invocation writes its pair alone for the
+    // browser to fill when the value lands (`invokeLanded`).
+    let record = `{ ${props.join(', ')} }`
+    if (node.attributes.some((attribute) => attribute.name === '...'))
+        record = `${lowering.use('slotValue')}(() => (${record}))`
+    return `${lowering.use('renderComponent')}(${lowering.chosenTag(node) ?? node.tag}, ${record}, ${HEADS})`
 }
 
 /**

@@ -19,14 +19,15 @@ import type { Component, Rendered } from './render.ts'
  * order the tree order.
  *
  * 32.36 — A TAG CHOOSING BY A VALUE (32.34) MAY CHOOSE NOTHING, and writes the pair alone: the
- * region is still there for the browser to fill when the value arrives.
+ * region is still there for the browser to fill when the value arrives. 32.23 — so does a record
+ * whose `{...expr}` has not landed, which `slotValue` hands over as `undefined`.
  */
 export function renderComponent(
     component: Component | undefined | null,
-    props: Record<string, () => unknown>,
+    props: Record<string, () => unknown> | undefined,
     heads: string[],
 ): string {
-    if (component == null) return regionMarkup('')
+    if (component == null || props === undefined) return regionMarkup('')
     const callsFrom = callsMadeSoFar()
     const rendered = (
         component as (props: Record<string, () => unknown>) => Rendered

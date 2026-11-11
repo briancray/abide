@@ -1297,19 +1297,37 @@ function emitInvocation(
     // 14.7 — the call runs the child's setup, and nothing it reads subscribes a caller: an arm's
     // swap and a list's rows both mount untracked (`ArmRegion`, `updateList`).
     const chosen = lowering.chosenTag(node)
-    if (chosen === undefined) {
-        region.lines.push(
-            `${SCOPE}.own(${node.tag}(${lowering.use('regionFound')}(${at.name}), { ${props.join(', ')} }))`,
-        )
-        return
+    const record = `{ ${props.join(', ')} }`
+    // 32.11, 32.23 — A SPREAD'S KEYS ARE READ WHEN THE RECORD IS MADE, and where its value has not
+    // landed the invocation waits for it rather than aborting the mount around it (`invokeLanded`).
+    // The region is found first, while the walk stands at it.
+    const spread = node.attributes.some((attribute) => attribute.name === '...')
+    const found = `${lowering.use('regionFound')}(${at.name})`
+    const handed = spread ? SPREAD_RECORD : record
+    let invocation: string
+    if (chosen === undefined)
+        invocation = `${SCOPE}.own(${node.tag}(${spread ? SPREAD_REGION : found}, ${handed}))`
+    else {
+        // 32.34, 32.35 — A TAG CHOOSING BY A VALUE IS AN `{#if}` WHOSE ARMS ARE COMPONENTS
+        // (`ChosenRegion`): the watch reads which, and the region swaps.
+        const name = region.claim('dc')
+        invocation = `const ${name} = new ${lowering.use('ChosenRegion')}(${spread ? SPREAD_REGION : found}, ${SCOPE}, ${handed}, ${SHARE_AT})
+${SCOPE}.watch(() => ${name}.show(${chosen}))`
     }
-    // 32.34, 32.35 — A TAG CHOOSING BY A VALUE IS AN `{#if}` WHOSE ARMS ARE COMPONENTS
-    // (`ChosenRegion`): the watch reads which, and the region swaps.
-    const name = region.claim('dc')
-    region.lines
-        .push(`const ${name} = new ${lowering.use('ChosenRegion')}(${lowering.use('regionFound')}(${at.name}), ${SCOPE}, { ${props.join(', ')} }, ${SHARE_AT})
-${SCOPE}.watch(() => ${name}.show(${chosen}))`)
+    // One line, so the region found and the call made from it share the block each line stands in.
+    region.lines.push(
+        spread
+            ? `const ${SPREAD_REGION} = ${found}
+${lowering.use('invokeLanded')}(${SCOPE}, ${SHARE_AT}, () => (${record}), (${SPREAD_RECORD}) => {
+${invocation}
+})`
+            : invocation,
+    )
 }
+
+// The region a spread invocation stands at, and the record `invokeLanded` hands it once made.
+const SPREAD_REGION = '__spreadAt'
+const SPREAD_RECORD = '__record'
 
 /**
  * Emits a `<slot/>`'s client unit: the caller's children, or the child's own fallback.
