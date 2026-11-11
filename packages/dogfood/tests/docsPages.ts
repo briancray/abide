@@ -172,23 +172,28 @@ async function eightAtATime(
     return answers
 }
 
+/** Each page's body as the built app answers `addressOf(route)`, keyed by route. */
+async function rendered(
+    addressOf: (route: string) => string,
+): Promise<Map<string, string>> {
+    const { base } = await servedDocs()
+    const pages = await docsPages()
+    const texts = await eightAtATime(pages, async (page) => {
+        const address = addressOf(page.route)
+        const answer = await Bun.fetch(`${base}${address}`)
+        if (!answer.ok)
+            throw new Error(`docs: ${address} answered ${answer.status}`)
+        return answer.text()
+    })
+    const bodies = new Map<string, string>()
+    for (let at = 0; at < pages.length; at += 1)
+        bodies.set((pages[at] as DocsPage).route, texts[at] as string)
+    return bodies
+}
+
 /** Each page's markdown, as the built app serves it at the page's address with `.md` on the end. */
 export function renderedMarkdown(): Promise<Map<string, string>> {
-    markdown ??= (async () => {
-        const { base } = await servedDocs()
-        const pages = await docsPages()
-        const texts = await eightAtATime(pages, async (page) => {
-            const address = markdownAddressOf(page.route)
-            const answer = await Bun.fetch(`${base}${address}`)
-            if (!answer.ok)
-                throw new Error(`docs: ${address} answered ${answer.status}`)
-            return answer.text()
-        })
-        const bodies = new Map<string, string>()
-        for (let at = 0; at < pages.length; at += 1)
-            bodies.set((pages[at] as DocsPage).route, texts[at] as string)
-        return bodies
-    })()
+    markdown ??= rendered(markdownAddressOf)
     return markdown
 }
 
@@ -270,19 +275,6 @@ let html: Promise<Map<string, string>> | undefined
 
 /** Each page's document, as the built app serves it. */
 export function renderedHtml(): Promise<Map<string, string>> {
-    html ??= (async () => {
-        const { base } = await servedDocs()
-        const pages = await docsPages()
-        const texts = await eightAtATime(pages, async (page) => {
-            const answer = await Bun.fetch(`${base}${page.route}`)
-            if (!answer.ok)
-                throw new Error(`docs: ${page.route} answered ${answer.status}`)
-            return answer.text()
-        })
-        const documents = new Map<string, string>()
-        for (let at = 0; at < pages.length; at += 1)
-            documents.set((pages[at] as DocsPage).route, texts[at] as string)
-        return documents
-    })()
+    html ??= rendered((route) => route)
     return html
 }

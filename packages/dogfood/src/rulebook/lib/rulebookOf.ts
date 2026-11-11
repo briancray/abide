@@ -1,3 +1,4 @@
+import { cellsOf } from '#src/lib/cellsOf.ts'
 import { inline, slugify } from '#src/lib/inline.ts'
 
 import { CLAUSE } from './CLAUSE.ts'
@@ -18,20 +19,14 @@ const CLAUSE_CLASS =
 const NUMBER_CLASS =
     'absolute top-1 left-2 font-mono text-chrome/6 text-muted no-underline hover:text-signal'
 
-function row(line: string): string[] {
-    return line
-        .replace(/^\||\|$/g, '')
-        .split(/(?<!\\)\|/)
-        .map((cell) => cell.trim().replaceAll('\\|', '|'))
-}
-
 function table(lines: string[]): string {
     let head = ''
-    for (const cell of row(lines[0] ?? '')) head += `<th>${inline(cell)}</th>`
+    for (const cell of cellsOf(lines[0] ?? ''))
+        head += `<th>${inline(cell)}</th>`
     let body = ''
     for (const line of lines.slice(2)) {
         body += '<tr>'
-        for (const cell of row(line)) body += `<td>${inline(cell)}</td>`
+        for (const cell of cellsOf(line)) body += `<td>${inline(cell)}</td>`
         body += '</tr>'
     }
     return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`

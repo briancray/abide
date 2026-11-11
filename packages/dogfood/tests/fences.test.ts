@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 
+import { EXCERPT } from '../src/lib/highlight.ts'
 import {
     attributeOf,
     type DocsPage,
@@ -8,8 +9,6 @@ import {
     fencesOf,
     tagEnd,
 } from './docsPages.ts'
-
-const EXCERPT = / — excerpt$/
 
 /** A label is an ADDRESS when it is a path rather than one of BRAND's four side words. */
 function isAddress(label: string): boolean {
@@ -70,7 +69,9 @@ test('a fence claiming a whole file agrees with every fence of that address', as
     for (const page of await docsPages())
         for (const fence of fencesOf(page)) {
             if (!isAddress(fence.caption)) continue
-            const address = fence.caption.replace(EXCERPT, '')
+            const address = fence.caption.endsWith(EXCERPT)
+                ? fence.caption.slice(0, -EXCERPT.length)
+                : fence.caption
             const list = byAddress.get(address) ?? []
             list.push({ where: page.route, fence })
             byAddress.set(address, list)
@@ -79,7 +80,7 @@ test('a fence claiming a whole file agrees with every fence of that address', as
     const contradicted: string[] = []
     for (const [address, fences] of byAddress)
         for (const whole of fences) {
-            if (EXCERPT.test(whole.fence.caption)) continue
+            if (whole.fence.caption.endsWith(EXCERPT)) continue
             const lines = new Set(
                 whole.fence.code.split('\n').map((line) => line.trim()),
             )

@@ -12,9 +12,9 @@ import {
     LEAF,
     referencePages,
 } from '../scripts/referencePages.ts'
+import { cellsOf } from '../src/lib/cellsOf.ts'
 import { REFERENCE } from '../src/lib/REFERENCE.ts'
 import {
-    cellsOf,
     registryRows as registryRowsOf,
     scopeOf,
 } from '../src/lib/referenceOf.ts'
@@ -42,19 +42,6 @@ type RegistryRow = {
     section: string
 }
 
-function cells(line: string): string[] {
-    const out: string[] = []
-    // A cell ends at the first UNESCAPED pipe — a type signature carries `\|`.
-    let start = 1
-    for (let at = 1; at <= line.length; at += 1) {
-        if (at < line.length && !(line[at] === '|' && line[at - 1] !== '\\'))
-            continue
-        out.push(line.slice(start, at).trim().replaceAll('\\|', '|'))
-        start = at + 1
-    }
-    return out
-}
-
 // Every name in the FIRST column of a REGISTRY table is a capability or a variant an app
 // author can reach. This reads REGISTRY.md rather than a copied list, so a capability
 // added there fails the tests below until a page claims it.
@@ -62,37 +49,18 @@ function cells(line: string): string[] {
 // Only a `Name | (Type) Signature | …` table carries a SIGNATURE. The others — file
 // conventions, CLI commands, generated headers — put prose in the second cell, and
 // reading that as a signature is what would make one capability restated in two tables
-// look like two capabilities that disagree.
+// look like two capabilities that disagree. The QUALIFIER is the nearest `##`, trimmed
+// to its first code span: "## `memo` — the loaded value" is `memo`.
 async function registryRows(): Promise<RegistryRow[]> {
     const rows: RegistryRow[] = []
-    let section = ''
-    let signed = false
-    for (const line of (await Bun.file(REGISTRY).text()).split('\n')) {
-        // The QUALIFIER is the nearest `##`, trimmed to its first code span:
-        // "## `memo` — the loaded value" is `memo`.
-        if (line.startsWith('## ')) {
-            const heading = line.slice(3).trim()
-            section = /`([^`]+)`/.exec(heading)?.[1] ?? heading
-            continue
-        }
-        if (line.startsWith('# ')) section = line.slice(2).trim()
-        // A header row, never the `| --- |` separator under it — which would reset this
-        // to false before the table's own rows are read.
-        if (
-            line.startsWith('| ') &&
-            !line.startsWith('| `') &&
-            !line.startsWith('| ---')
-        ) {
-            signed = /^(Type )?Signature$/.test(cells(line)[1] ?? '')
-            continue
-        }
-        if (!line.startsWith('| `')) continue
-        const row = cells(line)
-        if (row[0] === undefined) continue
+    for (const row of registryRowsOf(await Bun.file(REGISTRY).text())) {
+        const name = row.cells[0]
+        if (name === undefined || !name.startsWith('`')) continue
+        const signed = /^(Type )?Signature$/.test(row.header[1] ?? '')
         rows.push({
-            name: row[0],
-            signature: signed ? (row[1] ?? '') : undefined,
-            section,
+            name,
+            signature: signed ? (row.cells[1] ?? '') : undefined,
+            section: row.qualifier,
         })
     }
     return rows

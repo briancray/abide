@@ -3,9 +3,8 @@
 // which is a weak bar: a module that compiles can still walk to a node that is not there or throw
 // on its first read. This one runs them.
 //
-// 68 components written before the compiler existed, using surface the rulebook decided. What they
-// exercise is not what a fixture written beside the implementation exercises, which is the whole
-// reason to run them rather than more of my own pages.
+// The chapter apps are written as an app author writes, against the surface the rulebook decided,
+// so they exercise what a fixture written beside the implementation does not.
 
 import { expect, test } from 'bun:test'
 

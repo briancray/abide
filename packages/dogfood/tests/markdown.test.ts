@@ -5,6 +5,7 @@
 
 import { beforeAll, expect, test } from 'bun:test'
 
+import { EXCERPT } from '../src/lib/highlight.ts'
 import { SECTIONS } from '../src/lib/sitePages.ts'
 import { DOCUMENTS } from '../src/lib/siteSections.ts'
 import {
@@ -208,7 +209,10 @@ test('every code caption names a syntax or a file', async () => {
         for (const [, text] of document.matchAll(
             /<figcaption>([^<]*)<\/figcaption>/g,
         )) {
-            const caption = (text as string).replace(/ — excerpt$/, '')
+            const label = text as string
+            const caption = label.endsWith(EXCERPT)
+                ? label.slice(0, -EXCERPT.length)
+                : label
             if (caption.startsWith('.') || /\.\w+$/.test(caption)) continue
             vague.push(`${route}: "${text}"`)
         }

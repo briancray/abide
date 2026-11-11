@@ -26,6 +26,8 @@
 // `@abide/harness/…` entry holds that entry's names, and every other section holds abide's —
 // which is how `bytes` the response helper and `bytes` the harness lane are two pages.
 
+import { cellsOf } from './cellsOf.ts'
+
 /** One reference page, as `REFERENCE.ts` lists it. */
 export type ReferencePage = {
     route: string
@@ -75,19 +77,6 @@ const RECEIVER = /^([A-Za-z_$][\w$]*)[.[]/
 
 function firstCode(text: string): string | undefined {
     return /`([^`]+)`/.exec(text)?.[1]
-}
-
-/** A table row's cells — a cell ends at the first UNESCAPED pipe, a signature carrying `\|`. */
-export function cellsOf(line: string): string[] {
-    const out: string[] = []
-    let start = 1
-    for (let at = 1; at <= line.length; at += 1) {
-        if (at < line.length && !(line[at] === '|' && line[at - 1] !== '\\'))
-            continue
-        out.push(line.slice(start, at).trim().replaceAll('\\|', '|'))
-        start = at + 1
-    }
-    return out.slice(0, -1)
 }
 
 /** The scope an entry's names are written in. */

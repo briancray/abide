@@ -4,6 +4,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { tokenize } from '../../abide/src/compiler/tokenize.ts'
 import { rulebookClauses } from '../scripts/rulebookClauses.ts'
+import { cellsOf } from '../src/lib/cellsOf.ts'
 
 // REGISTRY.md holds signatures and RULEBOOK.md holds requirements, and the split is only worth
 // having if it STAYS split. Prose at the top of a document does not make it stay — a rule written
@@ -33,10 +34,10 @@ function rows(source: string): { line: number; cells: string[] }[] {
     for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index] ?? ''
         if (!line.startsWith('|') || /^\|\s*-/.test(line)) continue
-        const cells = line.replace(/^\||\|$/g, '').split(/(?<!\\)\|/)
+        const cells = cellsOf(line)
         // A header row, whatever its first column is called — `Name` here, `Context` in Tracking.
-        if (cells[cells.length - 1]?.trim() === 'Rules') continue
-        out.push({ line: index + 1, cells: cells.map((cell) => cell.trim()) })
+        if (cells[cells.length - 1] === 'Rules') continue
+        out.push({ line: index + 1, cells })
     }
     return out
 }
