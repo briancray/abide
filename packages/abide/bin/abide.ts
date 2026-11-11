@@ -217,9 +217,9 @@ async function bundle(
         )
         return 1
     }
-    const out = resolve(
-        values.out ?? `${executableName(packageUnder(root).name)}.app`,
-    )
+    const identity = packageUnder(root)
+    const name = executableName(identity.name)
+    const out = resolve(values.out ?? `${name}.app`)
     if (!out.endsWith('.app')) {
         console.error(
             `abide bundle: --out names the .app to write, and ${out} is not one.`,
@@ -247,8 +247,6 @@ async function bundle(
         console.error(`abide bundle: nothing under ${root} to bundle.`)
         return 1
     }
-    const identity = packageUnder(root)
-    const name = executableName(packageUnder(root).name)
     await compileExecutable(
         root,
         entry,
@@ -447,11 +445,13 @@ async function spawnedTool(tool: string, args: string[]): Promise<number> {
         stdout: 'ignore',
         stderr: 'pipe',
     })
-    const code = await child.exited
+    // Drained beside the exit, so a tool that fills the pipe is not left waiting on a reader.
+    const [code, said] = await Promise.all([
+        child.exited,
+        new Response(child.stderr).text(),
+    ])
     if (code !== 0)
-        console.warn(
-            `abide bundle: ${tool} failed — ${(await new Response(child.stderr).text()).trim()}`,
-        )
+        console.warn(`abide bundle: ${tool} failed — ${said.trim()}`)
     return code
 }
 

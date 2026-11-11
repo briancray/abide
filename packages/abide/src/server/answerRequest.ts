@@ -383,10 +383,9 @@ async function answerMatched(
     // 16.10 — AT THE ADDRESS IT IS SERVED AT, which is the one the browser's router arrives at: the
     // request reached here with the mount taken off, and a page reading `route.url()` on both sides
     // would otherwise render one address and hydrate against another.
-    const at = new URL(request.url)
-    at.pathname = mounted(at.pathname)
+    url.pathname = mounted(asked)
     // 23.29 — a request is a document load, which arrives at an entry of its own.
-    arrive(at.href, page.pattern, params, 0)
+    arrive(url.href, page.pattern, params, 0)
     // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
     // and 41.13, every call it makes is recorded into its render.
     beginPageRender(request)

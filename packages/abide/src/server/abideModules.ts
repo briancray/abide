@@ -113,6 +113,9 @@ const RUNTIME: Held = {
     tables: new Map(),
 }
 let registered = false
+// The handler files a registered `handlerFilesPlugin` already answers, by path: its filter is fixed,
+// but it reads each face from `RUNTIME`, so a later compilation of the same file needs no second one.
+const HANDLER_FILES_SERVED = new Set<string>()
 
 /**
  * Serves `compilation` to this process's imports from now on, and places a stack frame in each of
@@ -122,8 +125,14 @@ export function serveCompilation(root: string, compilation: Compilation): void {
     const real = realOrAsGiven(root)
     const handlerFiles = addCompilation(real, compilation, RUNTIME)
     installSourceMaps(serverMapsOf(compilation, real), real)
-    if (handlerFiles.length !== 0)
-        Bun.plugin(handlerFilesPlugin(handlerFiles, RUNTIME.handlers))
+    const unserved: string[] = []
+    for (const path of handlerFiles)
+        if (!HANDLER_FILES_SERVED.has(path)) {
+            HANDLER_FILES_SERVED.add(path)
+            unserved.push(path)
+        }
+    if (unserved.length !== 0)
+        Bun.plugin(handlerFilesPlugin(unserved, RUNTIME.handlers))
     if (registered) return
     registered = true
     Bun.plugin(modulesPlugin(RUNTIME))
@@ -132,8 +141,9 @@ export function serveCompilation(root: string, compilation: Compilation): void {
 // 16.2 — A HANDLER FILE LOADED AT ITS OWN PATH RE-EXPORTS ITS FACE, so every spelling of its import
 // is the module the server mounted. The runtime asks `onResolve` only for a specifier with an
 // extension, while `onLoad` is asked by the path the file resolved to, however it was spelled. One
-// plugin per compilation because the filter is fixed at registration, and the runtime's `onLoad`
-// cannot fall through, so the filter names the handler files and nothing else. The face it names
+// plugin per compilation that brings files no earlier one named, because the filter is fixed at
+// registration, and the runtime's `onLoad` cannot fall through, so the filter names the handler
+// files and nothing else. The face it names
 // is resolved by `modulesPlugin`, registered once.
 // 16.88 — AND GIVES IT ITS ADDRESS, so a test importing the file calls, links and matches it (44.51)
 // with no app booted.

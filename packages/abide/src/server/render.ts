@@ -24,7 +24,6 @@ import { currentRequestScope, inReleasedRender } from './requestScope.ts'
  * satisfy the linter would put the code and the registry row out of step, which is the drift
  * the documents exist to stop.
  */
-// REGISTRY declares `interface Component {}`.
 export interface Component {}
 
 /**

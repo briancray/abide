@@ -13,6 +13,7 @@ import { executableName } from './executableName.ts'
 import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
 import { launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
+import { LOOPBACK } from './LOOPBACK.ts'
 import { openDesktopWindow } from './openDesktopWindow.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { randomToken } from './randomToken.ts'
@@ -31,8 +32,6 @@ export type Desktop = {
     icon: string | undefined
     accent: string | undefined
 }
-
-const LOOPBACK = '127.0.0.1'
 
 export async function runDesktop(
     origin: AppOrigin,

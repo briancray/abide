@@ -107,7 +107,7 @@ export function followedIn(
 }
 
 /**
- * The row of a handler abide mounts itself, keyed as `answerRpc` looks one up.
+ * The row of a handler abide mounts itself, keyed by its bare address as `answerRequest`'s `OWN_HANDLERS` looks one up.
  *
  * Built on the core's `declare` with no generated surface (20.1) — the app's tree never names it.
  */

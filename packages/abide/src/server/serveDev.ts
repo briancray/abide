@@ -28,8 +28,12 @@ import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { Compilation } from './abideModules.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
 import type { FromWorker, ToWorker } from './devWorker.ts'
-import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
-import { muxSocketOptions, sendOrClose, upgraded } from './muxUpgrade.ts'
+import {
+    listenerOptions,
+    muxSocketOptions,
+    sendOrClose,
+    upgraded,
+} from './muxUpgrade.ts'
 import { placeOf } from './placement.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import type { ReceivedFrom } from './requestScope.ts'
@@ -276,14 +280,8 @@ export async function serveDev(
     // `maxPayloadLength` to every connection opened after it.
     let muxOptions = muxSocketOptions()
     const serving = (port: number | undefined): Bun.Serve.Options<Carried> => ({
-        ...(port === undefined ? {} : { port }),
-        ...(options.hostname === undefined
-            ? {}
-            : { hostname: options.hostname }),
         // 16.54, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
-        maxRequestBodySize: Number.MAX_SAFE_INTEGER,
-        // 16.56 — the bound a request received whole lifts and its answer puts back (16.23).
-        idleTimeout: IDLE_TIMEOUT_SECONDS,
+        ...listenerOptions({ port, hostname: options.hostname }),
         async fetch(request, listening) {
             const asked = new URL(request.url).pathname
             // THE MUX STANDS UNDER THE MOUNT, which is the app's configuration and so the worker's to

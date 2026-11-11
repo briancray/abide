@@ -8,6 +8,7 @@ import type { App } from './createApp.ts'
 import { reportUnexpected } from './hooks.ts'
 import type { Launcher } from './launcherOptions.ts'
 import type { Launch } from './launcherPage.ts'
+import { LOOPBACK } from './LOOPBACK.ts'
 import { LISTENING } from './requestScope.ts'
 
 /** What the launcher did last, and what its forms held, kept across launches. 38.73. */
@@ -20,7 +21,6 @@ type Remembered = {
 
 type Failure = NonNullable<Launch['failure']>
 
-const LOOPBACK = '127.0.0.1'
 const CONNECT_TIMEOUT_MILLISECONDS = 5000
 
 /**

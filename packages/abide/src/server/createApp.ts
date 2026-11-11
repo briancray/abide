@@ -44,10 +44,14 @@ import {
     reportUnexpected,
     rootRungs,
 } from './hooks.ts'
-import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { installServer } from './installServer.ts'
 import { followedIn, type Mount } from './mountHandlers.ts'
-import { admitsMux, muxSocketOptions, upgraded } from './muxUpgrade.ts'
+import {
+    admitsMux,
+    listenerOptions,
+    muxSocketOptions,
+    upgraded,
+} from './muxUpgrade.ts'
 import { packageDirectory } from './packageDirectory.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { presumePrincipal } from './principal.ts'
@@ -438,7 +442,6 @@ export async function bootEntered(
         run,
         // 42.9 — the socket, and what `server` hands back from then on.
         async listen(options) {
-            const port = options?.port
             const opened = openMux()
             // The upgrade carries its request to `open`, where the connection is made over the socket.
             type Upgraded = {
@@ -446,20 +449,7 @@ export async function bootEntered(
                 connection: MuxConnection | undefined
             }
             const server = Bun.serve<Upgraded>({
-                ...(options?.unix !== undefined
-                    ? { unix: options.unix }
-                    : {
-                          // 16.56 — the bound a request received whole lifts and its answer puts
-                          // back (16.23). A unix socket takes bun's own.
-                          idleTimeout: IDLE_TIMEOUT_SECONDS,
-                          ...(port === undefined ? {} : { port }),
-                          ...(options?.hostname === undefined
-                              ? {}
-                              : { hostname: options.hostname }),
-                      }),
-                // 16.54 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body
-                // before one that declared none could accept it.
-                maxRequestBodySize: Number.MAX_SAFE_INTEGER,
+                ...listenerOptions(options),
                 // 18.1, 37.3 — THE ONE MUX, upgraded where the app lane admitted it.
                 fetch: async (request, server) => {
                     // 22.12 — where it came from, for `requestIP` to answer.

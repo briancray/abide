@@ -221,29 +221,28 @@ export function publishedUnder(
  * is as cheap as the tree allows.
  */
 export function holdsApp(root: string): boolean {
-    return !appSourcesUnder(root, '').next().done
+    return holdsAppUnder(root, '')
 }
 
-// Every `.abide` under `directory`, and every handler file whose place is an address.
-function* appSourcesUnder(
-    directory: string,
-    relative: string,
-): Generator<string> {
+// Whether `directory` holds a `.abide`, or a handler file whose place is an address.
+function holdsAppUnder(directory: string, relative: string): boolean {
     let entries: Dirent[]
     try {
         entries = readdirSync(directory, { withFileTypes: true })
     } catch {
-        return
+        return false
     }
     for (const entry of entries) {
         if (skipped(entry.name)) continue
         const path = `${relative}${entry.name}`
-        if (entry.isDirectory())
-            yield* appSourcesUnder(`${directory}/${entry.name}`, `${path}/`)
-        else if (
+        if (entry.isDirectory()) {
+            if (holdsAppUnder(`${directory}/${entry.name}`, `${path}/`))
+                return true
+        } else if (
             path.endsWith('.abide') ||
             (isHandlerFile(path) && placeOf(path) === 'address')
         )
-            yield path
+            return true
     }
+    return false
 }

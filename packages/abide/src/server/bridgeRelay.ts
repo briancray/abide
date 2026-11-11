@@ -266,24 +266,14 @@ export async function* pairingStatus(
 
 /** Registers `wake` to run whenever the pairing filed under `key` changes; the returned function undoes it. */
 function watchPairing(key: string, wake: () => void): () => void {
-    let watchers = WATCHERS.get(key)
-    if (watchers === undefined) {
-        watchers = new Set()
-        WATCHERS.set(key, watchers)
-    }
-    watchers.add(wake)
+    const unwatch = fileIn(WATCHERS, key, wake, () => armIdle(key))
     const bridge = BY_KEY.get(key)
     if (bridge !== undefined) {
         bridge.watched = true
         if (bridge.idle !== undefined) clearTimeout(bridge.idle)
         bridge.idle = undefined
     }
-    return () => {
-        watchers.delete(wake)
-        if (watchers.size > 0) return
-        WATCHERS.delete(key)
-        armIdle(key)
-    }
+    return unwatch
 }
 
 /** Registers `follow` to hear who signs in at `caller` from here on; the returned function undoes it. */
@@ -291,15 +281,30 @@ function followSignIn(
     caller: string,
     follow: (caller: string, signedIn: string) => void,
 ): () => void {
-    let followers = FOLLOWERS.get(caller)
-    if (followers === undefined) {
-        followers = new Set()
-        FOLLOWERS.set(caller, followers)
+    return fileIn(FOLLOWERS, caller, follow, undefined)
+}
+
+/**
+ * Files `member` in the set `sets` holds under `key`; the returned function takes it out, and drops
+ * the set — then calls `emptied` — once it was the last.
+ */
+function fileIn<Member>(
+    sets: Map<string, Set<Member>>,
+    key: string,
+    member: Member,
+    emptied: (() => void) | undefined,
+): () => void {
+    let members = sets.get(key)
+    if (members === undefined) {
+        members = new Set()
+        sets.set(key, members)
     }
-    followers.add(follow)
+    members.add(member)
     return () => {
-        followers.delete(follow)
-        if (followers.size === 0) FOLLOWERS.delete(caller)
+        members.delete(member)
+        if (members.size > 0) return
+        sets.delete(key)
+        emptied?.()
     }
 }
 

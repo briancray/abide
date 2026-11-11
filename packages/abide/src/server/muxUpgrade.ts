@@ -12,6 +12,7 @@ import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
 import { unmounted } from '#shared/mount.ts'
 
 import { positiveSetting } from './config.ts'
+import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { plainAnswer } from './plainAnswer.ts'
 
 const MUX_ADMITTED = 204
@@ -100,21 +101,58 @@ export function muxSocketOptions(): {
 }
 
 /**
+ * What a listener the app lane answers through is opened with, at `at`: a TCP port and host where it
+ * names none of `unix`.
+ *
+ * 16.54 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body before one that
+ * declared none could accept it. 16.56 — the idle bound a request received whole lifts and its
+ * answer puts back (16.23); a unix socket takes bun's own.
+ */
+export function listenerOptions(
+    at:
+        | {
+              port?: number | undefined
+              hostname?: string | undefined
+              unix?: string | undefined
+          }
+        | undefined,
+):
+    | { unix: string; maxRequestBodySize: number }
+    | {
+          port?: number
+          hostname?: string
+          idleTimeout: number
+          maxRequestBodySize: number
+      } {
+    if (at?.unix !== undefined)
+        return { unix: at.unix, maxRequestBodySize: Number.MAX_SAFE_INTEGER }
+    return {
+        ...(at?.port === undefined ? {} : { port: at.port }),
+        ...(at?.hostname === undefined ? {} : { hostname: at.hostname }),
+        idleTimeout: IDLE_TIMEOUT_SECONDS,
+        maxRequestBodySize: Number.MAX_SAFE_INTEGER,
+    }
+}
+
+/**
+ * The far end of one connection to the mux, which its frames are written to as text.
+ *
+ * Bun's socket under `abide start`, and under `abide dev` a stand-in that posts each frame to the
+ * listener holding the real one (38.14).
+ */
+export type Socket = {
+    send(text: string): unknown
+    close(code: number, reason: string): unknown
+}
+
+/**
  * Sends `text` to `socket`, and closes it where bun dropped the frame rather than sending or buffering it.
  *
  * 18.30 — A FOLLOWER THAT MISSED A FRAME stands at a version the next one does not build on, so the
  * peer is closed rather than written past: the browser reconnects naming the version it holds (18.9)
  * and is sent what stands. No buffer of our own — what bun buffers is the bound.
  */
-export function sendOrClose(
-    socket:
-        | {
-              send(text: string): unknown
-              close(code: number, reason: string): unknown
-          }
-        | undefined,
-    text: string,
-): void {
+export function sendOrClose(socket: Socket | undefined, text: string): void {
     if (socket?.send(text) === 0)
         socket.close(1013, 'the connection fell behind')
 }

@@ -92,11 +92,9 @@ export async function answerRpc(
     const answer = await answerOutcome(invoked, request, found, offline)
     // A `Response` the handler built is its own — but the origin answer below is laid over it, so it
     // varies on `Origin` too (21.7), which `handlerHeaders` never reached.
-    if (outcome.settled && outcome.value instanceof Response) {
+    if (outcome.settled && outcome.value instanceof Response)
         answer.headers.append('vary', 'origin')
-        return admitting(answer, admitted)
-    }
-    invoked.timed()
+    else invoked.timed()
     return admitting(answer, admitted)
 }
 

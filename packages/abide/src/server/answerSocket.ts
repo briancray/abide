@@ -23,7 +23,7 @@ import { type Followers, Frame, type Peer } from './Followers.ts'
 import { failureOf } from './hooks.ts'
 import { admitsFollower, followedArgs } from './invokeHandler.ts'
 import type { FollowedHandler } from './mountHandlers.ts'
-import { sendOrClose } from './muxUpgrade.ts'
+import { sendOrClose, type Socket } from './muxUpgrade.ts'
 import {
     inOpenScope,
     RECEIVED_FROM,
@@ -31,17 +31,6 @@ import {
     type RequestScope,
     scopeFor,
 } from './requestScope.ts'
-
-/**
- * The far end of one connection to the mux, which its frames are written to as text.
- *
- * Bun's socket under `abide start`, and under `abide dev` a stand-in that posts each frame to the
- * listener holding the real one (38.14).
- */
-export type Socket = {
-    send(text: string): unknown
-    close(code: number, reason: string): unknown
-}
 
 // 18.31 — a page follows each value it reads once, so a thousand is a page no one could read.
 const MAX_SUBSCRIPTIONS = 1024
