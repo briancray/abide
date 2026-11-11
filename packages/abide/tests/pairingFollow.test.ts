@@ -1,4 +1,4 @@
-// 18.36, 44.69, 44.22 — `/__abide/pairing` FOLLOWED OVER THE MUX. Two browsers follow their pairings on
+// 18.36, 44.75, 44.22 — `/__abide/pairing` FOLLOWED OVER THE MUX. Two browsers follow their pairings on
 // one app's mux; a bridge pairs, a code expires and a page leaves, and what is asserted is the
 // frames each browser's connection is sent and what the bridge is told — no stream is held open.
 
@@ -88,7 +88,7 @@ async function pairedBy(
 // follow, and beta's is sent nothing. THE REVERT: file the follow's watch under a key its connection's
 // scope does not decide (`pairingKey('', '')` in `watchFollowedPairing`); alpha is sent 0 refreshes
 // where 1 is due. The caller-blind arm, a broadcast to every follow, is `followWatch.test.ts`'s.
-test('a bridge pairing one browser refreshes that browser’s follow alone — 18.36, 44.69', async () => {
+test('a bridge pairing one browser refreshes that browser’s follow alone — 18.36, 44.75', async () => {
     await using app = (await inMemoryApp({})) as BootedApp
     const alpha = await following(app, 'alpha')
     const beta = await following(app, 'beta')
@@ -112,10 +112,10 @@ test('a bridge pairing one browser refreshes that browser’s follow alone — 1
     beta.connection.close()
 })
 
-// 44.69 — A CODE THAT EXPIRES IS SAID TO WHOEVER FOLLOWS ITS PAIRING, and reading it again answers a
+// 44.75 — A CODE THAT EXPIRES IS SAID TO WHOEVER FOLLOWS ITS PAIRING, and reading it again answers a
 // fresh one; read again before then, it answers the same. THE REVERT: arm no expiry in `pairingNow`;
 // 0 refreshes where 1 is due.
-test('a code that expires refreshes the pairing’s follow, and the next read is a fresh one — 44.69', async () => {
+test('a code that expires refreshes the pairing’s follow, and the next read is a fresh one — 44.75', async () => {
     await using app = (await inMemoryApp({})) as BootedApp
     const browser = await following(app, 'expiring')
     jest.useFakeTimers()

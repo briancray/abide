@@ -266,7 +266,7 @@ export async function* pairingStatus(
     }
 }
 
-// 44.69 — EACH PAIRING'S STANDING CODE, by its pairing and the tools it asks for, with the timer that
+// 44.75 — EACH PAIRING'S STANDING CODE, by its pairing and the tools it asks for, with the timer that
 // tells whoever follows it once it expires: what `/__abide/pairing` answers, rather than a code per call.
 const STANDING = new Map<
     string,
@@ -277,7 +277,7 @@ const STANDING = new Map<
  * The pairing of `caller` signed in as `signedIn` as it stands, with a code asking for `tools` that
  * pairs one — the one it answered last, while that is unspent and unexpired. 44.67.
  *
- * 44.69 — A CODE THAT EXPIRES IS SAID TO WHOEVER FOLLOWS THE PAIRING, which reads it again and is
+ * 44.75 — A CODE THAT EXPIRES IS SAID TO WHOEVER FOLLOWS THE PAIRING, which reads it again and is
  * answered a fresh one; one a bridge spends is said by the pairing that spends it (`wakeWatchers`).
  */
 export function pairingNow(
@@ -316,7 +316,7 @@ export function pairingNow(
  * Watches the pairing a follow of `/__abide/pairing` reads, in its connection's scope — the browser
  * and the sign-in its upgrade carried — refreshing that follow alone whenever the pairing changes.
  *
- * 18.36, 44.69 — and 44.22: a page following is a page watching, so the bridge goes idle once none does.
+ * 18.36, 44.75 — and 44.22: a page following is a page watching, so the bridge goes idle once none does.
  */
 export function watchFollowedPairing(
     poke: (member: 'refresh') => void,

@@ -183,11 +183,11 @@ export const claudeCode: typeof claudeCodeProvider & {
 
 // 44.67 — THE PAIRING A BROWSER'S `pairing` READS, as a handler abide mounts rather than one each app
 // writes: the asking browser's pairing as it stands, granting the tools `ABIDE_BRIDGE_TOOLS` names.
-// 44.75 — THE SERVER DECIDES THEM: the parameter is declared only so the value is keyed and the call
+// 44.74 — THE SERVER DECIDES THEM: the parameter is declared only so the value is keyed and the call
 // runs it (1.7, as `health`'s is), and whatever a request names in it is never read. 44.68 — on no
 // generated surface.
 //
-// 44.69, 18.36 — NOT A STREAM: a page follows it over the mux it already holds, and is sent a refresh
+// 44.75, 18.36 — NOT A STREAM: a page follows it over the mux it already holds, and is sent a refresh
 // whenever the pairing changes or its code expires, so no http connection is held while it watches.
 const pairingHandler = declare('GET')(
     (_none: undefined): BridgeStatus => {

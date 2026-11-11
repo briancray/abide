@@ -3884,26 +3884,26 @@ separated by commas, and none where it names none.
 
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
-44.69 A subscription to `/__abide/pairing` MUST be sent a refresh whenever the asking browser's
-pairing changes, and where the code it was last answered with expires or pairs.
-
-44.70 `pairing`'s `status` MUST be the last `BridgeStatus` `/__abide/pairing` answered the browser,
+44.69 `pairing`'s `status` MUST be the last `BridgeStatus` `/__abide/pairing` answered the browser,
 and MUST be `undefined` where a server builds it.
 
-44.71 `pairing`'s `start` MUST do nothing while `status` holds no `BridgeStatus`, and otherwise MUST
+44.70 `pairing`'s `start` MUST do nothing while `status` holds no `BridgeStatus`, and otherwise MUST
 set `step` to `waiting` and navigate the page to the status's `link`.
 
-44.72 2500 ms after `pairing`'s `start`, `step` MUST become `click` where the window blurred since,
+44.71 2500 ms after `pairing`'s `start`, `step` MUST become `click` where the window blurred since,
 or `status` is paired, and `install` otherwise.
 
-44.73 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard, and once written
+44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard, and once written
 MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `click`.
 
-44.74 A `pairing` built in a component's setup MUST, once that component is disposed, stop reading and
+44.73 A `pairing` built in a component's setup MUST, once that component is disposed, stop reading and
 following `/__abide/pairing` where no other `pairing` reads it, remove the blur listener a `start`
 added, and clear every timer `start` and `copyInstall` set.
 
-44.75 `/__abide/pairing` MUST NOT grant a tool the request asking it names.
+44.74 `/__abide/pairing` MUST NOT grant a tool the request asking it names.
+
+44.75 A subscription to `/__abide/pairing` MUST be sent a refresh whenever the asking browser's
+pairing changes, and where the code it was last answered with expires or pairs.
 
 # 45. Offline
 

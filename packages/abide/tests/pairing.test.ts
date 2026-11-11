@@ -122,7 +122,7 @@ async function landed(
     expect(pair.status()).toEqual(status)
 }
 
-test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44.70', async () => {
+test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44.69', async () => {
     const { pair, dispose } = built()
     await landed(pair, UNPAIRED)
     expect(pair.status()).toEqual(UNPAIRED)
@@ -130,10 +130,10 @@ test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44
     dispose()
 })
 
-// 44.69 — READ ONCE AND FOLLOWED: a pairing that changes is read again when the mux says so, and two
+// 44.75 — READ ONCE AND FOLLOWED: a pairing that changes is read again when the mux says so, and two
 // `pairing` on one page share the one read and the one follow. THE REVERT: skip `MUX_FOLLOWS.follow`
 // in `pairing.ts`; the pushed status never lands and `landed` reports the unpaired one.
-test('a pairing is read again when its follow is refreshed, one read for every reader — 44.69', async () => {
+test('a pairing is read again when its follow is refreshed, one read for every reader — 44.75', async () => {
     const one = built()
     const two = built()
     await landed(one.pair, UNPAIRED)
@@ -148,7 +148,7 @@ test('a pairing is read again when its follow is refreshed, one read for every r
     expect(unfollowed).toBe(1)
 })
 
-test('a click that blurs the page offers the click again; one that does not offers the install — 44.71, 44.72', async () => {
+test('a click that blurs the page offers the click again; one that does not offers the install — 44.70, 44.71', async () => {
     const { pair, dispose } = built()
     // No status yet: nothing to open.
     pair.start()
@@ -169,7 +169,7 @@ test('a click that blurs the page offers the click again; one that does not offe
     dispose()
 })
 
-test('a click with a bridge already paired offers the click again — 44.72', async () => {
+test('a click with a bridge already paired offers the click again — 44.71', async () => {
     const { pair, dispose } = built()
     await landed(pair, { ...UNPAIRED, paired: true })
     jest.useFakeTimers()
@@ -179,7 +179,7 @@ test('a click with a bridge already paired offers the click again — 44.72', as
     dispose()
 })
 
-test('copyInstall copies the install command and holds copied — 44.73', async () => {
+test('copyInstall copies the install command and holds copied — 44.72', async () => {
     const { pair, dispose } = built()
     await landed(pair, UNPAIRED)
     const written: string[] = []
@@ -196,12 +196,12 @@ test('copyInstall copies the install command and holds copied — 44.73', async 
     dispose()
 })
 
-// 44.74 — A DISPOSED PAIRING LEAVES NOTHING RUNNING: its read of `/__abide/pairing` and its follow, the
+// 44.73 — A DISPOSED PAIRING LEAVES NOTHING RUNNING: its read of `/__abide/pairing` and its follow, the
 // blur listener a click added and the timers a click and a copy set — asserted by what the timers
 // would have written, since bun's `jest.getTimerCount` still counts a cleared one. THE REVERT: drop
 // the `owned(…)` call in `pairing.ts`; this reports `blur listeners: 1, step: install, copied: false,
 // read aborted: false, unfollowed: 0`.
-test('dispose stops the read and clears the blur listener and both timers — 44.74', async () => {
+test('dispose stops the read and clears the blur listener and both timers — 44.73', async () => {
     const { pair, dispose } = built()
     await landed(pair, UNPAIRED)
     clipboardWrites([])
@@ -282,10 +282,10 @@ test('/__abide/pairing answers the asking browser’s pairing, granting ABIDE_BR
     )
 })
 
-// 44.75 — THE TOOLS ARE THE SERVER'S TO DECIDE: a request naming some is granted none of them. THE
+// 44.74 — THE TOOLS ARE THE SERVER'S TO DECIDE: a request naming some is granted none of them. THE
 // REVERT: have the handler in `claudeCode.ts` split `args.tools` into `bridge`'s `tools` again; this
 // reports `command: --tools WebSearch, link: WebSearch`.
-test('/__abide/pairing grants no tool a request names — 44.75', async () => {
+test('/__abide/pairing grants no tool a request names — 44.74', async () => {
     const status = await firstStatus(
         'asking-browser',
         '?tools=WebSearch',
