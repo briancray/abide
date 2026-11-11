@@ -1619,7 +1619,8 @@ composite.
 
 23.6 `route.name` MUST be the resolution path.
 
-23.7 Where `isServer` is false, `online` MUST be `navigator.onLine` and its events.
+23.7 Where `isServer` is false, `online` MUST be `navigator.onLine` and its events, save while 41.32
+holds it.
 
 23.8 Where `isServer` is true, `online` MUST be true.
 
@@ -1689,7 +1690,7 @@ of no more than `route.index` entries MUST arrive at an entry of this app's rout
 23.29 On a server `route.index` MUST be 0.
 
 23.30 Where `isServer` is false, `media(query)` MUST be whether `matchMedia(query)` matches, and MUST
-follow its `change` event.
+follow its `change` event, save while 41.32 holds it.
 
 23.31 Where `isServer` is true, `media(query)` MUST be false.
 
@@ -2309,8 +2310,8 @@ holding it leave.
 after a resize of the element, a scroll of the document or of any element in it, or a resize of the
 window, where the value does not already hold that rectangle.
 
-32.87 `bind:rect` MUST NOT be written for a move of its element that no resize of the element,
-scroll or resize of the window accompanies.
+32.87 `bind:rect` MUST be written for a move of its element that no resize of the element, scroll
+or resize of the window accompanies, in the frame after the move.
 
 32.88 Every `bind:rect` in a document MUST share one scroll listener and one window resize listener,
 added with the first `bind:rect` and removed with the last.
@@ -2318,6 +2319,9 @@ added with the first `bind:rect` and removed with the last.
 32.89 The triggers 32.86 names that arrive before the next animation frame MUST be answered by one
 read of every `bind:rect` element's rectangle in that frame, every read before any write, and
 `bind:rect` MUST NOT read an element's rectangle outside such a frame.
+
+32.90 What observes a `bind:rect` element for 32.87 MUST be made again only in a frame whose read
+moved the element or resized the viewport, and MUST cost no work while neither moves.
 
 # 33. Props
 
@@ -3389,6 +3393,10 @@ markup.
 41.31 On a server, a bare `busy` or `ready` MUST answer over the loads set up before its component's
 markup is built, and a load a component set up later, one only a pending value places, MAY have it
 choose another arm at hydration under 41.24.
+
+41.32 While a page hydrates, `online` and `media` MUST answer as the server does, and once it has
+hydrated each MUST be written with the browser's answer, so an arm that answer changes is swapped as
+an update and not under 41.24.
 
 # 42. The app object
 

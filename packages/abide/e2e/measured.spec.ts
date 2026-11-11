@@ -25,6 +25,7 @@ import { media, reactive } from '@abide/abide'
 let box = reactive<{ width: number; height: number } | undefined>(undefined)
 let wide = reactive(false)
 let placed = reactive<{ top: number } | undefined>(undefined)
+let tall = reactive(false)
 let seen = reactive(false)
 let rows = reactive([1, 2, 3, 4, 5])
 let sizes = reactive<Record<number, number>>({})
@@ -36,9 +37,12 @@ const narrow = media('(max-width: 600px)')
     <p id="size">{box === undefined ? 'unmeasured' : box.width + 'x' + box.height}</p>
     <p id="seen">{seen}</p>
     <p id="narrow">{narrow}</p>
+    {#if narrow}<p id="narrow-arm">narrow</p>{:else}<p id="wide-arm">wide</p>{/if}
     <p id="rows">{Object.values(sizes).join(',')}</p>
     <button id="widen" onclick={() => { wide = !wide }}>widen</button>
     <button id="drop" onclick={() => { rows = [] }}>drop</button>
+    <button id="grow" onclick={() => { tall = true }}>grow</button>
+    <div class:tall={tall}></div>
     <div class="half"></div>
     <div id="placed" bind:rect={placed}></div>
     <div id="box" class:wide={wide} bind:size={box}></div>
@@ -53,6 +57,7 @@ const narrow = media('(max-width: 600px)')
 .row { width: 40px; height: 10px; }
 .spacer { height: 3000px; }
 .half { height: 50vh; }
+.tall { height: 50px; }
 #placed { height: 10px; }
 </style>`
 
@@ -158,10 +163,9 @@ test('bind:rect follows a scroll and a window resize — 32.86', async ({
     expect(served).toMatch(/<p id="top"[^>]*>unmeasured<\/p>/)
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.goto(`${base}/`)
-    // The rows' widths fill a line above `#placed` in their first frame — a move with no scroll or
-    // resize, which 32.87 leaves unseen — so the page is read once it has settled.
+    // The rows' widths fill a line above `#placed` after the first frame — a move 32.87 sees — so
+    // the page is read once it has settled.
     await expect(page.locator('#rows')).toHaveText('40,40,40,40,40')
-    await page.evaluate(() => window.dispatchEvent(new Event('resize')))
     const reported = () =>
         page.evaluate(() =>
             String(
@@ -182,4 +186,50 @@ test('bind:rect follows a scroll and a window resize — 32.86', async ({
     const resized = await reported()
     expect(resized).toBe(String(Number(scrolled) - 100))
     await expect(page.locator('#top')).toHaveText(resized)
+})
+
+// 32.87 — A SIBLING ABOVE GROWS, AND `#placed` MOVES WITH NO SCROLL, NO WINDOW RESIZE AND NO RESIZE
+// OF ITS OWN: its position observer sees the move. THE REVERT: skip `arm` in `measure`; `top` keeps
+// the reading from before the growth, 50px short.
+test('bind:rect follows a move nothing else reports — 32.87', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1024, height: 768 })
+    await page.goto(`${base}/`)
+    await expect(page.locator('#rows')).toHaveText('40,40,40,40,40')
+    const reported = () =>
+        page.evaluate(() =>
+            String(
+                Math.round(
+                    (
+                        document.getElementById('placed') as Element
+                    ).getBoundingClientRect().top,
+                ),
+            ),
+        )
+    const before = await reported()
+    await expect(page.locator('#top')).toHaveText(before)
+    await page.click('#grow')
+    const after = await reported()
+    expect(after).toBe(String(Number(before) + 50))
+    await expect(page.locator('#top')).toHaveText(after)
+})
+
+// 41.32 — THE SERVER PAINTS THE WIDE ARM, A NARROW BROWSER HYDRATES IT AND THEN SWAPS IT, and says
+// nothing on `abide:hydrate`: the arm changed because the viewport is the browser's to know, not
+// because the two sides disagreed by mistake. THE REVERT: make `beginHydration` write nothing and
+// `isHydrating` answer false; the console carries the 41.24 warning.
+test('media hydrates the arm the server painted and swaps it without a warning — 41.32', async ({
+    page,
+}) => {
+    const warned: string[] = []
+    page.on('console', (message) => {
+        if (message.text().includes('41.24')) warned.push(message.text())
+    })
+    await page.setViewportSize({ width: 500, height: 768 })
+    await page.goto(`${base}/`)
+    await expect(page.locator('#narrow-arm')).toHaveText('narrow')
+    await expect(page.locator('#wide-arm')).toHaveCount(0)
+    await expect(page.locator('#size')).toHaveText('200x100')
+    expect(warned).toEqual([])
 })

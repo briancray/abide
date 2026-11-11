@@ -435,13 +435,13 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8, 18.33, 18.34 |
+| `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8, 18.33, 18.34, 41.32 |
 
 ## `media`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `media` | `(query: string) => Reactive<boolean>` | Whether the document matches a media query. | 23.30, 23.31, 23.32 |
+| `media` | `(query: string) => Reactive<boolean>` | Whether the document matches a media query. | 23.30, 23.31, 23.32, 41.32 |
 
 ## `outbox`
 
@@ -619,7 +619,7 @@ type Reached = { readonly [REACHED]: true }
 | `bind:files` | A file input's files, as a list. | 32.73, 32.72, 32.74, 32.75, 32.76, 32.78 |
 | `bind:size` | A one-way bind of an element's content-box size. | 32.79, 32.72, 32.74, 32.76, 32.81, 32.82, 32.83, 32.84, 32.85 |
 | `bind:visible` | A one-way bind of whether an element intersects the viewport. | 32.80, 32.72, 32.74, 32.76, 32.81, 32.82, 32.83, 32.84, 32.85 |
-| `bind:rect` | A one-way bind of an element's rectangle in the viewport. | 32.86, 32.72, 32.74, 32.76, 32.81, 32.82, 32.84, 32.85, 32.87, 32.88, 32.89 |
+| `bind:rect` | A one-way bind of an element's rectangle in the viewport. | 32.86, 32.72, 32.74, 32.76, 32.81, 32.82, 32.84, 32.85, 32.87, 32.88, 32.89, 32.90 |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6, 32.78 |
 | `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
 | `class:name={cond}` | Toggles a class. | 32.10, 32.71 |

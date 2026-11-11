@@ -17,8 +17,52 @@ import { closeTyped, mountPage } from './typed.ts'
 afterAll(closeTyped)
 afterAll(removeTemporaryModules)
 
-// The element observer is the emulator's own, which never delivers; frames, window listeners and
-// reads are counted.
+// The resize observer is the emulator's own, which never delivers; frames, window listeners and
+// reads are counted, and every position observer is a stand-in a test delivers through.
+type PositionDelivery = (
+    entries: { target: Element; intersectionRatio: number }[],
+    observer: unknown,
+) => void
+const positions = {
+    made: 0,
+    disconnected: 0,
+    // The observer standing for each element, its margin and its delivery.
+    of: new Map<
+        Element,
+        { observer: unknown; rootMargin: string; deliver: PositionDelivery }
+    >(),
+}
+class PositionStandIn {
+    deliver: PositionDelivery
+    rootMargin: string
+    constructor(deliver: PositionDelivery, options: { rootMargin: string }) {
+        positions.made += 1
+        this.deliver = deliver
+        this.rootMargin = options.rootMargin
+    }
+    observe(element: Element): void {
+        positions.of.set(element, {
+            observer: this,
+            rootMargin: this.rootMargin,
+            deliver: this.deliver,
+        })
+    }
+    unobserve(): void {}
+    disconnect(): void {
+        positions.disconnected += 1
+    }
+}
+Object.assign(globalThis, { IntersectionObserver: PositionStandIn })
+
+/** Delivers `ratio` to the position observer standing for `element`. */
+function moved(element: Element, ratio: number): void {
+    const standing = positions.of.get(element)
+    standing?.deliver(
+        [{ target: element, intersectionRatio: ratio }],
+        standing.observer,
+    )
+}
+
 const counts = {
     frames: 0,
     reads: 0,
@@ -37,6 +81,9 @@ const native = {
 }
 
 beforeEach(() => {
+    positions.made = 0
+    positions.disconnected = 0
+    positions.of.clear()
     counts.frames = 0
     counts.reads = 0
     counts.added = { scroll: 0, resize: 0 }
@@ -209,4 +256,56 @@ let rect = reactive<{ top: number } | undefined>(undefined)
     )
     expect(html).not.toContain('bind:')
     runFrame()
+})
+
+// 32.87, 32.90 — A MOVE NO SCROLL OR RESIZE ACCOMPANIES IS SEEN: each element gets a position observer
+// around the rectangle its first frame read, whose first delivery is not a move, and a delivery
+// after it asks for one frame and reads nothing. A frame in which nothing moved makes no observer.
+// THE REVERTS, each run: never schedule from `deliverPositions` — 0 frames for the move; arm
+// whatever the insets (drop the compare in `arm`) — 20 observers made by the still frame.
+test('a move with no scroll or resize asks for one frame, and a still frame arms nothing — 32.87, 32.90', async () => {
+    ;(globalThis as { __RECTS__?: typeof counts }).__RECTS__ = counts
+    await mount(ROWS)
+    expect(`${positions.made} position observers`).toBe('0 position observers')
+    runFrame()
+    expect(`${positions.made} position observers`).toBe('20 position observers')
+    const viewport = document.documentElement
+    const first = document.querySelector('.row') as Element
+    expect(positions.of.get(first)?.rootMargin).toBe(
+        `-10px ${-Math.floor(viewport.clientWidth - 45)}px ${-Math.floor(viewport.clientHeight - 30)}px -5px`,
+    )
+    counts.frames = 0
+    counts.reads = 0
+    for (const row of document.querySelectorAll('.row')) moved(row, 1)
+    expect(`${counts.frames} frames for the first deliveries`).toBe(
+        '0 frames for the first deliveries',
+    )
+    moved(first, 0.6)
+    moved(first, 0.4)
+    expect(`${counts.frames} frames, ${counts.reads} reads`).toBe(
+        '1 frames, 0 reads',
+    )
+    positions.made = 0
+    runFrame()
+    expect(`${counts.reads} reads, ${positions.made} observers made`).toBe(
+        '20 reads, 0 observers made',
+    )
+    top = 40
+    window.dispatchEvent(new Event('scroll'))
+    runFrame()
+    expect(`${positions.made} observers made by a moving frame`).toBe(
+        '20 observers made by a moving frame',
+    )
+})
+
+// 32.85 — AN ELEMENT THAT LEAVES TAKES ITS POSITION OBSERVER WITH IT. THE REVERT: drop the
+// `disconnect` in the teardown; 0 of the 20 are disconnected.
+test('a bind:rect that leaves disconnects its position observer — 32.85', async () => {
+    ;(globalThis as { __RECTS__?: typeof counts }).__RECTS__ = counts
+    await mount(ROWS)
+    runFrame()
+    positions.disconnected = 0
+    click('#clear')
+    flushSync()
+    expect(`${positions.disconnected} disconnected`).toBe('20 disconnected')
 })

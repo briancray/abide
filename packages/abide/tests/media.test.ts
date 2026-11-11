@@ -5,10 +5,12 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { flushSync } from '#shared'
+import { beginHydration, endHydration } from '#shared/hydrating.ts'
 import { media } from '#shared/media.ts'
 
 import { removeTemporaryModules } from './temporaryModule.ts'
-import { closeTyped, mountPage } from './typed.ts'
+import { closeTyped, mountPage, renderPage } from './typed.ts'
+import { warningsWhile } from './warningsWhile.ts'
 
 afterAll(closeTyped)
 afterAll(removeTemporaryModules)
@@ -72,4 +74,49 @@ const wide = media('(min-width: 800px)')
     expect(html).toContain('<p id="wide">false</p>')
     flushSync()
     expect(document.getElementById('wide')?.textContent).toBe('true')
+})
+
+// 41.32 — HYDRATION READS THE SERVER'S ANSWER, so the arms the server painted for `media` and
+// `online` are adopted, and the browser's answer swaps them as an update with no 41.24 warning — while
+// any other value the two sides disagree on still warns. `online` was built at import, long before,
+// and is written the browser's answer at the end all the same. THE REVERTS, each run: make
+// `beginHydration` write nothing and `isHydrating` answer false — 2 warnings, `media`'s beside the
+// other's; drop the 41.24 warning from `ArmRegion.paintedOther` — 0.
+test('media and online hydrate as the server answered, and swap after without a warning — 41.32', async () => {
+    viewport(1024)
+    Object.defineProperty(navigator, 'onLine', {
+        configurable: true,
+        get: () => false,
+    })
+    try {
+        const { mount } = await renderPage(`<script>
+import { isServer, media, online, reactive } from '@abide/abide'
+
+const wide = media('(min-width: 700px)')
+const browser = reactive(() => !isServer())
+</script>
+
+{#if wide}<p id="wide">wide</p>{:else}<p id="narrow">narrow</p>{/if}
+{#if online}<p id="on">on</p>{:else}<p id="off">off</p>{/if}
+{#if browser}<p id="browser">browser</p>{:else}<p id="server">server</p>{/if}`)
+        expect(document.getElementById('narrow')).not.toBeNull()
+        expect(document.getElementById('on')).not.toBeNull()
+        const warned = warningsWhile(() => {
+            beginHydration()
+            try {
+                mount()
+            } finally {
+                endHydration()
+            }
+            flushSync()
+        }, '41.24')
+        expect(`${warned.length} warnings`).toBe('1 warnings')
+        expect(
+            ['wide', 'off', 'browser'].map(
+                (id) => document.getElementById(id) !== null,
+            ),
+        ).toEqual([true, true, true])
+    } finally {
+        delete (navigator as unknown as { onLine?: boolean }).onLine
+    }
 })

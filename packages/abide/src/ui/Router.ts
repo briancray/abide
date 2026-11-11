@@ -1,6 +1,7 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { ERROR_META } from '#shared/ERROR_META.ts'
+import { beginHydration, endHydration } from '#shared/hydrating.ts'
 import { firstMatch, type Found, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
@@ -510,13 +511,20 @@ export class Router {
         // 41.25 — AND THE CALLS THE SERVER PAINTED SETTLED ARE WAITED FOR, so setup reads each one
         // answered, as the markup was built from it, and picks the arm the server painted.
         const landing = paintedCallsLanded()
-        const standing = await load(found.route)
-        if (landing !== undefined) await landing
-        if (ticket.signal.aborted) return
-        // THE HYDRATE SHARE. Same name as the navigation's mount because it is the same work on the
-        // same chain — what differs is the op it is a fraction of.
-        this.arriveAt(new URL(location.href), found)
-        this.levels.hydrate(standing)
+        // 41.32 — FROM BEFORE THE PAGE'S MODULES LOAD, so a `media` a `<script module>` asks for at
+        // its top level answers as the server did too; and ended however this returns.
+        beginHydration()
+        try {
+            const standing = await load(found.route)
+            if (landing !== undefined) await landing
+            if (ticket.signal.aborted) return
+            // THE HYDRATE SHARE. Same name as the navigation's mount because it is the same work on
+            // the same chain — what differs is the op it is a fraction of.
+            this.arriveAt(new URL(location.href), found)
+            this.levels.hydrate(standing)
+        } finally {
+            endHydration()
+        }
         // 30.30 — A RELOAD lands on an entry that carries the scroll `remember` wrote on the way out.
         const scroll = (history.state as Partial<Entry> | null)?.scroll
         if (scroll != null) scrollTo(scroll[0], scroll[1])

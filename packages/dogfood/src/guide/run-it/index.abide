@@ -292,9 +292,10 @@ import Snippet from '#src/lib/Snippet.abide'
 
         <p><code>media(query)</code> is the same for a media query:
             <code>media('(max-width: 760px)')</code> follows <code>matchMedia</code>, and asking
-            twice hands back the same value. On the server it is <code>false</code>, so an
-            <code>{'{#if}'}</code> arm the browser's answer changes is rebuilt as the page hydrates,
-            with a warning on <code>abide:hydrate</code>. Where only the styling changes, use a CSS media query.</p>
+            twice hands back the same value. On the server it is <code>false</code>. It and <code>online</code>
+            answer as the server did while the page hydrates, so the page adopts what the server
+            painted, then switches to the browser's answer as an ordinary update. Where only the
+            styling changes, use a CSS media query, which applies before the first paint.</p>
     </Section>
 
     <Section title="A call logged offline is sent when the network is back">
