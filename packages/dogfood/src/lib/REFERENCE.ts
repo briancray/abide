@@ -62,6 +62,27 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: false,
     },
     {
+        route: '/reference/redisStore',
+        names: ['redisStore'],
+        entry: '@abide/abide/server',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
+        route: '/reference/indexedDBStore',
+        names: ['indexedDBStore'],
+        entry: '@abide/abide',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
+        route: '/reference/cookiesStore',
+        names: ['cookiesStore'],
+        entry: '@abide/abide',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
         route: '/reference/types/Shared',
         names: ['Shared'],
         entry: '@abide/abide',

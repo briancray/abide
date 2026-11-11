@@ -1,6 +1,6 @@
 import type { Store } from './reactive/index.ts'
 import type { Schema } from './Schema.ts'
-import { expiresAfter, storedValue } from './storedValue.ts'
+import { KeptText, storeKey } from './storedValue.ts'
 
 /**
  * A `Store` kept in this browser's `localStorage`, or its `sessionStorage`, under `key`.
@@ -16,25 +16,23 @@ export function webStore<Stored>(
 ): Store<Stored> {
     const name = options?.area === 'session' ? 'sessionStorage' : 'localStorage'
     const schema = options?.schema as Schema<unknown> | undefined
-    const where = `${name}[${JSON.stringify(key)}]`
+    const kept = new KeptText()
     const area = (): Storage | undefined =>
         (globalThis as unknown as Record<string, Storage | undefined>)[name]
     return {
         get: () => {
             const storage = area()
             if (storage === undefined) return undefined
-            const text = storage.getItem(key)
-            if (text === null) return undefined
-            const value = storedValue(JSON.parse(text), schema, where)
+            const stored = storeKey(key)
+            const text = storage.getItem(stored)
+            const where = `${name}[${JSON.stringify(stored)}]`
+            const value = kept.read(text, schema, where)
             // 8.26 — an entry past its deadline is gone, not merely skipped.
-            if (value === undefined) storage.removeItem(key)
+            if (value === undefined && text !== null) storage.removeItem(stored)
             return value as Stored | undefined
         },
         set: (value, retention) => {
-            area()?.setItem(
-                key,
-                JSON.stringify({ value, expires: expiresAfter(retention.ttl) }),
-            )
+            area()?.setItem(storeKey(key), kept.write(value, retention.ttl))
         },
         // 8.24 — another document's write arrives as a `storage` event; this document's own never does.
         watch: (changed) => {
@@ -43,7 +41,7 @@ export function webStore<Stored>(
             const listener = (event: StorageEvent): void => {
                 if (
                     event.storageArea === area() &&
-                    (event.key === key || event.key === null)
+                    (event.key === storeKey(key) || event.key === null)
                 )
                     changed()
             }

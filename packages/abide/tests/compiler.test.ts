@@ -183,7 +183,7 @@ test('the compiler is not reachable from the server seam', async () => {
     // `trace` is 24's and `config` is 27's; `callsInRender` is what an emitted component reads
     // around its setup (41.28), `derivedArgs` what a handler's module holds it to its annotation by
     // (19.9) and `addressed` what gives it its address (16.88); the six response helpers are 17's, `reachable` is
-    // 23's, `assistant`, `claudeApi` and `claudeCode` are 45's, and `sqliteStore` is 8.25's.
+    // 23's, `assistant`, `claudeApi` and `claudeCode` are 45's, `sqliteStore` is 8.25's and `redisStore` 8.31's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -215,6 +215,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'page',
             'reachable',
             'redirect',
+            'redisStore',
             'render',
             'sqliteStore',
             'renderComponent',

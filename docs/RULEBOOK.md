@@ -460,13 +460,41 @@ in its area.
 8.25 `sqliteStore` MUST keep the value in one row of its table under its key, and MUST create the
 table where it does not exist.
 
-8.26 `webStore` and `sqliteStore` MUST answer a miss for a value whose `ttl`, as their `set` received
-it, has passed.
+8.26 `webStore`, `sqliteStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST answer a miss for a value whose `ttl`, as their `set` received it, has passed.
 
-8.27 `webStore` and `sqliteStore` MUST run their `schema` on what `get` reads, and MUST throw what it
-refuses, per 8.15.
+8.27 `webStore`, `sqliteStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST run their `schema` on what `get` reads, and MUST throw what it refuses, per 8.15.
 
-8.28 `webStore` and `sqliteStore` MUST keep the value as JSON.
+8.28 `webStore`, `sqliteStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST keep the value as JSON.
+
+8.29 `webStore`, `sqliteStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST keep the value under the app name followed by its key.
+
+8.30 `webStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST answer a `get` that reads the
+text they last read or wrote with the value they answered for that text.
+
+8.31 `redisStore` MUST keep the value under its key in Redis.
+
+8.32 `redisStore` MUST hand Redis a finite `ttl` as the key's own expiry.
+
+8.33 `redisStore`'s `watch` MUST call what it is handed when the key's keyspace channel, in the
+database its client selected, carries an event.
+
+8.34 `indexedDBStore` MUST keep the value under its key in a table of the `abide` IndexedDB database.
+
+8.35 `indexedDBStore` MUST answer every `get` with a synchronous miss, and MUST write nothing, where
+the process has no IndexedDB.
+
+8.36 `indexedDBStore`'s `watch` MUST call what it is handed when an `indexedDBStore` in another
+document writes its key.
+
+8.37 `cookiesStore` MUST keep the value in a cookie, read and written through `cookies()`.
+
+8.38 `cookiesStore` MUST write a finite `ttl` as the cookie's `Max-Age`, and an infinite one as 400
+days.
+
+8.39 `cookiesStore`'s `set` MUST throw for a value whose cookie would pass 4096 bytes.
+
+8.40 `cookiesStore`'s `watch` MUST call what it is handed where the browser reports a change to its
+cookie, per 22.6.
 
 # 9. Streams and wired values
 

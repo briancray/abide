@@ -135,6 +135,10 @@ export {
     type Routes,
     url,
 } from './url.ts'
+// 8.37 — a `Store` in a cookie, the request's on a server.
+export { cookiesStore } from './cookiesStore.ts'
+// 8.34 — a `Store` in the browser's IndexedDB, inert where there is none.
+export { indexedDBStore } from './indexedDBStore.ts'
 export { validateJson } from './validateJson.ts'
 // 8.22 — a `Store` in the browser's Web Storage, inert where there is none (8.23).
 export { webStore } from './webStore.ts'

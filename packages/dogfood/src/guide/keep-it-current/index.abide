@@ -341,19 +341,24 @@ import Section from '#src/lib/Section.abide'
             happens, and returns the function that stops watching. The value reads <code>get</code>
             again, and the body does not run.</p>
 
-        <p>Two stores come with abide, for the places a value most often lives:</p>
+        <p>Five stores come with abide, for the places a value most often lives:</p>
 
         <table>
             <thead><tr><th>Name</th><th>Where the value lives</th></tr></thead>
             <tbody>
                 <tr><td><code>webStore</code></td><td><code>{"webStore('layout')"}</code> keeps it in this browser's <code>localStorage</code>, or <code>sessionStorage</code> with <code>{"{ area: 'session' }"}</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
                 <tr><td><code>sqliteStore</code></td><td><code>{"sqliteStore('crm.db', 'target')"}</code>, from <code>@abide/abide/server</code>, keeps it in a SQLite table, so a restarted server opens on it</td></tr>
+                <tr><td><code>redisStore</code></td><td><code>{"redisStore(Bun.redis, 'target')"}</code>, from <code>@abide/abide/server</code>, keeps it in a Redis key that Redis expires with the <code>ttl</code>, so every server behind one Redis opens on it. Where Redis reports changes to its keys, it follows a write another server makes</td></tr>
+                <tr><td><code>indexedDBStore</code></td><td><code>{"indexedDBStore('draft')"}</code> keeps it in this browser's IndexedDB, for a value too large for <code>localStorage</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
+                <tr><td><code>cookiesStore</code></td><td><code>{"cookiesStore('theme')"}</code> keeps it in a cookie, which the browser sends with every request, so the server renders the stored value rather than the fallback. A cookie holds 4 KB at most</td></tr>
             </tbody>
         </table>
 
-        <p>Both keep the value as JSON with the value's <code>ttl</code> beside it, and pass what they
-            read through a <code>schema</code> when given one: a restore skips the value's own, so an
-            entry an older build wrote is a miss rather than a wrong value.</p>
+        <p>Each keeps the value under the app's name and then the key, so two apps sharing one origin
+            or one Redis never read each other's. Each keeps it as JSON with the value's
+            <code>ttl</code> beside it, and passes what it reads through a <code>schema</code> when
+            given one: a restore skips the value's own, so an entry an older build wrote is a miss
+            rather than a wrong value.</p>
     </Section>
     <Section title="Next">
         <ul>
