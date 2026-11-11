@@ -237,6 +237,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`redisStore`',
                         '`indexedDBStore`',
                         '`cookiesStore`',
+                        '`database`',
                     ],
                 },
                 {

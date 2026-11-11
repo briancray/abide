@@ -51,6 +51,8 @@ export {
 export { type Config, config } from './config.ts'
 // 38.82 — the props `src/launcher.abide` is rendered with.
 export type { ConfigField } from './configFields.ts'
+// 47 — the app's SQLite database, opened and migrated on first use.
+export { database } from './database.ts'
 // 42 — the app object, and 37's hooks a `<script server>` calls.
 export { type App, createApp } from './createApp.ts'
 // 41.28's run-time half: an emitted component reads it on either side of its setup, and one whose

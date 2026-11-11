@@ -123,7 +123,8 @@ export function derived(): Record<string, string> {
         ...ADDED,
         APP_NAME: name,
         APP_VERSION: manifest.version ?? '0.0.0',
-        // 36.4 — A PATH, and never created: an app that wants the directory makes it.
+        // 36.4 — A PATH, and never created here: an app that wants the directory makes it, or opens a
+        // `database` (47.2).
         APP_DATA_DIR: dataDirectory(name),
     }
 }
