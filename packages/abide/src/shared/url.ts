@@ -7,7 +7,7 @@
 import { filledSegments } from './filledSegments.ts'
 import { mounted } from './mount.ts'
 import { queryText } from './queryText.ts'
-import { parseRoutePattern } from './routePattern.ts'
+import { parseRoutePattern, type Segment } from './routePattern.ts'
 
 type Parts<P extends string> = P extends `${infer Head}/${infer Tail}`
     ? Head | Parts<Tail>
@@ -96,6 +96,22 @@ export type RouteParams<P extends string> = {
     [K in RestNames<P>]: string[]
 } & Narrowed<P>
 
+// A ROUTE LITERAL PARSES ONCE: `url()` in a `{#for}` row is called per row with the same literal.
+// The key space is the app's literals, but `RouteLiteral` is `string` where none were declared, so
+// a pattern built at run time could grow it without end — past the cap it starts over.
+const PARSED = new Map<string, Segment[]>()
+const PARSED_CAP = 512
+
+function parsedPattern(pattern: string): Segment[] {
+    let segments = PARSED.get(pattern)
+    if (segments === undefined) {
+        if (PARSED.size === PARSED_CAP) PARSED.clear()
+        segments = parseRoutePattern(pattern)
+        PARSED.set(pattern, segments)
+    }
+    return segments
+}
+
 /**
  * An address from a route literal and its params, resolved against the mount, with an optional
  * query.
@@ -110,7 +126,7 @@ export function url<P extends RouteLiteral>(
     const query = rest[1]
     const address = mounted(
         filledSegments(
-            parseRoutePattern(pattern ?? '/'),
+            parsedPattern(pattern ?? '/'),
             params,
             `url('${pattern}')`,
         ),
