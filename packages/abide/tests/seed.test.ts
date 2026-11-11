@@ -294,9 +294,10 @@ test('the head starts every call the page made, before its markup — 41.20', as
 })
 
 // 41.25 — A CALL THE MARKUP WAS BUILT FROM SETTLED IS MARKED for hydration to wait on, a refusal too,
-// and one still in flight (the slow invoice on `/`) is not. 41.26 — nor is a stream, though this one
-// closed before the markup was built. THE REVERTS: write every row unmarked, and `getTotal` and
-// `getMissing` read `false`; drop `!isStreaming` from the mark, and `getLines` reads `true`.
+// and one still in flight (the slow invoice on `/`) is not. 16.93 — and a stream is not started at
+// all, though this one closed before the markup was built: the page reads it over the mux. THE
+// REVERTS: write every row unmarked, and `getTotal` and `getMissing` read `false`; drop the
+// `isStreaming` skip from the head, and `getLines` is started, as `false`.
 test('the head marks the calls the markup was built from settled — 41.25, 41.26', async () => {
     const rowsOf = async (address: string) =>
         JSON.parse(
@@ -311,7 +312,6 @@ test('the head marks the calls the markup was built from settled — 41.25, 41.2
     expect(marked).toEqual({
         getTotal: true,
         getMissing: true,
-        getLines: false,
         getInvoice: false,
     })
 })

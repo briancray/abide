@@ -132,7 +132,7 @@ export function unanswered(answer: Answer): boolean {
  * decoded as what it carried, and one unread read as bytes where it is a binary (16.34), as text
  * otherwise — or left unread for a `streams` caller where it is framed or a binary (16.32, 16.46).
  */
-function answerFrom(
+export function answerFrom(
     response: Response,
     read: ArrayBuffer | undefined,
     streams: boolean,

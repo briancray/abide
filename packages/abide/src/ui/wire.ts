@@ -38,9 +38,10 @@ import {
 import { standIn } from '#shared/reactive/producer.ts'
 import { declare, type Method } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
+import { startedEarly } from '#shared/takeEarlyCall.ts'
 
 import { enqueue, undelivered } from './outboxQueue.ts'
-import { followRpc } from './socketWire.ts'
+import { followRpc, streamOverMux } from './socketWire.ts'
 
 /** The browser's `Rpc` for a handler: the server's declaration over a body that fetches. */
 export function wire(
@@ -165,7 +166,17 @@ export function wire(
         // this runs while the call that started the load still has its signal set.
         const signal = startingLoadCall().signal
         const request = requestOf(args)
-        const answer = await answerOf(request, true, signal)
+        // 16.93 — A `GET` IS READ OVER THE MUX, holding no http connection while it streams, save
+        // one the page's early-call script already started (41.20) and one the mux sends back.
+        const muxed =
+            method === 'GET' && !startedEarly(request.key)
+                ? await streamOverMux(address, request.url, signal, () =>
+                      (value as (args: unknown) => { refresh(): void })(
+                          args,
+                      ).refresh(),
+                  )
+                : undefined
+        const answer = muxed ?? (await answerOf(request, true, signal))
         if (answer.ok) answeredOnce.add(request.key)
         follow(args, answer)
         if (answer.body !== undefined && answer.body !== null) {

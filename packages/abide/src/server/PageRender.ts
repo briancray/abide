@@ -11,6 +11,7 @@
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import type { HandlerRoute } from '#shared/HandlerRoute.ts'
 import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
+import { isStreaming } from '#shared/reactive/producer.ts'
 import type { Rpc } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
 
@@ -100,9 +101,9 @@ export class PageRender {
      *
      * 41.25 — A ROW ENDING IN `1` IS A CALL THE MARKUP WAS BUILT FROM SETTLED, a refusal included,
      * and its entry is marked `painted` for hydration to wait on — its body read to its bytes, so
-     * the wait covers it too. 41.26 — A CALL THAT STREAMS IS NEVER MARKED: the browser reads its
-     * chunks as they land (16.32), so no wait for its answer makes it settled where the page
-     * hydrates, and its region is 41.24's to put right.
+     * the wait covers it too. 41.26 — A CALL THAT STREAMS IS NEVER MARKED, NOR STARTED: the
+     * browser reads its chunks over the mux as they land (16.93), so no wait for its answer makes it
+     * settled where the page hydrates, and its region is 41.24's to put right.
      *
      * 29.9, 29.10 — THE CALLS ARE DATA AND THE RUNNER IS A CONSTANT. What a page called differs per
      * response, so it rides in a JSON block a browser never executes, and the one script that does
@@ -117,12 +118,17 @@ export class PageRender {
         const rows: (
             [string, string, RequestInit] | [string, string, RequestInit, 1]
         )[] = []
-        for (const { request, painted } of calls)
+        for (const { request, painted, reached } of calls) {
+            // 16.93 — A STREAM IS READ OVER THE MUX once the page runs, and a fetch started for it
+            // here would hold an http connection for as long as it streams.
+            if (isStreaming(reached)) continue
             rows.push(
                 painted === true
                     ? [request.key, request.url, request.init, 1]
                     : [request.key, request.url, request.init],
             )
+        }
+        if (rows.length === 0) return ''
         return `<script type="application/json">${JSON.stringify(rows).replace(/</g, '\\u003c')}</script><script>${EARLY_CALL_RUNNER}</script>`
     }
 }

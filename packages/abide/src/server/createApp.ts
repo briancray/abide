@@ -483,6 +483,10 @@ export async function bootEntered(
                     close(socket) {
                         socket.data.connection?.close()
                     },
+                    // 18.30 — the streams waiting on the socket's buffer read on.
+                    drain(socket) {
+                        socket.data.connection?.drained()
+                    },
                 },
             })
             bound = server as unknown as Bun.Server<unknown>

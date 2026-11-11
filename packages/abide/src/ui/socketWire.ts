@@ -3,6 +3,7 @@
 // where the version it holds is not the server's, and the writes of each patch over it (18.6, 18.11).
 
 import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { type Answer, answerFrom, noAnswer } from '#shared/answerOf.ts'
 import { applyPatch } from '#shared/applyPatch.ts'
 import { mounted } from '#shared/mount.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
@@ -136,11 +137,99 @@ class Following {
     }
 }
 
-/** One web socket carrying every followed `GET` under one address. */
+const ENCODER = new TextEncoder()
+
+/**
+ * A streaming `GET`'s call read over the mux, as the http answer it stands in for is read: settled
+ * with its head as an `Answer`, whose body is then fed the text each `lines` frame carries.
+ *
+ * 16.93. `undefined` is the call sent back to http (`MuxStream`'s `http`).
+ */
+class MuxStream {
+    id: number
+    url: string
+    // Whether the frame naming it went out over the socket standing now.
+    sent: boolean
+    settle: (answer: Answer | Promise<Answer> | undefined) => void
+    fail: (reason: unknown) => void
+    // The body its head opened, once it has; `null` while it has not.
+    body: ReadableStreamDefaultController<Uint8Array> | null
+    // A new run in place of this one, for a connection reopened under another caller (18.25).
+    restart: () => void
+
+    constructor(
+        id: number,
+        url: string,
+        settle: (answer: Answer | Promise<Answer> | undefined) => void,
+        fail: (reason: unknown) => void,
+        restart: () => void,
+    ) {
+        this.id = id
+        this.url = url
+        this.sent = false
+        this.settle = settle
+        this.fail = fail
+        this.body = null
+        this.restart = restart
+    }
+
+    frame(): BrowserFrame {
+        return { op: 'stream', id: this.id, url: this.url }
+    }
+
+    /** Takes a frame of its answer; returns whether the stream is over. */
+    receive(frame: ServerFrame, cancel: () => void): boolean {
+        if (frame.op === 'lines') {
+            this.body?.enqueue(ENCODER.encode(frame.lines ?? ''))
+            return false
+        }
+        if (frame.op === 'head' && frame.head !== undefined) {
+            const head = frame.head
+            const ok = head.status >= 200 && head.status < 300
+            const body = ok
+                ? new ReadableStream<Uint8Array>({
+                      start: (controller) => {
+                          this.body = controller
+                      },
+                      // A reader that stopped — an invalidate discarding the run (7.15) — ends it there.
+                      cancel,
+                  })
+                : (head.text ?? '')
+            this.settle(
+                answerFrom(
+                    new Response(head.status === 204 ? null : body, {
+                        status: head.status,
+                        statusText: head.statusText,
+                        headers: head.headers,
+                    }),
+                    undefined,
+                    true,
+                ),
+            )
+            return !ok
+        }
+        if (frame.op === 'end') this.body?.close()
+        // A body that broke reads as a connection that broke, as a fetch's would.
+        else if (frame.op === 'error' && this.body !== null)
+            this.body.error(new TypeError('the stream broke'))
+        // A refusal before its head, or `http`: the call is made over http instead.
+        else this.settle(undefined)
+        return true
+    }
+
+    /** Its connection is gone: no answer where it had none (16.79), and a broken body where it had one. */
+    lost(): void {
+        if (this.body === null) this.settle(noAnswer())
+        else this.body.error(new TypeError('the connection to the mux closed'))
+    }
+}
+
+/** One web socket carrying every followed `GET` under one address, and every streaming one read. */
 class Mux {
     url: string
     socket: WebSocket | null
     subscriptions: Map<number, Following>
+    streams: Map<number, MuxStream>
     nextId: number
     backoff: Backoff
 
@@ -148,6 +237,7 @@ class Mux {
         this.url = url
         this.socket = null
         this.subscriptions = new Map()
+        this.streams = new Map()
         this.nextId = 1
         this.backoff = new Backoff(RETRY_FLOOR_MS, RETRY_CEILING_MS, () =>
             this.connect(),
@@ -175,7 +265,65 @@ class Mux {
         socket.onclose = null
         socket.close()
         this.socket = null
-        if (this.subscriptions.size !== 0) this.connect()
+        // 16.93 — A STREAM ANSWERING THE CALLER IT OPENED AS is run again as the one it is now: a
+        // new run in place of one that had begun (9.7), and one that had not sent again as it was.
+        for (const stream of this.streams.values()) {
+            stream.sent = false
+            if (stream.body === null) continue
+            this.streams.delete(stream.id)
+            stream.restart()
+            stream.body.close()
+        }
+        if (this.subscriptions.size !== 0 || this.streams.size !== 0)
+            this.connect()
+    }
+
+    /**
+     * Reads the streaming `GET` at `url` over the socket: settles with its answer as its head lands,
+     * or `undefined` where it is to be called over http instead. 16.93.
+     *
+     * 16.79 — OFFLINE, OR A SOCKET THAT CLOSES before the head, is no answer, as a fetch's would be.
+     */
+    stream(
+        url: string,
+        signal: AbortSignal | undefined,
+        restart: () => void,
+    ): Promise<Answer | undefined> {
+        if (this.socket?.readyState !== WebSocket.OPEN && !navigator.onLine)
+            return Promise.resolve(noAnswer())
+        return new Promise((settle, fail) => {
+            const stream = new MuxStream(
+                this.nextId++,
+                url,
+                settle,
+                fail,
+                restart,
+            )
+            this.streams.set(stream.id, stream)
+            // 16.48 — the load's own ending: the server stops it, and the read throws as a fetch's.
+            signal?.addEventListener(
+                'abort',
+                () => {
+                    if (!this.streams.delete(stream.id)) return
+                    this.unsubscribe(stream)
+                    if (stream.body === null) fail(signal.reason)
+                    else stream.body.error(signal.reason)
+                },
+                { once: true },
+            )
+            if (this.socket?.readyState === WebSocket.OPEN) this.send(stream)
+            else this.connect()
+        })
+    }
+
+    private send(stream: MuxStream): void {
+        stream.sent = true
+        this.socket?.send(JSON.stringify(stream.frame()))
+    }
+
+    private unsubscribe(stream: MuxStream): void {
+        if (stream.sent && this.socket?.readyState === WebSocket.OPEN)
+            this.socket.send(JSON.stringify({ op: 'unsub', id: stream.id }))
     }
 
     /**
@@ -200,6 +348,8 @@ class Mux {
             // Every subscription again, carrying the version it holds (18.9).
             for (const each of this.subscriptions.values())
                 socket.send(JSON.stringify(each.frame()))
+            for (const stream of this.streams.values())
+                if (!stream.sent) this.send(stream)
         }
         // THE CLOSE THAT FOLLOWS IS WHAT RETRIES; an error left unhandled is only noise on top of it.
         socket.onerror = () => {}
@@ -207,6 +357,9 @@ class Mux {
             this.receive(JSON.parse(String(event.data)) as ServerFrame)
         socket.onclose = () => {
             this.socket = null
+            const streams = [...this.streams.values()]
+            this.streams.clear()
+            for (const stream of streams) stream.lost()
             // 18.34 — OFFLINE, AN ATTEMPT CANNOT SUCCEED, so none is armed: coming online redials.
             if (this.subscriptions.size !== 0 && navigator.onLine)
                 this.backoff.later()
@@ -214,13 +367,24 @@ class Mux {
     }
 
     receive(frame: ServerFrame): void {
-        this.subscriptions.get(frame.id)?.receive(frame)
+        const stream = this.streams.get(frame.id)
+        if (stream === undefined) {
+            this.subscriptions.get(frame.id)?.receive(frame)
+            return
+        }
+        const cancel = (): void => {
+            if (this.streams.delete(stream.id)) this.unsubscribe(stream)
+        }
+        if (stream.receive(frame, cancel)) this.streams.delete(stream.id)
     }
 
-    /** Lets go of every subscription and the socket, so a sign-in or a retry reaches nothing. */
+    /** Lets go of every subscription, stream and the socket, so a sign-in or a retry reaches nothing. */
     dispose(): void {
         this.backoff.cancel()
         this.subscriptions.clear()
+        const streams = [...this.streams.values()]
+        this.streams.clear()
+        for (const stream of streams) stream.lost()
         this.reopen()
     }
 }
@@ -282,6 +446,19 @@ function readAgainWritten(): void {
         const copy = following.entry() as Reactive<unknown>
         if (writtenLocally(copy)) copy.refresh()
     }
+}
+
+/**
+ * The streaming `GET` `url` names, read over the mux `address` is carried over: its answer, or
+ * `undefined` where it is to be called over http. `restart` runs its copy again (16.93, 18.25).
+ */
+export function streamOverMux(
+    address: string,
+    url: string,
+    signal: AbortSignal | undefined,
+    restart: () => void,
+): Promise<Answer | undefined> {
+    return muxFor(address).stream(url, signal, restart)
 }
 
 /**

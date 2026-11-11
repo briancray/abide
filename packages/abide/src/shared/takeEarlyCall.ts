@@ -29,6 +29,11 @@ function startedCalls(): Record<string, EarlyCall | undefined> | undefined {
     )[EARLY_CALLS]
 }
 
+/** Whether the page started a call under `key` that no reader has taken yet. */
+export function startedEarly(key: string): boolean {
+    return startedCalls()?.[key] !== undefined
+}
+
 /** The call the page started under `key`, taken so no later reader is answered from it. */
 export function takeEarlyCall(key: string): EarlyCall | undefined {
     const started = startedCalls()

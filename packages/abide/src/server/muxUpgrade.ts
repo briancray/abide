@@ -145,7 +145,8 @@ export type Socket = {
  * peer is closed rather than written past: the browser reconnects naming the version it holds (18.9)
  * and is sent what stands. No buffer of our own — what bun buffers is the bound.
  */
-export function sendOrClose(socket: Socket | undefined, text: string): void {
-    if (socket?.send(text) === 0)
-        socket.close(1013, 'the connection fell behind')
+export function sendOrClose(socket: Socket | undefined, text: string): unknown {
+    const sent = socket?.send(text)
+    if (sent === 0) socket?.close(1013, 'the connection fell behind')
+    return sent
 }

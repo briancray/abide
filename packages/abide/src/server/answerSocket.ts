@@ -31,6 +31,7 @@ import {
     type RequestScope,
     scopeFor,
 } from './requestScope.ts'
+import { streamOverMux } from './streamOverMux.ts'
 
 // 18.31 — a page follows each value it reads once, so a thousand is a page no one could read.
 const MAX_SUBSCRIPTIONS = 1024
@@ -41,8 +42,8 @@ class SocketPeer implements Peer {
     constructor(socket: Socket) {
         this.socket = socket
     }
-    send(id: number, frame: Frame): void {
-        sendOrClose(this.socket, frame.json(id))
+    send(id: number, frame: Frame): unknown {
+        return sendOrClose(this.socket, frame.json(id))
     }
     close(code: number, reason: string): unknown {
         return this.socket.close(code, reason)
@@ -138,8 +139,45 @@ export class MuxConnection {
         this.scope.applied = true
     }
 
+    // 18.30 — what each stream waiting on the socket's buffer resumes on.
+    private draining: (() => void)[] = []
+
     message(raw: string | Buffer): Promise<void> {
         return inOpenScope(this.scope, () => this.answerFrame(raw))
+    }
+
+    /** The socket sent what it had buffered: every stream waiting on it reads on. */
+    drained(): void {
+        const waiting = this.draining
+        this.draining = []
+        for (const resume of waiting) resume()
+    }
+
+    private untilDrained(): Promise<void> {
+        return new Promise((resume) => this.draining.push(resume))
+    }
+
+    /** Answers the streaming `GET` `url` names as `id`, in place of whatever `id` was. 16.93. */
+    private stream(id: number, url: string): void {
+        const subscriptions = this.subscriptions
+        const ending = new AbortController()
+        const stop = (): void => ending.abort()
+        subscriptions.get(id)?.()
+        subscriptions.set(id, stop)
+        void streamOverMux(
+            { peer: this.peer, drained: () => this.untilDrained() },
+            id,
+            url,
+            this.scope.request as Request,
+            this.mux.app?.answer,
+            AbortSignal.any([ending.signal, this.hangUp.signal]),
+        )
+            .catch((thrown: unknown) => {
+                if (!ending.signal.aborted) this.peer.send(id, refusal(thrown))
+            })
+            .finally(() => {
+                if (subscriptions.get(id) === stop) subscriptions.delete(id)
+            })
     }
 
     /** Stops every subscription and tears the scope down; a second close does nothing. */
@@ -169,9 +207,13 @@ export class MuxConnection {
             subscriptions.delete(id)
             return
         }
-        // 18.31 — A CONNECTION FOLLOWS AT MOST `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` VALUES; 18.32 — a frame
-        // naming an id it already holds replaces that one rather than adding to them.
-        if (frame.op === 'sub' && !subscriptions.has(id)) {
+        // 18.31 — A CONNECTION FOLLOWS AT MOST `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` VALUES, a stream it
+        // reads among them; 18.32 — a frame naming an id it already holds replaces that one rather
+        // than adding to them.
+        if (
+            (frame.op === 'sub' || frame.op === 'stream') &&
+            !subscriptions.has(id)
+        ) {
             const most = positiveSetting(
                 'ABIDE_MAX_SOCKET_SUBSCRIPTIONS',
                 MAX_SUBSCRIPTIONS,
@@ -189,6 +231,7 @@ export class MuxConnection {
                 return
             }
         }
+        if (frame.op === 'stream') return this.stream(id, frame.url ?? '')
         const followed =
             frame.op === 'sub' ? this.mux.followedAt(address) : undefined
         if (followed === undefined) {

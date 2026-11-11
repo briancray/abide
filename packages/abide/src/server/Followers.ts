@@ -86,7 +86,8 @@ const TRIGGERS = {
 
 /** What a frame is written to, under the follower's id: a socket, or an event stream. */
 export type Peer = {
-    send(id: number, frame: Frame): void
+    /** What the socket said of the frame: `-1` where it was buffered rather than sent (18.30). */
+    send(id: number, frame: Frame): unknown
     close(code: number, reason: string): unknown
 }
 

@@ -1277,6 +1277,20 @@ last frame is sent, and MUST NOT run where the run ends on a failure.
 16.92 The options `GET` takes MUST NOT carry `refreshes`, and a `GET` declared with `refreshes`
 MUST be refused as it is declared.
 
+16.93 A `GET` call in a browser whose copy the build marked as streaming MUST be read over the
+socket mux, answered as the request the call names made with the headers of the connection's
+upgrade.
+
+16.94 A `GET` call 16.93 reads MUST be made over http instead where its answer carries a cookie or
+the `abide-principal` header, is a redirect or is a binary, and where 41.20's script started it.
+
+16.95 A `GET` call 16.93 reads whose connection to the socket mux closes MUST refuse as 16.79 has it
+where its answer's status had not arrived, and MUST fail its stream where it had, save where 18.25
+opens the connection again, which MUST make the call again as 9.7 has a refresh run it.
+
+16.96 A `GET` call 16.93 reads MUST NOT read its answer's body further while a frame of it the
+connection was sent is held unsent, and MUST count toward 18.31's bound while it is read.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
@@ -3445,7 +3459,8 @@ key.
 run, before it builds any of their markup.
 
 41.20 A `render` MUST write one inline script into the head once setup has run and before any
-markup, starting each `Rpc` call the setup made as the request the browser's `Rpc` makes for it.
+markup, starting each `Rpc` call the setup made, save one answering a stream, as the request the
+browser's `Rpc` makes for it.
 
 41.21 The browser's `Rpc` MUST take a call 41.20's script started in place of making it, once.
 

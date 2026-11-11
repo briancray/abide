@@ -18,6 +18,7 @@ import {
     builtHandlers,
     serveApp,
 } from './builtApp.ts'
+import { installMuxLoopback } from './muxLoopback.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 // A STRING NO BROWSER MAY EVER RECEIVE. The handler module imports it, the page imports the
@@ -123,18 +124,13 @@ let stop = (): void => {}
 let base = ''
 
 // 18.3 — EVERY `GET` THE WIRE LOADS IS FOLLOWED over the mux, and `followWire.test.ts` is where that
-// is asserted. Here the socket never opens: happy-dom's `WebSocket` wraps `ws`, which throws an
-// unhandled `error` for a host nobody listens on — which three of these tests' addresses are.
-const unstubbedSocket = globalThis.WebSocket
-globalThis.WebSocket = class {
-    static OPEN = 1
-    readyState = 0
-    send(): void {}
-    close(): void {}
-} as unknown as typeof WebSocket
-// The muxes this file opens are forgotten with it (`resetSocketWire`).
+// is asserted. Here the socket is a loopback: a follow is ignored, and 16.93 — a streaming copy's
+// call is answered by the server's own half of the mux through whatever `fetch` stands. happy-dom's
+// `WebSocket` wraps `ws`, which throws an unhandled `error` for a host nobody listens on — which
+// three of these tests' addresses are.
+const restoreSocket = installMuxLoopback()
 afterAll(() => {
-    globalThis.WebSocket = unstubbedSocket
+    restoreSocket()
     resetSocketWire()
 })
 
