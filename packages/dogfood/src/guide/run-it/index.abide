@@ -289,6 +289,12 @@ import Snippet from '#src/lib/Snippet.abide'
             the connection returns, refresh what is on screen. The operations page does:</p>
 
         <Snippet source={opsPageSource} path="src/ops/index.abide" from={['watch(']} />
+
+        <p><code>media(query)</code> is the same for a media query:
+            <code>media('(max-width: 760px)')</code> follows <code>matchMedia</code>, and asking
+            twice hands back the same value. On the server it is <code>false</code>, so an
+            <code>{'{#if}'}</code> arm the browser's answer changes is rebuilt as the page hydrates,
+            with a warning on <code>abide:hydrate</code>. Where only the styling changes, use a CSS media query.</p>
     </Section>
 
     <Section title="A call logged offline is sent when the network is back">

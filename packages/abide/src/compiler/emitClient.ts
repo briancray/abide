@@ -763,6 +763,12 @@ function elementUnits(
             binds.push(
                 `${lowering.use('bindFiles')}(${element}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
             )
+        // 32.79, 32.80 — A MEASUREMENT, ONE WAY: the element is observed and the value written, and
+        // nothing watches the value.
+        else if (one.kind === 'measured')
+            binds.push(
+                `${lowering.use(one.measure === 'size' ? 'bindSize' : 'bindVisible')}(${element}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
+            )
         else if (one.kind === 'bound')
             binds.push(
                 `${lowering.use('bindProperty')}(${element}, ${JSON.stringify(one.bind)}, ${lowering.reference(one.attribute)}, ${SCOPE})`,

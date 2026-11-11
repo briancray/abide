@@ -77,10 +77,18 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>bind:open</code></td><td>a <code>&lt;details&gt;</code>, to whether it is open</td></tr>
                 <tr><td><code>bind:group</code></td><td>radios to one value, or checkboxes to an array of their <code>value</code>s</td></tr>
                 <tr><td><code>bind:files</code></td><td>a file input, to an array of the files picked</td></tr>
+                <tr><td><code>bind:size</code></td><td>any element, to its content-box <code>{'{ width, height }'}</code>, written as it is laid out and never read back</td></tr>
+                <tr><td><code>bind:visible</code></td><td>any element, to whether it is in the viewport, written the same way</td></tr>
                 <tr><td><code>{'bind:value={{get, set}}'}</code></td><td>a field to a pair you write, where the value is computed</td></tr>
                 <tr><td><code>{'bind:prop={state}'}</code></td><td>a component's prop, so the child's write reaches your value</td></tr>
             </tbody>
         </table>
+
+        <p><code>bind:size</code> and <code>bind:visible</code> run one way. The browser measures
+            and writes the value, and nothing you write reaches the element. The first measurement
+            lands after the first layout, so until then the value holds what you gave it. Every
+            bound element shares one observer, and an element that leaves is no longer observed.
+            The server has no layout and writes nothing for either.</p>
     </Section>
 
     <Section title="Where a reactive value's name is written decides what it reaches">

@@ -632,6 +632,9 @@ function openerOf(
  * could be, so the `set` is held to the union of their writes.
  */
 function bindOpenerOf(node: ElementNode, lowerName: string): string {
+    // 32.81 — a measured bind is written and never read, so its operand needs a `set` and no more.
+    if (lowerName === 'bind:size' || lowerName === 'bind:visible')
+        return `${BIND_MEASURES}(${JSON.stringify(lowerName.slice('bind:'.length))})(`
     const kind = writesOf(node, lowerName)
     return kind === undefined
         ? `${BIND}(`
@@ -684,6 +687,8 @@ const BIND = '__bind'
 /** 32.78 — what an element's `bind:` is opened with where the shadow knows what the element writes. */
 const BIND_WRITES = '__bindWrites'
 const BOUND = '__bound'
+/** 32.81 — what a measured `bind:` is opened with: a `set` taking what the measurement writes. */
+const BIND_MEASURES = '__bindMeasures'
 
 /** 33.6 — the type a written prop's cell is checked as, which is the framework's own. */
 const REACTIVE = `import(${JSON.stringify(FRAMEWORK_SOURCES.reactive)}).Reactive`
@@ -710,6 +715,7 @@ type ${BIND_WRITES}Option<Value> = [Extract<Value, string>] extends [never] ? ${
 type ${BIND_WRITES}Options<Value> = Value extends readonly (infer Item)[] ? [Extract<Item, string>] extends [never] ? string[] : Extract<Item, string>[] : string[]
 type ${BIND_WRITES}Of<Kind, Value> = Kind extends 'boolean' ? boolean : Kind extends 'files' ? File[] : Kind extends 'number' ? number | undefined : Kind extends 'input' ? string | number | undefined : Kind extends 'option' ? ${BIND_WRITES}Option<Value> : Kind extends 'options' ? ${BIND_WRITES}Options<Value> : Kind extends 'select' ? ${BIND_WRITES}Option<Value> | ${BIND_WRITES}Options<Value> : ${BIND_WRITES}Text<Value>
 declare function ${BIND_WRITES}<Kind extends string>(kind: Kind): <Value>(value: { (): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown } | { get(): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown }) => void
+declare function ${BIND_MEASURES}<Kind extends 'size' | 'visible'>(kind: Kind): (value: { set: (value: Kind extends 'size' ? { width: number; height: number } : boolean) => unknown }) => void
 declare function ${BOUND}<Value>(value: ${REACTIVE}<Value, any, any, any>): Value
 declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unknown }): Value
 declare function __restValues<Accessors>(record: Accessors): { [Key in keyof Accessors]: NonNullable<Accessors[Key]> extends () => infer Value ? Value : never }

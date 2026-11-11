@@ -58,6 +58,7 @@ export {
 // from the two places that have them — the build and the client router. Putting them here would
 // widen the public surface with names no clause or registry row gives an author, and drag both
 // modules into the static closure of the entry every page imports.
+export { media } from './media.ts'
 export { navigate } from './navigate.ts'
 export { online } from './online.ts'
 export { outbox, type QueuedCall } from './outbox.ts'

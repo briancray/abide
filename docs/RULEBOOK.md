@@ -1688,6 +1688,14 @@ of no more than `route.index` entries MUST arrive at an entry of this app's rout
 
 23.29 On a server `route.index` MUST be 0.
 
+23.30 Where `isServer` is false, `media(query)` MUST be whether `matchMedia(query)` matches, and MUST
+follow its `change` event.
+
+23.31 Where `isServer` is true, `media(query)` MUST be false.
+
+23.32 `media` MUST hand back the same value for the same query text, and MUST NOT add a listener
+for a query it already holds.
+
 # 24. Tracing
 
 24.1 `trace` MUST be built on first ask and held for the request.
@@ -2245,15 +2253,15 @@ element, and a style property MUST resolve as the server's merged attribute does
 declarations first, then each directive's in the tag's order.
 
 32.72 An element MUST be a build error where a `bind:` and something else both write its value: the
-attribute a `bind:name` names, `checked` beside `bind:group`, an `<option selected>` inside a
-`<select bind:value>`, or text inside a `<textarea bind:value>`.
+attribute a `bind:name` names, save `bind:size` and `bind:visible`, `checked` beside `bind:group`,
+an `<option selected>` inside a `<select bind:value>`, or text inside a `<textarea bind:value>`.
 
 32.73 `bind:files` MUST hold a list of the input's files, with or without `multiple`, MUST write the
 files picked back on change, and MUST hand the input a list written to it; the server MUST write
 nothing for it.
 
-32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files` and
-`element` MUST be a build error.
+32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files`, `size`,
+`visible` and `element` MUST be a build error.
 
 32.75 A `bind:` on an element MUST write its operand before any `on<event>` listener on that
 element, written or spread, runs for the same event, wherever the two are written in the tag.
@@ -2273,6 +2281,25 @@ on an `<input>` or a `<textarea>`, a string where the bound value holds no numbe
 those strings, and a `<select multiple>` a list of the strings its value's items hold, or of any
 string where they hold none. A `type` or a `multiple` written as an expression, or absent beside a
 spread, MUST be held to the union of what each value of it writes.
+
+32.79 `bind:size` MUST write the element's content-box `width` and `height`, as one record, at each
+observation of a size the value does not already hold.
+
+32.80 `bind:visible` MUST write whether the element intersects the viewport, at each observation.
+
+32.81 `abide check` MUST hold the `set` of a `bind:size` to a record of a numeric `width` and
+`height`, and of a `bind:visible` to a boolean, and MUST NOT require a `get` of either.
+
+32.82 Every `bind:size` in a document MUST be observed by one shared observer, and every
+`bind:visible` by one other.
+
+32.83 A `bind:size` or a `bind:visible` MUST NOT write its value before the first observation of its
+element, and MUST NOT read the element's layout to write it.
+
+32.84 The server MUST write nothing for a `bind:size` or a `bind:visible`.
+
+32.85 An element's `bind:size` and `bind:visible` MUST stop observing it when the nodes holding it
+leave.
 
 # 33. Props
 
