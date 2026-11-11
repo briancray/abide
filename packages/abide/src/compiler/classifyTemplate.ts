@@ -102,6 +102,9 @@ export type ClassifiedAttribute = {
     // 32.9 — the node itself, which a server has none of: written out it was `bind:element=""`,
     // inert and a tell. The client does not set it either; what the value takes is the element.
     | { kind: 'element' }
+    // 32.79, 32.80, 32.86 — a measurement of the element, which a server has none of either (32.84): the
+    // client writes the value from a shared observer and never reads it back into the element.
+    | { kind: 'measured'; measure: MeasuredBind }
     // 32.4 — a native listener on the element itself, reached by the same walk a text node is. The
     // server writes nothing, so a handler cannot fire from a document that never hydrated.
     | { kind: 'handler'; event: string }
@@ -204,6 +207,7 @@ export function classifyAttributes(
             continue
         }
         const bind = valueBindOf(attribute.lowerName)
+        const measure = measuredBindOf(attribute.lowerName)
         if (bind !== undefined)
             classified.push({
                 attribute,
@@ -221,6 +225,8 @@ export function classifyAttributes(
             })
         else if (isElementBind(attribute.lowerName))
             classified.push({ attribute, live, kind: 'element' })
+        else if (measure !== undefined)
+            classified.push({ attribute, live, kind: 'measured', measure })
         else if (isEventName(attribute.lowerName))
             classified.push({
                 attribute,
@@ -367,10 +373,15 @@ function heldClasses(groups: MergeGroup[]): string[] {
 function refuseBinds(node: ElementNode): void {
     for (const attribute of node.attributes) {
         const lower = attribute.lowerName
-        if (!lower.startsWith('bind:') || lower === 'bind:element') continue
+        if (
+            !lower.startsWith('bind:') ||
+            lower === 'bind:element' ||
+            measuredBindOf(lower) !== undefined
+        )
+            continue
         if (valueBindOf(lower) === undefined)
             throw new Error(
-                `abide: <${node.tag}> has ${attribute.name}, which binds nothing — an element binds ${VALUE_BINDS.join(', ')} or element. RULEBOOK 32.74.`,
+                `abide: <${node.tag}> has ${attribute.name}, which binds nothing — an element binds ${VALUE_BINDS.join(', ')}, ${MEASURED_BINDS.join(', ')} or element. RULEBOOK 32.74.`,
             )
         const owned =
             lower === 'bind:group' ? 'checked' : lower.slice('bind:'.length)
@@ -483,6 +494,22 @@ function isElementBind(lowerName: string): boolean {
 const VALUE_BINDS = ['value', 'checked', 'open', 'group', 'files'] as const
 type ValueBind = (typeof VALUE_BINDS)[number]
 
+/**
+ * The binds that measure an element and write what they measured, never reading the value back.
+ *
+ * 32.84, 32.72 — the server writes nothing for one, and it owns no attribute: `<input size="20"
+ * bind:size={box}>` is the attribute and a measurement, two things rather than two owners of one.
+ */
+const MEASURED_BINDS = ['size', 'visible', 'rect'] as const
+type MeasuredBind = (typeof MEASURED_BINDS)[number]
+
+/** The measured bind a folded attribute name is, or `undefined` for any other attribute. */
+function measuredBindOf(lowerName: string): MeasuredBind | undefined {
+    if (!lowerName.startsWith('bind:')) return undefined
+    const bind = lowerName.slice('bind:'.length) as MeasuredBind
+    return MEASURED_BINDS.includes(bind) ? bind : undefined
+}
+
 /** The value bind a folded attribute name is, or `undefined` for any other attribute. */
 function valueBindOf(lowerName: string): ValueBind | undefined {
     if (!lowerName.startsWith('bind:')) return undefined
@@ -592,6 +619,7 @@ function explicitNames(node: ElementNode): string[] {
     for (const attribute of node.attributes) {
         if (attribute.name === '...') continue
         const lower = attribute.lowerName
+        if (measuredBindOf(lower) !== undefined) continue
         const name = lower.startsWith('class:')
             ? 'class'
             : lower.startsWith('style:')

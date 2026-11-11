@@ -1657,7 +1657,8 @@ composite.
 
 23.6 `route.name` MUST be the resolution path.
 
-23.7 Where `isServer` is false, `online` MUST be `navigator.onLine` and its events.
+23.7 Where `isServer` is false, `online` MUST be `navigator.onLine` and its events, save while 41.32
+holds it.
 
 23.8 Where `isServer` is true, `online` MUST be true.
 
@@ -1725,6 +1726,14 @@ the index the entry was written with where a history step or a reload arrives at
 of no more than `route.index` entries MUST arrive at an entry of this app's router.
 
 23.29 On a server `route.index` MUST be 0.
+
+23.30 Where `isServer` is false, `media(query)` MUST be whether `matchMedia(query)` matches, and MUST
+follow its `change` event, save while 41.32 holds it.
+
+23.31 Where `isServer` is true, `media(query)` MUST be false.
+
+23.32 `media` MUST hand back the same value for the same query text, and MUST NOT add a listener
+for a query it already holds.
 
 # 24. Tracing
 
@@ -2308,15 +2317,16 @@ element, and a style property MUST resolve as the server's merged attribute does
 declarations first, then each directive's in the tag's order.
 
 32.72 An element MUST be a build error where a `bind:` and something else both write its value: the
-attribute a `bind:name` names, `checked` beside `bind:group`, an `<option selected>` inside a
-`<select bind:value>`, or text inside a `<textarea bind:value>`.
+attribute a `bind:name` names, save `bind:size`, `bind:visible` and `bind:rect`, `checked` beside
+`bind:group`,
+an `<option selected>` inside a `<select bind:value>`, or text inside a `<textarea bind:value>`.
 
 32.73 `bind:files` MUST hold a list of the input's files, with or without `multiple`, MUST write the
 files picked back on change, and MUST hand the input a list written to it; the server MUST write
 nothing for it.
 
-32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files` and
-`element` MUST be a build error.
+32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files`, `size`,
+`visible`, `rect` and `element` MUST be a build error.
 
 32.75 A `bind:` on an element MUST write its operand before any `on<event>` listener on that
 element, written or spread, runs for the same event, wherever the two are written in the tag.
@@ -2336,6 +2346,45 @@ on an `<input>` or a `<textarea>`, a string where the bound value holds no numbe
 those strings, and a `<select multiple>` a list of the strings its value's items hold, or of any
 string where they hold none. A `type` or a `multiple` written as an expression, or absent beside a
 spread, MUST be held to the union of what each value of it writes.
+
+32.79 `bind:size` MUST write the element's content-box `width` and `height`, as one record, at each
+observation of a size the value does not already hold.
+
+32.80 `bind:visible` MUST write whether the element intersects the viewport, at each observation.
+
+32.81 `abide check` MUST hold the `set` of a `bind:size` to a record of a numeric `width` and
+`height`, of a `bind:rect` to a record of a numeric `x`, `y`, `top`, `left`, `right`, `bottom`,
+`width` and `height`, and of a `bind:visible` to a boolean, and MUST NOT require a `get` of any of
+the three.
+
+32.82 Every `bind:size` in a document MUST be observed by one shared observer, every `bind:visible`
+by one other, and every `bind:rect` by a third.
+
+32.83 A `bind:size` or a `bind:visible` MUST NOT write its value before the first observation of its
+element, and MUST NOT read the element's layout to write it.
+
+32.84 The server MUST write nothing for a `bind:size`, a `bind:visible` or a `bind:rect`.
+
+32.85 An element's `bind:size`, `bind:visible` and `bind:rect` MUST stop observing it when the nodes
+holding it leave.
+
+32.86 `bind:rect` MUST write the element's rectangle in the viewport — `x`, `y`, `top`, `left`,
+`right`, `bottom`, `width` and `height`, as `getBoundingClientRect` reports them — as one record,
+after a resize of the element, a scroll of the document or of any element in it, or a resize of the
+window, where the value does not already hold that rectangle.
+
+32.87 `bind:rect` MUST be written for a move of its element that no resize of the element, scroll
+or resize of the window accompanies, in the frame after the move.
+
+32.88 Every `bind:rect` in a document MUST share one scroll listener and one window resize listener,
+added with the first `bind:rect` and removed with the last.
+
+32.89 The triggers 32.86 names that arrive before the next animation frame MUST be answered by one
+read of every `bind:rect` element's rectangle in that frame, every read before any write, and
+`bind:rect` MUST NOT read an element's rectangle outside such a frame.
+
+32.90 What observes a `bind:rect` element for 32.87 MUST be made again only in a frame whose read
+moved the element or resized the viewport, and MUST cost no work while neither moves.
 
 # 33. Props
 
@@ -3407,6 +3456,10 @@ markup.
 41.31 On a server, a bare `busy` or `ready` MUST answer over the loads set up before its component's
 markup is built, and a load a component set up later, one only a pending value places, MAY have it
 choose another arm at hydration under 41.24.
+
+41.32 While a page hydrates, `online` and `media` MUST answer as the server does, and once it has
+hydrated each MUST be written with the browser's answer, so an arm that answer changes is swapped as
+an update and not under 41.24.
 
 # 42. The app object
 

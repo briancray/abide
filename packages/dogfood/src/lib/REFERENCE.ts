@@ -580,6 +580,13 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: false,
     },
     {
+        route: '/reference/media',
+        names: ['media'],
+        entry: '@abide/abide',
+        group: 'Ambient values',
+        typeOnly: false,
+    },
+    {
         route: '/reference/outbox',
         names: ['outbox'],
         entry: '@abide/abide',

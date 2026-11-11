@@ -835,6 +835,51 @@ let sizes = reactive<('s' | 'm')[]>([])
     ])
 }, 60_000)
 
+// 32.81 — A MEASURED `bind:` IS HELD TO WHAT IT WRITES AND ASKS NO MORE: a size record for
+// `bind:size`, a rectangle for `bind:rect`, a boolean for `bind:visible`, and a pair with a `set`
+// and no `get` is enough, since nothing reads the value back. The four above the line check clean;
+// the three below it are a value taking a measurement it cannot hold. THE REVERT: open all three
+// with `BIND` in `bindOpenerOf`; the write-only pair's `next` is an implicit `any` (7006 on line 11)
+// and none of the three below is refused.
+test('a measured bind: is held to what it writes, and needs no get — 32.81', async () => {
+    const measured = appFixture({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                skipLibCheck: true,
+            },
+            include: ['.'],
+        }),
+        'index.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let box = reactive<{ width: number; height: number }>()
+let seen = reactive(false)
+let name = reactive('ada')
+let placed = reactive<{ top: number; left: number }>()
+</script>
+<div bind:size={box}></div>
+<div bind:visible={seen}></div>
+<div bind:size={{ set: (next) => { box = next } }}></div>
+<div bind:rect={placed}></div>
+<div bind:size={name}></div>
+<div bind:visible={name}></div>
+<div bind:rect={seen}></div>`,
+    })
+    expect(
+        (await checkApp(measured)).map(({ line, code }) => ({ line, code })),
+    ).toEqual([
+        { line: 13, code: 2345 },
+        { line: 14, code: 2345 },
+        { line: 15, code: 2345 },
+    ])
+}, 60_000)
+
 // 33.23 THROUGH `abide check` — a component typed `& Attributes<'button'>` that spreads its rest onto a
 // `<button>`: a caller's static text, a bare attribute, microdata and a typed listener are each held
 // to what a button takes, and a `type` it does not take is refused. THE REVERT: drop `Written` from
