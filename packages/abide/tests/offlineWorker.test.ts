@@ -9,6 +9,7 @@ import { answerWorker } from '#server/answerWorker.ts'
 import { buildFiles } from '#server/appBuild.ts'
 import { appManifest } from '#server/appManifest.ts'
 import type { Manifest } from '#server/manifestOf.ts'
+import { OFFLINE_STANDIN } from '#server/OFFLINE_STANDIN.ts'
 import { framingOf } from '#shared/framing.ts'
 import { MOUNT } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
@@ -42,7 +43,7 @@ type Event = {
 const page = (): Response =>
     new Response('<p>page</p>', { headers: { 'content-type': 'text/html' } })
 
-/** 21.22's default, which every page and `GET` a registered worker sees carries. */
+/** 21.22's default, which every `GET` a registered worker sees carries. */
 const KEPT = 'private, stale-while-revalidate=604800, stale-if-error=31536000'
 
 /** An answer `ageSeconds` old by its `date`, under `cacheControl`. */
@@ -189,10 +190,7 @@ test("a handler's answer and a public file are saved, and answered offline — 4
     const offline = await worker(MANIFEST, (request) => {
         if (!online) throw new TypeError('Failed to fetch')
         return new URL(request.url).pathname === '/logo.png'
-            ? aged(
-                  'png',
-                  'public, max-age=0, stale-while-revalidate=604800, stale-if-error=31536000',
-              )
+            ? aged('png', 'public, max-age=0, stale-if-error=31536000')
             : aged('saved', KEPT)
     })
     const get = (path: string) =>
@@ -237,6 +235,25 @@ test('a copy fresh by its max-age is answered without asking the network — 45.
     const before = offline.fetched.length
     expect(await (await get())?.text()).toBe('tile')
     expect(`fetched: ${offline.fetched.length - before}`).toBe('fetched: 0')
+})
+
+// 21.25 — A PAGE KEPT IS NEVER OPENED WHILE THE NETWORK ANSWERS: it names the build it was saved
+// under, and the visit after a deploy opened that build's markup over a stylesheet the new one no
+// longer serves — unstyled until a reload. Offline it still stands in. THE REVERT: give
+// `OFFLINE_STANDIN` `stale-while-revalidate=604800`; the visit after the deploy opens `old build`.
+test('the visit after a deploy opens the new page, and the kept one only offline — 21.25', async () => {
+    let build = 'old build'
+    let online = true
+    const offline = await worker(MANIFEST, () => {
+        if (!online) throw new TypeError('Failed to fetch')
+        return aged(build, `private, ${OFFLINE_STANDIN}`, 60)
+    })
+    await offline.navigate('/')
+    build = 'new build'
+    const opened = [await (await offline.navigate('/'))?.text()]
+    online = false
+    opened.push(await (await offline.navigate('/'))?.text())
+    expect(opened).toEqual(['new build', 'new build'])
 })
 
 // 45.18 — A STALE COPY WITHIN stale-while-revalidate IS ANSWERED BEFORE THE NETWORK IS: a signal that
@@ -892,12 +909,13 @@ test('ABIDE_OFFLINE decides the worker abide start answers, whether a page regis
     ])
 }, 60_000)
 
-// 21.22, 21.23, 21.11, 21.17 — WHERE THE WORKER IS REGISTERED, WHAT IT MAY KEEP SAYS SO in its own
-// header, for the worker and the browser's cache alike: a page, a value a `GET` answered and a public
-// file served stale for a week while asked again and for a year where the network fails, a `ttl`'s
+// 21.22, 21.23, 21.25, 21.11, 21.17 — WHERE THE WORKER IS REGISTERED, WHAT IT MAY KEEP SAYS SO in its
+// own header, for the worker and the browser's cache alike: a value a `GET` answered served stale for a
+// week while asked again, a page and a public file asked on every load — a deploy is what the next
+// visit opens — and all three for a year where the network fails, a `ttl`'s
 // `max-age` ahead of the same windows, and none of it for a refusal, a stream or a mutation. With
 // the worker off, every answer is as it was. THE REVERT: drop the `kept` write in `answerOutcome`; `/getNote` keeps `no-store` with the worker on.
-test('a page, a GET and a public file default to stale-while-revalidate where the worker is registered — 21.22, 21.23, 21.11, 21.17', async () => {
+test('a GET defaults to stale-while-revalidate, and a page and a public file to stale-if-error alone, where the worker is registered — 21.22, 21.23, 21.25, 21.11, 21.17', async () => {
     const IMPORTS = `import { GET, POST, jsonl } from '@abide/abide/server'\nimport { refuse } from '@abide/abide'\n\n`
     const app = appFixture({
         'layout.abide':
@@ -954,14 +972,14 @@ test('a page, a GET and a public file default to stale-while-revalidate where th
         '0 /getLines: private, no-store',
         '0 /addNote: private, no-store',
         '0 /logo.txt: public, max-age=0, must-revalidate',
-        `undefined /: private, ${KEPT}`,
+        'undefined /: private, max-age=0, stale-if-error=31536000',
         `undefined /getNote: private, ${KEPT}`,
         `undefined /getClock: private, max-age=<ttl>, ${KEPT}`,
         `undefined /getForever: private, ${KEPT}`,
         'undefined /getMissing: private, no-store',
         'undefined /getLines: private, no-store',
         'undefined /addNote: private, no-store',
-        `undefined /logo.txt: public, max-age=0, ${KEPT}`,
+        'undefined /logo.txt: public, max-age=0, stale-if-error=31536000',
     ])
 }, 60_000)
 

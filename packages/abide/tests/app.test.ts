@@ -505,9 +505,9 @@ test('every answer carries nosniff and traceresponse; a page its referrer policy
     expect(page.headers.get('referrer-policy')).toBe(
         'strict-origin-when-cross-origin',
     )
-    // 21.22 — the fixture is served built, where the worker is registered.
+    // 21.25 — the fixture is served built, where the worker is registered.
     expect(page.headers.get('cache-control')).toBe(
-        'private, stale-while-revalidate=604800, stale-if-error=31536000',
+        'private, max-age=0, stale-if-error=31536000',
     )
 })
 

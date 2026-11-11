@@ -29,7 +29,7 @@ import { reactive } from '@abide/abide'
 let count = reactive(0)
 </script>
 
-<main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="to-about" href="/about">about</a><a id="to-never" href="/never">never</a></main>`
+<main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="to-about" href="/about">about</a><a id="to-never" href="/never">never</a><a id="to-note" href="/note">note</a></main>`
 
 let server: ChildProcess | undefined
 let base = ''
@@ -292,27 +292,6 @@ test("a page's data loads again offline — 45.3", async ({ page, context }) => 
     }
 })
 
-// 45.18, 16.80 — A NETWORK THAT HANGS RATHER THAN FAILS opens a kept page and its data at once: the
-// server is stopped, so a connection is accepted and never answered — one bar of signal, which
-// `setOffline` cannot stand in for, since it fails a request at once. THE REVERT: drop the
-// `life.revalidate` arm from the worker's `answer`; the reload waits on the network, and `#text`
-// never shows inside the timeout.
-test('a page and its data open at once while the network hangs — 45.18', async ({
-    page,
-}) => {
-    await visit(page, '/')
-    await visit(page, '/note', ['/data/getNote'])
-    server?.kill('SIGSTOP')
-    try {
-        await page.reload({ waitUntil: 'commit', timeout: 3_000 })
-        await expect(page.locator('#text')).toHaveText('a saved note', {
-            timeout: 3_000,
-        })
-    } finally {
-        server?.kill('SIGCONT')
-    }
-})
-
 // 46.20 — A PAGE WITH NO CALL KEPT OPENS NO DATABASE: the outbox loads with every handler, and reading
 // the line there would cost every such page an IndexedDB open and read before it hydrates. THE
 // REVERT: drop the `marked()` test from `listen` in `#ui/outboxQueue.ts`; `abide-outbox` is opened.
@@ -362,11 +341,14 @@ test('a call made offline survives a reload and is delivered once online — 46.
 })
 
 // 45.23, 41.30 — A PAGE OPENED FROM ITS KEPT COPY STARTS ITS CALLS EARLY, as the page it was kept from
-// did, so it hydrates with its data rather than ahead of it. THE REVERT: drop the `KEEP` header from
-// `pageRequest`; the copy the first reload revalidated carries no early call, and the second reload
-// hydrates before the note has landed, warning that client and server disagree.
+// did, so it hydrates with its data rather than ahead of it. A page is asked of the network while it
+// answers (21.25), so the copy is opened offline, and it is one the worker asked for itself — a
+// navigation's own answer carries its seed. THE REVERT: drop the `KEEP` header from `pageRequest`; the
+// copy kept for the page the click reached carries no early call, and the offline reload hydrates
+// before the note has landed, warning that client and server disagree.
 test('a page reopened from its kept copy hydrates with its data — 45.23, 41.30', async ({
     page,
+    context,
 }) => {
     const warned: string[] = []
     page.on('console', (message) => {
@@ -374,19 +356,40 @@ test('a page reopened from its kept copy hydrates with its data — 45.23, 41.30
             warned.push(message.text())
     })
     await visit(page, '/')
-    await visit(page, '/note', ['/data/getNote', '/data/getTags'])
-    // Kept by the visit above, under the header that has the server write its early calls.
-    await page.reload()
+    await page.click('#to-note')
     await expect(page.locator('#text')).toHaveText('a saved note')
-    await page.reload()
-    await expect(page.locator('#text')).toHaveText('a saved note')
+    await expect
+        .poll(() =>
+            page.evaluate(async () => {
+                const saved = await caches.open('abide:saved')
+                for (const address of [
+                    location.href,
+                    '/data/getNote',
+                    '/data/getTags',
+                ])
+                    if (
+                        (await saved.match(new URL(address, location.href))) ===
+                        undefined
+                    )
+                        return false
+                return true
+            }),
+        )
+        .toBe(true)
+    await context.setOffline(true)
+    try {
+        await page.reload()
+        await expect(page.locator('#text')).toHaveText('a saved note')
+    } finally {
+        await context.setOffline(false)
+    }
     expect(warned).toEqual([])
 })
 
 // 13.7, 16.80, 45.20 — A LIST A WRITE'S PAGE REFRESHED WITHOUT READING IT IS ASKED OF THE NETWORK by
 // the next page to read it, though the worker holds a copy stale-while-revalidate would answer: the
 // page has an answer for it, so the reload asks `no-cache` and the worker leaves it to the network.
-// The page opened from its kept copy first, as a reload under the worker does. THE REVERT: drop
+// THE REVERT: drop
 // `resolve(inner)` from `mirror` in the reactive core; nothing is asked (0 where 1 is due) and the
 // list stays 'dune'.
 test('a tagged list refreshed while no page read it is asked of the network on the next page — 13.7, 45.20', async ({

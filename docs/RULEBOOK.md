@@ -1479,7 +1479,7 @@ by, anchored, and a matcher's name MUST be no part of the path, the operation or
 21.2 Every response MUST carry `traceresponse`, a refusal included.
 
 21.3 A page, an rpc answer and a refusal MUST default to `cache-control: private, no-store`, save
-where 21.22 has it.
+where 21.22 or 21.25 has it.
 
 21.4 `/__abide/openapi.json` and `/__abide/mcp` MUST answer `cache-control: no-store`. `/__abide/health`
 and `/__abide/principal` are answered as handlers (25.3) and carry 21.3's `private, no-store`.
@@ -1526,16 +1526,18 @@ time those rungs took apart from what they wrapped.
 
 21.21 The `Direct` duration 21.15 carries MUST NOT include the time 21.20 counts.
 
-21.22 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, a page, and the answer of
-a `GET` of the app's own that is neither a refusal nor a stream 16.32 frames, MUST default to `cache-control: private,
-stale-while-revalidate=604800, stale-if-error=31536000`.
+21.22 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, the answer of a `GET` of
+the app's own that is neither a refusal nor a stream 16.32 frames MUST default to `cache-control:
+private, stale-while-revalidate=604800, stale-if-error=31536000`.
 
 21.23 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, a file under a `public`
-directory MUST answer `cache-control: public, max-age=0, stale-while-revalidate=604800,
-stale-if-error=31536000`.
+directory MUST answer `cache-control: public, max-age=0, stale-if-error=31536000`.
 
 21.24 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, an answer carrying the
 `abide-principal` header 26.24 has it carry MUST carry `clear-site-data: "cache"`.
+
+21.25 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, a page MUST default to
+`cache-control: private, max-age=0, stale-if-error=31536000`.
 
 # 22. Request-scoped ambients
 

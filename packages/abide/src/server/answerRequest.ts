@@ -41,7 +41,7 @@ import {
 } from './hooks.ts'
 import { type Mounted, mountedOwn } from './mountHandlers.ts'
 import { muxAdmission } from './muxUpgrade.ts'
-import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
+import { OFFLINE_STANDIN } from './OFFLINE_STANDIN.ts'
 import { beginPageRender } from './PageRender.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { PRINCIPAL_MOUNT } from './principal.ts'
@@ -128,7 +128,7 @@ export type AppSources = {
     errors: RankedError[]
     /** The document the error pages are painted into. */
     errorDocument: string
-    /** 21.22, 21.23 — whether a page registers the worker `ABIDE_OFFLINE` turns on (45.1). */
+    /** 21.23, 21.25 — whether a page registers the worker `ABIDE_OFFLINE` turns on (45.1). */
     offline: boolean
     /** Every handler, keyed by its method and address (`handlerKey`), to what answers it. 16.2. */
     handlers: Map<string, Mounted>
@@ -370,7 +370,8 @@ async function answerMatched(
     // that stored the identity answer for a reader who sent no `accept-encoding` must not hand it
     // to one who did, nor the reverse.
     const headers = new Headers(DOCUMENT_HEADERS)
-    if (app.offline) headers.set('cache-control', `private, ${OFFLINE_STALE}`)
+    // 21.25
+    if (app.offline) headers.set('cache-control', `private, ${OFFLINE_STANDIN}`)
     // THE HEADERS A `GET` WOULD CARRY, and no render for a body nobody is sent — nor a caller
     // minted for a request that never becomes a page.
     if (request.method === 'HEAD')
@@ -512,10 +513,10 @@ function publicResponse(
         request,
         // 21.12. Revalidated every time and cached in between, which is what an unhashed name
         // earns — the etag is what makes that one conditional request rather than one transfer.
-        // 21.23 — and served stale where the device keeps it, while that request is made.
+        // 21.23 — and kept on the device to stand in where that request fails.
         new Headers({
             'cache-control': offline
-                ? `public, max-age=0, ${OFFLINE_STALE}`
+                ? `public, ${OFFLINE_STANDIN}`
                 : 'public, max-age=0, must-revalidate',
         }),
         200,
