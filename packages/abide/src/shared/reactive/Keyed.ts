@@ -386,7 +386,7 @@ export function createKeyed<
     // 7.20, 7.23 — one timer over the entries held at each tick: an evicted entry is out of the map.
     if (poll !== undefined) {
         refuseBadPoll(`${label}()`, poll)
-        ownedPoll(poll, () => entries.values())
+        ownedPoll(poll, () => entries.values(), null)
     }
 
     function askMembership(): void {

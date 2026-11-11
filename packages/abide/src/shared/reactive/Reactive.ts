@@ -41,6 +41,7 @@ import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
 import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
 import {
+    firstRunStarted,
     markPolled,
     ownedPoll,
     refuseBadPoll,
@@ -3042,6 +3043,8 @@ function reloadNow(cell: Cell): void {
  */
 function reloadOwed(cell: Cell): void {
     cell.owes = OWES_NOTHING
+    // 7.29 — a job's first run is an owed reload, and its clock starts with it.
+    firstRunStarted(cell)
     unserve(cell)
     reload(cell)
 }
@@ -3970,6 +3973,14 @@ export function createReactive<
     )
     // 7.25 AT CONSTRUCTION, and 7.28's mark ahead of the first run, which can fail where it starts.
     const poll = options?.poll
+    // 7.29 — a body polled with no owner to stop it is a job, and is not run where it is built.
+    const job =
+        poll !== undefined &&
+        body !== null &&
+        cell.store === null &&
+        !cached &&
+        !deferred &&
+        !owning()
     if (poll !== undefined) {
         refuseBadPoll(label, poll)
         markPolled(cell)
@@ -4032,11 +4043,22 @@ export function createReactive<
         if (initial === undefined) landOpening(cell)
         else if (initial !== NO_INITIAL) open(cell, initial)
     } else if (deferred) cell.loading = true
-    else startProducer(cell)
+    else if (job) {
+        // 7.29 — A JOB'S FIRST RUN IS OWED, as 7.12's is: the first read, probe or trigger settles
+        // it, or `App.listen` does through a refresh.
+        cell.direct = false
+        cell.owes = OWES_RELOAD
+    } else startProducer(cell)
     // 7.20, 7.23, 7.24 — a keyed entry is polled by its `Keyed`, one timer over every entry.
     if (poll !== undefined && !cached && reloads(cell)) {
         const polled = [self as unknown as Reactive<unknown>]
-        ownedPoll(poll, () => polled)
+        ownedPoll(
+            poll,
+            () => polled,
+            job
+                ? { record: cell, value: polled[0] as Reactive<unknown> }
+                : null,
+        )
     }
     return self as unknown as Reactive<Stored, Accepted, Failures, Produced>
 }

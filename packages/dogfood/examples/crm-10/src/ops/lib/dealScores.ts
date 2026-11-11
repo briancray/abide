@@ -36,4 +36,8 @@ async function* scoreInWorker(): AsyncGenerator<Score> {
     }
 }
 
-export const dealScores = reactive(scoreInWorker, { global: true })
+/** Every deal rescored each hour, once the app serves or a read asks. */
+export const dealScores = reactive(scoreInWorker, {
+    global: true,
+    poll: 3_600_000,
+})

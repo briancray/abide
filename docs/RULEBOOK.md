@@ -146,7 +146,8 @@ validation refusal wherever a `schema` is declared, without the app declaring it
 
 1.6 Where a load is told apart from a value, a `Reactive` MUST be taken as a value.
 
-1.7 Reaching a `Reactive` MUST start the work it is for, unless a window holds it back per 5.19.
+1.7 Reaching a `Reactive` MUST start the work it is for, unless a window holds it back per 5.19 or
+7.29 holds it back.
 
 1.8 Reaching a `Reactive` that already exists MUST join the standing work rather than start a
 second.
@@ -385,7 +386,8 @@ producer.
 value it held being served.
 
 7.20 `poll` MUST refresh the value per 7.4 every `poll` milliseconds from where it is constructed,
-and on a `Keyed` MUST refresh each entry the `Keyed` holds.
+or from its first run where 7.29 holds it back, and on a `Keyed` MUST refresh each entry the `Keyed`
+holds.
 
 7.21 `poll` MUST NOT refresh a value while its `s.busy` is true.
 
@@ -405,6 +407,16 @@ requests in flight have drained, before `onStop` runs and within 42.17's deadlin
 
 7.28 Every failure that fills `s.error` on a value declaring `poll`, an entry of a `Keyed` declaring
 it included, MUST warn on `abide:reactive` naming the value.
+
+7.29 A `reactive` with a body declaring `poll`, built where 7.23 has no owner to stop it, MUST NOT
+run its body where it is built.
+
+7.30 The first run of a value 7.29 holds back MUST be made by whichever comes first of a read, a
+probe or a trigger reaching it, `App.listen`, and `abide dev` serving the app, and MUST be made
+once.
+
+7.31 `App.stop` MUST NOT wait on, and MUST NOT run, a value 7.29 holds back that has not had its
+first run.
 
 # 8. Stores
 

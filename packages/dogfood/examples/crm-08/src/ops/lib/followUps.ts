@@ -6,7 +6,7 @@ import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 export const followUps = reactive(
     async function* () {
         for (const deal of DEALS) {
-            await Bun.sleep(50) // a look at the lead's inbox
+            await Bun.sleep(1) // a look at the lead's inbox
             if (deal.stage === 'lead') yield deal.name
         }
     },
