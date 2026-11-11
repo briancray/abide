@@ -28,7 +28,7 @@ import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
 import { parameterDefaults } from './parameterDefaults.ts'
-import { ownedPoll, refreshIdle, refuseBadPoll } from './poll.ts'
+import { ownedPoll, refuseBadPoll } from './poll.ts'
 import {
     abandonDeferred,
     createReactive,
@@ -349,8 +349,10 @@ export function createKeyed<
     // 11.45: A KEYED `ttl` IS THE LIFE OF AN ENTRY, not of a production inside one, so it is
     // taken off the options every entry is built from — forwarded, it would build the
     // unkeyed mechanism in every entry and evict nothing from this map.
-    // 7.20 — and `poll`, so one timer walks the entries rather than one per entry.
-    const { ttl, args, throttle, debounce, poll, ...rest } = options ?? {}
+    // `poll` STAYS ON THE ENTRY, which marks it for 7.28 and arms no timer of its own: one timer here
+    // walks the entries rather than one per entry (7.20).
+    const { ttl, args, throttle, debounce, ...rest } = options ?? {}
+    const poll = rest.poll
     const gate = args as Schema<Args> | undefined
     const entryOptions = rest
     // 5.14, at the factory: a keyed value is capped one way or the other.
@@ -384,9 +386,7 @@ export function createKeyed<
     // 7.20, 7.23 — one timer over the entries held at each tick: an evicted entry is out of the map.
     if (poll !== undefined) {
         refuseBadPoll(`${label}()`, poll)
-        ownedPoll(poll, () => {
-            for (const entry of entries.values()) refreshIdle(entry)
-        })
+        ownedPoll(poll, () => entries.values())
     }
 
     function askMembership(): void {

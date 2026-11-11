@@ -1,6 +1,7 @@
 <script>
 import { url } from '@abide/abide'
 import envSource from 'crm-08/.env' with { type: 'text' }
+import getFollowUpsSource from 'crm-08/src/ops/getFollowUps.handler.ts' with { type: 'text' }
 import getPoolSource from 'crm-08/src/ops/getPool.handler.ts' with { type: 'text' }
 import getRetriesSource from 'crm-08/src/ops/getRetries.handler.ts' with { type: 'text' }
 import opsPageSource from 'crm-08/src/ops/index.abide' with { type: 'text' }
@@ -11,6 +12,10 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
 import Console from 'crm-08/src/ops/lib/Console.abide'
 import consoleSource from 'crm-08/src/ops/lib/Console.abide' with { type: 'text' }
 import consoleTestSource from 'crm-08/src/ops/lib/Console.test.ts' with { type: 'text' }
+import FollowUps from 'crm-08/src/ops/lib/FollowUps.abide'
+import followUpsSource from 'crm-08/src/ops/lib/FollowUps.abide' with { type: 'text' }
+import followUpsTestSource from 'crm-08/src/ops/lib/FollowUps.test.ts' with { type: 'text' }
+import followUpsJobSource from 'crm-08/src/ops/lib/followUps.ts' with { type: 'text' }
 import Health from 'crm-08/src/ops/lib/Health.abide'
 import healthSource from 'crm-08/src/ops/lib/Health.abide' with { type: 'text' }
 import healthTestSource from 'crm-08/src/ops/lib/Health.test.ts' with { type: 'text' }
@@ -132,6 +137,35 @@ import Snippet from '#src/lib/Snippet.abide'
         <p>A hook is called in a page, a layout or a handler file, and returns a function that
             removes it. The ones for the whole app go in <code>src/layout.abide</code>, the root layout,
             whose server block the scaffold already starts with an <code>onStart</code>.</p>
+    </Section>
+
+    <Section title="Background work is a value on a clock">
+        <Example
+            id="crm-08-job"
+            app="crm-08"
+            title={'`reactive(async function* () { … }, { global: true, poll })` — a job'}
+            summary="Every five minutes the CRM walks the leads and lists the ones still waiting on a follow-up. The list is here before anyone asks for it."
+            files={{
+                'src/ops/lib/FollowUps.abide': followUpsSource,
+                'src/ops/lib/followUps.ts': followUpsJobSource,
+                'src/ops/getFollowUps.handler.ts': getFollowUpsSource,
+                'src/ops/lib/FollowUps.test.ts': followUpsTestSource,
+            }}
+        >
+            <FollowUps />
+        </Example>
+
+        <p>A job is a reactive value: a body, <code>global</code> so the process has one of it, and a
+            <code>poll</code> for the clock. It starts when the module loads, whether or not anything
+            reads it, and the value holds each lead it has yielded. Nothing else
+            schedules it, so there is no <code>setInterval</code> in <code>onStart</code> to
+            remember and no <code>clearInterval</code> in <code>onStop</code>.</p>
+
+        <p>One run happens at a time: the clock skips a tick while <code>followUps.busy()</code>
+            is true. <code>followUps.refresh()</code> runs it now. A run that throws is written to
+            <code>abide:reactive</code> under the value's name, and the next tick runs it again.
+            The app's stop ends the clock and waits for the run in flight before
+            <code>onStop</code>, inside the same <code>ABIDE_STOP_TIMEOUT</code> as the requests.</p>
     </Section>
 
     <Section title="Log namespaces are turned on one at a time">

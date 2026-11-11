@@ -14,6 +14,7 @@ import { LONGEST_DELAY } from '#shared/LONGEST_DELAY.ts'
 import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
+import { stopUnownedPolls } from '#shared/reactive/poll.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { laneFailure } from './answerFailure.ts'
@@ -402,12 +403,15 @@ export async function bootEntered(
         // stream ended, which a listener's stop otherwise waits on for as long as it streams.
         mux?.closeAll(1001, 'the app is stopping')
         endHeld()
+        // 7.26 — no job starts another run while the app stops; 7.27 waits out the one it has.
+        const settlePolls = stopUnownedPolls()
         const drain = (async () => {
             await bound?.stop()
             if (inFlight > 0)
                 await new Promise<void>((done) => {
                     drained = done
                 })
+            await settlePolls()
             return true
         })()
         // 42.17, 42.18 — THE DRAIN HAS A DEADLINE: past it, every connection still answering is

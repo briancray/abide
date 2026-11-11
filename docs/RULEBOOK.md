@@ -398,6 +398,14 @@ and on a `Keyed` MUST refresh each entry the `Keyed` holds.
 
 7.25 A `poll` that is not a positive number MUST refuse at construction.
 
+7.26 `App.stop` MUST stop every `poll` 7.23 does not, before it drains what is in flight.
+
+7.27 `App.stop` MUST wait on the production each value 7.26 stopped has in flight, once the
+requests in flight have drained, before `onStop` runs and within 42.17's deadline.
+
+7.28 Every failure that fills `s.error` on a value declaring `poll`, an entry of a `Keyed` declaring
+it included, MUST warn on `abide:reactive` naming the value.
+
 # 8. Stores
 
 8.1 A `Store` MUST provide both `get` and `set`.
