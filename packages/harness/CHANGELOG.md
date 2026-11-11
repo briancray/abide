@@ -1,5 +1,65 @@
 # @abide/harness
 
+## 0.4.0
+
+### Minor Changes
+
+- d821e1e: `@abide/harness/rows` no longer exports `BenchRow`, `RunnerFailure` or `isRunnerFailure`: no runner has written either row since the docs app's bench and test pages left, so the types described a contract nothing kept. `TestRow`, `TestCase`, `RowItem`, `RowState`, `inScope` and `matchesFilter` are unchanged.
+
+### Patch Changes
+
+- 4920103: measure arms around its body without a case record; one data-write tally, one delta, one formatter, one substrate type ([`5ef1db9`](https://github.com/briancray/abide/commit/5ef1db9c643a956bfa371552c6f21ad6bdeec9b9))
+- 4920103: round-2 leftovers — one eachArg role, one CLAUSE match, abide/bin scanned ([`806f9ab`](https://github.com/briancray/abide/commit/806f9ab6e7309b26183b0c745b073cb5580674ca))
+- 7029630: `testRows` stops a test file still running ten minutes after it started and reports it as `broken`, rather than leaving its row at `running` for as long as the reader watches (43.27).
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [4920103]
+- Updated dependencies [e957231]
+- Updated dependencies [ba23c6f]
+- Updated dependencies [a1d0354]
+- Updated dependencies [3dad985]
+- Updated dependencies [3cc3acb]
+- Updated dependencies [e957231]
+- Updated dependencies [f2cd7b7]
+- Updated dependencies [e957231]
+- Updated dependencies [3cc3acb]
+- Updated dependencies [b93aad7]
+- Updated dependencies [e957231]
+- Updated dependencies [424f31b]
+- Updated dependencies [2743db3]
+  - @abide/abide@0.126.2
+
 ## 0.3.2
 
 ### Patch Changes

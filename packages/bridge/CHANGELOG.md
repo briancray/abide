@@ -1,5 +1,11 @@
 # @abide/bridge
 
+## 0.6.1
+
+### Patch Changes
+
+- 4920103: installDirectory and searchPath read the platform, handlerIn reads handlerDirectory ([`8848623`](https://github.com/briancray/abide/commit/8848623ae50b5827cbde50add0b0f1a03c6f7db1))
+
 ## 0.6.0
 
 ### Minor Changes
