@@ -1407,6 +1407,9 @@ again at once where `online` becomes true or the page becomes visible.
 18.35 A subscriber's copy of a `GET` written here (3.10) MUST NOT take a value or a patch sent to it
 while `outbox` holds a call not yet delivered, and MUST read the value again once it holds none.
 
+18.36 A subscription to `/__abide/pairing` MUST be sent a trigger meant for the browser and the
+sign-in the upgrade of its connection carried, and MUST NOT be sent one meant for any other.
+
 # 19. Mount paths and schemas
 
 19.1 A route MUST be answered for each method by one file at most, a page answering `GET` and `HEAD`

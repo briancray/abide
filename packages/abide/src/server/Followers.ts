@@ -16,7 +16,7 @@ import { unowned } from '#shared/reactive/watch.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { fileIn } from './fileIn.ts'
-import type { FollowedHandler } from './mountHandlers.ts'
+import { type FollowedHandler, watchOf } from './mountHandlers.ts'
 import { heldByApp } from './requestScope.ts'
 import { EVENT_STREAM_OPENER, streamEvent } from './streamEvent.ts'
 import { patchesSince, versionOf } from './versionOf.ts'
@@ -178,7 +178,12 @@ export class Followers {
         const all = handlerFollowers.all
         all.add(follower)
         if (this.following++ === 0) RPC_SERVER.following.add(this)
+        // 18.36 — WATCHED IN THE FOLLOWER'S OWN SCOPE, where it was admitted: a follower its rungs
+        // refused is not who it says it is.
+        const watch = admitted ? watchOf(rpc) : undefined
+        const unwatch = watch?.((member) => peer.send(id, TRIGGERS[member]))
         return () => {
+            unwatch?.()
             follower.stopFeed?.()
             if (all.delete(follower) && --this.following === 0)
                 RPC_SERVER.following.delete(this)

@@ -95,15 +95,46 @@ export type FollowedHandler = Pick<
 
 /**
  * The `GET` a browser follows at each address among `handlers` — one it is handed a wrapper for
- * (20.4) — or `undefined`.
+ * (20.4) — or `undefined`; or one abide mounts itself that `followedOwn` made followable.
  */
 export function followedIn(
     handlers: Map<string, Mounted>,
 ): (address: string) => FollowedHandler | undefined {
     return (address) => {
         const found = handlers.get(handlerKey('GET', address))
-        return found?.ui === true ? found : undefined
+        return found?.ui === true ? found : OWN_FOLLOWED.get(address)
     }
+}
+
+/**
+ * What a follow of a handler is watched by, run in the follower's connection scope as it follows —
+ * the request its upgrade carried, and so its `principal.caller` and its sign-in — and handed what
+ * sends that one follower a trigger; it returns what stops watching, run as the follow stops.
+ *
+ * 18.36 — A FOLLOWER IS REACHED BY WHO IT IS, not by the args it named: what the watch reads off the
+ * scope is what it files `poke` under, so a change to one browser's state reaches that browser's
+ * followers alone, and the browser never names whose state it follows.
+ */
+export type FollowWatch = (
+    poke: (member: 'invalidate' | 'refresh') => void,
+) => () => void
+
+const OWN_FOLLOWED = new Map<string, Mounted>()
+const WATCHES = new WeakMap<object, FollowWatch>()
+
+/** Makes `own`, a handler abide mounts itself, followable over the mux, each follow watched by `watch`. */
+export function followedOwn(
+    own: [string, Mounted],
+    watch: FollowWatch,
+): [string, Mounted] {
+    OWN_FOLLOWED.set(own[0], own[1])
+    WATCHES.set(own[1].handler, watch)
+    return own
+}
+
+/** What watches each follow of `rpc`, or `undefined`. */
+export function watchOf(rpc: object): FollowWatch | undefined {
+    return WATCHES.get(rpc)
 }
 
 /**
