@@ -8,7 +8,7 @@ import { abideImportsOf } from './componentGraph.ts'
 import { type Diagnosis, Diagnostics } from './Diagnostics.ts'
 import { hooksIn } from './hookCalls.ts'
 import { parseAbide, scriptBodies } from './parseAbide.ts'
-import { parseSources, readSources } from './readSources.ts'
+import { type ParsedSource, parseSources, readSources } from './readSources.ts'
 
 /**
  * Every finding `abide check` reports for the app at `appRoot`.
@@ -57,45 +57,57 @@ export async function checkSource(
     // 23.19 — WHERE THE APP PLACES IT, so a mounted page's `route.params` is typed by the route its
     // mount gives it, as `checkApp` types it; a file the layout has not seen is placed at its path.
     const own: PlacedSource[] = []
-    const beside: { path: string; text: string; quiet: boolean }[] = []
+    // A FILE THE EDITOR DOES NOT HOLD CHANGED IS THE LAYOUT'S, parsed already — the layout is
+    // dropped on every move a watcher hears (`saw`), as `lowerApp` relies on. Only an edited one,
+    // or one the layout never laid, is read and parsed here.
+    const beside: ParsedSource[] = []
+    const unparsed: { path: string; text: string; quiet: true }[] = []
     if (page !== undefined) {
-        const laid = layout.sources.find((source) => source.path === path)
+        const laidAt = new Map<string, PlacedSource>()
+        for (const source of layout.sources) laidAt.set(source.path, source)
+        const laid = laidAt.get(path)
         own.push(
             laid === undefined
                 ? placedSource(page, placement(relative(root, path)), false)
                 : { ...laid, ...page },
         )
+        const lowered = new Set<string>()
         for (const imported of abideImportsOf(
             path,
             page.file,
             layout.resolve,
-        ).values())
+        ).values()) {
+            lowered.add(imported)
+            const editing = held(imported)
+            const source = laidAt.get(imported)
+            if (
+                source !== undefined &&
+                (editing === undefined || editing === source.text)
+            ) {
+                beside.push({ ...source, quiet: true })
+                continue
+            }
             try {
-                beside.push({
+                unparsed.push({
                     path: imported,
-                    text: held(imported) ?? (await Bun.file(imported).text()),
+                    text: editing ?? (await Bun.file(imported).text()),
                     quiet: true,
                 })
             } catch {
                 // A component that cannot be read takes anything here.
             }
+        }
         // 27.13 — AND EVERY FILE FILING `onConfig`, quietly, so a page that only reads `config()`
         // is typed by defaults it never imported — as `checkApp`'s whole-app program types it. The
         // calls only name candidates; the checker decides which file.
-        const lowered = new Set(beside.map((one) => one.path))
         for (const other of layout.sources) {
             if (other.path === path || lowered.has(other.path)) continue
             const editing = held(other.path)
-            if (
-                editing === undefined || editing === other.text
-                    ? other.hooks.includes('onConfig')
-                    : filesConfig(editing)
-            )
-                beside.push({
-                    path: other.path,
-                    text: editing ?? other.text,
-                    quiet: true,
-                })
+            if (editing === undefined || editing === other.text) {
+                if (other.hooks.includes('onConfig'))
+                    beside.push({ ...other, quiet: true })
+            } else if (filesConfig(editing))
+                unparsed.push({ path: other.path, text: editing, quiet: true })
         }
     }
     // A component that does not parse, or that the checker refuses, is its own file's finding and
@@ -105,7 +117,7 @@ export async function checkSource(
             layout,
             session,
             own,
-            parseSources(beside, diagnostics),
+            [...beside, ...parseSources(unparsed, diagnostics)],
             diagnostics,
             true,
             false,
