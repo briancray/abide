@@ -542,7 +542,8 @@ test('a navigation passes through middleware and is not rendered — 30.15, 30.1
     const allowed = await ask('/invoices/42')
     expect(allowed.status).toBe(204)
     expect(await allowed.text()).toBe('')
-    expect(allowed.headers.get('cache-control')).toBe('no-store')
+    // 21.3 — a page answer, so the page default.
+    expect(allowed.headers.get('cache-control')).toBe('private, no-store')
     const moved = await ask('/invoices/moved')
     expect(moved.status).toBe(302)
     expect(moved.headers.get('location')).toBe('/invoices/42')

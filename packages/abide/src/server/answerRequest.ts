@@ -348,18 +348,18 @@ async function answerMatched(
     if (request.headers.has(NAVIGATION_HEADER))
         return new Response(null, {
             status: 204,
-            headers: { 'cache-control': 'no-store' },
+            headers: { 'cache-control': 'private, no-store' },
         })
 
     // 35.19 — A REQUEST THAT CANNOT DISPLAY A PAGE, such as the `/favicon.ico` a browser asks every
     // site for where a `[param]` page matches it: refused before setup, so no handler runs for it
     // and no caller is minted. Bare, because an error page would set up too and nothing shows it;
-    // `no-store`, because the address answers a navigation with the page.
+    // 21.3's `no-store`, because the address answers a navigation with the page.
     const destination = request.headers.get('sec-fetch-dest')
     if (destination !== null && !PAGE_DESTINATIONS.has(destination))
         return new Response(null, {
             status: 404,
-            headers: { 'cache-control': 'no-store' },
+            headers: { 'cache-control': 'private, no-store' },
         })
 
     // 33.4 — a prop is an ACCESSOR, which is the contract `renderComponent` renders a child under

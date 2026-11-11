@@ -246,6 +246,7 @@ test('a page asked for as an image is refused before its setup runs — 35.19', 
     })
     expect(image.status).toBe(404)
     expect(await image.text()).toBe('')
+    expect(image.headers.get('cache-control')).toBe('private, no-store')
     expect((await count()) - before).toBe(0)
     const anonymous = await Bun.fetch(`${base}/`, {
         headers: { 'sec-fetch-dest': 'image' },
