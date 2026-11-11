@@ -45,8 +45,8 @@ import TeamTarget from 'crm-04/src/pipeline/lib/TeamTarget.abide'
 import teamTargetSource from 'crm-04/src/pipeline/lib/TeamTarget.abide' with { type: 'text' }
 import teamTargetTestSource from 'crm-04/src/pipeline/lib/TeamTarget.test.ts' with { type: 'text' }
 import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
-import qualifyLeadSource from 'crm-04/src/pipeline/qualifyLead.handler.ts' with { type: 'text' }
 import listTargetsSource from 'crm-04/src/pipeline/listTargets.handler.ts' with { type: 'text' }
+import qualifyLeadSource from 'crm-04/src/pipeline/qualifyLead.handler.ts' with { type: 'text' }
 import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
 import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
 import setTargetSource from 'crm-04/src/pipeline/setTarget.handler.ts' with { type: 'text' }
