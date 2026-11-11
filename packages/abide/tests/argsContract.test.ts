@@ -9,6 +9,7 @@ import { argsFor, collapsed, derivedArgs } from '#server/argsContract.ts'
 import { handlerFileMount } from '#server/handlerFileMount.ts'
 import { type Mounted, mountHandlers } from '#server/mountHandlers.ts'
 import { isFailed } from '#shared/Failed.ts'
+import { HandlerRoute } from '#shared/HandlerRoute.ts'
 
 const SCHEMA = {
     type: 'object',
@@ -95,6 +96,18 @@ test("a path's parameters join the args, coerced, and are never named twice — 
         refused = thrown
     }
     expect(isFailed(refused) && refused.status).toBe(400)
+})
+
+// 16.66 — WHAT NO PARAMETER TOOK IS KEPT AS GIVEN, a member the caller named `__proto__` included:
+// args an MCP tool call or a JSON body carries are keyed by the input (`putOwn`). THE REVERT: assign
+// `rest[name]` where `split` calls `putOwn`; the member re-parents `rest` and is gone from its body.
+test('a member no parameter takes is kept as an own member, `__proto__` included — 16.66', () => {
+    const { path, rest } = new HandlerRoute('/deals/[id]').split(
+        JSON.parse('{"id":"7","note":"a","__proto__":{"admin":true}}'),
+    )
+    expect(path).toBe('/deals/7')
+    expect(JSON.stringify(rest)).toBe('{"note":"a","__proto__":{"admin":true}}')
+    expect((rest as { admin?: boolean }).admin).toBeUndefined()
 })
 
 // 19.9 — A ROW'S DERIVED SCHEMA REACHES A HANDLER ITS MODULE NEVER HELD TO IT: a bundled

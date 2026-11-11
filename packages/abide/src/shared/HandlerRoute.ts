@@ -4,6 +4,7 @@
 // request a call is (`rpcRequest`), the in-process call's early refusal, and `abide call`.
 
 import { filledSegments } from './filledSegments.ts'
+import { putOwn } from './putOwn.ts'
 import { validationError } from './refuse.ts'
 import { parseRoutePattern, type Segment } from './routePattern.ts'
 
@@ -61,7 +62,7 @@ export class HandlerRoute {
         for (const name in args) {
             if (this.names.has(name)) continue
             rest ??= {}
-            rest[name] = args[name]
+            putOwn(rest, name, args[name])
         }
         return { path, rest }
     }
