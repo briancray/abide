@@ -15,6 +15,7 @@ import { followServed } from '#shared/reactive/producer.ts'
 import { unowned } from '#shared/reactive/watch.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
+import { callerOf } from './callerOf.ts'
 import { fileIn } from './fileIn.ts'
 import { type FollowedHandler, watchOf } from './mountHandlers.ts'
 import { heldByApp } from './requestScope.ts'
@@ -95,6 +96,8 @@ type Follower = {
     peer: Peer
     id: number
     args: unknown
+    // 18.37 — the `principal.caller` its connection's request carried, read once as it subscribes.
+    caller: string | undefined
     // The entry key its args are filed under (`GLOBAL_GETS`), taken once as it subscribes.
     key: string
     // The `global` entry its productions are pushed from, which is what a refresh would otherwise
@@ -158,6 +161,7 @@ export class Followers {
             peer,
             id,
             args,
+            caller: callerOf(),
             key,
             serving: undefined,
             stopFeed: undefined,
@@ -248,15 +252,20 @@ export class Followers {
         })
     }
 
-    /** A trigger on `rpc`, narrowed by the pattern it was handed as the handler's own entries are. 7.10, 7.18, 13.12. */
+    /**
+     * A trigger on `rpc`, narrowed by the pattern it was handed as the handler's own entries are, and
+     * by `caller` where one is given. 7.10, 7.18, 13.12, 18.37.
+     */
     broadcast(
         rpc: object,
         member: 'invalidate' | 'refresh',
         pattern: unknown,
+        caller: string | undefined,
     ): void {
         const handlerFollowers = this.handlers.get(rpc)
         if (handlerFollowers === undefined) return
         for (const follower of handlerFollowers.all) {
+            if (caller !== undefined && follower.caller !== caller) continue
             if (!matchesPattern(follower.args, pattern)) continue
             // A fed copy is refreshed by the production the reload mints (7.18), and invalidated
             // through the cell it is fed from (`followServed`), whichever trigger reached it — where

@@ -18,6 +18,7 @@ import { type Failed, isFailed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
+import { isServer } from './isServer.ts'
 import type { Issues } from './Issues.ts'
 import { compose, type Rung } from './Middleware.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
@@ -107,8 +108,8 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     synced(pattern?: Partial<Args>): boolean
     /** 46.1 — the calls the outbox holds for this handler, narrowed by a pattern. */
     outbox(pattern?: Partial<Args>): QueuedCall<Value>[]
-    refresh(pattern?: Partial<Args>): void
-    invalidate(pattern?: Partial<Args>): void
+    refresh(pattern?: Partial<Args>, options?: TriggerOptions): void
+    invalidate(pattern?: Partial<Args>, options?: TriggerOptions): void
     isError<Name extends string>(
         error: unknown,
         name: Name,
@@ -262,6 +263,12 @@ type Held<Accepted> = Accepted extends
     ((...given: never[]) => unknown) | { invalidate: unknown }
     ? never
     : Accepted | PromiseLike<Accepted>
+
+/**
+ * What narrows a trigger on an `Rpc` beside its pattern: `caller`, the `principal.caller` of the one
+ * browser whose followed copies it reaches. 18.37.
+ */
+export type TriggerOptions = { caller?: string }
 
 /** A handler's options: `RpcOptions` for a mutation, less `refreshes` for a `GET` (16.92). */
 type OptionsOf<
@@ -673,15 +680,24 @@ export function declare<Declared extends Method>(
         }) satisfies Gated<unknown>
         const members = rpc as unknown as Record<string, unknown>
         // 7.10, 7.18 — A TRIGGER ON A SERVER REACHES EVERY BROWSER HOLDING WHAT IT NAMES, through the
-        // mux (18.3). None follow in a browser, where the trigger is the copy's own.
+        // mux (18.3) — 18.37, or the one browser `caller` names. None follow in a browser, where the
+        // trigger is the copy's own, and a copy cannot tell whose caller it is (18.38, 26.22).
         for (const name of SELECTION_MEMBERS) {
             if (name === 'busy') continue
             members[name] =
                 name === 'invalidate' || name === 'refresh'
-                    ? (pattern?: unknown): unknown => {
+                    ? (
+                          pattern?: unknown,
+                          options?: TriggerOptions,
+                      ): unknown => {
+                          const caller = options?.caller
+                          if (caller !== undefined && !isServer())
+                              throw new Error(
+                                  `abide: \`${name}\` was given a \`caller\` in a browser, which cannot tell whose browser it is. Trigger it from the server. RULEBOOK 18.38.`,
+                              )
                           const done = faceHere()[name](pattern)
                           for (const followers of RPC_SERVER.following)
-                              followers.broadcast(rpc, name, pattern)
+                              followers.broadcast(rpc, name, pattern, caller)
                           return done
                       }
                     : (pattern?: unknown): unknown => faceHere()[name](pattern)
