@@ -132,9 +132,10 @@ export class Level {
 
     /**
      * 39.13 — A HEAD THAT READS A VALUE FOLLOWS IT for as long as the level is mounted, which is
-     * `scope`'s life. The first run only subscribes: the head it would write is already there,
-     * written by the server or applied by the level's mount ahead of its fill (39.6) — and seeds
-     * what a painted level stands as if its head throws before anything has reconciled it (39.20).
+     * `scope`'s life. On a painted level the first run only subscribes — the head it would write is
+     * already there — and seeds what it stands as if its head throws before anything has reconciled
+     * it (39.20). On a mounted one the mount's reconcile has read it already (39.6), so the first run
+     * asks for another only where the fill moved what the head reads.
      */
     followHead(scope: Scope): void {
         const own = this.own as HeadContribution
@@ -155,8 +156,9 @@ export class Level {
 }
 
 /**
- * One component's `<head>` in its level — what the component's scope owns, so the head leaves with
- * the component's region (39.14, 39.16).
+ * One contributor's `<head>` in its level: a component's, which the component's scope owns so the
+ * head leaves with its region (39.14, 39.16), or the level's own (`Level.own`), which leaves with
+ * the level.
  */
 export class HeadContribution {
     level: Level
@@ -193,6 +195,8 @@ export class HeadContribution {
     }
 
     /**
+     * A COMPONENT'S ONLY: a level's own leaves with the level, never through here.
+     *
      * 39.14 — WITHDRAWN AS A LEAVING LEVEL'S IS: the chain is reconciled without it. Adopted first
      * where the server painted it and nothing has reconciled since, so what it painted is known to
      * be its own. Nothing where the level is leaving too: the router reconciles the whole chain
