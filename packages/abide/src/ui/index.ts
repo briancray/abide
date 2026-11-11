@@ -2,19 +2,10 @@
 // Every module reached from here is in the client's static closure, so an export added here is
 // paid for on every page (CLAUDE.md, "seams and imports"). The list IS the budget.
 //
-// The steps a mount's walk takes and the checks a binding makes on what it found (`adoptWalk.ts`),
-// the write, the stringify a run's parts go through — and
-// what a DYNAMIC region needs: what WRITES into one (`fillRegion` for an arm, `fillEmpty` for a region
-// that fills itself,
-// `listAt` and `updateList` for a `{#for}` — which reconciles an array and appends an async
-// subject, 32.15 — and `replaceRow` for a row), what a hydration mismatch is answered with
-// (`warnMismatch`, 41.10), what every region's bindings are stopped through (`Scope`), what a
-// row's markup is parsed with (`markupNodes`)
-// and the anchors they are all counted from. 32.3's writes are THREE names rather than one
-// (`setAttribute`, `setStyleProperty`, `setClass`) for one reason said once: every `style:prop`
-// and every `class:name` on an element is merged by the server into the single `style` or `class`
-// attribute beside the author's own, so neither of those two attributes can be written back whole
-// — the CSSOM and `classList` are what touch the one declaration or the one token a binding owns.
+// 32.3's writes are THREE names rather than one (`setAttribute`, `setStyleProperty`, `setClass`)
+// for one reason said once: every `style:prop` and every `class:name` on an element is merged by
+// the server into the single `style` or `class` attribute beside the author's own, so neither of
+// those two attributes can be written back whole — the CSSOM and `classList` are what touch the one declaration or the one token a binding owns.
 // A `class={expr}` or `style={expr}` beside its directives is the same answer once more
 // (`setClassGroup`, `setStyleGroup`, 32.71): the group writes what it owns, and nothing else.
 // A list is reached through `listAt` and `updateList` alone, so its rows' shape is no caller's.

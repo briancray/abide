@@ -7,9 +7,7 @@ import { WORK } from '#shared/WORK.ts'
  * Writes, or removes, a bound attribute, skipping an unchanged write.
  *
  * 32.3 — what an attribute binding writes, and the client half the server never had: `emitComponent`
- * writes the value standing at render and, without this, nothing writes it again. A page whose
- * `{count}` moved while its `class={tone}` did not is the shape that was shipping, and no
- * correctness test of the first slot could see the second.
+ * writes the value standing at render and, without this, nothing writes it again.
  *
  * NOT ESCAPED, for `escapeless`'s reason: the server concatenates into markup a browser parses, and
  * `setAttribute` is not a parse. Escaping here would put `&amp;` in a `title` where the server put

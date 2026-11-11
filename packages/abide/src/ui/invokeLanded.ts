@@ -13,11 +13,7 @@
 // it, and which reads nothing once the child is made, so it never wakes again.
 
 import { NotLanded } from '#shared/reactive/NotLanded.ts'
-import {
-    leaveShare,
-    resumeShare,
-    type ShareScope,
-} from '#shared/reactive/share.ts'
+import { inShare, type ShareScope } from '#shared/reactive/share.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 
 import type { Scope } from './Scope.ts'
@@ -52,10 +48,5 @@ function invokeShared(
     invoke: (props: object) => void,
     landed: { props: object; share: ShareScope | null },
 ): void {
-    const back = resumeShare(landed.share)
-    try {
-        invoke(landed.props)
-    } finally {
-        leaveShare(back)
-    }
+    inShare(landed.share, invoke, landed.props, undefined)
 }

@@ -94,6 +94,27 @@ export function currentShare(): ShareScope | null {
     return CURRENT
 }
 
+/**
+ * `run(first, second)` with `scope` current, the previous one restored after it however it ends.
+ *
+ * Two arguments rather than a closure, as `untracked` takes them: a mount resuming its captured
+ * scope builds nothing to call through.
+ */
+export function inShare<First, Second, Result>(
+    scope: ShareScope | null,
+    run: (first: First, second: Second) => Result,
+    first: First,
+    second: Second,
+): Result {
+    const previous = CURRENT
+    CURRENT = scope
+    try {
+        return run(first, second)
+    } finally {
+        CURRENT = previous
+    }
+}
+
 /** Makes a captured share scope current again, and returns the previous one to restore. */
 export function resumeShare(scope: ShareScope | null): ShareScope | null {
     const previous = CURRENT

@@ -1,9 +1,4 @@
-import {
-    currentShare,
-    leaveShare,
-    resumeShare,
-    type ShareScope,
-} from './reactive/share.ts'
+import { currentShare, inShare, type ShareScope } from './reactive/share.ts'
 
 /**
  * Sets up levels `from` to `count - 1` of a page chain — its layouts outermost first, the page
@@ -43,11 +38,6 @@ export function setUpLevels(
 ): void {
     let share = outer === undefined ? currentShare() : outer
     for (let at = from; at < count; at += 1) {
-        const back = resumeShare(share)
-        try {
-            share = setUp(at, { ...props, children: undefined })
-        } finally {
-            leaveShare(back)
-        }
+        share = inShare(share, setUp, at, { ...props, children: undefined })
     }
 }

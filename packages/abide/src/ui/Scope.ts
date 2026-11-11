@@ -17,7 +17,7 @@ let ambientBoundary: Boundary | undefined
  * Runs `run` with every scope it builds falling under `boundary` (32.16), restoring the one around it.
  *
  * The ambient is this module's so `Scope`'s field reads a local at construction; `TryRegion` is the
- * one writer, and a page with no `{#try}` does not import it.
+ * one writer.
  */
 export function underBoundary<T>(boundary: Boundary, run: () => T): T {
     const previous = ambientBoundary

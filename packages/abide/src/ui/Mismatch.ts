@@ -9,8 +9,7 @@ export const HYDRATE_LOG = namedLogger('abide:hydrate')
  * 41.10 — A HYDRATION MISMATCH REBUILDS THE ENCLOSING BLOCK AND WARNS, and what it must not do is
  * take the page down. An ordinary throw out of `mount` does exactly that: every binding and every
  * listener after the one that refused is never installed, so a page whose one slot disagrees is
- * served looking right and completely dead. Every refusal in this seam cited the clause while
- * doing the opposite of it.
+ * served looking right and completely dead.
  *
  * THROWN RATHER THAN RETURNED, because the refusal comes from inside a walk several nodes deep and
  * the block that rebuilds is several frames above it. The BRAND is what a block's catch reads: a

@@ -5,11 +5,7 @@
 // `{#if}` inside a `{#for}` is one of these per row.
 
 import { namedArm } from '#shared/armAnchor.ts'
-import {
-    leaveShare,
-    resumeShare,
-    type ShareScope,
-} from '#shared/reactive/share.ts'
+import { inShare, type ShareScope } from '#shared/reactive/share.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 
 import { HYDRATE_LOG } from './Mismatch.ts'
@@ -179,14 +175,7 @@ export class ChosenRegion extends ArmRegion {
         const component = next as (root: Region, props: object) => Stoppable
         return {
             build: undefined,
-            mount: (root) => {
-                const back = resumeShare(this.share)
-                try {
-                    return component(root, this.props)
-                } finally {
-                    leaveShare(back)
-                }
-            },
+            mount: (root) => inShare(this.share, component, root, this.props),
         }
     }
 }
