@@ -103,7 +103,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`. | 5.4, 5.5, 18.4 |
 | `by` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.22, 18.4, 18.15, 32.32 |
 | `ttl` | `number` | The life of a production, of a keyed entry, or of a write to a value with no producer. | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13, 6.14, 6.15, 6.16, 11.6, 11.35, 11.45, 11.48, 11.49, 11.69 |
-| `poll` | `number` | How often the value refreshes itself, in milliseconds. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 7.27, 7.28 |
+| `poll` | `number` | How often the value refreshes itself, in milliseconds. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 7.27, 7.28, 7.29, 7.30, 7.31 |
 | `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.4, 11.28, 11.30, 11.40, 11.41, 11.56, 11.60, 11.68, 11.72 |
 | `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.39, 11.53, 11.67 |
 | `tags` | `string[] \| ((args: Args) => string[])` | What a `Selection` matches on. | 11.43, 11.44, 18.4, 18.15 |
@@ -819,8 +819,8 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
 | `App.fetch` | `(request: Request, options?: { principal?: Record<string, unknown>; caller?: string }) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6, 42.20, 42.21 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request; principal?: Record<string, unknown>; caller?: string }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 42.19, 42.21, 11.38 |
-| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30 |
-| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.26, 7.27 |
+| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 7.30 |
+| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.26, 7.27, 7.31 |
 | `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
 
 # Tests
@@ -946,7 +946,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123 |
 | `abide format [--check] [dir…]` | The formatter over a `.abide` tree. | 38.25, 38.125, 38.126, 38.127, 38.128, 38.129 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, what each matcher takes, the rungs each handler names, and where each hook is filed. | 38.108, 38.123, 38.135 |
-| `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136 |
+| `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 7.30 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123 |
 | `abide start [--port <n>] [--hostname <host>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123, 38.136 |
 | `abide [--url <origin>] [--port <n>] [--hostname <host>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62, 38.123, 38.136 |

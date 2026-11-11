@@ -6,10 +6,16 @@ import { expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
+import type { App, BootedApp } from '#server/createApp.ts'
 import { log, reactive } from '#shared'
 import { collectWatches } from '#shared/reactive/watch.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
+
+/** What `App.listen` and `abide dev` open, with no socket to bind here (7.30). */
+function serving(app: App): void {
+    ;(app as BootedApp).openMux()
+}
 
 /** Runs `build` as a component's setup is run, and answers what ends it. */
 function inSetup(build: () => void): () => void {
@@ -182,6 +188,7 @@ const ARMS: Record<string, (job: Job) => Promise<() => Promise<void>>> = {
     async abide(job) {
         reactive(() => scrapeRun(job, 15), { global: true, poll: 10 })
         const app = await inMemoryApp({})
+        serving(app)
         return () => app.stop()
     },
 }
@@ -239,4 +246,67 @@ test('a keyed polled entry whose first run fails is warned on abide:reactive —
                 record.message.includes('row 7 could not be read'),
         )
     expect(`warned: ${warned.length}`).toBe('warned: 1')
+})
+
+// 7.29, 7.30, 7.31 — A JOB WAITS FOR THE APP. Every claim is a count of body runs: a job that ran at import
+// still serves the right value, and costs every test that boots and stops an app one run each.
+
+/** A job counting its runs, built where nothing owns it — as a module's is. */
+function countedJob(): { runs: () => number; value: { busy(): boolean } } {
+    let runs = 0
+    const value = reactive(
+        async () => {
+            runs += 1
+            await Bun.sleep(5)
+            return runs
+        },
+        { global: true, poll: 60_000 },
+    )
+    return { runs: () => runs, value }
+}
+
+// THE REVERT: start the producer at construction again (drop the `job` arm in `createReactive`), and
+// `runs: 1` — the run at import, which every stop then waits on.
+test('apps booted and stopped before anything reads a job never run it — 7.29, 7.31', async () => {
+    const job = countedJob()
+    for (let cycle = 0; cycle < 5; cycle += 1) {
+        const app = await inMemoryApp({})
+        await app.stop()
+    }
+    expect(`runs: ${job.runs()}`).toBe('runs: 0')
+})
+
+// THE REVERT: drop `firstRunStarted` from `reloadOwed`, so the read leaves the job still held, and
+// the app opening runs it again — `after opening: 2`.
+test('a read before the app opens runs a job once, and the app opening does not run it again — 7.30', async () => {
+    let runs = 0
+    const value = reactive(
+        async () => {
+            runs += 1
+            return runs
+        },
+        { global: true, poll: 20 },
+    )
+    expect(`before: ${runs}`).toBe('before: 0')
+    expect(await value).toBe(1)
+    const app = await inMemoryApp({})
+    serving(app)
+    expect(`after opening: ${runs}`).toBe('after opening: 1')
+    await Bun.sleep(30)
+    await app.stop()
+    expect(runs).toBeGreaterThanOrEqual(2)
+})
+
+// THE REVERT: have `startUnownedPolls` refresh every job it finds, run or not, and the second
+// opening supersedes the first run — `runs: 2`.
+test('the app opening makes a job’s first run, once — 7.30', async () => {
+    const job = countedJob()
+    const app = await inMemoryApp({})
+    serving(app)
+    serving(app)
+    expect(`busy: ${job.value.busy()}, runs: ${job.runs()}`).toBe(
+        'busy: true, runs: 1',
+    )
+    await app.stop()
+    expect(`after the stop: ${job.value.busy()}`).toBe('after the stop: false')
 })

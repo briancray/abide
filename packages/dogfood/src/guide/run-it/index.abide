@@ -162,10 +162,12 @@ import Snippet from '#src/lib/Snippet.abide'
         </Example>
 
         <p>A job is a reactive value: a body, <code>global</code> so the process has one of it, and a
-            <code>poll</code> for the clock. It starts when the module loads, whether or not anything
-            reads it, and the value holds each lead it has yielded. Nothing else
-            schedules it, so there is no <code>setInterval</code> in <code>onStart</code> to
-            remember and no <code>clearInterval</code> in <code>onStop</code>.</p>
+            <code>poll</code> for the clock. Its first run is when the app starts serving, after
+            every <code>onStart</code> has run, or when something reads it first; the value holds
+            each lead it has yielded. A test that boots the app and never reads the job never runs
+            it. Nothing else schedules it, so there is no <code>setInterval</code> in
+            <code>onStart</code> to remember and no <code>clearInterval</code> in
+            <code>onStop</code>.</p>
 
         <p>One run happens at a time: the clock skips a tick while <code>followUps.busy()</code>
             is true. <code>followUps.refresh()</code> runs it now. A run that throws is written to
@@ -205,7 +207,8 @@ import Snippet from '#src/lib/Snippet.abide'
             <tbody>
                 <tr><td>how many workers</td><td>one per run, ended in the generator's <code>finally</code>, which also runs when a <code>refresh()</code> discards the run in flight</td></tr>
                 <tr><td>whether it keeps the process up</td><td><code>{'{ ref: false }'}</code>, so a run in flight never keeps the process alive</td></tr>
-                <tr><td>what happens at stop</td><td>nothing: the app does not wait for a run or end the worker. To finish one first, <code>await dealScores</code> in your <code>onStop</code></td></tr>
+                <tr><td>when it runs</td><td>hourly, as a job: <code>poll</code> puts the first run off until the app starts serving or the scores are read, so a test that never reads them never starts a worker</td></tr>
+                <tr><td>what happens at stop</td><td>the stop waits for a run in flight, as it does for any job, and the worker ends with the run. Past <code>ABIDE_STOP_TIMEOUT</code> nothing ends it but the process</td></tr>
                 <tr><td>what it can read</td><td>only what it is sent. A worker loads its own copy of every module, so the deals go in by <code>postMessage</code></td></tr>
             </tbody>
         </table>

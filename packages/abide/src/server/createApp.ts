@@ -14,7 +14,7 @@ import { LONGEST_DELAY } from '#shared/LONGEST_DELAY.ts'
 import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
-import { stopUnownedPolls } from '#shared/reactive/poll.ts'
+import { startUnownedPolls, stopUnownedPolls } from '#shared/reactive/poll.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { laneFailure } from './answerFailure.ts'
@@ -373,7 +373,10 @@ export async function bootEntered(
         (currentRequestScope()?.app?.answer ?? fetch)(request)
     RPC_SERVER.raw = answerRaw
 
+    // 7.30 — OPENED TO THE NETWORK, the app's jobs start: `App.listen` and `abide dev` both open the
+    // mux, after `onStart` has run, and an `App` a test only `fetch`es never runs one.
     const openMux = (): Mux => {
+        startUnownedPolls()
         mux = new Mux(
             followedIn(booted.handlers),
             answering.followers,
