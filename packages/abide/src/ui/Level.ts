@@ -49,15 +49,13 @@ export class Level {
      */
     share: ShareScope | null = null
     /**
-     * This level's own head markup as it reads now; `undefined` for a level with no `<head>`.
+     * This level's own head, the first contributor in it; `undefined` for a level with no `<head>`.
      *
-     * 39.14 — READ WHEN THE LEVEL LEAVES OR STAYS ABOVE ONE THAT DOES, which is why it is the
+     * 39.14 — READ WHEN THE LEVEL LEAVES OR STAYS ABOVE ONE THAT DOES, which is why it holds the
      * markup's thunk and not the markup: a layout's `<title>{name}</title>` puts back the name it
      * reads at that moment.
      */
-    head: (() => string) | undefined = undefined
-    /** What `head` read at the last reconcile — what it stands as once it throws (39.20). */
-    lastRead = ''
+    own: HeadContribution | undefined = undefined
     /**
      * The heads of the components mounted in this level, after its own and in the order they
      * mounted. A COLLECTION, NOT A CLOSURE PER CONTRIBUTION: a `{#for}` of components with a
@@ -72,7 +70,7 @@ export class Level {
 
     /** Left by the level's mount (`emitClient`), painted or not. */
     setHead(head: () => string): void {
-        this.head = head
+        this.own = new HeadContribution(this, head)
     }
 
     /** Left by the level's mount for the router to run once the chain is set up (41.19). */
@@ -105,20 +103,11 @@ export class Level {
     ): [who: object, text: string][] {
         const chain: [object, string][] = []
         for (const level of levels) {
-            if (level.head !== undefined) chain.push([level, level.read()])
+            const own = level.own
+            if (own !== undefined) chain.push([own, own.read()])
             for (const one of level.contributed) chain.push([one, one.read()])
         }
         return chain
-    }
-
-    /** This level's own head as it reads now, or as it last read once it has thrown (39.20). */
-    read(): string {
-        try {
-            this.lastRead = (this.head as () => string)()
-        } catch (thrown) {
-            this.head = headThrew(thrown, this.lastRead)
-        }
-        return this.lastRead
     }
 
     /**
@@ -144,11 +133,11 @@ export class Level {
     /**
      * 39.13 — A HEAD THAT READS A VALUE FOLLOWS IT for as long as the level is mounted, which is
      * `scope`'s life. The first run only subscribes: the head it would write is already there,
-     * written by the server or applied by the level's mount ahead of its fill (39.6). Followed as a
-     * component's is, by a contribution the level does not hold.
+     * written by the server or applied by the level's mount ahead of its fill (39.6) — and seeds
+     * what a painted level stands as if its head throws before anything has reconciled it (39.20).
      */
     followHead(scope: Scope): void {
-        const own = new HeadContribution(this, this.head as () => string)
+        const own = this.own as HeadContribution
         scope.watch(() => own.follow())
     }
 
@@ -172,7 +161,7 @@ export class Level {
 export class HeadContribution {
     level: Level
     head: () => string
-    /** What this contribution last wrote, or `undefined` before its first run. */
+    /** What this head last read, or `undefined` before it first was. */
     last: string | undefined = undefined
     dispose: Disposer | undefined = undefined
 
@@ -181,24 +170,26 @@ export class HeadContribution {
         this.head = head
     }
 
-    /** 39.13 — the first run only subscribes, as a level's own does. */
+    /**
+     * 39.13 — the first run only subscribes. 39.20 — read through `read`, so a throw here is reported
+     * once and stands as what it last read, which asks no reconcile.
+     */
     follow(): void {
-        const text = this.head()
         const last = this.last
-        this.last = text
-        if (last !== undefined && text !== last)
+        if (this.read() !== last && last !== undefined)
             reconcileLater(this.level.chain)
     }
 
     /** This head as it reads now, or as it last did once it has thrown (39.20). */
     read(): string {
         try {
-            return this.head()
+            this.last = this.head()
         } catch (thrown) {
             const kept = this.last ?? ''
             this.head = headThrew(thrown, kept)
-            return kept
+            this.last = kept
         }
+        return this.last
     }
 
     /**

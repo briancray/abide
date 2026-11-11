@@ -8,6 +8,7 @@ import { enterShare, leaveShare } from '#shared/reactive/share.ts'
 import { contributeHead, type HeadContribution, Level } from '#ui/Level.ts'
 import { reconcileHead } from '#ui/reconcileHead.ts'
 import type { Region } from '#ui/regions.ts'
+import { Scope } from '#ui/Scope.ts'
 
 import { warningsWhile } from './warningsWhile.ts'
 
@@ -214,7 +215,9 @@ test('rows joining in one reconcile each own an equal keyless node — 39.16', (
 // one a painted contributor's `stop` runs to adopt what it painted. THE REVERT: read `one.head()`
 // in `Level.contributors` — `p.stop()` throws out before `contributed.delete`, so this reports 1
 // stop thrown, 2 contributors left, 3 reconciles and `.p`, `.a` standing where 0, 1, 4 and `.b`
-// alone are due.
+// alone are due. REPORTED ONCE, by whichever read meets the throw first — its own watch here. THE
+// REVERT: read `this.head()` in `follow` — the watch's throw goes out as an effect's, freezing
+// nothing, and the next reconcile reports it again: 4 warnings where 2 are due.
 test('a contributor that throws stands as it last read — 12.6, 39.16, 39.20', () => {
     document.head.innerHTML = '<title>page</title><style>.p{}</style>'
     const levels: Level[] = []
@@ -267,7 +270,7 @@ test('a contributor that throws stands as it last read — 12.6, 39.16, 39.20', 
     const styles = [...document.head.querySelectorAll('style')].map(
         (node) => node.textContent,
     )
-    // Warned: a's and p's own watches, and each one's first reconcile — none after.
+    // Warned: a's and p's own watches — none after.
     expect({
         warned: warned.length,
         stopsThrown,
@@ -275,10 +278,66 @@ test('a contributor that throws stands as it last read — 12.6, 39.16, 39.20', 
         reconciles,
         styles,
     }).toEqual({
-        warned: 4,
+        warned: 2,
         stopsThrown: 0,
         contributors: 1,
         reconciles: 4,
         styles: ['.b{}'],
+    })
+})
+
+// A PAINTED LEVEL STANDS AS THE SERVER WROTE IT (39.20). Nothing reconciles a hydrated level's head at
+// mount, so its first client read may be the one that throws — a `<title>{deal.name}</title>` over a
+// load that failed after paint — and what it last read is what its watch's first run saw. THE
+// REVERT: read the level's head through a thunk of its own, seeded with `''`, in `contributors` —
+// it stands as nothing, so the layout's `Layout` replaces `Page`, the painted `.page` is never
+// adopted and outlives the page, and the throw is reported twice where once is due.
+test('a painted level whose head throws stands as the server wrote it — 39.14, 39.16, 39.20', () => {
+    document.head.innerHTML =
+        '<title>Page</title><style>.layout{}</style><style>.page{}</style>'
+    const levels: Level[] = []
+    const layout = new Level(chainOf(levels))
+    layout.setHead(() => '<title>Layout</title><style>.layout{}</style>')
+    const page = new Level(chainOf(levels))
+    const failing = reactive(false)
+    page.setHead(() => {
+        if (failing()) throw new Error('failed load')
+        return '<title>Page</title><style>.page{}</style>'
+    })
+    levels.push(layout, page)
+    const scope = new Scope()
+    page.followHead(scope)
+    const report = globalThis.reportError
+    globalThis.reportError = () => {}
+    const seen: { title: string; styles: (string | null)[] }[] = []
+    const read = () =>
+        seen.push({
+            title: document.title,
+            styles: [...document.head.querySelectorAll('style')].map(
+                (node) => node.textContent,
+            ),
+        })
+    let warned: string[]
+    try {
+        warned = warningsWhile(() => {
+            failing.set(true)
+            flushSync()
+            // A navigation away reconciles with the page still standing, then without it.
+            Level.reconcile(levels)
+            read()
+            scope.stop()
+            levels.pop()
+            Level.reconcile(levels)
+            read()
+        }, 'threw')
+    } finally {
+        globalThis.reportError = report
+    }
+    expect({ warned: warned.length, seen }).toEqual({
+        warned: 1,
+        seen: [
+            { title: 'Page', styles: ['.layout{}', '.page{}'] },
+            { title: 'Layout', styles: ['.layout{}'] },
+        ],
     })
 })
