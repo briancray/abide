@@ -71,10 +71,20 @@ export async function answerValue(
             status,
         )
     // 17.2 — the document `page` named: text, the bytes `render` hands back, or a stream of bytes.
+    // 38.29 — one in hand is a document, in the encoding the request takes.
     if (framing === 'html') {
         headers.set('content-type', 'text/html; charset=utf-8')
-        if (typeof value === 'string' || value instanceof Uint8Array)
-            return new Response(value as BodyInit, { status, headers })
+        if (typeof value === 'string' || value instanceof Uint8Array) {
+            headers.append('vary', 'accept-encoding')
+            return compressAnswer(
+                typeof value === 'string'
+                    ? ENCODER.encode(value)
+                    : (value as Uint8Array<ArrayBuffer>),
+                request,
+                headers,
+                status,
+            )
+        }
         // 16.75.
         headers.set('x-accel-buffering', 'no')
         return new Response(bodyOf(chunksOf(value), 'bytes'), {

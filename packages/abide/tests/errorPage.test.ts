@@ -103,11 +103,19 @@ afterAll(() => {
 })
 
 // 35.2, 15.7 — AN ADDRESS NOTHING ANSWERS IS `notFound`, rendered by the nearest error page at 404.
-test('an unmatched address renders the root error page at 404 — 35.2', async () => {
-    const answer = await Bun.fetch(`${base}/nowhere`, AS_A_PAGE)
+// 38.29 — A PAINTED ERROR PAGE IS A DOCUMENT, in the encoding the request takes. THE REVERT: answer
+// `renderDocument`'s bytes as `new Response(document)` in `answerFailure`; no `content-encoding`.
+test('an unmatched address renders the root error page at 404 — 35.2, 38.29', async () => {
+    const answer = await Bun.fetch(`${base}/nowhere`, {
+        headers: { accept: 'text/html', 'accept-encoding': 'gzip' },
+        decompress: false,
+    })
     expect(answer.status).toBe(404)
     expect(answer.headers.get('content-type')).toBe('text/html; charset=utf-8')
-    const html = await answer.text()
+    expect(answer.headers.get('content-encoding')).toBe('gzip')
+    const html = new TextDecoder().decode(
+        Bun.gunzipSync(new Uint8Array(await answer.arrayBuffer())),
+    )
     expect(html).toContain('<h1 id="root">No such page</h1>')
     expect(html).toContain('Nothing answers GET /nowhere.')
 })

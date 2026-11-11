@@ -9,6 +9,7 @@ import { coversPrefix, partsOf } from '#shared/matchRoute.ts'
 import { coversRoute, parseRoutePattern } from '#shared/routePattern.ts'
 
 import type { AppSources, RankedError } from './answerRequest.ts'
+import { compressAnswer } from './compressAnswer.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { leavePageRender } from './PageRender.ts'
 import { prefers } from './prefers.ts'
@@ -75,27 +76,31 @@ function errorsFor(errors: RankedError[], pathname: string): RankedError[] {
  *
  * 35.2, 35.3 — the page is rendered whole before a byte is answered, so one that fails is not
  * half-sent: it escalates to the next ancestor, and says so on `abide:render`. With none left,
- * the refusal is answered as text.
+ * the refusal is answered as text. 38.29 — the painted page is a document, in the encoding
+ * `request` takes.
  */
 export async function answerFailure(
     app: ErrorPages,
     pathname: string,
     failure: Failed<string, unknown>,
+    request: Request,
 ): Promise<Response> {
     const headers = new Headers(DOCUMENT_HEADERS)
     const status = failure.status
     for (const error of errorsFor(app.errors, pathname)) {
+        let document: Uint8Array<ArrayBuffer>
         try {
             const bound = boundPage(error, { failure: () => failure })
             leavePageRender()
-            const document = await renderDocument(bound, app.errorDocument)
-            return new Response(document, { status, headers })
+            document = await renderDocument(bound, app.errorDocument)
         } catch (thrown) {
             RENDER_LOG.warning(
                 `the error page for ${error.pattern} failed, so the next one answers`,
                 thrown,
             )
+            continue
         }
+        return compressAnswer(document, request, headers, status)
     }
     headers.set('content-type', 'text/plain; charset=utf-8')
     return new Response(failure.message, { status, headers })
@@ -112,6 +117,6 @@ export function laneFailure(
     request: Request,
 ): Response | Promise<Response> {
     return prefers(request, 'text/html', 'application/json')
-        ? answerFailure(app, pathname, failure)
+        ? answerFailure(app, pathname, failure, request)
         : answered(failure)
 }

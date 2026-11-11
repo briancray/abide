@@ -169,7 +169,7 @@ export async function answerRequest(
     if (own !== undefined)
         return own.method === method
             ? answerRpc(own, {}, url, request, app, false)
-            : methodRefused(app, asked, [own.method])
+            : methodRefused(app, asked, [own.method], request)
     // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where it answers nothing.
     const surface = SURFACES.get(asked)
     if (surface !== undefined) {
@@ -192,7 +192,9 @@ export async function answerRequest(
     if (isFrameworkAddress(asked)) {
         const answer = app.framework(asked, request)
         if (answer === undefined) return notFound()
-        return readsOnly(request) ? answer : methodRefused(app, asked, READS)
+        return readsOnly(request)
+            ? answer
+            : methodRefused(app, asked, READS, request)
     }
 
     // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
@@ -204,7 +206,7 @@ export async function answerRequest(
     if (file !== undefined)
         return readsOnly(request)
             ? publicResponse(request, file, app.offline)
-            : methodRefused(app, asked, READS)
+            : methodRefused(app, asked, READS, request)
 
     // 15.16 — an address that will not percent-decode names nothing, and is the caller's fault.
     const parts = partsOf(asked)
@@ -213,12 +215,13 @@ export async function answerRequest(
             app,
             asked,
             refuse(400, 'The address is not a valid path.'),
+            request,
         )
 
     const { found, allowed } = routed(app, parts, request)
     if (found === undefined) {
         if (allowed !== undefined)
-            return methodRefused(app, asked, [...allowed], request)
+            return methodRefused(app, asked, [...allowed], request, laneFailure)
         // 38.21. The client router leaves an unmatched address to the document (30.10), so this
         // is where that address arrives. An app answering one itself does it in a root rung (37.3),
         // which ran before this.
@@ -402,7 +405,7 @@ async function answerMatched(
             app.explained !== undefined
         )
             return app.explained(thrown)
-        return answerFailure(app, asked, failure)
+        return answerFailure(app, asked, failure, request)
     }
     // 21.10, 22.9 — WHAT WAS WRITTEN THROUGH `response` BEFORE THE HEAD WENT OUT: a `middleware`
     // rung's, and the page's own setup's, the head going out with the built page.
@@ -477,20 +480,17 @@ const READS = ['GET', 'HEAD']
 /**
  * 15.17 — a 405, naming what is answered at `pathname`.
  *
- * `request` where a route's methods were asked, which 15.22 answers in the asker's lane; a public
- * file and the bundle are a document's alone.
+ * Painted as a document by default — a public file and the bundle are a document's alone — and by
+ * `laneFailure` where a route's methods were asked, which 15.22 answers in the asker's lane.
  */
 async function methodRefused(
     app: AppSources,
     pathname: string,
     allowed: string[],
-    request?: Request,
+    request: Request,
+    paint: typeof laneFailure = answerFailure,
 ): Promise<Response> {
-    const failure = refuse(405)
-    const answer =
-        request === undefined
-            ? await answerFailure(app, pathname, failure)
-            : await laneFailure(app, pathname, failure, request)
+    const answer = await paint(app, pathname, refuse(405), request)
     answer.headers.set('allow', allowed.join(', '))
     return answer
 }

@@ -332,9 +332,9 @@ async function navigated(
     pages: ErrorPages,
 ): Promise<Response> {
     if (!outcome.settled)
-        return answerFailure(pages, pathname, failureOf(outcome.error))
+        return answerFailure(pages, pathname, failureOf(outcome.error), request)
     if (isFailed(outcome.value))
-        return answerFailure(pages, pathname, outcome.value)
+        return answerFailure(pages, pathname, outcome.value, request)
     const headers = new Headers({ 'cache-control': 'private, no-store' })
     const written = currentRequestScope()?.response
     const status = written?.status ?? 200

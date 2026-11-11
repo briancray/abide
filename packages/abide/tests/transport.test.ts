@@ -352,11 +352,22 @@ test('a framing fixed by a helper is kept whatever Accept asks — 17.6, 17.7', 
     expect(await answer.text()).toBe(':\n\ndata: 1\n\ndata: 2\n\n')
 })
 
-// 17.2, 17.3 — `page` names a document and `redirect` a status and an address.
-test('page answers a document and redirect a navigation — 17.2, 17.3', async () => {
-    const doc = await Bun.fetch(`${base}${RPC}/doc`)
+// 17.2, 17.3 — `page` names a document and `redirect` a status and an address. 38.29 — the document
+// is in the encoding the request takes, read with `decompress: false` or `Bun.fetch` decodes it
+// either way. THE REVERT: answer `page`'s text as `new Response(value)`; no `content-encoding`.
+test('page answers a document and redirect a navigation — 17.2, 17.3, 38.29', async () => {
+    const doc = await Bun.fetch(`${base}${RPC}/doc`, {
+        headers: { 'accept-encoding': 'gzip' },
+        decompress: false,
+    })
     expect(doc.headers.get('content-type')).toBe('text/html; charset=utf-8')
-    expect(await doc.text()).toBe('<h1>hello</h1>')
+    expect(doc.headers.get('content-encoding')).toBe('gzip')
+    expect(doc.headers.get('vary')).toContain('accept-encoding')
+    expect(
+        new TextDecoder().decode(
+            Bun.gunzipSync(new Uint8Array(await doc.arrayBuffer())),
+        ),
+    ).toBe('<h1>hello</h1>')
     const moved = await Bun.fetch(`${base}${RPC}/moved`, {
         method: 'POST',
         redirect: 'manual',

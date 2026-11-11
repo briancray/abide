@@ -279,6 +279,7 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
                             sources,
                             new URL(request.url).pathname,
                             failure,
+                            request,
                         ),
                     ),
                 ),

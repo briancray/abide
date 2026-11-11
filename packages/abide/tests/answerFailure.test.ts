@@ -48,6 +48,7 @@ test('the page lane escalates past a failing error page to text — 35.2, 35.3',
                 { errors: [broken], errorDocument: '<!doctype html>' },
                 '/missing',
                 refuse(404, 'nothing here'),
+                new Request('http://app.test/missing'),
             ),
     )
     expect(answer.status).toBe(404)
