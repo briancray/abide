@@ -33,7 +33,7 @@ test('unpaired: refused, with a command and a link', async () => {
     expect(refused.status).toBe(409)
     const watching = new AbortController()
     const status = await app.fetch(
-        fromPage('/assistant/bridge', { signal: watching.signal }),
+        fromPage('/__abide/pairing', { signal: watching.signal }),
     )
     const reader = (status.body as ReadableStream<Uint8Array>).getReader()
     const first = new TextDecoder().decode((await reader.read()).value)

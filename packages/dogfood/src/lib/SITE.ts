@@ -465,6 +465,8 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`claudeCode.bridge`',
                         '`BridgeStatus`',
                         '`/__abide/bridge`',
+                        '`/__abide/pairing`',
+                        '`pairing`',
                         '`abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]`',
                         '`abide-bridge install [--claude <path>] [--env NAME=VALUE]… [-- <options>]`',
                         '`abide-bridge uninstall`',

@@ -37,6 +37,8 @@ export const MCP_ADDRESS = `${ABIDE_ADDRESS}/mcp`
 export const HEALTH_ADDRESS = `${ABIDE_ADDRESS}/health`
 /** Where a visitor's Claude Code bridge pairs, and is relayed turns (44.13). */
 export const BRIDGE_ADDRESS = `${ABIDE_ADDRESS}/bridge`
+/** Where a browser's `pairing` reads its own pairing with a bridge, as it changes (44.67). */
+export const PAIRING_ADDRESS = `${ABIDE_ADDRESS}/pairing`
 
 /**
  * The socket the dev reload client holds open.

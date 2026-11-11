@@ -3,7 +3,6 @@ import { url } from '@abide/abide'
 import askAssistantSource from 'crm-09/src/assistant/askAssistant.handler.ts' with { type: 'text' }
 import askClaudeSource from 'crm-09/src/assistant/askClaude.handler.ts' with { type: 'text' }
 import askClaudeCodeSource from 'crm-09/src/assistant/askClaudeCode.handler.ts' with { type: 'text' }
-import bridgeSource from 'crm-09/src/assistant/bridge.handler.ts' with { type: 'text' }
 import exportContactsSource from 'crm-09/src/assistant/exportContacts.handler.ts' with { type: 'text' }
 import AssistantChat from 'crm-09/src/assistant/lib/AssistantChat.abide'
 import assistantChatSource from 'crm-09/src/assistant/lib/AssistantChat.abide' with { type: 'text' }
@@ -230,10 +229,9 @@ import Section from '#src/lib/Section.abide'
             id="crm-09-claude-code"
             app="crm-09"
             title="`claudeCode(config)` — a turn on the reader's own Claude Code"
-            summary="The assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; connect, run the command in a terminal or open the link, and ask again."
+            summary="The assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; pair with a click or run the command in a terminal, and ask again."
             files={{
                 'src/assistant/lib/ClaudeCodeBridge.abide': claudeCodeBridgeSource,
-                'src/assistant/bridge.handler.ts': bridgeSource,
                 'src/assistant/askClaudeCode.handler.ts': askClaudeCodeSource,
                 'src/assistant/lib/ClaudeCodeBridge.test.ts': claudeCodeBridgeTestSource,
             }}
@@ -291,6 +289,17 @@ import Section from '#src/lib/Section.abide'
 
         <Code code={`bunx @abide/bridge install`} />
 
+        <p><code>pairing()</code> is that click, and the page needs no handler of its own for it.
+            It reads this browser's statuses from <code>/__abide/pairing</code>, which abide mounts
+            and keeps off MCP and OpenAPI, and hands back <code>status</code>, the latest one.
+            <code>start</code> opens its link. A browser cannot tell whether a link opened anything,
+            but the app opening it blurs the page, so a click that blurs nothing and pairs nothing
+            within 2.5 seconds sets <code>step</code> to <code>install</code>.
+            <code>copyInstall</code> copies the install command and holds <code>copied</code> for a
+            moment. Pass <code>tools</code> to <code>pairing</code> to grant them, as with
+            <code>claudeCode.bridge</code>. Unmounting the component stops the read and the
+            timers.</p>
+
         <p>That registers a handler for the scheme under the visitor's own home: a small app in
             Application Support on macOS, a desktop entry on Linux, the visitor's own registry
             classes on Windows. <code>abide-bridge install</code> takes the same
@@ -322,6 +331,8 @@ import Section from '#src/lib/Section.abide'
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
+                <tr><td><code>pairing</code></td><td>This browser's pairing in a page: <code>status</code>, <code>step</code> and <code>copied</code>, with <code>start</code> to pair with a click and <code>copyInstall</code> to copy the install command.</td></tr>
+                <tr><td><code>/__abide/pairing</code></td><td>Where <code>pairing</code> reads this browser's statuses. On no generated surface.</td></tr>
                 <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
                 <tr><td><code>claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>

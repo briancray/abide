@@ -30,6 +30,7 @@ import { answerFailure, laneFailure } from './answerFailure.ts'
 import { answerRpc } from './answerRpc.ts'
 import { answerBlobTagged, answerValue } from './answerValue.ts'
 import { answerBridge } from './bridgeRelay.ts'
+import { PAIRING_MOUNT } from './claudeCode.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { answerMcp, openApi } from './generatedSurfaces.ts'
@@ -163,8 +164,9 @@ export async function answerRequest(
     const asked = url.pathname
     const method = request.method === 'HEAD' ? 'GET' : request.method
 
-    // 25.1, 25.3, 26.17 — the principal and the account of the app are handlers abide mounts,
-    // answered as the app's are — 21.4, save that neither is the app's to keep on the device.
+    // 25.1, 25.3, 26.17, 44.67 — the principal, the account of the app and the browser's pairing are
+    // handlers abide mounts, answered as the app's are — 21.4, save that none is the app's to keep on
+    // the device.
     const own = OWN_HANDLERS.get(asked)
     if (own !== undefined)
         return own.method === method
@@ -414,9 +416,10 @@ async function answerMatched(
 // 25.3 — `health` IS A `GET` LIKE ANY OTHER, as the principal's document is: a render's call is left
 // in the seed buffer and started from the head, and the browser's own call takes that answer.
 
-// 25.1, 26.17 — THE HANDLERS ABIDE MOUNTS ITSELF, answered as the app's are.
+// 25.1, 26.17, 44.67 — THE HANDLERS ABIDE MOUNTS ITSELF, answered as the app's are.
 const OWN_HANDLERS = new Map([
     PRINCIPAL_MOUNT,
+    PAIRING_MOUNT,
     mountedOwn(HEALTH_ADDRESS, 'health', health),
 ])
 

@@ -64,6 +64,8 @@ export { outbox, type QueuedCall } from './outbox.ts'
 // 37.16 — the browser's `onError`. `@abide/abide/server` exports the server's over it.
 export { onError } from './onError.ts'
 export { onMenu } from './onMenu.ts'
+// 44.70 — this browser's pairing with a Claude Code bridge, and the click that pairs one.
+export { pairing } from './pairing.ts'
 // 37.22 — the browser's `onRefusal`, which has no server's.
 export { onRefusal } from './onRefusal.ts'
 export { type Principal, principal } from './principal.ts'

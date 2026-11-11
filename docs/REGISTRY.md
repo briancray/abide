@@ -391,6 +391,13 @@ type Reached = { readonly [REACHED]: true }
 | `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40, 44.59, 44.60 |
 | `BridgeStatus` | `{ paired: boolean; missing: string[]; command: string; link: string; install: string }` | Whether a bridge is paired, the tools it cannot make available, and the command and the link that pair one, with the command that installs what opens the link. | 44.20, 44.40, 44.56, 44.59, 44.60 |
 | `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 16.57, 16.78 |
+| `/__abide/pairing` | `GET` | This browser's pairing, as it changes, for `pairing` to read. | 44.67, 44.68, 44.69 |
+
+## `pairing`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `pairing` | `(options?: { tools?: string[] }) => { status: Reactive<BridgeStatus \| undefined>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; copyInstall: () => Promise<void> }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.70, 44.71, 44.72, 44.73, 44.74 |
 
 # Ambient values
 
