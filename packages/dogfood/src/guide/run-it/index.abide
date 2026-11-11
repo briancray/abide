@@ -1,6 +1,8 @@
 <script>
 import { url } from '@abide/abide'
 import envSource from 'crm-08/.env' with { type: 'text' }
+import getDealScoresSource from 'crm-08/src/ops/getDealScores.handler.ts' with { type: 'text' }
+import getFollowUpsSource from 'crm-08/src/ops/getFollowUps.handler.ts' with { type: 'text' }
 import getPoolSource from 'crm-08/src/ops/getPool.handler.ts' with { type: 'text' }
 import getRetriesSource from 'crm-08/src/ops/getRetries.handler.ts' with { type: 'text' }
 import opsPageSource from 'crm-08/src/ops/index.abide' with { type: 'text' }
@@ -11,6 +13,14 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
 import Console from 'crm-08/src/ops/lib/Console.abide'
 import consoleSource from 'crm-08/src/ops/lib/Console.abide' with { type: 'text' }
 import consoleTestSource from 'crm-08/src/ops/lib/Console.test.ts' with { type: 'text' }
+import DealScores from 'crm-08/src/ops/lib/DealScores.abide'
+import dealScoresSource from 'crm-08/src/ops/lib/DealScores.abide' with { type: 'text' }
+import dealScoresTestSource from 'crm-08/src/ops/lib/DealScores.test.ts' with { type: 'text' }
+import dealScoresValueSource from 'crm-08/src/ops/lib/dealScores.ts' with { type: 'text' }
+import FollowUps from 'crm-08/src/ops/lib/FollowUps.abide'
+import followUpsSource from 'crm-08/src/ops/lib/FollowUps.abide' with { type: 'text' }
+import followUpsTestSource from 'crm-08/src/ops/lib/FollowUps.test.ts' with { type: 'text' }
+import followUpsJobSource from 'crm-08/src/ops/lib/followUps.ts' with { type: 'text' }
 import Health from 'crm-08/src/ops/lib/Health.abide'
 import healthSource from 'crm-08/src/ops/lib/Health.abide' with { type: 'text' }
 import healthTestSource from 'crm-08/src/ops/lib/Health.test.ts' with { type: 'text' }
@@ -23,6 +33,7 @@ import poolTestSource from 'crm-08/src/ops/lib/Pool.test.ts' with { type: 'text'
 import Retries from 'crm-08/src/ops/lib/Retries.abide'
 import retriesSource from 'crm-08/src/ops/lib/Retries.abide' with { type: 'text' }
 import retriesTestSource from 'crm-08/src/ops/lib/Retries.test.ts' with { type: 'text' }
+import scoreWorkerSource from 'crm-08/src/ops/lib/scoreWorker.ts' with { type: 'text' }
 import Sync from 'crm-08/src/ops/lib/Sync.abide'
 import syncSource from 'crm-08/src/ops/lib/Sync.abide' with { type: 'text' }
 import syncTestSource from 'crm-08/src/ops/lib/Sync.test.ts' with { type: 'text' }
@@ -132,6 +143,72 @@ import Snippet from '#src/lib/Snippet.abide'
         <p>A hook is called in a page, a layout or a handler file, and returns a function that
             removes it. The ones for the whole app go in <code>src/layout.abide</code>, the root layout,
             whose server block the scaffold already starts with an <code>onStart</code>.</p>
+    </Section>
+
+    <Section title="Background work is a value on a clock">
+        <Example
+            id="crm-08-job"
+            app="crm-08"
+            title={'`reactive(async function* () { … }, { global: true, poll })` — a job'}
+            summary="Every five minutes the CRM walks the leads and lists the ones still waiting on a follow-up. The list is here before anyone asks for it."
+            files={{
+                'src/ops/lib/FollowUps.abide': followUpsSource,
+                'src/ops/lib/followUps.ts': followUpsJobSource,
+                'src/ops/getFollowUps.handler.ts': getFollowUpsSource,
+                'src/ops/lib/FollowUps.test.ts': followUpsTestSource,
+            }}
+        >
+            <FollowUps />
+        </Example>
+
+        <p>A job is a reactive value: a body, <code>global</code> so the process has one of it, and a
+            <code>poll</code> for the clock. It starts when the module loads, whether or not anything
+            reads it, and the value holds each lead it has yielded. Nothing else
+            schedules it, so there is no <code>setInterval</code> in <code>onStart</code> to
+            remember and no <code>clearInterval</code> in <code>onStop</code>.</p>
+
+        <p>One run happens at a time: the clock skips a tick while <code>followUps.busy()</code>
+            is true. <code>followUps.refresh()</code> runs it now. A run that throws is written to
+            <code>abide:reactive</code> under the value's name, and the next tick runs it again.
+            The app's stop ends the clock and waits for the run in flight before
+            <code>onStop</code>, inside the same <code>ABIDE_STOP_TIMEOUT</code> as the requests.</p>
+    </Section>
+
+    <Section title="Heavy work runs in a worker thread">
+        <Example
+            id="crm-08-worker"
+            app="crm-08"
+            title={'`new Worker(url)` behind `reactive(async function* () { … })` — work off the main thread'}
+            summary="Scoring every deal takes long enough to stall every request the server is answering. It runs in a worker, and the scores arrive one deal at a time."
+            files={{
+                'src/ops/lib/DealScores.abide': dealScoresSource,
+                'src/ops/lib/dealScores.ts': dealScoresValueSource,
+                'src/ops/lib/scoreWorker.ts': scoreWorkerSource,
+                'src/ops/getDealScores.handler.ts': getDealScoresSource,
+                'src/ops/lib/DealScores.test.ts': dealScoresTestSource,
+            }}
+        >
+            <DealScores />
+        </Example>
+
+        <p>A loop that runs for seconds holds the server's one thread, and no request is answered
+            until it ends. A Bun <code>Worker</code> runs it on a thread of its own. The generator
+            wrapping it is an ordinary reactive value: <code>busy()</code> while the worker scores,
+            a score per message, and a throw in the worker refuses the value. The test answers a
+            request while the scores are still coming, which the same loop run inline cannot do.</p>
+
+        <p>This is a plain Bun <code>Worker</code>, and abide does not manage it. You own its
+            lifetime:</p>
+
+        <table>
+            <thead><tr><th>Yours to decide</th><th>What this card does</th></tr></thead>
+            <tbody>
+                <tr><td>how many workers</td><td>one per run, ended in the generator's <code>finally</code>, which also runs when a <code>refresh()</code> discards the run in flight</td></tr>
+                <tr><td>whether it keeps the process up</td><td><code>{'{ ref: false }'}</code>, so a run in flight never keeps the process alive</td></tr>
+                <tr><td>what happens at stop</td><td>nothing: the app does not wait for a run or end the worker. To finish one first, <code>await dealScores</code> in your <code>onStop</code></td></tr>
+                <tr><td>what it can read</td><td>only what it is sent. A worker loads its own copy of every module, so the deals go in by <code>postMessage</code></td></tr>
+            </tbody>
+        </table>
     </Section>
 
     <Section title="Log namespaces are turned on one at a time">

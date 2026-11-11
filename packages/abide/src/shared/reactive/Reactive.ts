@@ -40,7 +40,12 @@ import { isThenable } from './isThenable.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
 import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
-import { ownedPoll, refreshIdle, refuseBadPoll } from './poll.ts'
+import {
+    markPolled,
+    ownedPoll,
+    refuseBadPoll,
+    warnPolledFailure,
+} from './poll.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
 import { runInScope } from './scoping.ts'
@@ -1398,6 +1403,7 @@ function standWrite(cell: Cell, stream: Stream, value: unknown): number {
 function refused(cell: Cell, failure: unknown): unknown {
     cell.loading = false
     cell.failure = failure
+    warnPolledFailure(cell, cell.label, failure)
     // BOTH PROBES MOVED AND NEITHER IS ON THE VALUE EDGE: `busy` went false where the load
     // had set it true, and `error` went from nothing to this. A guard that asked about
     // either is woken here or never.
@@ -4137,6 +4143,12 @@ export function createReactive<
         options as ReactiveOptions<unknown, unknown, never> | undefined,
         streaming,
     )
+    // 7.25 AT CONSTRUCTION, and 7.28's mark ahead of the first run, which can fail where it starts.
+    const poll = options?.poll
+    if (poll !== undefined) {
+        refuseBadPoll(label, poll)
+        markPolled(cell)
+    }
     // THE READ IS THE CALLABLE'S OWN BODY, not a call it makes. It stood as
     // `return read(self)` and that was a second frame on the hottest path in the design —
     // a template pays it per slot per row, and a recompute pays it once per source it
@@ -4197,15 +4209,10 @@ export function createReactive<
     } else if (deferred) cell.loading = true
     else startProducer(cell)
     if (rewinds) rewindOnTtl(self, initial, snapshot, ttl)
-    // 7.20, 7.23, 7.24 — a `Keyed` takes `poll` off its entries' options and polls them itself.
-    const poll = options?.poll
-    if (poll !== undefined) {
-        refuseBadPoll(label, poll)
-        if (reloads(cell)) {
-            ownedPoll(poll, () =>
-                refreshIdle(self as unknown as Reactive<unknown>),
-            )
-        }
+    // 7.20, 7.23, 7.24 — a keyed entry is polled by its `Keyed`, one timer over every entry.
+    if (poll !== undefined && !cached && reloads(cell)) {
+        const polled = [self as unknown as Reactive<unknown>]
+        ownedPoll(poll, () => polled)
     }
     return self as unknown as Reactive<Stored, Accepted, Failures, Produced>
 }
