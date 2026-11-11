@@ -284,7 +284,8 @@ two is a comparator answering directly.
 
 5.11 An implementation MUST NOT start work a window would discard.
 
-5.12 `throttle` MUST allow a change immediately and then at most once per window.
+5.12 `throttle` MUST allow a change immediately and then at most once per window. A window of
+`Infinity` stands open for good: the first change is allowed and no other.
 
 5.13 `debounce` MUST delay a change until the changes stop.
 

@@ -18,7 +18,7 @@ import {
 } from './argsContract.ts'
 import { CELL } from './CELL.ts'
 import { type Callable, type Cell, refuseBothCaps } from './cellShape.ts'
-import { armTimer } from './Expiry.ts'
+import { armTimer, armWindow } from './Expiry.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
@@ -265,7 +265,7 @@ class StartWindow {
 
     open(): void {
         if (this.timer !== null) clearTimeout(this.timer)
-        armTimer(this, this.ms, () => {
+        armWindow(this, this.ms, () => {
             this.timer = null
             const held = this.pending
             if (held === null) return

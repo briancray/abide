@@ -113,3 +113,22 @@ export function armTimer(
     unrefTimer(timer)
     expiry.timer = timer
 }
+
+const OPEN_FOR_GOOD = -1 as unknown as ReturnType<typeof setTimeout>
+
+/**
+ * Arms a debounce or throttle window of `ms` on the holder's one timer.
+ *
+ * 5.12: A WINDOW OF `Infinity` STANDS OPEN FOR GOOD. `armTimer` arms nothing for it, and a throttle
+ * reads its window as open while the holder's timer is set — so the timer is set to a handle no
+ * `setTimeout` returns, which `clearTimeout` ignores, and the first change is the only one through.
+ * A debounce reads no timer, so the same handle leaves it holding forever (5.13).
+ */
+export function armWindow(
+    holder: { timer: ReturnType<typeof setTimeout> | null },
+    ms: number,
+    fire: () => void,
+): void {
+    armTimer(holder, ms, fire)
+    if (ms === Number.POSITIVE_INFINITY) holder.timer = OPEN_FOR_GOOD
+}

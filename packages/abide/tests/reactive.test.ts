@@ -2406,6 +2406,17 @@ test('a throttle lets the leading change through and holds the rest', () => {
     woken.stop()
 })
 
+// 5.12: A WINDOW OF `Infinity` STANDS OPEN FOR GOOD — the first change through and no other, as a
+// debounce of `Infinity` holds forever (5.13). THE REVERT: `armWindow` leaving the timer `null` for
+// `Infinity` reads 3 — every set leads, because no window ever reads as open.
+test('a throttle of Infinity lets the first change through and no other', () => {
+    const query = reactive(0, { throttle: Number.POSITIVE_INFINITY })
+    query.set(1)
+    query.set(2)
+    query.set(3)
+    expect(query()).toBe(1)
+})
+
 // 5.12 FROM A VALUE BUILT WITH ONE: the value it is constructed with is a landing, not a change, so
 // it opens no window and the first `set` after it is the leading change. A guard that sets a
 // throttled flag and reads it back in the same turn reads what it set.

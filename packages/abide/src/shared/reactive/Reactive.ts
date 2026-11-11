@@ -34,7 +34,7 @@ import {
     type Stream,
 } from './cellShape.ts'
 import { CAUGHT_UP, Cursor, hasCursorBehind, keepPlaces } from './Cursor.ts'
-import { armTimer, type Expiry } from './Expiry.ts'
+import { armTimer, armWindow, type Expiry } from './Expiry.ts'
 import { isReactive } from './isReactive.ts'
 import { isThenable } from './isThenable.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
@@ -1205,8 +1205,8 @@ function openWindow(cell: Cell, cap: Cap): void {
     // reads identically to a debounce under any run of writes made in one turn.
     if (cap.timer !== null) clearTimeout(cap.timer)
     // `armTimer` for 6.4's reason, which a window shares with a deadline: a timer never holds the
-    // process open. The keyed window already armed through it, so the two agree.
-    armTimer(cap, cap.ms, () => {
+    // process open. The keyed window arms through the same `armWindow`, so the two agree.
+    armWindow(cap, cap.ms, () => {
         cap.timer = null
         // 5.24: the reload the window held back, which is the run as well. A production held beside
         // it is served first — the reload re-reads a store that production has not been written to
