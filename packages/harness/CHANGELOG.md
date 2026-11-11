@@ -1,5 +1,46 @@
 # @abide/harness
 
+## 0.4.1
+
+### Patch Changes
+
+- 068afc4: injectables built in memory, one reactive run, packDocs serves through serveDocsApp ([`289bfa2`](https://github.com/briancray/abide/commit/289bfa263bd2e979c637b36e97ff3937404768eb))
+- 068afc4: one report build, one reactive format, shared row types ([`7d9b23a`](https://github.com/briancray/abide/commit/7d9b23ab3c2d6403c8ce8352439afce77a5e7987))
+- 068afc4: drop the withdrawn `within`, one DOM setup for the bun-side counts, comments that state mechanism only ([`cb36d99`](https://github.com/briancray/abide/commit/cb36d99026346fbc5660bc33344f085b08e4bca5))
+- 068afc4: drop the preload's happy-dom settings v21 makes inert — 43.35 ([`d668293`](https://github.com/briancray/abide/commit/d668293527d035181af802af701eecd98ebc5464))
+- bf7c772: `abide scaffold` writes `tailwindcss` `^4.3.5`, and the harness's DOM preload registers happy-dom 21 — which fetches no stylesheet a parsed document names by default, so the preload no longer sets the deprecated `disableCSSFileLoading`.
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [068afc4]
+- Updated dependencies [bf7c772]
+- Updated dependencies [e32d563]
+- Updated dependencies [c4ab17e]
+- Updated dependencies [43ece1a]
+- Updated dependencies [7e33ff2]
+- Updated dependencies [b591e8b]
+- Updated dependencies [444dedc]
+- Updated dependencies [afad9a9]
+  - @abide/abide@0.127.0
+
 ## 0.4.0
 
 ### Minor Changes
