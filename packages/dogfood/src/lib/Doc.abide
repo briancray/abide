@@ -3,27 +3,45 @@
 // the pages either side, and the rail — the page's own headings, and its two markdown downloads.
 //
 // WHICH PAGE COMES FROM THE ROUTE, so a page names nothing about itself: its words are `SITE`'s,
-// keyed by where it is served.
+// keyed by where it is served. A document — a page read off a file in `docs/` — is not in `SITE`,
+// so it hands over its own words as `documentPage`, and has no neighbors to thread to and no markdown twin.
 //
 // THE SCROLL SPY IS THE RAIL'S, bound to it rather than to `main`: on a page the reader navigated
 // to, `main` is built before the rail, and a spy installed then finds no links to mark.
-import { raw, reactive, route, type RouteLiteral, url } from '@abide/abide'
+import {
+    props,
+    raw,
+    reactive,
+    route,
+    type RouteLiteral,
+    url,
+} from '@abide/abide'
 
 import { inline } from './inline.ts'
 import { installDocs } from './installDocs.ts'
+import type { SitePage } from './SITE.ts'
 import { markdownAddressOf, neighborsOf, pageAt } from './sitePages.ts'
 
-const page = pageAt(route.name())
-const { previous, next } = neighborsOf(page.route)
+const { documentPage } = props<{ documentPage?: SitePage }>()
+const page = documentPage ?? pageAt(route.name())
+const { previous, next } =
+    documentPage === undefined
+        ? neighborsOf(page.route)
+        : { previous: undefined, next: undefined }
 const plain = page.title.replaceAll('`', '')
-const markdown = url(markdownAddressOf(page.route) as RouteLiteral)
+const markdown =
+    documentPage === undefined
+        ? url(markdownAddressOf(page.route) as RouteLiteral)
+        : undefined
 
 const headings = reactive.share('docHeadings', () => reactive([]))
 </script>
 
 <head>
     <title>{plain} — abide</title>
-    <link rel="alternate" type="text/markdown" href={markdown} title="{plain} as Markdown">
+    {#if markdown}
+        <link rel="alternate" type="text/markdown" href={markdown} title="{plain} as Markdown">
+    {/if}
 </head>
 
 <main id="content">
@@ -37,17 +55,21 @@ const headings = reactive.share('docHeadings', () => reactive([]))
         {/if}
     </header>
     <div class="flow">
-        <p>{raw(inline(page.lead))}</p>
+        {#if page.lead}
+            <p>{raw(inline(page.lead))}</p>
+        {/if}
         <slot />
     </div>
-    <footer>
-        {#if previous}
-            <a href={url(previous.route as RouteLiteral)}>&larr; {raw(inline(previous.nav))}</a>
-        {/if}
-        {#if next}
-            <a class="next" href={url(next.route as RouteLiteral)}>{raw(inline(next.nav))} &rarr;</a>
-        {/if}
-    </footer>
+    {#if previous || next}
+        <footer>
+            {#if previous}
+                <a href={url(previous.route as RouteLiteral)}>&larr; {raw(inline(previous.nav))}</a>
+            {/if}
+            {#if next}
+                <a class="next" href={url(next.route as RouteLiteral)}>{raw(inline(next.nav))} &rarr;</a>
+            {/if}
+        </footer>
+    {/if}
 </main>
 <aside class="toc" bind:element={installDocs}>
     {#if headings.length > 1}
@@ -60,11 +82,13 @@ const headings = reactive.share('docHeadings', () => reactive([]))
             </ul>
         </section>
     {/if}
-    <section>
-        <h2 id="md-title">Markdown</h2>
-        <ul class="downloads" aria-labelledby="md-title">
-            <li><a href={markdown} download>Download this page</a></li>
-            <li><a href={url('/abide.md' as RouteLiteral)} download>Download full docs</a></li>
-        </ul>
-    </section>
+    {#if markdown}
+        <section>
+            <h2 id="md-title">Markdown</h2>
+            <ul class="downloads" aria-labelledby="md-title">
+                <li><a href={markdown} download>Download this page</a></li>
+                <li><a href={url('/abide.md' as RouteLiteral)} download>Download full docs</a></li>
+            </ul>
+        </section>
+    {/if}
 </aside>

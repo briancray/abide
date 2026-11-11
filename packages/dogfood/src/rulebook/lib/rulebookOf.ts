@@ -1,4 +1,5 @@
 import { cellsOf } from '#src/lib/cellsOf.ts'
+import type { Heading } from '#src/lib/Heading.ts'
 import { inline, slugify } from '#src/lib/inline.ts'
 
 import { CLAUSE } from './CLAUSE.ts'
@@ -39,13 +40,13 @@ function orderedList(paragraph: string): string {
     return `<ol>${items}</ol>`
 }
 
-/** The rulebook's opening line, its body, and every heading the rail lists — all as HTML. */
+/** The rulebook's opening line and every heading the rail lists, as `Doc` inlines them, and its body as HTML. */
 export function rulebookOf(markdown: string): {
     summary: string
     html: string
-    headings: { id: string; title: string }[]
+    headings: Heading[]
 } {
-    const headings: { id: string; title: string }[] = []
+    const headings: Heading[] = []
     let summary = ''
     let html = ''
     // A heading is a block of its own even where no blank line sets it off, as markdown reads it.
@@ -62,13 +63,13 @@ export function rulebookOf(markdown: string): {
         if (group) {
             const id = group[1] ?? ''
             const title = `${id}. ${group[2] ?? ''}`
-            headings.push({ id, title: inline(title) })
+            headings.push({ id, title, level: 2 })
             html += `<h2 class="mt-9" id="${id}">${inline(title)}</h2>`
             continue
         }
         if (paragraph.startsWith('## ')) {
             const title = paragraph.slice(3)
-            headings.push({ id: slugify(title), title: inline(title) })
+            headings.push({ id: slugify(title), title, level: 2 })
             html += `<h2 id="${slugify(title)}">${inline(title)}</h2>`
             continue
         }
@@ -80,9 +81,9 @@ export function rulebookOf(markdown: string): {
             html += orderedList(paragraph)
             continue
         }
-        const text = inline(paragraph.replace(/\n/g, ' '))
+        const text = paragraph.replace(/\n/g, ' ')
         if (summary === '') summary = text
-        else html += `<p>${text}</p>`
+        else html += `<p>${inline(text)}</p>`
     }
     return { summary, html, headings }
 }
