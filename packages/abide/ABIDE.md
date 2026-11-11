@@ -125,10 +125,9 @@ affected code saying what it did, and tell the user.
   reads `.env.test`, so a test's database or data directory is a line in `.env.test`, not a check in
   the app's code.
 - Model output, markdown and fetched HTML are untrusted. Never hand them to `raw()` (RULEBOOK 32.2)
-  unsanitized. Render markdown on the server — a component in the browser calls a private `POST` in
-  its `<script server>` for it. `Bun.markdown.html(text, { noHtmlBlocks: true, noHtmlSpans: true })`
-  escapes HTML but keeps a `javascript:` URL, so pass its output through `HTMLRewriter` and drop any
-  `href` that is not `http:`, `https:` or `mailto:`, and any `src` that is not `http:` or `https:`.
+  unsanitized. Markdown can carry raw HTML and a link to a `javascript:` URL, and either runs script
+  in the page with the reader's session. On the server, `Bun.markdown.html(text, { noHtmlBlocks:
+  true, noHtmlSpans: true })` escapes the HTML but keeps the `javascript:` link.
 
 ## Measuring
 
