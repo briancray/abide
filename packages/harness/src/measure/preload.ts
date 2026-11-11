@@ -39,13 +39,12 @@ const native: Record<string, unknown> = {}
 for (const name of WIRE) native[name] = globalThis[name]
 // 43.35 — a document a test parses names its stylesheets and scripts, and a DOM that fetched them
 // would fetch them from a host nothing answers, in whichever test file happened to parse one.
+// happy-dom fetches neither unless told to — a stylesheet needs `enableCSSFileLoading`, a script
+// `enableJavaScriptEvaluation` — so what is set here is that a load it skipped fires `load`, as a
+// fetched one would, rather than `error` and a logged `NotSupportedError`.
 GlobalRegistrator.register({
     url: 'http://localhost/',
-    settings: {
-        disableCSSFileLoading: true,
-        disableJavaScriptFileLoading: true,
-        handleDisabledFileLoadingAsSuccess: true,
-    },
+    settings: { handleDisabledFileLoadingAsSuccess: true },
 })
 for (const name of WIRE) Object.assign(globalThis, { [name]: native[name] })
 install()
