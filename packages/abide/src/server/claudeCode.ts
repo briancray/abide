@@ -9,20 +9,26 @@
 // the visitor's own MCP servers, are a request the visitor grants or does not: the bridge decides
 // (44.15, 44.16, 44.29).
 
+export type { BridgeStatus } from '#shared/BridgeStatus.ts'
+
+import { PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
 import type {
     AssistantContent,
     AssistantMessage,
 } from '#shared/AssistantEvent.ts'
 import { BRIDGE_SCHEME } from '#shared/BRIDGE_SCHEME.ts'
+import type { BridgeStatus } from '#shared/BridgeStatus.ts'
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
+import { declare } from '#shared/rpc.ts'
 
 import { blocksOf, forwardOf, type Provider } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import { mintCode, pairingStatus, runTurn } from './bridgeRelay.ts'
 import { callerOf } from './callerOf.ts'
-import { ownOrigin } from './config.ts'
+import { config, ownOrigin } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
+import { mountedOwn } from './mountHandlers.ts'
 import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
 
@@ -44,19 +50,6 @@ export type ClaudeCodeConfig = {
 
 /** The tools a pairing command grants, as the visitor would after its `--`. 44.32. */
 type PairingOptions = Pick<ClaudeCodeConfig, 'tools'>
-
-/**
- * Whether this browser's bridge is connected, the tools it asked for that the bridge cannot give, and
- * the command and the link that pair one — in place of the one connected, where one is — with the
- * command that installs what opens the link.
- */
-export type BridgeStatus = {
-    paired: boolean
-    missing: string[]
-    command: string
-    link: string
-    install: string
-}
 
 /** The visitor's own Claude Code, reached through the bridge paired to their browser. */
 function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
@@ -181,3 +174,31 @@ export const claudeCode: typeof claudeCodeProvider & {
     bridge: typeof bridge
     bridgeCommand: typeof bridgeCommand
 } = Object.assign(claudeCodeProvider, { bridge, bridgeCommand })
+
+// 44.67 — THE PAIRING A BROWSER'S `pairing` READS, as a handler abide mounts rather than one each app
+// writes: `claudeCode.bridge` for the asking browser, granting the tools `ABIDE_BRIDGE_TOOLS` names.
+// 44.75 — THE SERVER DECIDES THEM: the parameter is declared only so the value is keyed and the call
+// runs it (1.7, as `health`'s is), and whatever a request names in it is never read. 44.68 — on no
+// generated surface. 44.69 — a pairing idles for minutes, so it is exempt from `ABIDE_RPC_TIMEOUT`
+// as the handler an app wrote would have to be.
+const pairingHandler = declare('GET')(
+    (_none: undefined) => {
+        const tools = config.peek()?.ABIDE_BRIDGE_TOOLS
+        return bridge(
+            typeof tools === 'string' && tools !== ''
+                ? { tools: tools.split(',') }
+                : {},
+        )
+    },
+    {
+        timeout: Infinity,
+        clients: { ui: false, mcp: false, cli: false, openapi: false },
+    },
+)
+
+/** The handler `/__abide/pairing` is answered by. */
+export const PAIRING_MOUNT = mountedOwn(
+    PAIRING_ADDRESS,
+    'pairing',
+    pairingHandler,
+)

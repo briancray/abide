@@ -517,6 +517,13 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: true,
     },
     {
+        route: '/reference/pairing',
+        names: ['pairing'],
+        entry: '@abide/abide',
+        group: 'Assistant',
+        typeOnly: false,
+    },
+    {
         route: '/reference/cookies',
         names: ['cookies'],
         entry: '@abide/abide',
