@@ -264,10 +264,16 @@ export class Followers {
      * 13.15 — A SWEEP REACHES EVERY COPY A BROWSER FOLLOWS that carries one of its `tags`, or every
      * copy where it is bare, as that copy's own trigger. A fed copy is skipped for `broadcast`'s
      * reason: the sweep reloaded the entry it is fed from here, and the production that mints is
-     * its refresh.
+     * its refresh. 16.92 — and `except`'s copies are skipped: a handler's `refreshes` is not sent
+     * to the copies following that handler.
      */
-    sweep(member: 'invalidate' | 'refresh', tags: string[] | null): void {
+    sweep(
+        member: 'invalidate' | 'refresh',
+        tags: string[] | null,
+        except?: object,
+    ): void {
         for (const [rpc, handlerFollowers] of this.handlers) {
+            if (rpc === except) continue
             if (tags !== null && !sharesTag(handlerFollowers.tags, tags))
                 continue
             for (const follower of handlerFollowers.all) {

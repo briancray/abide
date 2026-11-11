@@ -535,11 +535,16 @@ export function refresh<Chosen extends Selection>(
     const sweep = sweepOf(selection)
     if (sweep === undefined)
         (selection as { refresh(pattern: unknown): void }).refresh(pattern)
-    else {
-        refreshOver(sweep)
-        for (const followers of RPC_SERVER.following)
-            followers.sweep('refresh', sweep)
-    }
+    else refreshSwept(sweep)
+}
+/**
+ * `refresh` over a set of `tags`, or a bare one where `tags` is `null`: this process's values, and
+ * the copies browsers follow (13.15) save those following `except` (16.92).
+ */
+export function refreshSwept(tags: string[] | null, except?: object): void {
+    refreshOver(tags)
+    for (const followers of RPC_SERVER.following)
+        followers.sweep('refresh', tags, except)
 }
 /** Marks the selection stale: drops the cache behind it, never the value. */
 export function invalidate<Chosen extends Selection>(

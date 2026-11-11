@@ -42,6 +42,7 @@ import {
     type OptionalParameter,
     type Reactive,
     reactive,
+    refreshSwept,
     type Refusals,
     type Shaping,
     STREAMING,
@@ -51,6 +52,7 @@ import { MUTATION } from './reactive/MUTATION.ts'
 import {
     chunksOfStream,
     dropAnswered,
+    isAsyncGenerator,
     streamingOrSettled,
 } from './reactive/producer.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
@@ -234,6 +236,11 @@ export type RpcOptions<
     clients?: Clients
     crossOrigin?: boolean | string[]
     maxBodySize?: number
+    /**
+     * 16.89 — the `tags` a run of the handler `refresh`es once it answers without a refusal, or
+     * what returns them for the call's `Args`, as a value's own `tags` is written.
+     */
+    refreshes?: string[] | ((args: Args) => string[])
 }
 
 /**
@@ -493,32 +500,48 @@ export function declare(method: Method): Declare {
         // stream on as its chunks — a generator, which is not thenable. The value the call reaches
         // resolves to it and is a stream of its own from then (9.6), so a second call joining it
         // (1.8) reads the same accumulation. A refusal a rung answers with is the value's refusal.
+        const center = async (args: unknown): Promise<unknown> => {
+            // 16.7 behind rungs — the handler's spent answer is dropped HERE, once the rungs let
+            // the call through: reading an unkeyed value's cell builds this request's instance,
+            // which starts its body (1.7), and dropped in `call` that ran the body ahead of every
+            // rung (16.11, 16.16).
+            if (cacheOptions !== undefined && !keyed) dropAnswered(value)
+            const reached = reach(args)
+            const started = performance.now()
+            try {
+                const settled = await streamingOrSettled(reached)
+                return settled === STREAMING ? chunksOfStream(reached) : settled
+            } finally {
+                RPC_SERVER.handled?.(rpc, performance.now() - started)
+            }
+        }
         const onion =
             rungs.length === 0
                 ? null
-                : compose(rungs, async (ctx: RpcContext) => {
-                      // 16.7 behind rungs — the handler's spent answer is dropped HERE, once the
-                      // rungs let the call through: reading an unkeyed value's cell builds this
-                      // request's instance, which starts its body (1.7), and dropped in `call` that
-                      // ran the body ahead of every rung (16.11, 16.16).
-                      if (cacheOptions !== undefined && !keyed)
-                          dropAnswered(value)
-                      const reached = reach(argsOf(ctx))
-                      const started = performance.now()
-                      try {
-                          const settled = await streamingOrSettled(reached)
-                          return settled === STREAMING
-                              ? chunksOfStream(reached)
-                              : settled
-                      } finally {
-                          RPC_SERVER.handled?.(rpc, performance.now() - started)
-                      }
-                  })
-        const wrapped =
+                : compose(rungs, async (ctx: RpcContext) => center(argsOf(ctx)))
+        const answer =
             onion === null
+                ? center
+                : (args: unknown): Promise<unknown> => onion(contextOf(args))
+        // 16.89 — `refreshes` IS THE OUTERMOST LAYER, outside every rung, so what any of them
+        // refuses with refreshes nothing; and it is no rung, so a guarded `GET`'s follow (18.8) does
+        // not count it as one.
+        const refreshes = options?.refreshes
+        const wrapped =
+            onion === null && refreshes === undefined
                 ? null
                 : reactive(
-                      (args: unknown) => onion(contextOf(args)),
+                      refreshes === undefined
+                          ? answer
+                          : (args: unknown) =>
+                                answerThenRefresh(answer(args), () =>
+                                    refreshSwept(
+                                        typeof refreshes === 'function'
+                                            ? refreshes(args)
+                                            : refreshes,
+                                        rpc,
+                                    ),
+                                ),
                       cacheOptions,
                   )
         const reachThrough =
@@ -711,4 +734,30 @@ function argsOnce(
         asked = true
         return answer
     }
+}
+
+/**
+ * What a handler's run answered, with its `refreshes` run once it is known not to be a refusal.
+ *
+ * 16.90 — before the answer settles, so nothing the call's caller does next reads from before the
+ * write. 16.91 — a stream's at its close, where the write is whole, and not where it fails: a
+ * failure is thrown out of `yield*` past the refresh.
+ */
+async function answerThenRefresh(
+    answer: Promise<unknown>,
+    refresh: () => void,
+): Promise<unknown> {
+    const answered = await answer
+    if (isFailed(answered)) return answered
+    if (isAsyncGenerator(answered)) return refreshedAtClose(answered, refresh)
+    refresh()
+    return answered
+}
+
+async function* refreshedAtClose(
+    chunks: AsyncGenerator<unknown>,
+    refresh: () => void,
+): AsyncGenerator<unknown> {
+    yield* chunks
+    refresh()
 }

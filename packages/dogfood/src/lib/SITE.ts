@@ -209,6 +209,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`s.refresh`',
                         '`Selection`',
                         '`refresh`',
+                        '`refreshes`',
                         '`invalidate`',
                         '`ttl`',
                         '`poll`',

@@ -1219,6 +1219,19 @@ declare.
 loaded in a process serving the app's compilation, `bun test`'s under `@abide/abide/test` included
 (38.109), whether or not `createApp` has run.
 
+16.89 A handler's `refreshes` MUST `refresh` the `tags` it names, or the `tags` it returns for the
+call's `Args`, as `refresh` over those `tags` does (13.15), once for each run of the handler that
+answers without a refusal, whatever its method, and MUST NOT where the run is answered with a
+refusal, the handler's or a rung's, or with a throw.
+
+16.90 The `refresh` 16.89 states MUST have run before the call's answer settles, and before an
+answer over the wire is sent.
+
+16.91 Where the answer streams, the `refresh` 16.89 states MUST run once the run closes, before its
+last frame is sent, and MUST NOT run where the run ends on a failure.
+
+16.92 The `refresh` 16.89 states MUST NOT be sent to a copy following the handler that declared it.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.

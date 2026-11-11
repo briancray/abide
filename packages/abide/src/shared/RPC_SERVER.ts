@@ -41,9 +41,13 @@ export const RPC_SERVER: {
         ): void
         /**
          * A free trigger, sent to every followed copy carrying one of `tags`, or to every one where
-         * `tags` is `null`. 13.15.
+         * `tags` is `null`, save the copies following `except`. 13.15, 16.92.
          */
-        sweep(member: 'invalidate' | 'refresh', tags: string[] | null): void
+        sweep(
+            member: 'invalidate' | 'refresh',
+            tags: string[] | null,
+            except?: object,
+        ): void
         /**
          * The `global` entry an answer came from, and the key it is filed under (`GLOBAL_GETS`).
          *

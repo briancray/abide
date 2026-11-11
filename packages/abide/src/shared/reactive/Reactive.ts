@@ -346,7 +346,7 @@ const ASYNC_GENERATOR_FUNCTION = Object.getPrototypeOf(async function* () {})
 const ASYNC_GENERATOR = ASYNC_GENERATOR_FUNCTION.prototype
 
 /** Whether a run handed back an async generator, which 9.6 makes the run's stream. */
-function isAsyncGenerator(value: unknown): value is AsyncGenerator {
+export function isAsyncGenerator(value: unknown): value is AsyncGenerator {
     if (typeof value !== 'object' || value === null) return false
     const own = Object.getPrototypeOf(value)
     return own !== null && Object.getPrototypeOf(own) === ASYNC_GENERATOR

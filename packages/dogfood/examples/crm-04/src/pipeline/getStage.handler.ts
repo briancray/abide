@@ -18,5 +18,8 @@ export default GET(
             }
         return { count, value }
     },
-    { description: 'How many deals one stage holds, and their value.' },
+    {
+        description: 'How many deals one stage holds, and their value.',
+        tags: ({ stage }) => [`stage:${stage}`],
+    },
 )

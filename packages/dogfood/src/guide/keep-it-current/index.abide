@@ -20,6 +20,9 @@ import dealSearchTestSource from 'crm-04/src/pipeline/lib/DealSearch.test.ts' wi
 import Forecast from 'crm-04/src/pipeline/lib/Forecast.abide'
 import forecastSource from 'crm-04/src/pipeline/lib/Forecast.abide' with { type: 'text' }
 import forecastTestSource from 'crm-04/src/pipeline/lib/Forecast.test.ts' with { type: 'text' }
+import QualifyBoard from 'crm-04/src/pipeline/lib/QualifyBoard.abide'
+import qualifyBoardSource from 'crm-04/src/pipeline/lib/QualifyBoard.abide' with { type: 'text' }
+import qualifyBoardTestSource from 'crm-04/src/pipeline/lib/QualifyBoard.test.ts' with { type: 'text' }
 import stageAverageSource from 'crm-04/src/pipeline/lib/StageAverage.abide' with { type: 'text' }
 import StageBoard from 'crm-04/src/pipeline/lib/StageBoard.abide'
 import stageBoardSource from 'crm-04/src/pipeline/lib/StageBoard.abide' with { type: 'text' }
@@ -36,6 +39,7 @@ import TeamTarget from 'crm-04/src/pipeline/lib/TeamTarget.abide'
 import teamTargetSource from 'crm-04/src/pipeline/lib/TeamTarget.abide' with { type: 'text' }
 import teamTargetTestSource from 'crm-04/src/pipeline/lib/TeamTarget.test.ts' with { type: 'text' }
 import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
+import qualifyLeadSource from 'crm-04/src/pipeline/qualifyLead.handler.ts' with { type: 'text' }
 import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
 import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
 import setTargetSource from 'crm-04/src/pipeline/setTarget.handler.ts' with { type: 'text' }
@@ -161,6 +165,42 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>refresh</code>, <code>invalidate</code></td><td><code>refresh(getStage)</code> is <code>getStage.refresh()</code>; with no selection they reach every load in this scope</td></tr>
                 <tr><td><code>Selection</code></td><td>a value, a keyed value, a handler, or <code>{'{ tags: [...] }'}</code></td></tr>
                 <tr><td><code>tags</code></td><td><code>{'{ tags: ({ stage }) => [`stage:${stage}`] }'}</code> labels entries, so <code>{"refresh({ tags: ['stage:won'] })"}</code> reaches every value about that stage, whichever handler it came from</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A write names the stages it changes, and every tab reloads them">
+        <Example
+            id="crm-04-refreshes"
+            app="crm-04"
+            title={"`POST(write, { refreshes: ['stage:lead'] })` — reload by tag after a write"}
+            summary="The same board, with a write that says what it changed. Qualify a lead, in two tabs if you have them."
+            files={{
+                'src/pipeline/lib/QualifyBoard.abide': qualifyBoardSource,
+                'src/pipeline/qualifyLead.handler.ts': qualifyLeadSource,
+                'src/pipeline/getStage.handler.ts': getStageSource,
+                'src/pipeline/lib/QualifyBoard.test.ts': qualifyBoardTestSource,
+            }}
+        >
+            <QualifyBoard />
+        </Example>
+
+        <p>The button calls <code>qualifyLead()</code> and nothing after it. The handler lists the
+            tags it changes, and <code>getStage</code> tags each entry with its stage, so the
+            <code>lead</code> and <code>qualified</code> entries reload and the other two do not.
+            The refresh runs on the server, so every tab showing those stages reloads them, not only
+            the one that clicked.</p>
+
+        <p>It runs once the write has answered and before the answer is sent, so the caller's next
+            read is already the reload. A call that is refused, by the handler or by a
+            <code>middleware</code> rung, refreshes nothing, and a streamed answer refreshes when
+            its last chunk is read. Where the tags depend on the call, pass a function of its
+            arguments: <code>{'refreshes: ({ id }) => [`deal:${id}`]'}</code>.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>refreshes</code></td><td>the tags a handler refreshes each time it answers; any method takes it, and a handler's own followers are never sent it</td></tr>
             </tbody>
         </table>
     </Section>

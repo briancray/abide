@@ -79,6 +79,10 @@ export const recatalog = POST(() => {
     refresh({ tags: ['catalog'] })
 })
 
+export const reshelve = POST(() => 'shelved', { refreshes: ['library'] })
+
+export const browsed = GET(() => ({ at: Date.now() }), { tags: ['library'], refreshes: ['library'] })
+
 export const rescan = POST(({ refresh: reload, bare }: { refresh?: boolean; bare?: boolean }) => {
     const selection = bare ? undefined : { tags: ['library'] }
     if (reload) refresh(selection)
@@ -505,6 +509,34 @@ await post('recatalog', {})
 await until((frames) => frames.length > 0)
 `)
     expect(ops(frames)).toEqual(['value'])
+})
+
+// 16.89 — A HANDLER'S `refreshes` REACHES EVERY BROWSER FOLLOWING A COPY CARRYING ONE OF ITS TAGS,
+// as `refresh` over those tags would (13.15). THE REVERT: drop the walk of `RPC_SERVER.following` from
+// `refreshSwept`; the browser is sent 0 frames where 1 is due.
+test('a mutation declaring refreshes sends its tags a refresh — 16.89', async () => {
+    const frames =
+        await client(`send({ op: 'sub', id: 1, address: '/library/shows' })
+await settled()
+await post('reshelve', {})
+await until((frames) => frames.length > 0)
+`)
+    expect(frames).toEqual([{ op: 'refresh', id: 1 }])
+})
+
+// 16.92 — AND NOT TO THE COPIES FOLLOWING THE HANDLER THAT DECLARED IT: a `GET` refreshing a tag it
+// carries would otherwise send its own followers the refresh that calls it again. THE REVERT: drop
+// `except` from `Followers.sweep`; the follower of `browsed` is sent a refresh, 2 frames where 1 is due.
+test('a refreshes is not sent to the copies following its own handler — 16.92', async () => {
+    const frames =
+        await client(`send({ op: 'sub', id: 1, address: '/library/shows' })
+send({ op: 'sub', id: 2, address: '/library/browsed' })
+await settled()
+await get('browsed')
+await until((frames) => frames.length > 0)
+await settled()
+`)
+    expect(frames).toEqual([{ op: 'refresh', id: 1 }])
 })
 
 // 7.10 — AN INVALIDATE OF THE VALUE A `GET` SERVES reaches the browsers following it, as

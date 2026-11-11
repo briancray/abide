@@ -4,6 +4,7 @@ import DealNote from './lib/DealNote.abide'
 import DealPicker from './lib/DealPicker.abide'
 import DealSearch from './lib/DealSearch.abide'
 import Forecast from './lib/Forecast.abide'
+import QualifyBoard from './lib/QualifyBoard.abide'
 import StageBoard from './lib/StageBoard.abide'
 import StageTiles from './lib/StageTiles.abide'
 import TeamTarget from './lib/TeamTarget.abide'
@@ -15,6 +16,7 @@ import TeamTarget from './lib/TeamTarget.abide'
     <h1>Pipeline</h1>
     <TeamTarget />
     <StageBoard />
+    <QualifyBoard />
     <StageTiles />
     <Forecast />
     <DealSearch />
