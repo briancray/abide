@@ -1,5 +1,53 @@
 # @abide/abide
 
+## 0.127.0
+
+### Minor Changes
+
+- 43ece1a: Three new stores: `redisStore` (from `@abide/abide/server`, over `bun`'s `RedisClient`, expiring the
+  key with the `ttl` and following its keyspace channel), `indexedDBStore` (the browser's IndexedDB,
+  following other tabs' writes over a `BroadcastChannel`), and `cookiesStore` (a cookie through
+  `cookies()`, so the server renders the stored value). Every shipped store now keeps its key under the
+  app's name — a value `webStore` or `sqliteStore` kept under the bare key is not read back — and a
+  re-read of unchanged text answers the value it answered before, so a `watch` echoing a store's own
+  write wakes no reader.
+- afad9a9: `TypeSession` (`@abide/abide/compiler`) no longer has `complete`, `references`, `belowRoot` or the `tsconfig` getter. Nothing called them: an editor asks `session.lowered(path)` and then `completionAt`, `LoweredFile.inspect` and `LoweredFile.references` directly, which is what `abide`'s language server already does.
+
+### Patch Changes
+
+- 068afc4: one fileIn, one signatureText, an inferred listenerOptions ([`01d05ba`](https://github.com/briancray/abide/commit/01d05ba5439ba1a7948abe5dcec3ba0c7831e261))
+- 068afc4: an account holder is base64url text, not a decoded signature — 44.63 ([`03dc221`](https://github.com/briancray/abide/commit/03dc221b20abdeb5a93602c057a4936c170e1951))
+- 068afc4: join a message's chunks once, not once per chunk ([`113aa9e`](https://github.com/briancray/abide/commit/113aa9eeafa60d7ce9d9a013b31f80279f1cd0f3))
+- 068afc4: parse a route literal once, not once per call ([`1353d5e`](https://github.com/briancray/abide/commit/1353d5e1154d3fd1d77d221226483bae8629d07e))
+- 068afc4: a row an async {#for} appends is enclosed by the {#for} — 12.18 ([`24cddc2`](https://github.com/briancray/abide/commit/24cddc233da3b52f574b4ca42b9ce83be68e77f9))
+- 068afc4: a throttle window of Infinity stands open for good ([`3e3328f`](https://github.com/briancray/abide/commit/3e3328ffb993c66f151251bea29e87e573f2b559))
+- 068afc4: one spelling each for the checker's and the layout's repeated reads ([`51fcabf`](https://github.com/briancray/abide/commit/51fcabf11ffc73ad6822c7416713425e02dceb3d))
+- 068afc4: one ask of a store, one owned poll, and camelCase for mutable module state ([`657c444`](https://github.com/briancray/abide/commit/657c444207ade3af8b9ca73e0aa176678a7f993f))
+- 068afc4: one spelling each for a refusal's name test, a record and option whitespace ([`6cadf8f`](https://github.com/briancray/abide/commit/6cadf8fc6fbfe446bd4a9eeb9fb505d7b026ff5f))
+- 068afc4: a member no route parameter takes is kept as an own member — 16.66 ([`75ccc5b`](https://github.com/briancray/abide/commit/75ccc5b60d23e1f6afe139232adf312ba10e4d78))
+- 068afc4: a run holding a no-break space is text, not layout — 33.17, 33.18 ([`77657f5`](https://github.com/briancray/abide/commit/77657f5ba0144914ca7b05881964f5d0accb4c10))
+- 068afc4: a painted error page and a handler's page() are compressed documents — 38.29 ([`7a55366`](https://github.com/briancray/abide/commit/7a55366335c75ef39dbabfa2cac0530083e7676f))
+- 068afc4: an unowned watch is enclosed by nothing — 12.18 ([`7d12d32`](https://github.com/briancray/abide/commit/7d12d3241d33c4f7fc1cbe6fcebde0d6df4bfa20))
+- 068afc4: round-3 sweep — what round 2's lifts left behind ([`7ee1347`](https://github.com/briancray/abide/commit/7ee1347e2ef650e4dd593efabbcdef65605bb441))
+- 068afc4: a framing is read off the type's essence, case-insensitively — 16.32 ([`81c755c`](https://github.com/briancray/abide/commit/81c755cf41b07fa8b2488f570b9f29abe8076199))
+- 068afc4: one framework lookup, one newline run, one install dir ([`83e864a`](https://github.com/briancray/abide/commit/83e864a86088480792fe86efbeb94cd76a4a306c))
+- 068afc4: fold the front-end's repeated spellings into one each ([`8774f8d`](https://github.com/briancray/abide/commit/8774f8d83c0ad5b2d22d227f698f4158f464a024))
+- 068afc4: one spelling each for the listener, the loopback and the mux socket ([`92e2d56`](https://github.com/briancray/abide/commit/92e2d563938ca4ef3fe978050f9517c76111964d))
+- 068afc4: one resume of a captured share scope, and comments that state mechanism only ([`9350141`](https://github.com/briancray/abide/commit/9350141164956aaecbdeb7a5499aaabc0ea22830))
+- 068afc4: armTimer clears the standing timer; restoreFirst and stale notes go ([`9a7658f`](https://github.com/briancray/abide/commit/9a7658f684f9290dff3efbedf22888cf7fb77a0b))
+- 068afc4: a navigation's 204 and an undisplayable page's 404 are private, no-store — 21.3 ([`e7dad57`](https://github.com/briancray/abide/commit/e7dad573ae9e35b9c9afec83079880ede860729a))
+- 068afc4: checkSource lends the layout's parsed sources, not a re-read ([`eecf330`](https://github.com/briancray/abide/commit/eecf3309cf3d2182658ab89ae7ec200019bc406a))
+- bf7c772: `abide scaffold` writes `tailwindcss` `^4.3.5`, and the harness's DOM preload registers happy-dom 21 — which fetches no stylesheet a parsed document names by default, so the preload no longer sets the deprecated `disableCSSFileLoading`.
+- e32d563: A block updates before the blocks inside it (RULEBOOK 12.18): an inner `{#if}` woken through a derived value no longer runs after the `{#if}` around it has gone false — through a `{#for}`, a component, or a row an async `{#for}` appended — so the narrowing the outer block promises holds inside it.
+- c4ab17e: A page and a public file served with `ABIDE_OFFLINE` on are asked of the network on every load
+  (`max-age=0, stale-if-error=31536000`) rather than answered stale while it is asked behind — the visit
+  after a deploy opens the new build, where it opened the last one's markup over a stylesheet the new
+  one no longer serves and painted unstyled until a reload. The kept copy still stands in offline.
+  Handler answers keep `stale-while-revalidate`. RULEBOOK 21.22, 21.23, 21.25.
+- 7e33ff2: A `<script>` setup — a component's or a branch-local one — that reads a value still in flight now throws an error naming the setup's read and what to change, rather than a bare `NotLanded: reactive has not landed` (RULEBOOK 34.32). Inside an `{#if}` arm or a `{#for}` row the read is now reported as a failed effect (12.8) where it used to be dropped silently, leaving the arm unbuilt.
+- b591e8b: A component `{...spread}` over a value still in flight no longer aborts the render or the mount around it: the server writes the invocation's region empty, and the browser makes the invocation once the value lands (RULEBOOK 32.23, 41.4). Before, `NotLanded` escaped `spreadProps` — no document on the server, and on a client navigation every tag after the spread never mounted.
+- 444dedc: Because a signed-in pairing holder is now base64url text (44.63), a bridge's existing "always allow" for a signed-in visitor no longer matches, and they are asked once more. A load's `timeout` timer no longer holds the process open.
+
 ## 0.126.2
 
 ### Patch Changes
