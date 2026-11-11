@@ -1,5 +1,6 @@
 <script>
 import DealFeed from './lib/DealFeed.abide'
+import DealLink from './lib/DealLink.abide'
 import DealNote from './lib/DealNote.abide'
 import DealPicker from './lib/DealPicker.abide'
 import DealSearch from './lib/DealSearch.abide'
@@ -17,6 +18,7 @@ import TeamTarget from './lib/TeamTarget.abide'
     <StageBoard />
     <StageTiles />
     <Forecast />
+    <DealLink />
     <DealSearch />
     <DealPicker />
     <DealFeed />

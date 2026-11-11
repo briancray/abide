@@ -15,11 +15,18 @@ import ContactFields from 'crm-02/src/profile/lib/ContactFields.abide'
 import contactFieldsSource from 'crm-02/src/profile/lib/ContactFields.abide' with { type: 'text' }
 import contactFieldsBenchSource from 'crm-02/src/profile/lib/ContactFields.bench.ts' with { type: 'text' }
 import contactFieldsTestSource from 'crm-02/src/profile/lib/ContactFields.test.ts' with { type: 'text' }
+import ContactPanel from 'crm-02/src/profile/lib/ContactPanel.abide'
+import contactPanelSource from 'crm-02/src/profile/lib/ContactPanel.abide' with { type: 'text' }
+import contactPanelTestSource from 'crm-02/src/profile/lib/ContactPanel.test.ts' with { type: 'text' }
+import ContactRename from 'crm-02/src/profile/lib/ContactRename.abide'
+import contactRenameSource from 'crm-02/src/profile/lib/ContactRename.abide' with { type: 'text' }
+import contactRenameTestSource from 'crm-02/src/profile/lib/ContactRename.test.ts' with { type: 'text' }
 import customerBadgeSource from 'crm-02/src/profile/lib/CustomerBadge.abide' with { type: 'text' }
 import FollowUp from 'crm-02/src/profile/lib/FollowUp.abide'
 import followUpSource from 'crm-02/src/profile/lib/FollowUp.abide' with { type: 'text' }
 import followUpTestSource from 'crm-02/src/profile/lib/FollowUp.test.ts' with { type: 'text' }
 import leadBadgeSource from 'crm-02/src/profile/lib/LeadBadge.abide' with { type: 'text' }
+import nameDraftSource from 'crm-02/src/profile/lib/NameDraft.abide' with { type: 'text' }
 import PhoneField from 'crm-02/src/profile/lib/PhoneField.abide'
 import phoneFieldSource from 'crm-02/src/profile/lib/PhoneField.abide' with { type: 'text' }
 import phoneFieldTestSource from 'crm-02/src/profile/lib/PhoneField.test.ts' with { type: 'text' }
@@ -274,6 +281,54 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>**/node_modules/**/*.abide</code></td><td>a design system's components, compiled with the app that imports them</td></tr>
             </tbody>
         </table>
+    </Section>
+
+    <Section title="An edit to a copy of a prop stands until the prop changes">
+        <Example
+            id="crm-02-prop-draft"
+            app="crm-02"
+            title={'`reactive(() => name)` — a draft that starts over with each contact'}
+            summary="A display name field under two contacts. Edit Grace's, then open Ada."
+            files={{
+                'src/profile/lib/ContactRename.abide': contactRenameSource,
+                'src/profile/lib/NameDraft.abide': nameDraftSource,
+                'src/profile/lib/ContactRename.test.ts': contactRenameTestSource,
+            }}
+        >
+            <ContactRename />
+        </Example>
+
+        <p>The field is bound to <code>draft</code>, a derived value over the <code>name</code> prop.
+            Typing writes the draft, and the write stands until the body runs again (11.8), which it
+            does when <code>name</code> changes. So opening Ada starts the draft over from her name,
+            and the component stays: the test counts no node made or moved.</p>
+    </Section>
+
+    <Section title="A one-item keyed loop builds its markup again">
+        <Example
+            id="crm-02-fresh-subtree"
+            app="crm-02"
+            title={'`{#for shown of [open] by shown}` — a panel built fresh per contact'}
+            summary="A contact panel that fades in. Open Ada, then Grace."
+            files={{
+                'src/profile/lib/ContactPanel.abide': contactPanelSource,
+                'src/profile/lib/ContactPanel.test.ts': contactPanelTestSource,
+            }}
+        >
+            <ContactPanel />
+        </Example>
+
+        <p>A component reads its props live, so a new contact rewrites the panel in place, and a
+            fade-in on its first paint never plays again. A loop over a one-item list keyed by the
+            contact builds a new row whenever the key changes, and the test finds a new element where
+            the old one was. Reach for it where something only a new element resets has to start
+            over: an animation, focus, an uncontrolled field. State held in reactive values is the
+            card above, and needs no rebuild.</p>
+
+        <p>A page is the same case. Navigating to the page already shown, with other
+            <code>route.params</code>, keeps the page (30.23), so
+            <code>{'{#for each of [route.params.id] by each}'}</code> is how part of it is built again.
+            <a href={url('/guide/add-pages')}>Add pages</a> introduces the params.</p>
     </Section>
 
     <Section title="A component's styles reach only its own markup">

@@ -3,8 +3,8 @@ import { reactive } from '@abide/abide'
 
 import searchDeals from '../searchDeals.handler.ts'
 
-let q = reactive('')
-const found = reactive(() => searchDeals({ q }), { debounce: 300 })
+let q = reactive('', { debounce: 300 })
+const found = reactive(() => searchDeals({ q }))
 </script>
 
 <label>search deals

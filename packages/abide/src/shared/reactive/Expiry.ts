@@ -66,10 +66,10 @@ export type Expiry = {
 /**
  * The expiry record for a value declaring `ttl`, or `null` where none is declared or no producer.
  *
- * 6.2: INERT ON A VALUE WITH NO PRODUCER, decided once at construction rather than tested per
- * production. A plain state's contents are what the app put there and nothing here may drop them
- * — so on that value the option does not merely do nothing, it allocates no record, arms no timer
- * and leaves `direct` alone, which is the difference between an inert option and one that costs
+ * NONE ON A VALUE WITH NO PRODUCER, decided once at construction rather than tested per
+ * production. A plain state's contents are what the app put there and no deadline may drop them —
+ * its `ttl` is 6.2's write back, which happens on a write (`REWIND_PROTOTYPE` in `Reactive.ts`) — so
+ * here it allocates no record, arms no timer and leaves `direct` alone, which keeps the option off
  * the read path.
  */
 export function expiryFor(

@@ -2951,11 +2951,11 @@ test('a value that declares no ttl never asks what time it is', () => {
     expect(`clock reads: ${asked}`).toBe('clock reads: 0')
 })
 
-// 6.2, AND IT IS AN ALLOCATION CLAIM AS MUCH AS A BEHAVIOR ONE. A plain state's contents
-// are what the app put there, so `ttl` on one does not merely answer the same — it builds
-// no record, arms no timer and leaves `direct` alone, which is what keeps the clock off
-// the read. Asserting the value survived would pass against a branch that expired it and
-// had nothing to reload with.
+// 6.2 WRITES BACK, AND ONLY ON A WRITE — SO IT IS AN ALLOCATION CLAIM AS MUCH AS A BEHAVIOR ONE.
+// The expiry of 6.3 through 6.10 is a producer's, and a value with none builds no expiry record,
+// reads no clock and leaves `direct` alone: what 6.2 does to it happens on its seat's `set`, and a
+// value nothing writes holds what it opened on however late it is read. Asserting the value survived
+// would pass against a branch that expired it and had nothing to reload with.
 //
 // WHAT THE REVERT MOVES IS `direct`, NOT THE CLOCK, and the first spelling of this gate
 // asserted the clock alone and passed with the mechanism out — a plain state is guarded
@@ -2965,7 +2965,7 @@ test('a value that declares no ttl never asks what time it is', () => {
 //
 // THE REVERT: dropping the `hasProducer` term from `expiryFor` reports `direct: false`
 // against `direct: true`, and 1 clock read against 0.
-test('ttl is inert on a value with no producer', () => {
+test('ttl on a value with no producer costs its reads nothing — 6.2', () => {
     let held = reactive<number>(41, { ttl: 1 })
     const asked = clockReads(() => {
         held = reactive<number>(41, { ttl: 1 })
@@ -2973,8 +2973,6 @@ test('ttl is inert on a value with no producer', () => {
         held.peek()
     })
     expect(`clock reads: ${asked}`).toBe('clock reads: 0')
-    // 6.2 is a claim about the READ PATH: a value with nothing to reload with must not
-    // pay for a mechanism that could only ever answer "still 41".
     expect(`direct: ${cellOf(held).direct}`).toBe('direct: true')
     const realNow = Date.now()
     setSystemTime(new Date(realNow + 60_000))
