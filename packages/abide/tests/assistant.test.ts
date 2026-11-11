@@ -980,7 +980,9 @@ test('a paired status carries a command that replaces the paired bridge — 44.5
 
 // 44.63 — WHO A CODE WAS MINTED FOR, without spending it: the same for every code one browser mints signed
 // out, and for every code one sign-in mints at any browser, and different for anyone else. THE REVERT:
-// name the browser alone whoever is signed in, and Ann at two browsers is two holders.
+// name the browser alone whoever is signed in, and Ann at two browsers is two holders. And a holder
+// is TEXT, the key the bridge files consent under: interpolate the raw signature and the account
+// holder is UTF-8-decoded random bytes, `account.` plus replacement characters.
 test('a code names who it was minted for, without being spent — 44.63', async () => {
     const holder = async (caller: string): Promise<string | undefined> =>
         holderOf({
@@ -1000,6 +1002,8 @@ test('a code names who it was minted for, without being spent — 44.63', async 
     expect(await holder('held-ann-there')).toBe(ann)
     expect(await holder('held-bob')).not.toBe(ann)
     expect(ann).not.toBe(signedOut)
+    expect(ann).toMatch(/^account\.[\w-]+$/)
+    expect(signedOut).toMatch(/^browser\.[\w-]+$/)
 
     const code = await pairingCode('held-one')
     expect(

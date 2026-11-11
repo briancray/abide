@@ -253,7 +253,7 @@ export function holderOf(caller: string, signedIn: string): string {
     const [secret] = secrets()
     return signedIn === 'null' || secret === undefined
         ? `browser.${new Bun.CryptoHasher('sha256').update(caller).digest('base64url')}`
-        : `account.${signature(secret, signedIn)}`
+        : `account.${signature(secret, signedIn).toBase64({ alphabet: 'base64url', omitPadding: true })}`
 }
 
 /**
