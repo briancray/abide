@@ -312,6 +312,15 @@ export function isSpace(char: string): boolean {
 }
 
 /**
+ * Whether template text is ASCII whitespace alone — what 33.17 and 33.18 drop. `trim()` would also
+ * answer yes to a no-break space, which renders.
+ */
+export function isBlank(text: string): boolean {
+    for (const char of text) if (!isSpace(char)) return false
+    return true
+}
+
+/**
  * The index just past the CSS string opening at `open`.
  *
  * A `;` or a `:` inside one is the value's own.

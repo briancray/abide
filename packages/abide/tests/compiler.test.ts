@@ -79,6 +79,23 @@ test('formatting whitespace is dropped and a real space is kept', () => {
     expect(kept.map((c) => c.kind)).toEqual(['element', 'text', 'element'])
 })
 
+// 33.17, 33.18 — WHITESPACE IS HTML'S ASCII WHITESPACE, and a no-break space renders: a run holding
+// one beside a newline is text, at the ends of a body or between two nodes. THE REVERT: ask
+// `collapseWhitespace` `text.trim() !== ''`, which strips U+00A0; the div reports 0 children and the
+// run between the paragraphs is gone.
+test('a run holding a no-break space is text, not layout — 33.17, 33.18', () => {
+    const between = parseAbide('<p>a</p>\n\u00a0\n<p>b</p>').template
+    expect(between.map((node) => node.kind)).toEqual([
+        'element',
+        'text',
+        'element',
+    ])
+    const alone = parseAbide('<div>\n\u00a0\n</div>').template[0] as {
+        children: unknown[]
+    }
+    expect(alone.children).toHaveLength(1)
+})
+
 // 32.1. THE REVERT: emit `String(...)` in place of `escapeText(...)` in `emitComponent`. The
 // rendered document then carries 1 live `<script>` span where 0 is due, and this test reports
 // `<script>alert(1)</script>` against the escaped form. Not installable — the call is written

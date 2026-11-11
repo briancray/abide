@@ -2288,7 +2288,8 @@ read by name MUST read `undefined` where the call site did not pass it.
 33.16 `children` MUST always be accepted and MUST never be declared.
 
 33.17 In a `.abide` template a run of whitespace carrying newlines but no space or tab MUST be
-dropped wherever it stands.
+dropped wherever it stands. Whitespace here and in 33.18 is HTML's ASCII whitespace: a no-break
+space renders, and a run holding one is text.
 
 33.18 In a `.abide` template a run of whitespace that renders nothing but carries a newline and
 indentation MUST be dropped at both ends of every block body and of the top-level template.

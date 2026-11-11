@@ -20,6 +20,7 @@ import {
     type TemplateNode,
 } from './TemplateNode.ts'
 import {
+    isBlank,
     isSpace,
     nesting,
     skipQuoted,
@@ -669,7 +670,7 @@ export function parseAbide(source: string): AbideFile {
         for (const node of root)
             if (
                 !(node.kind === 'element' && node.lowerTag === 'html') &&
-                !(node.kind === 'text' && node.text.trim() === '')
+                !(node.kind === 'text' && isBlank(node.text))
             )
                 throw new Error(
                     `abide: ${node.kind === 'element' ? `<${node.tag}>` : 'markup'} stands beside <html>, and a file written inside <html> has nothing outside it. RULEBOOK 35.16.`,
@@ -861,7 +862,7 @@ function documentOf(
 ): { html: ElementNode; body: ElementNode } {
     let body: ElementNode | undefined
     for (const child of html.children) {
-        if (child.kind === 'text' && child.text.trim() === '') continue
+        if (child.kind === 'text' && isBlank(child.text)) continue
         if (child.kind === 'element' && child.lowerTag === 'head') {
             assertNoNestedHead(child.children, '<head>')
             for (const node of child.children) head.push(node)
@@ -1589,7 +1590,7 @@ function collapseWhitespace(children: TemplateNode[]): void {
     for (let i = children.length - 1; i >= 0; i -= 1) {
         const node = children[i] as TemplateNode
         for (const body of bodiesOf(node)) collapseWhitespace(body.children)
-        if (node.kind !== 'text' || node.text.trim() !== '') continue
+        if (node.kind !== 'text' || !isBlank(node.text)) continue
         if (!node.text.includes('\n')) continue
         const indented = /[ \t]/.test(node.text)
         if (!indented || i === 0 || i === children.length - 1)
