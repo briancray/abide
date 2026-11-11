@@ -79,6 +79,8 @@ export const recatalog = POST(() => {
     refresh({ tags: ['catalog'] })
 })
 
+export const reshelve = POST(() => 'shelved', { refreshes: ['library'] })
+
 export const rescan = POST(({ refresh: reload, bare }: { refresh?: boolean; bare?: boolean }) => {
     const selection = bare ? undefined : { tags: ['library'] }
     if (reload) refresh(selection)
@@ -505,6 +507,19 @@ await post('recatalog', {})
 await until((frames) => frames.length > 0)
 `)
     expect(ops(frames)).toEqual(['value'])
+})
+
+// 16.89 — A HANDLER'S `refreshes` REACHES EVERY BROWSER FOLLOWING A COPY CARRYING ONE OF ITS TAGS,
+// as `refresh` over those tags would (13.15). THE REVERT: call `refreshOver` in `rpc.ts` in place of
+// `refresh`; the browser is sent 0 frames where 1 is due.
+test('a mutation declaring refreshes sends its tags a refresh — 16.89', async () => {
+    const frames =
+        await client(`send({ op: 'sub', id: 1, address: '/library/shows' })
+await settled()
+await post('reshelve', {})
+await until((frames) => frames.length > 0)
+`)
+    expect(frames).toEqual([{ op: 'refresh', id: 1 }])
 })
 
 // 7.10 — AN INVALIDATE OF THE VALUE A `GET` SERVES reaches the browsers following it, as

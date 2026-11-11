@@ -25,6 +25,7 @@ export {
     chunksOfStream,
     dropAnswered,
     failedTransiently,
+    isAsyncGenerator,
     patchInto,
     produceInto,
     refuseInto,
