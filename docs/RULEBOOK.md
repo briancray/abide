@@ -96,7 +96,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | read | A call to `s` or to `s.peek`. |
 | write | A call to `s.set` or to `s.patch`. |
 | gated | A production the `identity` comparison may collapse: one a write or a body mints, and not a chunk a stream lands. |
-| probe | Any of `s.busy`, `s.ready`, `s.error`. |
+| probe | Any of `s.busy`, `s.ready`, `s.error`, `s.issues`. |
 | trigger | `s.refresh` or `s.invalidate`. |
 | producer | A source a value can ask for a value: a body, a `store`, or the connection a subscriber's copy is carried over. |
 | materialization | The making of a `Stored` from what a producer has yielded. |
@@ -215,6 +215,9 @@ subscribe it to the value.
 
 3.14 A probe over a value a mutation's `declare` built MUST NOT run its body.
 
+3.15 `s.issues` MUST answer the `data` of the refusal `s.error` answers where that refusal is a
+`ValidationError`, and `undefined` otherwise.
+
 # 4. Writes and gates
 
 4.1 `s.set` MUST accept a settled value or a load, and `reactive` MUST accept the same two.
@@ -257,6 +260,9 @@ escape the write.
 4.17 `s.set` MUST store a `Failed` it is given as a value rather than refuse the write.
 
 4.18 `s.set` MUST hand back the refusal a gate refused it with, and nothing where it was accepted.
+
+4.19 `reactive` called with no argument and an `Rpc` as its type argument MUST be typed as the
+`Reactive` a call of that `Rpc` hands back.
 
 # 5. Productions and identity
 
@@ -791,7 +797,7 @@ others, the opener MUST run, or be found to read nothing that changed, before th
 MUST be defined as `refresh` and `invalidate` over a `Selection`, and MUST NOT be a second
 mechanism.
 
-13.5 An implementation MUST NOT provide a free `done`, `success` or `error` over a `Selection`.
+13.5 An implementation MUST NOT provide a free `done`, `success`, `error` or `issues` over a `Selection`.
 
 13.6 A bare `invalidate`, `refresh`, `busy` or `ready` MUST match only entries whose producer is a
 load: a `store`, or a body that has handed back a pending answer or a stream.

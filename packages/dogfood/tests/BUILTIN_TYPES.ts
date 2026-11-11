@@ -25,6 +25,7 @@ export const BUILTIN_TYPES = new Set([
     'Promise',
     'PromiseLike',
     'Readonly',
+    'ReturnType',
     'Record',
     'Set',
     'Symbol',

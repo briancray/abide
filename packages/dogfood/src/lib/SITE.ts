@@ -154,6 +154,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`Schema<T>`',
                         '`JsonValue`',
                         '`Issues<T>`',
+                        '`s.issues`',
                         '`Paths<T>`',
                         '`validateJson`',
                         '`JsonSchema`',
