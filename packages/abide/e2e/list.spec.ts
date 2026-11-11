@@ -20,7 +20,7 @@
 
 import { expect, test } from '@playwright/test'
 
-import { builtBench } from './builtBench.ts'
+import { buildBench } from '../bench/buildBench.ts'
 
 type Row = {
     case: string
@@ -39,7 +39,7 @@ type Row = {
     wrong: string[]
 }
 
-const built = builtBench('list')
+const built = await buildBench('list')
 
 // WEBKIT CANNOT PRICE THESE INSIDE A GATE, and the refusal that says so is the
 // instrument working rather than a fault to route around. 43.11 asks a sample to be 100x

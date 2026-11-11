@@ -53,7 +53,7 @@ test('the preload leaves bun its own WebSocket and web streams — 43.28', async
 
 // 43.35 — A PARSED DOCUMENT FETCHES NOTHING IT NAMES: a server-rendered page parsed in a test names
 // its stylesheets and its script at an address nothing in the test answers. THE REVERT: register the
-// DOM with no `settings`; `asked` reads 2.
+// DOM with `enableCSSFileLoading: true`; `asked` reads 2 — the two stylesheets.
 //
 // `waitUntilComplete` waits on EVERY task the process's one window holds, and under
 // `bun run test:serial` every earlier file left its own there — a keyed value's `ttl` in

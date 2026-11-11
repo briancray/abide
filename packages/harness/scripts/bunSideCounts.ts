@@ -1,6 +1,7 @@
-// The bun half of the both-substrates gate, printed as JSON so the playwright side —
-// which runs on node and cannot import a lane — can compare against it rather than
-// against a second transcription of the same expectations.
+// The bun half of the both-substrates gate, printed as JSON so the playwright side can
+// compare against it rather than against a second transcription of the same expectations.
+// A process of its own because it registers happy-dom over the globals — `substrates.spec.ts`
+// says why that cannot be the playwright worker's.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 
 import { CASES } from '../e2e/CASES.ts'

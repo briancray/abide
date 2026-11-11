@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test'
 import { type Scheme, type Tree, tree, wide } from '../bench/depthTree.ts'
 import { type Report, reportScript } from './reportScript.ts'
 
-const REPORT = reportScript()
+const REPORT = await reportScript()
 const CASES: [number, number][] = [
     [2, 200],
     [8, 200],

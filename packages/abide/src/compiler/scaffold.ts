@@ -90,7 +90,7 @@ function filesFor(name: string): Record<string, string> {
                     '@abide/harness': HARNESS_DEPENDENCY,
                     '@types/bun': 'latest',
                     'bun-plugin-tailwind': '^0.1.2',
-                    tailwindcss: '^4.3.3',
+                    tailwindcss: '^4.3.5',
                 },
             },
             null,

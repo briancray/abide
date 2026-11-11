@@ -31,7 +31,7 @@
 
 import { expect, test } from '@playwright/test'
 
-import { compiledPage } from './compiledPage.ts'
+import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
 
 // THREE ROWS AND A REVERSE, so the middle row is a survivor that genuinely moves: in a reverse of
 // three, `b` keeps its place in the order but every sibling around it is rewritten, which is the
@@ -49,7 +49,7 @@ const rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 </ul>
 <button id="go" onclick={() => rows.set([...rows()].reverse())}>reverse</button>`
 
-const compiled = compiledPage(PAGE_SOURCE)
+const compiled = await buildCompiledPage(PAGE_SOURCE)
 
 test('a reordered row keeps the state a rebuild would destroy', async ({
     page,

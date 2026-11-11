@@ -9,11 +9,11 @@
 
 import { test } from '@playwright/test'
 
+import { buildBench } from '../bench/buildBench.ts'
 import type { ReactiveBenchRow } from '../bench/reactiveCases.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
-import { builtBench } from './builtBench.ts'
 
-const built = builtBench('reactive')
+const built = await buildBench('reactive')
 
 // WEBKIT CANNOT PRICE THESE INSIDE A GATE, and the refusal that says so is the
 // instrument working rather than a fault to route around. 43.11 asks a sample to be 100x

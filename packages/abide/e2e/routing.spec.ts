@@ -6,16 +6,18 @@
 // template that chunk carries (30.11) — so a navigation asks the server for JS and nothing else.
 // `/about` is served as an EMPTY shell on purpose: it is the direct-hit case, and it proves the
 // same module both hydrates what a server painted and builds what it did not.
-//
-// `node:http` rather than `Bun.serve`: playwright runs on node.
 
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { createServer, type Server } from 'node:http'
-import { join, normalize } from 'node:path'
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs' // bun has no sync mkdir/rm/stat of its own
+import { join, normalize } from 'node:path' // bun has no path helpers of its own
 
+import {
+    abideModules,
+    type Compilation,
+    serveCompilation,
+} from '@abide/abide/compiler'
+import { render } from '@abide/abide/server'
 import { expect, test } from '@playwright/test'
+import type { Server } from 'bun'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 // ONE FIXTURE TREE PER PROJECT, and the project name is what separates them. This spec runs in
@@ -46,8 +48,7 @@ let PAINTED_HEAD = ''
 let PLAIN = ''
 let PLAIN_HEAD = ''
 
-let server: Server | null = null
-let port = 0
+let server: Server<undefined> | null = null
 
 // Playwright reads the FIRST parameter to decide which fixtures to build, and `{}` is how it is
 // told "none" while still handing back `testInfo` in the second. A named parameter there asks for
@@ -55,9 +56,6 @@ let port = 0
 // Playwright's "no fixtures" spelling — see above.
 test.beforeAll(async ({}, testInfo) => {
     APP = join(REPO, `.test-modules/e2e-routeapp-${testInfo.project.name}`)
-    // WRITTEN FROM HERE, not from a `bun -e`. Nothing about laying the fixture out is bun-only —
-    // only the build and the server render below are — and a heredoc inside an argv string is
-    // three layers of quoting to get right every time the page changes.
     rmSync(APP, { recursive: true, force: true })
     mkdirSync(`${APP}/plain`, { recursive: true })
     mkdirSync(`${APP}/about`, { recursive: true })
@@ -92,73 +90,55 @@ test.beforeAll(async ({}, testInfo) => {
             include: ['**/*'],
         }),
     )
-    execFileSync(
-        'bun',
-        [
-            join(REPO, 'packages/abide/bin/abide.ts'),
-            'build',
-            '--root',
-            APP,
-            '--out',
-            `${APP}/.abide`,
-        ],
-        { cwd: REPO, encoding: 'utf8' },
-    )
+    await Bun.$`${process.execPath} ${join(REPO, 'packages/abide/bin/abide.ts')} build --root ${APP} --out ${APP}/.abide`
+        .cwd(REPO)
+        .quiet()
+    const compilation: Compilation = await Bun.file(
+        `${APP}/.abide/compilation.json`,
+    ).json()
     // `__ALIVE__` is what a reload erases, and the whole of "MUST NOT reload the document". The
     // entry carrying it is one more of the build's own modules, bundled through the plugin that
     // serves the rest (`abideModules`).
-    execFileSync(
-        'bun',
-        [
-            '-e',
-            `import { abideModules } from '@abide/abide/compiler'
-const root = ${JSON.stringify(APP)}
-const compilation = await Bun.file(root + '/.abide/compilation.json').json()
-compilation.tables['alive.ts'] = "import { start } from '../__abide/routes.ts'\\nstart(document.body)\\nwindow.__ALIVE__ = true\\n"
-const built = await Bun.build({
-    entrypoints: [root + '/__abide/alive.ts'],
-    root,
-    target: 'browser',
-    format: 'esm',
-    splitting: true,
-    naming: { entry: 'entry.[ext]' },
-    outdir: root + '/.abide/bundle',
-    plugins: [abideModules(root, compilation)],
-})
-if (!built.success) throw new AggregateError(built.logs, 'the routing app did not bundle')`,
-        ],
-        { cwd: REPO, encoding: 'utf8' },
-    )
+    compilation.tables['alive.ts'] =
+        "import { start } from '../__abide/routes.ts'\nstart(document.body)\nwindow.__ALIVE__ = true\n"
+    const bundled = await Bun.build({
+        entrypoints: [`${APP}/__abide/alive.ts`],
+        root: APP,
+        target: 'browser',
+        format: 'esm',
+        splitting: true,
+        naming: { entry: 'entry.[ext]' },
+        outdir: `${APP}/.abide/bundle`,
+        plugins: [abideModules(APP, compilation)],
+    })
+    if (!bundled.success)
+        throw new AggregateError(bundled.logs, 'the routing app did not bundle')
 
     // The server's own painting of `/`, HEAD AND BODY, produced by the page's server module. The
     // head matters as much as the body here: serving an empty one would make the first load's
     // title empty, and every assertion below would then be about `applyHead` alone rather than
     // about a navigation REPLACING what a server wrote.
-    const painted = JSON.parse(
-        execFileSync(
-            'bun',
-            [
-                '-e',
-                `import { serveCompilation } from '@abide/abide/compiler'
-import { render } from '@abide/abide/server'
-serveCompilation(${JSON.stringify(APP)}, await Bun.file(${JSON.stringify(`${APP}/.abide/compilation.json`)}).json())
-const painted = {}
-for (const page of ['index', 'plain/index']) {
-    const { default: C } = await import(${JSON.stringify(`${APP}/`)} + page + '.abide?component')
-    const html = new TextDecoder().decode(await render(C))
-    painted[page] = {
-        body: html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>')),
-        head: html.slice(html.indexOf('<head>') + 6, html.indexOf('</head>')),
-    }
-}
-console.log(JSON.stringify(painted))`,
-            ],
-            { cwd: REPO, encoding: 'utf8' },
+    serveCompilation(
+        APP,
+        await Bun.file(`${APP}/.abide/compilation.json`).json(),
+    )
+    const painted: Record<string, { body: string; head: string }> = {}
+    for (const page of ['index', 'plain/index']) {
+        const { default: component } = await import(
+            `${APP}/${page}.abide?component`
         )
-            .trim()
-            .split('\n')
-            .pop() as string,
-    ) as Record<string, { body: string; head: string }>
+        const html = new TextDecoder().decode(await render(component))
+        painted[page] = {
+            body: html.slice(
+                html.indexOf('<body>') + 6,
+                html.indexOf('</body>'),
+            ),
+            head: html.slice(
+                html.indexOf('<head>') + 6,
+                html.indexOf('</head>'),
+            ),
+        }
+    }
     PAINTED = painted.index?.body ?? ''
     PAINTED_HEAD = painted.index?.head ?? ''
     PLAIN = painted['plain/index']?.body ?? ''
@@ -169,66 +149,56 @@ console.log(JSON.stringify(painted))`,
         )
 
     const root = join(APP, '.abide/bundle')
-    server = createServer((request, response) => {
-        const asked = (request.url ?? '/').split('?')[0] ?? '/'
-        if (asked.endsWith('.js')) {
-            const file = join(root, normalize(asked))
-            if (
-                file.startsWith(root) &&
-                existsSync(file) &&
-                statSync(file).isFile()
-            ) {
-                readFile(file).then((text) => {
-                    response.writeHead(200, {
-                        'content-type': 'text/javascript',
+    server = Bun.serve({
+        port: 0,
+        fetch(request) {
+            const asked = new URL(request.url).pathname
+            if (asked.endsWith('.js')) {
+                const file = join(root, normalize(asked))
+                if (
+                    file.startsWith(root) &&
+                    existsSync(file) &&
+                    statSync(file).isFile()
+                )
+                    return new Response(Bun.file(file), {
+                        headers: { 'content-type': 'text/javascript' },
                     })
-                    response.end(text)
-                })
-                return
+                return new Response('404', { status: 404 })
             }
-            response.writeHead(404)
-            response.end('404')
-            return
-        }
-        // 30.16 — THE ROUTER ASKING, answered the way abide's own server does when no
-        // `middleware` objects: 204 and no body.
-        if (request.headers['abide-navigation'] !== undefined) {
-            response.writeHead(204)
-            response.end()
-            return
-        }
-        // AN ADDRESS THIS SERVER PAINTS NOTHING FOR still gets the page's pair, empty — the
-        // shape `render` writes for a page with no markup (41.9), and the one the router finds.
-        const body =
-            asked === '/'
-                ? PAINTED
-                : asked === '/plain'
-                  ? PLAIN
-                  : '<!--[--><!--]-->'
-        const head =
-            asked === '/' ? PAINTED_HEAD : asked === '/plain' ? PLAIN_HEAD : ''
-        response.writeHead(200, { 'content-type': 'text/html' })
-        response.end(
-            `<!doctype html><html><head>${head}<script type="module" src="/entry.js"></script></head><body>${body}</body></html>`,
-        )
-    })
-    const listening = server
-    await new Promise<void>((resolve) => {
-        listening.listen(0, () => {
-            port = (listening.address() as { port: number }).port
-            resolve()
-        })
+            // 30.16 — THE ROUTER ASKING, answered the way abide's own server does when no
+            // `middleware` objects: 204 and no body.
+            if (request.headers.has('abide-navigation'))
+                return new Response(null, { status: 204 })
+            // AN ADDRESS THIS SERVER PAINTS NOTHING FOR still gets the page's pair, empty — the
+            // shape `render` writes for a page with no markup (41.9), and the one the router finds.
+            const body =
+                asked === '/'
+                    ? PAINTED
+                    : asked === '/plain'
+                      ? PLAIN
+                      : '<!--[--><!--]-->'
+            const head =
+                asked === '/'
+                    ? PAINTED_HEAD
+                    : asked === '/plain'
+                      ? PLAIN_HEAD
+                      : ''
+            return new Response(
+                `<!doctype html><html><head>${head}<script type="module" src="/entry.js"></script></head><body>${body}</body></html>`,
+                { headers: { 'content-type': 'text/html' } },
+            )
+        },
     })
 })
 
 test.afterAll(() => {
-    server?.close()
+    server?.stop(true)
 })
 
 test('a navigation swaps the page without reloading the document — 30.7', async ({
     page,
 }) => {
-    const base = `http://localhost:${port}`
+    const base = `http://localhost:${server?.port}`
     await page.goto(`${base}/`)
     await page.waitForFunction(
         () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,
@@ -299,7 +269,7 @@ test('a navigation swaps the page without reloading the document — 30.7', asyn
 test('a page the server painted nothing for builds itself on a direct hit — 30.11', async ({
     page,
 }) => {
-    const base = `http://localhost:${port}`
+    const base = `http://localhost:${server?.port}`
     await page.goto(`${base}/about`)
     await page.waitForFunction(
         () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,
@@ -319,7 +289,7 @@ test('a page the server painted nothing for builds itself on a direct hit — 30
 test('a navigation to a page with no title ends on the title a direct load paints — 39.14', async ({
     page,
 }) => {
-    const base = `http://localhost:${port}`
+    const base = `http://localhost:${server?.port}`
     await page.goto(`${base}/plain`)
     await page.waitForFunction(
         () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,
@@ -358,7 +328,7 @@ test('a navigation to a page with no title ends on the title a direct load paint
 test('navigate by a number settles once the step has arrived — 30.38, 23.28', async ({
     page,
 }) => {
-    const base = `http://localhost:${port}`
+    const base = `http://localhost:${server?.port}`
     await page.goto(`${base}/`)
     await page.waitForFunction(
         () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,

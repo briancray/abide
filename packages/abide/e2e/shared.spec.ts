@@ -3,11 +3,11 @@
 
 import { test } from '@playwright/test'
 
+import { buildBench } from '../bench/buildBench.ts'
 import type { SharedRow } from '../bench/sharedRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
-import { builtBench } from './builtBench.ts'
 
-const built = builtBench('shared')
+const built = await buildBench('shared')
 
 test('shared allocations, current against candidate, in this engine', async ({
     page,

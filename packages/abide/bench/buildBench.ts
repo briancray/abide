@@ -1,6 +1,7 @@
 // Builds one browser bench — `bench/<name>Injectable.ts` — into one file a page can be injected
-// with: `bun bench/buildBench.ts list`. The harness's `buildInjectable.ts` is the same build over its MEASURE
-// lane's entry; what keeps abide out of that lane is its entry's graph, not this script.
+// with, for a spec to `await buildBench('list')`. The harness's `buildInjectable.ts` is the same
+// build over its MEASURE lane's entry; what keeps abide out of that lane is its entry's graph, not
+// this file.
 const OUT_DIR = new URL('../dist/', import.meta.url).pathname
 
 /** Builds one entry into `dist/<name>.js`, an IIFE a page is injected with, and returns its path. */
@@ -24,13 +25,4 @@ export function buildBench(name: string): Promise<string> {
         new URL(`./${name}Injectable.ts`, import.meta.url).pathname,
         name,
     )
-}
-
-if (import.meta.main) {
-    const name = Bun.argv[2]
-    if (name === undefined)
-        throw new Error(
-            'usage: bun scripts/buildBench.ts <list|reactive|shapes|shared>',
-        )
-    console.log(await buildBench(name))
 }
