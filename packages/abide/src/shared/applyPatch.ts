@@ -5,6 +5,7 @@
 // A pointer walks own properties alone, and an array step is an index or, for `add`, `-`. Every op a
 // patch records passes, so the check costs a browser replaying its server nothing, and an op naming
 // `__proto__` or a member off the prototype chain is refused at 400 rather than reached. A `test` that fails is 409, the patch's precondition rather than its form.
+import { isRecord } from './isRecord.ts'
 import { putOwn } from './putOwn.ts'
 import type { PatchOp } from './reactive/patchLog.ts'
 import { structural } from './reactive/structural.ts'
@@ -68,13 +69,13 @@ function parentOf(root: unknown, steps: string[]): Container {
 }
 
 function stepInto(held: unknown, step: string): unknown {
-    if (
-        held === null ||
-        typeof held !== 'object' ||
-        !Object.hasOwn(held, keyIn(held, step))
-    )
+    const key =
+        held !== null && typeof held === 'object'
+            ? keyIn(held, step)
+            : undefined
+    if (key === undefined || !Object.hasOwn(held as object, key))
         throw refuse(400, `abide: a patch named a path with no \`${step}\`.`)
-    return (held as Container)[keyIn(held, step)]
+    return (held as Container)[key]
 }
 
 /** An array's step as its index, where it is one; any other container's as the key it is. */
@@ -153,17 +154,9 @@ function replaceRoot(root: unknown, value: unknown): void {
         root.splice(0, root.length, ...value)
         return
     }
-    if (
-        root !== null &&
-        typeof root === 'object' &&
-        !Array.isArray(root) &&
-        value !== null &&
-        typeof value === 'object' &&
-        !Array.isArray(value)
-    ) {
-        for (const key of Object.keys(root)) delete (root as Container)[key]
-        for (const key of Object.keys(value))
-            putOwn(root as Container, key, (value as Container)[key])
+    if (isRecord(root) && isRecord(value)) {
+        for (const key of Object.keys(root)) delete root[key]
+        for (const key of Object.keys(value)) putOwn(root, key, value[key])
         return
     }
     throw refuse(

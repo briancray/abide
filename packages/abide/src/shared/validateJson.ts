@@ -251,10 +251,11 @@ function matchesType(wanted: string, value: unknown): boolean {
 /**
  * Whether two JSON values are equal by value, key order aside.
  *
- * `const` and `enum` compare by VALUE, so a nested object has to be walked. The canonical form is
- * not reachable from here (it is a `#shared` sibling that would drag its own graph in for one
- * comparison), and a schema's `const` is small by nature — which also bounds this walk, because
- * it stops the moment the two shapes part.
+ * `const` and `enum` compare by VALUE, so a nested object has to be walked. Not `structural`'s walk,
+ * which differs twice: JSON Schema compares a number mathematically, so `-0` equals `0` where
+ * `structural` reads `Object.is`; and `structural` refuses any object whose prototype is not
+ * `Object.prototype`, where a parsed body is compared by its own members alone. A schema's `const`
+ * is small by nature, which bounds this walk — it stops the moment the two shapes part.
  *
  * WALKED RATHER THAN STRINGIFIED. `JSON.stringify(a) === JSON.stringify(b)` read as a value
  * comparison and was three: it is KEY-ORDER sensitive, so `const: {a:1,b:2}` refused the same

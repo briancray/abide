@@ -8,7 +8,7 @@
 export const PUBLIC_DIRECTORY = 'public'
 
 /** The app's own code that is no address: components and modules, both sides. */
-export const LIB_DIRECTORY = 'lib'
+const LIB_DIRECTORY = 'lib'
 
 /** Both, as the walk of the app tests a directory against them. */
 export const RESERVED_DIRECTORIES: ReadonlySet<string> = new Set([

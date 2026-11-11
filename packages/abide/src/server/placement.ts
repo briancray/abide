@@ -4,7 +4,8 @@
 // build's and the server's alone, so it stays out of the client's closure.
 
 import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
-import { RESERVED_DIRECTORIES } from '#shared/RESERVED_DIRECTORIES.ts'
+
+import { RESERVED_DIRECTORIES } from './RESERVED_DIRECTORIES.ts'
 
 /** Where a file sits in an app, which is what it is to every reader (`placeOf`). */
 export type Place = 'address' | 'public' | 'lib' | 'dependency' | 'skipped'

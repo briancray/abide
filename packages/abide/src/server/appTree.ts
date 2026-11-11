@@ -16,10 +16,6 @@ import { type Dirent, readdirSync } from 'node:fs' // bun has no directory listi
 
 import type { Diagnostics } from '#compiler/Diagnostics.ts'
 import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
-import {
-    PUBLIC_DIRECTORY,
-    RESERVED_DIRECTORIES,
-} from '#shared/RESERVED_DIRECTORIES.ts'
 
 import { packageDirectory } from './packageDirectory.ts'
 import {
@@ -34,6 +30,10 @@ import {
     routeOf,
     skipped,
 } from './placement.ts'
+import {
+    PUBLIC_DIRECTORY,
+    RESERVED_DIRECTORIES,
+} from './RESERVED_DIRECTORIES.ts'
 
 /** What one walk of the app finds, every path relative to the root. */
 type AppFiles = {

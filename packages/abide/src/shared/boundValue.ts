@@ -3,6 +3,7 @@
 // on an element and on a component alike.
 // THE BRAND IS READ FIRST (1.6): a `Reactive` is callable and has members of its own.
 
+import { ASCII_WHITESPACE } from './ASCII_WHITESPACE.ts'
 import { numericReferenceCharacter } from './numericReferenceCharacter.ts'
 import { isReactive } from './reactive/isReactive.ts'
 import { pairReactive } from './reactive/pairReactive.ts'
@@ -83,7 +84,7 @@ const COMMENT = /<!--[\s\S]*?-->/g
 const REFERENCE = /&(?:#(\d+);?|#x([\da-f]+);?|(amp|lt|gt|quot|apos);)/gi
 // What an option's text collapses and trims, which is ASCII whitespace alone: a no-break space is
 // text the browser keeps in `option.value`.
-const OPTION_SPACE = /[\t\n\f\r ]+/g
+const OPTION_SPACE = new RegExp(ASCII_WHITESPACE.source, 'g')
 const NAMED: Record<string, string> = {
     amp: '&',
     lt: '<',

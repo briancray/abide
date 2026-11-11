@@ -2,7 +2,8 @@ import { REGION_CLOSE, REGION_OPEN } from './ANCHORS.ts'
 
 // The markup an anchor is WRITTEN as, for the server and the compiler. Never imported from the
 // client's closure: the browser reads an anchor as a comment's data and builds one with
-// `createComment`, so the comment syntax is only ever needed where markup is a string.
+// `createComment`. The one string it writes is `markupRun`'s anchored text run (32.30), which spells
+// its own pair rather than bring this module into every page.
 
 /** An anchor's comment, from its data. */
 export function anchorMarkup(data: string): string {
