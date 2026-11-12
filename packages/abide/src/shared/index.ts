@@ -51,6 +51,8 @@ export {
 // modules into the static closure of the entry every page imports.
 export { media } from './media.ts'
 export { navigate } from './navigate.ts'
+// 32.79-32.92 — the measuring adaptors a `bind:element` takes.
+export * as observe from './observe/index.ts'
 export { online } from './online.ts'
 export { outbox, type QueuedCall } from './outbox.ts'
 // 37.16 — the browser's `onError`. `@abide/abide/server` exports the server's over it.

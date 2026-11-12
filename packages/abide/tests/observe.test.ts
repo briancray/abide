@@ -1,11 +1,11 @@
-// 32.79, 32.80 — AN ELEMENT'S SIZE AND WHETHER IT IS IN VIEW, WRITTEN INTO A VALUE. What a page
+// 32.79, 32.80 — AN ELEMENT'S SIZE AND WHETHER IT IS IN VIEW, WRITTEN INTO A VALUE BY `observe`. What a page
 // otherwise wires by hand: an observer, a map from each element to its callback, and the teardown
 // that unobserves — and the version written per component is an observer per element.
 //
 // THE OBSERVERS ARE COUNTED, NOT TIMED. The emulator never lays anything out, so each observer here
 // is a stand-in installed before the first bind makes the shared one, which records what was
 // observed and hands deliveries over when a test says so. Whether a real browser delivers is the
-// browser spec's (`e2e/measured.spec.ts`).
+// browser spec's (`e2e/observe.spec.ts`).
 
 import { afterAll, expect, test } from 'bun:test'
 
@@ -78,18 +78,17 @@ const sizeOf = (target: Element, width: number, height: number) => ({
     contentRect: { width, height },
 })
 
-// 32.84, 32.83 — THE SERVER HAS NO LAYOUT, so it writes nothing for either bind, and the value holds what the
-// author gave it until the first delivery. THE REVERT: classify a measured bind as `dynamic`; the
-// tag carries `bind:size="[object Object]"` and the client sets it as an attribute.
-test('the server writes nothing for bind:size or bind:visible, and a delivery writes the value — 32.79, 32.80, 32.84', async () => {
+// 32.82 — THE VALUE HOLDS WHAT THE AUTHOR GAVE IT UNTIL THE FIRST DELIVERY, and a delivery writes
+// it. A `bind:element` list hands the element to both adaptors (32.9).
+test('a delivery writes the value, and nothing before it does — 32.79, 32.80, 32.82', async () => {
     const { html } = await mountPage(`<script>
-import { reactive } from '@abide/abide'
+import { observe, reactive } from '@abide/abide'
 
 let box = reactive({ width: 0, height: 0 })
 let seen = reactive(false)
 </script>
 
-<div id="panel" bind:size={box} bind:visible={seen}></div>
+<div id="panel" bind:element={[observe.size(box), observe.visible(seen)]}></div>
 <p id="out">{box.width}x{box.height} {seen}</p>`)
     expect(html).not.toContain('bind:')
     expect(html).toContain('<p id="out">0x0 false</p>')
@@ -101,18 +100,18 @@ let seen = reactive(false)
 })
 
 const ROWS = `<script>
-import { reactive } from '@abide/abide'
+import { observe, reactive } from '@abide/abide'
 
 let rows = reactive(Array.from({ length: 50 }, (_, index) => ({ id: index, box: reactive(), seen: reactive(false) })))
 </script>
 
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
-{#for row of rows by row.id}<div class="row" bind:size={row.box} bind:visible={row.seen}>{row.id}</div>{/for}`
+{#for row of rows by row.id}<div class="row" bind:element={[observe.size(row.box), observe.visible(row.seen)]}>{row.id}</div>{/for}`
 
-// 32.82 — ONE OBSERVER EACH FOR FIFTY ELEMENTS, and every element observed by it. THE REVERT:
-// make the observer per call in `bindSize` / `bindVisible` (`const observer = new ResizeObserver(…)`
+// 32.81 — ONE OBSERVER EACH FOR FIFTY ELEMENTS, and every element observed by it. THE REVERT:
+// make the observer per call in `size` / `visible` (`const observer = new ResizeObserver(…)`
 // in place of `observer ??=`) — `made` reads 51 and 51, one per row past the first test's.
-test('fifty bound elements share one observer of each kind — 32.82', async () => {
+test('fifty observed elements share one observer of each kind — 32.81', async () => {
     const madeBefore = [resize.counts.made, intersect.counts.made]
     await mountPage(ROWS)
     expect(document.querySelectorAll('.row')).toHaveLength(50)
@@ -132,10 +131,10 @@ test('fifty bound elements share one observer of each kind — 32.82', async () 
     expect(rows).toBe(50)
 })
 
-// 32.85 — A ROW THAT LEAVES IS UNOBSERVED, so the observer holds no node that left the
-// document. THE REVERT: drop the `scope.stops.push` in `bindSize` and `bindVisible`; after the
-// clear 50 elements stay observed by each.
-test('an element that leaves is unobserved — 32.85', async () => {
+// 32.83 — A ROW THAT LEAVES IS UNOBSERVED, so the observer holds no node that left the
+// document. THE REVERT: drop the `unobserve` from the `Disposer` `size` and `visible` hand back;
+// after the clear 50 elements stay observed by each.
+test('an element that leaves is unobserved — 32.83', async () => {
     await mountPage(ROWS)
     const bound = [...document.querySelectorAll('.row')]
     click('#clear')
@@ -153,37 +152,45 @@ test('an element that leaves is unobserved — 32.85', async () => {
 
 // 32.79 — A SIZE THE VALUE ALREADY HOLDS IS NOT WRITTEN: a delivery builds a fresh record, which the
 // value's identity gate cannot collapse, so the compare is what keeps a reader asleep. THE REVERT:
-// drop the `held` compare in `deliverSizes`; the area is computed 2 times for one real change.
+// drop the `held` compare in `deliverSizes`; the callback form, held to the same compare against
+// what it was last handed, is called 2 times for one size, and the area computed 2 times.
 test('a delivery of the size already held wakes nobody — 32.79', async () => {
     ;(globalThis as { __AREAS__?: number }).__AREAS__ = 0
     await mountPage(`<script>
 import { reactive } from '@abide/abide'
 
+import { observe } from '@abide/abide'
+
 let box = reactive({ width: 10, height: 10 })
+let calls = reactive(0)
 const area = reactive(() => {
     ;(globalThis as { __AREAS__?: number }).__AREAS__ = ((globalThis as { __AREAS__?: number }).__AREAS__ ?? 0) + 1
     return box.width * box.height
 })
 </script>
 
-<div id="sized" bind:size={box}></div>
-<p id="area">{area}</p>`)
+<div id="sized" bind:element={observe.size(box)}></div>
+<div id="called" bind:element={observe.size(() => { calls = calls + 1 })}></div>
+<p id="area">{area}</p>
+<p id="calls">{calls}</p>`)
     const sized = document.getElementById('sized') as Element
+    const called = document.getElementById('called') as Element
     const before = (globalThis as { __AREAS__?: number }).__AREAS__ ?? 0
-    resize.counts.deliver?.([sizeOf(sized, 10, 10)])
+    resize.counts.deliver?.([sizeOf(sized, 10, 10), sizeOf(called, 10, 10)])
     flushSync()
-    resize.counts.deliver?.([sizeOf(sized, 20, 10)])
+    resize.counts.deliver?.([sizeOf(sized, 20, 10), sizeOf(called, 10, 10)])
     flushSync()
+    expect(document.getElementById('calls')?.textContent).toBe('1')
     expect(document.getElementById('area')?.textContent).toBe('200')
     expect(
         `area computed ${((globalThis as { __AREAS__?: number }).__AREAS__ ?? 0) - before} times`,
     ).toBe('area computed 1 times')
 })
 
-// 32.72, 32.74 — A MEASURED BIND OWNS NO ATTRIBUTE: an input's `size` is its width in characters,
-// and a measurement of the box beside it is a second thing rather than a second owner. THE REVERT:
-// let `refuseBinds` check a measured bind's attribute; the input is refused under 32.72.
-test('a measured bind compiles beside the attribute of its name — 32.72, 32.74', () => {
+// 32.91 — A MEASUREMENT WRITTEN AS AN ATTRIBUTE IS REFUSED, naming the adaptor that is one. THE
+// REVERT: empty `MEASURED` in `classifyTemplate.ts`; every spelling below compiles, `bind:size`
+// refused only as a bind of nothing (32.74) and `visibleIn` written as an attribute.
+test('a measured bind or option is refused with the observe spelling — 32.91', () => {
     const refusedFor = (template: string): string => {
         try {
             emitClient(parseAbide(template))
@@ -192,34 +199,52 @@ test('a measured bind compiles beside the attribute of its name — 32.72, 32.74
         }
         return 'compiled'
     }
-    expect(refusedFor('<input size="20" bind:size={box}>')).toBe('compiled')
-    expect(refusedFor('<div bind:visible={seen}></div>')).toBe('compiled')
+    expect(refusedFor('<input size="20" bind:size={box}>')).toContain(
+        '`bind:size={x}` is `bind:element={observe.size(x)}`',
+    )
+    expect(refusedFor('<div bind:visible={seen}></div>')).toContain(
+        '`bind:visible={x}` is `bind:element={observe.visible(x)}`',
+    )
+    expect(refusedFor('<div bind:rect={placed}></div>')).toContain(
+        '`bind:rect={x}` is `bind:element={observe.rect(x)}`',
+    )
+    expect(refusedFor('<p visibleIn={box}></p>')).toContain(
+        'observe.visible(x, { in: root })',
+    )
+    expect(refusedFor('<p sizeBox="border"></p>')).toContain(
+        "observe.size(x, { box: 'border' })",
+    )
     expect(refusedFor('<div bind:sizes={box}></div>')).toContain(
         'RULEBOOK 32.74',
+    )
+    expect(refusedFor('<div bind:element={observe.size(box)}></div>')).toBe(
+        'compiled',
     )
 })
 
 const ROOTED = `<script>
-import { reactive } from '@abide/abide'
+import { observe, reactive } from '@abide/abide'
 
 let scroller = reactive<HTMLElement>()
 let rooted = reactive(true)
+const root = reactive(() => (rooted ? scroller : undefined))
 let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, seen: reactive(true) })))
 </script>
 
 <button id="unroot" onclick={() => { rooted = !rooted }}>unroot</button>
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
 <div id="scroller" bind:element={scroller}>
-    {#for row of rows by row.id}<p class="row" bind:visible={row.seen} visibleIn={rooted ? scroller : undefined}>{row.id}</p>{/for}
+    {#for row of rows by row.id}<p class="row" bind:element={observe.visible(row.seen, { in: root })}>{row.id}</p>{/for}
 </div>`
 
-// 32.82, 32.91 — TWENTY ELEMENTS IN ONE SCROLLER ARE ONE OBSERVER, rooted at the scroller, and none
+// 32.81, 32.89 — TWENTY ELEMENTS IN ONE SCROLLER ARE ONE OBSERVER, rooted at the scroller, and none
 // of them is observed against the viewport. A root that goes is every element unobserved and the
 // observer disconnected; one that comes back is a new observer. THE REVERT: make `observeIn` build a
 // `new Rooted(root)` for every element rather than look it up in `rooted`; 20 observers are made.
-test('every bind:visible in one root shares one observer, gone with the root — 32.82, 32.91', async () => {
-    const { html } = await mountPage(ROOTED)
-    expect(html.toLowerCase()).not.toContain('visiblein')
+// 31.3 — `{ in: root }` HANDS OVER THE `Reactive`: drop the object-literal arm of `declaredType` and
+// the root is read once, before the scroller is bound — 0 observers for the scroller.
+test('every observe.visible in one root shares one observer, gone with the root — 32.81, 32.89', async () => {
+    await mountPage(ROOTED)
     flushSync()
     const scroller = document.getElementById('scroller') as Element
     const rows = [...document.querySelectorAll('.row')]
@@ -251,26 +276,26 @@ test('every bind:visible in one root shares one observer, gone with the root —
     expect(again).toEqual({ observed: new Set(), disconnected: true })
 })
 
-// 32.92 — A BORDER BOX IS READ FROM `borderBoxSize` AND TURNED INTO THE PHYSICAL AXES: a vertical
-// writing mode's inline size is its height. `sizeBox` changing is the element observed again with
+// 32.90 — A BORDER BOX IS READ FROM `borderBoxSize` AND TURNED INTO THE PHYSICAL AXES: a vertical
+// writing mode's inline size is its height. `box` changing is the element observed again with
 // the new box. THE REVERT: write `inlineSize` and `blockSize` as width and height whatever the writing
-// mode in `deliverSizes`; the vertical box reads 124x224.
-test('sizeBox="border" writes the border box in physical axes — 32.92', async () => {
-    const { html } = await mountPage(`<script>
-import { reactive } from '@abide/abide'
+// mode in `deliverSizes`; the vertical box reads 124x224. 31.3 — the shorthand `{ box }` hands over
+// the `Reactive` too: hold only a `value` read in `readsIn`, and the toggle leaves `border-box`.
+test("box: 'border' writes the border box in physical axes — 32.90", async () => {
+    await mountPage(`<script>
+import { observe, reactive } from '@abide/abide'
 
 let flat = reactive({ width: 0, height: 0 })
 let upright = reactive({ width: 0, height: 0 })
 let content = reactive(false)
+const box = reactive(() => (content ? 'content' : 'border') as 'content' | 'border')
 </script>
 
 <button id="toggle" onclick={() => { content = !content }}>toggle</button>
-<div id="flat" bind:size={flat} sizeBox={content ? 'content' : 'border'}></div>
-<div id="upright" style="writing-mode: vertical-rl" bind:size={upright} sizeBox="border"></div>
+<div id="flat" bind:element={observe.size(flat, { box })}></div>
+<div id="upright" style="writing-mode: vertical-rl" bind:element={observe.size(upright, { box: 'border' })}></div>
 <p id="out">{flat.width}x{flat.height} {upright.width}x{upright.height}</p>`)
-    expect(html.toLowerCase()).not.toContain('sizebox')
     const flat = document.getElementById('flat') as Element
-    expect(flat.hasAttribute('sizebox')).toBe(false)
     const upright = document.getElementById('upright') as Element
     expect(resize.counts.boxes.get(flat)).toBe('border-box')
     const entry = (target: Element, inlineSize: number, blockSize: number) => ({
@@ -289,32 +314,14 @@ let content = reactive(false)
     expect(document.getElementById('out')?.textContent).toBe('200x100 224x124')
 })
 
-// 32.93 — AN OPTION WITH NO BIND, A STATIC ROOT AND A BOX THAT IS NEITHER ARE REFUSED, each written
-// otherwise as an attribute nothing reads. THE REVERT: return early from `refuseOption`; all three
-// compile.
-test('visibleIn and sizeBox are refused where they measure nothing — 32.93', () => {
-    const refusedFor = (template: string): string => {
-        try {
-            emitClient(parseAbide(template))
-        } catch (thrown) {
-            return (thrown as Error).message
-        }
-        return 'compiled'
-    }
-    expect(refusedFor('<p bind:visible={seen} visibleIn={box}></p>')).toBe(
-        'compiled',
-    )
-    expect(refusedFor('<p bind:size={size} sizeBox="border"></p>')).toBe(
-        'compiled',
-    )
-    expect(refusedFor('<p visibleIn={box}></p>')).toContain('RULEBOOK 32.93')
-    expect(refusedFor('<p bind:size={size} visibleIn={box}></p>')).toContain(
-        'RULEBOOK 32.93',
-    )
-    expect(
-        refusedFor('<p bind:visible={seen} visibleIn="#box"></p>'),
-    ).toContain('RULEBOOK 32.93')
-    expect(refusedFor('<p bind:size={size} sizeBox="margin"></p>')).toContain(
-        'RULEBOOK 32.93',
-    )
+// 32.92 — ONE ELEMENT TAKES ONE ADAPTOR OF A KIND: a second would take the first one's deliveries
+// and its teardown. THE REVERT: drop the `has` check in `size`; the second binds, and the first
+// stops being written.
+test('a second observe.size on one element throws — 32.92', async () => {
+    const { observe } = await import('#shared')
+    const element = document.createElement('div')
+    const stop = observe.size(() => {})(element)
+    expect(() => observe.size(() => {})(element)).toThrow('RULEBOOK 32.92')
+    stop()
+    observe.size(() => {})(element)()
 })

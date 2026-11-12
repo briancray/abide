@@ -599,6 +599,14 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | --- | --- | --- | --- |
 | `navigate` | `{ (by: number): Promise<void>; (url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }): Promise<void> }` | Navigates to an address, or steps through the history. | 30.7, 30.38, 30.39, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31, 30.32, 45.12, 45.24 |
 
+## `observe`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `observe.size` | `{ (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): (element: Element) => Disposer; (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: 'content' \| 'border' }): (element: Element) => Disposer; (target: ((size: { width: number; height: number }) => void), options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): (element: Element) => Disposer; (target: ((size: { width: number; height: number }) => void), options?: { box?: 'content' \| 'border' }): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's size. | 32.79, 32.81, 32.82, 32.83, 32.90, 32.91, 32.92 |
+| `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown> }): (element: Element) => Disposer; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown> }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Element \| Document }): (element: Element) => Disposer }` | The `bind:element` adaptor writing whether an element is in view. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92 |
+| `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): (element: Element) => Disposer; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's rectangle in the viewport. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92 |
+
 # `.abide` files
 
 ## Reading and writing by name
@@ -606,7 +614,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Spelling | Means | Rules |
 | --- | --- | --- |
 | `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.10 |
-| `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, return or `bind:` operand | the `Reactive` | 31.3 |
+| `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, object literal member, return or `bind:` operand | the `Reactive` | 31.3 |
 | `await foo` | the settling of the `Reactive`, which is its value | 1.4, 2.7, 31.3 |
 | `refresh(foo)` / a `Selection`-typed parameter | the `Reactive` | 31.13 |
 | `foo = bar` | a write | 31.4, 11.61 |
@@ -636,13 +644,8 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `bind:open` | The same, on a `<details>`. | 32.7, 32.72, 32.74, 32.75, 32.76, 32.78 |
 | `bind:group` | Radio or checkbox membership. | 32.8, 32.72, 32.74, 32.75, 32.76 |
 | `bind:files` | A file input's files, as a list. | 32.73, 32.72, 32.74, 32.75, 32.76, 32.78 |
-| `bind:size` | A one-way bind of an element's size. | 32.79, 32.72, 32.74, 32.76, 32.81, 32.82, 32.83, 32.84, 32.85 |
-| `bind:visible` | A one-way bind of whether an element is in view. | 32.80, 32.72, 32.74, 32.76, 32.81, 32.82, 32.83, 32.84, 32.85 |
-| `bind:rect` | A one-way bind of an element's rectangle in the viewport. | 32.86, 32.72, 32.74, 32.76, 32.81, 32.82, 32.84, 32.85, 32.87, 32.88, 32.89, 32.90 |
-| `visibleIn={root}` | The root a `bind:visible` beside it is measured against. | 32.91, 32.80, 32.82, 32.93, 32.94 |
-| `sizeBox="border"` | The box a `bind:size` beside it writes. | 32.92, 32.79, 32.93, 32.94 |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6, 32.78 |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer) \| ((element: Element) => void \| Disposer)[]}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
 | `class:name={cond}` | Toggles a class. | 32.10, 32.71 |
 | `style:prop={value}` | Sets one style property. | 32.10, 32.19, 32.71 |
 | `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13 |

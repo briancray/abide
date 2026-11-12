@@ -928,13 +928,12 @@ let sizes = reactive<('s' | 'm')[]>([])
     ])
 }, 60_000)
 
-// 32.81 — A MEASURED `bind:` IS HELD TO WHAT IT WRITES AND ASKS NO MORE: a size record for
-// `bind:size`, a rectangle for `bind:rect`, a boolean for `bind:visible`, and a pair with a `set`
-// and no `get` is enough, since nothing reads the value back. The four above the line check clean;
-// the three below it are a value taking a measurement it cannot hold. THE REVERT: open all three
-// with `BIND` in `bindOpenerOf`; the write-only pair's `next` is an implicit `any` (7006 on line 11)
-// and none of the three below is refused.
-test('a measured bind: is held to what it writes, and needs no get — 32.81', async () => {
+// 31.3 — AN `observe` ADAPTOR IS HELD TO WHAT IT WRITES, its target and its options alike, a
+// `Reactive` where a form takes one and a callback's parameter typed by the measurement. The four
+// above the line check clean; the four below it are a target taking a measurement it cannot hold,
+// and a box that is neither. THE REVERT: type the target of `size`'s callback forms `unknown`; the
+// `Reactive` of a string on line 14 checks clean, and lines 10 and 13 lose `next`'s type (7006).
+test('an observe adaptor is held to what it writes — 31.3', async () => {
     const measured = appFixture({
         'tsconfig.json': JSON.stringify({
             compilerOptions: {
@@ -949,67 +948,30 @@ test('a measured bind: is held to what it writes, and needs no get — 32.81', a
             include: ['.'],
         }),
         'index.abide': `<script>
-import { reactive } from '@abide/abide'
-
-let box = reactive<{ width: number; height: number }>()
-let seen = reactive(false)
-let name = reactive('ada')
-let placed = reactive<{ top: number; left: number }>()
-</script>
-<div bind:size={box}></div>
-<div bind:visible={seen}></div>
-<div bind:size={{ set: (next) => { box = next } }}></div>
-<div bind:rect={placed}></div>
-<div bind:size={name}></div>
-<div bind:visible={name}></div>
-<div bind:rect={seen}></div>`,
-    })
-    expect(
-        (await checkApp(measured)).map(({ line, code }) => ({ line, code })),
-    ).toEqual([
-        { line: 13, code: 2345 },
-        { line: 14, code: 2345 },
-        { line: 15, code: 2345 },
-    ])
-}, 60_000)
-
-// 32.94 — WHAT A MEASURED BIND MEASURES AGAINST IS HELD TO WHAT IT CAN BE: a root is an element, a
-// document or nothing, read by name, so an element's `Reactive` is the element it holds; a box is
-// one of two words. The three above the line check clean; the two below it are refused. THE REVERT:
-// open `visibleIn` and `sizeBox` with `(` in `openerOf`; neither below is refused.
-test('visibleIn and sizeBox are held to a root and a box — 32.94', async () => {
-    const measured = appFixture({
-        'tsconfig.json': JSON.stringify({
-            compilerOptions: {
-                strict: true,
-                target: 'esnext',
-                module: 'preserve',
-                moduleResolution: 'bundler',
-                allowImportingTsExtensions: true,
-                noEmit: true,
-                skipLibCheck: true,
-            },
-            include: ['.'],
-        }),
-        'index.abide': `<script>
-import { reactive } from '@abide/abide'
+import { observe, reactive } from '@abide/abide'
 
 let box = reactive<HTMLElement>()
 let seen = reactive(false)
-let size = reactive<{ width: number; height: number }>()
+let name = reactive('ada')
 let border = reactive<'content' | 'border'>('border')
+let placed = reactive<{ top: number; left: number }>()
 </script>
-<div bind:element={box}><p bind:visible={seen} visibleIn={box}></p></div>
-<div bind:size={size} sizeBox={border}></div>
-<div bind:size={size} sizeBox="border"></div>
-<p bind:visible={seen} visibleIn={seen}></p>
-<div bind:size={size} sizeBox={seen ? 'margin' : 'border'}></div>`,
+<div bind:element={[box, observe.size(name.length > 0 ? (next) => { placed = { top: next.height, left: next.width } } : () => {}, { box: border })]}></div>
+<p bind:element={observe.visible(seen, { in: box })}></p>
+<p bind:element={observe.rect(placed)}></p>
+<p bind:element={observe.size((next) => { placed = { top: next.height, left: 0 } }, { box: 'border' })}></p>
+<div bind:element={observe.size(name)}></div>
+<div bind:element={observe.visible(name)}></div>
+<div bind:element={observe.rect(seen)}></div>
+<div bind:element={observe.size(() => {}, { box: 'margin' })}></div>`,
     })
     expect(
         (await checkApp(measured)).map(({ line, code }) => ({ line, code })),
     ).toEqual([
-        { line: 12, code: 2345 },
-        { line: 13, code: 2345 },
+        { line: 14, code: 2769 },
+        { line: 15, code: 2769 },
+        { line: 16, code: 2769 },
+        { line: 17, code: 2769 },
     ])
 }, 60_000)
 

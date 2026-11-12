@@ -2158,8 +2158,9 @@ wake a reader of the value `route.query` answers.
 31.2 A read by name MUST be live.
 
 31.3 A name MUST hold the `Reactive` only where the declared type of its position is a `Reactive`: an
-annotated binding, an annotated return, a `Reactive`-typed parameter, a `bind:` operand, an `await`
-operand — or where 31.13 holds it.
+annotated binding, an annotated return, a `Reactive`-typed parameter, a member of an object literal
+passed where a parameter's type declares that member a `Reactive`, a `bind:` operand, an `await` operand — or where 31.13
+holds it.
 
 31.4 Assignment to such a name MUST be a write, and the assigned value MAY be settled, a load, or a
 `Reactive`.
@@ -2226,8 +2227,9 @@ string.
 
 32.8 `bind:group` MUST compare against the input's own value, and MUST NOT emit a `group` attribute.
 
-32.9 `bind:element` MUST accept a `Reactive` of an element, or a callback returning an optional
-`Disposer`.
+32.9 `bind:element` MUST accept a `Reactive` of an element, a callback returning an optional
+`Disposer`, or a list of such callbacks, each handed the element in the list's order and each
+`Disposer` run where the element's nodes leave.
 
 32.10 `class:name` and `style:prop` MUST set one class or one style property.
 
@@ -2422,16 +2424,15 @@ element, and a style property MUST resolve as the server's merged attribute does
 declarations first, then each directive's in the tag's order.
 
 32.72 An element MUST be a build error where a `bind:` and something else both write its value: the
-attribute a `bind:name` names, save `bind:size`, `bind:visible` and `bind:rect`, `checked` beside
-`bind:group`,
+attribute a `bind:name` names, `checked` beside `bind:group`,
 an `<option selected>` inside a `<select bind:value>`, or text inside a `<textarea bind:value>`.
 
 32.73 `bind:files` MUST hold a list of the input's files, with or without `multiple`, MUST write the
 files picked back on change, and MUST hand the input a list written to it; the server MUST write
 nothing for it.
 
-32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files`, `size`,
-`visible`, `rect` and `element` MUST be a build error.
+32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files` and
+`element` MUST be a build error.
 
 32.75 A `bind:` on an element MUST write its operand before any `on<event>` listener on that
 element, written or spread, runs for the same event, wherever the two are written in the tag.
@@ -2452,67 +2453,59 @@ those strings, and a `<select multiple>` a list of the strings its value's items
 string where they hold none. A `type` or a `multiple` written as an expression, or absent beside a
 spread, MUST be held to the union of what each value of it writes.
 
-32.79 `bind:size` MUST write the element's content-box `width` and `height`, or its border box's
-where 32.92 asks for it, as one record, at each observation of a size the value does not already
+32.79 `observe.size` MUST write the element's content-box `width` and `height`, or its border box's
+where 32.90 asks for it, as one record, at each observation of a size its target does not already
 hold.
 
-32.80 `bind:visible` MUST write whether the element intersects the viewport, or the root 32.91
+32.80 `observe.visible` MUST write whether the element intersects the viewport, or the root 32.89
 names, at each observation.
 
-32.81 `abide check` MUST hold the `set` of a `bind:size` to a record of a numeric `width` and
-`height`, of a `bind:rect` to a record of a numeric `x`, `y`, `top`, `left`, `right`, `bottom`,
-`width` and `height`, and of a `bind:visible` to a boolean, and MUST NOT require a `get` of any of
-the three.
+32.81 Every `observe.size` in a document MUST be observed by one shared observer, every
+`observe.visible` measured against one root by one other per root, the viewport being one, and
+every `observe.rect` by a third.
 
-32.82 Every `bind:size` in a document MUST be observed by one shared observer, every `bind:visible`
-measured against one root by one other per root, the viewport being one, and every `bind:rect` by
-a third.
+32.82 An `observe.size` or an `observe.visible` MUST NOT write its target before the first
+observation of its element, and MUST NOT read the element's layout to write it.
 
-32.83 A `bind:size` or a `bind:visible` MUST NOT write its value before the first observation of its
-element, and MUST NOT read the element's layout to write it.
+32.83 The `Disposer` an `observe` adaptor hands back MUST stop observing its element.
 
-32.84 The server MUST write nothing for a `bind:size`, a `bind:visible` or a `bind:rect`.
-
-32.85 An element's `bind:size`, `bind:visible` and `bind:rect` MUST stop observing it when the nodes
-holding it leave.
-
-32.86 `bind:rect` MUST write the element's rectangle in the viewport — `x`, `y`, `top`, `left`,
+32.84 `observe.rect` MUST write the element's rectangle in the viewport — `x`, `y`, `top`, `left`,
 `right`, `bottom`, `width` and `height`, as `getBoundingClientRect` reports them — as one record,
 after a resize of the element, a scroll of the document or of any element in it, or a resize of the
-window, where the value does not already hold that rectangle.
+window, where its target does not already hold that rectangle.
 
-32.87 `bind:rect` MUST be written for a move of its element that no resize of the element, scroll
+32.85 `observe.rect` MUST be written for a move of its element that no resize of the element, scroll
 or resize of the window accompanies, in the frame after the move.
 
-32.88 Every `bind:rect` in a document MUST share one scroll listener and one window resize listener,
-added with the first `bind:rect` and removed with the last.
+32.86 Every `observe.rect` in a document MUST share one scroll listener and one window resize
+listener, added with the first `observe.rect` and removed with the last.
 
-32.89 The triggers 32.86 names that arrive before the next animation frame MUST be answered by one
-read of every `bind:rect` element's rectangle in that frame, every read before any write, and
-`bind:rect` MUST NOT read an element's rectangle outside such a frame.
+32.87 The triggers 32.84 names that arrive before the next animation frame MUST be answered by one
+read of every `observe.rect` element's rectangle in that frame, every read before any write, and
+`observe.rect` MUST NOT read an element's rectangle outside such a frame.
 
-32.90 What observes a `bind:rect` element for 32.87 MUST NOT be made in a frame a scroll event
+32.88 What observes an `observe.rect` element for 32.85 MUST NOT be made in a frame a scroll event
 preceded, and MUST be made again only in a frame whose read found the element moved or the viewport
 resized since it was made. A frame a scroll preceded MUST ask for the frame after it, which answers
-that scroll under 32.89, so the observers stand again once the scroll is over. It MUST cost no work
+that scroll under 32.87, so the observers stand again once the scroll is over. It MUST cost no work
 while neither moves.
 
-32.91 A `visibleIn` beside a `bind:visible` MUST name the root the bind measures against, and
-MUST be read as the element's attributes are, so a change of what it holds observes the element
-against the new root. While it holds no root the element MUST NOT be observed, and the value holds
-what it last held. A root's observer MUST be disconnected when the last element measured against it
-stops being observed.
+32.89 The `in` option of `observe.visible` MUST name the root it measures against, the viewport where
+it is absent. A `Reactive` there MUST be watched, so a change of what it holds observes the element
+against the new root, and while it holds no root the element MUST NOT be observed and the target
+holds what it last held. A root's observer MUST be disconnected when the last element measured
+against it stops being observed.
 
-32.92 A `sizeBox` of `"border"` beside a `bind:size` MUST make it write the element's border-box
-`width` and `height`, and one of `"content"` its content box. Both MUST be the physical axes
-whatever the element's writing mode, and a change of the box MUST observe the element again.
+32.90 The `box` option of `observe.size` MUST make it write the element's border-box `width` and
+`height` where it is `"border"`, and its content box where it is `"content"` or absent. Both MUST be
+the physical axes whatever the element's writing mode, and a `Reactive` there MUST be watched, so a
+change of the box observes the element again.
 
-32.93 A `visibleIn` or a `sizeBox` on an element without its bind, a `visibleIn` written as static
-text, or a `sizeBox` written as static text other than `content` or `border`, MUST be a build
-error. The server MUST write nothing for either, and the client MUST set neither as an attribute.
+32.91 A `bind:size`, a `bind:visible` or a `bind:rect` on an element, or a `visibleIn` or a `sizeBox`
+attribute, MUST be a build error naming the `observe` spelling that measures it.
 
-32.94 `abide check` MUST hold a `visibleIn` to an element, a document, `null` or `undefined`, and a
-`sizeBox` to `'content'` or `'border'`.
+32.92 An `observe` adaptor handed an element that another adaptor of the same kind is observing
+MUST throw.
 
 # 33. Props
 
