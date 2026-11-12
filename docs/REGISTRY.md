@@ -229,7 +229,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures = never, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 16.79, 16.80, 16.85 |
+| `Rpc` | `<Value, Args, Failures = never, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 41.33, 16.79, 16.80, 16.85 |
 | `offline` | `(args: Args) => Value` | What a call settles to where a browser could not get its answer. | 16.81, 16.82, 16.83, 16.84 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
@@ -950,8 +950,8 @@ rows a runner prints, and an adapter for an abide app.
 | `abide format [--check] [path…]` | The formatter over a `.abide` tree. | 38.25, 38.125, 38.126, 38.127, 38.128, 38.129, 38.137 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, what each matcher takes, the rungs each handler names, and where each hook is filed. | 38.108, 38.123, 38.135 |
 | `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 7.30 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123 |
-| `abide start [--port <n>] [--hostname <host>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123, 38.136 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123, 38.139 |
+| `abide start [--port <n>] [--hostname <host>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123, 38.136, 38.139 |
 | `abide [--url <origin>] [--port <n>] [--hostname <host>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62, 38.123, 38.136 |
 | `abide call <address> [args]` | One call to one handler. | 38.8, 38.61, 38.110 |
 | `abide openapi [--url <origin>]` | The OpenAPI document printed rather than served. | 38.9, 38.25, 38.110, 38.111, 38.123 |

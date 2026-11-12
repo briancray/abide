@@ -1,5 +1,7 @@
 import { relative, resolve } from 'node:path' // bun exposes no path helpers of its own
 
+import { BuildRefusal } from './BuildRefusal.ts'
+import { citedClauses } from './citedClauses.ts'
 import { isIgnored } from './isIgnored.ts'
 import { lineOf } from './lineOf.ts'
 import { PositionedRefusal } from './PositionedRefusal.ts'
@@ -65,7 +67,17 @@ export class Diagnostics {
     at(file: string, thrown: unknown, text?: string): void {
         const positioned =
             text !== undefined && thrown instanceof PositionedRefusal
-        if (!this.collecting && !positioned) throw thrown
+        // 38.139 — A REFUSAL CITES ITS CLAUSE, and is printed as a line at its file. A throw that cites
+        // none is a crash in the compiler, thrown as it was for its stack; and one a stage below
+        // already filed is not filed again at the root.
+        if (
+            !this.collecting &&
+            !positioned &&
+            (thrown instanceof BuildRefusal ||
+                !(thrown instanceof Error) ||
+                citedClauses(thrown.message).length === 0)
+        )
+            throw thrown
         const diagnosis = diagnosisAt(
             resolve(this.root, file),
             positioned ? text : undefined,
@@ -74,7 +86,7 @@ export class Diagnostics {
             thrown instanceof Error ? thrown.message : String(thrown),
         )
         if (!this.collecting)
-            throw new Error(formatDiagnosis(diagnosis, process.cwd()))
+            throw new BuildRefusal(formatDiagnosis(diagnosis, process.cwd()))
         this.refused.push(diagnosis)
     }
 
@@ -91,7 +103,7 @@ export class Diagnostics {
         }
         const lines: string[] = []
         for (const one of found) lines.push(formatDiagnosis(one, process.cwd()))
-        throw new Error(lines.join('\n'))
+        throw new BuildRefusal(lines.join('\n'))
     }
 
     /** Keeps `found` as warnings: the build goes on. */

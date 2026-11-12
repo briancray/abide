@@ -102,9 +102,10 @@ export class PageRender {
      *
      * 41.25 — A ROW ENDING IN `1` IS A CALL THE MARKUP WAS BUILT FROM SETTLED, a refusal included,
      * and its entry is marked `painted` for hydration to wait on — its body read to its bytes, so
-     * the wait covers it too. 41.26 — A CALL THAT STREAMS IS NEVER MARKED: the browser reads its
-     * chunks as they land — the first over http, the rest over the mux (16.97) — so no wait for its
-     * answer makes it settled where the page hydrates, and its region is 41.24's to put right.
+     * the wait covers it too — a stream whose run had closed among them, whose copy then lands closed
+     * (41.33). 41.26 — A STREAM STILL RUNNING IS NEVER MARKED: the browser reads its chunks as they
+     * land — the first over http, the rest over the mux (16.97) — so no wait for its answer makes it
+     * settled where the page hydrates, and its region is 41.24's to put right.
      *
      * 29.9, 29.10 — THE CALLS ARE DATA AND THE RUNNER IS A CONSTANT. What a page called differs per
      * response, so it rides in a JSON block a browser never executes, and the one script that does

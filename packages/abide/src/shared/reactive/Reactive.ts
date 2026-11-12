@@ -1952,6 +1952,10 @@ function run(cell: Cell): void {
         promoteToStream(cell, produced)
         return
     }
+    if (!primitive && produced instanceof ClosedRun) {
+        landClosedRun(cell, produced.chunks)
+        return
+    }
     // 16.81 — a stand-in the body could hand back at once: an answer a page started early (41.21)
     // that the worker answered from a kept copy (16.85).
     if (!primitive && produced instanceof StandIn) {
@@ -2090,6 +2094,21 @@ function promoteToStream(cell: Cell, generator: AsyncIterable<unknown>): void {
     pumpRun(cell, stream, generator[Symbol.asyncIterator]())
 }
 
+/**
+ * 9.6, 41.33 — a value whose run handed back a run that had already closed: a streaming producer
+ * from that run on, its chunks landed and the run closed in this turn, with no load between.
+ */
+function landClosedRun(cell: Cell, chunks: unknown[]): void {
+    let stream = cell.stream
+    if (stream === null) stream = becomeStream(cell, null)
+    stopStream(stream)
+    const begun = chunks.length > 0
+    if (begun) beginAccumulation(cell, stream)
+    for (let index = 0; index < chunks.length; index += 1)
+        acceptChunk(cell, stream, chunks[index])
+    endStreamRun(cell, stream, begun)
+}
+
 /** Supersedes the run in flight with one reading `iterator`. */
 function pumpRun(
     cell: Cell,
@@ -2162,6 +2181,11 @@ async function pump(
         }
         acceptChunk(cell, stream, step.value)
     }
+    endStreamRun(cell, stream, begun)
+}
+
+/** Closes a stream's run once its last chunk has landed; `begun` where it landed any. */
+function endStreamRun(cell: Cell, stream: Stream, begun: boolean): void {
     stream.iterator = null
     // THE CLOSE RELEASES WHAT A WINDOW IS HOLDING. A stream that has finished has nothing left to
     // collapse, and an await resolving here would otherwise be handed the accumulation as the last
@@ -2918,6 +2942,25 @@ class StandIn {
 /** A body's stand-in for the answer it could not get, which `synced` reads false over (16.81). */
 export function standIn(value: unknown): unknown {
     return new StandIn(value)
+}
+
+/**
+ * What a body hands back for a stream whose run had closed before the body reached it: the chunks
+ * it carried. A CLASS for `StandIn`'s reason.
+ */
+class ClosedRun {
+    chunks: unknown[]
+    constructor(chunks: unknown[]) {
+        this.chunks = chunks
+    }
+}
+
+/**
+ * 41.33 — a stream the server painted closed, which its copy's run lands closed in the turn it runs
+ * (`landClosedRun`), as an answer painted settled lands settled.
+ */
+export function closedRun(chunks: unknown[]): unknown {
+    return new ClosedRun(chunks)
 }
 
 /**

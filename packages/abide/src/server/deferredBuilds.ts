@@ -10,7 +10,7 @@
 
 import { regionMarkup } from '#shared/anchorMarkup.ts'
 import { isReactive } from '#shared/reactive/index.ts'
-import { isStreaming, loadOf } from '#shared/reactive/producer.ts'
+import { isStreaming, loadOf, runClosed } from '#shared/reactive/producer.ts'
 
 import type { PageCall } from './PageRender.ts'
 import type { Rendered } from './render.ts'
@@ -131,12 +131,14 @@ function ownedByDeferred(
     return false
 }
 
-// 41.26 — a call that streams is never marked.
+// 41.26 — a stream is marked only where its run had closed: one still running is no load the wait
+// could see the end of, and nor is one whose first run has not begun — a `global` stream `poll`
+// starts later answers no load, and its call would run it while hydration waited.
 function paintedSettled({ reached }: PageCall): boolean {
     return (
         isReactive(reached) &&
         loadOf(reached) === undefined &&
-        !isStreaming(reached)
+        (!isStreaming(reached) || runClosed(reached))
     )
 }
 

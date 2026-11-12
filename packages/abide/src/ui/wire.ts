@@ -20,6 +20,7 @@
 import {
     type Answer,
     answered,
+    answerFrom,
     answerOf,
     noAnswer,
     unanswered,
@@ -36,10 +37,10 @@ import {
     declareDefaults,
     type Defaults,
 } from '#shared/reactive/parameterDefaults.ts'
-import { standIn } from '#shared/reactive/producer.ts'
+import { closedRun, standIn } from '#shared/reactive/producer.ts'
 import { declare, type Method } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
-import { startedEarly } from '#shared/takeEarlyCall.ts'
+import { startedEarly, takeLandedCall } from '#shared/takeEarlyCall.ts'
 
 import { enqueue, undelivered } from './outboxQueue.ts'
 import { continueOverMux, followRpc, streamOverMux } from './socketWire.ts'
@@ -218,7 +219,26 @@ export function wire(
     }
     // A KEYED VALUE OF ITS OWN where the handler's declares what its copy behaves by, so every entry —
     // the copy a page walks — carries it: its key (32.32), its tags (11.43) and its comparator (5.3). A `GET` alone: a mutation's value is written and read once.
-    const produce = options?.stream === true ? streamed : body
+    // 41.33 — A STREAM THE SERVER PAINTED CLOSED LANDS CLOSED, in the run that reaches it, as an answer
+    // painted settled lands settled: its run had ended before the page was answered, and hydration
+    // waited for its whole transcript (41.25). Read through `streamed`, it was in flight at adopt,
+    // and every region painted from its end was rebuilt from the start (41.24).
+    const paintedOrStreamed = (args: Record<string, unknown> | undefined) => {
+        const request = requestOf(args)
+        const early = takeLandedCall(request.key)
+        if (early === undefined) return streamed(args)
+        const answer = answerFrom(
+            early.response as Response,
+            early.bytes,
+            false,
+        ) as Answer
+        if (answer.ok) answeredOnce.add(request.key)
+        follow(args, answer)
+        const value = answered(answer, request)
+        if (isFailed(value)) return value
+        return closedRun(Array.isArray(value) ? value : [])
+    }
+    const produce = options?.stream === true ? paintedOrStreamed : body
     if (defaults !== undefined) declareDefaults(produce, defaults)
     // A `GET`'S ENTRY IS LOOKED UP BY ITS FOLLOW through the value, not the `Rpc`: a call made with no
     // signal pins the load it reaches (16.48), and a frame from the server would pin one a page was

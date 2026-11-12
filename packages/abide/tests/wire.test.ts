@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { buildFiles } from '#server/appBuild.ts'
 import { takeParked } from '#server/parkedAnswers.ts'
+import { beginHydration, endHydration } from '#shared/hydrating.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
@@ -556,6 +557,81 @@ test('the wire takes a call the page already started, and fetches after that —
         expect(fetched).toEqual(['/rpc/getInvoice?id=7'])
     } finally {
         window.fetch = previous
+        window.__abideCalls = undefined
+    }
+})
+
+// 41.33 — A STREAM THE SERVER PAINTED CLOSED IS CLOSED IN THE RUN THAT REACHES IT, its chunks held,
+// as an answer painted settled is settled: hydration chose the arm the server painted from its end,
+// and a copy still busy there has `{#if !s.busy()}` rebuild the region from its start. A stream
+// painted in flight stays in flight. THE REVERT: declare `streamed` as a marked copy's body again in
+// `wire`; the closed stream is busy at the reach, and its read throws `NotLanded`.
+test('a stream painted closed lands closed at the reach, and one painted in flight does not — 41.26, 41.33', async () => {
+    const window = globalThis as unknown as Record<string, unknown>
+    const jsonl = (text: string) =>
+        new Response(text, {
+            headers: { 'content-type': 'application/jsonl' },
+        })
+    window.__abideCalls = {
+        'GET /rpc/words?id=x ': {
+            promise: Promise.resolve(),
+            painted: 1,
+            response: jsonl(''),
+            bytes: new TextEncoder().encode('"one "\n"two "\n"x"\n').buffer,
+        },
+        'GET /rpc/words?id=y ': {
+            promise: Promise.resolve(),
+            painted: undefined,
+            response: jsonl('"one "\n'),
+            bytes: undefined,
+        },
+    }
+    try {
+        const words = wire('GET', '/rpc/words', { stream: true }) as (args: {
+            id: string
+        }) => (() => unknown) & { busy(): boolean } & PromiseLike<unknown>
+        const closed = words({ id: 'x' })
+        expect([closed.busy(), closed()]).toEqual([
+            false,
+            ['one ', 'two ', 'x'],
+        ])
+        const flowing = words({ id: 'y' })
+        expect(flowing.busy()).toBe(true)
+        expect(await flowing).toEqual(['one '])
+    } finally {
+        window.__abideCalls = undefined
+    }
+})
+
+// 41.27 — HOWEVER EARLY THE BROWSER MADE THE CALL. A value built at a module's import — a `me` over
+// `whoami()` — calls while the page's modules load, before its setup, and an answer painted in flight
+// that landed while they loaded had the page adopt from it: the server painted `me.ready()` false, the
+// browser read true, and every region guarded by it was rebuilt (41.24). THE REVERT: drop
+// `.then(hydrated)` from `answerOf`; the call reads `ready()` true while the page still hydrates.
+test('a call painted in flight stays in flight until the page has hydrated, however early it was made — 41.27', async () => {
+    const window = globalThis as unknown as Record<string, unknown>
+    window.__abideCalls = {
+        'GET /rpc/whoami ': {
+            promise: Promise.resolve(),
+            painted: undefined,
+            response: new Response('{"owner":true}', {
+                headers: { 'content-type': 'application/json' },
+            }),
+            bytes: undefined,
+        },
+    }
+    beginHydration()
+    try {
+        const whoami = wire('GET', '/rpc/whoami') as () => (() => unknown) & {
+            ready(): boolean
+        } & PromiseLike<unknown>
+        const me = whoami()
+        await Bun.sleep(5)
+        expect(me.ready()).toBe(false)
+        endHydration()
+        expect(await me).toEqual({ owner: true })
+    } finally {
+        endHydration()
         window.__abideCalls = undefined
     }
 })
