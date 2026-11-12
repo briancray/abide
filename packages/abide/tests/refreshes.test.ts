@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, POST, principal, reactive, refuse, watch } from '#server'
+import { GET, log, POST, principal, reactive, refuse, watch } from '#server'
 import type { BootedApp } from '#server/createApp.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -184,8 +184,8 @@ test('a GET declared with refreshes is refused — 16.92', () => {
 // grace's; ada writes. Counted twice over: the board's body runs on the server, and the frames each
 // tab is sent. THE REVERTS, each in `refreshEach` in `rpc.ts`: hand the pair's selection to `refresh`
 // without its pattern, and grace's board reloads — `grace +1; frames 1 1 1` where `grace +0; frames
-// 1 1 0` is due; drop the thenable arm, and the promise is walked as a list — a write that has
-// already landed is answered 500 where 200 is due.
+// 1 1 0` is due; drop the thenable arm, and the promise is walked as a list, which fails (16.102) —
+// `ada +0; frames 0 0 0` where `ada +1; frames 1 1 0` is due.
 const boardRuns: Record<string, number> = { ada: 0, grace: 0 }
 const boards = reactive(
     async ({ personId }: { personId: string }) => ({
@@ -257,5 +257,52 @@ test('a write refreshes the caller’s own board, on the server and in its tabs,
     )
     expect(`by tag: ${await counted('addByTag')}`).toBe(
         'by tag: ada +1, grace +0; frames 1 1 0',
+    )
+})
+
+// 16.102 — A `refreshes` THAT FAILS LEAVES THE WRITE'S ANSWER ALONE: the write has landed, and a 500
+// is a write a retrying client makes twice. Thrown and rejected alike, each warned once on
+// `abide:reactive` naming the handler. THE REVERT: drop the `try` and the `.catch` in
+// `refreshOrWarn` in `rpc.ts`; both answer 500 where 200 is due, and warn 0 times where 1 is due.
+const throwing = POST(() => 'written', {
+    refreshes: () => {
+        throw new Error('the refresh broke')
+    },
+})
+const rejecting = POST(() => 'written', {
+    refreshes: async () => {
+        throw new Error('the refresh broke')
+    },
+})
+
+test('a refreshes that fails answers the write as it returned, and warns once — 16.102', async () => {
+    await using app = await inMemoryApp({
+        'failing/throwing.handler.ts': { default: throwing },
+        'failing/rejecting.handler.ts': { default: rejecting },
+    })
+    const answered = async (address: string): Promise<string> => {
+        const before = (log.records.peek() ?? []).length
+        const answer = await app.fetch(
+            new Request(`http://app.invalid/failing/${address}`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: '{}',
+            }),
+        )
+        let warned = 0
+        for (const record of (log.records.peek() ?? []).slice(before))
+            if (
+                record.namespace === 'abide:reactive' &&
+                record.level === 'warning' &&
+                record.message.includes(`/failing/${address}`)
+            )
+                warned += 1
+        return `${answer.status} ${await answer.text()}, warned ${warned}`
+    }
+    expect(`thrown: ${await answered('throwing')}`).toBe(
+        'thrown: 200 "written", warned 1',
+    )
+    expect(`rejected: ${await answered('rejecting')}`).toBe(
+        'rejected: 200 "written", warned 1',
     )
 })

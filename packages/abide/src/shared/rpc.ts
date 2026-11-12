@@ -20,6 +20,7 @@ import { HandlerRoute } from './HandlerRoute.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
 import { isServer } from './isServer.ts'
 import type { Issues } from './Issues.ts'
+import { namedLogger } from './log.ts'
 import { compose, type Rung } from './Middleware.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
@@ -569,12 +570,15 @@ export function declare<Declared extends Method>(
                       refreshes === undefined
                           ? answer
                           : (args: unknown) =>
-                                answerThenRefresh(answer(args), () =>
-                                    refreshEach(
-                                        typeof refreshes === 'function'
-                                            ? refreshes(args)
-                                            : refreshes,
-                                    ),
+                                answerThenRefresh(
+                                    answer(args),
+                                    () =>
+                                        refreshEach(
+                                            typeof refreshes === 'function'
+                                                ? refreshes(args)
+                                                : refreshes,
+                                        ),
+                                    () => rpc.address ?? 'a handler',
                                 ),
                       cacheOptions,
                   )
@@ -789,11 +793,13 @@ function argsOnce(
 async function answerThenRefresh(
     answer: Promise<unknown>,
     refresh: () => void | Promise<void>,
+    named: () => string,
 ): Promise<unknown> {
     const answered = await answer
     if (isFailed(answered)) return answered
-    if (isAsyncGenerator(answered)) return refreshedAtClose(answered, refresh)
-    const refreshing = refresh()
+    if (isAsyncGenerator(answered))
+        return refreshedAtClose(answered, refresh, named)
+    const refreshing = refreshOrWarn(refresh, named)
     if (refreshing !== undefined) await refreshing
     return answered
 }
@@ -801,10 +807,34 @@ async function answerThenRefresh(
 async function* refreshedAtClose(
     chunks: AsyncGenerator<unknown>,
     refresh: () => void | Promise<void>,
+    named: () => string,
 ): AsyncGenerator<unknown> {
     yield* chunks
-    const refreshing = refresh()
+    const refreshing = refreshOrWarn(refresh, named)
     if (refreshing !== undefined) await refreshing
+}
+
+const REFRESHES_LOG = namedLogger('abide:reactive')
+
+/**
+ * 16.102 — A FAILING `refreshes` LEAVES THE ANSWER AS THE HANDLER MADE IT: the write has landed, and
+ * a refusal or a 500 here is a write a retrying client makes twice. Warned once instead.
+ */
+function refreshOrWarn(
+    refresh: () => void | Promise<void>,
+    named: () => string,
+): void | Promise<void> {
+    const warn = (failure: unknown): void =>
+        REFRESHES_LOG.warning(
+            `${named()}: its refreshes failed, and the write is answered as it returned.`,
+            failure,
+        )
+    try {
+        const refreshing = refresh()
+        if (refreshing !== undefined) return refreshing.catch(warn)
+    } catch (failure) {
+        warn(failure)
+    }
 }
 
 /**
