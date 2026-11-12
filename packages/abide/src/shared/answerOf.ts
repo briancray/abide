@@ -14,6 +14,7 @@ import {
 import { KEPT_HEADER } from './KEPT_HEADER.ts'
 import { refused, type RefusedCall } from './onRefusal.ts'
 import { principalRotated } from './principalRotated.ts'
+import { answeredAtOnce } from './reactive/producer.ts'
 import { refuse } from './refuse.ts'
 import type { RpcRequest } from './rpcRequest.ts'
 import { takeEarlyCall } from './takeEarlyCall.ts'
@@ -69,8 +70,10 @@ export function answerOf(
 ): Answer | Promise<Answer> {
     const early = takeEarlyCall(request.key)
     if (early === undefined) return fetched(request, streams, signal)
-    if (early.painted === 1 && early.response !== undefined)
+    if (early.painted === 1 && early.response !== undefined) {
+        answeredAtOnce()
         return answerFrom(early.response, early.bytes, streams)
+    }
     // An early call whose request failed is made again.
     return early.promise.then(() =>
         early.response === undefined
@@ -99,7 +102,7 @@ async function fetched(
         return noAnswer()
     }
     // THE HANDLER SIGNED THIS CALLER IN OR OUT, and the cookie is already the browser's.
-    principalRotated(response)
+    principalRotated(response, request.method)
     return answerFrom(response, undefined, streams)
 }
 

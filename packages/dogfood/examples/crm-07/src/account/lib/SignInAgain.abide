@@ -15,7 +15,6 @@ const commission = reactive(() => getCommission())
 
 watch(principal.resolved, () => {
     signedOut = false
-    getCommission.refresh()
 })
 </script>
 

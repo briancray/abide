@@ -84,8 +84,9 @@ import Snippet from '#src/lib/Snippet.abide'
             signs them out. Both run in a handler, because the cookie is written on its answer. The
             <code>onPrincipal</code> at the foot of <code>signIn.handler.ts</code> is the next card's.</p>
 
-        <p>The answer also tells the browser the caller changed. Every tab of the site reads
-            <code>principal</code> again, so the form's own button flips with nothing passed to it.</p>
+        <p>The answer also tells the browser the caller changed. Every tab of the site refreshes
+            everything it reads, <code>principal</code> among it, so the form's own button flips with
+            nothing passed to it, and nothing on the page goes on showing the last member's data.</p>
 
         <p>The seal is a JWT signed with <code>ABIDE_PRINCIPAL_SECRET</code>, and it lives for
             <code>ABIDE_PRINCIPAL_TTL</code> milliseconds, a week unless you set it. The chapter app
@@ -191,9 +192,9 @@ import Snippet from '#src/lib/Snippet.abide'
         <p>The handler reads <code>principal.resolved</code> and leaves the field out. Hiding it in
             the template would still send it, and anyone opening the network panel would read it.</p>
 
-        <p>An answer read under one member is not read again on its own when another signs in, so
-            the card watches <code>principal.resolved</code> and refreshes the contact. The test calls
-            the handler in process, under the cookie each member's sign-in left.</p>
+        <p>The card refreshes nothing itself. A sign-in reads every value on the page again as the
+            new member, the contact among them. The test calls the handler in process, under the
+            cookie each member's sign-in left.</p>
     </Section>
 
     <Section title="A `middleware` rung refuses before the handler runs">

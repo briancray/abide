@@ -27,7 +27,7 @@ const TAGGED = new Map<string, Set<WeakRef<Cell>>>()
  *
  * 13.6: A BARE SWEEP REACHES PRODUCERS, and of those it files the ones that LOAD: a value holding
  * a `store`, filed where it is built, and a body the first time it starts a load — a pending
- * answer or a stream (`beginLoad`). A synchronous body is a derivation: reloading it recomputes
+ * answer or a stream (`beginLoad`), or a seed taken settled (`answeredAtOnce`). A synchronous body is a derivation: reloading it recomputes
  * what its sources already say, and whatever load it reads is filed on its own. And filing is
  * what every filed value pays — a weak handle measured ~230 ns a value under V8 against ~20 under
  * JSC — so a value with nothing to load never pays it: a derivation per cell per row stays at

@@ -108,14 +108,14 @@ export function principalMembers(): Members {
             PRINCIPAL.caller(),
         ) as unknown as Reactive<string>,
     }
-    // A SIGN-IN OR SIGN-OUT A HANDLER ANSWERED reloads the document, and every member reads
-    // through it. A REFRESH, not an invalidate: 7.4 keeps the document a click handler reads
-    // served until the new one lands. 26.24 — another tab's is heard too (`principalRotated.ts`);
-    // a browser's alone: a server, which replaced these slots, answers no `abide-principal` to itself.
-    onPrincipalRotated(
-        () => document.refresh(),
-        PRINCIPAL.document === BROWSER_PRINCIPAL.document,
-    )
+    // 26.24 — A SIGN-IN OR SIGN-OUT A HANDLER ANSWERED reloads the document, and every member reads
+    // through it: with everything else the tab holds where the call was not a `GET`, and alone
+    // where it was. A REFRESH, not an invalidate: 7.4 keeps the document a click handler reads
+    // served until the new one lands. Another tab's is heard too (`principalRotated.ts`); a
+    // browser's alone: a server, which replaced these slots, answers no `abide-principal` to itself.
+    onPrincipalRotated((everything) => {
+        if (!everything) document.refresh()
+    }, PRINCIPAL.document === BROWSER_PRINCIPAL.document)
     return members
 }
 

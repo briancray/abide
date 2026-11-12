@@ -187,10 +187,13 @@ function readPairing(): {
         )
         reading = { copy, readers: 0, aborted }
         // 44.34 — WHOEVER SIGNS IN AT THE BROWSER IS THE PAIRING READ FROM THEN ON: the mux reopens
-        // as them (18.25), and the copy reads the pairing again as them.
+        // as them (18.25), and the copy reads the pairing again as them — with everything else the
+        // tab holds where the sign-in was not a `GET` (26.24).
         if (!listening) {
             listening = true
-            onPrincipalRotated(() => reading?.copy.refresh(), true)
+            onPrincipalRotated((everything) => {
+                if (!everything) reading?.copy.refresh()
+            }, true)
         }
     }
     const held = reading

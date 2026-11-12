@@ -18,8 +18,9 @@ import {
     principalMembers,
 } from '#shared/principal.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
-import { watch } from '#shared/reactive/index.ts'
+import { reactive, watch } from '#shared/reactive/index.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
+import { seededDocument } from '#shared/seededDocument.ts'
 
 // A BROWSER'S SLOTS, whatever ran first. A file in this process that imported `#server` swapped
 // the server's resolver into `PRINCIPAL` and `HEALTH`, which a browser never does, and these reads
@@ -156,7 +157,7 @@ test('a seed painted settled is read settled, at once — 41.25, 41.27', () => {
 // A HANDLER'S SIGN-IN MOVES A BROWSER'S `principal`, read by a component the call never named: the
 // answer carries `PRINCIPAL_HEADER`, and the browser loads the document again under the cookie that
 // answer set. Counted as the reader's wake-ups as well as the value — a reader that woke without a
-// reload would still read `false`. THE REVERT: drop the `PRINCIPAL_HEADER` check in `answerOf`'s
+// reload would still read `false`. THE REVERT: drop the `principalRotated` call in `answerOf`'s
 // `fetched`; the principal is fetched 1 time where 2 are due, and reads `false` after the sign-in.
 test("a handler's answer that signed the caller in reloads the browser's principal", async () => {
     let signedIn = false
@@ -229,8 +230,9 @@ test('a claim an app declares on Principal is typed where principal.resolved rea
 
 // 7.4 — THE RELOAD A SIGN-IN STARTS KEEPS SERVING THE DOCUMENT IT REPLACES. A click handler reading
 // `principal.authenticated()` while the reload is in flight reads the caller as they were, rather
-// than throwing that the value has not landed. THE REVERT: have the listener `principalMembers` registers call
-// `document.invalidate()` again; the read during the reload throws `NotLanded`.
+// than throwing that the value has not landed. THE REVERT: have `rotated` in `principalRotated.ts`
+// call a bare `invalidate()` in place of `refreshCallerHeld()`; the read during the reload throws
+// `NotLanded`.
 test('a read while the sign-in reload is in flight answers the previous document — 7.4', async () => {
     let signedIn = false
     let landPrincipal = (): void => {}
@@ -272,6 +274,256 @@ test('a read while the sign-in reload is in flight answers the previous document
         landPrincipal()
         expect(await principal.authenticated).toBe(true)
     } finally {
+        globalThis.fetch = fetchedBefore
+    }
+})
+
+// 26.24 — A SIGN-IN MAKES EVERYTHING THE TAB HOLDS ANOTHER CALLER'S, so the tab that made the call
+// reloads every value something reads, not only `principal` — here one the sign-in never named —
+// and serves what it held until the reload lands (7.4). Once: the principal's own listener stands
+// aside for the refresh that already reached it. THE REVERTS: drop `refreshCallerHeld()` from
+// `rotated` in `principalRotated.ts`, and the inbox is loaded 1 time where 2 are due; have
+// `principal.ts`'s listener refresh whatever `everything` says, and the principal is fetched 3 times
+// where 2 are due.
+test('a sign-in reloads every value the tab reads, serving the old one meanwhile — 26.24, 7.4', async () => {
+    let caller = 'nobody'
+    let landInbox = (): void => {}
+    let loads = 0
+    const inbox = reactive(async () => {
+        loads += 1
+        const reading = caller
+        if (loads > 1)
+            await new Promise<void>((resolve) => {
+                landInbox = resolve
+            })
+        return `${reading}'s`
+    })
+    const seen: string[] = []
+    const stopWatching = watch(() => {
+        if (inbox.ready()) seen.push(inbox())
+        if (principal.authenticated.ready()) principal.authenticated()
+    })
+    const fetched: string[] = []
+    const fetchedBefore = globalThis.fetch
+    globalThis.fetch = (async (url: string) => {
+        fetched.push(String(url))
+        if (String(url) === PRINCIPAL_ADDRESS)
+            return new Response(
+                JSON.stringify({ authenticated: caller !== 'nobody' }),
+                { headers: { 'content-type': 'application/json' } },
+            )
+        caller = 'ada'
+        return new Response('null', {
+            headers: {
+                'content-type': 'application/json',
+                [PRINCIPAL_HEADER]: 'set',
+            },
+        })
+    }) as typeof fetch
+    principalMembers().document.invalidate()
+    try {
+        expect(await inbox).toBe("nobody's")
+        expect(await principal.authenticated).toBe(false)
+        await answerOf(
+            rpcRequest('POST', '/session/signIn', {}),
+            false,
+            undefined,
+        )
+        expect(`loads: ${loads}, during: ${inbox()}`).toBe(
+            "loads: 2, during: nobody's",
+        )
+        landInbox()
+        expect(await inbox).toBe("ada's")
+        expect(seen.at(-1)).toBe("ada's")
+        expect(await principal.authenticated).toBe(true)
+        expect(
+            `principal fetched: ${fetched.filter((url) => url === PRINCIPAL_ADDRESS).length}`,
+        ).toBe('principal fetched: 2')
+    } finally {
+        stopWatching()
+        globalThis.fetch = fetchedBefore
+    }
+})
+
+// 26.24 — A `GET` THAT SIGNS IN RELOADS THE PRINCIPAL, AND NOTHING ELSE: a `GET` is what a refresh
+// calls, so a value whose read answers the header every time would otherwise refresh everything,
+// itself among it, without end. THE REVERT: have `principalRotated` refresh everything whatever the
+// method; the verifying value is loaded until the case's own stop at 50, where 1 is due.
+test('a GET that signs in reloads the principal and nothing else — 26.24', async () => {
+    const fetchedBefore = globalThis.fetch
+    globalThis.fetch = (async (url: string) => {
+        if (String(url) === PRINCIPAL_ADDRESS)
+            return new Response('{"authenticated":true}', {
+                headers: { 'content-type': 'application/json' },
+            })
+        return new Response('null', {
+            headers: {
+                'content-type': 'application/json',
+                [PRINCIPAL_HEADER]: 'set',
+            },
+        })
+    }) as typeof fetch
+    principalMembers().document.invalidate()
+    let loads = 0
+    const verified = reactive(async () => {
+        loads += 1
+        // The revert's loop, stopped so it does not outlive the case.
+        if (loads > 50) return loads
+        await answerOf(
+            rpcRequest('GET', '/session/verify', undefined),
+            false,
+            undefined,
+        )
+        return loads
+    })
+    const stopWatching = watch(() => {
+        if (verified.ready()) verified()
+        if (principal.authenticated.ready()) principal.authenticated()
+    })
+    try {
+        await verified
+        await Bun.sleep(20)
+        expect(`loads: ${Math.min(loads, 50)}`).toBe('loads: 1')
+        expect(await principal.authenticated).toBe(true)
+    } finally {
+        stopWatching()
+        globalThis.fetch = fetchedBefore
+    }
+})
+
+// 26.24 — ANOTHER TAB'S SIGN-IN IS HEARD AS THIS TAB'S OWN: everything this tab reads is reloaded on
+// the channel's message, and nothing is sent back. THE REVERT: drop `refreshCallerHeld()` from
+// `rotated`; the value is loaded 1 time where 2 are due.
+test("another tab's sign-in reloads every value this tab reads — 26.24", async () => {
+    let loads = 0
+    const inbox = reactive(async () => {
+        loads += 1
+        return loads
+    })
+    const stopWatching = watch(() => {
+        if (inbox.ready()) inbox()
+    })
+    // Opens this tab's channel, as reading `principal` does.
+    principalMembers()
+    const otherTab = new BroadcastChannel('abide:principal')
+    let echoed = 0
+    otherTab.onmessage = () => {
+        echoed += 1
+    }
+    try {
+        expect(await inbox).toBe(1)
+        otherTab.postMessage('everything')
+        await Bun.sleep(10)
+        expect(`loads: ${loads}, echoed: ${echoed}`).toBe('loads: 2, echoed: 0')
+    } finally {
+        stopWatching()
+        otherTab.close()
+    }
+})
+
+// 13.6, 26.24 — A VALUE PAINTED SETTLED IS A LOAD ALL THE SAME: its body took the seed at once
+// (41.27) and handed back no pending answer, yet the server painted it as the caller the page loaded
+// as, and a sign-in reloads it with the rest. THE REVERT: drop `answeredAtOnce()` from `answerOf`;
+// the bare refresh never reaches the value, and its address is fetched 0 times where 1 is due.
+test('a value painted settled is reloaded by a sign-in — 13.6, 26.24', async () => {
+    const address = '/account/getContact'
+    const started: Record<string, unknown> = {}
+    started[rpcRequest('GET', address, undefined).key] = {
+        promise: Promise.resolve(),
+        painted: 1,
+        response: new Response(null, {
+            headers: { 'content-type': 'application/json' },
+        }),
+        bytes: new TextEncoder().encode('{"dealValue":"admins only"}').buffer,
+    }
+    const globals = globalThis as unknown as Record<string, unknown>
+    globals[EARLY_CALLS] = started
+    const contact = reactive(() =>
+        seededDocument<{ dealValue: string }>(address),
+    )
+    globals[EARLY_CALLS] = undefined
+    const stopWatching = watch(() => {
+        if (contact.ready()) contact()
+    })
+    const fetched: string[] = []
+    const fetchedBefore = globalThis.fetch
+    globalThis.fetch = (async (url: string) => {
+        fetched.push(String(url))
+        if (String(url) === address)
+            return new Response('{"dealValue":"$48,000"}', {
+                headers: { 'content-type': 'application/json' },
+            })
+        return new Response('null', {
+            headers: {
+                'content-type': 'application/json',
+                [PRINCIPAL_HEADER]: 'set',
+            },
+        })
+    }) as typeof fetch
+    try {
+        expect(
+            (contact() as { dealValue: string } | undefined)?.dealValue,
+        ).toBe('admins only')
+        await answerOf(
+            rpcRequest('POST', '/session/signIn', {}),
+            false,
+            undefined,
+        )
+        expect(
+            `fetched: ${fetched.filter((url) => url === address).length}`,
+        ).toBe('fetched: 1')
+        expect(((await contact) as { dealValue: string }).dealValue).toBe(
+            '$48,000',
+        )
+    } finally {
+        stopWatching()
+        globalThis.fetch = fetchedBefore
+    }
+})
+
+// 26.24, 11.34 — A `global` VALUE IS NO ONE CALLER'S, so a sign-in leaves it be while it reloads what
+// this caller read: one cache for every caller holds nothing the new one makes stale. THE REVERT:
+// drop the `global` test from `refreshCallerHeld`; the shared value is loaded 2 times where 1 is due.
+test('a sign-in leaves a global value be — 26.24, 11.34', async () => {
+    let sharedLoads = 0
+    const shared = reactive(
+        async () => {
+            sharedLoads += 1
+            return sharedLoads
+        },
+        { global: true },
+    )
+    let ownLoads = 0
+    const own = reactive(async () => {
+        ownLoads += 1
+        return ownLoads
+    })
+    const stopWatching = watch(() => {
+        if (shared.ready()) shared()
+        if (own.ready()) own()
+    })
+    const fetchedBefore = globalThis.fetch
+    globalThis.fetch = (async () =>
+        new Response('null', {
+            headers: {
+                'content-type': 'application/json',
+                [PRINCIPAL_HEADER]: 'set',
+            },
+        })) as unknown as typeof fetch
+    try {
+        await shared
+        await own
+        await answerOf(
+            rpcRequest('POST', '/session/signIn', {}),
+            false,
+            undefined,
+        )
+        await own
+        expect(`shared: ${sharedLoads}, own: ${ownLoads}`).toBe(
+            'shared: 1, own: 2',
+        )
+    } finally {
+        stopWatching()
         globalThis.fetch = fetchedBefore
     }
 })

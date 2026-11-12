@@ -22,12 +22,14 @@ import { ownStream, type Reactive } from './Reactive.ts'
 
 export {
     abandonLoad,
+    answeredAtOnce,
     chunksOfStream,
     dropAnswered,
     failedTransiently,
     isAsyncGenerator,
     patchInto,
     produceInto,
+    refreshCallerHeld,
     refuseInto,
     standIn,
     streamingOrSettled,
