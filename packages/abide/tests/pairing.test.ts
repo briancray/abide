@@ -133,8 +133,10 @@ test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44
 })
 
 // 44.69 — A READ THAT FAILED IS THE STATUS'S FAILURE, so a page can say the assistant is unavailable
-// rather than wait on a status that never lands. THE REVERT: answer `undefined` from `status`'s body
-// where the copy failed, as it did; `status` stays ready and undefined, with no error, for good.
+// rather than wait on a status that never lands — on `error()`, a refused write's (4.10), so a READ
+// of `status` goes on answering `undefined` rather than throwing it (2.3). THE REVERT: give `status`
+// the 8ec67742 body, `reactive(() => read.copy())`; the read throws, and this reports `read: threw
+// HttpError`.
 test('a pairing /__abide/pairing fails to answer fails its status with that failure — 44.69', async () => {
     globalThis.fetch = (async () =>
         new Response('down', { status: 503 })) as unknown as typeof fetch
@@ -142,36 +144,76 @@ test('a pairing /__abide/pairing fails to answer fails its status with that fail
     for (let turn = 0; turn < 50 && pair.status.error() === undefined; turn++)
         await Bun.sleep(0)
     const failure = pair.status.error() as { status?: number } | undefined
+    let read: string
+    try {
+        read = String(pair.status())
+    } catch (thrown) {
+        read = `threw ${(thrown as Error).name}`
+    }
     expect(
-        `failed ${failure !== undefined}, status ${failure?.status}, value ${pair.status.peek()}`,
-    ).toBe('failed true, status 503, value undefined')
+        `failed ${failure !== undefined}, status ${failure?.status}, read: ${read}`,
+    ).toBe('failed true, status 503, read: undefined')
     pair.start()
     expect(pair.step()).toBe('click')
     dispose()
 })
 
-// 44.69 — IN FLIGHT UNTIL THE FIRST STATUS LANDS, so a page awaiting its pairing waits for one rather
-// than settling on nothing, and one whose read failed is rejected with that failure, narrowed by name.
-// THE REVERT: give `status` the body it had, `undefined` until the copy is ready or failed; this
-// reports `first: undefined` and `failed: none`.
-test('awaiting status waits for the first status, or the failure of its read — 44.69', async () => {
+// 44.69 — A READ AFTER THE FIRST THAT FAILS LEAVES THE STATUS IT HAD, failed beside it, and the next
+// that answers clears the failure (4.11). THE REVERT: drop the watch's failure arm in `setUp`; this
+// reports `failed: none` where `failed: 503` is due.
+test('a later read that fails keeps the status held, and the next answer clears it — 44.69', async () => {
     const { pair, dispose } = built()
+    // Disposed however this ends, or the page's copy outlives it into the next test.
+    try {
+        await landed(pair, UNPAIRED)
+        globalThis.fetch = (async () =>
+            new Response('down', { status: 503 })) as unknown as typeof fetch
+        push(UNPAIRED)
+        for (
+            let turn = 0;
+            turn < 50 && pair.status.error() === undefined;
+            turn++
+        )
+            await Bun.sleep(0)
+        const failed = `held: ${pair.status()?.link}, failed: ${pair.status.error()?.status ?? 'none'}`
+        globalThis.fetch = (async () =>
+            Response.json({
+                ...UNPAIRED,
+                paired: true,
+            })) as unknown as typeof fetch
+        push(UNPAIRED)
+        for (
+            let turn = 0;
+            turn < 50 && pair.status.error() !== undefined;
+            turn++
+        )
+            await Bun.sleep(0)
+        expect(
+            `${failed}; then paired: ${pair.status()?.paired}, failed: ${pair.status.error()?.status ?? 'none'}`,
+        ).toBe(`held: ${LINK}, failed: 503; then paired: true, failed: none`)
+    } finally {
+        dispose()
+    }
+})
+
+// 44.69 — BUSY UNTIL THE FIRST READ SETTLES, so a page awaiting its pairing waits for the first status
+// rather than settling on the `undefined` it opens on, and one whose read failed settles on that
+// `undefined` with the failure on `error()`. THE REVERT: drop the `status.set(new Promise(…))` in
+// `setUp`; this reports `busy: false, first: undefined`.
+test('awaiting status waits for the first read, settling undefined where it failed — 44.69', async () => {
+    const { pair, dispose } = built()
+    const busy = pair.status.busy()
     const first = await pair.status
     dispose()
     globalThis.fetch = (async () =>
         new Response('down', { status: 503 })) as unknown as typeof fetch
     const failing = built()
-    let failed = 'none'
-    try {
-        await failing.pair.status
-    } catch (error) {
-        if (failing.pair.status.isError(error, 'HttpError'))
-            failed = `${error.name} ${error.status}`
-    }
+    const settled = await failing.pair.status
+    const failure = failing.pair.status.error()
     failing.dispose()
-    expect(`first: ${first?.link}, failed: ${failed}`).toBe(
-        `first: ${LINK}, failed: HttpError 503`,
-    )
+    expect(
+        `busy: ${busy}, first: ${first?.link}, failed: ${settled} ${failure?.name} ${failure?.status}`,
+    ).toBe(`busy: true, first: ${LINK}, failed: undefined HttpError 503`)
 })
 
 // 44.73 — A PAIRING NO SETUP OWNS IS STOPPED BY ITS CALLER: one a click handler built reads and follows
@@ -190,10 +232,10 @@ test('a pairing built outside a setup stops reading and following once stopped �
     ).toBe('reads: 1, read aborted: true, unfollowed: 1')
 })
 
-// 44.69 — A SERVER HOLDS NOTHING AND HAS NOTHING IN FLIGHT, so a render opens no sink for the status
-// (3.4) and does not wait on it. THE REVERT: build the server's `status` as a body that never settles,
-// `reactive(() => new Promise(() => {}))`; this reports `busy: true`.
-test('a pairing a server builds holds no status and nothing in flight — 44.69', async () => {
+// 44.69 — A SERVER HOLDS `undefined` AND HAS NOTHING IN FLIGHT, so a render paints the page's arm for
+// no status and opens no sink for it (3.4). THE REVERT: write the server's `status` a load that never
+// settles, `status.set(new Promise(() => {}))`; this reports `busy: true`.
+test('a pairing a server builds holds undefined and nothing in flight — 44.69', async () => {
     await using app = await inMemoryApp({
         'probe/pairing.handler.ts': {
             default: GET(() => {
@@ -204,7 +246,7 @@ test('a pairing a server builds holds no status and nothing in flight — 44.69'
     })
     const answer = await app.fetch(new Request('http://site/probe/pairing'))
     expect(await answer.json()).toBe(
-        'ready: false, busy: false, held: undefined',
+        'ready: true, busy: false, held: undefined',
     )
     expect(asked).toHaveLength(0)
 })
