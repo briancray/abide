@@ -22,6 +22,7 @@ import { ownStream, type Reactive } from './Reactive.ts'
 
 export {
     abandonLoad,
+    answeredAtOnce,
     chunksOfStream,
     closedRun,
     dropAnswered,
@@ -29,6 +30,7 @@ export {
     isAsyncGenerator,
     patchInto,
     produceInto,
+    refreshCallerHeld,
     refuseInto,
     standIn,
     streamingOrSettled,

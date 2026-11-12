@@ -700,7 +700,7 @@ export function declare<Declared extends Method>(
                     )
                 // 26.24 — a sign-in made raw is still a sign-in.
                 return fetch(asked.url, given).then((answer) => {
-                    principalRotated(answer)
+                    principalRotated(answer, given.method ?? method)
                     return answer
                 })
             },

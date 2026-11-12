@@ -898,7 +898,8 @@ mechanism.
 13.5 An implementation MUST NOT provide a free `done`, `success`, `error` or `issues` over a `Selection`.
 
 13.6 A bare `invalidate`, `refresh`, `busy` or `ready` MUST match only entries whose producer is a
-load: a `store`, or a body that has handed back a pending answer or a stream.
+load: a `store`, or a body that has handed back a pending answer or a stream, or has taken a call
+41.20's script started that the server painted settled (41.27).
 
 13.7 A bare `refresh`, and `refresh` over a `Selection` that is not one `Reactive`, MUST reload
 only entries something subscribes to and MUST mark the rest.
@@ -1958,8 +1959,10 @@ naming the byte count.
 unauthenticated caller carrying that refusal as `principal.error`.
 
 26.24 Where a handler's `principal.set` or `principal.clear` ran, its answer MUST say so in an
-`abide-principal` header, and a browser that reads `principal` MUST reload the document on it in
-every tab, serving the one it holds until the new one lands per 7.4.
+`abide-principal` header, and on it a browser MUST, in every tab and once in each, refresh
+everything it holds save a `global` value, as a bare `refresh` does (13.7), where the call was not a
+`GET`, and reload the `principal` document where it was, each value serving the one it holds until
+the new one lands per 7.4.
 
 26.25 `Principal` MUST admit a field an app declares on it, of any type.
 

@@ -2964,6 +2964,19 @@ export function closedRun(chunks: unknown[]): unknown {
 }
 
 /**
+ * Files the value whose body is running as a load, where it took a seed settled at once (13.6).
+ *
+ * A SEED THE SERVER PAINTED SETTLED is a load's answer that arrived before the body asked (41.27):
+ * the body hands it back settled, so `beginLoad` never files it, and a bare `refresh` — a sign-in's
+ * among them (26.24) — passed over every value the page was painted with.
+ */
+export function answeredAtOnce(): void {
+    const running = TRACKING.reader
+    if (running instanceof Cell && running.running && !running.filed)
+        fileProducer(running)
+}
+
+/**
  * Writes `value` as its producer made it, putting it back in step (3.11).
  *
  * WHAT A FOLLOWED COPY IS SENT IS THE PRODUCER'S, whoever carries it in: the server's value
@@ -3702,20 +3715,32 @@ function invalidateIn(cell: Cell, tags: string[] | null): void {
  * BODY, and a stream's body is a generator that only `startStream` knows how to run.
  */
 export function refreshOver(tags: string[] | null): void {
-    for (const cell of inReach(tags)) {
-        // 13.16 — a mutation's reload is its write sent again, so a sweep marks it instead.
-        if (cell.mutation) invalidateIn(cell, tags)
-        else if (
-            readByAny(cell.readers) ||
-            readByAny(cell.probeReaders) ||
-            cell.stream !== null
-        ) {
-            if (tags === null) refreshOne(cell)
-            else eachAdopted(cell, refreshOne)
-        } else if (cell.body !== null) {
-            cell.state = DIRTY
-            cell.direct = false
-        }
+    for (const cell of inReach(tags)) refreshIn(cell, tags)
+}
+
+/**
+ * The bare refresh over what is held for one caller: every value in reach but a `global` one.
+ *
+ * 26.24 — A NEW CALLER MAKES STALE WHAT WAS READ AS THE OLD ONE, and a `global` value is one cache
+ * for every caller (11.34), so a sign-in has nothing of its to reload.
+ */
+export function refreshCallerHeld(): void {
+    for (const cell of inReach(null)) if (!cell.global) refreshIn(cell, null)
+}
+
+function refreshIn(cell: Cell, tags: string[] | null): void {
+    // 13.16 — a mutation's reload is its write sent again, so a sweep marks it instead.
+    if (cell.mutation) invalidateIn(cell, tags)
+    else if (
+        readByAny(cell.readers) ||
+        readByAny(cell.probeReaders) ||
+        cell.stream !== null
+    ) {
+        if (tags === null) refreshOne(cell)
+        else eachAdopted(cell, refreshOne)
+    } else if (cell.body !== null) {
+        cell.state = DIRTY
+        cell.direct = false
     }
 }
 
