@@ -1,5 +1,5 @@
 import type { JsonValue } from '#shared/JsonValue.ts'
-import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
+import { SERVER_RUNTIME_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { placed } from './Cursor.ts'
@@ -163,7 +163,7 @@ ${build}`
               : build
     // Before the imports are read off what the lowering was asked for (`setupThrown`).
     const guarded = guardedSetup(lowering, componentBody, level)
-    return `${moduleImports(lowering, () => SERVER_SPECIFIER, [moduleSetup, serverSetup, setup])}
+    return `${moduleImports(lowering, SERVER_RUNTIME_SPECIFIER, [moduleSetup, serverSetup, setup])}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}${serverBody}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
 ${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : ''}${opened}${guarded}${closed}
 }
@@ -202,25 +202,21 @@ function heldToAnnotations(
 }
 
 /**
- * An emitted module's imports: each framework name `lowering` used, from the specifier it ships
- * under, and the author's own from both script blocks, already pointed where they landed
- * (`splitImports`).
+ * An emitted module's imports: each framework name `lowering` used, from its lane's runtime
+ * (`SPECIFIERS.ts`), and the author's own from both script blocks, already pointed where they
+ * landed (`splitImports`).
  *
  * ASKED LAST, because `used` fills as the module is emitted.
  */
 export function moduleImports(
     lowering: Lowering,
-    specifierOf: (name: string) => string,
+    runtime: string,
     scripts: readonly { imports: string }[],
 ): string {
-    const names = new Map<string, string[]>()
-    for (const name of [...lowering.used].sort()) {
-        const specifier = specifierOf(name)
-        names.set(specifier, [...(names.get(specifier) ?? []), name])
-    }
-    let out = ''
-    for (const specifier of [...names.keys()].sort())
-        out += `import { ${importClause(names.get(specifier) as string[])} } from '${specifier}'\n`
+    let out =
+        lowering.used.size === 0
+            ? ''
+            : `import { ${importClause([...lowering.used].sort())} } from '${runtime}'\n`
     for (const script of scripts) out += withoutProps(script.imports)
     return out
 }
@@ -228,8 +224,8 @@ export function moduleImports(
 /**
  * The braces of a framework import: each name bound as `name as __name`.
  *
- * EVERY FRAMEWORK NAME IS BOUND UNDER `__`, the namespace an author does not write in: the escaping
- * helpers are public on `@abide/abide`, so an author may import the same name into the same `<script>` —
+ * EVERY FRAMEWORK NAME IS BOUND UNDER `__`, the namespace an author does not write in: an author may
+ * import a name the runtime also has into the same `<script>` —
  * `import { safeUrl } from './mine.ts'` beside one `<a href={u}>` was
  * `Identifier 'safeUrl' has already been declared` — and a `<script module>` declaring `setText` at
  * module scope collides with a runtime import made as written just the same.

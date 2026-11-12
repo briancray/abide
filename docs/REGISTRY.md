@@ -2,8 +2,9 @@
 
 Every name an app author can write, with its type and what it is.
 
-`@abide/abide/compiler`, and the `/runtime`, `/routing` and `/wire` entries a compiled bundle
-imports, are tooling rather than surface an app author writes, and none of their names is a row.
+`@abide/abide/compiler`, and the `/runtime`, `/server/runtime`, `/routing` and `/wire` entries
+compiled output imports, are tooling rather than surface an app author writes, and none of their
+names is a row.
 
 ## What this document is
 

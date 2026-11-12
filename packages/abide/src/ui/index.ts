@@ -17,6 +17,9 @@
 // reaches does not belong on what every compiled module resolves through.
 
 export { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
+// What emitted code calls on both sides — the server's markup and a client re-rendering an arm or
+// a row. The same modules every page reached through `@abide/abide` before, so no byte moves.
+export * from '#shared/emitted.ts'
 export { oneStyleValue } from '#shared/escapeText.ts'
 export { isRaw } from '#shared/Raw.ts'
 // 12.4 — the watches a component's setup opens, collected for the scope its markup makes.

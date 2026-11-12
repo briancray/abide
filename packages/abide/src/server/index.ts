@@ -9,9 +9,7 @@ import { installServer } from './installServer.ts'
 
 // THE WHOLE ISOMORPHIC SURFACE, re-exported rather than owned. A server module imports `GET` and
 // `reactive` through this one specifier — the same callable, by the same name, that `@abide/abide`
-// hands a page. It is also every run-time half an
-// emitted module reaches through here: 32.1's escaping and 32.2's `raw`, which both sides render
-// markup with, 32.20's `safeUrl`, and 31.8's `writePath`.
+// hands a page. What only EMITTED code calls is on `@abide/abide/server/runtime` (`runtime.ts`).
 export * from '#shared'
 // 18.11 — one write a patch made, as a followed `GET`'s `patch` carries it.
 export type { PatchOp } from '#shared/reactive/patchLog.ts'
@@ -55,22 +53,11 @@ export type { ConfigField } from './configFields.ts'
 export { database } from './database.ts'
 // 42 — the app object, and 37's hooks a `<script server>` calls.
 export { type App, createApp } from './createApp.ts'
-// 41.28's run-time half: an emitted component reads it on either side of its setup, and one whose
-// setup made a call answers as a page does. Not an app's name.
-export { callsInRender } from './PageRender.ts'
-// 16.88's run-time half: what the module a handler file is loaded through calls to give it its
-// address. Not an app's name.
-export { addressed } from './addressed.ts'
-// 19.9's run-time half: what the module a handler is loaded through calls to hold it to the schema
-// its annotation derives (15.8). Not an app's name.
-export { derivedArgs } from './argsContract.ts'
-// 37.1's run-time half: what a compiled server module calls around its `<script server>`, so the
-// hooks it makes are filed at its route.
+// 37 — the hooks a `<script server>` and a server module call.
 export {
     type ConfigDefaults,
     type ConfigOptions,
     type Env,
-    fileRoute,
     type Lane,
     middleware,
     onConfig,
@@ -87,9 +74,6 @@ export type { Launch } from './launcherPage.ts'
 // 23.10 — whether a host answers, asked before a call to it.
 export { reachable } from './reachable.ts'
 export { type Component, render } from './render.ts'
-// 32.17's run-time half: one invocation, rendered where it stands, with the anchors that make the
-// child's markup one thing for the client to walk to.
-export { renderComponent } from './renderComponent.ts'
 // 22.1 — the request being served, the response being built for it, and the listening server.
 // 22.12 — and where it came from.
 export {

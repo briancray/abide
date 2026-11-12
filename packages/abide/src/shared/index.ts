@@ -9,6 +9,11 @@
 // ONE REFUSAL TYPE beside it. `Failed` is the only thing a producer answers in place of a
 // value (15.1), so it is in this seam rather than the server's: the same object crosses a
 // wire, fills `s.error` and narrows through `s.isError`.
+//
+// EVERY NAME HERE HAS A REGISTRY ROW. What only compiled `.abide` output calls — the escaping, the
+// prop cells, the share scope — is on the two entries the compiler emits imports from,
+// `@abide/abide/runtime` and `@abide/abide/server/runtime`, and `coverage.test.ts` holds this
+// barrel to the registry so it cannot regrow there.
 
 // 44 — a conversation as a page sends it and is handed it back: the server's `assistant` yields it.
 export type {
@@ -18,18 +23,8 @@ export type {
 } from './AssistantEvent.ts'
 // 33.23 — an element's attributes, typed as a component's props.
 export type { Attributes } from './Attributes.ts'
-// 32.37 — what a value writes into an attribute, on both sides.
-export { attributeMarkup, attributeText } from './attributeText.ts'
-// EMITTED CODE'S: the value a `bind:` operand holds, as the server writes it into the tag (32.5).
-export {
-    boundProp,
-    boundValue,
-    groupHolds,
-    selectedMarkup,
-} from './boundValue.ts'
 export { type Cookies, cookies } from './cookies.ts'
 export { csp } from './csp.ts'
-export { escapeAttribute, escapeStyleValue, escapeText } from './escapeText.ts'
 export { type Failed, isFailed } from './Failed.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'
@@ -39,10 +34,6 @@ export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
-// 32.15's run-time half. In this seam because BOTH sides ask it what a `{#for}` subject iterates
-// as — the server's emitted block, the client's `updateList`, and the markup a client builds for a
-// row — so the one function is the one answer.
-export { listOf } from './listOf.ts'
 export { type Logger, type LogRecord, log } from './log.ts'
 export type { Middleware } from './Middleware.ts'
 export type { Params } from './matchRoute.ts'
@@ -70,39 +61,23 @@ export { pairing } from './pairing.ts'
 // 37.22 — the browser's `onRefusal`, which has no server's.
 export { onRefusal } from './onRefusal.ts'
 export { type Principal, principal } from './principal.ts'
-// EMITTED CODE'S: a prop the child writes (33.6, 33.7), and one it hands where a `Reactive` is due (33.27).
-export {
-    heldProp,
-    propCell,
-    propCells,
-    propOr,
-    restValues,
-    withoutKeys,
-} from './propCell.ts'
 export { props } from './props.ts'
-// `markupRun` and `RAW_WRITES` are EMITTED CODE'S: a text run anchored while it holds markup (32.30).
-export { markupRun, RAW_WRITES, Raw, raw } from './Raw.ts'
+export { Raw, raw } from './Raw.ts'
 export {
     busy,
-    // 10.5's pair — not an app's names: an emitted component opens its instance's share scope
-    // with them, on both sides, and `importClause` binds them under `__`.
-    currentShare,
     type Disposer,
     type Effect,
-    enterShare,
     flushSync,
     type Identity,
     invalidate,
     isReactive,
     type Keyed,
-    leaveShare,
     NotLanded,
     type Reactive,
     type ReactiveOptions,
     reactive,
     ready,
     refresh,
-    resumeShare,
     type Selection,
     type Shared,
     stopSignal,
@@ -117,14 +92,6 @@ export { aborted, notFound, refuse, validationError } from './refuse.ts'
 export { resultsOf } from './resultsOf.ts'
 export { route } from './route.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
-export { safeUrl } from './safeUrl.ts'
-// EMITTED CODE'S, not an author's — no REGISTRY row, the way `escapeText` and `listOf` have
-// none. A markup position that aborts on an unlanded read (32.23) is the compiler's business.
-export { slotValue } from './slotValue.ts'
-// EMITTED CODE'S — 34.32's naming of a setup's read of an unlanded value.
-export { setupThrown } from './setupThrown.ts'
-// EMITTED CODE'S — 32.11's spread, as props and as markup.
-export { spreadAttributes, spreadProps } from './spread.ts'
 // 30.1 — the address builder, and the types that read a route literal for it.
 export {
     type HasParams,
@@ -146,4 +113,3 @@ export { indexedDBStore } from './indexedDBStore.ts'
 export { validateJson } from './validateJson.ts'
 // 8.22 — a `Store` in the browser's Web Storage, inert where there is none (8.23).
 export { webStore } from './webStore.ts'
-export { mutatePath, writePath } from './writePath.ts'

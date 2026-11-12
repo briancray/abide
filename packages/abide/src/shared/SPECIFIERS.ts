@@ -5,12 +5,17 @@
 // to a grep exactly like an import statement, so holding all of them here is the difference between
 // a check that works and one with an exception in it.
 //
-// FIVE, BECAUSE THE ROUTER AND THE WIRE ARE NOT PART OF WHAT EVERY PAGE IMPORTS. Only the emitted
-// route table names the one and only an emitted handler wrapper the other, and an entry each is
-// what keeps them off the runtime barrel every compiled module resolves through. `ui/routing.ts`
-// records what that is and is not worth.
+// THE ROUTER AND THE WIRE ARE NOT PART OF WHAT EVERY PAGE IMPORTS. Only the emitted route table
+// names the one and only an emitted handler wrapper the other, and an entry each is what keeps them
+// off the runtime barrel every compiled module resolves through. `ui/routing.ts` records what that
+// is and is not worth.
+//
+// AN EMITTED MODULE IMPORTS ITS FRAMEWORK NAMES FROM A RUNTIME, never from the two an app writes:
+// `RUNTIME_SPECIFIER` in the browser and `SERVER_RUNTIME_SPECIFIER` on the server. What emitted
+// code calls has no REGISTRY row, and on `@abide/abide` it was autocomplete an author never wanted.
 export const SHARED_SPECIFIER = '@abide/abide'
 export const SERVER_SPECIFIER = '@abide/abide/server'
 export const RUNTIME_SPECIFIER = '@abide/abide/runtime'
+export const SERVER_RUNTIME_SPECIFIER = '@abide/abide/server/runtime'
 export const ROUTING_SPECIFIER = '@abide/abide/routing'
 export const WIRE_SPECIFIER = '@abide/abide/wire'

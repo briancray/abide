@@ -1,4 +1,4 @@
-import { escapeAttribute } from '@abide/abide'
+import { escapeHtml } from './escapeHtml.ts'
 
 // A compact highlighter: enough to make a snippet scannable, not a parser. Order in the alternation
 // is the precedence — a keyword inside a string stays a string.
@@ -13,17 +13,17 @@ export function highlight(code: string): string {
     let last = 0
     TOKEN.lastIndex = 0
     for (let match = TOKEN.exec(code); match; match = TOKEN.exec(code)) {
-        html += escapeAttribute(code.slice(last, match.index))
+        html += escapeHtml(code.slice(last, match.index))
         let group = 0
         for (let index = 1; index < match.length; index += 1)
             if (match[index] !== undefined) {
                 group = index
                 break
             }
-        html += `<span class="t-${TOKEN_CLASS[group - 1]}">${escapeAttribute(match[0])}</span>`
+        html += `<span class="t-${TOKEN_CLASS[group - 1]}">${escapeHtml(match[0])}</span>`
         last = match.index + match[0].length
     }
-    return html + escapeAttribute(code.slice(last))
+    return html + escapeHtml(code.slice(last))
 }
 
 /**

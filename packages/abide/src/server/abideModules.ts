@@ -19,7 +19,7 @@
 
 import { basename, dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 
-import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
+import { SERVER_RUNTIME_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import type { ServerTable } from './answerRequest.ts'
 import {
@@ -171,7 +171,7 @@ function handlerFilesPlugin(
                     const lines = [
                         `export { default } from ${face}`,
                         `import __handler from ${face}`,
-                        `import { addressed as __addressed, derivedArgs as __derivedArgs } from '${SERVER_SPECIFIER}'`,
+                        `import { addressed as __addressed, derivedArgs as __derivedArgs } from '${SERVER_RUNTIME_SPECIFIER}'`,
                         `__addressed(__handler, ${JSON.stringify(address)})`,
                     ]
                     if (schema !== undefined)
@@ -411,7 +411,7 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                 if (lane.browser) return { contents: face.client, loader: 'js' }
                 const text = await Bun.file(path).text()
                 return {
-                    contents: `import { fileRoute as __fileRoute } from '${SERVER_SPECIFIER}';__fileRoute(${JSON.stringify(face.scope)});${text}\n;__fileRoute(undefined)\n`,
+                    contents: `import { fileRoute as __fileRoute } from '${SERVER_RUNTIME_SPECIFIER}';__fileRoute(${JSON.stringify(face.scope)});${text}\n;__fileRoute(undefined)\n`,
                     loader: 'ts',
                 }
             })
