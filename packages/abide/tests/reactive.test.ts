@@ -6570,13 +6570,13 @@ test('a write over an invalidated stream is served, and the owed run is not star
 // does (7.4). `invalidate(); refresh()` blanks, which is the order the reload guide warns about.
 //
 // THE REVERT is `refreshOne` clearing the debt without unserving: `ready: true`.
-test('a refresh over an invalidated value does not serve what the mark said was wrong', () => {
+test('a refresh over an invalidated value does not serve what the mark said was wrong', async () => {
     const settled = reactive(() => 1)
     settled.invalidate()
     settled.refresh()
     expect(settled()).toBe(1)
     const loading = reactive(() => Promise.resolve(1))
-    return loading.then(() => {
+    await loading.then(() => {
         loading.invalidate()
         loading.refresh()
         expect(`ready: ${loading.ready()}`).toBe('ready: false')

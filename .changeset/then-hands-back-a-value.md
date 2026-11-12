@@ -1,0 +1,5 @@
+---
+'@abide/abide': minor
+---
+
+`s.then(onSettled, onFailed?)` hands back a `Reactive` instead of a `Promise` (RULEBOOK 2.16-2.22). It is busy until the handler and anything it returned have settled, holds what the handler settled to, and its `error()` is the step that failed: the original refusal passed through with its `issues()`, or the handler's throw or rejection. A handler that returns a call is followed until that call lands, and the failures that call declares are typed onto the result (`Next`). `saving = save(args).then(next)` keeps the button disabled through `next`. `s.catch` and `s.finally` are built from `then` (1.5), so they hand back a `Reactive` too. `await` works as before. Code that typed the result as `Promise<…>`, returned it from a `bun test` body, or relied on `instanceof Promise` should `await` it instead. A step nothing reads is still reported as unhandled when its handler throws (2.20). Once a step is kept or read, the throw is on its `error()` and is not reported (2.21). The value is built the first time something reaches it, so `await s` pays for one function and builds no cell.

@@ -187,8 +187,28 @@ fails.
 
 2.14 A `NotLanded` and a `Failed` MUST be distinguishable by brand.
 
-2.15 Where `s.then` is given no `onFailed`, the promise it hands back MUST NOT be reported as an
-unhandled rejection for the refusal 2.8 passes through to it.
+2.15 Where `s.then` is given no `onFailed`, what it hands back MUST NOT be reported as an unhandled
+rejection for the refusal 2.8 passes through to it.
+
+2.16 The `Reactive` `s.then` hands back MUST be busy until the handler that ran has returned, and
+what it returned has settled as 2.7 and 2.8 settle a `Reactive` or as a promise settles.
+
+2.17 The `Reactive` `s.then` hands back MUST land what the handler that ran settled to, or, where
+no handler ran, what 2.7 resolves with.
+
+2.18 Where `s.then` is given no `onFailed`, the `Reactive` it hands back MUST fail with the refusal
+2.8 passes through to it.
+
+2.19 The `Reactive` `s.then` hands back MUST fail with what the handler that ran threw, or with what
+it returned rejected or refused with.
+
+2.20 A failure of the `Reactive` `s.then` hands back MUST be reported as an unhandled rejection
+where nothing has reached that `Reactive`, save the refusal 2.15 exempts.
+
+2.21 A failure of the `Reactive` `s.then` hands back MUST NOT be reported as an unhandled rejection
+where something has reached that `Reactive`.
+
+2.22 `s.then` MUST run its handlers whether or not anything reaches what it hands back.
 
 # 3. Probes
 
