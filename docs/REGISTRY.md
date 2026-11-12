@@ -70,7 +70,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `reactive` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args \| undefined>>(body: (args?: Args) => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args \| undefined>, 'schema' \| 'args'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>>; args?: ArgsGate & Schema<Args \| undefined> }) => Keyed<Kept<Shaped>, Args \| undefined, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>> \| Gated<ArgsGate, Args \| undefined>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed overload for a body whose parameter is optional. | 11.2, 19.24 |
 | `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Accepted \| Promise<Accepted>, options?: Omit<ReactiveOptions<Accepted, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Accepted) => Shaped; schema?: Gate & Schema<Accepted> }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped> \| Gated<Gate, Accepted>>` | The value overload, for what the scope owns outright. | 4.1, 4.2, 4.14, 4.15, 4.16 |
 | `reactive` | `<Accepted = undefined, Shaped = Accepted, Gate = Schema<Accepted>>(initial: undefined, options?: Omit<ReactiveOptions<Accepted, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Accepted) => Shaped; schema?: Gate & Schema<Accepted> }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped> \| Gated<Gate, Accepted>>` | The undefined overload, for a value opening at `undefined`. | 4.15, 4.16 |
-| `reactive` | `<Accepted>() => [Accepted] extends [Rpc<infer Value, infer Args, infer Failures, infer Produced>] ? ReturnType<Rpc<Value, Args, Failures, Produced>> : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty overload, for a value nothing has written yet. | 4.14, 4.19 |
+| `reactive` | `<Accepted>() => [Accepted extends Rpc<infer Value, infer Args, infer Failures, infer Produced> ? true : false] extends [true] ? Reactive<StoredOf<CallOf<Accepted>>, StoredOf<CallOf<Accepted>>, AdoptedFailures<CallOf<Accepted>>, AdoptedProduced<CallOf<Accepted>, StoredOf<CallOf<Accepted>>>> : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty overload, for a value nothing has written yet. | 4.14, 4.19 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21 |
 | `webStore` | `<Stored>(key: string, options?: { area?: 'local' \| 'session'; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's Web Storage. | 8.22, 8.23, 8.24, 8.26, 8.27, 8.28, 8.29, 8.30 |
@@ -81,9 +81,9 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
 
-The aliases the overloads split a transform's return and a body's return through, and the one that
-adds a declared `schema`'s refusal, are declared rather than listed, none of them being a name an app
-writes:
+The aliases the overloads split a transform's return and a body's return through, the one that
+adds a declared `schema`'s refusal, and the two the empty overload reads each `Rpc`'s call through,
+are declared rather than listed, none of them being a name an app writes:
 
 ```ts
 type Kept<Shaped> = Exclude<Shaped, Failed<string, unknown>>
@@ -91,6 +91,8 @@ type Refused<Shaped> = Extract<Shaped, Failed<string, unknown>>
 type AdoptedFailures<T> = T extends Reactive<unknown, never, infer Failures, unknown> ? Failures : never
 type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown, infer Produced> ? Produced : Otherwise
 type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<'ValidationError', Issues<Accepted>>
+type CallOf<Calls> = Calls extends Rpc<infer Value, infer Args, infer Failures, infer Produced> ? ReturnType<Rpc<Value, Args, Failures, Produced>> : never
+type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unknown> ? Stored : never
 ```
 ### `ReactiveOptions`
 
@@ -118,7 +120,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `s` | `() => Stored` | Read the current value. | 2.1, 2.2, 2.3, 2.4, 2.9 |
 | `s.peek` | `() => Stored \| undefined` | Read what is held without joining the flow. | 2.10, 2.11 |
 | `NotLanded` | `Error & { name: 'NotLanded'; source: object }` | What a read throws where nothing has landed yet. | 2.9, 2.12, 2.13, 2.14, 7.8, 34.32 |
-| `s.then` | `<Result>(onSettled?: (value: Stored) => Result \| PromiseLike<Result>, onFailed?: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Result>` | The settling, as a promise. | 1.4, 2.7, 2.8 |
+| `s.then` | `<Settled = Stored, Refused = never>(onSettled?: (value: Stored) => Settled \| PromiseLike<Settled>, onFailed?: (error: unknown) => Refused \| PromiseLike<Refused>) => Promise<Settled \| Refused>` | The settling, as a promise. | 1.4, 2.7, 2.8 |
 | `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Stored \| Result>` | The settling's refusal path. | 1.4, 1.5 |
 | `s.finally` | `(onSettled: () => void) => Promise<Stored>` | The settling's end, whichever way it went. | 1.4, 1.5 |
 | `for await (… of s)` | `AsyncIterable<Produced>` | What one run produced: the settled value once, or a stream's chunks. | 2.5, 2.6, 5.10, 9.12, 9.15, 9.16, 9.17 |

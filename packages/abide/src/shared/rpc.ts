@@ -269,10 +269,12 @@ export type Plain = { invalidate?: never }
 // which has decided its own options. Unguarded, the arm won overload resolution's subtype pass over
 // every function arm, whose `& Plain` only passes assignability. The guard is the whole parameter
 // because `& Plain` kept `GET(0)` the literal `0`, and a bound of `Plain` refuses every primitive.
+// The promise is `Plain` too: a `Reactive` is one (1.4), and `Accepted` inferred through it is the
+// value it holds, which the guard above passes.
 type Held<Accepted> = Accepted extends
     ((...given: never[]) => unknown) | { invalidate: unknown }
     ? never
-    : Accepted | PromiseLike<Accepted>
+    : Accepted | (PromiseLike<Accepted> & Plain)
 
 /**
  * What narrows a trigger on an `Rpc` beside its pattern: `caller`, the `principal.caller` of the one

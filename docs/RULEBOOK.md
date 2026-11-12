@@ -263,8 +263,8 @@ escape the write.
 
 4.18 `s.set` MUST hand back the refusal a gate refused it with, and nothing where it was accepted.
 
-4.19 `reactive` called with no argument and an `Rpc` as its type argument MUST be typed as the
-`Reactive` a call of that `Rpc` hands back.
+4.19 `reactive` called with no argument and an `Rpc`, or a union of `Rpc`s, as its type argument
+MUST be typed as one `Reactive` over what a call of each of them hands back.
 
 # 5. Productions and identity
 

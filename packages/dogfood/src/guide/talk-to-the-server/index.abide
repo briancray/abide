@@ -22,6 +22,9 @@ import newDealTestSource from 'crm-03/src/deals/lib/NewDeal.test.ts' with { type
 import Pipeline from 'crm-03/src/deals/lib/Pipeline.abide'
 import pipelineSource from 'crm-03/src/deals/lib/Pipeline.abide' with { type: 'text' }
 import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { type: 'text' }
+import QuickDeal from 'crm-03/src/deals/lib/QuickDeal.abide'
+import quickDealSource from 'crm-03/src/deals/lib/QuickDeal.abide' with { type: 'text' }
+import quickDealTestSource from 'crm-03/src/deals/lib/QuickDeal.test.ts' with { type: 'text' }
 import listDealsSource from 'crm-03/src/deals/listDeals.handler.ts' with { type: 'text' }
 import moveDealSource from 'crm-03/src/deals/moveDeal.handler.ts' with { type: 'text' }
 
@@ -216,6 +219,43 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>JsonValue</code></td><td>what an argument may hold, so it can travel and key a cache</td></tr>
             </tbody>
         </table>
+    </Section>
+
+    <Section title="The form clears once the deal is added">
+        <Example
+            id="crm-03-quick-deal"
+            app="crm-03"
+            title={'`saving.then(…)` — the next step, once the call lands'}
+            summary="Sales adds renewals one after another. Press Add deal: the name clears when the server has the deal, ready for the next."
+            files={{
+                'src/deals/lib/QuickDeal.abide': quickDealSource,
+                'src/deals/createDeal.handler.ts': createDealSource,
+                'src/deals/lib/QuickDeal.test.ts': quickDealTestSource,
+            }}
+        >
+            <QuickDeal />
+        </Example>
+
+        <p>The kept call is a promise too, so what comes after a save is <code>saving.then(…)</code>:
+            clear a field, close a dialog, go to the new deal's page. It runs once the call lands,
+            and the call still runs once. The second function is for a refusal, which is already on
+            <code>saving.error()</code>; passing one says there is nothing more to do, and keeps
+            the refusal from being reported as unhandled. A <code>then</code> made before another
+            press is answered by the call the form keeps when it settles, which is the later one.</p>
+
+        <p>The answer is the call's, so the next call drops it until it lands. To keep the last
+            answer on screen through a call in flight or a refusal, write it into the value it is about:
+            <code>{'saving.then((moved) => { deal = moved }, () => {})'}</code> writes the answer
+            over a derived <code>deal</code>, which keeps it until the next answer lands.</p>
+
+        <p>To let go of a call, keep one nothing has made: <code>saving = reactive&lt;typeof
+                createDeal&gt;()</code> leaves no refusal standing and nothing in flight, for a dialog
+            opened again over the last one's error. <code>saving = undefined</code> is not the same:
+            it writes <code>undefined</code> over the answer of the call being kept.</p>
+
+        <p>One value can keep a call of any of several handlers, for a flow with one busy flag and
+            one error: <code>reactive&lt;typeof moveDeal | typeof createDeal&gt;()</code> keeps
+            either, with the failures of both.</p>
     </Section>
 
     <Section title="A refusal carries a name the page can match">
