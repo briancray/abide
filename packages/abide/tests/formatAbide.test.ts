@@ -336,3 +336,32 @@ test('`abide format --check` writes nothing and fails where a file would change 
     expect(written.exitCode).toBe(0)
     expect(await Bun.file(`${app}/index.abide`).text()).toBe('<p>{a + 1}</p>\n')
 }, 30_000)
+
+// THE REVERT: take every path named for a directory; a file named throws ENOTDIR out of the glob
+// and the command crashes with a stack instead of formatting it.
+test('a .abide named on the command line is formatted, beside a directory named — 38.125', async () => {
+    const source = '<p>{ a+1 }</p>\n'
+    const app = temporaryModule(
+        {
+            'bunfig.toml': FMT,
+            'named.abide': source,
+            'other.abide': source,
+            'tree/inner.abide': source,
+        },
+        OUTSIDE_REPO,
+    )
+    const run = await spawned([
+        'bun',
+        BIN,
+        'format',
+        `${app}/named.abide`,
+        `${app}/tree`,
+    ])
+    expect(run.stderr).toBe('')
+    expect(run.exitCode).toBe(0)
+    expect(await Bun.file(`${app}/named.abide`).text()).toBe('<p>{a + 1}</p>\n')
+    expect(await Bun.file(`${app}/tree/inner.abide`).text()).toBe(
+        '<p>{a + 1}</p>\n',
+    )
+    expect(await Bun.file(`${app}/other.abide`).text()).toBe(source)
+}, 30_000)

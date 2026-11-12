@@ -198,7 +198,7 @@ function commandsOf(host: Host): Row[] {
             'check',
         ),
         fromSource(
-            'format [--check] [dir…]',
+            'format [--check] [path…]',
             'format every .abide — its code by bun fmt, its markup by its nesting',
             'format',
         ),

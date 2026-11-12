@@ -3204,10 +3204,10 @@ the range.
 
 38.124 The project `abide scaffold` writes MUST carry a `bench` script that runs `harness-bench`.
 
-38.125 `abide format` MUST hand each `<script>` block and each `<style>` of every `.abide` under the
-directories named, or under the app where none are, to `bun fmt` as TypeScript and as CSS, under the
-options `bun fmt` reads for that file, and MUST leave as written a file those options'
-`ignorePatterns` name.
+38.125 `abide format` MUST hand each `<script>` block and each `<style>` of every `.abide` named, of
+every one under the directories named, or under the app where none are, to `bun fmt` as TypeScript
+and as CSS, under the options `bun fmt` reads for that file, and MUST leave as written a file those
+options' `ignorePatterns` name.
 
 38.126 `abide format` MUST hand each expression a slot, an attribute, a spread, a `{#if}`, a
 `{:else if}` or a `{#for}` holds to `bun fmt` as an expression, and MUST keep one as written where

@@ -369,7 +369,7 @@ abide start --port 8080`} />
             the TypeScript, and reports on the line you wrote. <code>abide lsp</code> is the same check
             in your editor. Run it first in CI, because it is the cheapest failure to report.</p>
 
-        <p><code>abide format [--check] [dir…]</code> formats every <code>.abide</code> the way
+        <p><code>abide format [--check] [path…]</code> formats every <code>.abide</code> the way
             <code>bun fmt</code> formats everything else: its scripts, styles and expressions under
             the <code>[fmt]</code> options in <code>bunfig.toml</code>, and its markup indented by its
             nesting. <code>--check</code> writes nothing and fails where a file would change, and
