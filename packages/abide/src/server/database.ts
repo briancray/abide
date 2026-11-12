@@ -1,31 +1,41 @@
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs' // bun exposes no directory creation of its own
+import { dirname, resolve } from 'node:path' // bun exposes no path resolution of its own
 
 import { config, derived } from './config.ts'
 import { onStop } from './hooks.ts'
 
-/** 47.3 — a file name, and nothing that reaches out of `APP_DATA_DIR`. */
-const NAME = /^[\w-][\w.-]*$/
+/** 47.2, 47.3 — a name, opened as `<name>.sqlite`. A string neither a name nor a path is refused. */
+const NAME = /^[\w-]+$/
+
+/** 47.3 — a path: anything holding a `/` or a `.`, so `todos.sqlite` is the file it says. */
+const PATH = /[/.]/
+
+const IN_MEMORY = ':memory:'
 
 const BUSY_TIMEOUT = 5000
 
+type Migration = string | ((database: Database) => void)
+
 /**
- * The opener of the app's SQLite database `name`: the first call opens and migrates it, and every
+ * The opener of the app's SQLite database `file`: the first call opens and migrates it, and every
  * call after hands back the same `bun:sqlite` `Database`.
+ *
+ * `file` is a name (`'todos'` is `todos.sqlite` in `APP_DATA_DIR`), a path holding a `/` or a `.`
+ * (relative to the working directory), or `':memory:'` — or a function returning one, called as the
+ * file opens so it can read `config()`.
  *
  * 47.6 — `PRAGMA user_version` counts the migrations a file has applied, so each runs once, in
  * order, however many times the app boots. A function migration is for what SQL cannot say alone:
  * a backfill computed in JavaScript, or the rows a first boot seeds.
  */
 export function database(
-    name: string,
-    options?: { migrations?: (string | ((database: Database) => void))[] },
+    file: string | (() => string),
+    options?: { migrations?: Migration[]; openNewer?: boolean },
 ): () => Database {
-    if (!NAME.test(name))
-        throw new Error(
-            `abide: database ${JSON.stringify(name)} is not a file name. RULEBOOK 47.3.`,
-        )
+    if (typeof file === 'string') checked(file)
     const migrations = options?.migrations ?? []
+    const openNewer = options?.openNewer === true
     let opened: Database | undefined
     // 47.4 — the test file a scratch database was opened for. `bun test` without `--isolate` runs
     // every file in one module registry, so one opener reaches every file, and `Bun.main` is the
@@ -45,18 +55,32 @@ export function database(
             opened = undefined
         }
         if (opened === undefined) {
-            opened = open(name, migrations)
-            scratchFor = process.env.NODE_ENV === 'test' ? Bun.main : undefined
+            const scratch = process.env.NODE_ENV === 'test'
+            // 47.12 — the function is called per open, and never for 47.4's scratch.
+            const named = scratch
+                ? IN_MEMORY
+                : checked(typeof file === 'string' ? file : file())
+            opened = open(named, migrations, openNewer)
+            scratchFor = scratch ? Bun.main : undefined
         }
         return opened
     }
 }
 
+function checked(file: string): string {
+    if (file !== IN_MEMORY && !PATH.test(file) && !NAME.test(file))
+        throw new Error(
+            `abide: database ${JSON.stringify(file)} is not a file name. RULEBOOK 47.3.`,
+        )
+    return file
+}
+
 function open(
-    name: string,
-    migrations: readonly (string | ((database: Database) => void))[],
+    file: string,
+    migrations: readonly Migration[],
+    openNewer: boolean,
 ): Database {
-    const db = new Database(fileOf(name), { create: true })
+    const db = new Database(pathOf(file), { create: true })
     try {
         // 47.5.
         db.run('PRAGMA journal_mode = WAL')
@@ -66,10 +90,13 @@ function open(
             .query('PRAGMA user_version')
             .get() as { user_version: number }
         // 47.9 — A NEWER BUILD MIGRATED THIS FILE, and this one cannot say what its schema is.
-        if (applied > migrations.length)
+        if (applied > migrations.length) {
+            // 47.13 — unless the app said it reads one, and then the file is left as it is.
+            if (openNewer) return db
             throw new Error(
-                `abide: database ${JSON.stringify(name)} is at migration ${applied}, past the ${migrations.length} this build declares. RULEBOOK 47.9.`,
+                `abide: database ${JSON.stringify(file)} is at migration ${applied}, past the ${migrations.length} this build declares. RULEBOOK 47.9.`,
             )
+        }
         // 47.7 — ONE TRANSACTION, so a throw leaves the file at the version it opened at.
         let running = applied
         try {
@@ -83,7 +110,7 @@ function open(
             })()
         } catch (error) {
             throw new Error(
-                `abide: database ${JSON.stringify(name)}'s migration ${running + 1} threw, and the database stays at migration ${applied}. RULEBOOK 47.7.`,
+                `abide: database ${JSON.stringify(file)}'s migration ${running + 1} threw, and the database stays at migration ${applied}. RULEBOOK 47.7.`,
                 { cause: error },
             )
         }
@@ -94,12 +121,12 @@ function open(
     }
 }
 
-/** 47.2, 47.4 — the file under `APP_DATA_DIR`, or a scratch database in memory under `bun test`. */
-function fileOf(name: string): string {
-    if (process.env.NODE_ENV === 'test') return ':memory:'
-    const directory = String(
-        config.peek()?.APP_DATA_DIR ?? derived().APP_DATA_DIR,
-    )
-    mkdirSync(directory, { recursive: true })
-    return `${directory}/${name}.sqlite`
+/** 47.2, 47.3 — a name's file under `APP_DATA_DIR`, a path from the working directory, or memory. */
+function pathOf(file: string): string {
+    if (file === IN_MEMORY) return file
+    const path = PATH.test(file)
+        ? resolve(file)
+        : `${String(config.peek()?.APP_DATA_DIR ?? derived().APP_DATA_DIR)}/${file}.sqlite`
+    mkdirSync(dirname(path), { recursive: true })
+    return path
 }
