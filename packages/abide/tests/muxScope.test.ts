@@ -38,7 +38,6 @@ function guarded(middleware: Rung<never, unknown>[]): Mux {
     const row: FollowedHandler = {
         address: ADDRESS,
         rungs: [],
-        copy: undefined,
         handler: handler as unknown as FollowedHandler['handler'],
     }
     return new Mux(

@@ -67,7 +67,6 @@ test("a GET followed over the mux passes its route's middleware — 18.26", asyn
     const row: FollowedHandler = {
         address: '/vault/gold',
         rungs: rungsOver('/vault', answered),
-        copy: undefined,
         handler: handler as unknown as FollowedHandler['handler'],
     }
     const mux = new Mux(
@@ -120,7 +119,6 @@ test('a route rung that re-heads the answer still admits the follow — 18.26', 
     const row: FollowedHandler = {
         address: '/traced/trail',
         rungs: rungsOver('/traced', answered),
-        copy: undefined,
         handler: handler as unknown as FollowedHandler['handler'],
     }
     const mux = new Mux(

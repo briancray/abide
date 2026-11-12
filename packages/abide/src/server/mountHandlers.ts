@@ -85,13 +85,10 @@ export type Mounted = Mount & {
 }
 
 /**
- * What following a handler reads of its row: where it answers, the rungs its route filed, the
- * handler, and the `tags` its copy carries. 18.3, 18.8, 18.26.
+ * What following a handler reads of its row: where it answers, the rungs its route filed, and the
+ * handler. 18.3, 18.8, 18.26.
  */
-export type FollowedHandler = Pick<
-    Mounted,
-    'address' | 'rungs' | 'handler' | 'copy'
->
+export type FollowedHandler = Pick<Mounted, 'address' | 'rungs' | 'handler'>
 
 /**
  * The `GET` a browser follows at each address among `handlers` — one it is handed a wrapper for

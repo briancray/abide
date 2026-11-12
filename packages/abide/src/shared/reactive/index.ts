@@ -19,6 +19,7 @@ import { OUTBOX_SENDING } from '../OUTBOX_SENDING.ts'
 import type { Rpc } from '../rpc.ts'
 import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
+import { DECLARED_TAGS } from './DECLARED_TAGS.ts'
 import { isReactive } from './isReactive.ts'
 import { createKeyed, isKeyed, type Keyed } from './Keyed.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
@@ -411,13 +412,17 @@ export function reactive(
     // `store`, built where it is first reached (11.71). `global` is what keeps a value process-wide
     // (11.34).
     const options = given[1] as
-        { global?: boolean; store?: unknown } | undefined
-    if (outsideScope(options?.global === true))
-        return scoped(
-            () => build(given, keyed),
-            !keyed && options?.store !== undefined,
-        )
-    return build(given, keyed)
+        { global?: boolean; store?: unknown; tags?: string[] } | undefined
+    const built = outsideScope(options?.global === true)
+        ? scoped(
+              () => build(given, keyed),
+              !keyed && options?.store !== undefined,
+          )
+        : build(given, keyed)
+    // 13.15 — for a `GET` handed this value to read its followers' tags off.
+    if (options?.tags !== undefined)
+        DECLARED_TAGS.set(built as object, options.tags)
+    return built
 }
 
 /**

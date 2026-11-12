@@ -21,7 +21,6 @@ cart.address = '/cart'
 const row: FollowedHandler = {
     address: '/cart',
     rungs: [],
-    copy: undefined,
     handler: cart as unknown as FollowedHandler['handler'],
 }
 
