@@ -10,6 +10,9 @@ import type { Scope } from './Scope.ts'
 const bound = new Map<Element, Placed>()
 let observer: ResizeObserver | undefined
 let frame = 0
+// Whether a scroll event arrived since the last frame: such a frame reads and writes but arms
+// nothing (32.90), and asks for the frame after it, where the scroll is over unless another came.
+let scrolled = false
 const SCROLLING: AddEventListenerOptions = { capture: true, passive: true }
 const RESIZING: AddEventListenerOptions = { passive: true }
 // The frame's reads, kept between frames so a frame allocates no array.
@@ -22,8 +25,8 @@ const rects: DOMRect[] = []
  * 32.87 — A MOVE IS SEEN BY OBSERVING THE ELEMENT'S OWN BOX: an `IntersectionObserver` whose root
  * is shrunk by `rootMargin` to the rectangle the last frame read, so the element fills it and any
  * move changes how much of it does. A margin is fixed per observer, so it is one per element, made
- * again only in a frame whose read moved the element or resized the viewport (32.90). The insets it was
- * made with are kept so that frame can tell.
+ * again only in a frame no scroll preceded whose read moved the element or resized the viewport
+ * (32.90). The insets it was made with are kept so that frame can tell.
  */
 class Placed {
     operand: unknown
@@ -59,7 +62,7 @@ export function bindRect(
     scope: Scope,
 ): void {
     if (bound.size === 0) {
-        addEventListener('scroll', schedule, SCROLLING)
+        addEventListener('scroll', scroll, SCROLLING)
         addEventListener('resize', schedule, RESIZING)
     }
     const placed = new Placed(operand)
@@ -72,10 +75,11 @@ export function bindRect(
         ;(observer as ResizeObserver).unobserve(element)
         placed.position?.disconnect()
         if (bound.size > 0) return
-        removeEventListener('scroll', schedule, SCROLLING)
+        removeEventListener('scroll', scroll, SCROLLING)
         removeEventListener('resize', schedule, RESIZING)
         if (frame !== 0) cancelAnimationFrame(frame)
         frame = 0
+        scrolled = false
     })
 }
 
@@ -85,12 +89,22 @@ function schedule(): void {
     if (frame === 0) frame = requestAnimationFrame(measure)
 }
 
+function scroll(): void {
+    scrolled = true
+    schedule()
+}
+
 // 32.89 — EVERY READ BEFORE ANY WRITE: a write wakes readers that may write the DOM, and a read
 // after one would force the layout it invalidated, once per element.
 // 32.86 — a fresh record per write defeats the identity gate, so a rectangle the value already
 // holds is not written: the four it is made of decide the other four.
 function measure(): void {
     frame = 0
+    // 32.90 — A SCROLL MOVES EVERY ELEMENT AND ITS OWN LISTENER ALREADY SEES THE NEXT STEP, so the
+    // observers are left standing until the first frame no scroll event preceded, and made there.
+    const scrolling = scrolled
+    scrolled = false
+    if (scrolling) schedule()
     let count = 0
     for (const element of bound.keys()) {
         elements[count] = element
@@ -106,7 +120,8 @@ function measure(): void {
         const rect = rects[index] as DOMRect
         const placed = bound.get(element)
         if (placed === undefined) continue
-        arm(element, placed, rect, viewportWidth, viewportHeight)
+        if (!scrolling)
+            arm(element, placed, rect, viewportWidth, viewportHeight)
         const operand = placed.operand
         const held = heldValue(operand) as
             | { x?: unknown; y?: unknown; width?: unknown; height?: unknown }

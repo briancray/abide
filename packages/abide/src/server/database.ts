@@ -27,6 +27,10 @@ export function database(
         )
     const migrations = options?.migrations ?? []
     let opened: Database | undefined
+    // 47.4 — the test file a scratch database was opened for. `bun test` without `--isolate` runs
+    // every file in one module registry, so one opener reaches every file, and `Bun.main` is the
+    // file running.
+    let scratchFor: string | undefined
     // 47.10, 47.11 — CLOSED AS THE APP STOPS, after the teardown it wraps, and opened again by the next
     // call.
     onStop(async (stop) => {
@@ -36,7 +40,14 @@ export function database(
     })
     // 47.11 — an open that threw caches nothing, so the next call tries again.
     return () => {
-        opened ??= open(name, migrations)
+        if (scratchFor !== undefined && scratchFor !== Bun.main) {
+            opened?.close()
+            opened = undefined
+        }
+        if (opened === undefined) {
+            opened = open(name, migrations)
+            scratchFor = process.env.NODE_ENV === 'test' ? Bun.main : undefined
+        }
         return opened
     }
 }

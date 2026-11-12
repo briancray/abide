@@ -3,7 +3,9 @@
 // `NODE_ENV` moved off `test` for the length of the test, which is 47.4's scratch otherwise.
 
 import { Database } from 'bun:sqlite'
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test'
+
+import { spawned } from '@abide/harness/gate'
 
 import { config } from '#server/config.ts'
 import { database } from '#server/database.ts'
@@ -11,6 +13,9 @@ import { sqliteStore } from '#server/sqliteStore.ts'
 import { reactive } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+
+afterAll(removeTemporaryModules)
 
 const environmentAsFound = process.env.NODE_ENV
 const dataDirectoryAsFound = process.env.APP_DATA_DIR
@@ -151,6 +156,40 @@ test('under bun test each opener is a scratch database of its own, and no file i
     one.close()
     two.close()
 })
+
+// 47.4 — ONE PROCESS, TWO TEST FILES, ONE OPENER: `bun test` without `--isolate` shares the module
+// that made the opener between the files, and each still opens on an empty database. A child process,
+// because the gate's `--parallel` isolates every file and could not show it. THE REVERT: drop the
+// `scratchFor !== Bun.main` reopen in `database`; the second file reads 2 cars.
+test('under bun test each test file opens a scratch database of its own — 47.4', async () => {
+    const counted = (file: string) => `import { expect, test } from 'bun:test'
+import { garage } from './garage.ts'
+
+test('${file}', () => {
+    garage().run("INSERT INTO cars (vin) VALUES ('${file}')")
+    const { cars } = garage().query('SELECT COUNT(*) AS cars FROM cars').get() as { cars: number }
+    console.log('${file} reads ' + cars + ' cars')
+    expect(cars).toBe(1)
+})
+`
+    const fresh = temporaryModule({
+        'garage.ts': `import { database } from '@abide/abide/server'
+
+export const garage = database('garage', { migrations: [${JSON.stringify(CARS)}] })
+`,
+        'one.test.ts': counted('one'),
+        'two.test.ts': counted('two'),
+    })
+    const ran = await spawned(
+        ['bun', 'test', './one.test.ts', './two.test.ts'],
+        {
+            cwd: fresh,
+        },
+    )
+    expect(
+        `${ran.exitCode} ${ran.stdout.match(/\w+ reads \d+ cars/g)?.join(', ')}`,
+    ).toBe('0 one reads 1 cars, two reads 1 cars')
+}, 30_000)
 
 // 47.10 — THE REVERT: drop the `onStop` from `database`; the handle survives the stop and the read
 // after it answers.

@@ -2450,8 +2450,11 @@ added with the first `bind:rect` and removed with the last.
 read of every `bind:rect` element's rectangle in that frame, every read before any write, and
 `bind:rect` MUST NOT read an element's rectangle outside such a frame.
 
-32.90 What observes a `bind:rect` element for 32.87 MUST be made again only in a frame whose read
-moved the element or resized the viewport, and MUST cost no work while neither moves.
+32.90 What observes a `bind:rect` element for 32.87 MUST NOT be made in a frame a scroll event
+preceded, and MUST be made again only in a frame whose read found the element moved or the viewport
+resized since it was made. A frame a scroll preceded MUST ask for the frame after it, which answers
+that scroll under 32.89, so the observers stand again once the scroll is over. It MUST cost no work
+while neither moves.
 
 # 33. Props
 
@@ -3927,7 +3930,7 @@ MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `c
 
 44.73 A `pairing` built in a component's setup MUST, once that component is disposed, stop reading and
 following `/__abide/pairing` where no other `pairing` reads it, remove the blur listener a `start`
-added, and clear every timer `start` and `copyInstall` set.
+added, clear the wait a `start` set, and leave `copied` and `step` where they stand.
 
 44.74 `/__abide/pairing` MUST NOT grant a tool the request asking it names.
 
@@ -4082,7 +4085,7 @@ call MUST hand back that same `Database` until 47.10 closes it.
 opening with `.`.
 
 47.4 Where `NODE_ENV` is `test`, `database` MUST open an empty database in memory in place of 47.2's
-file, one per opener.
+file, one per opener and per test file `bun test` runs.
 
 47.5 `database` MUST open with the `WAL` journal, foreign keys enforced, and a busy timeout of 5000
 milliseconds.
