@@ -56,20 +56,21 @@ export function database(
 ): (() => Database) & { close: (options?: { remove?: boolean }) => void } {
     if (typeof file === 'string') checked(file)
     let opened: Database | undefined
+    // 47.17 — the file the opener last opened, kept past a close: 47.10's leaves it to a `remove` after.
+    let lastOpened: string | undefined
     // 47.4 — the test file a scratch database was opened for.
     let scratchFor: string | undefined
     // 47.16, 47.17.
     const close = (closing?: { remove?: boolean }): void => {
-        const filename = opened?.filename
         opened?.close()
         opened = undefined
         if (
             closing?.remove === true &&
-            filename !== undefined &&
-            filename !== IN_MEMORY
+            lastOpened !== undefined &&
+            lastOpened !== IN_MEMORY
         )
             for (const suffix of BESIDE)
-                rmSync(`${filename}${suffix}`, { force: true })
+                rmSync(`${lastOpened}${suffix}`, { force: true })
     }
     // 47.10, 47.11 — CLOSED AS THE APP STOPS, after the teardown it wraps, and opened again by the next
     // call.
@@ -100,6 +101,7 @@ export function database(
                 opened = open(named, scratch, options, (db) => {
                     migrating = db
                 })
+                lastOpened = opened.filename
             } finally {
                 opening = false
                 migrating = undefined
@@ -111,7 +113,12 @@ export function database(
     return Object.assign(opener, { close })
 }
 
-function checked(file: string): string {
+function checked(file: unknown): string {
+    // 47.3 — a file function's `undefined` would pass `NAME` as its text, and open `undefined.sqlite`.
+    if (typeof file !== 'string')
+        throw new Error(
+            `abide: database ${Bun.inspect(file)} is not a string, so names no file. RULEBOOK 47.3.`,
+        )
     if (file !== IN_MEMORY && !PATH.test(file) && !NAME.test(file))
         throw new Error(
             `abide: database ${JSON.stringify(file)} is not a file name. RULEBOOK 47.3.`,

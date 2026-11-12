@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 
 import type { RedisClient } from 'bun'
 
+import { database } from '#server/database.ts'
 import * as store from '#server/stores.ts'
 import { flushSync, reactive } from '#shared'
 import { COOKIES, Cookies } from '#shared/cookies.ts'
@@ -163,6 +164,7 @@ test('a shipped store’s schema turns a value it refuses into a miss — 8.27',
 // 8.25: A ROW PER KEY IN A TABLE THE STORE MAKES, one connection per path however many stores name it.
 test('store.sqlite keeps a value in a row of its table, made where missing — 8.25, 8.28', () => {
     const path = `${Bun.env.TMPDIR ?? '/tmp'}/abide-sqlite-store-${process.pid}.db`
+    const kept = database(path)
     try {
         const first = reactive(() => ({ list: [1, 2] }), {
             store: store.sqlite<{ list: number[] }>(path, 'doc', {
@@ -170,12 +172,11 @@ test('store.sqlite keeps a value in a row of its table, made where missing — 8
             }),
         })
         expect(first()).toEqual({ list: [1, 2] })
-        const db = new Database(path)
-        const row = db
+        // 8.42 — the file `database` opens for the path, 47.4's scratch under bun test.
+        const row = kept()
             .query('SELECT value, expires FROM kept WHERE key = ?')
             .get(`${APP}:doc`)
         expect(row).toEqual({ value: '{"list":[1,2]}', expires: null })
-        db.close()
         let runs = 0
         const second = reactive(
             () => {
@@ -194,10 +195,7 @@ test('store.sqlite keeps a value in a row of its table, made where missing — 8
             store.sqlite(path, 'doc', { table: 'kept; DROP TABLE kept' }),
         ).toThrow('is not an SQL identifier')
     } finally {
-        for (const suffix of ['', '-wal', '-shm'])
-            Bun.file(`${path}${suffix}`)
-                .delete()
-                .catch(() => {})
+        kept.close({ remove: true })
     }
 })
 

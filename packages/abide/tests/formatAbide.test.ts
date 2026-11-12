@@ -27,9 +27,9 @@ tabWidth = 4
 const OUTSIDE_REPO = `${tmpdir()}/`
 afterAll(removeTemporaryModules)
 
-async function formatted(text: string): Promise<Formatted> {
+async function formatted(text: string, fmt = FMT): Promise<Formatted> {
     const app = temporaryModule(
-        { 'bunfig.toml': FMT, 'index.abide': text },
+        { 'bunfig.toml': fmt, 'index.abide': text },
         OUTSIDE_REPO,
     )
     return await formatAbide(`${app}/index.abide`, text)
@@ -204,6 +204,54 @@ test('a file that would parse to a different template is told apart from one re-
     expect(same('<a title="x y">a</a>\n', '<a title="x  y">a</a>\n')).toBe(
         false,
     )
+})
+
+// THE REVERT: compare a script block as its tokens in any order, as `sameTemplate` did; the two
+// imports `sortImports` merges into one lose an `import`, a `{`, a `}` and a `from`, the file reads as
+// a different template, and it is kept as written with one finding.
+test('imports sortImports merges and reorders read as the same template — 38.127', async () => {
+    const { text, findings } = await formatted(
+        `<script>
+import { b } from './words.ts'
+import { z } from './z.ts'
+import { a } from './words.ts'
+</script>
+
+<p>{a}{b}{z}</p>
+`,
+        `${FMT}sortImports = true\n`,
+    )
+    expect(findings).toEqual([])
+    expect(text).toBe(`<script>
+import { a, b } from './words.ts'
+import { z } from './z.ts'
+</script>
+
+<p>{a}{b}{z}</p>
+`)
+})
+
+// THE REVERT: the same; the merge reads as a different template (false where true), and the
+// statement moved past another as the same one, its tokens being the same multiset.
+test('an import that binds or loads something else, or a statement moved, is a different template — 38.127', () => {
+    const script = (code: string) =>
+        parseAbide(`<script>\n${code}\n</script>\n<p>{a}</p>\n`)
+    const before = script(
+        `import { a } from './w.ts'\nimport { b } from './w.ts'\nlet x = 1\nlet y = 2`,
+    )
+    expect(
+        sameTemplate(
+            before,
+            script(`import { a, b } from './w.ts'\nlet x = 1\nlet y = 2`),
+        ),
+    ).toBe(true)
+    for (const after of [
+        `import { a, b as c } from './w.ts'\nlet x = 1\nlet y = 2`,
+        `import { a } from './w.ts'\nimport { b } from './v.ts'\nlet x = 1\nlet y = 2`,
+        `import { a, type b } from './w.ts'\nlet x = 1\nlet y = 2`,
+        `import { a, b } from './w.ts'\nlet y = 2\nlet x = 1`,
+    ])
+        expect(sameTemplate(before, script(after))).toBe(false)
 })
 
 // THE REVERT: return the batch's refusal for the whole file; the slot that parses is left as

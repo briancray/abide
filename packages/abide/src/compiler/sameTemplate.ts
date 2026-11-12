@@ -1,13 +1,16 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import type { AbideFile } from './parseAbide.ts'
+import { importStatements } from './splitImports.ts'
 import type { Body, InlineComponent, TemplateNode } from './TemplateNode.ts'
 import { isBlank, NEWLINE_RUN, tokenize } from './tokenize.ts'
 
 // 38.127 — WHAT `abide format` MAY CHANGE, and nothing else: the whitespace a browser collapses, a
 // run's indentation where 33.17 and 33.18 read only its kind, and the code `bun fmt` printed, read as
-// its tokens — a script block's in any order, since `sortImports` moves its imports. Everything else — a tag, an attribute's text, a block's shape, a line inside a template
-// literal — is compared as the parser read it.
+// its tokens — save a script block's import statements, read as the modules and bindings they name,
+// since `sortImports` moves them and merges two from one module into one. Everything else — a tag,
+// an attribute's text, a block's shape, a line inside a template literal — is compared as the
+// parser read it.
 
 /** Whether `before` and `after` are one template, under what `abide format` may change. 38.127. */
 export function sameTemplate(before: AbideFile, after: AbideFile): boolean {
@@ -109,9 +112,30 @@ function codeShape(code: string): string {
     return tokensOf(code).join(' ')
 }
 
-/** A script block's code as its tokens in any order: `bun fmt`'s `sortImports` moves its imports. */
+/**
+ * A script block's code: its import statements as the SET of modules they load and bindings they
+ * make, and the rest as its tokens, in order. `bun fmt`'s `sortImports` reorders the statements and
+ * merges two from one module, which changes neither set. A statement whose clause names no binding
+ * it reads is kept among the tokens, so one this cannot read is still compared as written.
+ */
 function blockShape(code: string): string {
-    return tokensOf(code).sort().join(' ')
+    const imported = new Set<string>()
+    let rest = ''
+    let at = 0
+    for (const statement of importStatements(code)) {
+        const clause = code.slice(statement.start, statement.end)
+        if (statement.bindings.length === 0 && !/^import\s*['"]/.test(clause))
+            continue
+        const module = `${statement.specifier} ${codeShape(statement.attributes)}`
+        imported.add(module)
+        for (const binding of statement.bindings)
+            imported.add(
+                `${module} ${binding.typeOnly ? 'type ' : ''}${binding.imported} as ${binding.local}`,
+            )
+        rest += `${code.slice(at, statement.start)};`
+        at = statement.end
+    }
+    return `${[...imported].sort().join('\n')}\n${codeShape(rest + code.slice(at))}`
 }
 
 /**

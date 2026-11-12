@@ -590,6 +590,12 @@ document writes its key.
 8.40 `store.cookies`'s `watch` MUST call what it is handed where the browser reports a change to its
 cookie, per 22.6.
 
+8.41 `store.sqlite` given a function MUST call it at each `get` and `set`, and keep the value in the
+`Database` that call hands back.
+
+8.42 `store.sqlite` given a string MUST keep the value in the `Database` the opener `database`
+returns for that string hands back, per 47, and MUST make one such opener per string.
+
 # 9. Streams and wired values
 
 9.1 A streaming producer's `Stored` MUST be the chunks accumulated so far, materialized on the
@@ -3296,7 +3302,9 @@ the printed expression would end the attribute value it stands in.
 
 38.127 `abide format` MUST indent the markup by its element and block nesting, and MUST NOT change
 the template the file parses to: a run 33.17 drops between two nodes MUST NOT gain indentation, and
-the body of a `<pre>`, a `<textarea>` and a markup `<script>` MUST stay as written.
+the body of a `<pre>`, a `<textarea>` and a markup `<script>` MUST stay as written. A code
+block's import statements are part of that template as the set of modules they load and bindings
+they make, and in no order.
 
 38.128 `abide format` MUST leave as written a file the parser refuses, a file whose formatted text
 would parse to a different template (38.127), and a piece `bun fmt` refuses, MUST report each on its
@@ -4204,8 +4212,9 @@ call MUST hand back that same `Database` until 47.10 or 47.16 closes it.
 create the directory holding the file it opens where it does not exist.
 
 47.3 `database` MUST open a string holding `/` or `.` as a path, resolved against the process's
-working directory where relative, and `:memory:` as a database in memory, and MUST throw for any
-other string that is empty or holds anything but letters, digits, `_` and `-`.
+working directory where relative, and `:memory:` as a database in memory, and MUST throw for a
+value that is not a string, and for any other string that is empty or holds anything but letters,
+digits, `_` and `-`.
 
 47.4 Where `NODE_ENV` is `test`, `database` MUST open, in place of the file 47.2 and 47.3 name, the
 file at that absolute path inside a scratch directory of its own per test file `bun test` runs.
@@ -4245,8 +4254,9 @@ before 47.6's migrations.
 
 47.16 An opener's `close` MUST close the `Database` the opener holds, where it holds one.
 
-47.17 An opener's `close` with `remove` MUST delete the file 47.16 closed, with its `-wal` and `-shm`,
-where the file is not `:memory:`.
+47.17 An opener's `close` with `remove` MUST delete the file the opener last opened, with its `-wal`
+and `-shm`, where the file is not `:memory:`, whether that `close` closed it or 47.10 or an earlier
+`close` had.
 
 47.18 `database` MUST NOT write to a file whose `user_version` equals its count of migrations as it
 opens it.
