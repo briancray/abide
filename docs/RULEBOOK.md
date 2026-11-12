@@ -4160,7 +4160,7 @@ changed.
 # 47. Databases
 
 47.1 `database` MUST open its database at the first call of the opener it returns, and every later
-call MUST hand back that same `Database` until 47.10 closes it.
+call MUST hand back that same `Database` until 47.10 or 47.16 closes it.
 
 47.2 `database` MUST open the file `<name>.sqlite` in `APP_DATA_DIR` where given a name, and MUST
 create the directory holding the file it opens where it does not exist.
@@ -4169,8 +4169,8 @@ create the directory holding the file it opens where it does not exist.
 working directory where relative, and `:memory:` as a database in memory, and MUST throw for any
 other string that is empty or holds anything but letters, digits, `_` and `-`.
 
-47.4 Where `NODE_ENV` is `test`, `database` MUST open an empty database in memory in place of the
-file 47.2 and 47.3 name, whatever it is given, one per opener and per test file `bun test` runs.
+47.4 Where `NODE_ENV` is `test`, `database` MUST open, in place of the file 47.2 and 47.3 name, the
+file at that absolute path inside a scratch directory of its own per test file `bun test` runs.
 
 47.5 `database` MUST open with the `WAL` journal, foreign keys enforced, and a busy timeout of 5000
 milliseconds.
@@ -4190,11 +4190,28 @@ exceeds its count of migrations, save as 47.13 states.
 47.10 `database` MUST close the `Database` it opened inside `App.stop`'s teardown, filed as an
 `onStop` per 37.4 and 37.7 that closes once the teardown it wraps has run.
 
-47.11 An opener whose `Database` 47.10 closed, or whose open threw, MUST open it again when next
-called.
+47.11 An opener whose `Database` 47.10 or 47.16 closed, or whose open threw, MUST open it again when
+next called.
 
-47.12 `database` given a function MUST call it at each open, and read what it returns per 47.2 and
-47.3, and MUST NOT call it where 47.4 opens a scratch database.
+47.12 `database` given a function MUST call it at each open, 47.4's included, and at no other call,
+and read what it returns per 47.2 and 47.3.
 
 47.13 `database` with `openNewer` MUST open a file whose `user_version` exceeds its count of
 migrations, and MUST then run no migration and leave `user_version` as it was.
+
+47.14 `database` with `strict`, `readonly` or `safeIntegers` MUST open its `Database` with that
+option as `bun:sqlite` reads it.
+
+47.15 `database` with `open` MUST call it with the `Database` at each open, after 47.5's pragmas and
+before 47.6's migrations.
+
+47.16 An opener's `close` MUST close the `Database` the opener holds, where it holds one.
+
+47.17 An opener's `close` with `remove` MUST delete the file 47.16 closed, with its `-wal` and `-shm`,
+where the file is not `:memory:`.
+
+47.18 `database` MUST NOT write to a file whose `user_version` equals its count of migrations as it
+opens it.
+
+47.19 Where `NODE_ENV` is `test`, `database` MUST delete, as it makes a process's first scratch
+directory per 47.4, every scratch directory made by a process that no longer runs.

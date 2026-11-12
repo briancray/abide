@@ -497,10 +497,21 @@ import Section from '#src/lib/Section.abide'
             file has run no migration yet, so the first one runs over tables already there and
             keeps their rows, and every one after it runs as usual.</p>
 
-        <p>Under <code>bun test</code> each test file opens each database empty, in memory, whatever
-            it names, so a test never writes the file the app serves and never reads another file's
-            rows. The app closes the file as it stops. <code>store.sqlite</code> takes what the function hands back, so a store and the app's
+        <p>Under <code>bun test</code> each test file opens each database empty, in a scratch
+            directory of its own, whatever it names, so a test never writes the file the app serves
+            and never reads another test file's rows. Two openers of one file share it, as a second
+            connection does, and the function is still called, so a check inside it still throws. The
+            app closes the file as it stops, and the next call opens it again as it was.
+            <code>close()</code> does the same by hand, and <code>{'close({ remove: true })'}</code>
+            deletes the file, so the next call opens it empty. <code>store.sqlite</code> takes what the function hands back, so a store and the app's
             own tables can share one file.</p>
+
+        <p><code>open</code> runs at every open, before the migrations, for what a connection sets
+            rather than what the file keeps: <code>{"open: (db) => db.run('PRAGMA synchronous = NORMAL')"}</code>.
+            <code>strict</code>, <code>readonly</code> and <code>safeIntegers</code> go to
+            <code>bun:sqlite</code> as given. A function naming the file is called as the file opens
+            and at no other call, so a path that changes takes effect at the next open, after
+            <code>close()</code>.</p>
     </Section>
     <Section title="Next">
         <ul>

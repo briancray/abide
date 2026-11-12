@@ -244,6 +244,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`store.indexedDB`',
                         '`store.cookies`',
                         '`database`',
+                        '`opener.close`',
                     ],
                 },
                 {
