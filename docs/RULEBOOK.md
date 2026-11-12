@@ -1345,6 +1345,9 @@ the handler and the failure.
 16.103 An entry of a mutation's `refreshes` whose `refresh` fails MUST NOT keep the entries after it
 from being refreshed.
 
+16.104 An entry of a mutation's `refreshes` naming an `Rpc`, a pattern and options MUST refresh as
+`rpc.refresh` given that pattern and those options does.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
@@ -1483,6 +1486,10 @@ subscriptions whose connection's upgrade carried that `principal.caller`, and MU
 the server holds as they would given none.
 
 18.38 `rpc.refresh` and `rpc.invalidate` given a `caller` MUST throw in a browser.
+
+18.39 A `caller` of `true` given to `rpc.refresh` or `rpc.invalidate` MUST stand for the
+`principal.caller` of the request it is given in, and MUST send the trigger to no subscription where
+that request carries none.
 
 # 19. Mount paths and schemas
 

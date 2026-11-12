@@ -260,10 +260,13 @@ export class Followers {
         rpc: object,
         member: 'invalidate' | 'refresh',
         pattern: unknown,
-        caller: string | undefined,
+        given: string | true | undefined,
     ): void {
         const handlerFollowers = this.handlers.get(rpc)
         if (handlerFollowers === undefined) return
+        // 18.39 — the browser making this request, and none where it names none.
+        const caller = given === true ? callerOf() : given
+        if (given === true && caller === undefined) return
         for (const follower of handlerFollowers.all) {
             if (caller !== undefined && follower.caller !== caller) continue
             if (!matchesPattern(follower.args, pattern)) continue

@@ -248,8 +248,8 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. | 13.2, 13.3, 13.12, 13.19, 46.11 |
 | `rpc.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to the handler's matching entries. | 13.11, 13.12, 13.19 |
 | `rpc.synced` | `(pattern?: Partial<Args>) => boolean` | `synced` narrowed to the handler's matching entries. | 13.12, 13.18, 13.19 |
-| `rpc.invalidate` | `(pattern?: Partial<Args>, options?: { caller?: string }) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12, 13.19, 18.37, 18.38 |
-| `rpc.refresh` | `(pattern?: Partial<Args>, options?: { caller?: string }) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12, 13.19, 18.37, 18.38 |
+| `rpc.invalidate` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
+| `rpc.refresh` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.isError` | `<Name extends string>(error: unknown, name: Name) => error is Extract<Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, { name: Name }>` | Whether a caught failure is the one named. | 16.8 |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response. | 16.11, 16.42 |
 | `rpc.method` | `string` | The HTTP method. | 16.2 |
@@ -282,7 +282,7 @@ type Reached = { readonly [REACHED]: true }
 | `clients` | `Clients` | Which surfaces carry this handler. | 16.37, 20.3 |
 | `crossOrigin` | `boolean \| string[]` | Whether other origins may call it, or follow it over the mux. | 16.24, 18.2, 21.19 |
 | `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. | 16.13, 16.54, 16.55 |
-| `refreshes` | `readonly (string \| Selection \| readonly [Selection, Record<string, unknown>])[] \| ((args: Args) => readonly (string \| Selection \| readonly [Selection, Record<string, unknown>])[] \| PromiseLike<readonly (string \| Selection \| readonly [Selection, Record<string, unknown>])[]>)` | The tags and selections a run of a mutation refreshes once it answers. | 16.89, 16.90, 16.91, 16.92, 16.101, 16.102, 16.103 |
+| `refreshes` | `readonly (string \| Selection \| readonly [Selection, Record<string, unknown>] \| readonly [Rpc, Record<string, unknown> \| undefined, { caller?: string \| true }])[] \| ((args: Args) => readonly (string \| Selection \| readonly [Selection, Record<string, unknown>] \| readonly [Rpc, Record<string, unknown> \| undefined, { caller?: string \| true }])[] \| PromiseLike<readonly (string \| Selection \| readonly [Selection, Record<string, unknown>] \| readonly [Rpc, Record<string, unknown> \| undefined, { caller?: string \| true }])[]>)` | The tags and selections a run of a mutation refreshes once it answers. | 16.89, 16.90, 16.91, 16.92, 16.101, 16.102, 16.103, 16.104 |
 
 ### Response helpers
 
