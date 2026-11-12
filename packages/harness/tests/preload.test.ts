@@ -90,3 +90,28 @@ test('a document parsed under the preload fetches no stylesheet or script it nam
     document.head.innerHTML = ''
     expect(asked).toBe(0)
 })
+
+// 43.36 — A POPOVER OPENS AND CLOSES UNDER THE PRELOAD: happy-dom gives an element `popover` and no
+// `showPopover`, so a component that opens one on mount threw before its test saw it render. THE
+// REVERT: drop `installPopover()` from `measure/preload.ts`; `showPopover` is not a function.
+test('the preload opens and closes a popover — 43.36', () => {
+    const host = document.createElement('div')
+    host.setAttribute('popover', 'manual')
+    document.body.append(host)
+    const toggles: string[] = []
+    host.addEventListener('toggle', (event) =>
+        toggles.push((event as Event & { newState: string }).newState),
+    )
+    host.showPopover()
+    expect(host.matches(':popover-open')).toBe(true)
+    host.showPopover()
+    host.hidePopover()
+    expect(host.matches(':popover-open')).toBe(false)
+    expect(host.togglePopover()).toBe(true)
+    expect(host.togglePopover(true)).toBe(true)
+    expect(host.togglePopover(false)).toBe(false)
+    expect(toggles).toEqual(['open', 'closed', 'open', 'closed'])
+    // An element with no `popover` attribute is refused, as a browser refuses it.
+    expect(() => document.createElement('p').showPopover()).toThrow()
+    host.remove()
+})
