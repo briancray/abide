@@ -849,11 +849,21 @@ function refreshEach(
 ): void | Promise<void> {
     if (isThenable(refreshed))
         return Promise.resolve(refreshed).then(refreshEach)
+    // 16.103 — one entry failing leaves the rest to refresh; the first failure is what 16.102 warns.
     let tags: string[] | undefined
+    let failed: { failure: unknown } | undefined
     for (const entry of refreshed as Refreshed) {
-        if (typeof entry === 'string') (tags ??= []).push(entry)
-        else if (Array.isArray(entry)) refresh(entry[0], entry[1] as never)
-        else refresh(entry as Selection)
+        if (typeof entry === 'string') {
+            ;(tags ??= []).push(entry)
+            continue
+        }
+        try {
+            if (Array.isArray(entry)) refresh(entry[0], entry[1] as never)
+            else refresh(entry as Selection)
+        } catch (failure) {
+            failed ??= { failure }
+        }
     }
     if (tags !== undefined) refresh({ tags })
+    if (failed !== undefined) throw failed.failure
 }

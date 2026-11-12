@@ -1340,6 +1340,9 @@ upgrade carried no caller, MUST refuse as 16.79 has it.
 16.89 requests, MUST NOT change the call's answer, and MUST be warned once on `abide:reactive` naming
 the handler and the failure.
 
+16.103 An entry of a mutation's `refreshes` whose `refresh` fails MUST NOT keep the entries after it
+from being refreshed.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.

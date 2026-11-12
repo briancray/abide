@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test'
 
 import { GET, log, POST, principal, reactive, refuse, watch } from '#server'
 import type { BootedApp } from '#server/createApp.ts'
+import type { Selection } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -304,5 +305,36 @@ test('a refreshes that fails answers the write as it returned, and warns once �
     )
     expect(`rejected: ${await answered('rejecting')}`).toBe(
         'rejected: 200 "written", warned 1',
+    )
+})
+
+// 16.103 — ONE ENTRY FAILING LEAVES THE REST TO REFRESH: the entry after a broken one still reloads,
+// and the failure is still warned once (16.102). THE REVERT: drop the per-entry `try` in `refreshEach`
+// in `rpc.ts`; the throw leaves the loop, and `after +0` where `after +1` is due.
+let afterRuns = 0
+const after = reactive(async () => ++afterRuns, { global: true })
+const broken = {
+    refresh() {
+        throw new Error('this entry broke')
+    },
+} as unknown as Selection
+const partly = POST(() => 'written', { refreshes: () => [broken, after] })
+
+test('an entry of refreshes that fails leaves the entries after it refreshed — 16.103', async () => {
+    await using app = await inMemoryApp({
+        'partly/partly.handler.ts': { default: partly },
+    })
+    await after
+    const before = afterRuns
+    const answer = await app.fetch(
+        new Request('http://app.invalid/partly/partly', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+        }),
+    )
+    await after
+    expect(`${answer.status}, after +${afterRuns - before}`).toBe(
+        '200, after +1',
     )
 })
