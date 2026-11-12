@@ -298,13 +298,13 @@ test('every name in a declarator list is declared', async () => {
             'b',
         ]),
     ).toEqual(['a', 'b'])
-    // 31.12's case, not this one: a pattern binds names this does not see.
+    // 31.17 — and a pattern's names are names too.
     expect(
         await declared('const { x, y } = { x: reactive(0), y: reactive(1) }', [
             'x',
             'y',
         ]),
-    ).toEqual([])
+    ).toEqual(['x', 'y'])
     // `let` inside a string is not a declaration.
     expect(
         await declared('const s = reactive("let z = reactive(1), w")', [

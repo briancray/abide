@@ -131,7 +131,6 @@ export async function readsIn(
 ): Promise<{ answer: CheckerAnswer; warnings: Finding[]; suspects: number[] }> {
     const scriptsEnd = projection.scripts.end
     const positions = projection.positions
-    // A destructuring pattern binds names this does not see, and that is 31.12's case.
     const names: Node[] = []
     const spelled = new Set<string>()
     const bind = (name: Node): void => {
@@ -143,7 +142,7 @@ export async function readsIn(
         if (statement.getStart() >= scriptsEnd) break
         if (isVariableStatement(statement)) {
             for (const declaration of statement.declarationList.declarations)
-                bind(declaration.name)
+                declaredNames(declaration, bind)
             continue
         }
         // 31.1 — AN IMPORT BINDS A NAME AS A DECLARATION DOES, and the clause does not
@@ -172,7 +171,7 @@ export async function readsIn(
     for (const { node } of positions.nodesIn(sourceFile, SETUP))
         if (isVariableStatement(node))
             for (const declaration of node.declarationList.declarations)
-                if (isIdentifier(declaration.name)) names.push(declaration.name)
+                declaredNames(declaration, (name) => names.push(name))
     refuseDeclared(sourceFile.statements, scriptsEnd, file)
     // 33's pass runs whatever 31.3's found: a `props` pattern binds no name the walk
     // above collects — `const { amount } = props()` declares a PATTERN — so a file
@@ -790,6 +789,34 @@ async function routeReads(
         reads.push(read)
     }
     return reads
+}
+
+/**
+ * Each name a declaration binds, for 31.1 to ask whether it is a `Reactive`.
+ *
+ * 31.17 — A PATTERN'S NAMES ARE NAMES TOO: `const { status, step } = pairing()` binds two, each
+ * asked as a declared name is, at any depth, renamed or defaulted. A `props` pattern is 33's, whose
+ * names are accessors rather than values (`propsReads`) — told by the spelling `propsReads` asks
+ * about, as a pattern under any other callee is a pattern of values.
+ */
+function declaredNames(
+    declaration: Node & { name: Node; initializer?: Node },
+    visit: (name: Node) => void,
+): void {
+    const { name, initializer } = declaration
+    if (isIdentifier(name)) {
+        visit(name)
+        return
+    }
+    if (
+        initializer !== undefined &&
+        isCallExpression(initializer) &&
+        isIdentifier(initializer.expression) &&
+        (initializer.expression.text === 'props' ||
+            initializer.expression.text === INLINE_PROPS)
+    )
+        return
+    patternNames(name, visit)
 }
 
 /** Each identifier `name` binds: itself, or every name an object or array pattern destructures. */

@@ -102,6 +102,35 @@ rec.list[at] = at
 <button onclick={() => { rec.deep.s = 2 }}>bad</button>
 <button onclick={() => { rec.n++; query.tab = 'mine' }}>good</button>`
 
+// 31.17 — A NAME A PATTERN BINDS TO A `Reactive` IS READ AND WRITTEN BY NAME: every form below reads
+// its value and writes its `set`, so the two wrong lines are the whole of the findings.
+const DESTRUCTURED = `<script>
+import { reactive } from '@abide/abide'
+
+function pairing() {
+    return {
+        status: reactive<'idle' | 'busy'>('idle'),
+        step: reactive(0),
+        nested: { deep: reactive('a') },
+        list: [reactive(1), reactive(2)],
+        missing: undefined as ReturnType<typeof reactive<number>> | undefined,
+    }
+}
+const { status, step: renamed, nested: { deep }, missing = reactive(5) } = pairing()
+const [first, second] = pairing().list
+let { step } = pairing()
+const label: string = status
+const sum: number = renamed + first + second + step + missing
+const shouted: string = deep.toUpperCase()
+const wrong: number = status
+step = 3
+renamed += 1
+status = 'nope'
+</script>
+
+<p>{status} {deep} {sum}</p>
+<button onclick={() => { step++; deep = 'b' }}>next</button>`
+
 const LINKED = `<script>
 import { url } from '@abide/abide'
 
@@ -344,6 +373,7 @@ beforeAll(async () => {
         'linked/index.abide': LINKED,
         'queried/index.abide': QUERIED,
         'member-written/index.abide': MEMBER_WRITTEN,
+        'destructured/index.abide': DESTRUCTURED,
         'public/fonts/face.woff2': 'a face',
         'configured/index.abide': CONFIGURED,
         'configured/elsewhere/index.abide': `<script server>
@@ -543,6 +573,23 @@ test('a write through a member path is held to the member it writes — 31.16', 
         { ...at("rec.keyed['k']"), code: 2322 },
         { ...at('rec.deep.s++'), code: 2356 },
         { ...at('rec.deep.s = 2'), code: 2322 },
+    ])
+})
+
+// 31.17 — THE REVERT, run: bind only a declaration's own identifier in `declaredNames`, as before a
+// pattern's names were asked; every destructured name is the `Reactive` itself, and 9 findings
+// land where 2 are due — each read an operator or a member on a `Reactive`, each write a rebinding
+// of a constant, and `'nope'` not among them.
+test('a name a pattern binds to a Reactive is read and written by name — 31.17', () => {
+    expect(
+        inFile('destructured/index.abide').map(({ line, column, code }) => ({
+            line,
+            column,
+            code,
+        })),
+    ).toEqual([
+        { ...place(DESTRUCTURED, 'wrong'), code: 2322 },
+        { ...place(DESTRUCTURED, "'nope'"), code: 2345 },
     ])
 })
 
