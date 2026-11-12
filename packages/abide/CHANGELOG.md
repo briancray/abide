@@ -1,5 +1,63 @@
 # @abide/abide
 
+## 0.129.0
+
+### Minor Changes
+
+- 226147b: `database` opens a file wherever the app keeps it: its first argument is a name (`<name>.sqlite` in `APP_DATA_DIR`, as before), a path — anything holding a `/` or a `.`, relative to the working directory, so `todos.sqlite` is that file, `':memory:'`, or a function returning one, called as the file opens so it can read `config()` — RULEBOOK 47.2, 47.3, 47.12. Under `bun test` the scratch database still wins, and the function is not called (47.4). `{ openNewer: true }` opens a file a newer build migrated, running nothing and leaving `user_version` alone; the default still refuses it (47.9, 47.13).
+- 9088943: Breaking: the names only compiled `.abide` output calls are off the public entries. `@abide/abide` no longer exports `attributeMarkup`, `attributeText`, `boundProp`, `boundValue`, `groupHolds`, `selectedMarkup`, `escapeText`, `escapeAttribute`, `escapeStyleValue`, `listOf`, `heldProp`, `propCell`, `propCells`, `propOr`, `restValues`, `withoutKeys`, `markupRun`, `RAW_WRITES`, `currentShare`, `enterShare`, `leaveShare`, `resumeShare`, `safeUrl`, `slotValue`, `setupThrown`, `spreadAttributes`, `spreadProps`, `writePath` or `mutatePath`, and `@abide/abide/server` no longer exports `callsInRender`, `addressed`, `derivedArgs`, `renderComponent` or `fileRoute`. None had a REGISTRY row; an app that imported one (an `escapeAttribute` for its own markup, say) escapes with its own helper or `Bun.escapeHTML`. Compiled client modules import them from `@abide/abide/runtime`, and compiled server modules and handler faces from the new tooling entry `@abide/abide/server/runtime`. Every public entry's exports are now held to REGISTRY by a test.
+- e705d3b: A kept call covers a real form. `reactive<typeof resetHome | typeof deleteHome>()` keeps a call of either handler — one value, its failures the union of theirs (RULEBOOK 4.19, amended). `s.then` takes one result type per arm, as `PromiseLike` does, so `saving.then(close, () => {})` type-checks whatever `close` answers: the step after a save is `saving = save(args); saving.then(onSaved, () => {})`, the refusal still on `saving.error()` (2.7, 2.8). A call is let go by keeping one nothing has made — `saving = reactive<typeof save>()` — where `saving = undefined` is a write to the call kept (11.59, 11.61, 11.16). A `Reactive` handed to `GET` as a value with a value's options is refused again now that it matches `PromiseLike` exactly.
+- 995513c: **Breaking:** `bind:size`, `bind:visible` and `bind:rect` are gone, and so are `visibleIn` and
+  `sizeBox`. An element is measured by an `observe` adaptor its `bind:element` takes:
+  `bind:element={observe.size(box)}`, `observe.visible(seen, { in: scroller })`,
+  `observe.size(box, { box: 'border' })` and `observe.rect(placed)`. Each takes a `Reactive` to write
+  or a callback to call, and an `in` or a `box` given as a `Reactive` is watched. The old spellings
+  are a build error naming the new one. RULEBOOK 32.79-32.92.
+  
+  `bind:element` takes a list of callbacks, each handed the element and each `Disposer` run when it
+  leaves, so one element can carry more than one adaptor:
+  `bind:element={[observe.rect(placed), observe.size(box)]}`. RULEBOOK 32.9.
+  
+  Inside a `.abide` file, a name passed as a member of an object literal holds the `Reactive` where
+  the parameter's type declares that member one, as a `Reactive`-typed parameter already did.
+  RULEBOOK 31.3.
+  
+  The observers, listeners and frame batching are the ones the binds ran on; a page that uses only
+  `observe.size` loads neither of the other two.
+- 1355114: `onPairing(() => args)` from `@abide/abide/server` files the Claude Code arguments every pairing's command and install carry after `--`, asked in the asking request's scope — so a site can hand each person their own `--mcp-config` or `--allowedTools` through the built-in `/__abide/pairing` rather than a bridge handler of its own. Each argument is quoted where a shell would split it, the link carries none, and a request still names none (RULEBOOK 44.74, 44.76, 37.7).
+- c6f6243: a job can be spaced from its last run, put off at boot, and told to stop: `poll` takes `{ every, after: 'tick' | 'settle', delay }` beside a number, and `stopSignal()` is the signal `App.stop` aborts before it waits on a job's run — 7.20, 7.25, 7.32-7.39
+- 7514530: A mutation's `refreshes` names selections as well as tags — `[boards, { personId }]` refreshes that one entry as `refresh(boards, { personId })` does — and its function may be `async`, run in the call's scope, so it can `await principal.resolved` to name whose entry the write changed. RULEBOOK 16.89, 16.101.
+- 2ba96b2: BREAKING: the server's helpers are members of the names they belong to. The response helpers are
+  `response.page`, `response.json`, `response.jsonl`, `response.sse`, `response.bytes` and
+  `response.redirect` — `response()` still answers the status and headers being built (RULEBOOK 17,
+  22.1); `response.redirect` takes a `URL` as well as a string, as `Response.redirect` does.
+  `requestIP()` is `request.ip()` (22.12, 22.13). The two providers are `provider.claudeApi(config)`
+  and `provider.claudeCode(config)`, with the pairing at `provider.claudeCode.bridge` and
+  `provider.claudeCode.bridgeCommand` (44). The top-level `page`, `json`, `jsonl`, `sse`, `bytes`,
+  `redirect`, `requestIP`, `claudeApi` and `claudeCode` exports are gone: change
+  `import { json, sse } from '@abide/abide/server'` to `import { response } …` and call
+  `response.json(…)`. A `global` value's body calling `response.json` or `request.ip` is refused at
+  build as a read of `response` or `request` (11.37).
+- 5191734: BREAKING: the shipped stores and abide's own refusals are namespace members. `webStore`,
+  `indexedDBStore` and `cookiesStore` are `store.web`, `store.indexedDB` and `store.cookies` —
+  `reactive('', { store: store.web('draft') })` — and `@abide/abide/server`'s `store` adds
+  `store.sqlite` and `store.redis` (were `sqliteStore` and `redisStore`). `notFound`,
+  `validationError` and `aborted` are `refuse.notFound`, `refuse.validation` and `refuse.aborted`,
+  beside `refuse.named`. The old names are gone: rename each import to `store` or `refuse` and the
+  call to its member (RULEBOOK 8.22-8.40, 15.7-15.9). A page reading `store.web` still loads that
+  store alone, not its siblings (38.94). The `Store` type is unchanged.
+
+### Patch Changes
+
+- aee3e49: A framework ambient first built inside a request — `principal`'s members, built on first access — now builds its process-wide home outside that request. Built inside it, the home derived from that request's values for the life of the process, so a read outside every request (a bare `render`, a test) answered the first caller's principal.
+- 4309881: Fix: `abide check` narrows a value a branch-local `<script>` declares the way it narrows the page's own — `{#if proposal}{#if other}{proposal.x}{/if}{/if}` no longer reports `proposal` possibly undefined, nor does an `{:else if}` arm or a `{#for}` row inside the guard; no `proposal!` or `?.` needed. A read outside the guard, after a write, or in a listener is still checked as the union (RULEBOOK 38.138).
+- 3bc021d: Fix: `abide format` is idempotent — a multi-line `/* … */` comment in a branch-local `<script>`, a component's setup, a `<style>` or a multi-line expression no longer moves further right on every run. Each piece is handed to `bun fmt` with the indentation of where it stands taken off, since `bun fmt` keeps a block comment's continuation lines as given and abide indents them again (RULEBOOK 38.137).
+- 6e4a193: Fix: `abide format <file>` formats the `.abide` it names instead of crashing with `ENOTDIR` — a path named is a file to format or a directory to format every `.abide` under, and the two mix in one run (RULEBOOK 38.125).
+- ae8f6dc: `media(query)` first asked inside a request — a page's server render, in a test process that also mounts components — answers the browser's `matchMedia` outside it again, rather than the server's `false` for the rest of the process: the one value per query is built outside every request wherever it is first asked (RULEBOOK 23.30).
+- 6649767: `pairing()`'s `status` fails with the failure where `/__abide/pairing` does not answer, so `status.error()` carries it and a page can say the assistant is unavailable rather than wait on a status that never lands (RULEBOOK 44.69).
+- ce81023: An entry of a mutation's `refreshes` whose refresh fails no longer keeps the entries after it from refreshing; the first failure is still warned once on `abide:reactive` (16.102, 16.103).
+- 721fa2f: A mutation whose `refreshes` fails — its function throwing or rejecting, or a refresh it asks for — answers as its handler returned rather than with a 500, and warns once on `abide:reactive` naming the handler. RULEBOOK 16.102.
+
 ## 0.128.0
 
 ### Minor Changes
