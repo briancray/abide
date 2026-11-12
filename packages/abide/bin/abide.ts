@@ -8,6 +8,7 @@ import { brotliCompress, constants } from 'node:zlib' // bun's brotli is `Compre
 
 import { paints } from '#compiler/appLayout.ts'
 import { appMap, mapText } from '#compiler/appMap.ts'
+import { BuildRefusal } from '#compiler/BuildRefusal.ts'
 import { checkApp } from '#compiler/checkApp.ts'
 import {
     compilationOf,
@@ -837,5 +838,12 @@ async function dev(
     return undefined
 }
 
-const code = await runCommands(DISK, Bun.argv.slice(2))
+// 38.139 — a build that stops on a refusal says what it refused, as `abide check` does, and fails.
+const code = await runCommands(DISK, Bun.argv.slice(2)).catch(
+    (thrown: unknown) => {
+        if (!(thrown instanceof BuildRefusal)) throw thrown
+        console.error(thrown.message)
+        return 1
+    },
+)
 if (code !== undefined) process.exit(code)

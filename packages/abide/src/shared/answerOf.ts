@@ -11,6 +11,7 @@ import {
     framedChunks,
     framingOf,
 } from './framing.ts'
+import { hydrated } from './hydrating.ts'
 import { KEPT_HEADER } from './KEPT_HEADER.ts'
 import { refused, type RefusedCall } from './onRefusal.ts'
 import { principalRotated } from './principalRotated.ts'
@@ -71,8 +72,11 @@ export function answerOf(
     if (early === undefined) return fetched(request, streams, signal)
     if (early.painted === 1 && early.response !== undefined)
         return answerFrom(early.response, early.bytes, streams)
-    // An early call whose request failed is made again.
-    return early.promise.then(() =>
+    // 41.27 — AND HOWEVER EARLY THE CALL WAS MADE: a value built at a module's import calls before
+    // the page is set up, and its answer landing while the page loads had the page adopt an arm the
+    // server never painted. Held until the page has hydrated, where one is.
+    return early.promise.then(hydrated).then(() =>
+        // An early call whose request failed is made again.
         early.response === undefined
             ? fetched(request, streams, signal)
             : answerFrom(early.response, early.bytes, streams),

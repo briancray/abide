@@ -44,6 +44,16 @@ export function takeEarlyCall(key: string): EarlyCall | undefined {
 }
 
 /**
+ * The call the page started under `key`, taken only where the server painted it settled and its
+ * answer has landed — what a reader settles at once from (41.27).
+ */
+export function takeLandedCall(key: string): EarlyCall | undefined {
+    const early = startedCalls()?.[key]
+    if (early?.painted !== 1 || early.response === undefined) return undefined
+    return takeEarlyCall(key)
+}
+
+/**
  * What settles once every call the server painted settled has answered, or `undefined` where none
  * is still on its way.
  *

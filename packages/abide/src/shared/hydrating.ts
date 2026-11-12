@@ -18,9 +18,14 @@ type StandIn = {
     browser: () => boolean
 }
 
-const HYDRATION: { pending: boolean; standIns: StandIn[] } = {
+const HYDRATION: {
+    pending: boolean
+    standIns: StandIn[]
+    waiting: (() => void)[]
+} = {
     pending: false,
     standIns: [],
+    waiting: [],
 }
 
 /** Files a value whose server answer is `server` and whose browser answer `browser` reads. */
@@ -37,6 +42,14 @@ export function isHydrating(): boolean {
     return HYDRATION.pending
 }
 
+/** Settles once the page hydrating now has hydrated; `undefined` where none is hydrating. */
+export function hydrated(): Promise<void> | undefined {
+    if (!HYDRATION.pending) return undefined
+    return new Promise((done) => {
+        HYDRATION.waiting.push(done)
+    })
+}
+
 /** Writes every stand-in the server's answer, until `endHydration`. */
 export function beginHydration(): void {
     HYDRATION.pending = true
@@ -48,4 +61,6 @@ export function endHydration(): void {
     if (!HYDRATION.pending) return
     HYDRATION.pending = false
     for (const held of HYDRATION.standIns) held.value.set(held.browser())
+    const waiting = HYDRATION.waiting.splice(0)
+    for (const done of waiting) done()
 }

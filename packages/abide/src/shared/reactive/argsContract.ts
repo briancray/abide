@@ -146,7 +146,10 @@ function withDefaults<Args>(args: Args, defaults: Defaults): Args {
  */
 export function canonicalKey(args: unknown): string {
     if (args === undefined) return ''
-    return JSON.stringify(canonical(args, []))
+    const written = JSON.stringify(canonical(args, []))
+    // 11.24 — NO MEMBERS IS NO ARGS: a `GET`'s URL writes `{}` as it writes nothing, so a render's
+    // `{}` and the browser's empty query were one call keyed two ways, and the seed buffer missed.
+    return written === '{}' ? '' : written
 }
 
 // THE PATH IS A STACK OF STEPS, joined only when a refusal names it. Built as a string per member

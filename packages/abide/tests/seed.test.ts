@@ -46,7 +46,7 @@ middleware((next, { request }) => {
 
 // 41.25, 41.26 — ONE CALL OF EACH KIND A PAGE IS PAINTED FROM: answered within the render's turn,
 // refused within it, and a stream that has closed within it.
-const TOTALS = `import { GET, refuse } from '@abide/abide/server'
+const TOTALS = `import { GET, reactive, refuse } from '@abide/abide/server'
 
 export const getTotal = GET(({ id }: { id: string }) => ({ id, total: 12 }))
 
@@ -55,20 +55,33 @@ export const getMissing = GET(({ id }: { id: string }) => refuse(404, id))
 export const getLines = GET(async function* ({ id }: { id: string }) {
     yield id
 })
+
+// FORWARDED AND STILL RUNNING: the call's value adopts the global one, and is no load of its own.
+const scoring = reactive(
+    async function* () {
+        await new Promise(() => {})
+        yield 1
+    },
+    { global: true },
+)
+
+export const getScores = GET(() => scoring)
 `
 
 const PAINTED = `<script>
 import { reactive } from '@abide/abide'
 import getLines from '#src/totals/getLines.handler.ts'
+import getScores from '#src/totals/getScores.handler.ts'
 import getMissing from '#src/totals/getMissing.handler.ts'
 import getTotal from '#src/totals/getTotal.handler.ts'
 
 const total = reactive(() => getTotal({ id: 't' }))
 const missing = reactive(() => getMissing({ id: 'm' }))
 const lines = reactive(() => getLines({ id: 'l' }))
+const scores = reactive(() => getScores())
 </script>
 
-<main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p></main>`
+<main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p><p>{scores.busy()}</p></main>`
 
 // 18.5, 41.13 — A `global` VALUE A RENDER READ, and a write that moves it before the browser's call.
 const SHELF = `import { GET, POST, reactive } from '@abide/abide/server'
@@ -294,11 +307,15 @@ test('the head starts every call the page made, before its markup — 41.20', as
 })
 
 // 41.25 — A CALL THE MARKUP WAS BUILT FROM SETTLED IS MARKED for hydration to wait on, a refusal too,
-// and one still in flight (the slow invoice on `/`) is not. 41.26 — nor is a stream, though this one
-// closed before the markup was built: it is started to its first chunk and handed to the mux (16.97).
-// THE REVERTS: write every row unmarked, and `getTotal` and `getMissing` read `false`; drop
-// `!isStreaming` from the mark, and `getLines` reads `true`.
-test('the head marks the calls the markup was built from settled — 41.25, 41.26', async () => {
+// and one still in flight (the slow invoice on `/`) is not. 41.26 — nor is a stream still running
+// (the feed on `/feeds`), which is started to its first chunk and handed to the mux (16.97); one whose
+// run closed before the markup was built is settled (41.33), and is marked as one. THE REVERTS: write
+// every row unmarked, and `getTotal`, `getMissing` and `getLines` read `false`; mark every stream
+// unmarked again (`!isStreaming` in `paintedSettled`), and `getLines` reads `false`; drop the load
+// test, and `getFeed` and `getInvoice` read `true`. A call whose value FORWARDS a `global` stream
+// still running is no load of its own (`getScores`): drop `runClosed`, and it reads `true` — and
+// hydration waits on a run that has not closed.
+test('the head marks the calls the markup was built from settled — 41.25, 41.26, 41.33', async () => {
     const rowsOf = async (address: string) =>
         JSON.parse(
             /<script type="application\/json">([\s\S]*?)<\/script>/.exec(
@@ -306,14 +323,20 @@ test('the head marks the calls the markup was built from settled — 41.25, 41.2
             )?.[1] ?? '[]',
         ) as unknown[][]
     const marked: Record<string, boolean> = {}
-    for (const row of [...(await rowsOf('/painted')), ...(await rowsOf('/'))])
+    for (const row of [
+        ...(await rowsOf('/painted')),
+        ...(await rowsOf('/')),
+        ...(await rowsOf('/feeds')),
+    ])
         marked[String(row[1]).split('?')[0]?.split('/').pop() ?? ''] =
             row[3] === 1
     expect(marked).toEqual({
         getTotal: true,
         getMissing: true,
-        getLines: false,
+        getLines: true,
+        getScores: false,
         getInvoice: false,
+        getFeed: false,
     })
 })
 
@@ -360,6 +383,27 @@ test('a call the render made with other args runs the handler and warns on abide
     expect(warned.length).toBe(1)
     expect(warned[0]).toContain('/invoices/getInvoice')
     expect(warned[0]).toContain('41.12')
+})
+
+// 11.24 — AN ARGS OF NO MEMBERS IS AN ABSENT ARGS. A render that called `listThings({})` filed its
+// entry under the key of `{}`, and the browser's `GET` for it carries no query, so its args arrive
+// absent: keyed apart, the call missed, ran the handler again and warned. THE REVERT: drop the `{}`
+// arm from `canonicalKey`; both calls answer `undefined` and run the handler, and 2 warnings arrive
+// where 0 are due.
+test('a render that called with {} answers the call that arrives with no args, and the reverse — 11.24, 41.18', async () => {
+    const handler = { address: '/things/listThings' }
+    seedFor('caller-empty')(handler, {}, Promise.resolve('render'))
+    seedFor('caller-absent')(handler, undefined, Promise.resolve('bare'))
+    const answered: unknown[] = []
+    const warned = await warningsWhile(async () => {
+        answered.push(await takeSeed('caller-empty', handler, undefined))
+        // A member left `undefined` is dropped (11.24), which leaves none.
+        answered.push(
+            await takeSeed('caller-absent', handler, { q: undefined }),
+        )
+    }, 'abide:hydrate')
+    expect(answered).toMatchObject([{ value: 'render' }, { value: 'bare' }])
+    expect(warned).toEqual([])
 })
 
 // 16.33 — A STREAM'S TRANSCRIPT PAST `ABIDE_MAX_STREAM_BUFFER_SIZE` STOPS BEING HELD, and its call is

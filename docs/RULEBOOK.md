@@ -688,7 +688,8 @@ hold a subscription per source for it.
 11.23 A `Keyed` MUST propagate nothing.
 
 11.24 An `Args` object MUST become a key by its canonical wire form: members sorted by name,
-`undefined` members dropped, and `Date` written ISO.
+`undefined` members dropped, `Date` written ISO, and an object left with no members keyed as an
+absent `Args`.
 
 11.25 An `Args` key MUST be structural.
 
@@ -700,7 +701,7 @@ the body.
 11.28 An `args` gate MUST refuse and MUST NOT decide which entry an `Args` object lands on.
 
 11.29 A literal default written in the body's parameter MUST participate in the `Args` key, on
-both sides, and an absent `Args` MUST be keyed as `{}` where the parameter writes one.
+both sides, and the parameter's defaults MUST apply to an absent `Args` as to `{}`.
 
 11.30 The build MUST warn where `args` declares a default the parameter does not.
 
@@ -1327,10 +1328,10 @@ opens the connection again, which MUST make the call again as 9.7 has a refresh 
 16.96 A `GET` call 16.93 reads MUST NOT read its answer's body further while a frame of it the
 connection was sent is held unsent, and MUST count toward 18.31's bound while it is read.
 
-16.97 A `GET` call 41.20's script started whose answer is a jsonl stream, carrying no cookie or
-`abide-principal` header, to a request carrying a caller, MUST be answered over http only until its
-first chunk and the chunks ready with it, or a second without one, and MUST read the rest of that
-run over the socket mux.
+16.97 A `GET` call 41.20's script started that 41.26 does not wait for, whose answer is a jsonl
+stream, carrying no cookie or `abide-principal` header, to a request carrying a caller, MUST be
+answered over http only until its first chunk and the chunks ready with it, or a second without one,
+and MUST read the rest of that run over the socket mux.
 
 16.98 An answer of a `GET` call that 16.94 or 16.97 hands from one leg to the other MUST be given
 only to a request carrying the caller and the sign-in the request it answered carried, and any other
@@ -3318,6 +3319,9 @@ statements — a value a branch-local `<script>` declares as much as one the fil
 and MUST NOT carry what a condition established past a write of the value, nor into a function the
 arm declares.
 
+38.139 A refusal that stops `abide build`, or the build 38.100 makes, MUST be printed as `abide check`
+prints it and fail the command, and MUST NOT be printed as a stack.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -3583,10 +3587,11 @@ from the choice rather than adopted, warning on `abide:hydrate`.
 41.25 Hydration MUST NOT set up a page until every `Rpc` call `render` built its markup from settled
 has answered or failed.
 
-41.26 An `Rpc` call answering a stream MUST NOT be waited for under 41.25.
+41.26 An `Rpc` call answering a stream whose run had not closed when `render` built the markup from
+it MUST NOT be waited for under 41.25.
 
 41.27 An `Rpc` call `render` built the page's markup from in flight MUST be in flight as hydration
-adopts the page, however early its answer arrived.
+adopts the page, however early the browser made it or its answer arrived.
 
 41.28 A `render` MUST let the turn's queued microtasks run between setting up a `<Name/>` whose setup
 made an `Rpc` call, or whose markup reads a bare `busy` or `ready`, and building that component's
@@ -3604,6 +3609,9 @@ choose another arm at hydration under 41.24.
 41.32 While a page hydrates, `online` and `media` MUST answer as the server does, and once it has
 hydrated each MUST be written with the browser's answer, so an arm that answer changes is swapped as
 an update and not under 41.24.
+
+41.33 An `Rpc` call answering a stream whose run had closed when `render` built the markup from it
+MUST hold every chunk of that run, its run closed, as hydration adopts the page.
 
 # 42. The app object
 

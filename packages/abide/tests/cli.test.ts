@@ -141,3 +141,32 @@ test('--version prints the package version — 38.115', async () => {
         expect(`${said.exitCode} ${said.stdout.trim()}`).toBe(`0 ${version}`)
     }
 })
+
+// A BUILD'S REFUSAL IS A LINE AT ITS FILE, as `abide check` prints it — one the compiler filed at a
+// file (19.1's two owners of a route) and one it placed on a line (32.63's unclosed block) alike.
+// THE REVERT: drop the `BuildRefusal` catch around `runCommands` in `bin/abide.ts`; both are bun's
+// uncaught error, its source frame and its version banner, so the first line is the throw site.
+test('a build that stops on a refusal prints it as abide check does, not as a stack — 38.139', async () => {
+    for (const [files, line] of [
+        [
+            {
+                'src/local.abide': '<p>hi</p>\n',
+                'src/local.handler.ts': `import { GET } from '@abide/abide/server'\nexport default GET(() => 1)\n`,
+            },
+            'src/local.handler.ts - error: abide: local.abide and local.handler.ts both answer GET at /local. RULEBOOK 19.1.',
+        ],
+        [
+            { 'src/index.abide': '<p>{#if x}</p>\n' },
+            'src/index.abide:1:4 - error: abide: {#if} is never closed before </p>',
+        ],
+    ] as const) {
+        const app = temporaryModule({
+            ...files,
+            'package.json': JSON.stringify({ name: 'refused', type: 'module' }),
+        })
+        const built = await spawned(['bun', BIN, 'build'], { cwd: app })
+        expect(built.exitCode).toBe(1)
+        expect(built.stderr.split('\n')[0]).toStartWith(line)
+        expect(built.stderr).not.toContain('Bun v')
+    }
+})

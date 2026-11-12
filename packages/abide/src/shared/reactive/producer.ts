@@ -23,6 +23,7 @@ import { ownStream, type Reactive } from './Reactive.ts'
 export {
     abandonLoad,
     chunksOfStream,
+    closedRun,
     dropAnswered,
     failedTransiently,
     isAsyncGenerator,
@@ -111,6 +112,16 @@ export function isStreaming(value: unknown): boolean {
     if (!isReactive(value)) return false
     const stream = (value as Partial<Callable>)[CELL]?.stream
     return stream !== null && stream !== undefined
+}
+
+/**
+ * Whether what `value` serves is a stream's run that has closed — read on the stream it forwards,
+ * where it forwards one. False for a run in flight, and for a stream whose first run has not begun.
+ */
+export function runClosed(value: unknown): boolean {
+    let stream = cellOf(value).stream
+    while (stream?.source != null) stream = stream.source.stream
+    return stream?.closed === true
 }
 
 function adoptedCellOf(value: unknown): Cell {
