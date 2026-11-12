@@ -21,7 +21,12 @@ test.concurrent.each(APPS)(
     '%s passes its own tests and its own check',
     async (app) => {
         const cwd = `${DOGFOOD}examples/${app}`
-        const tested = await spawned(['bun', 'test'], { cwd })
+        // A later chapter's suite runs every earlier chapter's cards: past `spawned`'s 60 s on a CI
+        // runner, and still inside this test's own 120 s, so a hang fails naming the command.
+        const tested = await spawned(['bun', 'test'], {
+            cwd,
+            deadline: 110_000,
+        })
         expect(tested.exitCode, tested.stderr).toBe(0)
         const checked = await spawned(['bun', 'run', 'check'], { cwd })
         expect(checked.exitCode, checked.stdout + checked.stderr).toBe(0)
