@@ -436,3 +436,40 @@ for (const [what, page, components, created] of GATED_PAGES)
                 created: work.nodesCreated,
             }).toEqual({ body: 'child', caught: false, created })
         })
+
+// 32.16 OVER 2.2 AND 4.16 — A VALUE THAT OPENED AT `undefined` AND THEN FAILED IS A FAILURE OF THE
+// BODY READING IT, so the boundary shows the catch. `pairing`'s `status` shape, built and painted
+// before its copy fails. THE REVERT: drop `refusedAnswer`'s opening arm in `Reactive.ts`; the
+// binding goes on painting `reading` with nothing thrown, and the catch never renders.
+test('a value built before its source failed fails the body it is read in — 32.16, 2.2', async () => {
+    let fail!: (failure: Error) => void
+    const failing = new Promise<string>((_, reject) => {
+        fail = reject
+    })
+    // Handled here so the rejection the page's copy takes on is not reported as unhandled first.
+    failing.catch(() => undefined)
+    ;(globalThis as { pairingRead?: Promise<string> }).pairingRead = failing
+    await served(`<script>
+import { reactive } from '@abide/abide'
+
+const copy = reactive(() => (globalThis as unknown as { pairingRead: Promise<string> }).pairingRead)
+const status = reactive(() =>
+    copy.ready() || copy.error() !== undefined ? copy() : undefined,
+)
+const shown = reactive(() => status())
+</script>
+
+{#try}
+    <strong id="shown">{shown() ?? 'reading'}</strong>
+{:catch problem}
+    <p class="status">{problem.message}</p>
+{/try}`)
+    expect(document.getElementById('shown')?.textContent).toBe('reading')
+    fail(new Error('the pairing read failed'))
+    await Bun.sleep(5)
+    flushSync()
+    expect(document.getElementById('shown')).toBeNull()
+    expect(document.querySelector('.status')?.textContent).toBe(
+        'the pairing read failed',
+    )
+})

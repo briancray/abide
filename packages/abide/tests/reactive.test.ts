@@ -4231,6 +4231,99 @@ test('a reload that fails over an invalidated value wakes the reader it left wai
     expect(`answered: ${answered}`).toBe('answered: the reload failed')
 })
 
+// 2.2 OVER 4.16 — A BODY THAT FAILS OVER ITS OPENING `undefined` HAS NOTHING LANDED TO HOLD. The
+// opening is the value being empty and mints no production, so 4.12's "go on serving" had nothing
+// to serve: `pairing`'s `status` — `undefined` until the copy lands, the copy's failure once it fails
+// — went on answering `undefined` with the failure standing beside it, so a value built on it BEFORE
+// the failure never reran and stayed not ready with no `error()` for the life of the page, where the
+// same value built AFTER it threw. A real value is still held (4.12, and the recompute that refuses
+// in `refuse.test.ts`), which is why the test is the ordinal rather than `landed`.
+//
+// THE REVERT: drop `refusedAnswer`'s opening arm; all four rows read `undefined` — `status` with
+// the failure beside it, the other three with no `error()` at all — and the watch is woken 0 times
+// where 1 is due.
+test('a body that fails over its opening undefined serves the failure, to what was built on it before — 2.2, 4.16', async () => {
+    let fail!: (failure: Error) => void
+    const copy = reactive(
+        () =>
+            new Promise<string>((_, reject) => {
+                fail = reject
+            }),
+    )
+    const status = reactive(() =>
+        copy.ready() || copy.error() !== undefined ? copy() : undefined,
+    )
+    const derived = reactive(() => status())
+    const twice = reactive(() => derived())
+    const seen: string[] = []
+    const stop = watch(() => {
+        try {
+            seen.push(`reads ${twice()}`)
+        } catch (thrown) {
+            seen.push(`throws ${(thrown as Error).message}`)
+        }
+    })
+    fail(new Error('the read failed'))
+    await Bun.sleep(5)
+    flushSync()
+    stop()
+    const after = reactive(() => status())
+    const rows: string[] = []
+    for (const [name, value] of [
+        ['status', status],
+        ['derived', derived],
+        ['twice', twice],
+        ['after', after],
+    ] as const) {
+        let read: string
+        try {
+            read = `reads ${value()}`
+        } catch (thrown) {
+            read = `throws ${(thrown as Error).message}`
+        }
+        const error = value.error() as unknown as Error | undefined
+        rows.push(`${name}: error ${error?.message}, ${read}`)
+    }
+    expect(rows).toEqual([
+        'status: error the read failed, throws the read failed',
+        'derived: error the read failed, throws the read failed',
+        'twice: error the read failed, throws the read failed',
+        'after: error the read failed, throws the read failed',
+    ])
+    expect(seen).toEqual(['reads undefined', 'throws the read failed'])
+})
+
+// THE SAME SHAPE LANDING: the opening is replaced by the answer, and nothing about the failure arm
+// above costs the success path a wake or a run. Measured with the arm in and out: 1 wake of the
+// watch, and `status` runs twice — the opening, and the read of the landed copy — either way.
+test('a body over its opening undefined that lands wakes its readers once — 4.16, 5.1', async () => {
+    let land!: (value: string) => void
+    const copy = reactive(
+        () =>
+            new Promise<string>((resolve) => {
+                land = resolve
+            }),
+    )
+    let statusRuns = 0
+    const status = reactive(() => {
+        statusRuns += 1
+        return copy.ready() || copy.error() !== undefined ? copy() : undefined
+    })
+    const derived = reactive(() => status())
+    const twice = reactive(() => derived())
+    const seen: string[] = []
+    const stop = watch(() => {
+        seen.push(`${twice()}`)
+    })
+    land('paired')
+    await Bun.sleep(5)
+    flushSync()
+    stop()
+    expect(seen).toEqual(['undefined', 'paired'])
+    expect(`status runs: ${statusRuns}`).toBe('status runs: 2')
+    expect(`error: ${twice.error()}`).toBe('error: undefined')
+})
+
 // 2.8 — AND AN AWAIT OF IT REJECTS. The value has landed and is unserved (7.8), so waiting for it to
 // land again waited on a load that had already ended. THE REVERT: gate `settled`'s two failure arms
 // on `!cell.landed`; this reads `hung`.

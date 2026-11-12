@@ -157,7 +157,8 @@ second.
 
 2.1 A read MUST return what is held, and MUST NOT await.
 
-2.2 A read MUST throw where a producer failed and no value has landed.
+2.2 A read MUST throw where a producer failed and nothing but an opening `undefined` (4.16) has
+landed.
 
 2.3 A rejected write MUST NOT cause a read to throw.
 
@@ -181,7 +182,8 @@ from its first, and MUST end when that run closes.
 
 2.12 A `NotLanded` thrown into a tracked body MUST abort that body.
 
-2.13 A body a `NotLanded` aborted MUST rerun when the value it names lands.
+2.13 A body a `NotLanded` aborted MUST rerun when the value it names lands, or when its producer
+fails.
 
 2.14 A `NotLanded` and a `Failed` MUST be distinguishable by brand.
 
