@@ -1,0 +1,5 @@
+---
+"@abide/abide": minor
+---
+
+Breaking: the names only compiled `.abide` output calls are off the public entries. `@abide/abide` no longer exports `attributeMarkup`, `attributeText`, `boundProp`, `boundValue`, `groupHolds`, `selectedMarkup`, `escapeText`, `escapeAttribute`, `escapeStyleValue`, `listOf`, `heldProp`, `propCell`, `propCells`, `propOr`, `restValues`, `withoutKeys`, `markupRun`, `RAW_WRITES`, `currentShare`, `enterShare`, `leaveShare`, `resumeShare`, `safeUrl`, `slotValue`, `setupThrown`, `spreadAttributes`, `spreadProps`, `writePath` or `mutatePath`, and `@abide/abide/server` no longer exports `callsInRender`, `addressed`, `derivedArgs`, `renderComponent` or `fileRoute`. None had a REGISTRY row; an app that imported one (an `escapeAttribute` for its own markup, say) escapes with its own helper or `Bun.escapeHTML`. Compiled client modules import them from `@abide/abide/runtime`, and compiled server modules and handler faces from the new tooling entry `@abide/abide/server/runtime`. Every public entry's exports are now held to REGISTRY by a test.

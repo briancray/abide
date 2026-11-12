@@ -1,4 +1,6 @@
-import { escapeAttribute, type RouteLiteral, url } from '@abide/abide'
+import { type RouteLiteral, url } from '@abide/abide'
+
+import { escapeHtml } from './escapeHtml.ts'
 
 // A slot is NUL-delimited because the text it sits in is already escaped, so the one thing that
 // cannot appear around it is a control character.
@@ -20,10 +22,10 @@ export function inline(text: string): string {
         const part = parts[index] ?? ''
         if (index % 2 === 1) {
             markup += `\0${codes.length}\0`
-            codes.push(`<code>${escapeAttribute(part)}</code>`)
+            codes.push(`<code>${escapeHtml(part)}</code>`)
             continue
         }
-        markup += escapeAttribute(part)
+        markup += escapeHtml(part)
     }
     return markup
         .replace(

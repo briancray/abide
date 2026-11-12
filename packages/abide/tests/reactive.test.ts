@@ -23,7 +23,6 @@ import {
     refuse,
     structural,
     watch,
-    writePath,
 } from '#shared'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
@@ -35,6 +34,7 @@ import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { WORK } from '#shared/WORK.ts'
+import { writePath } from '#shared/writePath.ts'
 
 import { deferredLoads } from './deferredLoads.ts'
 import { warningsWhile } from './warningsWhile.ts'

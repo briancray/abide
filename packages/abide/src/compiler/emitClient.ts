@@ -12,7 +12,7 @@ import {
     HTML_NAMESPACE,
     INTEGRATION_POINTS,
 } from '#shared/INTEGRATION_POINTS.ts'
-import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
+import { RUNTIME_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import {
@@ -53,7 +53,6 @@ import {
     unlandable,
     type ValueRender,
 } from './renderMarkup.ts'
-import { SHARED_NAMES } from './SHARED_NAMES.ts'
 import {
     insideShare,
     resumedShare,
@@ -266,7 +265,7 @@ export function emitClient(
         // 34.2 — A `<script module>` RUNS IN THE BROWSER TOO, live markup or none: its module scope
         // is the browser's as much as the server's.
         if (moduleSetup.body === '' && moduleSetup.imports === '') return mount
-        return `${moduleImports(lowering, (name) => (SHARED_NAMES.has(name) ? SHARED_SPECIFIER : RUNTIME_SPECIFIER), [moduleSetup])}
+        return `${moduleImports(lowering, RUNTIME_SPECIFIER, [moduleSetup])}
 ${moduleSetup.body}
 ${mount}`
     }
@@ -309,10 +308,9 @@ ${mount}`
     const markup = routed
         ? deferredMarkup(levelMarkup, owning.declared, lowering)
         : levelMarkup
-    // The escaping is an APP's (`@abide/abide`); everything else is the client runtime's (`@abide/abide/runtime`).
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
     // multi-line template literal, so a string constant gains four spaces it never had.
-    return `${moduleImports(lowering, (name) => (SHARED_NAMES.has(name) ? SHARED_SPECIFIER : RUNTIME_SPECIFIER), [moduleSetup, setup])}
+    return `${moduleImports(lowering, RUNTIME_SPECIFIER, [moduleSetup, setup])}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
 export default function mount(${REGION_ROOT}${routed ? `, ${PROPS} = {}, ${ROUTED}` : lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${opened}${owning.opened}${setup.body}

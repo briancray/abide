@@ -710,21 +710,21 @@ test('the reference on disk is what the registry and the exports generate', asyn
     expect(stale).toEqual([])
 })
 
-// 40.42 — EVERY NAME AN APP IMPORTS AND REGISTRY WRITES HAS A PAGE OF ITS OWN. Read here by a scan of
-// its own — a `Name` cell spelling the export or a member of it, or a `###` heading naming it —
-// rather than by the placement the pages are generated with, so a slip in that is caught rather
-// than agreed with. THE REVERT: drop `flushSync` from `REFERENCE.ts`, and it is named.
+// Every export REGISTRY writes, as `scope\0name`. Read by a scan of its own — a `Name` cell spelling
+// the export or a member of it, or a `###` heading naming it — rather than by the placement the
+// pages are generated with, so a slip in that is caught rather than agreed with.
+const named = new Set<string>()
+for (const row of registryRows(registry)) {
+    const options = /`([^`]+)`/.exec(row.subsection ?? '')?.[1]
+    if (options) named.add(`${row.scope}\0${options}`)
+    if (row.header[0] !== 'Name') continue
+    for (const [, span] of (row.cells[0] ?? '').matchAll(/`([^`]+)`/g))
+        named.add(`${row.scope}\0${/^[\w$]+/.exec(span as string)?.[0] ?? ''}`)
+}
+
+// 40.42 — EVERY NAME AN APP IMPORTS AND REGISTRY WRITES HAS A PAGE OF ITS OWN. THE REVERT: drop
+// `flushSync` from `REFERENCE.ts`, and it is named.
 test('every export the registry names has a reference page', async () => {
-    const named = new Set<string>()
-    for (const row of registryRows(registry)) {
-        const options = /`([^`]+)`/.exec(row.subsection ?? '')?.[1]
-        if (options) named.add(`${row.scope}\0${options}`)
-        if (row.header[0] !== 'Name') continue
-        for (const [, span] of (row.cells[0] ?? '').matchAll(/`([^`]+)`/g))
-            named.add(
-                `${row.scope}\0${/^[\w$]+/.exec(span as string)?.[0] ?? ''}`,
-            )
-    }
     const paged = new Set<string>()
     for (const page of REFERENCE)
         for (const name of page.names)
@@ -734,6 +734,23 @@ test('every export the registry names has a reference page', async () => {
         if (named.has(`${scope}\0${name}`) && !paged.has(`${scope}\0${name}`))
             missing.push(`${entry}: ${name}`)
     expect(missing).toEqual([])
+})
+
+// THE CONVERSE: EVERY NAME A PUBLIC ENTRY EXPORTS IS ONE REGISTRY WRITES. A name with no row is one
+// an author is offered and told nothing about — what compiled `.abide` output calls belongs on the
+// runtimes it imports from (`packages/abide/src/shared/SPECIFIERS.ts`), not on what an app imports.
+// The two left are types an author can write and no row names yet: a RATCHET, shrinking only.
+// THE REVERT: re-export `escapeText` from `packages/abide/src/shared/index.ts`, and it is named.
+const UNREGISTERED = [
+    '@abide/abide: Identity',
+    '@abide/abide: StandardSchemaV1',
+]
+
+test('every export of a public entry is a name the registry writes', async () => {
+    const unnamed: string[] = []
+    for (const { entry, scope, name } of await declaredExports())
+        if (!named.has(`${scope}\0${name}`)) unnamed.push(`${entry}: ${name}`)
+    expect(unnamed).toEqual(UNREGISTERED)
 })
 
 // 40.43 — EVERY REGISTRY ROW IS ON EXACTLY ONE REFERENCE PAGE, read off the markdown each page serves:
