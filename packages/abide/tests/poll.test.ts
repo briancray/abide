@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import type { App, BootedApp } from '#server/createApp.ts'
-import { log, reactive } from '#shared'
+import { log, reactive, stopSignal } from '#shared'
 import { collectWatches } from '#shared/reactive/watch.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -311,4 +311,235 @@ test('the app opening makes a job’s first run, once — 7.30', async () => {
     )
     await app.stop()
     expect(`after the stop: ${job.value.busy()}`).toBe('after the stop: false')
+})
+
+// A JOB SPACED FROM ITS LAST RUN, PUT OFF AT BOOT, GATED BY CONFIG AND TOLD TO STOP — the loop media
+// wrote because `poll` was a fixed clock that started at once and a stop that only waited: a scan
+// started a day after boot, each next one an interval after the last ended, and a shutdown that
+// cancelled the scan in flight before waiting on it. Two arms over one contract again: media's
+// `scheduleLoop` with its `delay`, stopped as its `onStop` did — cancel, then wait — and
+// `reactive(…, { global: true, poll: { every, after: 'settle', delay } })` reading `stopSignal()`.
+
+const EVERY = 20
+const DELAY = 60
+
+type Ledger = {
+    starts: number[]
+    settles: number[]
+    overlapped: number
+    /** Runs that did their work — the config flag was on. */
+    worked: number
+    /** Whether the signal was aborted when each run ended. */
+    abortedAtEnd: boolean[]
+}
+
+/** A scan: skipped while `settings.SCAN` is off, 30 ms long, or long until told to stop. */
+async function scanRun(
+    ledger: Ledger,
+    signal: AbortSignal,
+    settings: { SCAN: boolean; long: boolean },
+): Promise<void> {
+    ledger.starts.push(performance.now())
+    if (ledger.starts.length - ledger.settles.length > 1) ledger.overlapped += 1
+    try {
+        if (!settings.SCAN) return
+        ledger.worked += 1
+        await new Promise<void>((done) => {
+            const timer = setTimeout(done, settings.long ? 30_000 : 30)
+            signal.addEventListener(
+                'abort',
+                () => {
+                    clearTimeout(timer)
+                    done()
+                },
+                { once: true },
+            )
+        })
+    } finally {
+        ledger.abortedAtEnd.push(signal.aborted)
+        ledger.settles.push(performance.now())
+    }
+}
+
+/** The vanilla arm: media's `scheduleLoop`, ported whole with its `delay`. */
+function scheduleDelayedLoop(
+    task: () => Promise<unknown>,
+    interval: number,
+    { delay = 0 }: { delay?: number } = {},
+): () => Promise<void> {
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let running: Promise<unknown> = Promise.resolve()
+    const run = (): void => {
+        running = task()
+            .catch((error) => log.error(error))
+            .finally(() => {
+                if (!stopped) timer = setTimeout(run, interval)
+            })
+    }
+    if (delay > 0) timer = setTimeout(run, delay)
+    else run()
+    return async () => {
+        stopped = true
+        clearTimeout(timer)
+        await running
+    }
+}
+
+type Settings = { SCAN: boolean; long: boolean }
+
+const SPACED_ARMS: Record<
+    string,
+    (
+        ledger: Ledger,
+        settings: Settings,
+    ) => Promise<{ opened: number; stop: () => Promise<void> }>
+> = {
+    async vanilla(ledger, settings) {
+        // media's layout: an abort of its own, cancelled in `onStop` before the loop's stop is waited on.
+        const cancel = new AbortController()
+        const opened = performance.now()
+        const stopLoop = scheduleDelayedLoop(
+            () => scanRun(ledger, cancel.signal, settings),
+            EVERY,
+            { delay: DELAY },
+        )
+        return {
+            opened,
+            stop: async () => {
+                cancel.abort()
+                await stopLoop()
+            },
+        }
+    },
+    async abide(ledger, settings) {
+        reactive(() => scanRun(ledger, stopSignal(), settings), {
+            global: true,
+            poll: { every: EVERY, after: 'settle', delay: () => DELAY },
+        })
+        const app = await inMemoryApp({})
+        const opened = performance.now()
+        serving(app)
+        return { opened, stop: () => app.stop() }
+    },
+}
+
+async function until(done: () => boolean): Promise<void> {
+    while (!done()) await Bun.sleep(1)
+}
+
+// 7.21, 7.33, 7.34, 7.35, 7.38 — THE CONTRACT, both arms.
+//
+// THE REVERTS, on the abide arm: spell the poll `after: 'tick'`, and `spaced short: 2` or more where
+// 0 is due — a tick lands at most `every` after the last, however late the run before it ended;
+// drop the `delay` arm of `startUnownedPolls`, and `first run after the delay: false`; drop
+// `STOPPING.abort()` from `stopUnownedPolls`, and `aborted: false, ended at the stop: false` — the
+// stop waits out its deadline and runs `onStop` past the scan still going.
+for (const [arm, start] of Object.entries(SPACED_ARMS))
+    test(`a job waits out its delay, runs an interval after its last run ends, skips while config says so, and is aborted before the stop waits — ${arm}, 7.21, 7.33, 7.34, 7.35, 7.38`, async () => {
+        const ledger: Ledger = {
+            starts: [],
+            settles: [],
+            overlapped: 0,
+            worked: 0,
+            abortedAtEnd: [],
+        }
+        const settings: Settings = { SCAN: false, long: false }
+        const { opened, stop } = await start(ledger, settings)
+        await until(() => ledger.settles.length >= 1)
+        expect(
+            `first run after the delay: ${(ledger.starts[0] as number) - opened >= DELAY - 2}, worked: ${ledger.worked}`,
+        ).toBe('first run after the delay: true, worked: 0')
+        settings.SCAN = true
+        await until(() => ledger.settles.length >= 4)
+        let spacedShort = 0
+        for (let run = 1; run < ledger.starts.length; run += 1)
+            if (
+                (ledger.starts[run] as number) -
+                    (ledger.settles[run - 1] as number) <
+                EVERY - 2
+            )
+                spacedShort += 1
+        expect(
+            `spaced short: ${spacedShort}, overlapped: ${ledger.overlapped}`,
+        ).toBe('spaced short: 0, overlapped: 0')
+        expect(ledger.worked).toBeGreaterThanOrEqual(2)
+        settings.long = true
+        const longFrom = ledger.starts.length
+        await until(
+            () =>
+                ledger.starts.length > longFrom &&
+                ledger.starts.length > ledger.settles.length,
+        )
+        await stop()
+        const endedAtStop = ledger.starts.length === ledger.settles.length
+        const atStop = ledger.starts.length
+        expect(
+            `aborted: ${ledger.abortedAtEnd.at(-1) === true}, ended at the stop: ${endedAtStop}`,
+        ).toBe('aborted: true, ended at the stop: true')
+        await Bun.sleep(EVERY * 3)
+        expect(`runs after the stop: ${ledger.starts.length - atStop}`).toBe(
+            'runs after the stop: 0',
+        )
+    }, 15_000)
+
+// 7.39 — A STOPPED APP'S SIGNAL STAYS ABORTED until another app is built, which is handed a fresh one:
+// a test that builds an app after another stopped, and never serves it, still has a job told of its stop.
+//
+// THE REVERT: drop `renewStopSignal()` from `bootEntered`, and `after the next app: true`.
+test('stopSignal is aborted by the stop and fresh again once an app is built — 7.38, 7.39', async () => {
+    const first = await inMemoryApp({})
+    const before = stopSignal()
+    await first.stop()
+    const second = await inMemoryApp({})
+    expect(
+        `before: ${before.aborted}, after the next app: ${stopSignal().aborted}`,
+    ).toBe('before: true, after the next app: false')
+    await second.stop()
+})
+
+// 7.37 — A DELAY STILL BEING WAITED OUT ENDS WITH THE STOP, and the job never runs.
+//
+// THE REVERT: leave `delayTimer` armed in `stopUnownedPolls`, and `runs: 1`.
+test('a job whose delay the stop cuts short never runs — 7.31, 7.37', async () => {
+    let runs = 0
+    reactive(
+        () => {
+            runs += 1
+            return runs
+        },
+        { global: true, poll: { every: 60_000, delay: 30 } },
+    )
+    const app = await inMemoryApp({})
+    serving(app)
+    await app.stop()
+    await Bun.sleep(60)
+    expect(`runs: ${runs}`).toBe('runs: 0')
+})
+
+// 7.36 — `delay` IS A JOB'S: a value a setup owns runs where it is built, as 1.7 has it.
+test('delay is inert on a value an owner stops — 7.36', () => {
+    let runs = 0
+    const end = inSetup(() => {
+        reactive(
+            () => {
+                runs += 1
+                return runs
+            },
+            { poll: { every: 60_000, delay: 60_000 } },
+        )
+    })
+    end()
+    expect(`runs: ${runs}`).toBe('runs: 1')
+})
+
+test('a poll after something but a tick or a settle is refused at construction — 7.25', () => {
+    expect(() =>
+        reactive(() => 1, {
+            poll: { every: 10, after: 'end' as 'settle' },
+        }),
+    ).toThrow("A poll runs after a 'tick' or after a 'settle'")
+    expect(() => reactive(() => 1, { poll: { every: 0 } })).toThrow(
+        'A poll is a positive number of milliseconds',
+    )
 })

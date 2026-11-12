@@ -45,6 +45,7 @@ import {
     isPolled,
     markPolled,
     ownedPoll,
+    type Poll,
     refuseBadPoll,
 } from './poll.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
@@ -154,12 +155,14 @@ export type ReactiveOptions<
      */
     ttl?: number
     /**
-     * A refresh every this many milliseconds.
+     * A refresh every this many milliseconds, or `{ every, after, delay }`.
      *
      * RULEBOOK 7.20 through 7.25: `s.refresh` on a clock, skipped while the value is busy and
-     * stopped with the value. Inert on a value with no producer (7.24).
+     * stopped with the value. Inert on a value with no producer (7.24). `after: 'settle'` spaces
+     * each refresh from the previous run's end (7.33), and `delay` puts a job's first run off
+     * (7.34).
      */
-    poll?: number
+    poll?: Poll
     /**
      * The gate on the way in, run before `transform` on every way in.
      *
@@ -3158,10 +3161,11 @@ function reloadNow(cell: Cell): void {
  */
 function reloadOwed(cell: Cell): void {
     cell.owes = OWES_NOTHING
-    // 7.29 — a job's first run is an owed reload, and its clock starts with it.
-    firstRunStarted(cell)
     unserve(cell)
     reload(cell)
+    // 7.29 — a job's first run is an owed reload, and its clock starts with it: after the reload
+    // has begun, so a clock spaced from the run's end (7.33) finds it in flight.
+    firstRunStarted(cell)
 }
 
 /**

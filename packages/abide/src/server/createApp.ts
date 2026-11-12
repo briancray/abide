@@ -14,7 +14,11 @@ import { LONGEST_DELAY } from '#shared/LONGEST_DELAY.ts'
 import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
-import { startUnownedPolls, stopUnownedPolls } from '#shared/reactive/poll.ts'
+import {
+    renewStopSignal,
+    startUnownedPolls,
+    stopUnownedPolls,
+} from '#shared/reactive/poll.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { laneFailure } from './answerFailure.ts'
@@ -249,6 +253,8 @@ export async function bootEntered(
     //
     // 42.2 — THE CONFIGURATION IS READ AS PART OF THE BOOT, so a configuration that does not resolve
     // is a boot that fails rather than a first request that does.
+    // 7.39 — ahead of `onStart`, so what it starts is told of this app's stop and not a past one's.
+    renewStopSignal()
     let sources: AppSources | undefined
     await compose(inOrder(HOOKS.starts), async () => {
         config.invalidate()
@@ -410,7 +416,8 @@ export async function bootEntered(
         // stream ended, which a listener's stop otherwise waits on for as long as it streams.
         mux?.closeAll(1001, 'the app is stopping')
         endHeld()
-        // 7.26 — no job starts another run while the app stops; 7.27 waits out the one it has.
+        // 7.38 — `stopSignal` aborted first, so the run a job has is told to end before 7.27 waits
+        // it out; 7.26 — and no job starts another while the app stops.
         const settlePolls = stopUnownedPolls()
         const drain = (async () => {
             await bound?.stop()

@@ -111,6 +111,13 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: false,
     },
     {
+        route: '/reference/stopSignal',
+        names: ['stopSignal'],
+        entry: '@abide/abide',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
         route: '/reference/types/Disposer',
         names: ['Disposer'],
         entry: '@abide/abide',

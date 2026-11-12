@@ -1,4 +1,4 @@
-import { reactive } from '@abide/abide'
+import { reactive, stopSignal } from '@abide/abide'
 
 import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
@@ -20,6 +20,13 @@ async function* scoreInWorker(): AsyncGenerator<Score> {
         landed.push(new Error(event.message))
         wake()
     }
+    // the app stopping ends the scoring now, ahead of any score still queued
+    const stopping = stopSignal()
+    const stop = () => {
+        landed.unshift(null)
+        wake()
+    }
+    stopping.addEventListener('abort', stop)
     // the worker has its own modules: send it the data
     worker.postMessage(DEALS)
     try {
@@ -32,12 +39,13 @@ async function* scoreInWorker(): AsyncGenerator<Score> {
             if (next !== undefined) yield next
         }
     } finally {
+        stopping.removeEventListener('abort', stop)
         worker.terminate()
     }
 }
 
-/** Every deal rescored each hour, once the app serves or a read asks. */
+/** Rescored an hour after the last scoring ends, from a minute in. */
 export const dealScores = reactive(scoreInWorker, {
     global: true,
-    poll: 3_600_000,
+    poll: { every: 3_600_000, after: 'settle', delay: 60_000 },
 })

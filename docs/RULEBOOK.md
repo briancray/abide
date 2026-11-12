@@ -409,7 +409,7 @@ producer.
 7.19 A load over a value `s.invalidate` marked that is refused with `HttpError` at 503 MUST leave the
 value it held being served.
 
-7.20 `poll` MUST refresh the value per 7.4 every `poll` milliseconds from where it is constructed,
+7.20 `poll` MUST refresh the value per 7.4 every `every` milliseconds from where it is constructed,
 or from its first run where 7.29 holds it back, and on a `Keyed` MUST refresh each entry the `Keyed`
 holds.
 
@@ -422,7 +422,8 @@ holds.
 
 7.24 `poll` on a value with no producer MUST be inert.
 
-7.25 A `poll` that is not a positive number MUST refuse at construction.
+7.25 A `poll` whose `every` is not a positive number, or whose `after` is neither `'tick'` nor
+`'settle'`, MUST refuse at construction.
 
 7.26 `App.stop` MUST stop every `poll` 7.23 does not, before it drains what is in flight.
 
@@ -441,6 +442,28 @@ once.
 
 7.31 `App.stop` MUST NOT wait on, and MUST NOT run, a value 7.29 holds back that has not had its
 first run.
+
+7.32 A `poll` given as a number MUST be a `poll` whose `every` is that number and which declares
+nothing else.
+
+7.33 A `poll` declaring `after: 'settle'` MUST make each refresh `every` milliseconds after the run
+before it settled, and on a `Keyed` after every entry the refresh before reached settled, in place
+of 7.20's clock.
+
+7.34 A `poll` declaring `delay` MUST put the first run 7.30 has `App.listen` and `abide dev` make off
+by `delay` milliseconds, and a `delay` that is not positive MUST put it off by none.
+
+7.35 A `delay` given as a function MUST be called for its milliseconds where the app opens, once per
+opening that 7.34 puts a first run off for.
+
+7.36 `delay` MUST be inert on a value 7.29 does not hold back.
+
+7.37 `App.stop` MUST cancel every first run 7.34 is still putting off.
+
+7.38 `App.stop` MUST abort the signal `stopSignal` answers before it drains what is in flight.
+
+7.39 The signal `stopSignal` answers MUST stay aborted after `App.stop` until `createApp` builds an
+app, and MUST be one not aborted from before that app's `onStart` runs.
 
 # 8. Stores
 
