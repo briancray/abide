@@ -475,8 +475,8 @@ import Section from '#src/lib/Section.abide'
             that boot's migrations are kept, and a file a newer build migrated is refused rather
             than opened.</p>
 
-        <p>Under <code>bun test</code> each database is an empty one in memory, so a test never
-            writes the file the app serves. The app closes the file as it stops. A
+        <p>Under <code>bun test</code> each test file opens each database empty, in memory, so a
+            test never writes the file the app serves and never reads another file's rows. The app closes the file as it stops. A
             <code>sqliteStore</code> takes what the function hands back, so a store and the app's
             own tables can share one file.</p>
     </Section>

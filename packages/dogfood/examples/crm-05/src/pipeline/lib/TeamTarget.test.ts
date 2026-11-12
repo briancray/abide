@@ -9,8 +9,6 @@ import TeamTarget from './TeamTarget.abide'
 const shown = () => document.querySelector('strong')?.textContent
 
 test('a target set once is what every later visit opens on', async () => {
-    // One scratch file per process, which another test file may have written.
-    crmDatabase().run('DELETE FROM targets')
     {
         using _first = await mount(TeamTarget({}))
         await Bun.sleep(500)

@@ -4077,7 +4077,7 @@ call MUST hand back that same `Database` until 47.10 closes it.
 opening with `.`.
 
 47.4 Where `NODE_ENV` is `test`, `database` MUST open an empty database in memory in place of 47.2's
-file, one per opener.
+file, one per opener and per test file `bun test` runs.
 
 47.5 `database` MUST open with the `WAL` journal, foreign keys enforced, and a busy timeout of 5000
 milliseconds.
