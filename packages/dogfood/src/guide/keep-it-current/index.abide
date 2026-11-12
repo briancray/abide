@@ -443,7 +443,7 @@ import Section from '#src/lib/Section.abide'
             <thead><tr><th>Name</th><th>Where the value lives</th></tr></thead>
             <tbody>
                 <tr><td><code>store.web</code></td><td><code>{"store.web('layout')"}</code> keeps it in this browser's <code>localStorage</code>, or <code>sessionStorage</code> with <code>{"{ area: 'session' }"}</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
-                <tr><td><code>store.sqlite</code></td><td><code>{"store.sqlite('crm.db', 'target')"}</code>, on <code>@abide/abide/server</code>'s <code>store</code> alone, keeps it in a SQLite table, so a restarted server opens on it</td></tr>
+                <tr><td><code>store.sqlite</code></td><td><code>{"store.sqlite(crmDatabase, 'target')"}</code>, on <code>@abide/abide/server</code>'s <code>store</code> alone, keeps it in a SQLite table of the file a <code>database</code> opener opens, so a restarted server opens on it</td></tr>
                 <tr><td><code>store.redis</code></td><td><code>{"store.redis(Bun.redis, 'target')"}</code>, on <code>@abide/abide/server</code>'s <code>store</code> alone, keeps it in a Redis key that Redis expires with the <code>ttl</code>, so every server behind one Redis opens on it. Where Redis reports changes to its keys, it follows a write another server makes</td></tr>
                 <tr><td><code>store.indexedDB</code></td><td><code>{"store.indexedDB('draft')"}</code> keeps it in this browser's IndexedDB, for a value too large for <code>localStorage</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
                 <tr><td><code>store.cookies</code></td><td><code>{"store.cookies('theme')"}</code> keeps it in a cookie, which the browser sends with every request, so the server renders the stored value rather than the fallback. A cookie holds 4 KB at most</td></tr>
@@ -508,15 +508,24 @@ import Section from '#src/lib/Section.abide'
             connection does, and the function is still called, so a check inside it still throws. The
             app closes the file as it stops, and the next call opens it again as it was.
             <code>close()</code> does the same by hand, and <code>{'close({ remove: true })'}</code>
-            deletes the file, so the next call opens it empty. <code>store.sqlite</code> takes what the function hands back, so a store and the app's
-            own tables can share one file.</p>
+            deletes the file the opener last opened, even after the app's stop closed it, so the next call
+            opens it empty.</p>
+
+        <p>A store and the app's own tables share one file when <code>store.sqlite</code> is handed
+            the opener itself: <code>{"store.sqlite(crmDatabase, 'target')"}</code>. The store calls
+            it at each read and write, so it opens the file again after a stop closed it. Handed a
+            string, <code>store.sqlite</code> opens it as <code>database</code> would, scratch
+            directory and all.</p>
 
         <p><code>open</code> runs at every open, before the migrations, for what a connection sets
             rather than what the file keeps: <code>{"open: (db) => db.run('PRAGMA synchronous = NORMAL')"}</code>.
             <code>strict</code>, <code>readonly</code> and <code>safeIntegers</code> go to
             <code>bun:sqlite</code> as given. A function naming the file is called as the file opens
             and at no other call, so a path that changes takes effect at the next open, after
-            <code>close()</code>.</p>
+            <code>close()</code>. A test that points the path somewhere else partway through a file
+            calls <code>close()</code> first, or it goes on reading the file it opened. A function
+            that hands back anything but a string, such as a config key with no value yet, throws
+            rather than open a file named for it.</p>
     </Section>
     <Section title="Next">
         <ul>

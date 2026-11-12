@@ -575,12 +575,93 @@ test('stopping the app closes the database, and the next call opens it again —
     after.close()
 })
 
-test('store.sqlite keeps a value in the database an opener hands back — 47.1, 8.25', () => {
-    const db = database('crm')()
-    const target = reactive(500_000, {
-        store: sqlite<number>(db, 'target'),
+// 8.41, 47.10 — THE STORE OUTLIVES THE `Database` A STOP CLOSES, which is every store an app files
+// beside `database`'s opener and boots twice in one process. THE REVERT: call the function once in
+// `store.sqlite` and keep what it handed back; the `get` after the stop throws `Cannot use a closed
+// database`.
+test('store.sqlite given an opener keeps working after the app stop closes its Database — 8.41, 47.10', async () => {
+    onDisk()
+    const crm = database('crm')
+    const kept = sqlite<number>(crm, 'target')
+    kept.set(750_000, { ttl: Number.POSITIVE_INFINITY })
+    const app = await inMemoryApp({})
+    await app.stop()
+    expect({
+        read: kept.get(),
+        again: reactive(0, { store: sqlite<number>(crm, 'target') })(),
+    }).toEqual({ read: 750_000, again: 750_000 })
+    crm.close()
+})
+
+// 8.42, 47.4, 47.5 — A STRING IS WHAT `database` READS IT AS, so under bun test it opens 47.4's
+// scratch file with 47.5's pragmas. THE REVERT: open the string as `new Database(path, { create: true
+// })`; the named file is written, and the opener of the same string reads no `abide_store` table.
+test('store.sqlite given a string keeps the value in the database `database` opens for it — 8.42, 47.4', async () => {
+    directory = `${(Bun.env.TMPDIR ?? '/tmp').replace(/\/$/, '')}/abide-store-${process.pid}`
+    mkdirSync(directory, { recursive: true })
+    const path = `${directory}/kept.sqlite`
+    sqlite<number>(path, 'target').set(7, {
+        ttl: Number.POSITIVE_INFINITY,
     })
-    target.set(750_000)
-    expect(reactive(0, { store: sqlite<number>(db, 'target') })()).toBe(750_000)
-    db.close()
+    const same = database(path)
+    let row: unknown
+    try {
+        row = same().query('SELECT value FROM abide_store').get()
+    } catch (error) {
+        row = (error as Error).message
+    }
+    expect({
+        written: await Bun.file(path).exists(),
+        row,
+        journal: same().query('PRAGMA journal_mode').get(),
+    }).toEqual({
+        written: false,
+        row: { value: '7' },
+        journal: { journal_mode: 'wal' },
+    })
+    same.close({ remove: true })
+})
+
+// 47.3 — THE REVERT: drop the `typeof file !== 'string'` throw from `checked`; `undefined` passes
+// `NAME` as its text and the opener opens `undefined.sqlite` under APP_DATA_DIR.
+test('a file function that answers anything but a string is refused — 47.3', async () => {
+    onDisk()
+    const unconfigured = database(() => undefined as unknown as string)
+    const thrown = (): string => {
+        try {
+            return `opened ${unconfigured().filename}`
+        } catch (error) {
+            return (error as Error).message
+        }
+    }
+    expect({
+        thrown: thrown(),
+        written: await Bun.file(`${directory}/undefined.sqlite`).exists(),
+    }).toEqual({
+        thrown: 'abide: database undefined is not a string, so names no file. RULEBOOK 47.3.',
+        written: false,
+    })
+})
+
+// 47.17, 47.10 — A TEST'S `await using app` HAS CLOSED THE FILE BY THE TIME IT REMOVES IT. THE REVERT:
+// remove `opened?.filename` in `close`, as 47.17 once read; the stop left nothing open, so nothing is
+// removed, and the next call reads the car.
+test('close with remove deletes the file the opener last opened, after the app stop closed it — 47.17, 47.10', async () => {
+    const garage = database('removed', { migrations: [CARS] })
+    const file = garage().filename
+    garage().run("INSERT INTO cars (vin) VALUES ('1G1YB')")
+    const app = await inMemoryApp({})
+    await app.stop()
+    garage.close({ remove: true })
+    const left: Record<string, boolean> = {}
+    for (const suffix of ['', '-wal', '-shm'])
+        left[suffix] = await Bun.file(`${file}${suffix}`).exists()
+    expect({
+        left,
+        cars: garage().query('SELECT COUNT(*) AS cars FROM cars').get(),
+    }).toEqual({
+        left: { '': false, '-wal': false, '-shm': false },
+        cars: { cars: 0 },
+    })
+    garage.close({ remove: true })
 })

@@ -242,9 +242,7 @@ test('an import that binds or loads something else, or a statement moved, is a d
     expect(
         sameTemplate(
             before,
-            script(
-                `import { a, b } from './w.ts'\nlet x = 1\nlet y = 2`,
-            ),
+            script(`import { a, b } from './w.ts'\nlet x = 1\nlet y = 2`),
         ),
     ).toBe(true)
     for (const after of [
