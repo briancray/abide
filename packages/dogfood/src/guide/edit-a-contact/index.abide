@@ -103,6 +103,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>{'observe.visible(seen, { in: scroller })'}</code></td><td>whether it is in view inside an element you hold, such as a scroller</td></tr>
                 <tr><td><code>{'bind:element={observe.rect(placed)}'}</code></td><td>its rectangle in the viewport, as <code>getBoundingClientRect</code> reports it</td></tr>
                 <tr><td><code>{'bind:element={[observe.rect(placed), observe.size(box)]}'}</code></td><td>both, on one element</td></tr>
+                <tr><td><code>{'return observe.size(refresh)(node)'}</code></td><td>the size, from inside a <code>bind:element</code> function of your own</td></tr>
             </tbody>
         </table>
 
@@ -111,6 +112,10 @@ import Section from '#src/lib/Section.abide'
             then the value holds what you gave it. Every observed element shares one observer, and
             an element that leaves is no longer observed. The server has no layout and runs none of
             it.</p>
+
+        <p>An adaptor is a function of the element that hands back what stops it, so a
+            <code>bind:element</code> function of your own can call one on the node it is handed,
+            beside the listeners it adds, and stop it with them. It shares the same one observer.</p>
 
         <p><code>in</code> takes an element, usually one <code>bind:element</code> gave you. Until
             it holds one, nothing is observed. The elements measured against one root share an
