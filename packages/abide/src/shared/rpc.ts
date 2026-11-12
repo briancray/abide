@@ -45,10 +45,12 @@ import {
     reactive,
     refresh,
     type Refusals,
+    type Selection,
     type Shaping,
     STREAMING,
     type Streams,
 } from './reactive/index.ts'
+import { isThenable } from './reactive/isThenable.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
 import {
     chunksOfStream,
@@ -238,12 +240,19 @@ export type RpcOptions<
     crossOrigin?: boolean | string[]
     maxBodySize?: number
     /**
-     * 16.89 — the `tags` a run of a mutation `refresh`es once it answers without a refusal, or
-     * what returns them for the call's `Args`, as a value's own `tags` is written. Never a
-     * `GET`'s (16.92).
+     * 16.89 — what a run of a mutation `refresh`es once it answers without a refusal, or what
+     * returns it for the call's `Args`. Never a `GET`'s (16.92).
      */
-    refreshes?: string[] | ((args: Args) => string[])
+    refreshes?: Refreshed | ((args: Args) => Refreshed | PromiseLike<Refreshed>)
 }
+
+/**
+ * 16.89 — what `refreshes` names, each entry what `refresh` is handed: a tag, a `Selection`, or a
+ * `Selection` beside its pattern (13.12) — `[boards, { personId }]` is `refresh(boards, { personId })`.
+ */
+type Refreshed = readonly (
+    string | Selection | readonly [Selection, Record<string, unknown>]
+)[]
 
 /**
  * A handler `declare` builds the value of: a plain function or a value, which no `Reactive` or
@@ -561,12 +570,11 @@ export function declare<Declared extends Method>(
                           ? answer
                           : (args: unknown) =>
                                 answerThenRefresh(answer(args), () =>
-                                    refresh({
-                                        tags:
-                                            typeof refreshes === 'function'
-                                                ? refreshes(args)
-                                                : refreshes,
-                                    }),
+                                    refreshEach(
+                                        typeof refreshes === 'function'
+                                            ? refreshes(args)
+                                            : refreshes,
+                                    ),
                                 ),
                       cacheOptions,
                   )
@@ -780,19 +788,40 @@ function argsOnce(
  */
 async function answerThenRefresh(
     answer: Promise<unknown>,
-    refresh: () => void,
+    refresh: () => void | Promise<void>,
 ): Promise<unknown> {
     const answered = await answer
     if (isFailed(answered)) return answered
     if (isAsyncGenerator(answered)) return refreshedAtClose(answered, refresh)
-    refresh()
+    const refreshing = refresh()
+    if (refreshing !== undefined) await refreshing
     return answered
 }
 
 async function* refreshedAtClose(
     chunks: AsyncGenerator<unknown>,
-    refresh: () => void,
+    refresh: () => void | Promise<void>,
 ): AsyncGenerator<unknown> {
     yield* chunks
-    refresh()
+    const refreshing = refresh()
+    if (refreshing !== undefined) await refreshing
+}
+
+/**
+ * 16.89 — `refresh` over each entry `refreshes` named, its tags as one selection, once a promise of
+ * them settles: 16.101 runs the function in the call's scope, so it may `await principal.resolved`
+ * for whose entry the write changed.
+ */
+function refreshEach(
+    refreshed: Refreshed | PromiseLike<Refreshed>,
+): void | Promise<void> {
+    if (isThenable(refreshed))
+        return Promise.resolve(refreshed).then(refreshEach)
+    let tags: string[] | undefined
+    for (const entry of refreshed as Refreshed) {
+        if (typeof entry === 'string') (tags ??= []).push(entry)
+        else if (Array.isArray(entry)) refresh(entry[0], entry[1] as never)
+        else refresh(entry as Selection)
+    }
+    if (tags !== undefined) refresh({ tags })
 }

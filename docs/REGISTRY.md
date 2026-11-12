@@ -277,7 +277,7 @@ type Reached = { readonly [REACHED]: true }
 | `clients` | `Clients` | Which surfaces carry this handler. | 16.37, 20.3 |
 | `crossOrigin` | `boolean \| string[]` | Whether other origins may call it, or follow it over the mux. | 16.24, 18.2, 21.19 |
 | `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. | 16.13, 16.54, 16.55 |
-| `refreshes` | `string[] \| ((args: Args) => string[])` | The `tags` a run of a mutation refreshes once it answers. | 16.89, 16.90, 16.91, 16.92 |
+| `refreshes` | `readonly (string \| Selection \| readonly [Selection, Record<string, unknown>])[] \| ((args: Args) => readonly (string \| Selection \| readonly [Selection, Record<string, unknown>])[] \| PromiseLike<readonly (string \| Selection \| readonly [Selection, Record<string, unknown>])[]>)` | The tags and selections a run of a mutation refreshes once it answers. | 16.89, 16.90, 16.91, 16.92, 16.101 |
 
 ### Response helpers
 

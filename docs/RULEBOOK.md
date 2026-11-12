@@ -1266,10 +1266,11 @@ declare.
 loaded in a process serving the app's compilation, `bun test`'s under `@abide/abide/test` included
 (38.109), whether or not `createApp` has run.
 
-16.89 A mutation's `refreshes` MUST `refresh` the `tags` it names, or the `tags` it returns for
-the call's `Args`, as `refresh` over those `tags` does (13.15), once for each run of the handler
-that answers without a refusal, and MUST NOT where the run is answered with a refusal, the
-handler's or a rung's, or with a throw.
+16.89 A mutation's `refreshes` MUST `refresh` what it names, or what it returns for the call's
+`Args` once that settles — the tags in it as one set of `tags` (13.15), and each `Selection` in it as
+`refresh` over that `Selection` does, narrowed by the pattern paired with it (13.12) — once for each
+run of the handler that answers without a refusal, and MUST NOT where the run is answered with a
+refusal, the handler's or a rung's, or with a throw.
 
 16.90 The `refresh` 16.89 states MUST have run before the call's answer settles, and before an
 answer over the wire is sent.
@@ -1309,6 +1310,8 @@ the answer MUST be sent `cache-control: no-store`.
 
 16.100 A `GET` call 16.93 reads whose answer 16.94 would hand to http, over a connection whose
 upgrade carried no caller, MUST refuse as 16.79 has it.
+
+16.101 The function a mutation's `refreshes` names MUST run in the scope the call's handler ran in.
 
 # 17. Response helpers
 
