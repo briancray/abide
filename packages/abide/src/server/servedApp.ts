@@ -127,7 +127,7 @@ export function builtSources(parts: BuildParts): Promise<AppSources> {
                 files,
                 'public, max-age=31536000, immutable',
             ),
-            offline: settingOn('ABIDE_OFFLINE', true),
+            offline: settingOn('ABIDE_OFFLINE'),
         },
     })
 }
@@ -162,7 +162,7 @@ type ClientLane = {
     head: string
     /**
      * 45.1, 45.9 — whether the worker saves `manifest`'s bundle and the pages register it: `abide
-     * build`'s, unless `ABIDE_OFFLINE` is off. Where not, the worker address answers the removing one.
+     * build`'s, where `ABIDE_OFFLINE` is on. Where not, the worker address answers the removing one.
      */
     offline: boolean
 }
@@ -187,7 +187,7 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
     // 45.15 — installable where the pages are kept offline and the app has an icon to install by.
     const icon = published.get(ICON_ADDRESSES.png)
     const install =
-        icon !== undefined && settingOn('ABIDE_OFFLINE', true)
+        icon !== undefined && settingOn('ABIDE_OFFLINE')
             ? await appManifest(icon.path)
             : undefined
     const documentOf = (modules: string[]): string =>

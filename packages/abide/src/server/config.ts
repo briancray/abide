@@ -171,17 +171,15 @@ export function positiveSetting<Fallback extends number | undefined>(
 }
 
 /**
- * Whether the switch `name` is on: `true` or `false`, or text reading `true` or `1`, `false` or `0`
- * in any case, as 27.8 coerces one over a boolean default — and `fallback` where it is unset or reads
- * as neither.
+ * Whether the switch `name` is on: `true`, or text reading `true` or `1` in any case, as 27.8 coerces
+ * one over a boolean default — and off where it is unset or reads as anything else.
  *
  * 45.14.
  */
-export function settingOn(name: string, fallback: boolean): boolean {
+export function settingOn(name: string): boolean {
     const declared = config.peek()?.[name]
     if (typeof declared === 'boolean') return declared
-    if (typeof declared !== 'string') return fallback
-    return (coerce(declared, fallback) as boolean | undefined) ?? fallback
+    return typeof declared === 'string' && coerce(declared, false) === true
 }
 
 // 36.2 — `APP_URL`, parsed once per text it holds, and `undefined` where there is none or it will not

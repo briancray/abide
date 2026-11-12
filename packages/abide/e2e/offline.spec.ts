@@ -2,8 +2,7 @@
 // emulator installs one, so whether a page comes back with the network gone is a question only a
 // browser can answer.
 //
-// CHROMIUM ALONE: playwright drives a service worker in chromium, and its webkit leaves
-// `navigator.serviceWorker` unregistered under automation.
+// BOTH ENGINES: playwright's webkit registers a service worker on `localhost` as chromium does.
 
 import { expect, type Page, test } from '@playwright/test'
 import type { Subprocess } from 'bun'
@@ -35,8 +34,7 @@ let base = ''
 
 // Playwright's "no fixtures" spelling — see `routing.spec.ts`.
 test.beforeAll(async ({}, testInfo) => {
-    if (testInfo.project.name !== 'abide') return
-    // ON BY DEFAULT (45.14): nothing in the environment asks for the worker.
+    // 45.14 — OFF UNLESS ASKED FOR, so this app asks.
     ;({ base, server } = await servedFixture(
         `e2e-offline-${testInfo.project.name}`,
         {
@@ -140,19 +138,12 @@ const tags = getTags()
             'never/index.abide':
                 '<main id="never"><h1>Never visited</h1></main>',
         },
+        { ABIDE_OFFLINE: '1' },
     ))
 })
 
 test.afterAll(() => {
     server?.kill()
-})
-
-// Playwright's "no fixtures" spelling — see `routing.spec.ts`.
-test.beforeEach(({}, testInfo) => {
-    test.skip(
-        testInfo.project.name !== 'abide',
-        'a service worker is driven in chromium alone',
-    )
 })
 
 /**

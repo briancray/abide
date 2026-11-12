@@ -13,3 +13,9 @@ export const OFFLINE_SHARED = `${OFFLINE_CACHE_PREFIX}shared`
 
 /** The build's bundle, saved as the worker installs. */
 export const OFFLINE_BUNDLE = `${OFFLINE_CACHE_PREFIX}bundle`
+
+/**
+ * The files of the bundle the build before named, kept until the build after this one activates, for
+ * a page of it still open or still loading.
+ */
+export const OFFLINE_RETIRED = `${OFFLINE_CACHE_PREFIX}retired`

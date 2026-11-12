@@ -13,6 +13,7 @@ import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import {
     OFFLINE_BUNDLE,
     OFFLINE_CACHE_PREFIX,
+    OFFLINE_RETIRED,
     OFFLINE_SAVED,
     OFFLINE_SHARED,
 } from '#shared/OFFLINE_CACHES.ts'
@@ -34,14 +35,15 @@ const CACHES = `const OURS = ${JSON.stringify(OFFLINE_CACHE_PREFIX)}
 const SAVED = ${JSON.stringify(OFFLINE_SAVED)}
 const SHARED = ${JSON.stringify(OFFLINE_SHARED)}
 const BUNDLE = ${JSON.stringify(OFFLINE_BUNDLE)}
+const RETIRED = ${JSON.stringify(OFFLINE_RETIRED)}
 
 async function dropOurs(keeping) {
     for (const name of await caches.keys())
-        if (name.startsWith(OURS) && name !== keeping) await caches.delete(name)
+        if (name.startsWith(OURS) && !keeping.includes(name)) await caches.delete(name)
 }
 `
 
-// 45.3 through 45.8, 45.13, and 45.17 through 45.26.
+// 45.3 through 45.8, 45.13, and 45.17 through 45.29.
 const SAVING = `
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -52,15 +54,23 @@ self.addEventListener('install', (event) => {
     )
 })
 
+// 45.8 — THE BUILD BEFORE'S FILES OUTLIVE ITS PAGES BY ONE BUILD: this worker takes over at once, and
+// a page of the build before — open, or opened from its copy as this one installed — still loads its
+// stylesheet and its chunks. Dropped, a page whose stylesheet had not landed yet painted unstyled.
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         (async () => {
-            await dropOurs(BUNDLE)
-            const cache = await caches.open(BUNDLE)
-            for (const request of await cache.keys())
-                if (!FILES.has(request.url)) await cache.delete(request)
-            // A preload would ask the network for every navigation, a kept copy answered or not.
-            await self.registration.navigationPreload?.disable()
+            await dropOurs([BUNDLE, RETIRED])
+            await caches.delete(RETIRED)
+            const bundle = await caches.open(BUNDLE)
+            const retired = await caches.open(RETIRED)
+            for (const request of await bundle.keys())
+                if (!FILES.has(request.url)) {
+                    await retired.put(request, await bundle.match(request))
+                    await bundle.delete(request)
+                }
+            // 45.25 — the browser asks for every navigation as itself, alongside the worker.
+            await self.registration.navigationPreload?.enable()
             await self.clients.claim()
             for (const client of await self.clients.matchAll({ type: 'window' }))
                 await keepPage(client.url)
@@ -77,9 +87,13 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
     const request = event.request
+    // 45.27 — another origin's request is the browser's, whatever it is.
+    if (!request.url.startsWith(\`\${self.location.origin}/\`)) return
     if (request.mode === 'navigate') {
-        if (request.method === 'GET') event.respondWith(answer(event, true))
-        else event.waitUntil(dropSaved())
+        if (request.method !== 'GET') event.waitUntil(dropSaved())
+        // 45.27 — a frame's navigation is the browser's: a sign-in renewed in a hidden frame
+        // answered from a copy is a sign-in that never happened.
+        else if (request.destination === 'document') event.respondWith(opened(event))
         return
     }
     if (request.method !== 'GET') return
@@ -91,37 +105,85 @@ self.addEventListener('fetch', (event) => {
         )
         return
     }
-    if (new URL(request.url).origin !== self.location.origin) return
     if (request.headers.has(NAVIGATION) || request.headers.has('range')) return
     if ((request.headers.get('accept') ?? '').includes('text/event-stream'))
         return
-    event.respondWith(answer(event, false))
+    event.respondWith(answer(event))
 })
+
+// 45.25, 45.28 — A PAGE OPENS FROM THE DEVICE, and the page asked for behind it is the copy the next
+// load opens. A reload asks the network first, as 45.20 has a call do, so the reload after a deploy is
+// the new build — with the copy still standing in offline (RULEBOOK 45.19).
+async function opened(event) {
+    const request = event.request
+    const since = drops
+    const saved = await savedCopy(request)
+    const life = saved === undefined ? undefined : lifeOf(saved)
+    const reloading =
+        request.cache === 'no-cache' ||
+        request.cache === 'reload' ||
+        request.cache === 'no-store'
+    if (life !== undefined && standsIn(life) && !reloading) {
+        // ASKED AS A PAGE KEPT, NOT OFF THE PRELOAD: webkit never settles a preload the worker
+        // answered ahead of, and a wait on it is a worker that never goes idle — the next build's
+        // left waiting behind it for good.
+        event.waitUntil(
+            fetch(pageRequest(request.url)).then(
+                (response) => revalidated(request, response, since),
+                () => {},
+            ),
+        )
+        return marked(saved)
+    }
+    try {
+        // THE NAVIGATION AS THE BROWSER ASKED IT: a worker that fetches it again sends another
+        // request — its destination empty, its user activation gone, the site it came from
+        // recomputed — and a sign-in proxy that tells a page load by those answers it 401 rather
+        // than sending it to sign in. Only a browser with no preload has it fetched again, unchanged.
+        const response = (await event.preloadResponse) ?? (await fetch(request))
+        const copy = kept(response) ? response.clone() : undefined
+        event.waitUntil(keep(request, response, copy, since))
+        return response
+    } catch {
+        if (life !== undefined && standsIn(life)) return marked(saved)
+        return offline()
+    }
+}
+
+// 45.29 — THE PAGE OPENED FROM ITS COPY WHERE THE ADDRESS NOW ANSWERS SOMETHING ELSE — a redirect to
+// sign in above all, or a refusal — is opened again: the copy is dropped (RULEBOOK 45.26), so the window's next
+// load is the browser's own, and the sign-in it is sent to is reached now rather than on a reload
+// nobody makes. A 200 is the page itself, which the next load opens; a server error leaves the copy,
+// and the window, standing.
+async function revalidated(request, response, since) {
+    const copy = kept(response) ? response : undefined
+    if (copy === undefined) response.body?.cancel()
+    await keep(request, response, copy, since)
+    if (response.status === 200 || response.status >= 500) return
+    for (const client of await self.clients.matchAll({ type: 'window' }))
+        if (client.url === request.url) await client.navigate(client.url)
+}
 
 // 45.17 through 45.20 — THE COPY KEPT, BY ITS OWN cache-control: fresh is answered and the network
 // not asked, stale within stale-while-revalidate is answered while the network is asked for the next
 // one — save by a request asking force-cache, a call whose wire asks again itself once it reads the
 // copy (RULEBOOK 16.80, 16.85), so asking here too would ask twice — and stale within stale-if-error
 // stands in where the network gives nothing. A request asking past every cache (a refresh, a load
-// after invalidate) is the network's alone; a navigation never is, since a reload offline would
-// otherwise be the page saying nothing was saved.
-async function answer(event, page) {
+// after invalidate) is the network's alone.
+async function answer(event) {
     const request = event.request
     const bypass =
-        !page &&
-        (request.cache === 'no-cache' ||
-            request.cache === 'reload' ||
-            request.cache === 'no-store')
-    const saved = bypass
-        ? undefined
-        : await savedCopy(request)
+        request.cache === 'no-cache' ||
+        request.cache === 'reload' ||
+        request.cache === 'no-store'
+    const saved = bypass ? undefined : await savedCopy(request)
     const life = saved === undefined ? undefined : lifeOf(saved)
     if (life !== undefined) {
         if (life.age < life.fresh) return marked(saved)
         if (life.age < life.fresh + life.revalidate) {
             if (request.cache !== 'force-cache')
                 event.waitUntil(
-                    fromNetwork(event, page, false).then(
+                    fromNetwork(event).then(
                         (response) => response.body?.cancel(),
                         () => {},
                     ),
@@ -130,10 +192,10 @@ async function answer(event, page) {
         }
     }
     try {
-        return await fromNetwork(event, page, page)
+        return await fromNetwork(event)
     } catch {
         if (life !== undefined && standsIn(life)) return marked(saved)
-        return page ? offline() : Response.error()
+        return Response.error()
     }
 }
 
@@ -151,27 +213,20 @@ function marked(saved) {
 // A page no navigation is asking for, as the worker asks for it: past the browser's cache, as a page
 // kept, and with its redirects left unfollowed — one followed would be saved under the address it was
 // asked at, holding where it led (RULEBOOK 45.4, 45.21, 45.23).
-function pageRequest(url, headers) {
-    const asking = new Headers(headers)
-    asking.set(KEEP, '1')
-    return new Request(url, { headers: asking, redirect: 'manual', cache: 'no-cache' })
+function pageRequest(url) {
+    return new Request(url, {
+        headers: { [KEEP]: '1' },
+        redirect: 'manual',
+        cache: 'no-cache',
+    })
 }
 
-// 45.25 — THE NAVIGATION ASKED AS ITSELF: any init rebuilds a navigation's request as a script's
-// fetch, and a proxy in front of the app tells the two apart — one sending a page load to sign-in
-// answers a fetch 401. As itself its mode is navigate, the page that hydrates (RULEBOOK 41.29), its redirects
-// left to the browser. Anything else is asked past the browser's own cache (RULEBOOK 45.21), which
-// holds the same answers under the same headers and would hand a revalidation the copy it is replacing
-// — and a page as one kept, which a script's fetch is not otherwise told from (RULEBOOK 45.23, 41.30).
-async function fromNetwork(event, page, opened) {
+// 45.21 — A CALL ASKED PAST THE BROWSER'S OWN CACHE, which holds the same answers under the same
+// headers and would hand a revalidation the copy it is replacing.
+async function fromNetwork(event) {
     const request = event.request
-    const asked = opened
-        ? request
-        : page
-          ? pageRequest(request.url, request.headers)
-          : new Request(request, { cache: 'no-cache' })
     const since = drops
-    const response = await fetch(asked)
+    const response = await fetch(new Request(request, { cache: 'no-cache' }))
     // A copy nothing reads is a tee holding every chunk, so one is cloned only to be saved.
     const copy = kept(response) ? response.clone() : undefined
     event.waitUntil(keep(request, response, copy, since))
@@ -243,19 +298,27 @@ function directivesOf(response) {
     return directives
 }
 
-// 45.3, 45.4 — a 200 whose cache-control lets a private cache store it, and no stream.
+// 45.3, 45.4 — a 200 the server offered for offline, and no stream: one a private cache may store
+// that names a stale-if-error to stand in for, or that is immutable — a file the bundle's stylesheet
+// loads, which no copy of can go stale. An answer naming neither is one this origin answered for
+// something other than abide — a sign-in proxy's own sign-out page, which kept would be a sign-out
+// answered from the device.
 function kept(response) {
     if (response.status !== 200) return false
-    if (directivesOf(response).has('no-store')) return false
+    const directives = directivesOf(response)
+    if (directives.has('no-store')) return false
+    if (!directives.has('stale-if-error') && !directives.has('immutable')) return false
     const type = (response.headers.get('content-type') ?? '').toLowerCase()
     return !STREAMED.some((streamed) => type.startsWith(streamed))
 }
 
-// The copy saved of an address, a caller's own ahead of one any caller may be answered.
+// The copy saved of an address: a caller's own ahead of one any caller may be answered, and the
+// build before's file (RULEBOOK 45.8) last.
 async function savedCopy(request) {
     return (
         (await caches.match(request, { cacheName: SAVED, ignoreVary: true })) ??
-        (await caches.match(request, { cacheName: SHARED, ignoreVary: true }))
+        (await caches.match(request, { cacheName: SHARED, ignoreVary: true })) ??
+        (await caches.match(request, { cacheName: RETIRED }))
     )
 }
 
@@ -280,9 +343,9 @@ async function keep(request, response, copy, since) {
         since = drops
     }
     // 45.26 — AN ANSWER NOT SAVED STILL REPLACES THE COPY: a redirect or a 401 is what the address
-    // answers now, and a copy left standing would answer every load in its stale-while-revalidate
-    // window in its place — a session lapsed behind a sign-in proxy never reaching the sign-in. A
-    // server error is no answer to replace a copy with.
+    // answers now, and a copy left standing would open every load in its place — a session lapsed
+    // behind a sign-in proxy never reaching the sign-in. A server error is no answer to replace a
+    // copy with.
     if (copy === undefined) {
         if (response.status >= 500) return
         await Promise.all([
@@ -317,7 +380,7 @@ self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         (async () => {
-            await dropOurs(undefined)
+            await dropOurs([])
             await self.registration.unregister()
         })(),
     )

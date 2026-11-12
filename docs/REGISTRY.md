@@ -326,7 +326,7 @@ type Reached = { readonly [REACHED]: true }
 | `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk addressed by its own content hash. | 21.5 |
 | `cache-control: public, max-age=0, must-revalidate` | a file under a `public` directory | A file at an address the build never chose. | 21.12 |
 | `cache-control: private, stale-while-revalidate=604800, stale-if-error=31536000` | a `GET`'s answer, where `ABIDE_OFFLINE` registers its worker | The default that lets a copy kept on the device stand in for the network. | 21.22, 21.11, 21.17 |
-| `cache-control: private, max-age=0, stale-if-error=31536000` | a page, where `ABIDE_OFFLINE` registers its worker | The default that asks the network on every load and keeps a copy for where it fails. | 21.25 |
+| `cache-control: private, max-age=0, stale-if-error=31536000` | a page, where `ABIDE_OFFLINE` registers its worker | The default that keeps the browser's own cache from opening a page stale, and the worker's copy standing in for a year. | 21.25 |
 | `cache-control: public, max-age=0, stale-if-error=31536000` | a file under a `public` directory, where `ABIDE_OFFLINE` registers its worker | The same, for a file at an address the build never chose. | 21.23 |
 | `clear-site-data: "cache"` | an answer carrying `abide-principal`, where pages are kept offline | Drops what the browser's own cache kept for the caller signed in before. | 21.24 |
 | `etag` | a file under a `public` directory | The answered bytes, addressed by their content. | 21.13, 21.14 |
@@ -746,7 +746,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
 | `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
 | `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
-| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23, 45.24, 45.25, 45.26 |
+| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23, 45.24, 45.25, 45.26, 45.27, 45.28, 45.29 |
 | `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |

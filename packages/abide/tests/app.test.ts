@@ -505,10 +505,8 @@ test('every answer carries nosniff and traceresponse; a page its referrer policy
     expect(page.headers.get('referrer-policy')).toBe(
         'strict-origin-when-cross-origin',
     )
-    // 21.25 — the fixture is served built, where the worker is registered.
-    expect(page.headers.get('cache-control')).toBe(
-        'private, max-age=0, stale-if-error=31536000',
-    )
+    // 21.3 — `ABIDE_OFFLINE` is off unless asked for (45.14), so no worker keeps the page.
+    expect(page.headers.get('cache-control')).toBe('private, no-store')
 })
 
 // 21.18 — a page may not be framed unless the app says so. THE REVERT: drop the

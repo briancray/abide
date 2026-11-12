@@ -452,23 +452,24 @@ abide bundle --out ~/Applications/CRM.app`} />
     </Section>
 
     <Section title="Keep the CRM readable offline">
-        <Code code={`abide start
-ABIDE_OFFLINE=0 abide start`} />
+        <Code code={`ABIDE_OFFLINE=1 abide start`} />
 
-        <p>Each page the CRM opens is kept on the device, with the answers its handlers gave, the
-            public files it loaded and the bundle it runs, until <code>ABIDE_OFFLINE=0</code> turns
-            that off where the CRM is served. A page is asked of the network on every load, so the
-            visit after a deploy opens the new CRM; a handler's kept answer opens at once, however
-            weak the signal, and the network is asked for the next one behind it. With the network
-            gone, a page opened in
-            the last year loads again with its data and works. One never opened says the device is
+        <p>Where <code>ABIDE_OFFLINE=1</code> turns it on, each page the CRM opens is kept on the
+            device, with the answers its handlers gave, the public files it loaded and the bundle it
+            runs. Off is the default, and a browser that kept the CRM while it was on drops what it
+            kept on its next visit. A page opens from the device at once, however weak the signal,
+            and the network is asked for the next copy behind it. So the visit after a deploy opens
+            the CRM before it, and the visit after that the new one. A reload asks the network
+            first.
+            A handler's kept answer opens the same way. With the network gone, a page opened in the
+            last year loads again with its data and works. One never opened says the device is
             offline, and a link to it leaves the page you are on standing.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
                 <tr><td><code>cache-control: private, stale-while-revalidate=604800, stale-if-error=31536000</code></td><td>what a handler's answer carries, so the device shows what it kept while it asks again</td></tr>
-                <tr><td><code>cache-control: private, max-age=0, stale-if-error=31536000</code></td><td>what a page carries, so every load asks for it and what was kept stands in offline</td></tr>
+                <tr><td><code>cache-control: private, max-age=0, stale-if-error=31536000</code></td><td>what a page carries, so the browser's own cache never opens it stale and what the device kept stands in offline</td></tr>
                 <tr><td><code>cache-control: public, max-age=0, stale-if-error=31536000</code></td><td>the same, for a public file</td></tr>
                 <tr><td><code>clear-site-data: "cache"</code></td><td>what a sign-in or a sign-out answers, so the browser forgets what it kept for the last person</td></tr>
             </tbody>

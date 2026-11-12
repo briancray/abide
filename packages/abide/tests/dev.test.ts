@@ -313,7 +313,7 @@ test('a dev document carries the app name its configuration resolved — 28.4', 
     expect(html).toContain('<meta name="abide-app" content="dev-fixture">')
 })
 
-// 45.1, 45.9 — `ABIDE_OFFLINE` IS ON BY DEFAULT, and dev still registers nothing: no tag for the
+// 45.1, 45.9 — DEV REGISTERS NOTHING, `ABIDE_OFFLINE` on or not: no tag for the
 // browser to register by, and the removing worker for one `abide start` left on this origin.
 // THE REVERT: `offline: true` on dev's client lane in `devWorker`; the tag is written and the worker
 // saves the dev bundle.

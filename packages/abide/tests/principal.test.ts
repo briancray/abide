@@ -306,12 +306,12 @@ test('an answer whose handler signed the caller in or out says so — principal 
 test('a sign-in and a sign-out clear the browser cache where pages are kept offline, a read does not — 21.24', async () => {
     const { principal, caller } = await signedIn()
     const cookie = `${principal}; ${caller}`
-    const off = await startApp(app, { ...process.env, ABIDE_OFFLINE: '0' })
+    const on = await startApp(app, { ...process.env, ABIDE_OFFLINE: '1' })
     const said: string[] = []
     try {
         for (const [setting, at] of [
-            ['on', base],
-            ['off', off.base],
+            ['on', on.base],
+            ['off', base],
         ] as const)
             for (const [name, method] of [
                 ['signIn', 'POST'],
@@ -328,7 +328,7 @@ test('a sign-in and a sign-out clear the browser cache where pages are kept offl
                 )
             }
     } finally {
-        off.stop()
+        on.stop()
     }
     expect(said).toEqual([
         'on signIn: "cache"',
