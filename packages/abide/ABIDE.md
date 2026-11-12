@@ -39,6 +39,10 @@ affected code saying what it did, and tell the user.
   `principal` runs inside `app.run(…)` of `await createApp()`, where the app's `onConfig` has run.
   A request sent as someone is `app.fetch(request, { principal, caller })` (RULEBOOK 42.20, 42.21),
   never a hand-written `abide-principal` or `abide-caller` cookie.
+  A component whose call needs that scope is mounted INSIDE the same `app.run` as the click: a
+  value is request-local on a server (RULEBOOK 11.32), so a component mounted outside the `run` and
+  clicked inside it writes the call into the run's own copy of the value, and the mounted DOM never
+  sees it busy or landed.
   `mount` sets no route, so a page stays thin: it reads the route and hands what it needs to a
   component in `lib/`, and the test mounts that component.
 - `bun run bench` — runs `harness-bench`: every `*.bench.ts` under `src/`, kept beside the code it

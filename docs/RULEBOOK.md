@@ -3758,6 +3758,10 @@ naming a bench its file does not export.
 43.35 The DOM `@abide/harness/preload` registers MUST NOT fetch a stylesheet or a script a document
 it parses names.
 
+43.36 The DOM `@abide/harness/preload` registers MUST give an element `showPopover`, `hidePopover`
+and `togglePopover`, MUST fire `toggle` on each change of state, MUST match `:popover-open` while one
+is open, and MUST throw on an element with no `popover` attribute.
+
 # 44. The assistant
 
 44.1 `assistant` MUST answer only through a handler that yields it, and MUST NOT mount an address

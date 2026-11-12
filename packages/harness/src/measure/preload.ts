@@ -4,6 +4,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 
 import { install } from './install.ts'
+import { installPopover } from './installPopover.ts'
 
 // A child spawned with this env would paint its output in ANSI off a pipe (bun's console, and
 // abide's own log under RULEBOOK 36.9), and the suites compare that output as text. A terminal
@@ -42,3 +43,4 @@ GlobalRegistrator.register({
 })
 for (const name of WIRE) Object.assign(globalThis, { [name]: native[name] })
 install()
+installPopover()
