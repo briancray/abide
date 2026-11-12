@@ -238,15 +238,23 @@ import Section from '#src/lib/Section.abide'
 
         <p>The kept call is a promise too, so what comes after a save is <code>saving.then(…)</code>:
             clear a field, close a dialog, go to the new deal's page. It runs once the call lands,
-            and the call still runs once. The second function is for a refusal, which is already on
-            <code>saving.error()</code>; passing one says there is nothing more to do, and keeps
-            the refusal from being reported as unhandled. A <code>then</code> made before another
-            press is answered by the call the form keeps when it settles, which is the later one.</p>
+            and the call still runs once. A refusal is already on <code>saving.error()</code>, so a
+            <code>then</code> given one function does not report it as unhandled; an
+            <code>await</code> still throws it, and a throw from the function itself is still
+            reported. A <code>then</code> made before another press is answered by the call the form
+            keeps when it settles, which is the later one.</p>
 
         <p>The answer is the call's, so the next call drops it until it lands. To keep the last
             answer on screen through a call in flight or a refusal, write it into the value it is about:
-            <code>{'saving.then((moved) => { deal = moved }, () => {})'}</code> writes the answer
-            over a derived <code>deal</code>, which keeps it until the next answer lands.</p>
+            <code>{'saving.then((moved) => (deal = moved))'}</code> writes the answer over a derived
+            <code>deal</code>, which keeps it until the next answer lands.</p>
+
+        <p>A form that moves on once it is saved — to the new deal's page, or back to the list —
+            is pressed once: <code>{'disabled={saving.busy() || saving.ready()}'}</code>.
+            <code>ready()</code> holds from the answer until the next call is kept, so the button
+            stays off while the page moves, and a refusal turns it back on. A label that reads
+            <code>busy()</code> stays on through the next step when the kept promise ends in it and
+            answers what the call did: <code>{'saving = createDeal(…).then(async (made) => { await navigate(…); return made })'}</code>.</p>
 
         <p>To let go of a call, keep one nothing has made: <code>saving = reactive&lt;typeof
                 createDeal&gt;()</code> leaves no refusal standing and nothing in flight, for a dialog
@@ -255,7 +263,15 @@ import Section from '#src/lib/Section.abide'
 
         <p>One value can keep a call of any of several handlers, for a flow with one busy flag and
             one error: <code>reactive&lt;typeof moveDeal | typeof createDeal&gt;()</code> keeps
-            either, with the failures of both.</p>
+            either, with the failures of both. Its <code>then</code> is handed either answer, so a
+            step that needs the new deal's <code>id</code> keeps the call under its own name first:
+            <code>const made = createDeal(…)</code>, <code>saving = made</code>, then
+            <code>made.then(…)</code>, typed as that call alone.</p>
+
+        <p>A step that is not a call goes under the same busy flag and error by keeping the promise
+            that ends in the call: <code>{'saving = file.text().then((csv) => importDeals({ csv }))'}</code>
+            is busy from reading the file to the server's answer, and its error is whichever step
+            failed.</p>
     </Section>
 
     <Section title="A refusal carries a name the page can match">
