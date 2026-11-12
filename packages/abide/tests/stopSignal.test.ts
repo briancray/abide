@@ -69,3 +69,34 @@ test('a job giving up on stopSignal is not warned on, and a failing one still is
         `aborted runs warned: ${warningsSince(before, 'AbortError')}, failures warned: ${warningsSince(before, 'the feed could not be read')}, held: ${landed.peek()}`,
     ).toBe('aborted runs warned: 0, failures warned: 1, held: 1')
 })
+
+// 7.38, 7.39 — THE SIGNAL SAYS STOP FOR THE STOP, AND NO LONGER: aborted before the drain, still
+// aborted as the drain waits on the run it told, and a fresh one once `App.stop` resolves — so code
+// that links it after an app's stop, in the same process with no app built since, is not handed a
+// signal that already says stop.
+//
+// THE REVERTS: renew in `bootEntered` again rather than at the end of `stopOnce`, and `after the
+// stop: true`; renew in `stopUnownedPolls` right after the abort, and `during the drain: false`.
+test('stopSignal is aborted from the stop through its drain, and fresh once the stop resolves — 7.38, 7.39', async () => {
+    let started = false
+    let duringTheDrain: boolean | undefined
+    reactive(
+        async () => {
+            started = true
+            await givenUp(stopSignal()).catch(() => undefined)
+            // A turn past the abort, as a run winding down takes, and still inside the drain.
+            await Bun.sleep(5)
+            duringTheDrain = stopSignal().aborted
+            return 0
+        },
+        { global: true, poll: 60_000 },
+    )
+    const app = await inMemoryApp({})
+    serving(app)
+    while (!started) await Bun.sleep(1)
+    const told = stopSignal()
+    await app.stop()
+    expect(
+        `told: ${told.aborted}, during the drain: ${duringTheDrain}, after the stop: ${stopSignal().aborted}`,
+    ).toBe('told: true, during the drain: true, after the stop: false')
+})

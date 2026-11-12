@@ -463,8 +463,8 @@ opening that 7.34 puts a first run off for.
 
 7.38 `App.stop` MUST abort the signal `stopSignal` answers before it drains what is in flight.
 
-7.39 The signal `stopSignal` answers MUST stay aborted after `App.stop` until `createApp` builds an
-app, and MUST be one not aborted from before that app's `onStart` runs.
+7.39 The signal `stopSignal` answers MUST stay aborted from 7.38's abort until `App.stop` resolves,
+`onStop` included, and MUST be one not aborted from then on.
 
 # 8. Stores
 
