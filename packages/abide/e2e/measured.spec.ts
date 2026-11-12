@@ -215,6 +215,36 @@ test('bind:rect follows a move nothing else reports — 32.87', async ({
     await expect(page.locator('#top')).toHaveText(after)
 })
 
+// 32.87, 32.90 — THE SAME MOVE RIGHT AFTER A SCROLL. A scrolled frame makes no position observer, so
+// what sees the growth is the one made in the frame after the scroll. THE REVERT: drop
+// `if (scrolling) schedule()` in `measure`; in chromium `top` keeps the reading from the scroll, 50px
+// short (575 -> 525).
+test('bind:rect follows a move nothing else reports right after a scroll — 32.87, 32.90', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1024, height: 768 })
+    await page.goto(`${base}/`)
+    await expect(page.locator('#rows')).toHaveText('40,40,40,40,40')
+    const reported = () =>
+        page.evaluate(() =>
+            String(
+                Math.round(
+                    (
+                        document.getElementById('placed') as Element
+                    ).getBoundingClientRect().top,
+                ),
+            ),
+        )
+    await page.evaluate(() => window.scrollTo(0, 100))
+    const scrolled = await reported()
+    await expect(page.locator('#top')).toHaveText(scrolled)
+    // Clicked in the page: playwright's own click scrolls the button into view first.
+    await page.evaluate(() => document.getElementById('grow')?.click())
+    const after = await reported()
+    expect(after).toBe(String(Number(scrolled) + 50))
+    await expect(page.locator('#top')).toHaveText(after)
+})
+
 // 41.32 — THE SERVER PAINTS THE WIDE ARM, A NARROW BROWSER HYDRATES IT AND THEN SWAPS IT, and says
 // nothing on `abide:hydrate`: the arm changed because the viewport is the browser's to know, not
 // because the two sides disagreed by mistake. THE REVERT: make `beginHydration` write nothing and

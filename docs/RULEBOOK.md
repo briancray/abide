@@ -2442,8 +2442,11 @@ added with the first `bind:rect` and removed with the last.
 read of every `bind:rect` element's rectangle in that frame, every read before any write, and
 `bind:rect` MUST NOT read an element's rectangle outside such a frame.
 
-32.90 What observes a `bind:rect` element for 32.87 MUST be made again only in a frame whose read
-moved the element or resized the viewport, and MUST cost no work while neither moves.
+32.90 What observes a `bind:rect` element for 32.87 MUST NOT be made in a frame a scroll event
+preceded, and MUST be made again only in a frame whose read found the element moved or the viewport
+resized since it was made. A frame a scroll preceded MUST ask for the frame after it, which answers
+that scroll under 32.89, so the observers stand again once the scroll is over. It MUST cost no work
+while neither moves.
 
 # 33. Props
 

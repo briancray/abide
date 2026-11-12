@@ -171,7 +171,8 @@ let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, rect:
 // OF TWENTY READS, every read before any write. THE REVERTS, each run: add the listeners per bind
 // (drop `bound.size === 0`) — 20 scroll and 20 resize listeners; drop `frame === 0` in `schedule` —
 // 20 frames for the mount alone; read in the listener (`schedule` calling `measure`) — 0 frames and
-// 210 reads; write each rectangle as it is read — `rwrw…`.
+// 210 reads; write each rectangle as it is read — `rwrw…`. The second frame counted is the one the
+// scroll's frame asks for, where its position observers are made (32.90), and is not run here.
 test('twenty bind:rects share one listener set, and a burst of scrolls is one frame of reads — 32.88, 32.89', async () => {
     ;(globalThis as { __RECTS__?: typeof counts }).__RECTS__ = counts
     await mount(ROWS)
@@ -193,7 +194,7 @@ test('twenty bind:rects share one listener set, and a burst of scrolls is one fr
     runFrame()
     expect(
         `${counts.frames} frames, ${counts.reads} reads, ${counts.log}`,
-    ).toBe(`1 frames, 20 reads, ${'r'.repeat(20)}${'w'.repeat(20)}`)
+    ).toBe(`2 frames, 20 reads, ${'r'.repeat(20)}${'w'.repeat(20)}`)
 })
 
 // 32.88 — THE LAST ELEMENT TO LEAVE TAKES THE LISTENERS WITH IT. THE REVERT: drop the removal in the
@@ -260,9 +261,12 @@ let rect = reactive<{ top: number } | undefined>(undefined)
 
 // 32.87, 32.90 — A MOVE NO SCROLL OR RESIZE ACCOMPANIES IS SEEN: each element gets a position observer
 // around the rectangle its first frame read, whose first delivery is not a move, and a delivery
-// after it asks for one frame and reads nothing. A frame in which nothing moved makes no observer.
+// after it asks for one frame and reads nothing. A frame in which nothing moved makes no observer,
+// and neither does a frame a scroll preceded: the frame after it, with no scroll before it, does.
 // THE REVERTS, each run: never schedule from `deliverPositions` — 0 frames for the move; arm
-// whatever the insets (drop the compare in `arm`) — 20 observers made by the still frame.
+// whatever the insets (drop the compare in `arm`) — 20 observers made by the still frame; arm in a
+// scrolled frame (drop `!scrolling`) — 20 made by the scrolling frame; never ask for the frame after
+// a scroll (drop `if (scrolling) schedule()`) — 0 made once it is over.
 test('a move with no scroll or resize asks for one frame, and a still frame arms nothing — 32.87, 32.90', async () => {
     ;(globalThis as { __RECTS__?: typeof counts }).__RECTS__ = counts
     await mount(ROWS)
@@ -293,8 +297,12 @@ test('a move with no scroll or resize asks for one frame, and a still frame arms
     top = 40
     window.dispatchEvent(new Event('scroll'))
     runFrame()
-    expect(`${positions.made} observers made by a moving frame`).toBe(
-        '20 observers made by a moving frame',
+    expect(`${positions.made} observers made by a scrolling frame`).toBe(
+        '0 observers made by a scrolling frame',
+    )
+    runFrame()
+    expect(`${positions.made} observers made once the scroll is over`).toBe(
+        '20 observers made once the scroll is over',
     )
 })
 

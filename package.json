@@ -33,6 +33,7 @@
         "examples:forward": "bun packages/dogfood/scripts/forwardChapters.ts",
         "clauses:uncited": "bun packages/dogfood/scripts/uncitedClauses.ts",
         "bench:reorder": "bun packages/abide/bench/reorderShare.ts",
+        "bench:rect": "bun packages/abide/bench/rectScrollShare.ts",
         "prepare": "git config core.hooksPath .githooks || true",
         "changeset": "changeset",
         "version-packages": "bun run scripts/autofillChangesets.ts && changeset version",
