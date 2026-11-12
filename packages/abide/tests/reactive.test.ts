@@ -4879,13 +4879,16 @@ test('a burst of chunks in one task wakes a reader once', async () => {
 // 9.10: `flushSync` IS HOW A TURN IS ENDED ON DEMAND, and a wake a stream is holding for the
 // next task is exactly what a test, a measurement or a server render ending the turn has to
 // see. The first assertion is what proves the wake WAS held: the chunks have landed and the
-// effect has not heard.
+// effect has not heard. The run is held open: its close pays the wake it owes at once (9.17).
 //
 // THE REVERT is `flushSync` not calling `wakeStreams`: `after flush: 0`.
 test('flushSync delivers a stream wake held for the next task', async () => {
+    let close = (): void => {}
+    const held = new Promise<void>((resolve) => (close = resolve))
     const rows = reactive(async function* () {
         yield 'a'
         yield 'b'
+        await held
     })
     let seen = 0
     const stop = watch(() => {
@@ -4897,6 +4900,7 @@ test('flushSync delivers a stream wake held for the next task', async () => {
     flushSync()
     expect(`after flush: ${seen}`).toBe('after flush: 2')
     stop()
+    close()
 })
 
 // ── Adopting a stream: RULEBOOK 11.15 forwarding what a stream declares ─────────────

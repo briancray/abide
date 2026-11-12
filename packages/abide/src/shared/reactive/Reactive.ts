@@ -2041,6 +2041,7 @@ async function pump(
         } catch (failed) {
             if (stream.run !== run) return
             stream.iterator = null
+            tellOwed(cell, stream)
             // 2.4: what the stream had already said goes on being served, with the failure
             // standing beside it — and 2.2 where it had said nothing.
             refused(cell, failed)
@@ -2065,6 +2066,7 @@ async function pump(
         cap.holding = false
         releaseChunks(cell, stream)
     }
+    tellOwed(cell, stream)
     if (!begun) {
         // A stream that closed with nothing in it has finished, and what it accumulated is
         // no chunks — a value, where waiting on would be a load that never ends.
@@ -2146,19 +2148,37 @@ function wakeStreams(): void {
     // The length is re-read per turn: a mirror the cascade runs can land on another stream.
     for (let index = 0; index < WAKING.length; index += 1) {
         const cell = WAKING[index] as Cell
-        const stream = cell.stream as Stream
-        stream.waking = false
-        let owed = stream.probesOwed
-        stream.probesOwed = false
-        // 9.11: the chunk ended a write following a `Reactive`, whose probes were this one's.
-        if (cell.adoption !== null) {
-            unfollow(cell)
-            owed = true
-        }
-        cascade(cell)
-        if (owed) probesMoved(cell)
+        // Told already, by the close of its run (`tellOwed`).
+        if ((cell.stream as Stream).waking)
+            wakeStream(cell, cell.stream as Stream)
     }
     WAKING.length = 0
+}
+
+function wakeStream(cell: Cell, stream: Stream): void {
+    stream.waking = false
+    let owed = stream.probesOwed
+    stream.probesOwed = false
+    // 9.11: the chunk ended a write following a `Reactive`, whose probes were this one's.
+    if (cell.adoption !== null) {
+        unfollow(cell)
+        owed = true
+    }
+    cascade(cell)
+    if (owed) probesMoved(cell)
+}
+
+/**
+ * Tells readers now of the chunks a wake still owes them — at the end of a run, ahead of the end.
+ *
+ * 9.17 — A RUN'S END NEVER REACHES A READER AHEAD OF ITS LAST CHUNKS. The end moves the probes in
+ * the turn it lands and the chunk's wake waits for the next task (9.9), so a value forwarding the
+ * stream (11.15) — whose buffer is shared but whose count of told chunks is copied at the wake —
+ * would hear the run settle while it still counted the last chunks short, and a reader draining it
+ * at the settle would end there. So a wake still owed is paid before the end is told.
+ */
+function tellOwed(cell: Cell, stream: Stream): void {
+    if (stream.waking) wakeStream(cell, stream)
 }
 
 /**

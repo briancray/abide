@@ -582,6 +582,9 @@ run ended on.
 
 9.16 A cursor over a streaming producer MUST end where a new run replaces the one it was reading.
 
+9.17 A streaming producer's run MUST NOT end, to a reader of it or of a value forwarding it, before
+every chunk that run produced has reached that reader.
+
 # 10. Sharing
 
 10.1 `reactive.share` MUST get or create in one call.
