@@ -20,6 +20,7 @@ import { HandlerRoute } from './HandlerRoute.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
 import { isServer } from './isServer.ts'
 import type { Issues } from './Issues.ts'
+import { namedLogger } from './log.ts'
 import { compose, type Rung } from './Middleware.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
@@ -45,10 +46,12 @@ import {
     reactive,
     refresh,
     type Refusals,
+    type Selection,
     type Shaping,
     STREAMING,
     type Streams,
 } from './reactive/index.ts'
+import { isThenable } from './reactive/isThenable.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
 import {
     chunksOfStream,
@@ -238,12 +241,19 @@ export type RpcOptions<
     crossOrigin?: boolean | string[]
     maxBodySize?: number
     /**
-     * 16.89 — the `tags` a run of a mutation `refresh`es once it answers without a refusal, or
-     * what returns them for the call's `Args`, as a value's own `tags` is written. Never a
-     * `GET`'s (16.92).
+     * 16.89 — what a run of a mutation `refresh`es once it answers without a refusal, or what
+     * returns it for the call's `Args`. Never a `GET`'s (16.92).
      */
-    refreshes?: string[] | ((args: Args) => string[])
+    refreshes?: Refreshed | ((args: Args) => Refreshed | PromiseLike<Refreshed>)
 }
+
+/**
+ * 16.89 — what `refreshes` names, each entry what `refresh` is handed: a tag, a `Selection`, or a
+ * `Selection` beside its pattern (13.12) — `[boards, { personId }]` is `refresh(boards, { personId })`.
+ */
+type Refreshed = readonly (
+    string | Selection | readonly [Selection, Record<string, unknown>]
+)[]
 
 /**
  * A handler `declare` builds the value of: a plain function or a value, which no `Reactive` or
@@ -560,13 +570,15 @@ export function declare<Declared extends Method>(
                       refreshes === undefined
                           ? answer
                           : (args: unknown) =>
-                                answerThenRefresh(answer(args), () =>
-                                    refresh({
-                                        tags:
+                                answerThenRefresh(
+                                    answer(args),
+                                    () =>
+                                        refreshEach(
                                             typeof refreshes === 'function'
                                                 ? refreshes(args)
                                                 : refreshes,
-                                    }),
+                                        ),
+                                    () => rpc.address ?? 'a handler',
                                 ),
                       cacheOptions,
                   )
@@ -780,19 +792,66 @@ function argsOnce(
  */
 async function answerThenRefresh(
     answer: Promise<unknown>,
-    refresh: () => void,
+    refresh: () => void | Promise<void>,
+    named: () => string,
 ): Promise<unknown> {
     const answered = await answer
     if (isFailed(answered)) return answered
-    if (isAsyncGenerator(answered)) return refreshedAtClose(answered, refresh)
-    refresh()
+    if (isAsyncGenerator(answered))
+        return refreshedAtClose(answered, refresh, named)
+    const refreshing = refreshOrWarn(refresh, named)
+    if (refreshing !== undefined) await refreshing
     return answered
 }
 
 async function* refreshedAtClose(
     chunks: AsyncGenerator<unknown>,
-    refresh: () => void,
+    refresh: () => void | Promise<void>,
+    named: () => string,
 ): AsyncGenerator<unknown> {
     yield* chunks
-    refresh()
+    const refreshing = refreshOrWarn(refresh, named)
+    if (refreshing !== undefined) await refreshing
+}
+
+const REFRESHES_LOG = namedLogger('abide:reactive')
+
+/**
+ * 16.102 — A FAILING `refreshes` LEAVES THE ANSWER AS THE HANDLER MADE IT: the write has landed, and
+ * a refusal or a 500 here is a write a retrying client makes twice. Warned once instead.
+ */
+function refreshOrWarn(
+    refresh: () => void | Promise<void>,
+    named: () => string,
+): void | Promise<void> {
+    const warn = (failure: unknown): void =>
+        REFRESHES_LOG.warning(
+            `${named()}: its refreshes failed, and the write is answered as it returned.`,
+            failure,
+        )
+    try {
+        const refreshing = refresh()
+        if (refreshing !== undefined) return refreshing.catch(warn)
+    } catch (failure) {
+        warn(failure)
+    }
+}
+
+/**
+ * 16.89 — `refresh` over each entry `refreshes` named, its tags as one selection, once a promise of
+ * them settles: 16.101 runs the function in the call's scope, so it may `await principal.resolved`
+ * for whose entry the write changed.
+ */
+function refreshEach(
+    refreshed: Refreshed | PromiseLike<Refreshed>,
+): void | Promise<void> {
+    if (isThenable(refreshed))
+        return Promise.resolve(refreshed).then(refreshEach)
+    let tags: string[] | undefined
+    for (const entry of refreshed as Refreshed) {
+        if (typeof entry === 'string') (tags ??= []).push(entry)
+        else if (Array.isArray(entry)) refresh(entry[0], entry[1] as never)
+        else refresh(entry as Selection)
+    }
+    if (tags !== undefined) refresh({ tags })
 }

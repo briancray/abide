@@ -230,6 +230,14 @@ import Section from '#src/lib/Section.abide'
             its last chunk is read. Where the tags depend on the call, pass a function of its
             arguments: <code>{'refreshes: ({ id }) => [`deal:${id}`]'}</code>.</p>
 
+        <p>Where what changed belongs to whoever called, name it by who they are. Each rep's
+            pipeline is one entry of a keyed value, and the function runs in the call's request
+            (16.101), so it may be <code>async</code> and read <code>principal</code>.
+            <code>{'refreshes: async () => [[pipelines, { repId: (await principal.resolved).id }]]'}</code>
+            reloads that rep's entry, as <code>{'refresh(pipelines, { repId })'}</code> would. Only
+            the tabs following it are sent the new pipeline. One list can name tags, selections and
+            <code>[selection, pattern]</code> pairs together.</p>
+
         <p>Some views belong to one browser: a draft, a cart, the deals one person has starred.
             A refresh on the server reaches every tab following the handler, so pass the browser it
             is for: <code>{'getStarred.refresh(undefined, { caller: principal.caller })'}</code>
@@ -240,7 +248,7 @@ import Section from '#src/lib/Section.abide'
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
             <tbody>
                 <tr><td><code>{'{ caller }'}</code></td><td>the second argument to <code>rpc.refresh</code> and <code>rpc.invalidate</code> on the server: reach only the browser whose <code>principal.caller</code> it is</td></tr>
-                <tr><td><code>refreshes</code></td><td>the tags a write refreshes each time it answers. <code>POST</code>, <code>PUT</code>, <code>PATCH</code> and <code>DELETE</code> take it; <code>GET</code> does not, since a read changes nothing to refresh</td></tr>
+                <tr><td><code>refreshes</code></td><td>the tags, selections and <code>[selection, pattern]</code> pairs a write refreshes each time it answers, or a function of its arguments returning them, <code>async</code> where it reads <code>principal</code>. <code>POST</code>, <code>PUT</code>, <code>PATCH</code> and <code>DELETE</code> take it; <code>GET</code> does not, since a read changes nothing to refresh</td></tr>
             </tbody>
         </table>
     </Section>
