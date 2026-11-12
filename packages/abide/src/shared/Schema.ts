@@ -69,7 +69,7 @@ export type Schema<T> = ((value: unknown) => T) | StandardSchemaV1<T>
  * What running a schema found: the accepted value, or its issues by path.
  *
  * ISSUES RATHER THAN A REFUSAL, and that is what keeps this module out of a cycle: a
- * `validationError` is built by `refuse`, `refuse` runs a schema (15.11), and the two
+ * `refuse.validation` is built by `refuse`, `refuse` runs a schema (15.11), and the two
  * importing each other is an edge a bundler has to break. What a schema knows is WHAT WAS
  * WRONG AND WHERE; turning that into a named refusal at 422 (15.8) is the caller's, and
  * the caller is the one place that knows whether this was a write, a publish or a body.

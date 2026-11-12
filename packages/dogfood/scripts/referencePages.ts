@@ -77,6 +77,9 @@ async function exportsOf(file: string): Promise<Map<string, boolean>> {
             for (const [name, typeOnly] of await exportsOf(target))
                 names.set(name, typeOnly)
     }
+    // A namespace re-export is one value, named where it is spelled.
+    for (const [, name] of source.matchAll(/export \* as (\w+) from '[^']+'/g))
+        names.set(name as string, false)
     for (const [, allTypes, list, from] of source.matchAll(
         /export (type )?\{([^}]*)\}(?: from '([^']+)')?/g,
     )) {

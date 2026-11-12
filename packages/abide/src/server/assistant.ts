@@ -18,7 +18,7 @@ import type {
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
-import { aborted, refuse } from '#shared/refuse.ts'
+import { refuse } from '#shared/refuse.ts'
 
 import { type McpReply, McpSurface } from './generatedSurfaces.ts'
 import { request, within } from './requestScope.ts'
@@ -150,11 +150,11 @@ async function* endedBy(
     // A STEP RACES ITS OWN ABORT: one promise pending for the whole conversation would keep a
     // reaction per event, none freed until it ends.
     let rejectStep: (reason: unknown) => void = () => {}
-    const stop = (): void => rejectStep(aborted())
+    const stop = (): void => rejectStep(refuse.aborted())
     signal.addEventListener('abort', stop, { once: true })
     try {
         for (;;) {
-            if (signal.aborted) throw aborted()
+            if (signal.aborted) throw refuse.aborted()
             const step = await Promise.race([
                 events.next(),
                 new Promise<never>((_, reject) => {
@@ -165,7 +165,7 @@ async function* endedBy(
             yield step.value
         }
     } catch (thrown) {
-        throw signal.aborted ? aborted() : thrown
+        throw signal.aborted ? refuse.aborted() : thrown
     } finally {
         signal.removeEventListener('abort', stop)
         // A provider still awaiting returns once that await settles, and nobody waits for it.

@@ -31,16 +31,16 @@ test.beforeAll(async ({}, testInfo) => {
     ;({ base, server } = await servedFixture(directory, {
         'layout.abide': LAYOUT,
         'cookie/index.abide': `<script>
-import { cookiesStore, reactive } from '@abide/abide'
+import { reactive, store } from '@abide/abide'
 
-let theme = reactive('system', { store: cookiesStore('theme') })
+let theme = reactive('system', { store: store.cookies('theme') })
 </script>
 
 <main id="cookie"><p id="theme">{theme}</p><button id="dark" onclick={() => { theme = 'dark' }}>dark</button><button id="light" onclick={() => { theme = 'light' }}>light</button></main>`,
         'indexed/index.abide': `<script>
-import { indexedDBStore, reactive } from '@abide/abide'
+import { reactive, store } from '@abide/abide'
 
-let count = reactive(0, { store: indexedDBStore('count') })
+let count = reactive(0, { store: store.indexedDB('count') })
 </script>
 
 <main id="indexed"><p id="count">{count.ready() ? count : 'loading'}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button></main>`,

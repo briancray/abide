@@ -15,7 +15,7 @@ import { type Failed, isFailed } from '#shared/Failed.ts'
 import { isAbort } from '#shared/isAbort.ts'
 import { namedLogger } from '#shared/log.ts'
 import type { Rung } from '#shared/Middleware.ts'
-import { aborted, refuse } from '#shared/refuse.ts'
+import { refuse } from '#shared/refuse.ts'
 import {
     coversRoute,
     parseRoutePattern,
@@ -361,7 +361,7 @@ export function handOnError(error: unknown): void {
 export function failureOf(error: unknown): Failed<string, unknown> {
     if (isFailed(error)) return error
     if (currentRequestScope()?.request?.signal.aborted === true)
-        return aborted()
+        return refuse.aborted()
     reportUnexpected(error)
     return refuse(500)
 }

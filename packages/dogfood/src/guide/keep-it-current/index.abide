@@ -434,16 +434,16 @@ import Section from '#src/lib/Section.abide'
             happens, and returns the function that stops watching. The value reads <code>get</code>
             again, and the body does not run.</p>
 
-        <p>Five stores come with abide, for the places a value most often lives:</p>
+        <p>Five stores come with abide, the members of <code>store</code>, for the places a value most often lives:</p>
 
         <table>
             <thead><tr><th>Name</th><th>Where the value lives</th></tr></thead>
             <tbody>
-                <tr><td><code>webStore</code></td><td><code>{"webStore('layout')"}</code> keeps it in this browser's <code>localStorage</code>, or <code>sessionStorage</code> with <code>{"{ area: 'session' }"}</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
-                <tr><td><code>sqliteStore</code></td><td><code>{"sqliteStore('crm.db', 'target')"}</code>, from <code>@abide/abide/server</code>, keeps it in a SQLite table, so a restarted server opens on it</td></tr>
-                <tr><td><code>redisStore</code></td><td><code>{"redisStore(Bun.redis, 'target')"}</code>, from <code>@abide/abide/server</code>, keeps it in a Redis key that Redis expires with the <code>ttl</code>, so every server behind one Redis opens on it. Where Redis reports changes to its keys, it follows a write another server makes</td></tr>
-                <tr><td><code>indexedDBStore</code></td><td><code>{"indexedDBStore('draft')"}</code> keeps it in this browser's IndexedDB, for a value too large for <code>localStorage</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
-                <tr><td><code>cookiesStore</code></td><td><code>{"cookiesStore('theme')"}</code> keeps it in a cookie, which the browser sends with every request, so the server renders the stored value rather than the fallback. A cookie holds 4 KB at most</td></tr>
+                <tr><td><code>store.web</code></td><td><code>{"store.web('layout')"}</code> keeps it in this browser's <code>localStorage</code>, or <code>sessionStorage</code> with <code>{"{ area: 'session' }"}</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
+                <tr><td><code>store.sqlite</code></td><td><code>{"store.sqlite('crm.db', 'target')"}</code>, on <code>@abide/abide/server</code>'s <code>store</code> alone, keeps it in a SQLite table, so a restarted server opens on it</td></tr>
+                <tr><td><code>store.redis</code></td><td><code>{"store.redis(Bun.redis, 'target')"}</code>, on <code>@abide/abide/server</code>'s <code>store</code> alone, keeps it in a Redis key that Redis expires with the <code>ttl</code>, so every server behind one Redis opens on it. Where Redis reports changes to its keys, it follows a write another server makes</td></tr>
+                <tr><td><code>store.indexedDB</code></td><td><code>{"store.indexedDB('draft')"}</code> keeps it in this browser's IndexedDB, for a value too large for <code>localStorage</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
+                <tr><td><code>store.cookies</code></td><td><code>{"store.cookies('theme')"}</code> keeps it in a cookie, which the browser sends with every request, so the server renders the stored value rather than the fallback. A cookie holds 4 KB at most</td></tr>
             </tbody>
         </table>
 
@@ -499,7 +499,7 @@ import Section from '#src/lib/Section.abide'
 
         <p>Under <code>bun test</code> each test file opens each database empty, in memory, whatever
             it names, so a test never writes the file the app serves and never reads another file's
-            rows. The app closes the file as it stops. A <code>sqliteStore</code> takes what the function hands back, so a store and the app's
+            rows. The app closes the file as it stops. <code>store.sqlite</code> takes what the function hands back, so a store and the app's
             own tables can share one file.</p>
     </Section>
     <Section title="Next">

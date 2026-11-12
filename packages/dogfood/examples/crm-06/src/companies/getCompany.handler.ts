@@ -1,4 +1,4 @@
-import { GET, notFound } from '@abide/abide/server'
+import { GET, refuse } from '@abide/abide/server'
 
 import { COMPANIES } from './lib/COMPANIES.server.ts'
 
@@ -7,7 +7,7 @@ export default GET(
     async ({ id }: { id: string }) => {
         const company = COMPANIES.find((one) => one.id === id)
         // A miss is answered at once, so the page can say 404.
-        if (company === undefined) return notFound()
+        if (company === undefined) return refuse.notFound()
         // A slow database, so the page goes out before the company.
         await Bun.sleep(1200)
         return company

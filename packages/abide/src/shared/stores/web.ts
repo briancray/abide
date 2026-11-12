@@ -1,6 +1,6 @@
-import type { Store } from './reactive/index.ts'
-import type { Schema } from './Schema.ts'
-import { KeptText, storeKey } from './storedValue.ts'
+import type { Store } from '../reactive/index.ts'
+import type { Schema } from '../Schema.ts'
+import { KeptText, storeKey } from '../storedValue.ts'
 
 /**
  * A `Store` kept in this browser's `localStorage`, or its `sessionStorage`, under `key`.
@@ -10,7 +10,7 @@ import { KeptText, storeKey } from './storedValue.ts'
  * The storage is looked up on each call rather than held, since a browser that refuses storage
  * throws on the lookup — and a throw there is 8.15's miss and 8.12's warning, not a broken module.
  */
-export function webStore<Stored>(
+export function web<Stored>(
     key: string,
     options?: { area?: 'local' | 'session'; schema?: Schema<Stored> },
 ): Store<Stored> {

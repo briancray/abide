@@ -28,7 +28,7 @@ const STORE_LOG = namedLogger('abide:reactive')
  * the server rather than held until the next `get`. 8.33 — `watch` follows the key's keyspace
  * channel, which carries news only where the server's `notify-keyspace-events` enables it.
  */
-export function redisStore<Stored>(
+export function redis<Stored>(
     client: RedisClient | string,
     key: string,
     options?: { schema?: Schema<Stored> },
@@ -68,7 +68,7 @@ export function redisStore<Stored>(
             )
             subscribed.catch((failed: unknown) => {
                 STORE_LOG.warning(
-                    `redisStore(${JSON.stringify(key)}) could not subscribe to its keyspace channel.`,
+                    `store.redis(${JSON.stringify(key)}) could not subscribe to its keyspace channel.`,
                     failed,
                 )
             })

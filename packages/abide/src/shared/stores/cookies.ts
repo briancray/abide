@@ -1,7 +1,7 @@
-import { cookies } from './cookies.ts'
-import type { Store } from './reactive/index.ts'
-import type { Schema } from './Schema.ts'
-import { KeptText, storeKey } from './storedValue.ts'
+import { cookies as requestCookies } from '../cookies.ts'
+import type { Store } from '../reactive/index.ts'
+import type { Schema } from '../Schema.ts'
+import { KeptText, storeKey } from '../storedValue.ts'
 
 /** What a browser keeps of one cookie, its name and its encoded value together. */
 const COOKIE_BYTES = 4096
@@ -10,15 +10,15 @@ const COOKIE_BYTES = 4096
 const LONGEST_MAX_AGE = 400 * 24 * 60 * 60
 
 /**
- * A `Store` kept in a cookie, read and written through `cookies()` on both sides (22.2).
+ * A `Store` kept in a cookie, read and written through `requestCookies()` on both sides (22.2).
  *
  * 8.37 — ON A SERVER IT IS THE REQUEST'S COOKIE, so a page renders the stored value rather than
- * the fallback; outside a request `cookies()` throws (22.8), which is 8.15's miss. A write once a
+ * the fallback; outside a request `requestCookies()` throws (22.8), which is 8.15's miss. A write once a
  * response's headers are out throws as well (22.10), and is 8.12's failed write.
  * 8.39 — a value whose cookie would pass `COOKIE_BYTES` throws on `set`, rather than being dropped
  * by the browser with nothing said.
  */
-export function cookiesStore<Stored>(
+export function cookies<Stored>(
     name: string,
     options?: {
         path?: string
@@ -37,7 +37,7 @@ export function cookiesStore<Stored>(
             const named = cookieName()
             // `held` rather than `get`: `watch` is how a change reaches the value, and a read here
             // must not subscribe the producer to the jar (22.4).
-            const text = cookies().held.get(named)
+            const text = requestCookies().held.get(named)
             return kept.read(text, schema, `cookie ${named}`) as
                 Stored | undefined
         },
@@ -49,7 +49,7 @@ export function cookiesStore<Stored>(
                 throw new Error(
                     `cookie ${named} would be ${bytes} bytes, past the ${COOKIE_BYTES} a browser keeps. RULEBOOK 8.39.`,
                 )
-            cookies().set({
+            requestCookies().set({
                 name: named,
                 value: text,
                 path: options?.path ?? '/',
@@ -74,7 +74,7 @@ export function cookiesStore<Stored>(
                 .cookieStore
             if (store === undefined) return () => {}
             // The jar first: it listens too, and must have taken the change in before `get` reads it.
-            cookies()
+            requestCookies()
             const listener = (event: Event): void => {
                 const { changed: written = [], deleted = [] } =
                     event as unknown as {

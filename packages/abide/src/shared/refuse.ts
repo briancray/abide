@@ -1,6 +1,7 @@
 // HOW A REFUSAL IS DECLARED AND HOW ONE IS MADE WITHOUT DECLARING IT. `refuse(status)` is
 // the undeclared form (17.4) and `refuse.named(name)` mints a factory for a named one
-// (15.3): the bare call is the plain case, and the member is the one that says more.
+// (15.3): the bare call is the plain case, and the member is the one that says more. The framework's
+// own three are members beside it — `refuse.notFound`, `refuse.validation`, `refuse.aborted`.
 //
 // FOUR NAMES AND NO MORE. 15.9 caps what this framework may declare at `NotFound`,
 // `ValidationError`, `Aborted` and the `HttpError` 17.4 names — everything else is the app's,
@@ -173,7 +174,7 @@ function messageFor<Data>(
  * mounted at that address and method — are one refusal, because a caller cannot tell them
  * apart and telling them apart is what an enumeration attack is.
  */
-export const notFound = named<'NotFound', { path: string; method: string }>(
+refuse.notFound = named<'NotFound', { path: string; method: string }>(
     'NotFound',
     404,
 )
@@ -184,7 +185,7 @@ export const notFound = named<'NotFound', { path: string; method: string }>(
  * 16.49: a load every caller of which aborted. 499 is the status a server logs for a request its
  * client closed, and the one thing true of this refusal is that nobody is waiting for the answer.
  */
-export const aborted = named<'Aborted', undefined>('Aborted', 499)
+refuse.aborted = named<'Aborted', undefined>('Aborted', 499)
 
 /**
  * The shared `ValidationError` factory, at 422.
@@ -193,18 +194,21 @@ export const aborted = named<'Aborted', undefined>('Aborted', 499)
  * is "this request is malformed"; a 422 is "it parsed and the contents are wrong", which
  * is exactly what a schema that ran and refused has found out.
  *
- * THE FACTORY IS BUILT ONCE and the export is a thin generic over it. `Issues<T>` varies
+ * THE FACTORY IS BUILT ONCE and the member is a thin generic over it. `Issues<T>` varies
  * per call site and a `Failed`'s `data` does not care which shape it holds, so minting a
  * factory per call would allocate one to throw away and hand back a `.is` that compares
  * the same string the shared one does.
  */
-const validation = named<'ValidationError', JsonValue>('ValidationError', 422)
+const validationFactory = named<'ValidationError', JsonValue>(
+    'ValidationError',
+    422,
+)
 
 /** A `ValidationError` refusal at 422, carrying the issues it found. */
-export function validationError<T>(
+refuse.validation = function validation<T>(
     data?: Issues<T>,
 ): Failed<'ValidationError', Issues<T>> {
-    return validation(data as JsonValue) as unknown as Failed<
+    return validationFactory(data as JsonValue) as unknown as Failed<
         'ValidationError',
         Issues<T>
     >
@@ -219,6 +223,6 @@ export function validationError<T>(
  */
 export function checkArgs<Args>(gate: Schema<Args>, args: unknown): Args {
     const answer = runSchema(gate, args)
-    if (answer.issues !== null) throw validationError<Found>(answer.issues)
+    if (answer.issues !== null) throw refuse.validation<Found>(answer.issues)
     return answer.value as Args
 }

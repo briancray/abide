@@ -1,10 +1,10 @@
 <script>
-import { type Failed, notFound, props } from '@abide/abide'
+import { type Failed, props, refuse } from '@abide/abide'
 
 const { failure } = props<{ failure: Failed<string, unknown> }>()
 </script>
 
-{#if notFound.is(failure)}
+{#if refuse.notFound.is(failure)}
     <h2 class="text-heading font-semibold">No such company</h2>
     <p>It may have been merged into another, or removed.</p>
 {:else}

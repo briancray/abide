@@ -10,7 +10,7 @@ import { spawned } from '@abide/harness/gate'
 
 import { config } from '#server/config.ts'
 import { database } from '#server/database.ts'
-import { sqliteStore } from '#server/sqliteStore.ts'
+import { sqlite } from '#server/stores/sqlite.ts'
 import { reactive } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -350,14 +350,12 @@ test('stopping the app closes the database, and the next call opens it again —
     after.close()
 })
 
-test('sqliteStore keeps a value in the database an opener hands back — 47.1, 8.25', () => {
+test('store.sqlite keeps a value in the database an opener hands back — 47.1, 8.25', () => {
     const db = database('crm')()
     const target = reactive(500_000, {
-        store: sqliteStore<number>(db, 'target'),
+        store: sqlite<number>(db, 'target'),
     })
     target.set(750_000)
-    expect(reactive(0, { store: sqliteStore<number>(db, 'target') })()).toBe(
-        750_000,
-    )
+    expect(reactive(0, { store: sqlite<number>(db, 'target') })()).toBe(750_000)
     db.close()
 })

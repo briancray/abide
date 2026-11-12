@@ -8,7 +8,6 @@ import {
     flushSync,
     invalidate,
     type Middleware,
-    notFound,
     type Reactive,
     reactive,
     ready,
@@ -17,7 +16,6 @@ import {
     watch,
 } from '#shared'
 import { answered } from '#shared/answerOf.ts'
-import { validationError } from '#shared/refuse.ts'
 import type { RpcContext } from '#shared/rpc.ts'
 
 // 16.6 — GET OVER A PLAIN FUNCTION IS GET OVER THE `reactive` OF IT, so a parameter makes it keyed
@@ -185,7 +183,7 @@ test('a refusal lands on the value and narrows by name — 16.8', async () => {
     const getInvoice = GET(async ({ id }: { id: string }) =>
         id === '42'
             ? { number: 'INV-0042' }
-            : notFound({ path: `/invoices/${id}`, method: 'GET' }),
+            : refuse.notFound({ path: `/invoices/${id}`, method: 'GET' }),
     )
     const missing = getInvoice({ id: 'nope' })
     await missing.catch(() => {})
@@ -342,7 +340,7 @@ test("a handler the annotation checks carries the wire's ValidationError — 16.
     const double = POST(async ({ n }: { n: number }) => n * 2)
     const page = GET(({ size = 10 }: { size?: number } = {}) => size)
     const keyed = POST(reactive(({ id }: { id: string }) => id))
-    const refused: unknown = validationError<{ n: number }>({
+    const refused: unknown = refuse.validation<{ n: number }>({
         n: ['must be number'],
     })
     const read: (string[] | undefined)[] = []

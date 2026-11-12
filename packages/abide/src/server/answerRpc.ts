@@ -12,7 +12,7 @@ import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { deadlineOf } from '#shared/reactive/producer.ts'
-import { notFound, refuse } from '#shared/refuse.ts'
+import { refuse } from '#shared/refuse.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
@@ -61,7 +61,9 @@ export async function answerRpc(
     if (request.method === 'OPTIONS')
         return origin !== null && allows(found.handler.crossOrigin, origin)
             ? preflight(found, origin, request)
-            : answered(notFound({ path: pathname, method: request.method }))
+            : answered(
+                  refuse.notFound({ path: pathname, method: request.method }),
+              )
     const inUrl = argsInURL(found.method)
     const form = isForm(request)
     // 21.19 — the origin the answer admits, where the handler declared it may read.

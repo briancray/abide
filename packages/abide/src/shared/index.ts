@@ -112,12 +112,15 @@ export {
     type Transformer,
     watch,
 } from './reactive/index.ts'
-export { aborted, notFound, refuse, validationError } from './refuse.ts'
+export { refuse } from './refuse.ts'
 // 44.51 — what a conversation's calls to one handler answered.
 export { resultsOf } from './resultsOf.ts'
 export { route } from './route.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 export { safeUrl } from './safeUrl.ts'
+// 8.22, 8.34, 8.37 — the `Store`s, as one namespace: `store.web`, `store.indexedDB`, `store.cookies`.
+// `@abide/abide/server` exports its own over this one, with the two a server alone has.
+export * as store from './stores.ts'
 // EMITTED CODE'S, not an author's — no REGISTRY row, the way `escapeText` and `listOf` have
 // none. A markup position that aborts on an unlanded read (32.23) is the compiler's business.
 export { slotValue } from './slotValue.ts'
@@ -139,11 +142,5 @@ export {
     type Routes,
     url,
 } from './url.ts'
-// 8.37 — a `Store` in a cookie, the request's on a server.
-export { cookiesStore } from './cookiesStore.ts'
-// 8.34 — a `Store` in the browser's IndexedDB, inert where there is none.
-export { indexedDBStore } from './indexedDBStore.ts'
 export { validateJson } from './validateJson.ts'
-// 8.22 — a `Store` in the browser's Web Storage, inert where there is none (8.23).
-export { webStore } from './webStore.ts'
 export { mutatePath, writePath } from './writePath.ts'

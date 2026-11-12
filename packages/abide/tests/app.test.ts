@@ -519,7 +519,7 @@ test('a page may not be framed by default — 21.18', async () => {
 })
 
 // 21.3 — A REFUSAL ABIDE ANSWERS AS TEXT is typed as text and uncached, through `stamp`'s rebuild
-// for its reason phrase. THE REVERT: `notFound` as a bare `new Response('not found', …)`; the type
+// for its reason phrase. THE REVERT: `notFoundResponse` as a bare `new Response('not found', …)`; the type
 // reads `application/octet-stream`, which `nosniff` turns into a download, and `cache-control` null.
 test('a refusal answered as text is typed and uncached — 21.3', async () => {
     const answer = await Bun.fetch(`${base}/__abide/client/none.js`)

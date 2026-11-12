@@ -1,6 +1,6 @@
-import type { Store } from './reactive/index.ts'
-import type { Schema } from './Schema.ts'
-import { KeptText, storeKey } from './storedValue.ts'
+import type { Store } from '../reactive/index.ts'
+import type { Schema } from '../Schema.ts'
+import { KeptText, storeKey } from '../storedValue.ts'
 
 const DATABASE_NAME = 'abide'
 
@@ -13,11 +13,11 @@ let channel: BroadcastChannel | undefined
 /**
  * A `Store` kept in this browser's IndexedDB, in the `abide` database, under `key`.
  *
- * 8.35 — WHERE THERE IS NO INDEXEDDB, A SERVER, THE STORE IS INERT, as `webStore` is (8.23).
+ * 8.35 — WHERE THERE IS NO INDEXEDDB, A SERVER, THE STORE IS INERT, as `store.web` is (8.23).
  * 8.36 — IndexedDB reports no change, so each write is posted on a `BroadcastChannel` and `watch`
- * hears another document's; a write made outside an `indexedDBStore` is not heard.
+ * hears another document's; a write made outside a `store.indexedDB` is not heard.
  */
-export function indexedDBStore<Stored>(
+export function indexedDB<Stored>(
     key: string,
     options?: { table?: string; schema?: Schema<Stored> },
 ): Store<Stored> {
@@ -28,13 +28,13 @@ export function indexedDBStore<Stored>(
         // Synchronous where there is nothing to read: a promise, even of a miss, is a load (8.4),
         // and a server would render the value pending rather than its fallback.
         get: () => {
-            if (typeof indexedDB === 'undefined') return undefined
+            if (typeof globalThis.indexedDB === 'undefined') return undefined
             return read(table, storeKey(key), kept, schema) as Promise<
                 Stored | undefined
             >
         },
         set: (value, retention) => {
-            if (typeof indexedDB === 'undefined') return
+            if (typeof globalThis.indexedDB === 'undefined') return
             return written(
                 table,
                 storeKey(key),
@@ -42,7 +42,7 @@ export function indexedDBStore<Stored>(
             )
         },
         watch: (changed) => {
-            if (typeof indexedDB === 'undefined') return () => {}
+            if (typeof globalThis.indexedDB === 'undefined') return () => {}
             const listener = (event: MessageEvent): void => {
                 const posted = event.data as { table: string; key: string }
                 if (posted.table === table && posted.key === storeKey(key))
@@ -129,8 +129,8 @@ function opened(
     return new Promise((resolve, reject) => {
         const request =
             version === undefined
-                ? indexedDB.open(DATABASE_NAME)
-                : indexedDB.open(DATABASE_NAME, version)
+                ? globalThis.indexedDB.open(DATABASE_NAME)
+                : globalThis.indexedDB.open(DATABASE_NAME, version)
         request.onupgradeneeded = () => {
             if (!request.result.objectStoreNames.contains(table))
                 request.result.createObjectStore(table)

@@ -21,7 +21,7 @@ import { matchOf, type Params, partsOf } from '#shared/matchRoute.ts'
 import { compose } from '#shared/Middleware.ts'
 import { mounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
-import { notFound as refusedNotFound, refuse } from '#shared/refuse.ts'
+import { refuse } from '#shared/refuse.ts'
 import { arrive } from '#shared/route.ts'
 import type { Segment } from '#shared/routePattern.ts'
 import type { Method } from '#shared/rpc.ts'
@@ -176,7 +176,7 @@ export async function answerRequest(
     const surface = SURFACES.get(asked)
     if (surface !== undefined) {
         const answer = await surface.answer(app, request)
-        if (answer === undefined) return notFound()
+        if (answer === undefined) return notFoundResponse()
         // 21.4 — an answer about the app's surfaces is never cached.
         return answerValue(
             answer,
@@ -193,7 +193,7 @@ export async function answerRequest(
     if (admitted !== undefined) return admitted
     if (isFrameworkAddress(asked)) {
         const answer = app.framework(asked, request)
-        if (answer === undefined) return notFound()
+        if (answer === undefined) return notFoundResponse()
         return readsOnly(request)
             ? answer
             : methodRefused(app, asked, READS, request)
@@ -230,7 +230,7 @@ export async function answerRequest(
         return laneFailure(
             app,
             asked,
-            refusedNotFound({ path: asked, method: request.method }),
+            refuse.notFound({ path: asked, method: request.method }),
             request,
         )
     }
@@ -468,7 +468,7 @@ export function answerInside(
     return compose(rungs, ({ request }) => answerMatched(app, request, found))
 }
 
-function notFound(): Response {
+function notFoundResponse(): Response {
     return plainAnswer('not found', 404)
 }
 

@@ -110,10 +110,9 @@ export {
     sse,
     type Values,
 } from './responseHelpers.ts'
-// 8.31 — a `Store` in a Redis key.
-export { redisStore } from './redisStore.ts'
-// 8.25 — a `Store` in a `bun:sqlite` table.
-export { sqliteStore } from './sqliteStore.ts'
+// 8.25, 8.31 — the server's `store`, over the isomorphic one `export *` brings: the same members, and
+// `store.sqlite` and `store.redis`. A local export shadows a star export's name, as `onError` does.
+export * as store from './stores.ts'
 // 24 — the trace this work belongs to.
 export { trace } from './trace.ts'
 

@@ -15,7 +15,7 @@
 import { DERIVED_ARGS } from '../DERIVED_ARGS.ts'
 import type { Issues } from '../Issues.ts'
 import { putOwn } from '../putOwn.ts'
-import { validationError } from '../refuse.ts'
+import { refuse } from '../refuse.ts'
 import type { Schema } from '../Schema.ts'
 import type { Defaults } from './parameterDefaults.ts'
 
@@ -91,7 +91,7 @@ export function acceptedArgs(
 ): unknown {
     const args = normalized(face, given)
     const issues = face[DERIVED_ARGS]?.(args) ?? null
-    if (issues !== null) throw validationError(issues)
+    if (issues !== null) throw refuse.validation(issues)
     return args
 }
 
