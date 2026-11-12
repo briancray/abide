@@ -399,7 +399,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `pairing` | `() => { status: Reactive<BridgeStatus, BridgeStatus, Failed<'HttpError', undefined>>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; copyInstall: () => Promise<void>; stop: () => void; [Symbol.dispose]: () => void }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.69, 44.70, 44.71, 44.72, 44.73 |
+| `pairing` | `() => { status: Reactive<BridgeStatus \| undefined, BridgeStatus \| undefined, Failed<'HttpError', undefined>>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; copyInstall: () => Promise<void>; stop: () => void; [Symbol.dispose]: () => void }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.69, 44.70, 44.71, 44.72, 44.73 |
 
 # Ambient values
 
@@ -656,7 +656,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31, 32.70, 32.77 |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31, 32.70, 32.77, 32.93 |
 | `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.24 |
 
 ### Control flow

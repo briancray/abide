@@ -10,6 +10,13 @@ import {
 // ONE TEMPLATE PER DOCUMENT, reused: setting `innerHTML` replaces what the last parse left, and
 // every caller moves those nodes out before it parses again.
 const TEMPLATES = new WeakMap<Document, HTMLTemplateElement>()
+// THE PAGE'S OWN IS MADE AS THE RUNTIME LOADS, not by whichever op parses first: made lazily, it was
+// one more node created by the first `raw()` render in the document, so a count over that render
+// moved by one with whether anything — an earlier test file in the same process — had parsed before
+// it. A document only a page mounts into later (an example `<iframe>`) still gets its own on its
+// first parse.
+if (typeof document !== 'undefined')
+    TEMPLATES.set(document, document.createElement('template'))
 
 const SVG = 'http://www.w3.org/2000/svg'
 const MATHML = 'http://www.w3.org/1998/Math/MathML'

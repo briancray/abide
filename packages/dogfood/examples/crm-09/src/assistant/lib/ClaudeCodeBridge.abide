@@ -21,7 +21,9 @@ const answer = reactive(() => {
 })
 </script>
 
-{#if status.paired}
+{#if status.error()}
+    <p class="status">claude code is unavailable</p>
+{:else if status?.paired}
     <ul class="fields">
         <li><span>your claude code</span><strong>paired</strong></li>
     </ul>
@@ -29,6 +31,8 @@ const answer = reactive(() => {
         <button disabled={step === 'waiting'} onclick={start}>
             Reconnect</button>
     </div>
+{:else if !status}
+    <p class="status">Connecting…</p>
 {:else if step === 'install'}
     <pre class="rounded-md border border-rule bg-raised p-snug
         text-chrome">{status.install}</pre>

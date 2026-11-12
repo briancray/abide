@@ -33,11 +33,15 @@ const PAIR_WAIT = 2500
 const COPIED_FOR = 1200
 
 /** What a read of `/__abide/pairing` fails with: it declares no refusal, so the transport's (16.8). */
-type PairingFailure = Failed<'HttpError', undefined>
+type PairingStatus = Reactive<
+    BridgeStatus | undefined,
+    BridgeStatus | undefined,
+    Failed<'HttpError', undefined>
+>
 
 /** This browser's pairing with a Claude Code bridge, and the click that pairs one. */
 export function pairing(): {
-    status: Reactive<BridgeStatus, BridgeStatus, PairingFailure>
+    status: PairingStatus
     step: Reactive<'click' | 'waiting' | 'install'>
     copied: Reactive<boolean>
     start: () => void
@@ -45,11 +49,11 @@ export function pairing(): {
     stop: () => void
     [Symbol.dispose]: () => void
 } {
-    // 44.69 — A SERVER HOLDS NOTHING, AND NOTHING IN FLIGHT: the copy is the browser's, and with no
-    // producer there is no sink for a render to hold open (3.4), where a read in flight would be one.
+    // 44.69 — A SERVER HOLDS `undefined`, AND NOTHING IN FLIGHT: the copy is the browser's, and with
+    // no read there is no sink for a render to hold open (3.4), where a read in flight would be one.
     const read = isServer() ? undefined : readPairing()
-    // 44.73 — WHAT IS BUILT HERE STOPS WITH `stop`, collected rather than listed: the status's
-    // derivation, `copied`'s write back (6.14) and the watch that ends the install step. `stop` is
+    // 44.73 — WHAT IS BUILT HERE STOPS WITH `stop`, collected rather than listed: the watch
+    // writing the status, `copied`'s write back (6.14) and the watch that ends the install step. `stop` is
     // then handed to whatever owns this call, so a setup's dispose runs it, and a `pairing` built
     // anywhere else — a click handler — is stopped by its caller. A server's request already owns
     // all of it (12.5), so nothing is collected there to be stopped twice.
@@ -61,7 +65,7 @@ export function pairing(): {
     } finally {
         if (read !== undefined) collectWatches(previous)
     }
-    const { status, step, copied, current } = built
+    const { status, step, copied } = built
     let waiting: ReturnType<typeof setTimeout> | undefined
     let onBlur: (() => void) | undefined
     const stopWaiting = (): void => {
@@ -85,7 +89,7 @@ export function pairing(): {
         copied,
         // 44.70, 44.71.
         start() {
-            const link = current()?.link
+            const link = status.peek()?.link
             if (link === undefined || disposed) return
             stopWaiting()
             step.set('waiting')
@@ -99,12 +103,12 @@ export function pairing(): {
             waiting = setTimeout(() => {
                 stopWaiting()
                 // Paired already: a reconnect that opened no app leaves the old bridge answering.
-                step.set(blurred || current()?.paired ? 'click' : 'install')
+                step.set(blurred || status.peek()?.paired ? 'click' : 'install')
             }, PAIR_WAIT)
         },
         // 44.72.
         async copyInstall() {
-            const install = current()?.install
+            const install = status.peek()?.install
             if (install === undefined || navigator.clipboard === undefined)
                 return
             await navigator.clipboard.writeText(install)
@@ -119,18 +123,31 @@ export function pairing(): {
 
 /** A pairing's values over `read`, the page's copy, or over nothing on a server. */
 function setUp(read: ReturnType<typeof readPairing> | undefined): {
-    status: Reactive<BridgeStatus, BridgeStatus, PairingFailure>
+    status: PairingStatus
     step: Reactive<'click' | 'waiting' | 'install'>
     copied: Reactive<boolean>
-    current: () => BridgeStatus | undefined
 } {
-    // 44.69 — IN FLIGHT UNTIL THE FIRST ANSWER LANDS, so `await status` waits for it; a read that
-    // failed throws here, which is `status`'s failure.
-    const status = (
-        read === undefined
-            ? reactive<BridgeStatus>()
-            : reactive(() => read.copy())
-    ) as Reactive<BridgeStatus, BridgeStatus, PairingFailure>
+    // 44.69 — A VALUE EACH READ OF THE COPY IS WRITTEN INTO, not a derivation of it. It opens on
+    // `undefined` (4.15), so a page's arm for no status yet is the one it paints; the first read is a
+    // load written into it (4.2), busy over that `undefined` until it settles, which is what `await
+    // status` waits for; and a read that failed is a write refused (4.10) — its failure is `error()`,
+    // what is held goes on being served (2.3), and no read of `status` throws. A derivation answering
+    // the copy read `NotLanded` in flight, which left a template expression empty (32.23), and threw
+    // the failure out of every read outside an `.error()` arm (2.2).
+    const status: PairingStatus = reactive<BridgeStatus | undefined>(undefined)
+    if (read !== undefined) {
+        const { copy } = read
+        status.set(
+            new Promise<BridgeStatus>((settle, fail) => {
+                copy.then(settle, fail)
+            }),
+        )
+        watch(() => {
+            const failure = copy.error()
+            if (failure !== undefined) status.set(Promise.reject(failure))
+            else if (copy.ready()) status.set(copy())
+        })
+    }
     const step = reactive<'click' | 'waiting' | 'install'>('click')
     // 44.72 — 6.2 writes `false` back `COPIED_FOR` after a copy, and that is what ends the install
     // step.
@@ -138,10 +155,7 @@ function setUp(read: ReturnType<typeof readPairing> | undefined): {
     watch([copied], () => {
         if (!copied.peek()) step.set('click')
     })
-    // A click reads the status as it stands, and one that has not landed has no link to open.
-    const current = (): BridgeStatus | undefined =>
-        status.ready() && status.error() === undefined ? status() : undefined
-    return { status, step, copied, current }
+    return { status, step, copied }
 }
 
 /** The page's one copy of its pairing, and how many `pairing` read it. */

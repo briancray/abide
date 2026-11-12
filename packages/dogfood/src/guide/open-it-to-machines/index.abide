@@ -292,9 +292,12 @@ import Section from '#src/lib/Section.abide'
         <p><code>pairing()</code> is that click, and the page needs no handler of its own for it.
             It reads this browser's status from <code>/__abide/pairing</code>, which abide mounts
             and keeps off MCP and OpenAPI, and follows it over the socket the page already holds,
-            so <code>status</code> is always the latest and no connection waits on it. It is in
-            flight until the first status lands, so <code>await status</code> waits for one, and a
-            read that failed fails it. A server render holds no status and does not wait for one.
+            so <code>status</code> is always the latest and no connection waits on it. It is
+            <code>undefined</code> until the first status lands, which is when the card says
+            Connecting, and <code>await status</code> waits for that first one. A read that
+            failed is on <code>status.error()</code>, the way a refused write is, and reading
+            <code>status</code> still answers what it held, so nothing throws. A server render
+            holds <code>undefined</code> and does not wait.
             <code>start</code> opens its link. A browser cannot tell whether a link opened anything,
             but the app opening it blurs the page, so a click that blurs nothing and pairs nothing
             within 2.5 seconds sets <code>step</code> to <code>install</code>.

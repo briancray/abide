@@ -11,6 +11,7 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { measure } from '@abide/harness/abide'
+import { inAFreshProcess } from '@abide/harness/gate'
 
 import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -257,4 +258,27 @@ let rows = reactive([{ id: 'a' }, { id: 'c' }])
     expect(shapeOf(out())).toBe(
         '<!--[-->,<!--r-->,<!--{-->,i(c),<!--}-->,span(ci),<!--r-->,<!--{-->,i(a),<!--}-->,span(ai),<!--]-->',
     )
+})
+
+// 32.93 — THE FIRST RAW RENDER IN A PROCESS COUNTS WHAT EVERY LATER ONE DOES. The template markup is
+// parsed in was made by whichever op parsed first, so under `--parallel` a count over a `raw()`
+// render moved by one with whether an earlier file in the same worker had parsed markup. Taken in
+// a child, where nothing has. THE REVERT: drop the eager `TEMPLATES.set` in `parseMarkup.ts`; this
+// reports `[5,4]`.
+test('the first raw render in a process creates what every later one does — 32.93', async () => {
+    const run = await inAFreshProcess(`
+import '${import.meta.dir}/../../harness/src/measure/preload.ts'
+import { measure } from '${import.meta.dir}/../../harness/src/measure/index.ts'
+import { textToMarkup } from '${import.meta.dir}/../src/ui/RawRun.ts'
+
+const created = []
+for (let render = 0; render < 2; render++) {
+    const host = document.body.appendChild(document.createElement('p'))
+    const text = host.appendChild(document.createTextNode(''))
+    created.push(measure(() => textToMarkup(text, '<b>x</b>')).nodesCreated)
+    host.remove()
+}
+console.log(JSON.stringify(created))
+`)
+    expect(run.output.trim()).toBe('[4,4]')
 })

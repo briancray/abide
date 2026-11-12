@@ -2547,6 +2547,9 @@ attribute, MUST be a build error naming the `observe` spelling that measures it.
 32.92 An `observe` adaptor handed an element that another adaptor of the same kind is observing
 MUST throw.
 
+32.93 In a browser, a slot rendering a value branded by `raw` into the document the runtime loaded in
+MUST create no node but those its markup parses to, whatever was parsed before it.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -4033,9 +4036,10 @@ separated by commas, and none where it names none.
 
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
-44.69 `pairing`'s `status` MUST be in flight until `/__abide/pairing` first answers the browser, and
-then MUST be the last `BridgeStatus` it answered, MUST fail with the failure of a read of it that
-failed, and MUST hold nothing and have nothing in flight where a server builds it.
+44.69 `pairing`'s `status` MUST hold `undefined` until `/__abide/pairing` first answers the browser,
+MUST report `s.busy` true while that first read is in flight, and then MUST hold the last
+`BridgeStatus` it answered; a read of it that failed MUST be taken as a refused write is (4.10, 2.3),
+and where a server builds it `status` MUST hold `undefined` with nothing in flight.
 
 44.70 `pairing`'s `start` MUST do nothing while `status` holds no `BridgeStatus`, and otherwise MUST
 set `step` to `waiting` and navigate the page to the status's `link`.
