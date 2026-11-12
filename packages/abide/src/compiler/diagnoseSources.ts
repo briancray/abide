@@ -8,7 +8,7 @@ import {
 } from './Diagnostics.ts'
 import { lineOf } from './lineOf.ts'
 import { LoweredFile } from './LoweredFile.ts'
-import { CHECKED_VALUES } from './Lowering.ts'
+import { CHECKED_RECORD } from './Lowering.ts'
 import { projectShadow } from './projectShadow.ts'
 import type { ReadSource } from './readSources.ts'
 import { routesDeclaration } from './routesDeclaration.ts'
@@ -132,7 +132,7 @@ export async function diagnoseSources(
                         category: CATEGORIES[diagnostic.category] ?? 'error',
                         // A checked module's own names are the lowering's, and read as the author's.
                         message: flatten(diagnostic).replaceAll(
-                            `${CHECKED_VALUES}.`,
+                            CHECKED_RECORD,
                             '',
                         ),
                     })

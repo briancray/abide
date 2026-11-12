@@ -247,6 +247,7 @@ export async function readsIn(
             if (read === undefined) continue
             read.byValue = byValue[index] as boolean
             read.local = index >= topLevel
+            if (read.local) read.declaredAt = (names[index] as Node).getStart()
             named.push(read)
             located.push({ node, read })
             if (read.shape === 'value')

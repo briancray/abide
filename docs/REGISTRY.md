@@ -944,7 +944,7 @@ rows a runner prints, and an adapter for an abide app.
 | --- | --- | --- |
 | `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122, 38.124, 38.131, 38.132 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
-| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123 |
+| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123, 38.138 |
 | `abide format [--check] [path…]` | The formatter over a `.abide` tree. | 38.25, 38.125, 38.126, 38.127, 38.128, 38.129, 38.137 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, what each matcher takes, the rungs each handler names, and where each hook is filed. | 38.108, 38.123, 38.135 |
 | `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 7.30 |

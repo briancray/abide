@@ -3251,6 +3251,12 @@ the interface `--hostname` names alone, and on every interface where it names no
 wrote MUST write the same text, a block comment's lines in a script block, a style and an expression
 at any nesting included.
 
+38.138 `abide check` MUST check each arm of an `{#if}`, and every body nested in one, under what its
+condition and the conditions of the arms before it established, as TypeScript checks nested `if`
+statements — a value a branch-local `<script>` declares as much as one the file's `<script>` does —
+and MUST NOT carry what a condition established past a write of the value, nor into a function the
+arm declares.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

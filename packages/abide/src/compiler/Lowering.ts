@@ -914,10 +914,10 @@ export class Lowering {
      * what `set` takes.
      */
     private checkedWriteParts(read: Read): [string, string] | undefined {
-        if (!this.checking || read.local) return undefined
         const spelled = this.projection.text.slice(read.start, read.end)
-        this.values.set(spelled, read.through)
-        const held = `${CHECKED_VALUES}.${spelled}`
+        const record = this.recordOf(spelled, read)
+        if (record === undefined) return undefined
+        const held = `${record}.${spelled}`
         const written = `${CHECKED_WRITE}(${this.nameOf(read)}, `
         const op = read.operator
         // A WRITE THAT IS A WHOLE STATEMENT MUST NOT OPEN ON `(`: after a line with no semicolon,
@@ -933,11 +933,51 @@ export class Lowering {
 
     /** A read of the value: `name()`, or `__values.name` where the checker is asked. */
     private valueOf(spelled: string, read: Read, name: string): string {
-        // A branch-local name is out of scope where the record is declared, and two bodies may
-        // each declare one of the same spelling — it is called, and narrows as a call does.
-        if (!this.checking || read.local) return `${name}()`
-        this.values.set(spelled, read.through)
-        return `${CHECKED_VALUES}.${spelled}`
+        const record = this.recordOf(spelled, read)
+        return record === undefined ? `${name}()` : `${record}.${spelled}`
+    }
+
+    /**
+     * The record a checked lowering reads `read` through, or `undefined` where it is called.
+     *
+     * 38.138 — A BRANCH-LOCAL NAME HAS A RECORD OF ITS OWN, declared at the head of the setup that
+     * declares it (`localRecords`): it is out of scope where the page's is declared, and two bodies
+     * may each declare one of the same spelling. A local read with no setup declaring it — an inline
+     * component's prop — is called, and narrows as a call does: not at all.
+     */
+    private recordOf(spelled: string, read: Read): string | undefined {
+        if (!this.checking) return undefined
+        if (!read.local) {
+            this.values.set(spelled, read.through)
+            return CHECKED_VALUES
+        }
+        const setup = this.setupDeclaring(read)
+        return setup === undefined ? undefined : `${CHECKED_VALUES}${setup}`
+    }
+
+    /** Where the branch-local `<script>` declaring `read`'s name starts, or `undefined`. */
+    private setupDeclaring(read: Read): number | undefined {
+        if (read.declaredAt === -1) return undefined
+        const setup = this.projection.positions.holding(read.declaredAt)
+        return setup?.kind === 'setup' ? setup.start : undefined
+    }
+
+    /**
+     * 38.138 — each branch-local `<script>` a checked read goes through, by where it starts, and the
+     * names read through its record: what `checkedShadow` declares at its head.
+     */
+    localRecords(): Map<number, Set<string>> {
+        const records = new Map<number, Set<string>>()
+        if (!this.checking) return records
+        for (const read of this.answer.reads) {
+            if (!read.local) continue
+            const setup = this.setupDeclaring(read)
+            if (setup === undefined) continue
+            const names = records.get(setup) ?? new Set<string>()
+            names.add(this.projection.text.slice(read.start, read.end))
+            records.set(setup, names)
+        }
+        return records
     }
 
     /**
@@ -1013,8 +1053,14 @@ function grouped(text: string): string {
  */
 export const PROPS = '__props'
 
-/** The record a checked lowering reads each value through (`Lowering.values`). */
+/**
+ * The record a checked lowering reads each value through (`Lowering.values`) — suffixed, for a
+ * branch-local value, by where the setup declaring it starts (`Lowering.localRecords`).
+ */
 export const CHECKED_VALUES = '__values'
+
+/** A read through any record a checked lowering declares — the page's, or a setup's — and its dot. */
+export const CHECKED_RECORD = /__values\d*\./g
 
 /**
  * 27.13 — what a checked lowering binds an `onConfig(…)` statement to, suffixed by where the call

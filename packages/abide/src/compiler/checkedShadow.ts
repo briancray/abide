@@ -106,10 +106,19 @@ export function checkedShadow(
     // Where the script blocks end in THIS text, which lowering has moved from where they end in
     // the projection.
     let scriptsEnd = 0
+    const localRecords = lowering.localRecords()
     for (const { span, holds } of units) {
         if (span.start < at) continue
         origins.push({ at: text.length, source: at, length: span.start - at })
         text += source.slice(at, span.start)
+        // 38.138 — ahead of the setup, so a statement of it reads its own names through the record.
+        const local = localRecords.get(span.start)
+        if (local !== undefined) {
+            text += `const ${CHECKED_VALUES}${span.start}: {\n`
+            for (const name of local)
+                text += `    ${name}: ReturnType<typeof ${name}>\n`
+            text += '} = null!\n'
+        }
         text += lowering.lower(span, holds, origins, text.length)
         at = span.end
         if (span === projection.scripts) scriptsEnd = text.length
