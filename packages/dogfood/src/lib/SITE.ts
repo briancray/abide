@@ -104,6 +104,8 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`bind:size`',
                         '`bind:visible`',
                         '`bind:rect`',
+                        '`visibleIn={root}`',
+                        '`sizeBox="border"`',
                         '`bind:value={{get, set}}`',
                         '`{#if cond}`',
                         '`{#try}`',

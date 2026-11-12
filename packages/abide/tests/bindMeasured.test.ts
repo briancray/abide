@@ -27,20 +27,38 @@ function standIn() {
         made: 0,
         observed: new Set<Element>(),
         deliver: undefined as Delivery | undefined,
+        // Every observer made with a root, by it: what it observes, and whether it was disconnected.
+        rooted: new Map<
+            unknown,
+            { observed: Set<Element>; disconnected: boolean }[]
+        >(),
+        // The box each element was last observed with.
+        boxes: new Map<Element, string | undefined>(),
     }
     class StandIn {
-        constructor(deliver: Delivery) {
+        own: { observed: Set<Element>; disconnected: boolean } | undefined
+        constructor(deliver: Delivery, options?: { root?: unknown }) {
             counts.made += 1
             counts.deliver = deliver
+            if (options?.root == null) return
+            this.own = { observed: new Set(), disconnected: false }
+            const made = counts.rooted.get(options.root) ?? []
+            made.push(this.own)
+            counts.rooted.set(options.root, made)
         }
-        observe(element: Element): void {
-            counts.observed.add(element)
+        observe(element: Element, options?: { box?: string }): void {
+            ;(this.own?.observed ?? counts.observed).add(element)
+            counts.boxes.set(element, options?.box)
         }
         unobserve(element: Element): void {
-            counts.observed.delete(element)
+            ;(this.own?.observed ?? counts.observed).delete(element)
         }
         disconnect(): void {
-            counts.observed.clear()
+            if (this.own === undefined) counts.observed.clear()
+            else {
+                this.own.observed.clear()
+                this.own.disconnected = true
+            }
         }
     }
     return { counts, StandIn }
@@ -178,5 +196,125 @@ test('a measured bind compiles beside the attribute of its name — 32.72, 32.74
     expect(refusedFor('<div bind:visible={seen}></div>')).toBe('compiled')
     expect(refusedFor('<div bind:sizes={box}></div>')).toContain(
         'RULEBOOK 32.74',
+    )
+})
+
+const ROOTED = `<script>
+import { reactive } from '@abide/abide'
+
+let scroller = reactive<HTMLElement>()
+let rooted = reactive(true)
+let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, seen: reactive(true) })))
+</script>
+
+<button id="unroot" onclick={() => { rooted = !rooted }}>unroot</button>
+<button id="clear" onclick={() => { rows = [] }}>clear</button>
+<div id="scroller" bind:element={scroller}>
+    {#for row of rows by row.id}<p class="row" bind:visible={row.seen} visibleIn={rooted ? scroller : undefined}>{row.id}</p>{/for}
+</div>`
+
+// 32.82, 32.91 — TWENTY ELEMENTS IN ONE SCROLLER ARE ONE OBSERVER, rooted at the scroller, and none
+// of them is observed against the viewport. A root that goes is every element unobserved and the
+// observer disconnected; one that comes back is a new observer. THE REVERT: make `observeIn` build a
+// `new Rooted(root)` for every element rather than look it up in `rooted`; 20 observers are made.
+test('every bind:visible in one root shares one observer, gone with the root — 32.82, 32.91', async () => {
+    const { html } = await mountPage(ROOTED)
+    expect(html.toLowerCase()).not.toContain('visiblein')
+    flushSync()
+    const scroller = document.getElementById('scroller') as Element
+    const rows = [...document.querySelectorAll('.row')]
+    expect(rows).toHaveLength(20)
+    const made = intersect.counts.rooted.get(scroller) ?? []
+    expect(`observers for the scroller: ${made.length}`).toBe(
+        'observers for the scroller: 1',
+    )
+    const [shared] = made as [{ observed: Set<Element>; disconnected: boolean }]
+    expect(shared.observed.size).toBe(20)
+    for (const row of rows)
+        expect(intersect.counts.observed.has(row)).toBe(false)
+    // A delivery from the rooted observer writes the row's value, as the viewport's does.
+    intersect.counts.deliver?.([{ target: rows[3], isIntersecting: false }])
+    flushSync()
+    click('#unroot')
+    flushSync()
+    expect(shared).toEqual({ observed: new Set(), disconnected: true })
+    click('#unroot')
+    flushSync()
+    expect(intersect.counts.rooted.get(scroller)).toHaveLength(2)
+    const again = (intersect.counts.rooted.get(scroller) ?? [])[1] as {
+        observed: Set<Element>
+        disconnected: boolean
+    }
+    expect(again.observed.size).toBe(20)
+    click('#clear')
+    flushSync()
+    expect(again).toEqual({ observed: new Set(), disconnected: true })
+})
+
+// 32.92 — A BORDER BOX IS READ FROM `borderBoxSize` AND TURNED INTO THE PHYSICAL AXES: a vertical
+// writing mode's inline size is its height. `sizeBox` changing is the element observed again with
+// the new box. THE REVERT: write `inlineSize` and `blockSize` as width and height whatever the writing
+// mode in `deliverSizes`; the vertical box reads 124x224.
+test('sizeBox="border" writes the border box in physical axes — 32.92', async () => {
+    const { html } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let flat = reactive({ width: 0, height: 0 })
+let upright = reactive({ width: 0, height: 0 })
+let content = reactive(false)
+</script>
+
+<button id="toggle" onclick={() => { content = !content }}>toggle</button>
+<div id="flat" bind:size={flat} sizeBox={content ? 'content' : 'border'}></div>
+<div id="upright" style="writing-mode: vertical-rl" bind:size={upright} sizeBox="border"></div>
+<p id="out">{flat.width}x{flat.height} {upright.width}x{upright.height}</p>`)
+    expect(html.toLowerCase()).not.toContain('sizebox')
+    const flat = document.getElementById('flat') as Element
+    expect(flat.hasAttribute('sizebox')).toBe(false)
+    const upright = document.getElementById('upright') as Element
+    expect(resize.counts.boxes.get(flat)).toBe('border-box')
+    const entry = (target: Element, inlineSize: number, blockSize: number) => ({
+        target,
+        contentRect: { width: 0, height: 0 },
+        borderBoxSize: [{ inlineSize, blockSize }],
+    })
+    resize.counts.deliver?.([entry(flat, 224, 124), entry(upright, 124, 224)])
+    flushSync()
+    expect(document.getElementById('out')?.textContent).toBe('224x124 224x124')
+    click('#toggle')
+    flushSync()
+    expect(resize.counts.boxes.get(flat)).toBe(undefined)
+    resize.counts.deliver?.([sizeOf(flat, 200, 100)])
+    flushSync()
+    expect(document.getElementById('out')?.textContent).toBe('200x100 224x124')
+})
+
+// 32.93 — AN OPTION WITH NO BIND, A STATIC ROOT AND A BOX THAT IS NEITHER ARE REFUSED, each written
+// otherwise as an attribute nothing reads. THE REVERT: return early from `refuseOption`; all three
+// compile.
+test('visibleIn and sizeBox are refused where they measure nothing — 32.93', () => {
+    const refusedFor = (template: string): string => {
+        try {
+            emitClient(parseAbide(template))
+        } catch (thrown) {
+            return (thrown as Error).message
+        }
+        return 'compiled'
+    }
+    expect(refusedFor('<p bind:visible={seen} visibleIn={box}></p>')).toBe(
+        'compiled',
+    )
+    expect(refusedFor('<p bind:size={size} sizeBox="border"></p>')).toBe(
+        'compiled',
+    )
+    expect(refusedFor('<p visibleIn={box}></p>')).toContain('RULEBOOK 32.93')
+    expect(refusedFor('<p bind:size={size} visibleIn={box}></p>')).toContain(
+        'RULEBOOK 32.93',
+    )
+    expect(
+        refusedFor('<p bind:visible={seen} visibleIn="#box"></p>'),
+    ).toContain('RULEBOOK 32.93')
+    expect(refusedFor('<p bind:size={size} sizeBox="margin"></p>')).toContain(
+        'RULEBOOK 32.93',
     )
 })
