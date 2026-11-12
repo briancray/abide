@@ -8,8 +8,9 @@ const CLI = join(REPO, 'packages/abide/bin/abide.ts')
 
 /**
  * An app of `files` — paths below its root, `#src/*` resolving there — written fresh to
- * `.test-modules/<directory>`, built, and started on a free port. Answers the address the banner
- * names and the server, which the spec stops (or pauses) itself.
+ * `.test-modules/<directory>`, built, and started on a free port under `env` over this process's
+ * environment. Answers the address the banner names and the server, which the spec stops (or
+ * pauses) itself, and the app's root, for `startedFixture` to start it again.
  *
  * A directory per playwright PROJECT is the caller's to name: a spec runs in both engines at once,
  * and two projects building into one tree is a reader catching the other's build half-written.
@@ -17,7 +18,8 @@ const CLI = join(REPO, 'packages/abide/bin/abide.ts')
 export async function servedFixture(
     directory: string,
     files: Record<string, string>,
-): Promise<{ base: string; server: Subprocess }> {
+    env: Record<string, string> = {},
+): Promise<{ app: string; base: string; server: Subprocess }> {
     const app = join(REPO, `.test-modules/${directory}`)
     rmSync(app, { recursive: true, force: true })
     mkdirSync(app, { recursive: true })
@@ -29,13 +31,36 @@ export async function servedFixture(
             imports: { '#src/*': './*' },
         }),
     )
+    writeFixture(app, files)
+    await buildFixture(app)
+    return { app, ...(await startedFixture(app, env)) }
+}
+
+/** Writes `files` below `app`, over what is there. */
+export function writeFixture(app: string, files: Record<string, string>): void {
     for (const [path, text] of Object.entries(files)) {
         mkdirSync(dirname(`${app}/${path}`), { recursive: true })
         writeFileSync(`${app}/${path}`, text)
     }
+}
+
+/** `abide build` over `app`, as a deploy does. */
+export async function buildFixture(app: string): Promise<void> {
     await Bun.$`${process.execPath} ${CLI} build --root ${app} --out ${app}/.abide`
         .cwd(REPO)
         .quiet()
+}
+
+/**
+ * `abide start` over the build `app` holds, under `env`, on `port` — `0` for a free one. A spec that
+ * restarts an app on the address it had passes that address's port, since a browser keeps a service
+ * worker per origin.
+ */
+export async function startedFixture(
+    app: string,
+    env: Record<string, string> = {},
+    port = 0,
+): Promise<{ base: string; server: Subprocess }> {
     const server = Bun.spawn(
         [
             process.execPath,
@@ -46,9 +71,14 @@ export async function servedFixture(
             '--out',
             `${app}/.abide`,
             '--port',
-            '0',
+            String(port),
         ],
-        { cwd: REPO, stdout: 'pipe', stderr: 'inherit' },
+        {
+            cwd: REPO,
+            env: { ...process.env, ...env },
+            stdout: 'pipe',
+            stderr: 'inherit',
+        },
     )
     // The first address the banner names, which is `Local:` — read past the color playwright's
     // `FORCE_COLOR` gives it. The pipe is DRAINED after that rather than released: a server whose

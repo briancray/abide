@@ -158,10 +158,8 @@ test('a handler file answers at its path, as JSON — 16.2, 16.30', async () => 
     const answer = await Bun.fetch(`${base}${RPC}/getInvoice?id=4021`)
     expect(answer.status).toBe(200)
     expect(answer.headers.get('content-type')).toBe('application/json')
-    // 21.22 — the fixture is served built, where the worker is registered.
-    expect(answer.headers.get('cache-control')).toBe(
-        'private, stale-while-revalidate=604800, stale-if-error=31536000',
-    )
+    // 21.3 — `ABIDE_OFFLINE` is off unless asked for (45.14).
+    expect(answer.headers.get('cache-control')).toBe('private, no-store')
     expect(await answer.json()).toEqual({ number: 'INV-4021', total: '$82.40' })
 
     const health = await Bun.fetch(`${base}/health`)

@@ -452,12 +452,12 @@ abide bundle --out ~/Applications/CRM.app`} />
     </Section>
 
     <Section title="Keep the CRM readable offline">
-        <Code code={`abide start
-ABIDE_OFFLINE=0 abide start`} />
+        <Code code={`ABIDE_OFFLINE=1 abide start`} />
 
-        <p>Each page the CRM opens is kept on the device, with the answers its handlers gave, the
-            public files it loaded and the bundle it runs, until <code>ABIDE_OFFLINE=0</code> turns
-            that off where the CRM is served. A page is asked of the network on every load, so the
+        <p>Where <code>ABIDE_OFFLINE=1</code> turns it on, each page the CRM opens is kept on the
+            device, with the answers its handlers gave, the public files it loaded and the bundle it
+            runs. Off is the default, and a browser that kept the CRM while it was on drops what it
+            kept on its next visit. A page is asked of the network on every load, so the
             visit after a deploy opens the new CRM; a handler's kept answer opens at once, however
             weak the signal, and the network is asked for the next one behind it. With the network
             gone, a page opened in

@@ -847,9 +847,10 @@ test("the worker is allowed the whole of the app's mount — 45.2", () => {
 })
 
 // 45.1, 45.9, 45.14 — WHAT `abide start` ANSWERS, by the setting it was started under: the tag the
-// browser registers by and the worker saving this build unless `ABIDE_OFFLINE` is off, neither of
-// them and the removing worker where it is. THE REVERT: write the tag whatever `client.offline` is,
-// in `appSources`; `0` and `FALSE` read `tag true`.
+// browser registers by and the worker saving this build only where `ABIDE_OFFLINE` turns it on, and
+// otherwise neither of them and the removing worker — unset and unreadable included. THE REVERT:
+// have `settingOn` answer `true` for a setting unset or unreadable, as before; `undefined` and `yes`
+// read `tag true`.
 test('ABIDE_OFFLINE decides the worker abide start answers, whether a page registers it and links a manifest — 45.1, 45.9, 45.14, 45.15', async () => {
     const app = appFixture({
         'layout.abide':
@@ -879,7 +880,7 @@ test('ABIDE_OFFLINE decides the worker abide start answers, whether a page regis
             registers = true
     expect(`registers: ${registers}`).toBe('registers: true')
     const said: string[] = []
-    for (const setting of ['0', 'FALSE', 'yes', undefined]) {
+    for (const setting of ['0', 'FALSE', 'yes', undefined, '1', 'TRUE']) {
         const { base, stop } = await startApp(app, {
             ...process.env,
             ABIDE_OFFLINE: setting,
@@ -904,8 +905,10 @@ test('ABIDE_OFFLINE decides the worker abide start answers, whether a page regis
     expect(said).toEqual([
         '0: tag false, saving false, removing true, linked false, manifest 404',
         'FALSE: tag false, saving false, removing true, linked false, manifest 404',
-        'yes: tag true, saving true, removing false, linked true, manifest 192x192',
-        'undefined: tag true, saving true, removing false, linked true, manifest 192x192',
+        'yes: tag false, saving false, removing true, linked false, manifest 404',
+        'undefined: tag false, saving false, removing true, linked false, manifest 404',
+        '1: tag true, saving true, removing false, linked true, manifest 192x192',
+        'TRUE: tag true, saving true, removing false, linked true, manifest 192x192',
     ])
 }, 60_000)
 
@@ -932,7 +935,7 @@ test('a GET defaults to stale-while-revalidate, and a page and a public file to 
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const said: string[] = []
-    for (const setting of ['0', undefined]) {
+    for (const setting of [undefined, '1']) {
         const { base, stop } = await startApp(app, {
             ...process.env,
             ABIDE_OFFLINE: setting,
@@ -964,22 +967,22 @@ test('a GET defaults to stale-while-revalidate, and a page and a public file to 
     }
     const KEPT = 'stale-while-revalidate=604800, stale-if-error=31536000'
     expect(said).toEqual([
-        '0 /: private, no-store',
-        '0 /getNote: private, no-store',
-        '0 /getClock: private, max-age=<ttl>',
-        '0 /getForever: private, no-store',
-        '0 /getMissing: private, no-store',
-        '0 /getLines: private, no-store',
-        '0 /addNote: private, no-store',
-        '0 /logo.txt: public, max-age=0, must-revalidate',
-        'undefined /: private, max-age=0, stale-if-error=31536000',
-        `undefined /getNote: private, ${KEPT}`,
-        `undefined /getClock: private, max-age=<ttl>, ${KEPT}`,
-        `undefined /getForever: private, ${KEPT}`,
+        'undefined /: private, no-store',
+        'undefined /getNote: private, no-store',
+        'undefined /getClock: private, max-age=<ttl>',
+        'undefined /getForever: private, no-store',
         'undefined /getMissing: private, no-store',
         'undefined /getLines: private, no-store',
         'undefined /addNote: private, no-store',
-        'undefined /logo.txt: public, max-age=0, stale-if-error=31536000',
+        'undefined /logo.txt: public, max-age=0, must-revalidate',
+        '1 /: private, max-age=0, stale-if-error=31536000',
+        `1 /getNote: private, ${KEPT}`,
+        `1 /getClock: private, max-age=<ttl>, ${KEPT}`,
+        `1 /getForever: private, ${KEPT}`,
+        '1 /getMissing: private, no-store',
+        '1 /getLines: private, no-store',
+        '1 /addNote: private, no-store',
+        '1 /logo.txt: public, max-age=0, stale-if-error=31536000',
     ])
 }, 60_000)
 

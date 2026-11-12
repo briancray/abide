@@ -3966,8 +3966,8 @@ that it saved no copy of, 503 with a page saying so.
 45.13 The worker `ABIDE_OFFLINE` turns on MUST save, as it activates, the page of every window it
 then controls.
 
-45.14 `ABIDE_OFFLINE` MUST be off where `config` holds it as `false`, or as text reading `false` or
-`0` in any case, and on otherwise.
+45.14 `ABIDE_OFFLINE` MUST be on where `config` holds it as `true`, or as text reading `true` or `1`
+in any case, and off otherwise.
 
 45.15 Where `ABIDE_OFFLINE` is on and the app's public `/icon.png` is a PNG, every page MUST link a
 web app manifest naming the app, with the app's mount as its scope and its start, and that icon at
