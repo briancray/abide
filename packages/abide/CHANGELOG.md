@@ -1,5 +1,87 @@
 # @abide/abide
 
+## 0.128.0
+
+### Minor Changes
+
+- c4d4ee3: a streaming GET is read over the mux, holding no http connection while it streams — 16.93-16.96 ([`0a6594a`](https://github.com/briancray/abide/commit/0a6594ae3072bc88422cc65b04afdfee4416f39c))
+- c4d4ee3: a follow is watched in its connection's scope, and reached by who it is — 18.36 ([`944049b`](https://github.com/briancray/abide/commit/944049b2768ead298cfa8582a1baa82b44487f30))
+- c4d4ee3: pairing is read once and followed over the mux, holding no connection — 44.69 ([`c0020d0`](https://github.com/briancray/abide/commit/c0020d0c0eb40fdd18452eb5a82c2f3631bacac3))
+- 5414067: `rpc.refresh(pattern, { caller })` and `rpc.invalidate(pattern, { caller })`: on the server, a trigger
+  narrowed to the one browser whose `principal.caller` it names — sent to that browser's follows over the
+  mux and no other's, while the server's own values are triggered as without it. In a browser, which
+  cannot tell whose caller it is, passing one throws. A streaming `GET` is now read over the socket mux,
+  holding no http connection while it streams. RULEBOOK 16.93-16.96, 18.37, 18.38.
+- ca50c60: `pairing()` from `@abide/abide`: this browser's Claude Code pairing in a page — `status` (the latest
+  `BridgeStatus`), `step` (`'click' | 'waiting' | 'install'`) and `copied`, with `start()` to pair with a
+  click on the `abide-bridge:` link and `copyInstall()` to copy the install command. It reads the new
+  built-in `/__abide/pairing`, which abide mounts off every generated surface and the page follows
+  over the socket mux it already holds — no connection is held while it watches — so an app drops its
+  own `bridge.handler.ts` and the pairing code it copied.
+  The tools a pairing grants are the server's to decide: set `ABIDE_BRIDGE_TOOLS` (comma-separated, an
+  `onConfig` default or the environment); unset grants none, and a request naming tools is ignored.
+  RULEBOOK 44.67-44.75.
+- c9c621b: A name a destructuring pattern binds to a `Reactive` is read and written by name, as a declared one is:
+  `const { status, step } = pairing()` reads `status` as its value and `step = 'x'` writes the `step` the
+  pattern bound — object and array patterns, renames, defaults and nested patterns, `const` or `let`.
+  RULEBOOK 31.17.
+- cd1aa3e: Keep the call: a form holds the `Reactive` its write's call hands back instead of awaiting it in a `try` and copying the outcome out.
+  
+  - `reactive<typeof save>()` is typed as the value a call of `save` is — its value and its failures, `HttpError` and the `ValidationError` included (RULEBOOK 4.19) — so `saving = save(args)` type-checks and `saving.isError(saving.error(), 'Name')` narrows with no cast.
+  - New probe `s.issues()`: the `data` of the standing `ValidationError`, typed `Issues<Args>` over a call, or `undefined` when none stands (RULEBOOK 3.15).
+  - Fix: adopting a `Reactive` that has already failed, such as a call its `args` gate refused at the call, now wakes the readers of `s.error` (and `s.issues`). Before, `{saving.error()}` never heard that refusal.
+- 3a3bd00: `bind:size={box}` writes an element's content-box `{ width, height }` and `bind:visible={seen}` whether it intersects the viewport — one way, from one `ResizeObserver` and one `IntersectionObserver` shared by every bound element, unobserved when the element leaves, and nothing written by the server (RULEBOOK 32.79-32.85). `bind:rect={placed}` writes the element's viewport rectangle as `getBoundingClientRect` reports it, re-read in one animation frame after a resize of the element, a scroll anywhere in the document, a window resize, or any other move of the element, which an `IntersectionObserver` fitted to its last rectangle reports — one scroll and one resize listener for every bound element, every read before any write, and nothing observed again while nothing moves (RULEBOOK 32.86-32.90). `media(query)` is a `Reactive<boolean>` following `matchMedia`, one value per query text, `false` on the server (RULEBOOK 23.30-23.32). While a page hydrates, `media` and `online` answer as the server did and are written the browser's answer once it has, so an `{#if}` they change is swapped as an update, with no 41.24 warning (RULEBOOK 41.32).
+- 50d1773: With `ABIDE_OFFLINE` on, a page opens from the device again: a navigation the worker saved a page of
+  is answered with that copy at once — its stylesheet and bundle from the device too — and the page is
+  asked for behind it, so the visit after a deploy is the build before and the visit after that the new
+  one; a reload asks the network first (chromium; webkit hands the worker a reload as a plain visit).
+  A new build's worker keeps the build before's bundle files one build longer, so a page of it still
+  open or opened as the new worker took over keeps its stylesheet and chunks rather than painting
+  unstyled. RULEBOOK 45.8, 45.20, 45.28.
+  
+  The worker no longer refetches a navigation itself. Where it has no copy it answers with the
+  browser's own navigation preload — the request the browser made, `sec-fetch-dest: document` and all —
+  so a sign-in gateway that tells a page load by its fetch metadata redirects it to the identity
+  provider instead of answering 401. Another origin's request and a frame's navigation are never the
+  worker's; an answer is saved only where its `cache-control` names `stale-if-error` or `immutable`, so
+  a page a gateway answers for itself is never opened from the device; and a page opened from its copy
+  whose address now answers a redirect or a refusal is opened again, once, by the browser — a lapsed
+  session reaches sign-in on that load. RULEBOOK 45.3, 45.25, 45.27, 45.29.
+- e3a145f: `ABIDE_OFFLINE` is off unless the app's config or environment turns it on (`true`, or `1` / `true`
+  in any case) — an app that wants its pages kept offline now says so, `ABIDE_OFFLINE=1`. A browser that
+  installed the worker while it was on removes it on its next visit: the worker address answers the
+  worker that unregisters and empties every cache it kept, once and with no reload. RULEBOOK 45.14, 45.9.
+- 6690904: A polled value no component or request owns is now a background job the app can stop cleanly. `reactive(async function* () { … }, { global: true, poll })` already ran on its clock with nobody reading it and never overlapped itself (7.20, 7.21). Now:
+  
+  - `App.stop` stops the clock of every such poll before it drains (7.26), and once the requests have drained it waits for the run each one has in flight, before `onStop` and within `ABIDE_STOP_TIMEOUT` (7.27).
+  - A failed run of a polled value warns on `abide:reactive` with the value's name, and the next tick runs it again (7.28). This covers each keyed entry and a first run that fails.
+  - A job's first run is no longer made where the value is built. It happens when the app starts serving (`App.listen`, or `abide dev`), after every `onStart`, or when something first reads, probes or triggers it, whichever comes first (7.29, 7.30). An app booted in a test and never read runs no job, and its stop waits on nothing (7.31).
+- 02fe5c8: `route.query(defaults)` — the address's query as one `Reactive`, shaped and typed by its defaults.
+  Each member is read by its default's type (a number, `true`/`false`, text, or a list of text from a
+  repeated name), and a missing or unparseable member reads its default. `query.tab = 'notes'` changes
+  one member and `query = { tab: 'notes' }` replaces the lot, members left out going back to their
+  defaults; either is one `navigate` with `replace` and `keepScroll`, members at their default left out
+  of the address and members the defaults do not name left where they stand. A write on a server
+  throws, as `navigate` refuses there. `url(path, params, query, defaults)` takes the same defaults as
+  a fourth argument.
+- a36a425: A mutation (`POST`, `PUT`, `PATCH`, `DELETE`) takes `refreshes`: the `tags` (or a function of the call's args returning them) that each run answering without a refusal refreshes on the server, reaching every tab following a value carrying one of them — `POST(write, { refreshes: ['stage:won'] })` in place of a `refresh({ tags })` after every call (16.89). It runs before the answer settles or is sent (16.90), at a streamed answer's close and not where the stream fails (16.91), and `GET` does not take it: a type error, and refused where a `GET` is declared with it (16.92).
+- 5650413: `database(name, { migrations })` from `@abide/abide/server`: a lazy opener handing back bun's own `Database` for `<name>.sqlite` in `APP_DATA_DIR` — WAL, foreign keys and a busy timeout on open, each migration (SQL or a function) run once in one transaction tracked by `PRAGMA user_version`, a file a newer build migrated refused, an empty in-memory database per opener under `bun test`, and closed as the app stops (RULEBOOK 47).
+- b3def9b: `ttl` on a value with no producer now writes it back to the value it was built with, `ttl` ms after a write, where it used to do nothing (6.2). `let copied = reactive(false, { ttl: 2_000 })` is a flag that resets itself with no `setTimeout`. A later write restarts the clock (6.11), a write of the opening value stops it (6.12), a refused write leaves it alone (6.13), and the timer never holds the process open (6.4) and stops with the setup or request that built the value (6.14). What is written back is a fresh copy of the opening value as it was built, so a `patch` never changes it (6.15), and an opening value `structuredClone` cannot copy whole — a function, a promise, a class instance — is refused at construction (6.16). A value with a body or a `store` keeps the expiry it had.
+
+### Patch Changes
+
+- c4d4ee3: a scrolled frame makes no position observer; the frame after the scroll does — 32.90 ([`00e9b52`](https://github.com/briancray/abide/commit/00e9b5268f3dae8535d7a688183355a654e3d02b))
+- c4d4ee3: an answer the mux cannot carry is parked and taken over http — its handler runs once — 16.94 ([`210daf6`](https://github.com/briancray/abide/commit/210daf6107988c14c52eac8e8fce173bd45fdf5e))
+- c4d4ee3: copied is a ttl value — 6.2 writes it back, 6.14 stops it; the copy timer goes — 44.72, 44.73 ([`4998c79`](https://github.com/briancray/abide/commit/4998c7988d81852f508eb2c5ebdf8ae3d2990cb6))
+- c4d4ee3: under bun test each test file opens its own scratch database — 47.4 ([`51a4389`](https://github.com/briancray/abide/commit/51a438901d6bd81c3b533abc66e4530c93f01228))
+- c4d4ee3: a parked answer is its own browser's, and its token never rides a URL — 16.98-16.100 ([`8794f3f`](https://github.com/briancray/abide/commit/8794f3f77fef209b254ce9f9619e78e9963fb740))
+- c4d4ee3: a run's end never overtakes its last chunk to a forwarding reader — 9.17 ([`b260a8c`](https://github.com/briancray/abide/commit/b260a8c94439f570a60a21220baf5999c0da32c2))
+- c4d4ee3: a failed revalidation warns on abide:reactive naming the value — 4.12 ([`bd56580`](https://github.com/briancray/abide/commit/bd5658031ef149a6e9d02bea2b0d23cd649bec80))
+- c4d4ee3: an early-called stream goes over http to its first chunk, then the mux — 16.97 ([`c826708`](https://github.com/briancray/abide/commit/c82670835d697329c2ffa8892af45c83f158218f))
+- 20df1d6: `abide check` holds a write through a member path to the member's type: `query.tab = 3`, `rec.n += 'x'`,
+  `rec.list[i] = 'z'` and `rec.deep.s++` are refused on the line they are written, as a whole-value set
+  already was. RULEBOOK 31.16.
+
 ## 0.127.0
 
 ### Minor Changes
