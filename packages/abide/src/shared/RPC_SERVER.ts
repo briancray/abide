@@ -35,13 +35,14 @@ export const RPC_SERVER: {
     following: Set<{
         /**
          * A trigger on an `Rpc`, sent to every browser following what its pattern names — or, given
-         * a caller, to that one browser's follows alone. 7.10, 7.18, 18.37.
+         * a caller, to that one browser's follows alone — `true` the request's own. 7.10, 7.18,
+         * 18.37, 18.39.
          */
         broadcast(
             rpc: object,
             member: 'invalidate' | 'refresh',
             pattern: unknown,
-            caller: string | undefined,
+            caller: string | true | undefined,
         ): void
         /**
          * A free trigger, sent to every followed copy carrying one of `tags`, or to every one where

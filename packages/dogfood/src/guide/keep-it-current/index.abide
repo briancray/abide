@@ -240,15 +240,18 @@ import Section from '#src/lib/Section.abide'
 
         <p>Some views belong to one browser: a draft, a cart, the deals one person has starred.
             A refresh on the server reaches every tab following the handler, so pass the browser it
-            is for: <code>{'getStarred.refresh(undefined, { caller: principal.caller })'}</code>
-            reloads the copies that browser follows and leaves every other browser alone. Only the
-            server knows a browser's caller, so a page that passes one is told so.</p>
+            is for: <code>{'getStarred.refresh(undefined, { caller: true })'}</code> reloads the
+            copies the browser making this request follows, in every tab of it, and leaves every
+            other browser alone. A write says the same as a triple,
+            <code>{'refreshes: [[getStarred, undefined, { caller: true }]]'}</code>, and a call no
+            browser made reaches none. Only the server knows a browser's caller, so a page that
+            passes one is told so.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
             <tbody>
-                <tr><td><code>{'{ caller }'}</code></td><td>the second argument to <code>rpc.refresh</code> and <code>rpc.invalidate</code> on the server: reach only the browser whose <code>principal.caller</code> it is</td></tr>
-                <tr><td><code>refreshes</code></td><td>the tags, selections and <code>[selection, pattern]</code> pairs a write refreshes each time it answers, or a function of its arguments returning them, <code>async</code> where it reads <code>principal</code>. <code>POST</code>, <code>PUT</code>, <code>PATCH</code> and <code>DELETE</code> take it; <code>GET</code> does not, since a read changes nothing to refresh</td></tr>
+                <tr><td><code>{'{ caller }'}</code></td><td>the second argument to <code>rpc.refresh</code> and <code>rpc.invalidate</code> on the server: reach only the browser whose <code>principal.caller</code> it is, or <code>true</code> for the one making the request</td></tr>
+                <tr><td><code>refreshes</code></td><td>the tags, selections, <code>[selection, pattern]</code> pairs and <code>[rpc, pattern, {'{ caller }'}]</code> triples a write refreshes each time it answers, or a function of its arguments returning them, <code>async</code> where it reads <code>principal</code>. <code>POST</code>, <code>PUT</code>, <code>PATCH</code> and <code>DELETE</code> take it; <code>GET</code> does not, since a read changes nothing to refresh</td></tr>
             </tbody>
         </table>
     </Section>

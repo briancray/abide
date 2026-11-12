@@ -250,9 +250,21 @@ export type RpcOptions<
 /**
  * 16.89 — what `refreshes` names, each entry what `refresh` is handed: a tag, a `Selection`, or a
  * `Selection` beside its pattern (13.12) — `[boards, { personId }]` is `refresh(boards, { personId })`.
+ * 16.104 — or an `Rpc` beside its pattern and its trigger's options: `[whoAmI, undefined, { caller:
+ * true }]` is `whoAmI.refresh(undefined, { caller: true })`, the calling browser's copies alone.
  */
 type Refreshed = readonly (
-    string | Selection | readonly [Selection, Record<string, unknown>]
+    | string
+    | Selection
+    | readonly [Selection, Record<string, unknown>]
+    | readonly [
+          {
+              method: Method
+              refresh(pattern: never, options: TriggerOptions): void
+          },
+          Record<string, unknown> | undefined,
+          TriggerOptions,
+      ]
 )[]
 
 /**
@@ -278,9 +290,9 @@ type Held<Accepted> = Accepted extends
 
 /**
  * What narrows a trigger on an `Rpc` beside its pattern: `caller`, the `principal.caller` of the one
- * browser whose followed copies it reaches. 18.37.
+ * browser whose followed copies it reaches (18.37) — `true` for the one making this request (18.39).
  */
-export type TriggerOptions = { caller?: string }
+export type TriggerOptions = { caller?: string | true }
 
 /** A handler's options: `RpcOptions` for a mutation, less `refreshes` for a `GET` (16.92). */
 type OptionsOf<
@@ -858,7 +870,11 @@ function refreshEach(
             continue
         }
         try {
-            if (Array.isArray(entry)) refresh(entry[0], entry[1] as never)
+            // 16.104 — options are the `Rpc`'s own trigger's, which the free `refresh` does not take.
+            if (Array.isArray(entry))
+                entry.length === 3
+                    ? entry[0].refresh(entry[1] as never, entry[2])
+                    : refresh(entry[0], entry[1] as never)
             else refresh(entry as Selection)
         } catch (failure) {
             failed ??= { failure }

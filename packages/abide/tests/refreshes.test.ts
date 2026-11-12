@@ -338,3 +338,87 @@ test('an entry of refreshes that fails leaves the entries after it refreshed —
         '200, after +1',
     )
 })
+
+// 16.104, 18.39 — A WRITE REFRESHES WHAT ONLY THE CALLING BROWSER SEES. `whoAmI` is built per request
+// and keyed by nothing: who it answers is the sign-in, so there is no pattern to name the writer's
+// copies by, and a tag would reach every browser following it. Two tabs of ada's browser follow it
+// and one of grace's; ada's browser writes. Counted twice over: the frames each tab is sent, and the
+// body runs on the server once each tab sent a refresh reads its copy again, as a browser's copy
+// does (7.18). And a call carrying no caller — a machine's, with no browser to name — reaches none.
+// THE REVERTS: in `refreshEach` in `rpc.ts`, hand the triple to the free `refresh`, dropping its
+// options, and every browser following is refreshed — `frames 1 1 1; ada +2, grace +1` where `frames
+// 1 1 0; ada +2, grace +0` is due; in `Followers.broadcast`, drop the return where `true` resolves to
+// no caller, and the machine's call reaches every browser — `frames 1 1 1; ada +2, grace +1` where
+// `frames 0 0 0; ada +0, grace +0` is due.
+const whoRuns: Record<string, number> = { ada: 0, grace: 0 }
+const whoAmI = GET(async () => {
+    const name = String((await principal.resolved).name)
+    whoRuns[name]! += 1
+    return name
+})
+const signUp = POST(() => 'kept', {
+    refreshes: [[whoAmI, undefined, { caller: true }]],
+})
+
+test('a write refreshes what the calling browser follows, in every tab of it, and no other browser’s — 16.104, 18.39', async () => {
+    await using app = (await inMemoryApp({
+        'me/whoAmI.handler.ts': { default: whoAmI },
+        'me/signUp.handler.ts': { default: signUp },
+    })) as BootedApp
+    const mux = app.openMux()
+    const tabs = { ada1: 'ada', ada2: 'ada', grace: 'grace' } as const
+    const frames: Record<string, number> = { ada1: 0, ada2: 0, grace: 0 }
+    // What a tab's copy does with a `refresh` frame: read the value again, as its browser.
+    const reads: Promise<unknown>[] = []
+    const asBrowser = (person: string) => ({
+        principal: { name: person },
+        caller: `${person}-browser`,
+    })
+    for (const [tab, person] of Object.entries(tabs)) {
+        const connection = mux.connect(
+            new Request('http://app.invalid/__abide/socket', {
+                headers: { cookie: `abide-caller=${person}-browser` },
+            }),
+            {
+                send(text: string) {
+                    frames[tab]! += 1
+                    if (JSON.parse(text).op === 'refresh')
+                        reads.push(
+                            app.fetch(
+                                new Request('http://app.invalid/me/whoAmI'),
+                                asBrowser(person),
+                            ),
+                        )
+                },
+                close() {},
+            },
+        )
+        await connection.message(
+            JSON.stringify({ op: 'sub', id: 1, address: '/me/whoAmI' }),
+        )
+    }
+    const counted = async (options: {
+        principal: Record<string, unknown>
+        caller?: string
+    }): Promise<string> => {
+        const ran = { ...whoRuns }
+        for (const tab in frames) frames[tab] = 0
+        const answer = await app.fetch(
+            new Request('http://app.invalid/me/signUp', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: '{}',
+            }),
+            options,
+        )
+        expect(answer.status).toBe(200)
+        await Promise.all(reads.splice(0))
+        return `frames ${frames.ada1} ${frames.ada2} ${frames.grace}; ada +${whoRuns.ada! - ran.ada!}, grace +${whoRuns.grace! - ran.grace!}`
+    }
+    expect(`ada's browser: ${await counted(asBrowser('ada'))}`).toBe(
+        "ada's browser: frames 1 1 0; ada +2, grace +0",
+    )
+    expect(`a machine: ${await counted({ principal: { name: 'ada' } })}`).toBe(
+        'a machine: frames 0 0 0; ada +0, grace +0',
+    )
+})
