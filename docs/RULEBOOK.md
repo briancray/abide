@@ -430,7 +430,7 @@ holds.
 requests in flight have drained, before `onStop` runs and within 42.17's deadline.
 
 7.28 Every failure that fills `s.error` on a value declaring `poll`, an entry of a `Keyed` declaring
-it included, MUST warn on `abide:reactive` naming the value.
+it included, and is not a failed revalidation, MUST warn on `abide:reactive` naming the value.
 
 7.29 A `reactive` with a body declaring `poll`, built where 7.23 has no owner to stop it, MUST NOT
 run its body where it is built.
@@ -581,6 +581,9 @@ arrives.
 run ended on.
 
 9.16 A cursor over a streaming producer MUST end where a new run replaces the one it was reading.
+
+9.17 A streaming producer's run MUST NOT end, to a reader of it or of a value forwarding it, before
+every chunk that run produced has reached that reader.
 
 # 10. Sharing
 

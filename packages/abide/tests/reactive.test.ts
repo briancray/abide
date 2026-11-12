@@ -14,6 +14,7 @@ import {
     flushSync,
     invalidate,
     isReactive,
+    log,
     NotLanded,
     type Reactive,
     reactive,
@@ -4075,6 +4076,97 @@ test('a failed revalidation goes on serving and wakes nobody', async () => {
     )
 })
 
+/** The warnings `abide:reactive` recorded while `body` ran, by their messages. */
+async function reactiveWarnings(
+    body: () => Promise<unknown> | unknown,
+): Promise<string[]> {
+    const before = (log.records.peek() ?? []).length
+    await body()
+    const said: string[] = []
+    for (const record of (log.records.peek() ?? []).slice(before))
+        if (record.namespace === 'abide:reactive' && record.level === 'warning')
+            said.push(record.message)
+    return said
+}
+
+// 4.12: A FAILED REVALIDATION WARNS, ONCE, NAMING THE VALUE — a load, a body failing in the refresh's
+// own run, a stream and a keyed entry alike, each still serving what it held. A first load that fails
+// is no revalidation: nothing is served over it, the failure is what a read throws (2.2), and it is
+// not warned of. Nor is a run that a source moving started, rather than `s.refresh`.
+//
+// THE REVERT: drop `warnFailure`'s 4.12 arm, and `load warned: 0` where 1 is due; drop its
+// `refreshing` test alone, and `body warned: 0`.
+test('a failed revalidation warns once on abide:reactive naming the value, and goes on serving — 4.12', async () => {
+    let fail = false
+    const failing = (): never => {
+        throw new Error('the reload failed')
+    }
+    const loaded = reactive(() =>
+        fail
+            ? Promise.reject(new Error('the reload failed'))
+            : Promise.resolve('held'),
+    )
+    const body = reactive(() => (fail ? failing() : 'held'))
+    const stream = reactive(async function* () {
+        yield 'held'
+        if (fail) failing()
+    })
+    const row = reactive((args: { id: number }) =>
+        fail
+            ? Promise.reject(new Error('the reload failed'))
+            : Promise.resolve(`held ${args.id}`),
+    )
+    const entry = row({ id: 7 })
+    await Promise.all([loaded, stream, entry])
+    expect(body()).toBe('held')
+    fail = true
+    for (const [name, value, label] of [
+        ['load', loaded, 'reactive'],
+        ['body', body, 'reactive'],
+        ['stream', stream, 'reactive'],
+        ['keyed', entry, 'reactive({"id":7})'],
+    ] as const) {
+        const said = await reactiveWarnings(async () => {
+            value.refresh()
+            await Bun.sleep(5)
+        })
+        expect(`${name} warned: ${said.length}`).toBe(`${name} warned: 1`)
+        expect(said[0]).toStartWith(`${label}: a revalidation failed`)
+        expect(said[0]).toContain('the reload failed')
+        expect(`${name} serves: ${String(value()).replace(/ 7$/, '')}`).toBe(
+            `${name} serves: held`,
+        )
+    }
+})
+
+test('a first load that fails, and a failed run a source started, are not revalidations — 4.12, 2.2', async () => {
+    const firstLoad = await reactiveWarnings(async () => {
+        const never = reactive(() =>
+            Promise.reject(new Error('the first load failed')),
+        )
+        await never.then(undefined, () => undefined)
+    })
+    expect(`first load warned: ${firstLoad.length}`).toBe(
+        'first load warned: 0',
+    )
+    const source = reactive(1)
+    const derived = reactive(() =>
+        source() === 1
+            ? Promise.resolve('held')
+            : Promise.reject(new Error('rerun failed')),
+    )
+    expect(await derived).toBe('held')
+    const moved = await reactiveWarnings(async () => {
+        source.set(2)
+        derived.peek()
+        await Bun.sleep(5)
+    })
+    const error = derived.error() as unknown as Error | undefined
+    expect(
+        `source moved warned: ${moved.length}, error: ${error?.message}`,
+    ).toBe('source moved warned: 0, error: rerun failed')
+})
+
 // 4.12 FOR A BODY THAT FAILS IN ITS OWN RUN, which reached `run`'s two private copies of the
 // refusal rather than `refused` — a sync throw and a returned `Failed` — and those cascaded
 // unconditionally, so the same revalidation that wakes nobody through a rejected load woke
@@ -4879,13 +4971,16 @@ test('a burst of chunks in one task wakes a reader once', async () => {
 // 9.10: `flushSync` IS HOW A TURN IS ENDED ON DEMAND, and a wake a stream is holding for the
 // next task is exactly what a test, a measurement or a server render ending the turn has to
 // see. The first assertion is what proves the wake WAS held: the chunks have landed and the
-// effect has not heard.
+// effect has not heard. The run is held open: its close pays the wake it owes at once (9.17).
 //
 // THE REVERT is `flushSync` not calling `wakeStreams`: `after flush: 0`.
 test('flushSync delivers a stream wake held for the next task', async () => {
+    let close = (): void => {}
+    const held = new Promise<void>((resolve) => (close = resolve))
     const rows = reactive(async function* () {
         yield 'a'
         yield 'b'
+        await held
     })
     let seen = 0
     const stop = watch(() => {
@@ -4897,6 +4992,7 @@ test('flushSync delivers a stream wake held for the next task', async () => {
     flushSync()
     expect(`after flush: ${seen}`).toBe('after flush: 2')
     stop()
+    close()
 })
 
 // ── Adopting a stream: RULEBOOK 11.15 forwarding what a stream declares ─────────────

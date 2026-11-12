@@ -121,7 +121,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `s.then` | `<Result>(onSettled?: (value: Stored) => Result \| PromiseLike<Result>, onFailed?: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Result>` | The settling, as a promise. | 1.4, 2.7, 2.8 |
 | `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Stored \| Result>` | The settling's refusal path. | 1.4, 1.5 |
 | `s.finally` | `(onSettled: () => void) => Promise<Stored>` | The settling's end, whichever way it went. | 1.4, 1.5 |
-| `for await (… of s)` | `AsyncIterable<Produced>` | What one run produced: the settled value once, or a stream's chunks. | 2.5, 2.6, 5.10, 9.12, 9.15, 9.16 |
+| `for await (… of s)` | `AsyncIterable<Produced>` | What one run produced: the settled value once, or a stream's chunks. | 2.5, 2.6, 5.10, 9.12, 9.15, 9.16, 9.17 |
 | `s[Symbol.asyncIterator]` | `() => AsyncIterator<Produced>` | The run being served, from its start to its end. | 2.5, 2.6 |
 
 ### Writes
