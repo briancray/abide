@@ -80,6 +80,28 @@ const wrong: string = query.watch
 <button onclick={() => { query = { tab: 3 } }}>bad</button>
 <p>{watch} {wrong} {query.open} {query.tags.join(',')}</p>`
 
+// 31.16 — A WRITE THROUGH A MEMBER PATH IS HELD TO THE MEMBER'S TYPE, as a whole-value set is held
+// to the value's: each wrong line below is refused where it is written, and each right one is not.
+const MEMBER_WRITTEN = `<script>
+import { reactive, route } from '@abide/abide'
+
+const query = route.query({ tab: 'all', page: 0 })
+let rec = reactive({ n: 0, deep: { s: 'a' }, list: [1, 2], keyed: {} as Record<string, number> })
+let at = reactive(0)
+query.tab = 3
+rec.n = 'x'
+rec.n += 'x'
+rec.deep.s = 1
+rec.list[at] = 'z'
+rec.keyed['k'] = 'z'
+rec.deep.s++
+query.page += 1
+rec.list[at] = at
+</script>
+
+<button onclick={() => { rec.deep.s = 2 }}>bad</button>
+<button onclick={() => { rec.n++; query.tab = 'mine' }}>good</button>`
+
 const LINKED = `<script>
 import { url } from '@abide/abide'
 
@@ -321,6 +343,7 @@ beforeAll(async () => {
         'routed/[id]/[...rest]/index.abide': ROUTED,
         'linked/index.abide': LINKED,
         'queried/index.abide': QUERIED,
+        'member-written/index.abide': MEMBER_WRITTEN,
         'public/fonts/face.woff2': 'a face',
         'configured/index.abide': CONFIGURED,
         'configured/elsewhere/index.abide': `<script server>
@@ -497,6 +520,29 @@ test('route.query is typed by its defaults, read and written by name — 30.41',
     ).toEqual([
         { ...place(QUERIED, 'wrong'), code: 2322 },
         { ...place(QUERIED, 'tab: 3', 0), code: 2322 },
+    ])
+})
+
+// 31.16 — THE REVERT, run: drop the member-path arm from `Lowering.lower`, so a write through a path
+// is checked as `rec.set(writePath(rec(), […], value))` — a value typed `unknown` — and not one of
+// the 8 findings is reported: 0 where 8 are due.
+test('a write through a member path is held to the member it writes — 31.16', () => {
+    const at = (needle: string, skip = 0) => place(MEMBER_WRITTEN, needle, skip)
+    expect(
+        inFile('member-written/index.abide').map(({ line, column, code }) => ({
+            line,
+            column,
+            code,
+        })),
+    ).toEqual([
+        { ...at('query.tab = 3'), code: 2322 },
+        { ...at("rec.n = 'x'"), code: 2322 },
+        { ...at("rec.n += 'x'"), code: 2322 },
+        { ...at('rec.deep.s = 1'), code: 2322 },
+        { ...at("rec.list[at] = 'z'"), code: 2322 },
+        { ...at("rec.keyed['k']"), code: 2322 },
+        { ...at('rec.deep.s++'), code: 2356 },
+        { ...at('rec.deep.s = 2'), code: 2322 },
     ])
 })
 
