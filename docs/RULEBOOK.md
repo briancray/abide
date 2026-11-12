@@ -3276,7 +3276,9 @@ the printed expression would end the attribute value it stands in.
 
 38.127 `abide format` MUST indent the markup by its element and block nesting, and MUST NOT change
 the template the file parses to: a run 33.17 drops between two nodes MUST NOT gain indentation, and
-the body of a `<pre>`, a `<textarea>` and a markup `<script>` MUST stay as written.
+the body of a `<pre>`, a `<textarea>` and a markup `<script>` MUST stay as written. A code
+block's import statements are part of that template as the set of modules they load and bindings
+they make, and in no order.
 
 38.128 `abide format` MUST leave as written a file the parser refuses, a file whose formatted text
 would parse to a different template (38.127), and a piece `bun fmt` refuses, MUST report each on its
