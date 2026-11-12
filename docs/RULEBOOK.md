@@ -896,8 +896,9 @@ entry of a `global` `Keyed` it matches.
 load it reads.
 
 13.15 On a server, a bare `invalidate` or `refresh`, or one over a set of `tags`, MUST also send the
-same trigger to every copy a browser follows over the mux that the selection matches by the `tags`
-its build copied, whether or not the server holds a value it matches, and MUST NOT send it to a copy
+same trigger to every copy a browser follows over the mux or an event stream (18.20) that the
+selection matches by the `tags` its `GET` declares — a function of `Args` answered for the `Args` that
+copy follows — whether or not the server holds a value it matches, and MUST NOT send it to a copy
 fed from a value the server holds.
 
 13.16 A bare `refresh`, and `refresh` over a set of `tags`, MUST invalidate, and MUST NOT reload,
@@ -1395,7 +1396,8 @@ and MUST NOT answer 204.
 for those `Args`.
 
 18.4 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `by` as a
-property name, `tags` as a list of names, and `identity` as `structural`.
+property name, `tags` as a list of names, and `identity` as `structural`, and MUST NOT carry a
+function form of `by` or `tags`, which stays the server's (13.15).
 
 18.5 A `GET` answered from a `global` value MUST carry the version of the production it answered
 with as its `etag`.

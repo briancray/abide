@@ -81,6 +81,14 @@ export const recatalog = POST(() => {
 
 export const reshelve = POST(() => 'shelved', { refreshes: ['library'] })
 
+export const stage = GET(({ home }: { home: string }) => ({ home }), {
+    tags: ({ home }) => ['access', \`home:\${home}\`],
+})
+
+export const revoke = POST(({ tag }: { tag: string }) => {
+    refresh({ tags: [tag] })
+})
+
 export const rescan = POST(({ refresh: reload, bare }: { refresh?: boolean; bare?: boolean }) => {
     const selection = bare ? undefined : { tags: ['library'] }
     if (reload) refresh(selection)
@@ -473,6 +481,26 @@ await until((frames) => frames.length >= 2)
     expect(frames).toEqual([
         { op: 'refresh', id: 1 },
         { op: 'invalidate', id: 1 },
+    ])
+})
+
+// 13.15 — A `GET` WHOSE `tags` ARE A FUNCTION OF ITS ARGS IS SWEPT BY WHAT THOSE ARGS COMPUTE, which no
+// build copies onto the browser (18.4) — the server answers it per follow. THE REVERT: give a follower
+// `tags: typeof tags === 'function' ? undefined : tags` in `Followers.follow`; the browser is sent 0
+// frames where 3 are due.
+test('a sweep by tag on the server reaches a follow by the tags its args compute — 13.15', async () => {
+    const frames =
+        await client(`send({ op: 'sub', id: 1, address: '/library/stage', args: { home: 'a' } })
+send({ op: 'sub', id: 2, address: '/library/stage', args: { home: 'b' } })
+await settled()
+await post('revoke', { tag: 'access' })
+await post('revoke', { tag: 'home:b' })
+await until((frames) => frames.length >= 3)
+`)
+    expect(frames.map((frame) => `${frame.op} ${frame.id}`)).toEqual([
+        'refresh 1',
+        'refresh 2',
+        'refresh 2',
     ])
 })
 

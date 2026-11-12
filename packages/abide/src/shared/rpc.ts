@@ -33,6 +33,7 @@ import {
     keyOf,
 } from './reactive/argsContract.ts'
 import { callLoad } from './reactive/callLoad.ts'
+import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
 import {
     type AdoptedFailures,
     type AdoptedProduced,
@@ -755,6 +756,15 @@ export function declare<Declared extends Method>(
                       }
                     : { key: () => '', at: () => value },
             )
+        // 13.15 — the tags its followers carry: a handed value's own, as the build reads them (18.4),
+        // or the `GET`'s where it built the value itself.
+        if (method === 'GET') {
+            const tags =
+                value === handler
+                    ? DECLARED_TAGS.get(value as object)
+                    : (options as { tags?: string[] } | undefined)?.tags
+            if (tags !== undefined) DECLARED_TAGS.set(rpc, tags)
+        }
         return rpc
     }) as Declare<Declared extends 'GET' ? false : true>
 }

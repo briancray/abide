@@ -20,7 +20,6 @@ function followedRow(rpc: { address: string }): FollowedHandler {
     return {
         address: rpc.address,
         rungs: [],
-        copy: undefined,
         handler: rpc as unknown as FollowedHandler['handler'],
     }
 }

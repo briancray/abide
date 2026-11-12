@@ -10,6 +10,7 @@
 
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import type { ServerFrame } from '#shared/muxFrames.ts'
+import { DECLARED_TAGS } from '#shared/reactive/DECLARED_TAGS.ts'
 import { matchesPattern } from '#shared/reactive/matchesPattern.ts'
 import { followServed } from '#shared/reactive/producer.ts'
 import { unowned } from '#shared/reactive/watch.ts'
@@ -109,12 +110,15 @@ type Follower = {
     // 18.8 — whether the handler's rungs let it through when it opened: a guarded `GET` feeds only
     // a follower they admitted, and sends the rest its triggers alone.
     admitted: boolean
+    // 13.15 — the tags its copy carries, for a sweep to match: the handler's list, or what its
+    // function form answers for these args, evaluated once as it subscribes.
+    tags: string[] | undefined
 }
 
 type HandlerFollowers = {
-    // 13.15 — the literal `tags` the build copied onto the browser's copy, for a sweep to match:
-    // the handler's, so one for all of its followers.
-    tags: string[] | undefined
+    // 13.15 — whether the handler declares `tags` at all, so a sweep by tag passes over the
+    // followers of one that does not without walking them.
+    tagged: boolean
     // What a trigger walks, matching each follower's args against its pattern.
     all: Set<Follower>
     // BY ENTRY KEY, so an entry answered walks the followers of its own args alone (18.8). Filed
@@ -157,6 +161,7 @@ export class Followers {
     ): () => void {
         const rpc = followed.handler
         const key = GLOBAL_GETS.get(rpc)?.key(args) ?? ''
+        const tags = DECLARED_TAGS.get(rpc)
         const follower: Follower = {
             peer,
             id,
@@ -167,12 +172,13 @@ export class Followers {
             stopFeed: undefined,
             sent: held,
             admitted,
+            tags: typeof tags === 'function' ? tags(args as never) : tags,
         }
         this.attach(rpc, follower)
         let handlerFollowers = this.handlers.get(rpc)
         if (handlerFollowers === undefined) {
             handlerFollowers = {
-                tags: followed.copy?.tags,
+                tagged: tags !== undefined,
                 all: new Set(),
                 byKey: new Map(),
             }
@@ -279,16 +285,17 @@ export class Followers {
     }
 
     /**
-     * 13.15 — A SWEEP REACHES EVERY COPY A BROWSER FOLLOWS that carries one of its `tags`, or every
+     * 13.15 — A SWEEP REACHES EVERY COPY A BROWSER FOLLOWS that carries one of its `tags` — a
+     * function form's as the copy's args compute them, which only the server can — or every
      * copy where it is bare, as that copy's own trigger. A fed copy is skipped for `broadcast`'s
      * reason: the sweep reloaded the entry it is fed from here, and the production that mints is
      * its refresh.
      */
     sweep(member: 'invalidate' | 'refresh', tags: string[] | null): void {
         for (const [rpc, handlerFollowers] of this.handlers) {
-            if (tags !== null && !sharesTag(handlerFollowers.tags, tags))
-                continue
+            if (tags !== null && !handlerFollowers.tagged) continue
             for (const follower of handlerFollowers.all) {
+                if (tags !== null && !sharesTag(follower.tags, tags)) continue
                 if (this.attach(rpc, follower) !== undefined) continue
                 follower.peer.send(follower.id, TRIGGERS[member])
             }
