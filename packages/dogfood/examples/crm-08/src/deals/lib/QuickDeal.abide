@@ -1,0 +1,24 @@
+<script>
+import { reactive } from '@abide/abide'
+
+import createDeal from '../createDeal.handler.ts'
+
+let name = reactive('Support renewal')
+let saving = reactive<typeof createDeal>()
+
+function add() {
+    saving = createDeal({ name, company: 'Babbage & Co', amount: 800 })
+    // Once it lands; a refusal stays on saving.error().
+    saving.then(
+        () => (name = ''),
+        () => {},
+    )
+}
+</script>
+
+<div class="row">
+    <label>name <input bind:value={name}></label>
+    <button onclick={add} disabled={saving.busy()}>Add deal</button>
+</div>
+
+<p class="status">{saving.ready() ? `Added ${saving.name}` : ''}</p>

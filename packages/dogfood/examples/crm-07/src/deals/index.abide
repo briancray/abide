@@ -5,6 +5,7 @@ import DealStage from './lib/DealStage.abide'
 import ExportDeals from './lib/ExportDeals.abide'
 import NewDeal from './lib/NewDeal.abide'
 import Pipeline from './lib/Pipeline.abide'
+import QuickDeal from './lib/QuickDeal.abide'
 </script>
 
 <head><title>Deals — CRM</title></head>
@@ -16,5 +17,6 @@ import Pipeline from './lib/Pipeline.abide'
     <DealNotes />
     <DealStage />
     <NewDeal />
+    <QuickDeal />
     <ExportDeals />
 </main>
