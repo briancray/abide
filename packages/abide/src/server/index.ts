@@ -77,6 +77,7 @@ export {
     onError,
     onHealth,
     onLauncher,
+    onPairing,
     onPrincipal,
     onStart,
     onStop,

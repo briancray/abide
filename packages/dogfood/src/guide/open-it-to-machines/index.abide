@@ -306,6 +306,14 @@ import Section from '#src/lib/Section.abide'
 
         <Code code={`onConfig(() => ({ ABIDE_BRIDGE_TOOLS: 'WebSearch,mcp__calendar__meetings' }))`} />
 
+        <p>What the visitor runs can carry options of the site's own, per person. Each
+            <code>onPairing</code> answers the Claude Code options for the request asking, so it can
+            read <code>principal</code>, and they follow the <code>--</code> of the command and of
+            the install command, quoted for a shell. The link carries none, and a request names
+            none.</p>
+
+        <Code code={`onPairing(() => ['--mcp-config', \`/configs/\${principal.resolved().id}.json\`])`} />
+
         <p>That registers a handler for the scheme under the visitor's own home: a small app in
             Application Support on macOS, a desktop entry on Linux, the visitor's own registry
             classes on Windows. <code>abide-bridge install</code> takes the same
@@ -340,6 +348,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>pairing</code></td><td>This browser's pairing in a page: <code>status</code>, <code>step</code> and <code>copied</code>, with <code>start</code> to pair with a click and <code>copyInstall</code> to copy the install command.</td></tr>
                 <tr><td><code>/__abide/pairing</code></td><td>Where <code>pairing</code> reads this browser's status, followed over the socket. On no generated surface.</td></tr>
                 <tr><td><code>ABIDE_BRIDGE_TOOLS</code></td><td>The tools <code>/__abide/pairing</code> grants, separated by commas. Unset, none.</td></tr>
+                <tr><td><code>onPairing</code></td><td>The options every pairing's command and install command carry after <code>--</code>, for the person asking.</td></tr>
                 <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
                 <tr><td><code>claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>

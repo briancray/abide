@@ -210,6 +210,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'onConfig',
             'onHealth',
             'onLauncher',
+            'onPairing',
             'onPrincipal',
             'onStart',
             'onStop',

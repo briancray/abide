@@ -91,6 +91,7 @@ export const HOOKS = {
     }>[],
     principal: [] as Filed<(claims: unknown) => unknown | Promise<unknown>>[],
     launcher: [] as Filed<() => LauncherOptions>[],
+    pairing: [] as Filed<() => readonly string[]>[],
 }
 
 const ROOT = '/'
@@ -298,6 +299,16 @@ export function onPrincipal(
  */
 export function onLauncher(options: () => LauncherOptions): () => void {
     return filed(HOOKS.launcher, options)
+}
+
+/**
+ * Files the Claude Code arguments every pairing's command and install carry after `--`, asked in the
+ * asking request's scope; returns what unfiles it.
+ *
+ * 44.76 — the site's, per person: a request names none (44.74).
+ */
+export function onPairing(args: () => readonly string[]): () => void {
+    return filed(HOOKS.pairing, args)
 }
 
 /**

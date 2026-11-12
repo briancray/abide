@@ -944,6 +944,13 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: false,
     },
     {
+        route: '/reference/onPairing',
+        names: ['onPairing'],
+        entry: '@abide/abide/server',
+        group: 'Configuration',
+        typeOnly: false,
+    },
+    {
         route: '/reference/onLauncher',
         names: ['onLauncher'],
         entry: '@abide/abide/server',
