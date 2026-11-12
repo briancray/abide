@@ -4233,3 +4233,9 @@ opens it.
 
 47.19 Where `NODE_ENV` is `test`, `database` MUST delete, as it makes a process's first scratch
 directory per 47.4, every scratch directory made by a process that no longer runs.
+
+47.20 An opener called from a migration 47.6 runs MUST hand back the `Database` that migration is
+called with, inside 47.7's transaction.
+
+47.21 An opener called at any point of its own open but 47.20's MUST throw, and MUST NOT open a
+second `Database`.

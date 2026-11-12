@@ -415,6 +415,90 @@ test('open runs at every open, after the pragmas and before the migrations — 4
     garage.close()
 })
 
+// 47.20 — A SEED BUILT FROM THE APP'S OWN HELPERS: `insertCar` calls the opener, which is still
+// opening as the migration calling it runs. THE REVERT: drop `if (migrating !== undefined) return
+// migrating` from the opener; the call throws 47.21's error, and the boot throws migration 2's 47.7.
+// With 47.21's throw dropped too, the call opens a second connection that waits out the 5000 ms busy
+// timeout on this one's write lock — the same migration 2, after 5.2 s.
+test('a migration that calls a helper calling the opener seeds through the Database it migrates, inside its transaction — 47.20', () => {
+    onDisk()
+    let broken = true
+    let seeding: Database | undefined
+    const garage = database('garage', {
+        migrations: [
+            CARS,
+            (db) => {
+                seeding = db
+                insertCar('1G1YB')
+                insertCar('1G1YC')
+            },
+            () => {
+                if (broken) throw new Error('no such car')
+            },
+        ],
+    })
+    const insertCar = (vin: string): void => {
+        garage().run('INSERT INTO cars (vin) VALUES (?)', [vin])
+    }
+    expect(() => garage()).toThrow(
+        'abide: database "garage"\'s migration 3 threw, and the database stays at migration 0. RULEBOOK 47.7.',
+    )
+    const after = new Database(`${directory}/garage.sqlite`)
+    const rolledBack = {
+        version: versionOf(after),
+        tables: after
+            .query("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .all(),
+    }
+    after.close()
+    broken = false
+    const db = garage()
+    expect({
+        rolledBack,
+        same: seeding === db,
+        version: versionOf(db),
+        cars: db.query('SELECT vin FROM cars ORDER BY id').all(),
+    }).toEqual({
+        rolledBack: { version: 0, tables: [] },
+        same: true,
+        version: 3,
+        cars: [{ vin: '1G1YB' }, { vin: '1G1YC' }],
+    })
+    garage.close()
+})
+
+// 47.21 — a call from `open` or from the file function cannot be served: the `Database` is not
+// migrated yet, or not opened at all. THE REVERT: drop the `opening` throw from the opener; each
+// call opens again, which calls `open` or the function again, and both read `Maximum call stack size
+// exceeded.` in place of 47.21's error.
+test('an opener called from its own open hook or file function throws rather than open again — 47.21', () => {
+    onDisk()
+    const refused =
+        'abide: a database opener was called while it opens, outside a migration — from its file function or its open hook. RULEBOOK 47.21.'
+    const hooked = database('garage', {
+        migrations: [CARS],
+        open: () => {
+            hooked()
+        },
+    })
+    const named = database(() => {
+        named()
+        return 'garage'
+    })
+    const thrown = (opener: () => Database): unknown => {
+        try {
+            opener()
+        } catch (error) {
+            return error instanceof Error ? error.message : error
+        }
+        return 'opened'
+    }
+    expect({ hooked: thrown(hooked), named: thrown(named) }).toEqual({
+        hooked: refused,
+        named: refused,
+    })
+})
+
 // 47.12 — A PATH IS READ AS THE FILE OPENS AND AT NO OTHER CALL, so a changed config takes effect at
 // the next open, which `close` asks for. THE REVERT: call the function at every call and reopen where
 // it changed; the second call answers `second.sqlite`.

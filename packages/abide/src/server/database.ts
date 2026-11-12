@@ -45,8 +45,10 @@ const SCRATCH = /^abide-test-(\d+)-/
  *
  * 47.6 — `PRAGMA user_version` counts the migrations a file has applied, so each runs once, in
  * order, however many times the app boots. A function migration is for what SQL cannot say alone:
- * a backfill computed in JavaScript, or the rows a first boot seeds. `open` runs at every open, for
- * what a connection holds rather than the file: a pragma like `synchronous`.
+ * a backfill computed in JavaScript, or the rows a first boot seeds — and the opener called from
+ * inside one hands back the `Database` it migrates (47.20), so a seed can call the app's own
+ * helpers. `open` runs at every open, for what a connection holds rather than the file: a pragma
+ * like `synchronous`.
  */
 export function database(
     file: string | (() => string),
@@ -75,14 +77,33 @@ export function database(
         await stop()
         close()
     })
+    // 47.20, 47.21 — a call made while the opener opens: `migrating` is the `Database` a migration
+    // running now migrates, and any other such call, from `file` or `open`, cannot be served — opening
+    // again would run the same migrations on a second connection, which recurses or waits out the busy
+    // timeout on the first one's write lock.
+    let opening = false
+    let migrating: Database | undefined
     // 47.11 — an open that threw caches nothing, so the next call tries again.
     const opener = (): Database => {
+        if (migrating !== undefined) return migrating
+        if (opening)
+            throw new Error(
+                'abide: a database opener was called while it opens, outside a migration — from its file function or its open hook. RULEBOOK 47.21.',
+            )
         if (scratchFor !== undefined && scratchFor !== Bun.main) close()
         if (opened === undefined) {
             const scratch = process.env.NODE_ENV === 'test'
-            // 47.12 — the function is called per open, 47.4's scratch included.
-            const named = checked(typeof file === 'string' ? file : file())
-            opened = open(named, scratch, options)
+            opening = true
+            try {
+                // 47.12 — the function is called per open, 47.4's scratch included.
+                const named = checked(typeof file === 'string' ? file : file())
+                opened = open(named, scratch, options, (db) => {
+                    migrating = db
+                })
+            } finally {
+                opening = false
+                migrating = undefined
+            }
             scratchFor = scratch ? Bun.main : undefined
         }
         return opened
@@ -102,6 +123,7 @@ function open(
     file: string,
     scratch: boolean,
     options: Options | undefined,
+    migrationsBegin: (db: Database) => void,
 ): Database {
     const migrations = options?.migrations ?? []
     const readonly = options?.readonly === true
@@ -139,6 +161,7 @@ function open(
         if (applied === migrations.length) return db
         // 47.7 — ONE TRANSACTION, so a throw leaves the file at the version it opened at.
         let running = applied
+        migrationsBegin(db)
         try {
             db.transaction(() => {
                 for (; running < migrations.length; running += 1) {

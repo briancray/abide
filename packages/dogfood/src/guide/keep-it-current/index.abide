@@ -482,7 +482,9 @@ import Section from '#src/lib/Section.abide'
 
         <p>Each migration runs once, in order, and the file remembers how many it has run. A new
             column is one more string at the end of the list, never an edit to one already there.
-            A migration can be a function too, for rows a first boot seeds. If one throws, none of
+            A migration can be a function too, for rows a first boot seeds, and it can seed through
+            the app's own helpers: the opener called inside it hands back the database it is
+            migrating. If one throws, none of
             that boot's migrations are kept. A file a newer build migrated is refused rather than
             opened, unless the opener says <code>{'{ openNewer: true }'}</code>: then it opens as it
             stands, runs nothing and keeps its count, so switching back from a branch that added a
