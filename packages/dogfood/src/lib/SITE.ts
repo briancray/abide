@@ -75,6 +75,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`foo` wherever the declared type of its position is not a `Reactive`',
                         '`const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, return or `bind:` operand',
                         '`const [a, b] = foo` / `...foo`',
+                        '`const { a, b: c } = bar()` where a member is a `Reactive`',
                         '`foo = bar`',
                         '`foo.bar = v`',
                         '`foo.push(v)`',

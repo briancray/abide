@@ -663,6 +663,25 @@ export class Lowering {
                 at = current.to
                 continue
             }
+            // 31.16, 31.8 — A WRITE THROUGH A MEMBER PATH IS CHECKED AS THE ASSIGNMENT IT IS:
+            // the name reads as its value and the rest — path, operator, value — goes on being
+            // lowered by this walk, so `rec.n += 'x'` is held to the member's type and lands where
+            // written. Lowered to `set(writePath(…))` the value is `unknown`, and nothing is held.
+            if (
+                this.checking &&
+                current.path.length > 0 &&
+                (current.shape === 'write' || current.shape === 'update')
+            ) {
+                copy(current.start)
+                pin(current.start)
+                out += this.valueOf(
+                    source.slice(current.start, current.end),
+                    current,
+                    this.nameOf(current),
+                )
+                at = current.end
+                continue
+            }
             // 38.116 — THE CHECKER'S `props` CALL IS COPIED INSIDE ITS WRAPPER, so its type is the
             // author's text where a rename looks for it, and a finding in it lands where written.
             if (this.checking && current.shape === 'props') {

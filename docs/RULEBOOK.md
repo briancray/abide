@@ -2158,6 +2158,14 @@ copy it or any level above it, and MUST NOT wake a reader.
 31.15 `route.url`, `route.params`, `route.name`, `route.index` and `route.navigating` MUST each be
 read and written as a name bound to a `Reactive` is, per 31.1 to 31.7.
 
+31.16 `abide check` MUST hold a write through a member path — an assignment, a compound assignment
+or an update, at any depth and through a computed key — to the type of the member it writes, on the
+`.abide` line.
+
+31.17 A name a destructuring pattern binds to a `Reactive` — in an object or an array pattern,
+renamed, defaulted or nested, under `const`, `let` or `var` — MUST be read and written as a name a
+declaration binds to it is, per 31.1 to 31.7, save a name a `props` pattern binds (33.4).
+
 # 32. Templating
 
 32.1 `{expr}` MUST render reactive text, escaped.

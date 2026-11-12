@@ -615,9 +615,10 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `await foo` | the settling of the `Reactive`, which is its value | 1.4, 2.7, 31.3 |
 | `refresh(foo)` / a `Selection`-typed parameter | the `Reactive` | 31.13 |
 | `foo = bar` | a write | 31.4, 11.61 |
-| `foo.bar = v` | a write through a path | 31.8, 31.14 |
+| `foo.bar = v` | a write through a path | 31.8, 31.14, 31.16 |
 | `foo.push(v)` | the same | 31.8, 31.9 |
 | `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
+| `const { a, b: c } = bar()` where a member is a `Reactive` | a name bound to that `Reactive` | 31.17 |
 | `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one the value does not | 31.5 |
 | `foo.bar(…)` | a call of the value's `bar`, or of the `Reactive`'s own `bar` where it declares one the value does not | 31.6 |
 | `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.11 |

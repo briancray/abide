@@ -267,8 +267,11 @@ export function classifyRead(
 ): Read | undefined {
     const parent = node.parent
     if (isNotARead(parent)) return undefined
+    // The declaration itself, a pattern's binding element among them (31.17), binds the name and
+    // reads nothing.
     if (
-        parent.kind === SyntaxKind.VariableDeclaration &&
+        (parent.kind === SyntaxKind.VariableDeclaration ||
+            parent.kind === SyntaxKind.BindingElement) &&
         (parent as { name?: Node }).name === node
     )
         return undefined

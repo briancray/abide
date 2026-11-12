@@ -5,10 +5,7 @@ import askClaudeCode from '../askClaudeCode.handler.ts'
 
 const QUESTION = 'Which company is Grace at?'
 
-const pair = pairing()
-const status = pair.status
-const step = pair.step
-const copied = pair.copied
+const { status, step, copied, start, copyInstall } = pairing()
 let asked = reactive(0)
 const events = reactive(() =>
     asked
@@ -29,14 +26,14 @@ const answer = reactive(() => {
         <li><span>your claude code</span><strong>paired</strong></li>
     </ul>
     <div class="row">
-        <button disabled={step === 'waiting'} onclick={pair.start}>
+        <button disabled={step === 'waiting'} onclick={start}>
             Reconnect</button>
     </div>
 {:else if status && step === 'install'}
     <pre class="rounded-md border border-rule bg-raised p-snug
         text-chrome">{status.install}</pre>
     <div class="row">
-        <button onclick={pair.copyInstall}>
+        <button onclick={copyInstall}>
             {copied ? 'Copied' : 'Copy'}</button>
         <span class="status">then pair again</span>
     </div>
@@ -44,7 +41,7 @@ const answer = reactive(() => {
     <pre class="rounded-md border border-rule bg-raised p-snug
         text-chrome">{status.command}</pre>
     <div class="row">
-        <button disabled={step === 'waiting'} onclick={pair.start}>
+        <button disabled={step === 'waiting'} onclick={start}>
             {step === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>
     </div>
 {/if}
