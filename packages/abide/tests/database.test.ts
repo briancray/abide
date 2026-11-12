@@ -4,6 +4,7 @@
 
 import { Database } from 'bun:sqlite'
 import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test'
+import { mkdirSync } from 'node:fs' // bun exposes no directory creation of its own
 
 import { spawned } from '@abide/harness/gate'
 
@@ -25,7 +26,8 @@ let counter = 0
 // A directory of its own per test, so no test reads a file another wrote.
 function onDisk(): void {
     counter += 1
-    directory = `${Bun.env.TMPDIR ?? '/tmp'}/abide-database-${process.pid}-${counter}`
+    // Without TMPDIR's trailing `/`, so a path reads back as `database` resolved it.
+    directory = `${(Bun.env.TMPDIR ?? '/tmp').replace(/\/$/, '')}/abide-database-${process.pid}-${counter}`
     process.env.NODE_ENV = 'production'
     process.env.APP_DATA_DIR = directory
     config.invalidate()
@@ -133,14 +135,149 @@ test('a file a newer build migrated is refused, not opened — 47.9', () => {
     )
 })
 
+// 47.3 — THE REVERT: open every string as `<name>.sqlite` in `pathOf`; the absolute path opens
+// `garage.sqlite.sqlite` and the relative one throws 47.3.
+test('a path opens that file, absolute as given and relative under APP_DATA_DIR — 47.2, 47.3', async () => {
+    onDisk()
+    const absolute = database(`${directory}/elsewhere/garage.sqlite`, {
+        migrations: [CARS],
+    })()
+    const relative = database('data/garage.sqlite', { migrations: [CARS] })()
+    expect({
+        absolute: absolute.filename,
+        relative: relative.filename,
+        written: [
+            await Bun.file(`${directory}/elsewhere/garage.sqlite`).exists(),
+            await Bun.file(`${directory}/data/garage.sqlite`).exists(),
+        ],
+    }).toEqual({
+        absolute: `${directory}/elsewhere/garage.sqlite`,
+        relative: `${directory}/data/garage.sqlite`,
+        written: [true, true],
+    })
+    absolute.close()
+    relative.close()
+})
+
+// 47.3 — THE REVERT: drop the `IN_MEMORY` test from `pathOf`; `:memory:` opens a file of that name
+// under APP_DATA_DIR, and the second opener reads the first's car.
+test('`:memory:` opens a database in memory, of its own per opener — 47.3', async () => {
+    onDisk()
+    const one = database(':memory:', { migrations: [CARS] })()
+    one.run("INSERT INTO cars (vin) VALUES ('1G1YB')")
+    const two = database(':memory:', { migrations: [CARS] })()
+    expect({
+        other: two.query('SELECT COUNT(*) AS cars FROM cars').get(),
+        written: await Bun.file(`${directory}/:memory:`).exists(),
+    }).toEqual({ other: { cars: 0 }, written: false })
+    one.close()
+    two.close()
+})
+
+// 47.12 — THE REVERT: call the function where `database` is called, not at the open; it reads
+// `GARAGE_DB` before the app set it, and the file opens at `undefined`.
+test('a function names the file as it opens, so it reads the config of that moment — 47.12', async () => {
+    onDisk()
+    let calls = 0
+    const garage = database(
+        () => {
+            calls += 1
+            return String(config().GARAGE_DB)
+        },
+        { migrations: [CARS] },
+    )
+    const before = calls
+    process.env.GARAGE_DB = `${directory}/configured.sqlite`
+    config.invalidate()
+    try {
+        const db = garage()
+        garage()
+        expect({ before, calls, file: db.filename }).toEqual({
+            before: 0,
+            calls: 1,
+            file: `${directory}/configured.sqlite`,
+        })
+        db.close()
+    } finally {
+        delete process.env.GARAGE_DB
+    }
+})
+
+// 47.12, 47.4 — THE REVERT: call the function under `NODE_ENV=test` too; it is called once.
+test('under bun test the function is never called, and the scratch database wins over any path — 47.4, 47.12', () => {
+    let calls = 0
+    const garage = database(
+        () => {
+            calls += 1
+            return '/nowhere/garage.sqlite'
+        },
+        { migrations: [CARS] },
+    )
+    const pathed = database('/nowhere/garage.sqlite', { migrations: [CARS] })
+    const files = [garage().filename, pathed().filename]
+    expect({ calls, files }).toEqual({
+        calls: 0,
+        files: [':memory:', ':memory:'],
+    })
+    garage().close()
+    pathed().close()
+})
+
+// 47.13 — THE REVERT: drop the `openNewer` return in `open`; it throws 47.9, or, past the throw, the
+// transaction lowers the file to migration 1.
+test('openNewer opens a file a newer build migrated, running nothing and lowering nothing — 47.13', () => {
+    onDisk()
+    database('garage', { migrations: [CARS, TRIM] })().close()
+    let ran = 0
+    const db = database('garage', {
+        migrations: [
+            (db) => {
+                ran += 1
+                db.run(CARS)
+            },
+        ],
+        openNewer: true,
+    })()
+    db.run("INSERT INTO cars (vin, trim) VALUES ('1G1YB', 'Stingray')")
+    expect({ version: versionOf(db), ran }).toEqual({ version: 2, ran: 0 })
+    db.close()
+})
+
+// THE ADOPTION PATH, which is 47.6 alone: a file an app made before it used `database` sits at
+// `user_version` 0 with its tables already there, and migration 1 written with IF NOT EXISTS passes
+// over them. THE REVERT: write migration 1 without IF NOT EXISTS; the open throws 47.7.
+test('a file made before `database` adopts it through an idempotent first migration — 47.6', () => {
+    onDisk()
+    mkdirSync(directory, { recursive: true })
+    const before = new Database(`${directory}/garage.sqlite`, { create: true })
+    before.run(CARS)
+    before.run("INSERT INTO cars (vin) VALUES ('1G1YB')")
+    before.close()
+    const db = database('garage', {
+        migrations: [
+            'CREATE TABLE IF NOT EXISTS cars (id INTEGER PRIMARY KEY, vin TEXT NOT NULL)',
+            TRIM,
+        ],
+    })()
+    expect({
+        version: versionOf(db),
+        cars: db.query('SELECT vin, trim FROM cars').all(),
+    }).toEqual({ version: 2, cars: [{ vin: '1G1YB', trim: '' }] })
+    db.close()
+})
+
 test('a name that is not a file name is refused — 47.3', () => {
-    for (const name of ['../garage', 'cars/garage', '.garage', ''])
+    for (const name of ['.garage', '', 'cars\\garage', ':memory'])
         expect(() => database(name)).toThrow(
             `abide: database ${JSON.stringify(name)} is not a file name. RULEBOOK 47.3.`,
         )
+    onDisk()
+    expect(() => database(() => '.garage')()).toThrow(
+        'abide: database ".garage" is not a file name. RULEBOOK 47.3.',
+    )
 })
 
-// 47.4 — THE REVERT: drop the `NODE_ENV` test from `fileOf`; the two openers share the file and the
+// 47.4 — THE REVERT: open the named file under `NODE_ENV=test` too; the two openers share the file and the
 // second reads the first's car.
 test('under bun test each opener is a scratch database of its own, and no file is written — 47.4', async () => {
     directory = `${Bun.env.TMPDIR ?? '/tmp'}/abide-database-${process.pid}-scratch`
