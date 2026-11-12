@@ -3785,7 +3785,15 @@ const MEMBERS = {
         onSettled?: (value: unknown) => unknown,
         onFailed?: (error: unknown) => unknown,
     ): Promise<unknown> {
-        return settled(this[CELL]).then(onSettled, onFailed)
+        const settling = settled(this[CELL])
+        const followed = settling.then(onSettled, onFailed)
+        // 2.15 — WITH NO `onFailed` THE REFUSAL PASSES THROUGH, and it stands on `s.error` already.
+        // The handler is attached once the refusal is known rather than at once, so a throw from
+        // `onSettled` is still reported: both reactions run in the same microtask checkpoint, before
+        // the rejection is reported.
+        if (onFailed === undefined)
+            settling.then(undefined, () => followed.then(undefined, passed))
+        return followed
     },
     catch(
         this: Callable,
@@ -3797,6 +3805,8 @@ const MEMBERS = {
         return settled(this[CELL]).finally(onSettled)
     },
 }
+
+function passed(): void {}
 
 // The cells a mutation's call has been answered from, so the next call knows the answer is spent.
 const ANSWERED = new WeakSet<object>()

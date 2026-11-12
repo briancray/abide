@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
 
+import { gate, inAFreshProcess } from '@abide/harness/gate'
+
 import { POST } from '#server'
 import {
     flushSync,
@@ -324,4 +326,139 @@ test('reactive<typeof a | typeof b>() keeps a call of either — 4.19', async ()
         const account: string[] | undefined = refusal.data.account
         expect(account).toBeUndefined()
     }
+})
+
+// 2.15 — AFTER-SUCCESS IS `then` WITH ONE ARGUMENT. A refusal the kept value holds on `error` is not
+// reported unhandled by a `then` given no `onFailed`; an `await` still rejects, and a throw from the
+// follow-up is still reported. Counted in a child: `bun test` fails a test an unhandled rejection
+// lands in before any listener the test adds can count it. Four submits, three refused, each
+// followed by `then(onDone)`, then a follow-up that throws. THE REVERT: hand the kept value's `then`
+// an `onFailed` that rethrows, which is the member without 2.15 — `reported` reads 4 where 1 is owed.
+let thenReverted = false
+gate(
+    'then with no onFailed leaves a refusal on error, and reports a throw from the follow-up — 2.15',
+    {
+        revert: () => {
+            thenReverted = true
+            return () => {
+                thenReverted = false
+            }
+        },
+        worth: { reported: 'reported=4' },
+    },
+    async () => {
+        const run = await inAFreshProcess(`
+import { POST } from '${import.meta.dir}/../src/server/index.ts'
+import { reactive, refuse } from '${import.meta.dir}/../src/shared/index.ts'
+
+let reported = 0
+process.on('unhandledRejection', () => {
+    reported += 1
+})
+const Closed = refuse.named('Closed', 409)
+const save = POST(async ({ ok }) => (ok ? { ok } : Closed()))
+const saving = reactive()
+const keep = (call) => {
+    saving.set(call)
+    ${thenReverted ? 'const then = saving.then; saving.then = (onSettled, onFailed) => then.call(saving, onSettled, onFailed ?? ((error) => { throw error }))' : ''}
+}
+let landed = 0
+let refused = 0
+for (const ok of [false, true, false, false]) {
+    keep(save({ ok }))
+    saving.then(() => {
+        landed += 1
+    })
+    await saving.then(undefined, () => {
+        refused += 1
+    })
+}
+let awaited = 'resolved'
+try {
+    await saving
+} catch (error) {
+    awaited = error.name
+}
+keep(save({ ok: true }))
+saving.then(() => {
+    throw new Error('follow-up broke')
+})
+await Bun.sleep(20)
+console.log('reported=' + reported, 'landed=' + landed, 'refused=' + refused, 'awaited=' + awaited)`)
+        expect(run.output).toContain(
+            'reported=1 landed=1 refused=3 awaited=Closed',
+        )
+    },
+)
+
+// 4.1, 4.2, 11.61 — ONE BUSY AND ONE ERROR OVER A STEP THAT IS NOT A CALL. A promise chain is a load
+// like any other, so `saving = locate().then((place) => recordBalance(place))` keeps both steps: the
+// call the chain's handler returns is a thenable the chain settles with. `busy` moves once each way
+// across both steps, where two kept calls in a row would move it twice; whichever step failed is
+// the one `error` holds, a plain `Error` as much as a refusal. THE REVERT: keep the two steps one
+// after the other — `saving = locate()` and then `saving = recordBalance(…)` — and the reader reads
+// `[false, true, false, true, false]` where `[false, true, false]` is owed.
+test('a promise chain keeps a step that is not a call under the same busy and error — 4.1, 4.2', async () => {
+    const saving = reactive<typeof recordBalance>()
+    const busy: boolean[] = []
+    using _busy = {
+        [Symbol.dispose]: watch(() => {
+            busy.push(saving.busy())
+        }),
+    }
+    flushSync()
+    const located = Promise.withResolvers<string>()
+    const release = held()
+    saving.set(
+        located.promise.then((account) =>
+            recordBalance({ account, amount: 5 }),
+        ),
+    )
+    flushSync()
+    located.resolve('checking')
+    await Bun.sleep(0)
+    flushSync()
+    release()
+    await settled(saving)
+    expect(saving()).toEqual({ account: 'checking', amount: 5 })
+    expect(busy).toEqual([false, true, false])
+
+    saving.set(
+        Promise.reject(new Error('no fix')).then(() =>
+            recordBalance({ account: 'checking', amount: 5 }),
+        ),
+    )
+    await settled(saving)
+    expect(String(saving.error())).toBe('Error: no fix')
+
+    saving.set(
+        Promise.resolve('x').then((account) =>
+            recordBalance({ account, amount: 5 }),
+        ),
+    )
+    await settled(saving)
+    expect(Object.keys(saving.issues() ?? {})).toEqual(['account'])
+})
+
+// 11.16 — PRESSED ONCE: a form that moves on after its call (a navigation, a parent's callback) is
+// disabled on `busy() || ready()`. `ready` holds from the answer until the next call is kept, and a
+// refusal leaves it false, so the press comes back for a retry and only for one. Each press is the
+// state the button reads after it.
+test('busy or ready is true from a press to a refusal, and stays true past an answer — 11.16', async () => {
+    const saving = reactive<typeof recordBalance>()
+    const pressed = (): boolean => saving.busy() || saving.ready()
+    const read: boolean[] = [pressed()]
+    let release = held()
+    saving.set(recordBalance({ account: 'closed', amount: 5 }))
+    read.push(pressed())
+    release()
+    await settled(saving)
+    read.push(pressed())
+    release = held()
+    saving.set(recordBalance({ account: 'checking', amount: 5 }))
+    read.push(pressed())
+    release()
+    await settled(saving)
+    read.push(pressed())
+    expect(read).toEqual([false, true, false, true, true])
 })

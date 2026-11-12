@@ -9,10 +9,7 @@ let saving = reactive<typeof createDeal>()
 function add() {
     saving = createDeal({ name, company: 'Babbage & Co', amount: 800 })
     // Once it lands; a refusal stays on saving.error().
-    saving.then(
-        () => (name = ''),
-        () => {},
-    )
+    saving.then(() => (name = ''))
 }
 </script>
 

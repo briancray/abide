@@ -187,6 +187,9 @@ fails.
 
 2.14 A `NotLanded` and a `Failed` MUST be distinguishable by brand.
 
+2.15 Where `s.then` is given no `onFailed`, the promise it hands back MUST NOT be reported as an
+unhandled rejection for the refusal 2.8 passes through to it.
+
 # 3. Probes
 
 3.1 A probe MUST NOT throw.

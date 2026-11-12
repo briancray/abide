@@ -122,7 +122,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `s` | `() => Stored` | Read the current value. | 2.1, 2.2, 2.3, 2.4, 2.9 |
 | `s.peek` | `() => Stored \| undefined` | Read what is held without joining the flow. | 2.10, 2.11 |
 | `NotLanded` | `Error & { name: 'NotLanded'; source: object }` | What a read throws where nothing has landed yet. | 2.9, 2.12, 2.13, 2.14, 7.8, 34.32 |
-| `s.then` | `<Settled = Stored, Refused = never>(onSettled?: (value: Stored) => Settled \| PromiseLike<Settled>, onFailed?: (error: unknown) => Refused \| PromiseLike<Refused>) => Promise<Settled \| Refused>` | The settling, as a promise. | 1.4, 2.7, 2.8 |
+| `s.then` | `<Settled = Stored, Refused = never>(onSettled?: (value: Stored) => Settled \| PromiseLike<Settled>, onFailed?: (error: unknown) => Refused \| PromiseLike<Refused>) => Promise<Settled \| Refused>` | The settling, as a promise. | 1.4, 2.7, 2.8, 2.15 |
 | `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Stored \| Result>` | The settling's refusal path. | 1.4, 1.5 |
 | `s.finally` | `(onSettled: () => void) => Promise<Stored>` | The settling's end, whichever way it went. | 1.4, 1.5 |
 | `for await (… of s)` | `AsyncIterable<Produced>` | What one run produced: the settled value once, or a stream's chunks. | 2.5, 2.6, 5.10, 9.12, 9.15, 9.16, 9.17 |
