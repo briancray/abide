@@ -19,7 +19,7 @@ test('a target set is a row in the file, listed newest first', async () => {
     await Bun.sleep(200)
     expect(shown()[0]).toBe('$650,000')
     expect(shown().length).toBe(before + 1)
-    // Under bun test the file is a scratch one, in memory.
+    // Under bun test the file is a scratch one, of this test file's own.
     expect(
         crmDatabase()
             .query('SELECT target FROM targets ORDER BY id DESC LIMIT 1')

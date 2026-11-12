@@ -4,7 +4,7 @@
 
 import { Database } from 'bun:sqlite'
 import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test'
-import { mkdirSync } from 'node:fs' // bun exposes no directory creation of its own
+import { existsSync, mkdirSync } from 'node:fs' // bun exposes no directory creation, nor a directory's existence, of its own
 
 import { spawned } from '@abide/harness/gate'
 
@@ -207,8 +207,9 @@ test('a function names the file as it opens, so it reads the config of that mome
     }
 })
 
-// 47.12, 47.4 — THE REVERT: call the function under `NODE_ENV=test` too; it is called once.
-test('under bun test the function is never called, and the scratch database wins over any path — 47.4, 47.12', () => {
+// 47.12, 47.4 — THE REVERT: skip the function under `NODE_ENV=test`, as 47.4 once read; it is
+// called 0 times, and a config guard inside it never throws under test.
+test('under bun test the function is still called, and what it names opens inside the scratch directory — 47.4, 47.12', () => {
     let calls = 0
     const garage = database(
         () => {
@@ -217,14 +218,18 @@ test('under bun test the function is never called, and the scratch database wins
         },
         { migrations: [CARS] },
     )
-    const pathed = database('/nowhere/garage.sqlite', { migrations: [CARS] })
-    const files = [garage().filename, pathed().filename]
-    expect({ calls, files }).toEqual({
-        calls: 0,
-        files: [':memory:', ':memory:'],
+    const unconfigured = database(() => {
+        throw new Error('GARAGE_DB is not configured')
     })
-    garage().close()
-    pathed().close()
+    const file = garage().filename
+    expect({
+        calls,
+        scratch:
+            file.endsWith('/nowhere/garage.sqlite') &&
+            !file.startsWith('/nowhere'),
+    }).toEqual({ calls: 1, scratch: true })
+    expect(() => unconfigured()).toThrow('GARAGE_DB is not configured')
+    garage.close()
 })
 
 // 47.13 — THE REVERT: drop the `openNewer` return in `open`; it throws 47.9, or, past the throw, the
@@ -281,28 +286,160 @@ test('a name that is not a file name is refused — 47.3', () => {
     )
 })
 
-// 47.4 — THE REVERT: open the named file under `NODE_ENV=test` too; the two openers share the file and the
-// second reads the first's car.
-test('under bun test each opener is a scratch database of its own, and no file is written — 47.4', async () => {
+// 47.4 — THE REVERT: open the named file under `NODE_ENV=test` too; the named file is written. Or open
+// the scratch in memory, as 47.4 once read; the second opener and the second connection read 0 cars.
+test('under bun test two openers of one file share its scratch file, and a second connection reads what the first wrote — 47.4', async () => {
     directory = `${Bun.env.TMPDIR ?? '/tmp'}/abide-database-${process.pid}-scratch`
     process.env.APP_DATA_DIR = directory
     config.invalidate()
-    const one = database('garage', { migrations: [CARS] })()
-    one.run("INSERT INTO cars (vin) VALUES ('1G1YB')")
-    const two = database('garage', { migrations: [CARS] })()
+    const one = database('garage', { migrations: [CARS] })
+    one().run("INSERT INTO cars (vin) VALUES ('1G1YB')")
+    const two = database('garage', { migrations: [CARS] })
+    const outside = new Database(one().filename)
     expect({
-        other: two.query('SELECT COUNT(*) AS cars FROM cars').get(),
+        two: two().query('SELECT COUNT(*) AS cars FROM cars').get(),
+        outside: outside.query('SELECT COUNT(*) AS cars FROM cars').get(),
         written: await Bun.file(`${directory}/garage.sqlite`).exists(),
-    }).toEqual({ other: { cars: 0 }, written: false })
-    one.close()
+    }).toEqual({ two: { cars: 1 }, outside: { cars: 1 }, written: false })
+    outside.close()
+    one.close({ remove: true })
     two.close()
+})
+
+// 47.10, 47.4 — THE REVERT: open 47.4's scratch in memory; the app's stop closes it and the call after
+// it reads no table at all.
+test('under bun test a database the app stop closed opens again with what it held — 47.4, 47.10', async () => {
+    const garage = database('stopped', { migrations: [CARS] })
+    garage().run("INSERT INTO cars (vin) VALUES ('1G1YB')")
+    const app = await inMemoryApp({})
+    await app.stop()
+    expect(garage().query('SELECT vin FROM cars').all()).toEqual([
+        { vin: '1G1YB' },
+    ])
+    garage.close({ remove: true })
+})
+
+// 47.16, 47.17 — THE REVERT: drop the `rmSync` from `close`; the reopened file still holds the car.
+// Or drop `opened = undefined`; the call after `close` hands back the closed handle, and throws.
+test('close keeps the file and the next call opens it again; close with remove opens it empty and migrated — 47.16, 47.17', () => {
+    const garage = database('closed', { migrations: [CARS] })
+    garage().run("INSERT INTO cars (vin) VALUES ('1G1YB')")
+    garage.close()
+    const kept = garage().query('SELECT COUNT(*) AS cars FROM cars').get()
+    garage.close({ remove: true })
+    expect({
+        kept,
+        removed: garage().query('SELECT COUNT(*) AS cars FROM cars').get(),
+        version: versionOf(garage()),
+    }).toEqual({ kept: { cars: 1 }, removed: { cars: 0 }, version: 1 })
+    garage.close({ remove: true })
+})
+
+// 47.3, 47.16 — `:memory:` is a database of its own wherever it is opened, under test as well, so
+// closing it is how a test starts on an empty one. THE REVERT: send `:memory:` through 47.4's scratch
+// path; the reopened database still holds the car.
+test('under bun test `:memory:` stays in memory, and close hands back an empty one — 47.3, 47.16', () => {
+    const forks = database(':memory:', { migrations: [CARS] })
+    forks().run("INSERT INTO cars (vin) VALUES ('1G1YB')")
+    forks.close({ remove: true })
+    expect({
+        file: forks().filename,
+        cars: forks().query('SELECT COUNT(*) AS cars FROM cars').get(),
+    }).toEqual({ file: ':memory:', cars: { cars: 0 } })
+    forks.close()
+})
+
+// 47.14 — THE REVERT: drop `strict` from the options `open` hands `new Database`; a missing `$vin`
+// binds NULL, and what throws is the NOT NULL column rather than the binding.
+test('strict, readonly and safeIntegers reach bun:sqlite — 47.14', () => {
+    onDisk()
+    const garage = database('garage', { migrations: [CARS], strict: true })
+    garage().query('INSERT INTO cars (vin) VALUES ($vin)').run({ vin: '1G1YB' })
+    expect(() =>
+        garage()
+            .query('INSERT INTO cars (vin) VALUES ($vin)')
+            .run({ make: 'Chevrolet' } as never),
+    ).toThrow('Missing parameter "vin"')
+    garage.close()
+    const reading = database('garage', {
+        migrations: [CARS],
+        readonly: true,
+        safeIntegers: true,
+    })
+    expect(reading().query('SELECT id, vin FROM cars').all()).toEqual([
+        { id: 1n, vin: '1G1YB' },
+    ])
+    expect(() => reading().run("INSERT INTO cars (vin) VALUES ('2')")).toThrow(
+        'attempt to write a readonly database',
+    )
+    reading.close()
+})
+
+// 47.18 — THE REVERT: drop the early return for a current file in `open`; the readonly open writes
+// `user_version` and throws 47.7.
+test('a file whose migrations have all run is not written as it opens — 47.18', () => {
+    onDisk()
+    database('garage', { migrations: [CARS] })().close()
+    const before = Bun.file(`${directory}/garage.sqlite`).lastModified
+    const reading = database('garage', { migrations: [CARS], readonly: true })
+    expect(versionOf(reading())).toBe(1)
+    expect(Bun.file(`${directory}/garage.sqlite`).lastModified).toBe(before)
+    reading.close()
+})
+
+// 47.15 — THE REVERT: drop the `open` call; `synchronous` reads FULL (2), and the hook saw nothing.
+// Or call it after the migrations; it sees `user_version` 1, not 0.
+test('open runs at every open, after the pragmas and before the migrations — 47.15', () => {
+    onDisk()
+    const seen: { journal: unknown; version: number }[] = []
+    const garage = database('garage', {
+        migrations: [CARS],
+        open: (db) => {
+            db.run('PRAGMA synchronous = NORMAL')
+            seen.push({
+                journal: db.query('PRAGMA journal_mode').get(),
+                version: versionOf(db),
+            })
+        },
+    })
+    const synchronous = garage().query('PRAGMA synchronous').get()
+    garage.close()
+    garage()
+    expect({ synchronous, seen }).toEqual({
+        synchronous: { synchronous: 1 },
+        seen: [
+            { journal: { journal_mode: 'wal' }, version: 0 },
+            { journal: { journal_mode: 'wal' }, version: 1 },
+        ],
+    })
+    garage.close()
+})
+
+// 47.12 — A PATH IS READ AS THE FILE OPENS AND AT NO OTHER CALL, so a changed config takes effect at
+// the next open, which `close` asks for. THE REVERT: call the function at every call and reopen where
+// it changed; the second call answers `second.sqlite`.
+test('a changed path opens at the next open, not the next call — 47.12', () => {
+    onDisk()
+    let named = `${directory}/first.sqlite`
+    const garage = database(() => named, { migrations: [CARS] })
+    const first = garage().filename
+    named = `${directory}/second.sqlite`
+    const still = garage().filename
+    garage.close()
+    expect({ first, still, next: garage().filename }).toEqual({
+        first: `${directory}/first.sqlite`,
+        still: `${directory}/first.sqlite`,
+        next: `${directory}/second.sqlite`,
+    })
+    garage.close()
 })
 
 // 47.4 — ONE PROCESS, TWO TEST FILES, ONE OPENER: `bun test` without `--isolate` shares the module
 // that made the opener between the files, and each still opens on an empty database. A child process,
 // because the gate's `--parallel` isolates every file and could not show it. THE REVERT: drop the
-// `scratchFor !== Bun.main` reopen in `database`; the second file reads 2 cars.
-test('under bun test each test file opens a scratch database of its own — 47.4', async () => {
+// `scratchFor !== Bun.main` reopen in `database`; the second file reads 2 cars. 47.19 — THE REVERT:
+// drop the sweep in `scratchDirectory`; the directory a finished process left is still there.
+test("under bun test each test file opens a scratch database of its own, and a finished run's is removed — 47.4, 47.19", async () => {
     const counted = (file: string) => `import { expect, test } from 'bun:test'
 import { garage } from './garage.ts'
 
@@ -321,15 +458,19 @@ export const garage = database('garage', { migrations: [${JSON.stringify(CARS)}]
         'one.test.ts': counted('one'),
         'two.test.ts': counted('two'),
     })
+    const finished = await spawned(['bun', '-e', 'console.log(process.pid)'])
+    const left = `${(Bun.env.TMPDIR ?? '/tmp').replace(/\/$/, '')}/abide-test-${finished.stdout.trim()}-left`
+    mkdirSync(left, { recursive: true })
     const ran = await spawned(
         ['bun', 'test', './one.test.ts', './two.test.ts'],
         {
             cwd: fresh,
         },
     )
-    expect(
-        `${ran.exitCode} ${ran.stdout.match(/\w+ reads \d+ cars/g)?.join(', ')}`,
-    ).toBe('0 one reads 1 cars, two reads 1 cars')
+    expect({
+        ran: `${ran.exitCode} ${ran.stdout.match(/\w+ reads \d+ cars/g)?.join(', ')}`,
+        left: existsSync(left),
+    }).toEqual({ ran: '0 one reads 1 cars, two reads 1 cars', left: false })
 }, 30_000)
 
 // 47.10 — THE REVERT: drop the `onStop` from `database`; the handle survives the stop and the read

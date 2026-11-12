@@ -1,0 +1,7 @@
+---
+"@abide/abide": minor
+---
+
+`database` closes the gaps that kept apps on a hand-rolled `bun:sqlite` opener. `strict`, `readonly` and `safeIntegers` go to `bun:sqlite` as given (RULEBOOK 47.14), and `open: (db) => …` runs at every open, after abide's pragmas and before the migrations, for a per-connection setting like `PRAGMA synchronous = NORMAL` (47.15). The opener carries `close()`, and the next call opens the file again; `close({ remove: true })` deletes it, so the next call opens it empty and migrated (47.16, 47.17). A file already at its count of migrations is not written as it opens, so a `readonly` opener works (47.18).
+
+Under `bun test` the scratch database is now a FILE, at the path the opener names inside a scratch directory of the test file's own, rather than an empty database in memory (47.4): two openers of one path share it, a second connection reads what the first wrote, and a database the app's stop closed opens again with what it held. The function naming the file is called under test too, so a config check inside it still throws (47.12), and it is called at each open and at no other call — a changed path takes effect at the next open, which `close()` asks for. `:memory:` stays in memory under test. A finished run's scratch directories are removed by the next run to make one (47.19). An app whose `.env.test` pointed its database at `:memory:` to stay off the real file can drop that line.
