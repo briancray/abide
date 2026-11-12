@@ -259,11 +259,12 @@ test('then on a kept call follows each answer once, and leaves a refusal on erro
     expect(recorded - before).toBe(4)
 
     // A `then` arm answering anything types: one result type per arm, as `PromiseLike` has.
-    const closed: Promise<boolean> = saving.then(
+    const closed = saving.then(
         () => true,
         () => false,
     )
-    expect(await closed).toBe(true)
+    const answered: boolean = await closed
+    expect(answered).toBe(true)
 })
 
 // 11.61, 11.16, 11.50 — KEEPING NO CALL IS ADOPTING A VALUE NOTHING HAS WRITTEN: `saving =
@@ -387,6 +388,174 @@ await Bun.sleep(20)
 console.log('reported=' + reported, 'landed=' + landed, 'refused=' + refused, 'awaited=' + awaited)`)
         expect(run.output).toContain(
             'reported=1 landed=1 refused=3 awaited=Closed',
+        )
+    },
+)
+
+// 2.16, 2.17 — A CALL KEPT THROUGH ITS NEXT STEP: `saving = recordBalance(…).then(step)` is busy from
+// the call to the step's end, and holds what the step answered. The reader records `busy` on each
+// wake and the step is held open after the call lands, so the read between the two is the one the
+// clause is about. THE REVERT: hand back the call `then` was asked on, which is `then` before 2.16 —
+// `saving` goes idle as the call lands, `mid-step busy=false`, holding the call's answer.
+let thenHandsBackTheCall = false
+function nextStep<Value, Next>(
+    call: Reactive<Value, never, unknown>,
+    step: (value: Value) => Next | PromiseLike<Next>,
+): Reactive<Next, Next, unknown> {
+    const followed = call.then(step)
+    if (!thenHandsBackTheCall) return followed
+    // Reached and dropped, so a step that throws is not reported unhandled (2.20) under the revert.
+    followed.busy()
+    return call as unknown as Reactive<Next, Next, unknown>
+}
+const handBackTheCall = (): (() => void) => {
+    thenHandsBackTheCall = true
+    return () => {
+        thenHandsBackTheCall = false
+    }
+}
+gate(
+    'a call kept through then is busy until the step ends, and holds what the step answered — 2.16, 2.17',
+    { revert: handBackTheCall, worth: { busy: 'mid-step busy=false' } },
+    async () => {
+        const saving = reactive<number>()
+        const busy: boolean[] = []
+        using _busy = {
+            [Symbol.dispose]: watch(() => {
+                busy.push(saving.busy())
+            }),
+        }
+        flushSync()
+        const stepped = Promise.withResolvers<void>()
+        const release = held()
+        saving.set(
+            nextStep(
+                recordBalance({ account: 'checking', amount: 5 }),
+                async (made) => {
+                    await stepped.promise
+                    return made.amount * 2
+                },
+            ),
+        )
+        flushSync()
+        release()
+        await Bun.sleep(0)
+        flushSync()
+        const midStep = saving.busy()
+        stepped.resolve()
+        await settled(saving)
+        expect(
+            `mid-step busy=${midStep} value=${JSON.stringify(saving.peek())} busy=${busy.join()}`,
+        ).toBe('mid-step busy=true value=10 busy=false,true,false')
+    },
+)
+
+// 2.18, 2.19 — WHICHEVER STEP FAILED IS THE ONE `error` HOLDS. A call refused by its gate passes the
+// refusal through with its issues and never runs the step; a step that throws holds the throw; a
+// step answering another call is followed until that call lands, and holds its refusal, typed by
+// the call's failures (`Next`). THE REVERT: `nextStep` handing back the call, as above — the call
+// landed, so the throw is nowhere, `thrown=undefined`.
+gate(
+    'a step kept through then fails with whichever step failed — 2.18, 2.19',
+    { revert: handBackTheCall, worth: { thrown: 'thrown=undefined' } },
+    async () => {
+        let ran = 0
+        const refused = nextStep(
+            recordBalance({ account: 'x', amount: 0 }),
+            () => {
+                ran += 1
+            },
+        )
+        await settled(refused)
+        const issues = Object.keys(refused.issues() ?? {}).join('+')
+
+        const thrown = nextStep(
+            recordBalance({ account: 'checking', amount: 5 }),
+            () => {
+                throw new Error('step broke')
+            },
+        )
+        await settled(thrown)
+
+        const release = held()
+        const closing = recordBalance({ account: 'checking', amount: 5 }).then(
+            () => closeAccount({ account: 'closed' }),
+        )
+        // Reached at once, as a value keeps one: 2.20 reports what a step nobody reached refused.
+        closing.busy()
+        const releaseClose = held()
+        release()
+        await Bun.sleep(0)
+        flushSync()
+        const followed = closing.busy()
+        releaseClose()
+        await settled(closing)
+        const failure = closing.error()
+        let closed = 'unnamed'
+        if (closing.isError(failure, 'AccountClosed')) {
+            const account: string = failure.data.account
+            closed = account
+        }
+        expect(
+            `ran=${ran} issues=${issues} thrown=${(thrown.error() as Error | undefined)?.message} followed=${followed} closed=${closed}`,
+        ).toBe(
+            'ran=0 issues=account+amount thrown=step broke followed=true closed=closed',
+        )
+    },
+)
+
+// 2.20, 2.21, 2.22 — A STEP NOBODY REACHED IS A PROMISE NOBODY HANDLED. Its throw is reported as
+// unhandled, as a promise's is; a step kept in a value or read is reached, and its throw stands on
+// `error` instead of being reported. Both handlers run unreached. Counted in a child, as 2.15's
+// gate is. THE REVERT FOR 2.21: report every throw from a step whether or not it was reached, as a
+// rejection of its own — `reported=4` where 1 is owed. 2.20's revert is structural — `followUp` building
+// its value at once rather than on reach takes the unreached step in: `reported=0`, here and in 2.15's.
+let reachedStepReported = false
+gate(
+    'a step is reported unhandled only where nothing reached it — 2.20, 2.21, 2.22',
+    {
+        revert: () => {
+            reachedStepReported = true
+            return () => {
+                reachedStepReported = false
+            }
+        },
+        worth: { reported: 'reported=4' },
+    },
+    async () => {
+        const run = await inAFreshProcess(`
+import { POST } from '${import.meta.dir}/../src/server/index.ts'
+import { reactive } from '${import.meta.dir}/../src/shared/index.ts'
+
+let reported = 0
+process.on('unhandledRejection', () => {
+    reported += 1
+})
+const save = POST(async () => ({ saved: true }))
+const step = ${
+            reachedStepReported
+                ? '(call, next) => call.then((value) => { try { return next(value) } catch (error) { Promise.reject(error); throw error } })'
+                : '(call, next) => call.then(next)'
+        }
+let ran = 0
+step(save({}), () => {
+    ran += 1
+    throw new Error('unreached step broke')
+})
+const kept = reactive()
+kept.set(step(save({}), () => {
+    ran += 1
+    throw new Error('kept step broke')
+}))
+const read = step(save({}), () => {
+    ran += 1
+    throw new Error('read step broke')
+})
+read.busy()
+await Bun.sleep(20)
+console.log('reported=' + reported, 'ran=' + ran, 'kept=' + kept.error()?.message, 'read=' + read.error()?.message)`)
+        expect(run.output).toContain(
+            'reported=1 ran=3 kept=kept step broke read=read step broke',
         )
     },
 )

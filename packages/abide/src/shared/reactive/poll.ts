@@ -204,7 +204,7 @@ export function stopUnownedPolls(): () => Promise<void> {
         for (const clock of UNOWNED) {
             if (clock.first !== null) continue
             for (const value of clock.values())
-                if (value.busy()) inFlight.push(value.then(settle, settle))
+                if (value.busy()) inFlight.push(settledEitherWay(value))
         }
         await Promise.all(inFlight)
     }
@@ -241,7 +241,7 @@ function halt(clock: Clock): void {
 function afterSettle(clock: Clock): void {
     const inFlight: Promise<unknown>[] = []
     for (const value of clock.values())
-        if (value.busy()) inFlight.push(value.then(settle, settle))
+        if (value.busy()) inFlight.push(settledEitherWay(value))
     if (inFlight.length === 0) {
         armOnce(clock)
         return
@@ -264,7 +264,16 @@ function armOnce(clock: Clock): void {
     unrefTimer(clock.timer)
 }
 
-function settle(): void {}
+// A PROMISE AROUND `then` RATHER THAN `then` ITSELF: what `then` hands back is a value (2.16), and
+// awaited it is built — a cell per value per wait, where this leaves it unreached.
+function settledEitherWay(value: Polled): Promise<void> {
+    return new Promise<void>((done) => {
+        value.then(
+            () => done(),
+            () => done(),
+        )
+    })
+}
 
 /**
  * Refreshes `value` unless it is busy (7.21).

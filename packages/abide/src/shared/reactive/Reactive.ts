@@ -307,14 +307,19 @@ export type Reactive<
     [Symbol.asyncIterator](): AsyncIterator<Produced>
     // A RESULT TYPE PER ARM, as `PromiseLike` has: with one, `then(close, () => {})` took the empty
     // arm's `void` as the result and refused a `close` that answers anything.
-    then<Settled = Stored, Refused = never>(
-        onSettled?: (value: Stored) => Settled | PromiseLike<Settled>,
+    //
+    // 2.16 — A VALUE, NOT A PROMISE, busy through the step. Its failures are this value's (2.18),
+    // and a step answering a `Reactive` adds that value's own (2.19): `Next` is read off that arm.
+    then<Settled = Stored, Refused = never, Next = never>(
+        onSettled?: (
+            value: Stored,
+        ) => Settled | Reactive<Settled, any, Next, any> | PromiseLike<Settled>,
         onFailed?: (error: unknown) => Refused | PromiseLike<Refused>,
-    ): Promise<Settled | Refused>
+    ): Reactive<Settled | Refused, Settled | Refused, Failures | Next>
     catch<Result>(
         onFailed: (error: unknown) => Result | PromiseLike<Result>,
-    ): Promise<Stored | Result>
-    finally(onSettled: () => void): Promise<Stored>
+    ): Reactive<Stored | Result, Stored | Result, Failures>
+    finally(onSettled: () => void): Reactive<Stored, Stored, Failures>
 }
 
 /**
@@ -3784,7 +3789,7 @@ const MEMBERS = {
         this: Callable,
         onSettled?: (value: unknown) => unknown,
         onFailed?: (error: unknown) => unknown,
-    ): Promise<unknown> {
+    ): unknown {
         const settling = settled(this[CELL])
         const followed = settling.then(onSettled, onFailed)
         // 2.15 — WITH NO `onFailed` THE REFUSAL PASSES THROUGH, and it stands on `s.error` already.
@@ -3793,20 +3798,85 @@ const MEMBERS = {
         // the rejection is reported.
         if (onFailed === undefined)
             settling.then(undefined, () => followed.then(undefined, passed))
-        return followed
+        return followUp(followed)
     },
-    catch(
-        this: Callable,
-        onFailed: (error: unknown) => unknown,
-    ): Promise<unknown> {
-        return settled(this[CELL]).catch(onFailed)
+    // 1.5 — BOTH ARE `then`, so each hands back the value 2.16 describes.
+    catch(this: Callable, onFailed: (error: unknown) => unknown): unknown {
+        return MEMBERS.then.call(this, undefined, onFailed)
     },
-    finally(this: Callable, onSettled: () => void): Promise<unknown> {
-        return settled(this[CELL]).finally(onSettled)
+    finally(this: Callable, onSettled: () => void): unknown {
+        return MEMBERS.then.call(
+            this,
+            (value: unknown) => {
+                onSettled()
+                return value
+            },
+            (error: unknown) => {
+                onSettled()
+                throw error
+            },
+        )
     },
 }
 
 function passed(): void {}
+
+const FOLLOWED: unique symbol = Symbol('abide.followed')
+const FOLLOWED_VALUE: unique symbol = Symbol('abide.followedValue')
+
+/** What `s.then` hands back: the step's promise, and the value built over it once reached. */
+type FollowUp = {
+    [FOLLOWED]: Promise<unknown> | null
+    [FOLLOWED_VALUE]: Callable | null
+}
+
+/**
+ * The `Reactive` `s.then` hands back over `followed`, the promise its handler's step settles.
+ *
+ * 2.16 — A VALUE, BUILT WHERE IT IS FIRST REACHED. `await s` calls `then` and drops what it hands
+ * back, so building the value there put a cell, its callable and a reaction on every await;
+ * unreached, this is one function over the promise. And reaching is the line 2.20 draws: a step
+ * nobody reached is still a promise nobody handled, so its failure is reported, and one that was
+ * reached takes the promise in and the failure stands on `error` instead.
+ *
+ * A VALUE FIRST REACHED AFTER THE STEP SETTLED is busy until the next microtask: a promise's outcome
+ * cannot be read synchronously, and reading it at once would be a reaction on every await again.
+ */
+function followUp(followed: Promise<unknown>): unknown {
+    const read = function readFollowUp(): unknown {
+        return (followedValue(read) as unknown as () => unknown)()
+    } as unknown as FollowUp
+    Object.setPrototypeOf(read, FOLLOW_UP_PROTOTYPE)
+    read[FOLLOWED] = followed
+    read[FOLLOWED_VALUE] = null
+    return read
+}
+
+/** The value `followUp` stands for, built over its promise the first time anything reaches it. */
+function followedValue(followUp: FollowUp): Callable {
+    let value = followUp[FOLLOWED_VALUE]
+    if (value === null) {
+        // UNTRACKED: the reach may be a read inside a body, and building the value is not one.
+        value = untracked(
+            buildFollowed,
+            followUp[FOLLOWED] as Promise<unknown>,
+            undefined,
+        )
+        followUp[FOLLOWED_VALUE] = value
+        followUp[FOLLOWED] = null
+    }
+    return value
+}
+
+function buildFollowed(followed: Promise<unknown>): Callable {
+    return createReactive(
+        'then',
+        null,
+        undefined,
+        followed,
+        undefined,
+    ) as unknown as Callable
+}
 
 // The cells a mutation's call has been answered from, so the next call knows the answer is spent.
 const ANSWERED = new WeakSet<object>()
@@ -3932,6 +4002,30 @@ export function brandedPrototype(
 }
 
 const MEMBER_PROTOTYPE = brandedPrototype()
+
+// EVERY MEMBER FORWARDED TO THE VALUE BUILT ON REACH, and the cell as a getter — `scoped.ts`'s
+// forwarder, for its reason: the core reaches a value's record through `[CELL]`.
+const followUpMembers: Record<PropertyKey, unknown> = {}
+for (const key of MEMBER_KEYS)
+    followUpMembers[key] = function forwardFollowUp(
+        this: FollowUp,
+        ...given: unknown[]
+    ): unknown {
+        const value = followedValue(this) as unknown as Record<
+            PropertyKey,
+            (...given: unknown[]) => unknown
+        >
+        return (value[key] as (...given: unknown[]) => unknown).apply(
+            value,
+            given,
+        )
+    }
+const FOLLOW_UP_PROTOTYPE = brandedPrototype(followUpMembers)
+Object.defineProperty(FOLLOW_UP_PROTOTYPE, CELL, {
+    get(this: FollowUp): Cell {
+        return followedValue(this)[CELL]
+    },
+})
 
 /**
  * The member prototype of a streaming value, whose writes stand over the stream.

@@ -130,7 +130,7 @@ import Section from '#src/lib/Section.abide'
 
         <p>A probe never throws and never starts a load, so it is safe to read before anything has
             landed. A read of the value itself outside the markup, in a click handler, throws
-            <code>NotLanded</code> until it lands. The value is also a promise, for a handler or a test: <code>await deals</code>
+            <code>NotLanded</code> until it lands. The value can also be awaited, for a handler or a test: <code>await deals</code>
             waits for it, and <code>s.then</code>, <code>s.catch</code> and <code>s.finally</code> reach the same
             settling.</p>
     </Section>
@@ -236,13 +236,20 @@ import Section from '#src/lib/Section.abide'
             <QuickDeal />
         </Example>
 
-        <p>The kept call is a promise too, so what comes after a save is <code>saving.then(…)</code>:
-            clear a field, close a dialog, go to the new deal's page. It runs once the call lands,
-            and the call still runs once. A refusal is already on <code>saving.error()</code>, so a
-            <code>then</code> given one function does not report it as unhandled; an
-            <code>await</code> still throws it, and a throw from the function itself is still
-            reported. A <code>then</code> made before another press is answered by the call the form
-            keeps when it settles, which is the later one.</p>
+        <p>The kept call can be awaited like a promise, so what comes after a save is
+            <code>saving.then(…)</code>: clear a field, close a dialog, go to the new deal's page. It
+            runs once the call lands, and the call still runs once. A refusal is already on
+            <code>saving.error()</code>, so a <code>then</code> given one function does not report it
+            as unhandled; an <code>await</code> still throws it. A <code>then</code> made before
+            another press is answered by the call the form keeps when it settles, which is the later
+            one.</p>
+
+        <p><code>then</code> hands back a reactive value of its own rather than a promise: busy until
+            the next step ends, holding what that step answered, and failing with whichever step
+            failed — a refusal passed through with its <code>issues()</code>, or a throw from the
+            step. A step that answers another call is followed until that call lands. Left unread,
+            it is a promise nobody handled, and a throw from the step is reported; kept or read, the
+            throw is on its <code>error()</code> instead.</p>
 
         <p>The answer is the call's, so the next call drops it until it lands. To keep the last
             answer on screen through a call in flight or a refusal, write it into the value it is about:
@@ -253,8 +260,9 @@ import Section from '#src/lib/Section.abide'
             is pressed once: <code>{'disabled={saving.busy() || saving.ready()}'}</code>.
             <code>ready()</code> holds from the answer until the next call is kept, so the button
             stays off while the page moves, and a refusal turns it back on. A label that reads
-            <code>busy()</code> stays on through the next step when the kept promise ends in it and
-            answers what the call did: <code>{'saving = createDeal(…).then(async (made) => { await navigate(…); return made })'}</code>.</p>
+            <code>busy()</code> stays on through the next step when the form keeps what
+            <code>then</code> hands back, answering what the call did:
+            <code>{'saving = createDeal(…).then(async (made) => { await navigate(…); return made })'}</code>.</p>
 
         <p>To let go of a call, keep one nothing has made: <code>saving = reactive&lt;typeof
                 createDeal&gt;()</code> leaves no refusal standing and nothing in flight, for a dialog
