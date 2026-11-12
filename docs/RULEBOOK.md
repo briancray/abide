@@ -3935,7 +3935,8 @@ pairing changes, and where the code it was last answered with expires or pairs.
 scope of the app's mount.
 
 45.3 The worker `ABIDE_OFFLINE` turns on MUST save an answer to a page, or to any other `GET` of the
-app's own origin, only where its `cache-control` lets a private cache store it.
+app's own origin, only where its `cache-control` lets a private cache store it and names
+`stale-if-error` or `immutable`.
 
 45.4 The worker `ABIDE_OFFLINE` turns on MUST save only an answer of 200, to the address it asked
 rather than one a redirect led to, that is neither a stream 16.32 frames nor a binary 16.34 types.
@@ -3949,8 +3950,9 @@ saved.
 `cache-control` is `public`, where an answer it is handed carries `abide-principal`, where
 `principal` changes in any tab, and where a form is submitted.
 
-45.8 The worker `ABIDE_OFFLINE` turns on, of a new build, MUST drop everything the one before it
-saved, and every file of the bundle the new build does not name.
+45.8 The worker `ABIDE_OFFLINE` turns on, of a new build, MUST drop every answer the one before it
+saved, and every file of a bundle neither the new build nor the build before it names, and MUST
+answer a file of the bundle the build before named from what it saved.
 
 45.9 The address of the worker `ABIDE_OFFLINE` turns on MUST answer a worker that drops what was
 saved and unregisters itself, under `abide dev` and where `ABIDE_OFFLINE` is off.
@@ -3976,19 +3978,20 @@ the size it is drawn at.
 45.16 The worker `ABIDE_OFFLINE` turns on MUST leave to the network the request 30.15 makes, a
 request carrying `range`, and one accepting `text/event-stream`.
 
-45.17 The worker `ABIDE_OFFLINE` turns on MUST answer a request with the copy it saved of its address,
-and not ask the network, while that copy is fresh by its `cache-control`.
+45.17 The worker `ABIDE_OFFLINE` turns on MUST answer a request that is not a navigation with the copy
+it saved of its address, and not ask the network, while that copy is fresh by its `cache-control`.
 
-45.18 The worker `ABIDE_OFFLINE` turns on MUST answer a request with the copy it saved of its address,
-and ask the network for the copy it saves next save where the request's `cache` is `force-cache`,
-while that copy is stale by no more than its `stale-while-revalidate`.
+45.18 The worker `ABIDE_OFFLINE` turns on MUST answer a request that is not a navigation with the copy
+it saved of its address, and ask the network for the copy it saves next save where the request's
+`cache` is `force-cache`, while that copy is stale by no more than its `stale-while-revalidate`.
 
 45.19 The worker `ABIDE_OFFLINE` turns on MUST answer a request 45.17 and 45.18 leave to the network
 with the network's answer, and with the copy it saved of that address where the network gives none
 and that copy is stale by no more than its `stale-if-error`.
 
-45.20 The worker `ABIDE_OFFLINE` turns on MUST answer a request that is not a navigation, and whose
-`cache` is `no-cache`, `reload` or `no-store`, with the network's answer alone.
+45.20 The worker `ABIDE_OFFLINE` turns on MUST answer a request whose `cache` is `no-cache`, `reload`
+or `no-store` with the network's answer, and only a navigation among them, where the network gives
+none, with the copy 45.19 has stand in.
 
 45.21 The worker `ABIDE_OFFLINE` turns on MUST ask the network past the browser's own cache, save
 for a navigation 45.25 has it ask as itself.
@@ -4003,11 +4006,22 @@ save for a navigation 45.25 has it ask as itself.
 where it saved no copy of that address 45.19 would answer with, and MUST NOT save one of another
 origin.
 
-45.25 The worker `ABIDE_OFFLINE` turns on MUST ask the network for a navigation with the navigation's
-own request, unchanged.
+45.25 The worker `ABIDE_OFFLINE` turns on MUST answer a navigation 45.28 does not open from a copy with
+the browser's navigation preload, and where the browser makes none, with the navigation's own
+request, unchanged.
 
 45.26 The worker `ABIDE_OFFLINE` turns on MUST drop the copy it saved of an address where the network
 answers that address with an answer 45.3 or 45.4 does not let it save, save one of 500 or above.
+
+45.27 The worker `ABIDE_OFFLINE` turns on MUST NOT answer a request of another origin, nor a
+navigation whose destination is not `document`.
+
+45.28 The worker `ABIDE_OFFLINE` turns on MUST answer a navigation of an address it saved a page of,
+whose `cache` is none 45.20 names, with that copy while 45.19 has it stand in, before the network
+answers, and MUST ask for that address's page behind it as 45.21 and 45.23 have it ask.
+
+45.29 The worker `ABIDE_OFFLINE` turns on MUST navigate again the window a navigation 45.28 opened
+from a copy, where the page asked for behind it answers other than 200 and below 500.
 
 # 46. Outbox
 
