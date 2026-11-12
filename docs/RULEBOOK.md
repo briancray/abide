@@ -2520,6 +2520,9 @@ attribute, MUST be a build error naming the `observe` spelling that measures it.
 32.92 An `observe` adaptor handed an element that another adaptor of the same kind is observing
 MUST throw.
 
+32.93 In a browser, a slot rendering a value branded by `raw` into the document the runtime loaded in
+MUST create no node but those its markup parses to, whatever was parsed before it.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
