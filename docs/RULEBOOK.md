@@ -2758,8 +2758,8 @@ nearest route first, and on one outside every request where filed at the root ro
 37.6 A hook `onStart` or `onStop` wraps that throws MUST fail hard, and the server MUST NOT
 start.
 
-37.7 `onConfig`, `onPrincipal`, `onStart`, `onStop` and `onHealth` MUST each compose every hook filed,
-by route depth, then by route, then in the order called — the answers of `onConfig` and
+37.7 `onConfig`, `onPrincipal`, `onStart`, `onStop`, `onHealth` and `onPairing` MUST each compose
+every hook filed, by route depth, then by route, then in the order called — the answers of `onConfig` and
 `onPrincipal` merged, a later one's member over an earlier one's.
 
 37.8 Under `abide start` and `abide dev`, a rejection nothing handled and a throw nothing caught MUST
@@ -3920,7 +3920,8 @@ separated by commas, and none where it names none.
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
 44.69 `pairing`'s `status` MUST be the last `BridgeStatus` `/__abide/pairing` answered the browser,
-and MUST be `undefined` where a server builds it.
+MUST fail with the failure of a read of it that failed, and MUST be `undefined` where a server builds
+it.
 
 44.70 `pairing`'s `start` MUST do nothing while `status` holds no `BridgeStatus`, and otherwise MUST
 set `step` to `waiting` and navigate the page to the status's `link`.
@@ -3939,6 +3940,11 @@ added, clear the wait a `start` set, and leave `copied` and `step` where they st
 
 44.75 A subscription to `/__abide/pairing` MUST be sent a refresh whenever the asking browser's
 pairing changes, and where the code it was last answered with expires or pairs.
+
+44.76 The command and the install of every pairing `/__abide/pairing`, `claudeCode.bridgeCommand` or
+`claudeCode.bridge` answers MUST carry after a `--`, behind the command's `--tools`, the arguments
+every `onPairing` answers in the asking request's scope, each quoted where a shell would split or
+expand it, and the link MUST carry none of them.
 
 # 45. Offline
 

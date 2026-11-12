@@ -34,6 +34,7 @@ import {
 import { callerOf } from './callerOf.ts'
 import { config, ownOrigin } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
+import { HOOKS, inOrder } from './hooks.ts'
 import { followedOwn, mountedOwn } from './mountHandlers.ts'
 import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
@@ -150,12 +151,34 @@ function commandFor(
     const granted = tools?.length ? tools.join(',') : undefined
     const query = new URLSearchParams({ site, code, version: BRIDGE_VERSION })
     if (granted !== undefined) query.set('tools', granted)
-    const grant = granted === undefined ? '' : ` -- --tools ${granted}`
+    // 44.76 — the site's own arguments after the tools, in the command and the install alike; the
+    // link carries none (44.44), so an install is how a link opened later runs with them.
+    const added = pairingArgs()
+    const options =
+        granted === undefined ? added : ['--tools', granted, ...added]
     return {
-        command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}${grant}`,
+        command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}${afterDashes(options)}`,
         link: `${BRIDGE_SCHEME}://pair?${query}`,
-        install: `bunx @abide/bridge@${BRIDGE_VERSION} install`,
+        install: `bunx @abide/bridge@${BRIDGE_VERSION} install${afterDashes(added)}`,
     }
+}
+
+/** Every `onPairing`'s arguments, in 37.7's order, asked in the request's scope. 44.76. */
+function pairingArgs(): string[] {
+    const args: string[] = []
+    for (const answer of inOrder(HOOKS.pairing)) args.push(...answer())
+    return args
+}
+
+/** ` -- ` and `words`, each quoted where a shell would split or expand it, or nothing for none. */
+function afterDashes(words: readonly string[]): string {
+    if (words.length === 0) return ''
+    let line = ' --'
+    for (const word of words)
+        line += /^[\w@%+=:,./-]+$/.test(word)
+            ? ` ${word}`
+            : ` '${word.replaceAll("'", "'\\''")}'`
+    return line
 }
 
 /**

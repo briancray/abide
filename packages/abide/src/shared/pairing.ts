@@ -41,10 +41,11 @@ export function pairing(): {
 } {
     // 44.69 — a server renders no pairing: the copy is the browser's, and a render would wait on it.
     const read = isServer() ? undefined : readPairing()
+    // 44.69 — undefined until the first answer lands, and a read that failed is `status`'s failure:
+    // reading the failed copy throws it here, so `status.error()` carries it.
     const status = reactive(() =>
         read !== undefined &&
-        read.copy.ready() &&
-        read.copy.error() === undefined
+        (read.copy.ready() || read.copy.error() !== undefined)
             ? read.copy()
             : undefined,
     ) as Reactive<BridgeStatus | undefined>

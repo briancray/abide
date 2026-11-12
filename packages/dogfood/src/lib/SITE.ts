@@ -477,6 +477,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`/__abide/pairing`',
                         '`pairing`',
                         '`ABIDE_BRIDGE_TOOLS`',
+                        '`onPairing`',
                         '`abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]`',
                         '`abide-bridge install [--claude <path>] [--env NAME=VALUE]… [-- <options>]`',
                         '`abide-bridge uninstall`',

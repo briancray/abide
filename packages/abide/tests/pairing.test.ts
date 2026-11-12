@@ -5,13 +5,14 @@
 
 import { afterEach, beforeEach, expect, jest, spyOn, test } from 'bun:test'
 
-import { GET } from '#server'
+import { GET, onPairing } from '#server'
 import { config } from '#server/config.ts'
 import { flushSync } from '#shared'
 import { PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { BridgeStatus } from '#shared/BridgeStatus.ts'
 import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
 import { pairing } from '#shared/pairing.ts'
+import { principal } from '#shared/principal.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -128,6 +129,24 @@ test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44
     await landed(pair, UNPAIRED)
     expect(pair.status()).toEqual(UNPAIRED)
     expect(asked[0]?.url).toBe(PAIRING_ADDRESS)
+    dispose()
+})
+
+// 44.69 — A READ THAT FAILED IS THE STATUS'S FAILURE, so a page can say the assistant is unavailable
+// rather than wait on a status that never lands. THE REVERT: answer `undefined` from `status`'s body
+// where the copy failed, as it did; `status` stays ready and undefined, with no error, for good.
+test('a pairing /__abide/pairing fails to answer fails its status with that failure — 44.69', async () => {
+    globalThis.fetch = (async () =>
+        new Response('down', { status: 503 })) as unknown as typeof fetch
+    const { pair, dispose } = built()
+    for (let turn = 0; turn < 50 && pair.status.error() === undefined; turn++)
+        await Bun.sleep(0)
+    const failure = pair.status.error() as { status?: number } | undefined
+    expect(
+        `failed ${failure !== undefined}, status ${failure?.status}, value ${pair.status.peek()}`,
+    ).toBe('failed true, status 503, value undefined')
+    pair.start()
+    expect(pair.step()).toBe('click')
     dispose()
 })
 
@@ -297,6 +316,47 @@ test('/__abide/pairing grants no tool a request names — 44.74', async () => {
         undefined,
     )
     expect(granted(status)).toBe('command: no grant, link: no tools')
+})
+
+// 44.76 — THE SITE SHAPES WHAT ITS VISITOR RUNS, PER PERSON: what `onPairing` answers in the asking
+// request's scope follows `--` in the command and in the install, after the tools, quoted for a shell —
+// and a request naming arguments of its own reaches neither. THE REVERT: drop `pairingArgs()` from
+// `commandFor` in `claudeCode.ts`; this reports the command with `--tools WebSearch` alone and the
+// install with no `--` — `install: undefined`.
+test('onPairing’s arguments follow -- in the command and the install, per principal — 44.76, 44.74', async () => {
+    const unfile = onPairing(() => {
+        const { id } = principal.resolved()
+        return [
+            '--mcp-config',
+            `/configs/${id}.json`,
+            '--allowedTools',
+            'Read Grep',
+        ]
+    })
+    const declared = process.env.ABIDE_BRIDGE_TOOLS
+    process.env.ABIDE_BRIDGE_TOOLS = 'WebSearch'
+    config.invalidate()
+    try {
+        await using app = await inMemoryApp({})
+        const answered = await app.fetch(
+            new Request(
+                `http://site${PAIRING_ADDRESS}?args=--dangerously-skip-permissions`,
+            ),
+            { caller: 'ada-browser', principal: { id: 'ada' } },
+        )
+        const status = (await answered.json()) as BridgeStatus
+        expect(
+            `command: ${status.command.split(' -- ')[1]}\ninstall: ${status.install.split(' -- ')[1]}`,
+        ).toBe(
+            "command: --tools WebSearch --mcp-config /configs/ada.json --allowedTools 'Read Grep'\ninstall: --mcp-config /configs/ada.json --allowedTools 'Read Grep'",
+        )
+        expect(new URL(status.link).searchParams.has('args')).toBe(false)
+    } finally {
+        unfile()
+        if (declared === undefined) delete process.env.ABIDE_BRIDGE_TOOLS
+        else process.env.ABIDE_BRIDGE_TOOLS = declared
+        config.invalidate()
+    }
 })
 
 test('/__abide/pairing is on no generated surface — 44.68', async () => {

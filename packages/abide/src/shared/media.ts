@@ -13,6 +13,7 @@ import { isHydrating, standIn } from './hydrating.ts'
 import { isServer } from './isServer.ts'
 import { ambient } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
+import { runInScope } from './reactive/scoping.ts'
 
 const queries = new Map<string, Reactive<boolean>>()
 
@@ -25,8 +26,16 @@ export function media(query: string): Reactive<boolean> {
     else {
         const list = matchMedia(query)
         // 41.32 — the server's answer while the page hydrates, and the browser's after.
-        const followed = ambient<boolean>(
-            () => !isServer() && !isHydrating() && list.matches,
+        // 23.30 — BUILT OUTSIDE EVERY REQUEST, wherever first asked: a test process's server render
+        // asks inside one, and a value built there runs its body in that request for good — the
+        // server's `false` to every browser read after it, `refresh` included.
+        const followed = runInScope(
+            undefined,
+            () =>
+                ambient<boolean>(
+                    () => !isServer() && !isHydrating() && list.matches,
+                ),
+            undefined,
         )
         standIn(followed, false, () => list.matches)
         list.addEventListener('change', (event) => followed.set(event.matches))
