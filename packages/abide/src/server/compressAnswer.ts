@@ -5,7 +5,7 @@
 //
 // WHAT EACH LANE SENDS BESIDE THE BYTES. The JSON lane names `accept-encoding` in `vary` here; the
 // bytes lane leaves it to the CALLER's headers — `DOCUMENT_HEADERS` for a page or an error page,
-// which its `HEAD` carries as well, and `answerValue`'s own append for a document `page()` hands
+// which its `HEAD` carries as well, and `answerValue`'s own append for a document `response.page()` hands
 // back. Both say their length: `abide dev` relays a body chunk by chunk
 // from its worker (38.35), and a relayed body with no declared length goes out chunked.
 // BUN'S GZIP parts from zlib's past ~130 KB, which only the off-loop lane reaches — so that lane takes

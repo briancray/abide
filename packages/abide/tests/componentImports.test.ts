@@ -18,11 +18,11 @@ const { name } = props<{ name: string }>()
 </script>
 <p>hello {name}</p>
 `,
-    'preview.handler.ts': `import { GET, page, render } from '@abide/abide/server'
+    'preview.handler.ts': `import { GET, render, response } from '@abide/abide/server'
 import Card from '#src/lib/Card.abide'
 
 export default GET(async ({ name }: { name: string }) =>
-    page(await render(Card({ name }), '<html><body></body></html>')),
+    response.page(await render(Card({ name }), '<html><body></body></html>')),
 )
 `,
 }

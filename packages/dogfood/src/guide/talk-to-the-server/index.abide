@@ -324,9 +324,9 @@ import Section from '#src/lib/Section.abide'
         <table>
             <thead><tr><th>You return</th><th>The caller gets</th></tr></thead>
             <tbody>
-                <tr><td><code>page</code></td><td>a rendered document as <code>text/html</code>: a stored invoice as it was sent</td></tr>
-                <tr><td><code>json</code></td><td>JSON whatever the caller's <code>Accept</code> says, with <code>null</code> for nothing</td></tr>
-                <tr><td><code>redirect</code></td><td>a navigation to another address, at a <code>RedirectStatus</code>: 301, 302, 303, 307 or 308</td></tr>
+                <tr><td><code>response.page</code></td><td>a rendered document as <code>text/html</code>: a stored invoice as it was sent</td></tr>
+                <tr><td><code>response.json</code></td><td>JSON whatever the caller's <code>Accept</code> says, with <code>null</code> for nothing</td></tr>
+                <tr><td><code>response.redirect</code></td><td>a navigation to another address, at a <code>RedirectStatus</code>: 301, 302, 303, 307 or 308</td></tr>
             </tbody>
         </table>
 

@@ -15,8 +15,8 @@ import {
     releaseScope,
     request,
     type RequestScope,
-    response,
 } from '#server/requestScope.ts'
+import { response } from '#server/response.ts'
 import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
 import { cellOf } from '#shared/reactive/cellShape.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'

@@ -1129,8 +1129,8 @@ ETag it derives, and answer 206, 416 and 304 as the protocol requires.
 16.37 Where a handler returns a `Response`, `clients.mcp` and `clients.cli` MUST default to false.
 
 16.38 A mutation MUST answer a request preferring `text/html` as a navigation: a returned
-`redirect` passes through, a returned value becomes 303 back to the referrer, and a failure renders
-`error.abide` at its own status.
+`response.redirect` passes through, a returned value becomes 303 back to the referrer, and a failure
+renders `error.abide` at its own status.
 
 16.39 A handler whose value carries a `Reactive` below its top level MUST be a compile error naming
 the handler and the path to it.
@@ -1172,7 +1172,7 @@ does.
 16.51 A `HEAD` MUST NOT take from the seed buffer.
 
 16.52 An `Rpc` answer with no body — a 204, or a status `response` writes with nothing returned, a
-`redirect` included — MUST NOT carry `content-type`.
+`response.redirect` included — MUST NOT carry `content-type`.
 
 16.53 The 303 16.38 answers MUST go to the mount's root where the referrer is absent or is not of
 `APP_URL`'s origin, per 36.2.
@@ -1245,8 +1245,8 @@ that file's default.
 
 ## Streamed answers and ceilings, continued
 
-16.75 A streamed answer — jsonl, sse, bytes, or a document `page` hands a stream — MUST carry
-`X-Accel-Buffering: no`.
+16.75 A streamed answer — jsonl, sse, bytes, or a document `response.page` hands a stream — MUST
+carry `X-Accel-Buffering: no`.
 
 16.76 An `Rpc` streaming under 16.32 MUST end its answer where the run it sends ends: at that run's
 close, where a new run replaces it, and with the failure that run ended on.
@@ -1349,10 +1349,10 @@ from being refreshed.
 
 17.1 Every body helper MUST take `Values<T>`.
 
-17.2 `page` MUST be defined as a write through `response` naming `text/html`, and MUST take what
-a render produced rather than perform the render.
+17.2 `response.page` MUST be defined as a write through `response` naming `text/html`, and MUST take
+what a render produced rather than perform the render.
 
-17.3 `redirect` MUST be defined as a write through `response` carrying a `RedirectStatus`,
+17.3 `response.redirect` MUST be defined as a write through `response` carrying a `RedirectStatus`,
 defaulting to 302.
 
 17.4 `refuse` on a server MUST hand back, per 15.5, the undeclared `Failed` named `HttpError` at
@@ -1360,8 +1360,8 @@ the given status.
 
 17.5 `refuse` MUST carry no data, and MUST NOT take an options bag for any.
 
-17.6 `jsonl`, `sse` and `bytes` MUST each be defined as a write through `response` fixing the
-framing of a streaming answer.
+17.6 `response.jsonl`, `response.sse` and `response.bytes` MUST each be defined as a write through
+`response` fixing the framing of a streaming answer.
 
 17.7 An implementation MUST NOT negotiate past a framing a handler fixed.
 
@@ -1369,11 +1369,11 @@ framing of a streaming answer.
 its `statusText` when nothing wrote one, and `refuse` given no `message` MUST take the same phrase,
 falling back to `HttpError` for a status with none.
 
-17.9 `json` MUST be defined as a write through `response` fixing the answer as `application/json`,
-serialized as a bare return is.
+17.9 `response.json` MUST be defined as a write through `response` fixing the answer as
+`application/json`, serialized as a bare return is.
 
-17.10 `json` given `undefined` MUST answer `null` at the status written through `response`, and MUST
-NOT answer 204.
+17.10 `response.json` given `undefined` MUST answer `null` at the status written through `response`,
+and MUST NOT answer 204.
 
 # 18. Following a `GET`
 
@@ -1705,7 +1705,7 @@ directory MUST answer `cache-control: public, max-age=0, stale-if-error=31536000
 
 # 22. Request-scoped ambients
 
-22.1 `request`, `requestIP`, `response` and `server` MUST throw outside a request.
+22.1 `request`, `request.ip`, `response` and `server` MUST throw outside a request.
 
 22.2 `cookies` MUST be isomorphic, and on a server writes MUST be collected onto the response.
 
@@ -1732,11 +1732,11 @@ be that scope's alone.
 22.11 `isServer` MUST be true inside a request, an `App.run` or a `render`, and wherever there is no
 document, and MUST be false everywhere else.
 
-22.12 `requestIP` MUST answer the address of the peer the listener received the request being served
-from, the same under `abide start`, `abide dev` and `App.listen`, and `null` where the listener names
-none.
+22.12 `request.ip` MUST answer the address of the peer the listener received the request being
+served from, the same under `abide start`, `abide dev` and `App.listen`, and `null` where the
+listener names none.
 
-22.13 `requestIP` MUST answer `'in-process'` for a request no listener received: one `App.fetch` or
+22.13 `request.ip` MUST answer `'in-process'` for a request no listener received: one `App.fetch` or
 `App.run` was handed in process, a call the app makes of itself among them.
 
 # 23. Route and connectivity
@@ -3776,8 +3776,8 @@ of its own.
 44.4 `assistant` MUST hold no conversation between calls, and MUST take the whole transcript with
 each one.
 
-44.5 `claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns folded
-above the last and each `AssistantContent` image in its place.
+44.5 `provider.claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns
+folded above the last and each `AssistantContent` image in its place.
 
 44.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
 lists, and MUST call each as a request through the app answering the request.
@@ -3787,22 +3787,22 @@ NOT carry any other header of it.
 
 44.8 `mcp` over an app whose route table lists no handler for `/__abide/mcp` MUST throw.
 
-44.9 `claudeApi` MUST call the Messages API again with the tool results only while a turn stops for
-`tool_use`, and MUST send each assistant turn's blocks back as they arrived.
+44.9 `provider.claudeApi` MUST call the Messages API again with the tool results only while a turn
+stops for `tool_use`, and MUST send each assistant turn's blocks back as they arrived.
 
-44.10 `claudeApi` MUST throw where no `apiKey` is given, and MUST NOT read a key from the
+44.10 `provider.claudeApi` MUST throw where no `apiKey` is given, and MUST NOT read a key from the
 environment.
 
 44.11 A conversation reaching `maxTurns` with a tool call pending MUST end on a `done` whose `stop`
 is `max_turns`, and MUST NOT run that call.
 
-44.12 `claudeApi` MUST send the results of one turn's tool calls back in one message.
+44.12 `provider.claudeApi` MUST send the results of one turn's tool calls back in one message.
 
-44.13 `claudeCode` MUST run a turn on the Claude Code of the bridge paired with the asking browser,
-and MUST refuse 409 where none is paired.
+44.13 `provider.claudeCode` MUST run a turn on the Claude Code of the bridge paired with the asking
+browser, and MUST refuse 409 where none is paired.
 
-44.14 A code `claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that asked for
-it, once, and MUST NOT pair once it has expired.
+44.14 A code `provider.claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that
+asked for it, once, and MUST NOT pair once it has expired.
 
 44.15 A bridge MUST run Claude Code with no MCP server but the bridge's own and the visitor's servers
 of the MCP tools 44.29 makes available to the turn, in an empty directory removed when the run ends,
@@ -3815,18 +3815,19 @@ an option the visitor passed after `--` over the site's.
 44.17 An MCP request a bridge's Claude Code makes MUST be answered from the `Toolbox` of the turn it
 was made in.
 
-44.18 `claudeCode` MUST end a turn's run on the bridge when the caller hangs up.
+44.18 `provider.claudeCode` MUST end a turn's run on the bridge when the caller hangs up.
 
-44.19 `/__abide/bridge` MUST be closed until `claudeCode` has minted a pairing code in that process.
+44.19 `/__abide/bridge` MUST be closed until `provider.claudeCode` has minted a pairing code in that
+process.
 
-44.20 `claudeCode.bridge` MUST yield a `BridgeStatus` whenever the asking browser's pairing changes,
-and MUST yield a fresh command where the standing one's code expires or pairs.
+44.20 `provider.claudeCode.bridge` MUST yield a `BridgeStatus` whenever the asking browser's pairing
+changes, and MUST yield a fresh command where the standing one's code expires or pairs.
 
-44.21 A failure the Messages API reports to `claudeApi`, or a bridge reports to `claudeCode`, MUST
-refuse 502.
+44.21 A failure the Messages API reports to `provider.claudeApi`, or a bridge reports to
+`provider.claudeCode`, MUST refuse 502.
 
-44.22 A bridge a `claudeCode.bridge` stream or a subscription to `/__abide/pairing` has watched MUST
-be sent away once neither watches it and it has run no turn for 30 seconds.
+44.22 A bridge a `provider.claudeCode.bridge` stream or a subscription to `/__abide/pairing` has
+watched MUST be sent away once neither watches it and it has run no turn for 30 seconds.
 
 44.23 A post to `/__abide/bridge` carrying a line that is not JSON MUST be refused 400, and none of
 its lines MUST be relayed.
@@ -3861,20 +3862,21 @@ and naming it `unfinished` where it ended without a `done`, followed by why — 
 signal 44.57 hands its provider aborted, else `failed` where its provider threw, with the throw's message ending the
 line, else `stopped` where its caller stopped reading.
 
-44.32 A command `claudeCode.bridgeCommand` or `claudeCode.bridge` mints with `tools` MUST grant
-those tools after its `--` as `--tools`, and one minted without `tools` MUST carry no `--`.
+44.32 A command `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints with
+`tools` MUST grant those tools after its `--` as `--tools`, and one minted without `tools` MUST
+carry no `--`.
 
 44.33 A pairing MUST be to the claims the principal was sealed with (26.11), or to none, where its
-code was minted, and `claudeCode` and `claudeCode.bridge` MUST read it as absent to a request from
-that browser carrying any other.
+code was minted, and `provider.claudeCode` and `provider.claudeCode.bridge` MUST read it as absent
+to a request from that browser carrying any other.
 
-44.34 A `claudeCode.bridge` stream MUST yield the pairing of whoever a `principal.set` or a
+44.34 A `provider.claudeCode.bridge` stream MUST yield the pairing of whoever a `principal.set` or a
 `principal.clear` made at its browser since it opened signs in, at the caller 26.9 rotates it to,
 and the command it yields MUST pair that one.
 
 44.35 A `Toolbox` call MUST hand as its `ToolAnswer`'s `content` the pieces `/__abide/mcp` carries
-for the same call, `claudeApi` MUST show the model those pieces as the call's result, and the
-`result` `AssistantEvent` MUST carry their words and none of their images.
+for the same call, `provider.claudeApi` MUST show the model those pieces as the call's result, and
+the `result` `AssistantEvent` MUST carry their words and none of their images.
 
 44.36 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
 `AssistantContent` image whose `mimeType` is none of `image/png`, `image/jpeg`, `image/gif` and
@@ -3883,14 +3885,15 @@ for the same call, `claudeApi` MUST show the model those pieces as the call's re
 44.37 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
 `AssistantContent` image in a turn that is not the user's.
 
-44.38 `claudeApi` MUST send each `AssistantContent` image to the model as an image block, base64 with
-its type, in its place in its turn.
+44.38 `provider.claudeApi` MUST send each `AssistantContent` image to the model as an image block,
+base64 with its type, in its place in its turn.
 
 44.39 `assistant` MUST hand a `Provider` each turn as its `AssistantContent` pieces, a turn's string
 as one text piece.
 
-44.40 A pairing `claudeCode.bridgeCommand` or `claudeCode.bridge` mints MUST carry, beside its command,
-a link in the `abide-bridge` scheme naming the same site, code, bridge release and tools.
+44.40 A pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints MUST
+carry, beside its command, a link in the `abide-bridge` scheme naming the same site, code, bridge
+release and tools.
 
 44.41 A bridge MUST open only a link of the `abide-bridge` scheme whose site is https or loopback and
 whose release is a version alone, and MUST run the release it names.
@@ -3942,8 +3945,8 @@ that image is of a type 44.36 does not name.
 44.55 `imageFiles` MUST hand back, in order, the files a `DataTransfer` carries of a type 44.36
 names or a HEIC or HEIF, which 44.52 draws, reading its `items` where its `files` hold none.
 
-44.56 The `install` of a pairing `claudeCode.bridgeCommand` or `claudeCode.bridge` mints MUST run
-`abide-bridge install` at the bridge release its command runs.
+44.56 The `install` of a pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge`
+mints MUST run `abide-bridge install` at the bridge release its command runs.
 
 44.57 `assistant` MUST hand its `Provider` a `limits.signal` that aborts once the request's signal
 aborts or once the `signal` its caller passed does, and once that signal aborts MUST end the
@@ -4006,10 +4009,10 @@ added, clear the wait a `start` set, and leave `copied` and `step` where they st
 44.75 A subscription to `/__abide/pairing` MUST be sent a refresh whenever the asking browser's
 pairing changes, and where the code it was last answered with expires or pairs.
 
-44.76 The command and the install of every pairing `/__abide/pairing`, `claudeCode.bridgeCommand` or
-`claudeCode.bridge` answers MUST carry after a `--`, behind the command's `--tools`, the arguments
-every `onPairing` answers in the asking request's scope, each quoted where a shell would split or
-expand it, and the link MUST carry none of them.
+44.76 The command and the install of every pairing `/__abide/pairing`,
+`provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` answers MUST carry after a `--`,
+behind the command's `--tools`, the arguments every `onPairing` answers in the asking request's
+scope, each quoted where a shell would split or expand it, and the link MUST carry none of them.
 
 # 45. Offline
 

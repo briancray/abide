@@ -194,7 +194,7 @@ import Section from '#src/lib/Section.abide'
         <Example
             id="crm-05-csv"
             app="crm-05"
-            title="`bytes(values)` — a CSV written as the cursor reaches each row"
+            title="`response.bytes(values)` — a CSV written as the cursor reaches each row"
             summary="A rep takes an account's activity into a spreadsheet. The preview above the link is the file it downloads."
             files={{
                 'src/activity/lib/CsvExport.abide': csvExportSource,
@@ -213,14 +213,14 @@ import Section from '#src/lib/Section.abide'
             <thead><tr><th>The handler returns</th><th>The caller gets</th></tr></thead>
             <tbody>
                 <tr><td>an async generator</td><td>JSON Lines, or events for a caller asking for <code>text/event-stream</code></td></tr>
-                <tr><td><code>jsonl(values)</code></td><td>JSON Lines, whatever the caller asks for: a list sent a line at a time</td></tr>
-                <tr><td><code>sse(values)</code></td><td>server-sent events, whatever the caller asks for</td></tr>
-                <tr><td><code>bytes(values)</code></td><td>the chunks as they are, <code>application/octet-stream</code></td></tr>
+                <tr><td><code>response.jsonl(values)</code></td><td>JSON Lines, whatever the caller asks for: a list sent a line at a time</td></tr>
+                <tr><td><code>response.sse(values)</code></td><td>server-sent events, whatever the caller asks for</td></tr>
+                <tr><td><code>response.bytes(values)</code></td><td>the chunks as they are, <code>application/octet-stream</code></td></tr>
             </tbody>
         </table>
 
         <p>A stream whose first chunk is binary is sent as bytes without the helper.
-            <code>bytes</code> says so before there is a first chunk, so an account with no activity
+            <code>response.bytes</code> says so before there is a first chunk, so an account with no activity
             downloads an empty file rather than an empty JSON answer.</p>
     </Section>
 
@@ -228,7 +228,7 @@ import Section from '#src/lib/Section.abide'
         <Example
             id="crm-05-ticker"
             app="crm-05"
-            title="`sse(values)` — events, whoever asks"
+            title="`response.sse(values)` — events, whoever asks"
             summary="A wallboard by the sales floor reads today's deal moves with the plain request its script has always sent."
             files={{
                 'src/activity/lib/Wallboard.abide': wallboardSource,
@@ -240,7 +240,7 @@ import Section from '#src/lib/Section.abide'
         </Example>
 
         <p>A wallboard script, like <code>curl</code>, asks for nothing in particular, and an
-            async generator answers that caller with JSON Lines. <code>sse</code> fixes the answer as
+            async generator answers that caller with JSON Lines. <code>response.sse</code> fixes the answer as
             events, <code>data: </code> and a JSON value per event, so the board reads it with the
             event-stream parser it already has. An <code>EventSource</code> asks for events by name,
             and gets them from any streaming handler without the helper.</p>

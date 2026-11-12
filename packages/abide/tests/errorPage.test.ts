@@ -44,9 +44,9 @@ export default POST(({ amount }: { amount: string | string[] }) =>
 )
 `
 
-const MOVE = `import { POST, redirect } from '@abide/abide/server'
+const MOVE = `import { POST, response } from '@abide/abide/server'
 
-export default POST(() => redirect('/elsewhere', 303))
+export default POST(() => response.redirect('/elsewhere', 303))
 `
 
 // 41.1, 35.2 — A DETAIL PAGE WHOSE RECORD IS NOT THERE. The handler refuses, the page reads the

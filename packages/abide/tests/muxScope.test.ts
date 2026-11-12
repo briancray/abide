@@ -15,8 +15,8 @@ import {
     currentRequestScope,
     request,
     requestCookies,
-    response,
 } from '#server/requestScope.ts'
+import { response } from '#server/response.ts'
 import { reactive, watch } from '#shared'
 import type { Rung } from '#shared/Middleware.ts'
 import { GET } from '#shared/rpc.ts'

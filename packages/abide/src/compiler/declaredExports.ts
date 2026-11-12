@@ -316,7 +316,7 @@ async function declaringMethod(
         declared.copy = { ...declared.copy, stream: true }
     // 16.37 — A HANDLER ANSWERING A WHOLE `Response` HAS NO VALUE A TOOL OR THE SHELL CAN PUBLISH, so
     // both default off where its `clients` does not say. Read off the type, since the runtime only
-    // learns it by calling the handler; `page`, `redirect` and the stream helpers hand back what
+    // learns it by calling the handler; `response.page`, `response.redirect` and the stream helpers hand back what
     // they were given, and are not a `Response`.
     const answersResponse = await isResponse(returned)
     return {
@@ -455,7 +455,7 @@ async function allSettled<T>(promises: Promise<T>[]): Promise<T[]> {
 
 /**
  * What a handler's function returns, a promise's value in place of the promise: declared
- * `async function*`, an arrow, or a member naming one (`claudeCode.bridge`).
+ * `async function*`, an arrow, or a member naming one (`provider.claudeCode.bridge`).
  */
 async function awaitedReturnOf(
     checker: Checker,
@@ -483,7 +483,7 @@ async function isGenerator(
     returned: Type | undefined,
 ): Promise<boolean> {
     if (returned === undefined) return false
-    // An async generator's own members: `sse(…)`'s `Values` and a `ReadableStream` are iterated
+    // An async generator's own members: `response.sse(…)`'s `Values` and a `ReadableStream` are iterated
     // too, and neither is typed as a stream.
     let iterates = false
     let throws = false

@@ -68,7 +68,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
     // 44.10 — the key is the app's to hand over, and nothing reads one from the environment.
     if (typeof config.apiKey !== 'string' || config.apiKey === '')
         throw new Error(
-            'abide: claudeApi was handed no apiKey. RULEBOOK 44.10.',
+            'abide: provider.claudeApi was handed no apiKey. RULEBOOK 44.10.',
         )
     const { apiKey, baseURL, tools: ownTools, ...body } = config
     return {

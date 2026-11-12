@@ -1,4 +1,4 @@
-import { GET, sse } from '@abide/abide/server'
+import { GET, response } from '@abide/abide/server'
 
 const MOVES = [
     { account: 'Hopper & Co', stage: 'Won' },
@@ -7,6 +7,6 @@ const MOVES = [
 ]
 
 /** Answers at /activity/ticker as server-sent events, whatever is asked. */
-export default GET(() => sse(MOVES), {
+export default GET(() => response.sse(MOVES), {
     description: "Today's deal moves, as server-sent events.",
 })

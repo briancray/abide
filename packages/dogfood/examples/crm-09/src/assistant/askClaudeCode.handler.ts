@@ -1,15 +1,15 @@
 import {
     assistant,
     type AssistantMessage,
-    claudeCode,
     POST,
+    provider,
 } from '@abide/abide/server'
 
 export default POST(
     async function* ({ messages }: { messages: AssistantMessage[] }) {
         yield* assistant(
             messages,
-            claudeCode({ systemPrompt: 'Answer in one sentence.' }),
+            provider.claudeCode({ systemPrompt: 'Answer in one sentence.' }),
             { mcp: true },
         )
     },

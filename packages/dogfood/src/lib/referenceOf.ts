@@ -24,7 +24,7 @@
 //
 // An export's SCOPE is where REGISTRY writes it: a section whose heading names an
 // `@abide/harness/…` entry holds that entry's names, and every other section holds abide's —
-// which is how `bytes` the response helper and `bytes` the harness lane are two pages.
+// which is how an abide name and a harness name spelled the same are two pages.
 
 import { cellsOf } from './cellsOf.ts'
 

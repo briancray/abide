@@ -12,7 +12,7 @@ import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { reactive, refuse } from '@abide/abide'
-import { GET, json, page, POST, redirect, request, response, sse } from '@abide/abide/server'
+import { GET, POST, request, response } from '@abide/abide/server'
 import { reported } from '../../lib/reported.server.ts'
 
 export const shared = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
@@ -72,12 +72,12 @@ export const binary = GET(async function* () {
     yield new Uint8Array([3])
 })
 
-export const fixed = GET(() => sse([1, 2]))
+export const fixed = GET(() => response.sse([1, 2]))
 
-export const doc = GET(() => page('<h1>hello</h1>'))
+export const doc = GET(() => response.page('<h1>hello</h1>'))
 
 export const streamedDoc = GET(() =>
-    page(
+    response.page(
         (async function* () {
             yield '<h1>'
             yield 'hello</h1>'
@@ -85,15 +85,15 @@ export const streamedDoc = GET(() =>
     ),
 )
 
-export const moved = POST(() => redirect('/there', 303))
+export const moved = POST(() => response.redirect('/there', 303))
 
 export const nothing = POST(() => undefined)
 
-export const nothingAsJson = POST(() => json(undefined))
+export const nothingAsJson = POST(() => response.json(undefined))
 
 export const partial = GET(() => {
     response().status = 206
-    return json([1, 2])
+    return response.json([1, 2])
 })
 
 export const raw = GET(() => new Response('teapot', { status: 418 }))
@@ -352,10 +352,10 @@ test('a framing fixed by a helper is kept whatever Accept asks — 17.6, 17.7', 
     expect(await answer.text()).toBe(':\n\ndata: 1\n\ndata: 2\n\n')
 })
 
-// 17.2, 17.3 — `page` names a document and `redirect` a status and an address. 38.29 — the document
+// 17.2, 17.3 — `response.page` names a document and `response.redirect` a status and an address. 38.29 — the document
 // is in the encoding the request takes, read with `decompress: false` or `Bun.fetch` decodes it
-// either way. THE REVERT: answer `page`'s text as `new Response(value)`; no `content-encoding`.
-test('page answers a document and redirect a navigation — 17.2, 17.3, 38.29', async () => {
+// either way. THE REVERT: answer `response.page`'s text as `new Response(value)`; no `content-encoding`.
+test('response.page answers a document and response.redirect a navigation — 17.2, 17.3, 38.29', async () => {
     const doc = await Bun.fetch(`${base}${RPC}/doc`, {
         headers: { 'accept-encoding': 'gzip' },
         decompress: false,
@@ -376,10 +376,10 @@ test('page answers a document and redirect a navigation — 17.2, 17.3, 38.29', 
     expect(moved.headers.get('location')).toBe('/there')
 })
 
-// 17.9, 17.10 — `json` is a bare return's JSON with somewhere to put a status, and `undefined` sent
-// as `null`. THE REVERT: drop the `json` arm from `answerValue`; the framing it fixed reads as a
+// 17.9, 17.10 — `response.json` is a bare return's JSON with somewhere to put a status, and `undefined` sent
+// as `null`. THE REVERT: drop the `json` framing arm from `answerValue`; the framing it fixed reads as a
 // stream's, and `[1, 2]` is answered as `text/event-stream` where `application/json` is due.
-test('json answers its value as JSON, and undefined as null — 17.9, 17.10', async () => {
+test('response.json answers its value as JSON, and undefined as null — 17.9, 17.10', async () => {
     const partial = await Bun.fetch(`${base}${RPC}/partial`)
     expect(partial.status).toBe(206)
     expect(partial.headers.get('content-type')).toBe('application/json')

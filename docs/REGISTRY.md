@@ -289,13 +289,13 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
-| `page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 16.75, 17.2 |
-| `json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. | 17.7, 17.9, 17.10 |
-| `redirect` | `(to: string, status?: RedirectStatus) => undefined` | A navigation. | 16.52, 17.3 |
-| `jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.44, 16.75, 17.6, 17.7 |
-| `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.45, 16.57, 16.75, 17.6, 17.7 |
-| `bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.34, 16.75, 17.6, 17.7 |
-| `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `redirect` may carry. | 17.3 |
+| `response.page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 16.75, 17.2 |
+| `response.json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. | 17.7, 17.9, 17.10 |
+| `response.redirect` | `(to: string \| URL, status?: RedirectStatus) => undefined` | A navigation. | 16.52, 17.3 |
+| `response.jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.44, 16.75, 17.6, 17.7 |
+| `response.sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.45, 16.57, 16.75, 17.6, 17.7 |
+| `response.bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.34, 16.75, 17.6, 17.7 |
+| `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `response.redirect` may carry. | 17.3 |
 | `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.5, 15.9, 15.10, 15.16, 15.19, 15.20, 16.40, 17.4, 17.5, 17.8 |
 
 ## Mount paths
@@ -381,21 +381,16 @@ type Reached = { readonly [REACHED]: true }
 | `imagePiece` | `(image: Blob) => Promise<{ type: 'image'; data: string; mimeType: string }>` | An image as a turn's image piece, drawn down to what a model looks at and redrawn where it is a photo. | 44.52, 44.53, 44.54 |
 | `imageFiles` | `(data: DataTransfer \| null) => File[]` | The images a paste or a drop carries that a model is shown, or that `imagePiece` draws as one. | 44.55 |
 
-## `claudeApi`
+## `provider`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `claudeApi` | `(config: ClaudeApiConfig) => Provider` | The Claude Messages API as a provider. | 44.9, 44.10, 44.12, 44.21, 44.35, 44.38 |
+| `provider.claudeApi` | `(config: ClaudeApiConfig) => Provider` | The Claude Messages API as a provider. | 44.9, 44.10, 44.12, 44.21, 44.35, 44.38 |
 | `ClaudeApiConfig` | `{ apiKey: string; baseURL?: string; model: string; max_tokens: number; system?: string \| unknown[]; tools?: unknown[]; [field: string]: unknown }` | A Messages API request body, less `messages` and `stream`, with the client's key and origin. | 44.9, 44.10 |
-
-## `claudeCode`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.33 |
+| `provider.claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.33 |
 | `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the tools of the visitor's machine it asks for. | 44.15, 44.16, 44.29, 44.58 |
-| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; link: string; install: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the tools it is given, and the command that installs what opens the link. | 44.14, 44.32, 44.33, 44.40, 44.56, 44.76 |
-| `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40, 44.59, 44.60, 44.76 |
+| `provider.claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; link: string; install: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the tools it is given, and the command that installs what opens the link. | 44.14, 44.32, 44.33, 44.40, 44.56, 44.76 |
+| `provider.claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40, 44.59, 44.60, 44.76 |
 | `BridgeStatus` | `{ paired: boolean; missing: string[]; command: string; link: string; install: string }` | Whether a bridge is paired, the tools it cannot make available, and the command and the link that pair one, with the command that installs what opens the link. | 44.20, 44.40, 44.56, 44.59, 44.60 |
 | `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 16.57, 16.78 |
 | `/__abide/pairing` | `GET` | This browser's pairing, as it changes, for `pairing` to read. | 44.67, 44.68, 44.74, 44.75, 44.76, 18.36 |
@@ -420,12 +415,7 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `request` | `() => Request` | The request being served. | 18.16, 18.17, 18.18, 22.1 |
-
-## `requestIP`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `requestIP` | `() => ReceivedFrom \| 'in-process'` | Where the request being served came from. | 22.1, 22.12, 22.13 |
+| `request.ip` | `() => ReceivedFrom \| 'in-process'` | Where the request being served came from. | 22.1, 22.12, 22.13 |
 | `ReceivedFrom` | `{ address: string; family: 'IPv4' \| 'IPv6'; port: number } \| null` | The peer a listener received a request from. | 22.12 |
 
 ## `response`
@@ -972,7 +962,7 @@ rows a runner prints, and an adapter for an abide app.
 ## `abide-bridge` — the bridge
 
 `@abide/bridge`, a package of its own: what a visitor runs to put their own Claude Code behind a
-site's `claudeCode`.
+site's `provider.claudeCode`.
 
 | Command | Meaning | Rules |
 | --- | --- | --- |

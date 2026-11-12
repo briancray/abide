@@ -13,7 +13,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
 
 const SESSION = `import { cookies as jar, principal, reactive } from '@abide/abide'
-import { csp, GET, request } from '@abide/abide/server'
+import { csp, GET, request, response } from '@abide/abide/server'
 
 export const who = reactive(() => principal, { global: true })
 export const crumbs = reactive(() => jar(), { global: true })
@@ -21,6 +21,7 @@ export const nonce = reactive(() => csp.nonce, { global: true })
 export const policy = reactive(() => csp, { global: true })
 export const local = reactive(() => request().url)
 export const viewer = GET(() => principal.authenticated, { global: true })
+export const framed = GET(() => response.json(request.ip()), { global: true })
 `
 
 const PAGE = `<script>
@@ -64,7 +65,9 @@ function place(text: string, needle: string): { line: number; column: number } {
 // THE REVERTS: match the name as spelled rather than the symbol's own and the aliased `jar()` goes
 // unfound (3 against 4); drop `readsNonce` and the bare `csp` is found (5 against 4); read
 // `reactive(…)` alone in `reactiveOptions` and the `GET`'s global body goes unfound (3 against 4).
-// The page's own `route` is the near miss the declaration's path keeps out.
+// The page's own `route` is the near miss the declaration's path keeps out. A namespace member is a
+// read of the ambient that holds it: point `response`'s path in `AMBIENTS` at the module that
+// declared it before `response.ts` and `response.json` goes unfound (5 against 6).
 test('a global body reading an ambient is found at the read — 11.37', () => {
     expect(
         found.map(({ path, line, column }) => ({
@@ -80,8 +83,12 @@ test('a global body reading an ambient is found at the read — 11.37', () => {
             file: 'lib/session.ts',
             ...place(SESSION, 'principal.authenticated'),
         },
+        { file: 'lib/session.ts', ...place(SESSION, 'response.json') },
+        { file: 'lib/session.ts', ...place(SESSION, 'request.ip') },
     ])
     expect(found[1]?.message).toContain('`cookies`')
+    expect(found[4]?.message).toContain('`response`')
+    expect(found[5]?.message).toContain('`request`')
     expect(found[2]?.message).toContain('`csp.nonce`')
 })
 

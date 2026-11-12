@@ -164,7 +164,7 @@ async function answerOutcome(
     }
     // 21.22 — A `GET` THE DEVICE KEEPS, where the worker is there to keep it: a value, not a
     // refusal (16.40) nor a stream with no end to keep (16.32) — a generator's, or the lines a
-    // `jsonl` or an `sse` fixed.
+    // `response.jsonl` or a `response.sse` fixed.
     const framing = currentRequestScope()?.framing
     const kept =
         offline &&
@@ -341,7 +341,7 @@ function isForm(request: Request): boolean {
 /**
  * The answer a form posted with no script gets.
  *
- * 16.38 — a `redirect` the handler wrote passes through; a value is a 303 back where the form was;
+ * 16.38 — a `response.redirect` the handler wrote passes through; a value is a 303 back where the form was;
  * a refusal renders the nearest error page at its own status, and a fault renders it at 500.
  */
 async function navigated(

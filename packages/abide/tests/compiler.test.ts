@@ -177,13 +177,12 @@ test('a static page emits no client runtime import', async () => {
 test('the compiler is not reachable from the server seam', async () => {
     const server = await import('#server')
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
-    // owns: `render` is 35.4's, the five methods are 16.2's, `request`, `requestIP`, `response` and
-    // `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the hooks are 37's —
-    // `onError` among the shared seam's, the server's own exported over the browser's (37.16), and
-    // `store` the same way, the server's carrying `sqlite` (8.25) and `redis` (8.31) beside the
-    // shared three — `trace` is 24's and `config` is 27's; the six response helpers are 17's,
-    // `reachable` is 23's, `assistant`, `claudeApi` and `claudeCode` are 45's and `database` 47's.
-    // What only emitted code calls is on `server/runtime.ts`, not here.
+    // owns: `render` is 35.4's, the five methods are 16.2's, `request`, `response` and `server` are
+    // 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the hooks are 37's — `onError` among the
+    // shared seam's, the server's own exported over the browser's (37.16), and `store` the same way,
+    // the server's carrying `sqlite` (8.25) and `redis` (8.31) beside the shared three — `trace` is
+    // 24's and `config` is 27's; `reachable` is 23's, `assistant` and `provider` are 44's and
+    // `database` 47's. What only emitted code calls is on `server/runtime.ts`, not here.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -191,17 +190,12 @@ test('the compiler is not reachable from the server seam', async () => {
             'DELETE',
             'GET',
             'assistant',
-            'claudeApi',
-            'claudeCode',
             'PATCH',
             'POST',
             'PUT',
-            'bytes',
             'config',
             'createApp',
             'database',
-            'json',
-            'jsonl',
             'middleware',
             'onConfig',
             'onHealth',
@@ -210,15 +204,12 @@ test('the compiler is not reachable from the server seam', async () => {
             'onPrincipal',
             'onStart',
             'onStop',
-            'page',
+            'provider',
             'reachable',
-            'redirect',
             'render',
             'request',
-            'requestIP',
             'response',
             'server',
-            'sse',
             'trace',
         ].sort(),
     )

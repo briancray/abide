@@ -23,7 +23,7 @@ export {
     type Rpc,
     type RpcOptions,
 } from '#shared/rpc.ts'
-// 45 — a conversation with a model, piped through a handler, and the two providers abide ships.
+// 44 — a conversation with a model, piped through a handler, and the two providers abide ships.
 // 44 — what a page sends and is handed back, which the isomorphic entry carries too.
 export type {
     AssistantContent,
@@ -39,12 +39,9 @@ export {
     type Toolbox,
     type ToolDefinition,
 } from './assistant.ts'
-export { type ClaudeApiConfig, claudeApi } from './claudeApi.ts'
-export {
-    type BridgeStatus,
-    type ClaudeCodeConfig,
-    claudeCode,
-} from './claudeCode.ts'
+export type { ClaudeApiConfig } from './claudeApi.ts'
+export type { BridgeStatus, ClaudeCodeConfig } from './claudeCode.ts'
+export { provider } from './provider.ts'
 // 27 — the resolved configuration.
 export { type Config, config } from './config.ts'
 // 38.82 — the props `src/launcher.abide` is rendered with.
@@ -74,26 +71,10 @@ export type { Launch } from './launcherPage.ts'
 // 23.10 — whether a host answers, asked before a call to it.
 export { reachable } from './reachable.ts'
 export { type Component, render } from './render.ts'
-// 22.1 — the request being served, the response being built for it, and the listening server.
-// 22.12 — and where it came from.
-export {
-    type ReceivedFrom,
-    request,
-    requestIP,
-    response,
-    server,
-} from './requestScope.ts'
-// 17 — the response helpers, each a write through `response`.
-export {
-    bytes,
-    json,
-    jsonl,
-    page,
-    type RedirectStatus,
-    redirect,
-    sse,
-    type Values,
-} from './responseHelpers.ts'
+// 22.1 — the request being served and the listening server. 22.12 — and where it came from.
+export { type ReceivedFrom, request, server } from './requestScope.ts'
+// 22.1 — the response being built, and 17's helpers, each a write through it.
+export { type RedirectStatus, response, type Values } from './response.ts'
 // 8.25, 8.31 — the server's `store`, over the isomorphic one `export *` brings: the same members, and
 // `store.sqlite` and `store.redis`. A local export shadows a star export's name, as `onError` does.
 export * as store from './stores.ts'

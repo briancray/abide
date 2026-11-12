@@ -1,4 +1,4 @@
-import { bytes, GET } from '@abide/abide/server'
+import { GET, response } from '@abide/abide/server'
 
 const ENCODER = new TextEncoder()
 
@@ -18,6 +18,6 @@ async function* csvOf(): AsyncGenerator<Uint8Array> {
 }
 
 /** Answers at /activity/exportCsv with a file, whatever the caller asks. */
-export default GET(() => bytes(csvOf()), {
+export default GET(() => response.bytes(csvOf()), {
     description: "Hopper & Co's activity, as CSV.",
 })

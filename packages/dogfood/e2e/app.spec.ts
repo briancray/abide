@@ -220,7 +220,7 @@ test('the bundled stylesheet reaches the page', async ({ page }) => {
 
 // 44.75, 16.93 — THE PAIRING PANEL MOUNTED AS THE PAGE LOADS, and the page still goes idle: the panel
 // reads its pairing once and follows it over the socket, so no fetch stays open while it watches.
-// THE REVERT: answer `/__abide/pairing` as `claudeCode.bridge`'s stream again and read it in
+// THE REVERT: answer `/__abide/pairing` as `provider.claudeCode.bridge`'s stream again and read it in
 // `pairing.ts` as one; the open stream holds a connection and `networkidle` never comes.
 test('the pairing panel shows its command and the page reaches networkidle — 44.75', async ({
     page,

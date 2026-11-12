@@ -1,9 +1,9 @@
-import { POST, sse } from '@abide/abide/server'
+import { POST, response } from '@abide/abide/server'
 
 // A stand-in for the Messages API, streaming back the body it was sent.
 export default POST(
     (asked: Record<string, unknown>) =>
-        sse([
+        response.sse([
             { type: 'message_start', message: { usage: { input_tokens: 0 } } },
             {
                 type: 'content_block_start',

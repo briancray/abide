@@ -1,10 +1,10 @@
-// 22.12, 22.13, 38.136 — WHERE A REQUEST CAME FROM, and the interface it could come in on: `requestIP`
+// 22.12, 22.13, 38.136 — WHERE A REQUEST CAME FROM, and the interface it could come in on: `request.ip`
 // answers the peer under `abide start` (and under `abide dev`, in `dev.test.ts`), `'in-process'` for a
 // request no listener received, and `--hostname` binds the one interface it names.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
-import { GET, requestIP } from '#server'
+import { GET, request } from '#server'
 import { banner } from '#server/banner.ts'
 
 import { serveApp } from './builtApp.ts'
@@ -17,7 +17,7 @@ let stop = (): void => {}
 beforeAll(async () => {
     ;({ base, stop } = await serveApp(
         {
-            'whereFrom.handler.ts': `import { GET, requestIP } from '@abide/abide/server'\n\nexport default GET(() => requestIP(), { description: 'Where the call came from.' })\n`,
+            'whereFrom.handler.ts': `import { GET, request } from '@abide/abide/server'\n\nexport default GET(() => request.ip(), { description: 'Where the call came from.' })\n`,
         },
         process.env,
         ['--hostname', '127.0.0.1'],
@@ -59,7 +59,7 @@ test('the banner lists no network address for a named interface — 38.58, 38.13
 // 22.12 — UNDER `abide start` THE PEER IS BUN'S, and a call the app makes of itself in process is
 // `'in-process'`. THE REVERT: drop the `RECEIVED_FROM.set` from `App.listen`'s fetch; the http call
 // reads `'in-process'` too.
-test('requestIP answers the peer under start, and in-process for a call the app makes of itself — 22.12, 22.13', async () => {
+test('request.ip answers the peer under start, and in-process for a call the app makes of itself — 22.12, 22.13', async () => {
     const direct = (await (
         await Bun.fetch(`${base}/whereFrom`)
     ).json()) as Record<string, unknown>
@@ -85,10 +85,10 @@ test('requestIP answers the peer under start, and in-process for a call the app 
 })
 
 // 22.13 — `App.fetch` WITH NO LISTENER is in process. THE REVERT: answer `null` where nothing filed
-// the request in `requestIP`; the call reads `null`, which a unix socket answers too.
-test('requestIP answers in-process for App.fetch with no listener — 22.13', async () => {
+// the request in `request.ip`; the call reads `null`, which a unix socket answers too.
+test('request.ip answers in-process for App.fetch with no listener — 22.13', async () => {
     const app = await inMemoryApp({
-        'whereFrom.handler.ts': { default: GET(() => requestIP()) },
+        'whereFrom.handler.ts': { default: GET(() => request.ip()) },
     })
     const answer = await app.fetch(new Request('http://app.test/whereFrom'))
     expect(await answer.json()).toBe('in-process')
