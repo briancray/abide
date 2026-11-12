@@ -39,7 +39,7 @@ test('media follows matchMedia and its change event — 23.30', () => {
 
 // 23.30 — A QUERY FIRST ASKED BY A REQUEST ANSWERS THE BROWSER'S OUTSIDE IT: in a test process a page
 // fetched from the app asks first, and a component mounted after it reads the same value. THE REVERT:
-// build `followed` in `media` without `runInScope(undefined, …)`; it records the request as its
+// build a home with `make()` in `Filed`'s constructor in `scoped.ts`; it records the request as its
 // scope, its body runs there for good, and it reads `after it false, refreshed false`.
 test('a query a request asked first answers the browser after it — 23.30', async () => {
     viewport(1024)

@@ -27,7 +27,13 @@ import { appFiles } from '../../abide/src/server/appTree.ts'
 import { placement, routeOf } from '../../abide/src/server/placement.ts'
 import { PRIVATE_EXPORT } from '../../abide/src/server/PRIVATE_EXPORT.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'
+import { PRINCIPAL_ADDRESS } from '../../abide/src/shared/ADDRESSES.ts'
 import { browserCookies, COOKIES } from '../../abide/src/shared/cookies.ts'
+import {
+    BROWSER_PRINCIPAL,
+    PRINCIPAL,
+    principalMembers,
+} from '../../abide/src/shared/principal.ts'
 import { RPC_SERVER } from '../../abide/src/shared/RPC_SERVER.ts'
 import {
     removeTemporaryModules,
@@ -184,6 +190,7 @@ test('every example renders on the server and mounts on the client', async () =>
     }
 
     const serverCookies = COOKIES.current
+    const serverPrincipal = { ...PRINCIPAL }
     const fetched = globalThis.fetch
     // NO APP ANSWERS A `raw` CALL IN PROCESS, whatever ran first: an app booted earlier in this
     // process is the one a call outside every request falls to (16.42), stopped or not, and the
@@ -230,11 +237,15 @@ test('every example renders on the server and mounts on the client', async () =>
         }
         // A `raw` CALL GOES OVER THE WIRE, and there is no server here: it is answered `null`, which
         // is what is under test — the card paints and adopts — and not what the handler says.
+        // The browser's principal is loaded from its address, and answered signed out.
         globalThis.fetch = Object.assign(
-            async () =>
-                new Response('null', {
-                    headers: { 'content-type': 'application/json' },
-                }),
+            async (url: string | URL | Request) =>
+                new Response(
+                    String(url) === PRINCIPAL_ADDRESS
+                        ? '{"authenticated":false}'
+                        : 'null',
+                    { headers: { 'content-type': 'application/json' } },
+                ),
             { preconnect: () => {} },
         ) as typeof fetch
         for (const card of await allCards()) {
@@ -249,6 +260,7 @@ test('every example renders on the server and mounts on the client', async () =>
                 // IN A REQUEST, as a page is always rendered: `principal` reads the request's
                 // cookie and throws outside one (22.1).
                 COOKIES.current = serverCookies
+                Object.assign(PRINCIPAL, serverPrincipal)
                 await inScope(new Request('http://example.test/'), async () => {
                     html = new TextDecoder().decode(await render(Component))
                 })
@@ -271,6 +283,10 @@ test('every example renders on the server and mounts on the client', async () =>
                 // at the request scope, which a browser never does, so a mount reading `cookies()`
                 // would refuse as if it ran outside a request.
                 COOKIES.current = browserCookies
+                // And its principal: the server's slots refuse outside a request (22.1), and the one
+                // document outside every request is the browser's, loaded again under its slots.
+                Object.assign(PRINCIPAL, BROWSER_PRINCIPAL)
+                principalMembers().document.invalidate()
                 // The host holds the component and nothing else, so the pair `render` wrote round
                 // it (41.9) is its first child and its last.
                 mount({ open: host.firstChild, close: host.lastChild })
@@ -289,6 +305,7 @@ test('every example renders on the server and mounts on the client', async () =>
         globalThis.fetch = fetched
         RPC_SERVER.raw = serverRaw
         COOKIES.current = serverCookies
+        Object.assign(PRINCIPAL, serverPrincipal)
         console.warn = warned
         removeEventListener('error', escaped)
         removeEventListener('unhandledrejection', escaped)

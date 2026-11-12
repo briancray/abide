@@ -53,7 +53,9 @@ class Filed {
 
     constructor(make: () => unknown, lazy: boolean, global: boolean) {
         this.make = make
-        this.home = lazy ? UNBUILT : make()
+        // OUTSIDE EVERY SCOPE even where an `ambient` is first built inside a request (`principal`'s
+        // members): built there, the home read that request's instances for the life of the process.
+        this.home = lazy ? UNBUILT : runInScope(undefined, make, undefined)
         this.global = global
         this.declaredOwned = owning()
         this.unbuilt = newTracked()
