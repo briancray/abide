@@ -135,28 +135,32 @@ test('a file a newer build migrated is refused, not opened — 47.9', () => {
     )
 })
 
-// 47.3 — THE REVERT: open every string as `<name>.sqlite` in `pathOf`; the absolute path opens
-// `garage.sqlite.sqlite` and the relative one throws 47.3.
-test('a path opens that file, absolute as given and relative under APP_DATA_DIR — 47.2, 47.3', async () => {
+// 47.2, 47.3 — THE REVERT: resolve a relative path against APP_DATA_DIR in `pathOf`; the two
+// relative paths open under it rather than under the working directory. Or read only a `/` as a
+// path; `garage.sqlite` opens `garage.sqlite.sqlite` in APP_DATA_DIR.
+test('a path opens that file, relative to the working directory, and a bare name opens under APP_DATA_DIR — 47.2, 47.3', async () => {
     onDisk()
-    const absolute = database(`${directory}/elsewhere/garage.sqlite`, {
-        migrations: [CARS],
-    })()
-    const relative = database('data/garage.sqlite', { migrations: [CARS] })()
-    expect({
-        absolute: absolute.filename,
-        relative: relative.filename,
-        written: [
-            await Bun.file(`${directory}/elsewhere/garage.sqlite`).exists(),
-            await Bun.file(`${directory}/data/garage.sqlite`).exists(),
-        ],
-    }).toEqual({
-        absolute: `${directory}/elsewhere/garage.sqlite`,
-        relative: `${directory}/data/garage.sqlite`,
-        written: [true, true],
-    })
-    absolute.close()
-    relative.close()
+    mkdirSync(`${directory}/work`, { recursive: true })
+    const workingAsFound = process.cwd()
+    process.chdir(`${directory}/work`)
+    try {
+        const working = process.cwd()
+        const opened = [
+            `${directory}/elsewhere/garage.sqlite`,
+            'data/garage.sqlite',
+            'garage.sqlite',
+            'garage',
+        ].map((file) => database(file, { migrations: [CARS] })())
+        expect(opened.map((db) => db.filename)).toEqual([
+            `${directory}/elsewhere/garage.sqlite`,
+            `${working}/data/garage.sqlite`,
+            `${working}/garage.sqlite`,
+            `${directory}/garage.sqlite`,
+        ])
+        for (const db of opened) db.close()
+    } finally {
+        process.chdir(workingAsFound)
+    }
 })
 
 // 47.3 — THE REVERT: drop the `IN_MEMORY` test from `pathOf`; `:memory:` opens a file of that name
@@ -267,13 +271,13 @@ test('a file made before `database` adopts it through an idempotent first migrat
 })
 
 test('a name that is not a file name is refused — 47.3', () => {
-    for (const name of ['.garage', '', 'cars\\garage', ':memory'])
+    for (const name of ['', 'cars\\garage', ':memory', 'two words'])
         expect(() => database(name)).toThrow(
             `abide: database ${JSON.stringify(name)} is not a file name. RULEBOOK 47.3.`,
         )
     onDisk()
-    expect(() => database(() => '.garage')()).toThrow(
-        'abide: database ".garage" is not a file name. RULEBOOK 47.3.',
+    expect(() => database(() => 'two words')()).toThrow(
+        'abide: database "two words" is not a file name. RULEBOOK 47.3.',
     )
 })
 

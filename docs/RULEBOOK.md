@@ -4098,9 +4098,9 @@ call MUST hand back that same `Database` until 47.10 closes it.
 47.2 `database` MUST open the file `<name>.sqlite` in `APP_DATA_DIR` where given a name, and MUST
 create the directory holding the file it opens where it does not exist.
 
-47.3 `database` MUST open a string holding `/` as a path, resolved against `APP_DATA_DIR` where
-relative, and `:memory:` as a database in memory, and MUST throw for any other string holding
-anything but letters, digits, `_`, `-` and `.`, or opening with `.`.
+47.3 `database` MUST open a string holding `/` or `.` as a path, resolved against the process's
+working directory where relative, and `:memory:` as a database in memory, and MUST throw for any
+other string that is empty or holds anything but letters, digits, `_` and `-`.
 
 47.4 Where `NODE_ENV` is `test`, `database` MUST open an empty database in memory in place of the
 file 47.2 and 47.3 name, whatever it is given, one per opener and per test file `bun test` runs.

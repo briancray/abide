@@ -6,7 +6,10 @@ import { config, derived } from './config.ts'
 import { onStop } from './hooks.ts'
 
 /** 47.2, 47.3 — a name, opened as `<name>.sqlite`. A string neither a name nor a path is refused. */
-const NAME = /^[\w-][\w.-]*$/
+const NAME = /^[\w-]+$/
+
+/** 47.3 — a path: anything holding a `/` or a `.`, so `todos.sqlite` is the file it says. */
+const PATH = /[/.]/
 
 const IN_MEMORY = ':memory:'
 
@@ -18,9 +21,9 @@ type Migration = string | ((database: Database) => void)
  * The opener of the app's SQLite database `file`: the first call opens and migrates it, and every
  * call after hands back the same `bun:sqlite` `Database`.
  *
- * `file` is a name (`'todos'` is `todos.sqlite` in `APP_DATA_DIR`), a path holding `/` (relative
- * to `APP_DATA_DIR`), or `':memory:'` — or a function returning one, called as the file opens so it
- * can read `config()`.
+ * `file` is a name (`'todos'` is `todos.sqlite` in `APP_DATA_DIR`), a path holding a `/` or a `.`
+ * (relative to the working directory), or `':memory:'` — or a function returning one, called as the
+ * file opens so it can read `config()`.
  *
  * 47.6 — `PRAGMA user_version` counts the migrations a file has applied, so each runs once, in
  * order, however many times the app boots. A function migration is for what SQL cannot say alone:
@@ -65,7 +68,7 @@ export function database(
 }
 
 function checked(file: string): string {
-    if (file !== IN_MEMORY && !file.includes('/') && !NAME.test(file))
+    if (file !== IN_MEMORY && !PATH.test(file) && !NAME.test(file))
         throw new Error(
             `abide: database ${JSON.stringify(file)} is not a file name. RULEBOOK 47.3.`,
         )
@@ -118,16 +121,12 @@ function open(
     }
 }
 
-/** 47.2, 47.3 — a name's file under `APP_DATA_DIR`, a path resolved against it, or memory. */
+/** 47.2, 47.3 — a name's file under `APP_DATA_DIR`, a path from the working directory, or memory. */
 function pathOf(file: string): string {
     if (file === IN_MEMORY) return file
-    const directory = String(
-        config.peek()?.APP_DATA_DIR ?? derived().APP_DATA_DIR,
-    )
-    const path = resolve(
-        directory,
-        file.includes('/') ? file : `${file}.sqlite`,
-    )
+    const path = PATH.test(file)
+        ? resolve(file)
+        : `${String(config.peek()?.APP_DATA_DIR ?? derived().APP_DATA_DIR)}/${file}.sqlite`
     mkdirSync(dirname(path), { recursive: true })
     return path
 }
