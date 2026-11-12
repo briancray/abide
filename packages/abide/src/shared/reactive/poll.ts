@@ -70,7 +70,7 @@ const HELD = new WeakMap<object, Clock>()
  */
 const POLLED = new WeakSet<object>()
 
-/** 7.38, 7.39 — what `stopSignal` answers: aborted by a stop, replaced by the next app built. */
+/** 7.38, 7.39 — what `stopSignal` answers: aborted by a stop, replaced as that stop ends. */
 let STOPPING = new AbortController()
 
 /**
@@ -81,7 +81,7 @@ export function stopSignal(): AbortSignal {
     return STOPPING.signal
 }
 
-/** 7.39 — an app being built after a stop is handed a signal that does not already say stop. */
+/** 7.39 — a stop that has ended leaves a signal that does not already say stop. */
 export function renewStopSignal(): void {
     if (STOPPING.signal.aborted) STOPPING = new AbortController()
 }

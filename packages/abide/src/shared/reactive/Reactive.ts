@@ -13,6 +13,7 @@
 // read downstream of it deoptimizes.
 
 import { type Failed, isFailed, isFailedNamed } from '../Failed.ts'
+import { isAbort } from '../isAbort.ts'
 import { namedLogger } from '../log.ts'
 import { refuse } from '../refuse.ts'
 import { type Found, runSchema, type Schema } from '../Schema.ts'
@@ -1436,6 +1437,8 @@ function loadStamp(cell: Cell): LoadStamp {
  * reader sees nothing of it. `loading` is whether a load was in flight as it landed, which tells
  * the load a refresh started from a write refused after it. 7.28 — any other failure of a value
  * declaring `poll`, a job's first run among them, which has no reader for the failure to reach.
+ * Neither warns on 37.28's abort, a job's run giving up as `stopSignal` asked it to among them —
+ * past the revalidation's stamp, which is dropped either way.
  */
 function warnFailure(cell: Cell, failure: unknown, loading: boolean): void {
     if (cell.servable) {
@@ -1450,6 +1453,7 @@ function warnFailure(cell: Cell, failure: unknown, loading: boolean): void {
         }
         if (revalidated) {
             REVALIDATIONS.delete(cell)
+            if (isAbort(failure)) return
             REACTIVE_LOG.warning(
                 `${cell.label}: a revalidation failed, and what it held is still served.`,
                 failure,
@@ -1457,7 +1461,7 @@ function warnFailure(cell: Cell, failure: unknown, loading: boolean): void {
             return
         }
     }
-    if (isPolled(cell))
+    if (isPolled(cell) && !isAbort(failure))
         REACTIVE_LOG.warning(`${cell.label}: a polled run failed.`, failure)
 }
 

@@ -183,7 +183,8 @@ import Snippet from '#src/lib/Snippet.abide'
             file was last written. A read still runs the job at once.</p>
 
         <p>A run that should not be waited on reads <code>stopSignal()</code>. The stop aborts it
-            before waiting, so the run ends early and the stop waits only for that. A job that is
+            before waiting, so the run ends early and the stop waits only for that. A run that
+            gives up by throwing the abort has not failed, and nothing is logged for it. A job that is
             switched off by configuration checks <code>config()</code> at the top of its body and
             returns. The worker in the next section reads the signal.</p>
     </Section>

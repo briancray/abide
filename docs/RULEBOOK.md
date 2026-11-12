@@ -248,8 +248,8 @@ escape the write.
 
 4.11 An accepted write or production MUST clear the standing `s.error`.
 
-4.12 A failed revalidation MUST leave the held value being served, and MUST warn on
-`abide:reactive` naming the value.
+4.12 A failed revalidation MUST leave the held value being served, and, save where it fails with
+37.28's abort, MUST warn on `abide:reactive` naming the value.
 
 4.13 `s.set` MUST take the `Accepted` its factory declared, and a `Reactive` MUST carry that
 `Accepted` wherever it is passed.
@@ -433,7 +433,8 @@ holds.
 requests in flight have drained, before `onStop` runs and within 42.17's deadline.
 
 7.28 Every failure that fills `s.error` on a value declaring `poll`, an entry of a `Keyed` declaring
-it included, and is not a failed revalidation, MUST warn on `abide:reactive` naming the value.
+it included, and is neither a failed revalidation nor 37.28's abort, MUST warn on `abide:reactive`
+naming the value.
 
 7.29 A `reactive` with a body declaring `poll`, built where 7.23 has no owner to stop it, MUST NOT
 run its body where it is built.
@@ -464,8 +465,8 @@ opening that 7.34 puts a first run off for.
 
 7.38 `App.stop` MUST abort the signal `stopSignal` answers before it drains what is in flight.
 
-7.39 The signal `stopSignal` answers MUST stay aborted after `App.stop` until `createApp` builds an
-app, and MUST be one not aborted from before that app's `onStart` runs.
+7.39 The signal `stopSignal` answers MUST stay aborted from 7.38's abort until `App.stop` resolves,
+`onStop` included, and MUST be one not aborted from then on.
 
 # 8. Stores
 

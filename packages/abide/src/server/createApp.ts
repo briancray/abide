@@ -253,8 +253,6 @@ export async function bootEntered(
     //
     // 42.2 — THE CONFIGURATION IS READ AS PART OF THE BOOT, so a configuration that does not resolve
     // is a boot that fails rather than a first request that does.
-    // 7.39 — ahead of `onStart`, so what it starts is told of this app's stop and not a past one's.
-    renewStopSignal()
     let sources: AppSources | undefined
     await compose(inOrder(HOOKS.starts), async () => {
         config.invalidate()
@@ -452,7 +450,12 @@ export async function bootEntered(
         // 16.42 — a stopped app answers no `raw` call made outside every request.
         if (RPC_SERVER.raw === answerRaw) RPC_SERVER.raw = null
         bound = undefined
-        await compose(inOrder(HOOKS.stops), async () => {})(undefined)
+        // 7.39 — the signal says stop for the whole of the stop, `onStop` included, and no longer.
+        try {
+            await compose(inOrder(HOOKS.stops), async () => {})(undefined)
+        } finally {
+            renewStopSignal()
+        }
     }
 
     return {
