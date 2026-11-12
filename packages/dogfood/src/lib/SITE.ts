@@ -388,6 +388,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`onStart`',
                         '`onStop`',
                         '`ABIDE_STOP_TIMEOUT`',
+                        '`stopSignal`',
                         '`src/layout.abide`',
                         '`log`',
                         '`log.info` / `log.warning` / `log.error` / `log.debug`',

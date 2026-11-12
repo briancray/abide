@@ -105,6 +105,7 @@ export {
     resumeShare,
     type Selection,
     type Shared,
+    stopSignal,
     type Store,
     structural,
     synced,
