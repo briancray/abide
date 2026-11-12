@@ -1,13 +1,13 @@
-// SECTION 45 — A CONVERSATION WITH A MODEL, piped through a handler the app wrote. `assistant` is what
+// SECTION 44 — A CONVERSATION WITH A MODEL, piped through a handler the app wrote. `assistant` is what
 // every provider shares: the transcript's check, the app's MCP tools as a `Toolbox`, and the turn cap.
-// A `Provider` runs the conversation — `claudeApi` by looping over the Messages API itself,
-// `claudeCode` by handing it to a Claude Code on the visitor's own machine — and yields the one
+// A `Provider` runs the conversation — `provider.claudeApi` by looping over the Messages API itself,
+// `provider.claudeCode` by handing it to a Claude Code on the visitor's own machine — and yields the one
 // `AssistantEvent` stream either way (44.2).
 //
 // THE TOOLS ARE THE APP'S OWN MCP SURFACE (44.6), called in process through the app answering this
 // request and carrying the asker's credentials (44.7), so a tool does what the person asking could do
 // and nothing more. Both are CAPTURED when the conversation starts: a provider may call a tool from
-// another request's scope — `claudeCode` answers one from the bridge's — and the call is still this
+// another request's scope — `provider.claudeCode` answers one from the bridge's — and the call is still this
 // asker's.
 
 import type {
@@ -287,7 +287,7 @@ async function* traced(
 /** Where an MCP request is answered, as JSON-RPC's `result` or `error`. */
 type McpForward = (method: string, params: unknown) => Promise<McpReply>
 
-// WHAT A `Toolbox` FORWARDS AN MCP REQUEST TO, for a provider that speaks MCP itself (`claudeCode`):
+// WHAT A `Toolbox` FORWARDS AN MCP REQUEST TO, for a provider that speaks MCP itself (`provider.claudeCode`):
 // the app's own surface, verbatim, rather than a second server rebuilt over `list` and `call`. Beside
 // the type rather than on it, since a `Toolbox` is public and this is not.
 const FORWARDS = new WeakMap<Toolbox, McpForward>()

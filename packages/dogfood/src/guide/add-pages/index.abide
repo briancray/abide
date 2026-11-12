@@ -400,7 +400,7 @@ import Section from '#src/lib/Section.abide'
 
         <p><code>CompanySheet(&#123; company &#125;)</code> is a <code>Component</code>: the
             component bound to its props, not yet rendered. <code>render</code> turns it into the
-            document's bytes, built whole, and <code>page</code> answers with them as HTML.</p>
+            document's bytes, built whole, and <code>response.page</code> answers with them as HTML.</p>
 
         <p>A component written inside <code>&lt;html&gt;</code> is the whole document, so the
             sheet carries its own styles and no bundle. The CRM's root layout writes its document the

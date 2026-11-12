@@ -1108,7 +1108,7 @@ test('ABIDE_OFFLINE decides the worker abide start answers, whether a page regis
 // `max-age` ahead of the same windows, and none of it for a refusal, a stream or a mutation. With
 // the worker off, every answer is as it was. THE REVERT: drop the `kept` write in `answerOutcome`; `/getNote` keeps `no-store` with the worker on.
 test('a GET defaults to stale-while-revalidate, and a page and a public file to stale-if-error alone, where the worker is registered — 21.22, 21.23, 21.25, 21.11, 21.17', async () => {
-    const IMPORTS = `import { GET, POST, jsonl } from '@abide/abide/server'\nimport { refuse } from '@abide/abide'\n\n`
+    const IMPORTS = `import { GET, POST, response } from '@abide/abide/server'\nimport { refuse } from '@abide/abide'\n\n`
     const app = appFixture({
         'layout.abide':
             '<html lang="en"><head></head><body><slot/></body></html>',
@@ -1117,7 +1117,7 @@ test('a GET defaults to stale-while-revalidate, and a page and a public file to 
         'getClock.handler.ts': `${IMPORTS}export default GET(() => ({ at: 1 }), { global: true, ttl: 90_500 })\n`,
         'getForever.handler.ts': `${IMPORTS}export default GET(() => ({ at: 1 }), { global: true, ttl: Infinity })\n`,
         'getMissing.handler.ts': `${IMPORTS}export default GET(() => refuse(404))\n`,
-        'getLines.handler.ts': `${IMPORTS}export default GET(() => jsonl([1, 2]))\n`,
+        'getLines.handler.ts': `${IMPORTS}export default GET(() => response.jsonl([1, 2]))\n`,
         'addNote.handler.ts': `${IMPORTS}export default POST(() => ({ added: true }))\n`,
     })
     await Bun.write(`${app}/public/logo.txt`, 'logo')

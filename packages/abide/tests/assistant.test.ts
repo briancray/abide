@@ -1,5 +1,5 @@
-// SECTION 45 — `assistant` over a served app, with each provider abide ships: `claudeApi` against a
-// scripted Messages API, and `claudeCode` through a real `abide-bridge` paired with the app, running a
+// SECTION 44 — `assistant` over a served app, with each provider abide ships: `provider.claudeApi` against a
+// scripted Messages API, and `provider.claudeCode` through a real `abide-bridge` paired with the app, running a
 // scripted Claude Code (`fixtures/assistant`). Both play the same conversation: a turn that calls
 // `post_invoices_whoami`, and a turn that says what it answered.
 
@@ -75,15 +75,15 @@ export default POST(() => principal.clear(), { clients: { mcp: false } })
 // The claims carry an `iat` of their own, which the seal's overwrites, so the code this mints is
 // filed under the claims as a later request opens them rather than as they were handed.
 const SIGN_IN_AND_PAIR = `import { principal } from '@abide/abide'
-import { claudeCode, POST } from '@abide/abide/server'
+import { POST, provider } from '@abide/abide/server'
 
 export default POST(async ({ id }: { id: string }) => {
     await principal.set({ id, iat: 1 })
-    return claudeCode.bridgeCommand()
+    return provider.claudeCode.bridgeCommand()
 }, { clients: { mcp: false } })
 `
 
-const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, type ClaudeCodeConfig, GET, POST, type Provider } from '@abide/abide/server'
+const ASK = `import { assistant, type AssistantMessage, type ClaudeCodeConfig, GET, POST, type Provider, provider } from '@abide/abide/server'
 
 const HIDDEN = { clients: { mcp: false } }
 
@@ -105,13 +105,13 @@ const own: Provider = {
     },
 }
 
-export const bridge = GET(() => claudeCode.bridge(), { ...HIDDEN, timeout: Infinity })
+export const bridge = GET(() => provider.claudeCode.bridge(), { ...HIDDEN, timeout: Infinity })
 
-export const command = GET(() => claudeCode.bridgeCommand(), HIDDEN)
+export const command = GET(() => provider.claudeCode.bridgeCommand(), HIDDEN)
 
-export const granting = GET(() => claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
+export const granting = GET(() => provider.claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
 
-export const asking = GET(() => claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
+export const asking = GET(() => provider.claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
 
 export const ask = POST(
     async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code' | 'own'; maxTurns?: number; config?: Record<string, unknown> }) {
@@ -120,9 +120,9 @@ export const ask = POST(
             via === 'own'
                 ? own
                 : via === 'api'
-                ? claudeApi({ apiKey: 'key', baseURL: process.env.FAKE_API, model: 'claude-opus-5', max_tokens: 1000 })
+                ? provider.claudeApi({ apiKey: 'key', baseURL: process.env.FAKE_API, model: 'claude-opus-5', max_tokens: 1000 })
                 // Loose, so an option no site may set reaches the bridge to be refused there.
-                : claudeCode((config ?? { model: 'sonnet', appendSystemPrompt: 'Be brief.' }) as ClaudeCodeConfig),
+                : provider.claudeCode((config ?? { model: 'sonnet', appendSystemPrompt: 'Be brief.' }) as ClaudeCodeConfig),
             { mcp: true, maxTurns },
         )
     },
@@ -382,7 +382,7 @@ test('both providers play one conversation as one event sequence, tools called a
 // image block, base64 with its type, which the scripted API answers back; the `result` event carries the
 // answer's words, which an image has none of. THE REVERTS: drop the image arm of `blocksOf` and the model
 // is handed nothing; spread the whole answer into the event and it carries the image's bytes.
-test('claudeApi shows a tool answered image to the model as one, and the event carries no bytes — 44.35', async () => {
+test('provider.claudeApi shows a tool answered image to the model as one, and the event carries no bytes — 44.35', async () => {
     const said = await events(await ask('one', 'api', 'show me'))
     expect(said).toContainEqual({
         type: 'result',
@@ -473,7 +473,7 @@ test('a handler that takes args is one resultsOf reads — 44.51', () => {
 // 44.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
 // `post_invoices_whoami` is announced as it streams, but no `result` follows and the conversation ends on
 // `max_turns` rather than the `tool_use` the turn stopped for. THE REVERTS: yield `stop` as it arrived
-// in `claudeApi`'s `done`, and this reads `tool_use`; drop `turn >= maxTurns`, and the call runs and a
+// in `provider.claudeApi`'s `done`, and this reads `tool_use`; drop `turn >= maxTurns`, and the call runs and a
 // second turn answers `saw "ada"`.
 test('a conversation out of turns ends on max_turns without running the pending call — 44.11', async () => {
     expect(await events(await ask('one', 'api', 'who am I?', 1))).toEqual([
@@ -505,7 +505,7 @@ async function eventsUntilTool(answer: Response): Promise<unknown[]> {
 
 // 44.28 — A CALL IS ANNOUNCED AS THE MODEL STARTS WRITING IT. Both models start `post_invoices_whoami`
 // and never finish writing it, so the `tool` is all a page can have seen, and no `input` follows. THE
-// REVERTS: yield `tool` at `content_block_stop` in `claudeApi`, or report it from the finished
+// REVERTS: yield `tool` at `content_block_stop` in `provider.claudeApi`, or report it from the finished
 // `assistant` line in the bridge, and that provider yields nothing for two seconds.
 test('a tool call is announced before its input is written — 44.28', async () => {
     const started = [
@@ -785,7 +785,7 @@ test('a site setting an option it may not fails the turn — 44.16', async () =>
 }, 30_000)
 
 // 44.18 — A CALLER WHO HANGS UP ENDS THE RUN on the visitor's machine: the page's answer canceled once
-// the first event is in. THE REVERT: drop the `cancel` frame `claudeCode` sends on abort; the fake
+// the first event is in. THE REVERT: drop the `cancel` frame `provider.claudeCode` sends on abort; the fake
 // waits forever and its pid still answers a signal 0.
 test('a caller hanging up kills the Claude Code run — 44.18', async () => {
     await pairBridge('five')
@@ -1126,7 +1126,7 @@ test("an image a model cannot take, or one in a turn not the user's, is refused 
 // 44.38 — AN IMAGE IN THE TRANSCRIPT IS SHOWN THE MODEL AS ONE, in its place in its turn: the scripted
 // API answers the last turn's content back as it came. THE REVERT: send `content` as it is and the API
 // is handed the pieces in abide's own shape, which it refuses.
-test('claudeApi shows a transcript image to the model in its place — 44.38', async () => {
+test('provider.claudeApi shows a transcript image to the model in its place — 44.38', async () => {
     const said = await events(await askWith('one', 'api', LOOKED_AT))
     expect(said).toContainEqual({
         type: 'text',

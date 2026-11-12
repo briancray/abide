@@ -157,7 +157,7 @@ export async function* runTurn({
     if (bridge === undefined)
         throw refuse(
             409,
-            'No Claude Code is paired with this browser as the one signed in. claudeCode.bridgeCommand() is the command that pairs one.',
+            'No Claude Code is paired with this browser as the one signed in. provider.claudeCode.bridgeCommand() is the command that pairs one.',
         )
     const turn = randomToken(9, 'base64url')
     const inbox = new Inbox<TurnItem>()

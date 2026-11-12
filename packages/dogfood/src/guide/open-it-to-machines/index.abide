@@ -198,11 +198,11 @@ import Section from '#src/lib/Section.abide'
         </table>
     </Section>
 
-    <Section title="`claudeApi` sends the request body you wrote">
+    <Section title="`provider.claudeApi` sends the request body you wrote">
         <Example
             id="crm-09-claude-api"
             app="crm-09"
-            title="`claudeApi(config)` — the request body you wrote, sent as written"
+            title="`provider.claudeApi(config)` — the request body you wrote, sent as written"
             summary="The assistant on Anthropic's API, its baseURL pointed at a stand-in in the CRM that answers with the body it was sent. Ask, and read the request."
             files={{
                 'src/assistant/lib/ClaudeApiRequest.abide': claudeApiRequestSource,
@@ -214,21 +214,21 @@ import Section from '#src/lib/Section.abide'
             <ClaudeApiRequest />
         </Example>
 
-        <p><code>claudeApi</code> takes a Messages API request body as Anthropic documents it,
+        <p><code>provider.claudeApi</code> takes a Messages API request body as Anthropic documents it,
             with the client's <code>apiKey</code> and <code>baseURL</code> beside it. Its type is
             <code>ClaudeApiConfig</code>. abide adds <code>messages</code> and <code>stream</code>, and
             every other field is sent as you wrote it.</p>
 
-        <p>Leave <code>baseURL</code> out and the request goes to Anthropic. <code>claudeApi</code>
+        <p>Leave <code>baseURL</code> out and the request goes to Anthropic. <code>provider.claudeApi</code>
             reads no key from the environment, so pass <code>apiKey</code> from wherever the CRM keeps
             its secrets. Read on: <a href={url('/guide/run-it')}>Run it</a></p>
     </Section>
 
-    <Section title="`claudeCode` runs on the visitor's own Claude Code">
+    <Section title="`provider.claudeCode` runs on the visitor's own Claude Code">
         <Example
             id="crm-09-claude-code"
             app="crm-09"
-            title="`claudeCode(config)` — a turn on the reader's own Claude Code"
+            title="`provider.claudeCode(config)` — a turn on the reader's own Claude Code"
             summary="The assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; pair with a click or run the command in a terminal, and ask again."
             files={{
                 'src/assistant/lib/ClaudeCodeBridge.abide': claudeCodeBridgeSource,
@@ -239,7 +239,7 @@ import Section from '#src/lib/Section.abide'
             <ClaudeCodeBridge />
         </Example>
 
-        <p><code>claudeCode</code> sends the conversation to Claude Code on the asker's machine,
+        <p><code>provider.claudeCode</code> sends the conversation to Claude Code on the asker's machine,
             on their own sign-in and plan. Its config, <code>ClaudeCodeConfig</code>, is Claude Code's
             own option names, each passed as its flag: <code>model</code>, <code>fallbackModel</code>,
             <code>systemPrompt</code>, <code>appendSystemPrompt</code>, <code>effort</code>,
@@ -269,8 +269,8 @@ import Section from '#src/lib/Section.abide'
             <code>--env NAME=VALUE</code> sets a variable for it, such as a proxy or an API key of
             the visitor's own.</p>
 
-        <p>Pass the same <code>tools</code> to <code>claudeCode.bridge</code> or
-            <code>claudeCode.bridgeCommand</code> and the command it mints carries that grant, so a
+        <p>Pass the same <code>tools</code> to <code>provider.claudeCode.bridge</code> or
+            <code>provider.claudeCode.bridgeCommand</code> and the command it mints carries that grant, so a
             visitor who runs it as shown gives the tools. One minted without them grants none.</p>
 
         <p>The visitor pairs once per visit by running a command, which dials out to the site.
@@ -300,7 +300,7 @@ import Section from '#src/lib/Section.abide'
             moment. Unmounting the component stops the read and the timers.</p>
 
         <p>The server decides what that pairing grants, never the page. Set
-            <code>ABIDE_BRIDGE_TOOLS</code> to the same tools your <code>claudeCode</code> turns
+            <code>ABIDE_BRIDGE_TOOLS</code> to the same tools your <code>provider.claudeCode</code> turns
             ask for, separated by commas, in an <code>onConfig</code> default or the environment.
             Unset, it grants none, and a tool a request names is ignored.</p>
 
@@ -349,9 +349,9 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>/__abide/pairing</code></td><td>Where <code>pairing</code> reads this browser's status, followed over the socket. On no generated surface.</td></tr>
                 <tr><td><code>ABIDE_BRIDGE_TOOLS</code></td><td>The tools <code>/__abide/pairing</code> grants, separated by commas. Unset, none.</td></tr>
                 <tr><td><code>onPairing</code></td><td>The options every pairing's command and install command carry after <code>--</code>, for the person asking.</td></tr>
-                <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
+                <tr><td><code>provider.claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
-                <tr><td><code>claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>
+                <tr><td><code>provider.claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>
                 <tr><td><code>/__abide/bridge</code></td><td>Where the visitor's bridge connects. It opens the first time a command is minted.</td></tr>
             </tbody>
         </table>

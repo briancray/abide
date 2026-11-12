@@ -64,7 +64,7 @@ export default GET(async () => {
 }
 
 // Every hook, each leaving a mark a request or a script can read back.
-const APP = `import { cookies, middleware, onConfig, onError, onHealth, onStart, onStop, redirect, request, response } from '@abide/abide/server'
+const APP = `import { cookies, middleware, onConfig, onError, onHealth, onStart, onStop, request, response } from '@abide/abide/server'
 import { marks } from './lib/marks.server.ts'
 
 onConfig(() => ({ LIMIT: 5, FEATURE: false, LABEL: 'default' }))
@@ -101,7 +101,7 @@ middleware(async (next, { request: asked }) => {
     // 30.16 — a rung that decides a page: a redirect written through \`response\`, and a refusal
     // answered in the page's place.
     const path = new URL(asked.url).pathname
-    if (path === '/invoices/moved') redirect('/invoices/42')
+    if (path === '/invoices/moved') response.redirect('/invoices/42')
     if (path === '/invoices/refused') return new Response('refused', { status: 403 })
     return next()
 })

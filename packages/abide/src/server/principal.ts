@@ -248,7 +248,7 @@ function identityOf(opened: Sealed | null): string {
  * synchronously, off the cookie, so the pairing command stays a plain call.
  */
 export function signedInAs(): string {
-    return identityOf(openedSeal(within('claudeCode')))
+    return identityOf(openedSeal(within('provider.claudeCode')))
 }
 
 /** Who `request` is signed in as, as `signedInAs` says it, read off its own cookie alone. 16.98. */

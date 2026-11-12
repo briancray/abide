@@ -1,8 +1,8 @@
 import {
     assistant,
     type AssistantMessage,
-    claudeApi,
     POST,
+    provider,
     request,
 } from '@abide/abide/server'
 
@@ -14,7 +14,7 @@ export default POST(
         const standInAt = new URL(standIn.url({}), request().url)
         yield* assistant(
             messages,
-            claudeApi({
+            provider.claudeApi({
                 apiKey: 'the stand-in reads none',
                 baseURL: standInAt.href.replace('/v1/messages', ''),
                 model: 'claude-opus-5',

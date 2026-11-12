@@ -25,7 +25,7 @@ export {
     type Rpc,
     type RpcOptions,
 } from '#shared/rpc.ts'
-// 45 — a conversation with a model, piped through a handler, and the two providers abide ships.
+// 44 — a conversation with a model, piped through a handler, and the two providers abide ships.
 // 44 — what a page sends and is handed back, which the isomorphic entry carries too.
 export type {
     AssistantContent,
@@ -41,12 +41,9 @@ export {
     type Toolbox,
     type ToolDefinition,
 } from './assistant.ts'
-export { type ClaudeApiConfig, claudeApi } from './claudeApi.ts'
-export {
-    type BridgeStatus,
-    type ClaudeCodeConfig,
-    claudeCode,
-} from './claudeCode.ts'
+export type { ClaudeApiConfig } from './claudeApi.ts'
+export type { BridgeStatus, ClaudeCodeConfig } from './claudeCode.ts'
+export { provider } from './provider.ts'
 // 27 — the resolved configuration.
 export { type Config, config } from './config.ts'
 // 38.82 — the props `src/launcher.abide` is rendered with.
@@ -90,26 +87,10 @@ export { type Component, render } from './render.ts'
 // 32.17's run-time half: one invocation, rendered where it stands, with the anchors that make the
 // child's markup one thing for the client to walk to.
 export { renderComponent } from './renderComponent.ts'
-// 22.1 — the request being served, the response being built for it, and the listening server.
-// 22.12 — and where it came from.
-export {
-    type ReceivedFrom,
-    request,
-    requestIP,
-    response,
-    server,
-} from './requestScope.ts'
-// 17 — the response helpers, each a write through `response`.
-export {
-    bytes,
-    json,
-    jsonl,
-    page,
-    type RedirectStatus,
-    redirect,
-    sse,
-    type Values,
-} from './responseHelpers.ts'
+// 22.1 — the request being served and the listening server. 22.12 — and where it came from.
+export { type ReceivedFrom, request, server } from './requestScope.ts'
+// 22.1 — the response being built, and 17's helpers, each a write through it.
+export { type RedirectStatus, response, type Values } from './response.ts'
 // 8.31 — a `Store` in a Redis key.
 export { redisStore } from './redisStore.ts'
 // 8.25 — a `Store` in a `bun:sqlite` table.

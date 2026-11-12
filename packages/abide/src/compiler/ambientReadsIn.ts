@@ -36,7 +36,7 @@ const AMBIENTS: { path: string; name: string; nonce: boolean }[] = [
         nonce: false,
     },
     {
-        path: FRAMEWORK_SOURCES.requestScope,
+        path: FRAMEWORK_SOURCES.response,
         name: 'response',
         nonce: false,
     },

@@ -177,13 +177,13 @@ test('the compiler is not reachable from the server seam', async () => {
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
-    // `request`, `requestIP`, `response` and `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the hooks and the
+    // `request`, `response` and `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the hooks and the
     // `fileRoute` a compiled server block files them under are 37's — `onError` among the shared
     // seam's, the server's own exported over the browser's (37.16) —
     // `trace` is 24's and `config` is 27's; `callsInRender` is what an emitted component reads
     // around its setup (41.28), `derivedArgs` what a handler's module holds it to its annotation by
-    // (19.9) and `addressed` what gives it its address (16.88); the six response helpers are 17's, `reachable` is
-    // 23's, `assistant`, `claudeApi` and `claudeCode` are 45's, `sqliteStore` is 8.25's, `redisStore` 8.31's and `database` 47's.
+    // (19.9) and `addressed` what gives it its address (16.88); `reachable` is
+    // 23's, `assistant` and `provider` are 44's, `sqliteStore` is 8.25's, `redisStore` 8.31's and `database` 47's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -194,18 +194,13 @@ test('the compiler is not reachable from the server seam', async () => {
             'assistant',
             'callsInRender',
             'derivedArgs',
-            'claudeApi',
-            'claudeCode',
             'PATCH',
             'POST',
             'PUT',
-            'bytes',
             'config',
             'createApp',
             'database',
             'fileRoute',
-            'json',
-            'jsonl',
             'middleware',
             'onConfig',
             'onHealth',
@@ -214,18 +209,15 @@ test('the compiler is not reachable from the server seam', async () => {
             'onPrincipal',
             'onStart',
             'onStop',
-            'page',
+            'provider',
             'reachable',
-            'redirect',
             'redisStore',
             'render',
             'sqliteStore',
             'renderComponent',
             'request',
-            'requestIP',
             'response',
             'server',
-            'sse',
             'trace',
         ].sort(),
     )

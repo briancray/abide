@@ -20,8 +20,10 @@ export const FRAMEWORK_SOURCES = {
     methods: besideCompiler('../shared/rpc.ts'),
     /** `onConfig` (27.13). */
     hooks: besideCompiler('../server/hooks.ts'),
-    /** `request` and `response`. */
+    /** `request`. */
     requestScope: besideCompiler('../server/requestScope.ts'),
+    /** `response`. */
+    response: besideCompiler('../server/response.ts'),
     principal: besideCompiler('../shared/principal.ts'),
     cookies: besideCompiler('../shared/cookies.ts'),
     csp: besideCompiler('../shared/csp.ts'),

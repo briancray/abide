@@ -406,11 +406,6 @@ export function writtenStatus(): number {
     return STORAGE.getStore()?.response.status ?? 200
 }
 
-/** The request being served. 22.1. */
-export function request(): Request {
-    return within('request').request as Request
-}
-
 // 21.20 — only the handler being answered: one it calls in process reports into the same scope.
 export function handlerTook(rpc: object, duration: number): void {
     const timing = STORAGE.getStore()?.timing
@@ -457,10 +452,16 @@ export function serverTiming(): string | undefined {
     return entries.length === 0 ? undefined : entries.join(', ')
 }
 
-/** The response being built for the request being served. 22.1, 22.9. */
-export function response(): { status: number; headers: Headers } {
-    const scope = within('response')
-    refuseUnanswered(scope, 'response()')
+/**
+ * The response being built for the request being served, read by `name` (`response.ts`), which
+ * a throw names. 22.1, 22.9.
+ */
+export function responseWritten(name: string): {
+    status: number
+    headers: Headers
+} {
+    const scope = within(name)
+    refuseUnanswered(scope, `${name}()`)
     return scope.response
 }
 
@@ -485,13 +486,22 @@ export const RECEIVED_FROM = new WeakMap<Request, ReceivedFrom>()
  * 22.12, 22.13 — the same under `abide start`, `abide dev` and `App.listen`; `null` where the
  * listener names no peer, as a unix socket does. A socket mux frame answers its upgrade's.
  */
-export function requestIP(): ReceivedFrom | 'in-process' {
-    const scope = within('requestIP')
+function ip(): ReceivedFrom | 'in-process' {
+    const scope = within('request.ip')
     const asked = (scope.received ?? scope.request) as Request
     return RECEIVED_FROM.has(asked)
         ? (RECEIVED_FROM.get(asked) as ReceivedFrom)
         : 'in-process'
 }
+
+/** The request being served. 22.1. */
+function requestBeingServed(): Request {
+    return within('request').request as Request
+}
+
+/** The request being served, and where it came from. 22.1, 22.12. */
+export const request: typeof requestBeingServed & { ip: typeof ip } =
+    Object.assign(requestBeingServed, { ip })
 
 /**
  * The listening server.

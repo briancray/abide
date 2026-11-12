@@ -14,7 +14,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 // Past the moment bun reaps an idle connection, which its four-second tick puts up to four late.
 const PAST_REAPING = (IDLE_TIMEOUT_SECONDS + 5) * 1000
 
-const HANDLERS = `import { GET, POST, reactive, sse } from '@abide/abide/server'
+const HANDLERS = `import { GET, POST, reactive, response } from '@abide/abide/server'
 
 const quote = reactive(1, { global: true })
 
@@ -36,7 +36,7 @@ export const ticks = GET(async function* () {
 })
 
 export const beats = GET(() =>
-    sse(
+    response.sse(
         (async function* () {
             yield 1
             await Bun.sleep(${HEARTBEAT_MILLISECONDS + 1000})

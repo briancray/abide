@@ -1,4 +1,4 @@
-import { GET, notFound, page, render } from '@abide/abide/server'
+import { GET, notFound, render, response } from '@abide/abide/server'
 
 import { COMPANIES } from './lib/COMPANIES.server.ts'
 import CompanySheet from './lib/CompanySheet.abide'
@@ -8,7 +8,7 @@ export default GET(
     async ({ id }: { id: string }) => {
         const company = COMPANIES.find((one) => one.id === id)
         if (company === undefined) return notFound()
-        return page(await render(CompanySheet({ company })))
+        return response.page(await render(CompanySheet({ company })))
     },
     { description: "A company's account sheet, rendered on its own." },
 )

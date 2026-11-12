@@ -758,7 +758,7 @@ test('a streaming mutation coalesces until its stream closes, then calls again �
 // 16.32, 16.74 — AND THE BUILD IS WHAT MARKS IT: a handler returning an async generator is written
 // into its file's browser wrapper as a stream, and one that does not is left a value — a mutation's
 // as much as a read's, and an arrow handing one back or a promise of one, or a member naming one
-// (`claudeCode.bridge`), as much as one declared `async function*`. THE REVERT: return false from
+// (`provider.claudeCode.bridge`), as much as one declared `async function*`. THE REVERT: return false from
 // `isGenerator` in `declaredExports`; no wrapper carries `stream` and every copy collects. Mark a
 // `GET`'s alone and `postLines` loses it; drop the `Promise` unwrap and `awaitedLines` does.
 test('the build marks a handler returning an async generator as a stream in its wrapper — 16.32', async () => {

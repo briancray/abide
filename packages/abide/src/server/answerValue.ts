@@ -1,6 +1,6 @@
 // WHAT A HANDLER'S VALUE IS ANSWERED AS, over http. JSON by default (16.30), and otherwise by what the
 // value is: a `Response` as it stands (16.36), a binary as bytes (16.34), a `Blob` range-aware
-// (16.35), a document where `page` named one (17.2), a stream — a streaming handler's chunks, or
+// (16.35), a document where `response.page` named one (17.2), a stream — a streaming handler's chunks, or
 // `Values` a handler returned — framed one chunk per pull (16.32, 16.44–16.47).
 
 import { isFailed, problemOf } from '#shared/Failed.ts'
@@ -43,7 +43,7 @@ export async function answerValue(
 ): Promise<Response> {
     if (value instanceof Response) return heldUntilSent(value)
     const framing = currentRequestScope()?.framing
-    // 17.9, 17.10 — what `json` fixed: the standing value, whatever it is, and `null` for nothing.
+    // 17.9, 17.10 — what `response.json` fixed: the standing value, whatever it is, and `null` for nothing.
     if (framing === 'json') {
         headers.set('content-type', 'application/json')
         return compressAnswer(
@@ -54,7 +54,7 @@ export async function answerValue(
         )
     }
     // 16.31 — nothing to say is 204, where the handler wrote no status of its own, and 16.52 — a
-    // type for no content is noise, at any status: a `redirect` has no body for it to describe.
+    // type for no content is noise, at any status: a `response.redirect` has no body for it to describe.
     if (value === undefined) {
         headers.delete('content-type')
         return new Response(null, {
@@ -70,7 +70,7 @@ export async function answerValue(
             headers,
             status,
         )
-    // 17.2 — the document `page` named: text, the bytes `render` hands back, or a stream of bytes.
+    // 17.2 — the document `response.page` named: text, the bytes `render` hands back, or a stream of bytes.
     // 38.29 — one in hand is a document, in the encoding the request takes.
     if (framing === 'html') {
         headers.set('content-type', 'text/html; charset=utf-8')

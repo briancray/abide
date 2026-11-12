@@ -470,7 +470,7 @@ export async function bootEntered(
                 ...listenerOptions(options),
                 // 18.1, 37.3 — THE ONE MUX, upgraded where the app lane admitted it.
                 fetch: async (request, server) => {
-                    // 22.12 — where it came from, for `requestIP` to answer.
+                    // 22.12 — where it came from, for `request.ip` to answer.
                     RECEIVED_FROM.set(request, server.requestIP(request))
                     const answered = await fetch(request)
                     return admitsMux(request, answered, booted)

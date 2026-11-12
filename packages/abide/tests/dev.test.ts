@@ -115,7 +115,7 @@ process.exit(3)
 <main id="exit"/>`,
         // 22.12 — where a call came from, which only the listener's process can see.
         'whereFrom.handler.ts':
-            "import { GET, requestIP } from '@abide/abide/server'\n\nexport default GET(() => requestIP())\n",
+            "import { GET, request } from '@abide/abide/server'\n\nexport default GET(() => request.ip())\n",
         'package.json': PACKAGE,
         'tsconfig.json': TSCONFIG,
     })
@@ -696,7 +696,7 @@ test('a dev server given a taken port does not move off it — 38.64', async () 
 }, 30_000)
 
 // 38.136 — `abide dev --hostname` LISTENS ON THAT INTERFACE ALONE, as `abide start`'s does
-// (`requestIP.test.ts`). THE REVERT: drop `hostname` from what `serveDev` hands `Bun.serve`; the
+// (`requestIp.test.ts`). THE REVERT: drop `hostname` from what `serveDev` hands `Bun.serve`; the
 // address prints as `localhost` and the IPv6 loopback answers.
 test('dev --hostname listens on the interface it names alone — 38.136', async () => {
     const at = new URL(base)
@@ -711,7 +711,7 @@ test('dev --hostname listens on the interface it names alone — 38.136', async 
 // 22.12 — THE PEER CROSSES TO THE WORKER WITH THE REQUEST, so a handler under `abide dev` reads what
 // one under `abide start` does. THE REVERT: drop the `RECEIVED_FROM.set` from the worker's `fetch`;
 // the call reads `'in-process'`.
-test('requestIP answers the peer the listener received under dev — 22.12', async () => {
+test('request.ip answers the peer the listener received under dev — 22.12', async () => {
     const from = (await (
         await Bun.fetch(`${base}/whereFrom`)
     ).json()) as Record<string, unknown>
