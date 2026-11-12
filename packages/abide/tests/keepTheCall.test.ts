@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
 
+import { gate, inAFreshProcess } from '@abide/harness/gate'
+
 import { POST } from '#server'
 import {
     flushSync,
@@ -325,3 +327,67 @@ test('reactive<typeof a | typeof b>() keeps a call of either — 4.19', async ()
         expect(account).toBeUndefined()
     }
 })
+
+// 2.15 — AFTER-SUCCESS IS `then` WITH ONE ARGUMENT. A refusal the kept value holds on `error` is not
+// reported unhandled by a `then` given no `onFailed`; an `await` still rejects, and a throw from the
+// follow-up is still reported. Counted in a child: `bun test` fails a test an unhandled rejection
+// lands in before any listener the test adds can count it. Four submits, three refused, each
+// followed by `then(onDone)`, then a follow-up that throws. THE REVERT: hand the kept value's `then`
+// an `onFailed` that rethrows, which is the member without 2.15 — `reported` reads 4 where 1 is owed.
+let thenReverted = false
+gate(
+    'then with no onFailed leaves a refusal on error, and reports a throw from the follow-up — 2.15',
+    {
+        revert: () => {
+            thenReverted = true
+            return () => {
+                thenReverted = false
+            }
+        },
+        worth: { reported: 'reported=4' },
+    },
+    async () => {
+        const run = await inAFreshProcess(`
+import { POST } from '${import.meta.dir}/../src/server/index.ts'
+import { reactive, refuse } from '${import.meta.dir}/../src/shared/index.ts'
+
+let reported = 0
+process.on('unhandledRejection', () => {
+    reported += 1
+})
+const Closed = refuse.named('Closed', 409)
+const save = POST(async ({ ok }) => (ok ? { ok } : Closed()))
+const saving = reactive()
+const keep = (call) => {
+    saving.set(call)
+    ${thenReverted ? 'const then = saving.then; saving.then = (onSettled, onFailed) => then.call(saving, onSettled, onFailed ?? ((error) => { throw error }))' : ''}
+}
+let landed = 0
+let refused = 0
+for (const ok of [false, true, false, false]) {
+    keep(save({ ok }))
+    saving.then(() => {
+        landed += 1
+    })
+    await saving.then(undefined, () => {
+        refused += 1
+    })
+}
+let awaited = 'resolved'
+try {
+    await saving
+} catch (error) {
+    awaited = error.name
+}
+keep(save({ ok: true }))
+saving.then(() => {
+    throw new Error('follow-up broke')
+})
+await Bun.sleep(20)
+console.log('reported=' + reported, 'landed=' + landed, 'refused=' + refused, 'awaited=' + awaited)`)
+        expect(run.output).toContain(
+            'reported=1 landed=1 refused=3 awaited=Closed',
+        )
+    },
+)
+

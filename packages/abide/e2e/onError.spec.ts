@@ -18,6 +18,11 @@ export default POST(() => {
 })
 `
 
+const ANSWERED = `import { POST } from '@abide/abide/server'
+
+export default POST(() => ({ answered: true }))
+`
+
 // What the layout's hook hears, painted in a list the test reads.
 const LAYOUT = `<script>
 import { onError, reactive } from '@abide/abide'
@@ -33,9 +38,11 @@ onError((error) => {
 
 const PAGE = `<script>
 import { reactive, watch } from '@abide/abide'
+import answer from '#src/data/answer.handler.ts'
 import claim from '#src/data/claim.handler.ts'
 
 let broken = reactive(false)
+let saving = reactive<typeof claim | typeof answer>()
 let caught = reactive('')
 watch(() => {
     if (broken) throw new Error('effect broke')
@@ -43,6 +50,18 @@ watch(() => {
 
 async function claimUncaught() {
     await claim()
+}
+
+function claimKept() {
+    saving = claim()
+    saving.then(() => {})
+}
+
+function answerThrows() {
+    saving = answer()
+    saving.then(() => {
+        throw new Error('follow-up broke')
+    })
 }
 
 async function claimCaught() {
@@ -58,7 +77,10 @@ async function claimCaught() {
 <button id="uncaught" onclick={claimUncaught}>claim</button>
 <button id="caught" onclick={claimCaught}>claim, caught</button>
 <button id="break" onclick={() => (broken = true)}>break</button>
+<button id="kept" onclick={claimKept}>claim, kept</button>
+<button id="follow-up" onclick={answerThrows}>answer, then throw</button>
 <p id="caught-said">{caught}</p>
+<p id="kept-said">{saving.error()?.message ?? ''}</p>
 </main>`
 
 let server: Subprocess | undefined
@@ -69,6 +91,7 @@ test.beforeAll(async ({}, testInfo) => {
         `e2e-on-error-${testInfo.project.name}`,
         {
             'data/claim.handler.ts': HANDLER,
+            'data/answer.handler.ts': ANSWERED,
             'claims/layout.abide': LAYOUT,
             'claims/index.abide': PAGE,
         },
@@ -134,4 +157,33 @@ test('an effect that threw reaches onError once — 12.6, 12.7, 37.17', async ({
     await pressUntil(page, '#break', async () => (await items.count()) > 0)
     await page.waitForTimeout(100)
     await expect(items).toHaveText(['effect broke'])
+})
+
+// 2.15 — A KEPT CALL'S REFUSAL IS ON `error`, NOT AN UNHANDLED REJECTION, where the page's `then` had no
+// `onFailed`. Read in both engines, since what it rests on is when each reports a rejection: after the
+// microtask checkpoint the handler is attached in. THE REVERT: drop the `onFailed === undefined` arm
+// from `then` in `Reactive.ts`, and the list reads `already taken` once per press.
+test('a kept call refused under then(onDone) stays on error, and onError hears nothing — 2.15', async ({
+    page,
+}) => {
+    await page.goto(`${base}/claims`)
+    await pressUntil(
+        page,
+        '#kept',
+        async () => (await page.textContent('#kept-said')) === 'already taken',
+    )
+    await page.waitForTimeout(100)
+    await expect(page.locator('#heard li')).toHaveCount(0)
+})
+
+// THE CONTROL beside the test above: what 2.15 leaves alone is a throw from the follow-up, which is
+// still reported — so the test above cannot pass on a `then` that swallows everything.
+test('a follow-up that throws under then(onDone) reaches onError — 2.15, 37.17', async ({
+    page,
+}) => {
+    await page.goto(`${base}/claims`)
+    const items = page.locator('#heard li')
+    await pressUntil(page, '#follow-up', async () => (await items.count()) > 0)
+    for (const said of await items.allTextContents())
+        expect(said).toBe('follow-up broke')
 })

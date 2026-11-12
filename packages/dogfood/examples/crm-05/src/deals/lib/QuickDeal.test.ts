@@ -25,3 +25,15 @@ test('the name clears once the deal is added, and not before', async () => {
         'Added Support renewal',
     )
 })
+
+test('a refused deal keeps its name, for putting right', async () => {
+    using _form = await mount(QuickDeal({}))
+    const input = document.querySelector('input') as HTMLInputElement
+    input.value = 'x'
+    input.dispatchEvent(new Event('input'))
+    document.querySelector('button')?.click()
+    await Bun.sleep(50)
+    flushSync()
+    expect(input.value).toBe('x')
+    expect(document.querySelector('.status')?.textContent).toBe('')
+})
