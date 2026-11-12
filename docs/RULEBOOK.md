@@ -3982,9 +3982,9 @@ separated by commas, and none where it names none.
 
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
-44.69 `pairing`'s `status` MUST be the last `BridgeStatus` `/__abide/pairing` answered the browser,
-MUST fail with the failure of a read of it that failed, and MUST be `undefined` where a server builds
-it.
+44.69 `pairing`'s `status` MUST be in flight until `/__abide/pairing` first answers the browser, and
+then MUST be the last `BridgeStatus` it answered, MUST fail with the failure of a read of it that
+failed, and MUST hold nothing and have nothing in flight where a server builds it.
 
 44.70 `pairing`'s `start` MUST do nothing while `status` holds no `BridgeStatus`, and otherwise MUST
 set `step` to `waiting` and navigate the page to the status's `link`.
@@ -3995,9 +3995,10 @@ or `status` is paired, and `install` otherwise.
 44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard, and once written
 MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `click`.
 
-44.73 A `pairing` built in a component's setup MUST, once that component is disposed, stop reading and
-following `/__abide/pairing` where no other `pairing` reads it, remove the blur listener a `start`
-added, clear the wait a `start` set, and leave `copied` and `step` where they stand.
+44.73 A `pairing` MUST, once its `stop` or its `[Symbol.dispose]` is called, or the component whose
+setup built it is disposed, stop reading and following `/__abide/pairing` where no other `pairing`
+reads it, remove the blur listener a `start` added, clear the wait a `start` set, and leave `copied`
+and `step` where they stand.
 
 44.74 `/__abide/pairing` MUST NOT grant a tool the request asking it names.
 

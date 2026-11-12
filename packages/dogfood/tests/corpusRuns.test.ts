@@ -27,7 +27,10 @@ import { appFiles } from '../../abide/src/server/appTree.ts'
 import { placement, routeOf } from '../../abide/src/server/placement.ts'
 import { PRIVATE_EXPORT } from '../../abide/src/server/PRIVATE_EXPORT.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'
-import { PRINCIPAL_ADDRESS } from '../../abide/src/shared/ADDRESSES.ts'
+import {
+    PAIRING_ADDRESS,
+    PRINCIPAL_ADDRESS,
+} from '../../abide/src/shared/ADDRESSES.ts'
 import { browserCookies, COOKIES } from '../../abide/src/shared/cookies.ts'
 import {
     BROWSER_PRINCIPAL,
@@ -153,6 +156,15 @@ async function appTree(session: TypeSession): Promise<{
     return { tree, compilation }
 }
 
+/** What `/__abide/pairing` answers a browser with nothing paired. */
+const UNPAIRED = JSON.stringify({
+    paired: false,
+    missing: [],
+    command: 'bunx @abide/bridge@0.0.0 http://example.test one',
+    link: 'abide-bridge://pair?code=one',
+    install: 'bunx @abide/bridge@0.0.0 install',
+})
+
 test('every example renders on the server and mounts on the client', async () => {
     const session = await TypeSession.open(TSCONFIG)
     const broken: string[] = []
@@ -237,13 +249,16 @@ test('every example renders on the server and mounts on the client', async () =>
         }
         // A `raw` CALL GOES OVER THE WIRE, and there is no server here: it is answered `null`, which
         // is what is under test — the card paints and adopts — and not what the handler says.
-        // The browser's principal is loaded from its address, and answered signed out.
+        // The browser's principal is loaded from its address, and answered signed out; its pairing
+        // (44.67), which is never `null`, answered unpaired.
         globalThis.fetch = Object.assign(
             async (url: string | URL | Request) =>
                 new Response(
                     String(url) === PRINCIPAL_ADDRESS
                         ? '{"authenticated":false}'
-                        : 'null',
+                        : String(url) === PAIRING_ADDRESS
+                          ? UNPAIRED
+                          : 'null',
                     { headers: { 'content-type': 'application/json' } },
                 ),
             { preconnect: () => {} },

@@ -150,6 +150,65 @@ test('a pairing /__abide/pairing fails to answer fails its status with that fail
     dispose()
 })
 
+// 44.69 — IN FLIGHT UNTIL THE FIRST STATUS LANDS, so a page awaiting its pairing waits for one rather
+// than settling on nothing, and one whose read failed is rejected with that failure, narrowed by name.
+// THE REVERT: give `status` the body it had, `undefined` until the copy is ready or failed; this
+// reports `first: undefined` and `failed: none`.
+test('awaiting status waits for the first status, or the failure of its read — 44.69', async () => {
+    const { pair, dispose } = built()
+    const first = await pair.status
+    dispose()
+    globalThis.fetch = (async () =>
+        new Response('down', { status: 503 })) as unknown as typeof fetch
+    const failing = built()
+    let failed = 'none'
+    try {
+        await failing.pair.status
+    } catch (error) {
+        if (failing.pair.status.isError(error, 'HttpError'))
+            failed = `${error.name} ${error.status}`
+    }
+    failing.dispose()
+    expect(`first: ${first?.link}, failed: ${failed}`).toBe(
+        `first: ${LINK}, failed: HttpError 503`,
+    )
+})
+
+// 44.73 — A PAIRING NO SETUP OWNS IS STOPPED BY ITS CALLER: one a click handler built reads and follows
+// `/__abide/pairing` until `stop` — or the dispose `using` calls, the same function — and then
+// neither, so a refresh the mux sends after reads nothing. THE REVERT: empty `stop`'s body in
+// `pairing.ts`; this reports `reads: 2, read aborted: false, unfollowed: 0`.
+test('a pairing built outside a setup stops reading and following once stopped — 44.73', async () => {
+    const pair = pairing()
+    await landed(pair, UNPAIRED)
+    expect(pair[Symbol.dispose]).toBe(pair.stop)
+    pair.stop()
+    push({ ...UNPAIRED, paired: true })
+    await Bun.sleep(1)
+    expect(
+        `reads: ${asked.length}, read aborted: ${asked[0]?.signal?.aborted}, unfollowed: ${unfollowed}`,
+    ).toBe('reads: 1, read aborted: true, unfollowed: 1')
+})
+
+// 44.69 — A SERVER HOLDS NOTHING AND HAS NOTHING IN FLIGHT, so a render opens no sink for the status
+// (3.4) and does not wait on it. THE REVERT: build the server's `status` as a body that never settles,
+// `reactive(() => new Promise(() => {}))`; this reports `busy: true`.
+test('a pairing a server builds holds no status and nothing in flight — 44.69', async () => {
+    await using app = await inMemoryApp({
+        'probe/pairing.handler.ts': {
+            default: GET(() => {
+                const { status } = pairing()
+                return `ready: ${status.ready()}, busy: ${status.busy()}, held: ${status.peek()}`
+            }),
+        },
+    })
+    const answer = await app.fetch(new Request('http://site/probe/pairing'))
+    expect(await answer.json()).toBe(
+        'ready: false, busy: false, held: undefined',
+    )
+    expect(asked).toHaveLength(0)
+})
+
 // 44.75 — READ ONCE AND FOLLOWED: a pairing that changes is read again when the mux says so, and two
 // `pairing` on one page share the one read and the one follow. THE REVERT: skip `MUX_FOLLOWS.follow`
 // in `pairing.ts`; the pushed status never lands and `landed` reports the unpaired one.
