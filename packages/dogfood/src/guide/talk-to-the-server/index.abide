@@ -119,6 +119,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>s.busy</code></td><td>whether work is in flight for the value</td></tr>
                 <tr><td><code>s.ready</code></td><td>whether there is a value to show</td></tr>
                 <tr><td><code>s.error</code></td><td>the standing failure, handed back rather than thrown</td></tr>
+                <tr><td><code>s.issues</code></td><td>the issues of a standing validation refusal, field by field</td></tr>
                 <tr><td><code>busy</code></td><td>whether anything in a selection is in flight: an app-wide progress bar</td></tr>
                 <tr><td><code>ready</code></td><td>whether everything in a selection has a value</td></tr>
             </tbody>
