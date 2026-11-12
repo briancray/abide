@@ -6,15 +6,12 @@
 import { expect, test } from 'bun:test'
 
 import {
-    aborted,
     type Failed,
     flushSync,
     isFailed,
     jsonSchema,
-    notFound,
     reactive,
     refuse,
-    validationError,
     watch,
 } from '#shared'
 
@@ -52,7 +49,7 @@ test('constructing a Failed is inert', () => {
 //
 // THE REVERT: making `isFailed` test `value instanceof Error` reports `narrows: false`.
 test('a refusal that crossed a wire is still one', () => {
-    const missing = notFound({ path: '/invoices/7', method: 'GET' })
+    const missing = refuse.notFound({ path: '/invoices/7', method: 'GET' })
     const overWire: unknown = JSON.parse(
         JSON.stringify({
             name: missing.name,
@@ -65,7 +62,7 @@ test('a refusal that crossed a wire is still one', () => {
         'instanceof Error: false',
     )
     expect(`isFailed: ${isFailed(overWire)}`).toBe('isFailed: true')
-    expect(`narrows: ${notFound.is(overWire)}`).toBe('narrows: true')
+    expect(`narrows: ${refuse.notFound.is(overWire)}`).toBe('narrows: true')
 })
 
 // `.is` IS THE NAME COMPARISON THE DECLARATION SITE OWNS. An app writing
@@ -170,12 +167,12 @@ test('refuse with no message takes the reason phrase for its status — 17.8', (
 // names, and 15.9 caps it there. The statuses are not interchangeable: a 422 says the request
 // parsed and its contents are wrong, which is what a schema that ran and refused found out.
 test('abide declares four refusal names and no more', () => {
-    const missing = notFound({ path: '/x', method: 'GET' })
-    const invalid = validationError<{ email: string }>({
+    const missing = refuse.notFound({ path: '/x', method: 'GET' })
+    const invalid = refuse.validation<{ email: string }>({
         email: ['required'],
     })
     const undeclared = refuse(418, 'no coffee')
-    const abandoned = aborted()
+    const abandoned = refuse.aborted()
     expect(
         [
             `${missing.name} ${missing.status}`,
@@ -305,8 +302,8 @@ test('a refusal survives a schema that is itself wrong', () => {
 test('a refusal survives JSON and is still a refusal', () => {
     const made = [
         refuse(503, 'upstream is down'),
-        notFound({ path: '/a', method: 'GET' }),
-        validationError<{ email: string }>({ email: ['is required'] }),
+        refuse.notFound({ path: '/a', method: 'GET' }),
+        refuse.validation<{ email: string }>({ email: ['is required'] }),
     ]
     const seen: string[] = []
     for (const refusal of made) {
@@ -349,7 +346,7 @@ test("a refusal's schema runs untracked", () => {
 })
 
 // 15.5 — RETURNING A `Failed` REFUSES, from a body as much as from a `transform`. Only the
-// `transform` had been checked, so a body answering `notFound(…)` STORED the refusal as its
+// `transform` had been checked, so a body answering `refuse.notFound(…)` STORED the refusal as its
 // value: `ready()` true, `error()` empty, and the page rendering an error object as data. Both
 // ways a body answers are asserted, and a write is the boundary — it is not an answer.
 // THE REVERT: drop the `isFailed` arm in `run` and the `answered` test in `absorb`; the first
@@ -359,15 +356,15 @@ test('a body that returns a refusal refuses — 15.5', async () => {
     const summary = (value: { error(): unknown; ready(): boolean }): string =>
         `error: ${isFailed(value.error()) ? (value.error() as Error).name : 'none'}, ready: ${value.ready()}`
 
-    const settled = reactive(() => notFound())
+    const settled = reactive(() => refuse.notFound())
     expect(summary(settled)).toBe('error: NotFound, ready: false')
 
-    const loaded = reactive(async () => notFound())
+    const loaded = reactive(async () => refuse.notFound())
     await loaded.catch(() => {})
     expect(summary(loaded)).toBe('error: NotFound, ready: false')
 
     const keyed = reactive(async ({ id }: { id: string }) =>
-        id === '42' ? { id } : notFound(),
+        id === '42' ? { id } : refuse.notFound(),
     )
     const missing = keyed({ id: 'nope' })
     await missing.catch(() => {})
@@ -376,7 +373,7 @@ test('a body that returns a refusal refuses — 15.5', async () => {
     // 4.17 — A WRITE OF ONE IS DATA. `set` is not a producer's answer; a write refuses only where
     // its `transform` returned the refusal (4.6).
     const held = reactive<unknown>(0)
-    held.set(notFound())
+    held.set(refuse.notFound())
     expect(summary(held)).toBe('error: none, ready: true')
 })
 
@@ -384,7 +381,9 @@ test('a body that returns a refusal refuses — 15.5', async () => {
 // beside it, exactly as a recompute that threw does.
 test('a recompute that returns a refusal keeps serving what it had', () => {
     const id = reactive('42')
-    const invoice = reactive(() => (id() === '42' ? 'INV-0042' : notFound()))
+    const invoice = reactive(() =>
+        id() === '42' ? 'INV-0042' : refuse.notFound(),
+    )
     const seen: string[] = []
     watch(() => {
         const error = invoice.error() as Error | undefined

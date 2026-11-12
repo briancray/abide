@@ -9,7 +9,7 @@ import { homedir } from 'node:os' // bun exposes no home directory of its own
 import { isRecord } from '#shared/isRecord.ts'
 import { numberFromText } from '#shared/numberFromText.ts'
 import { reactive } from '#shared/reactive/index.ts'
-import { validationError } from '#shared/refuse.ts'
+import { refuse } from '#shared/refuse.ts'
 import { runSchema } from '#shared/Schema.ts'
 
 import { type Env, HOOKS, inOrder } from './hooks.ts'
@@ -93,7 +93,7 @@ function resolve(): Config {
         if (schema === undefined) continue
         const checked = runSchema(schema, document)
         if (checked.issues !== null)
-            return validationError(checked.issues as never) as never
+            return refuse.validation(checked.issues as never) as never
         if (isRecord(checked.value)) Object.assign(document, checked.value)
     }
     return document as Config

@@ -515,52 +515,53 @@ the function it is handed MUST run `get` again as a restore, per 8.18, and MUST 
 8.21 What a `Store`'s `watch` returns MUST be called once the `Reactive` is released: a `Keyed`
 entry evicted, or the setup or request that built it, or its `Keyed`, ended.
 
-8.22 `webStore` MUST keep the value under its key in `localStorage`, or in `sessionStorage` where its
-`area` is `'session'`.
+8.22 `store.web` MUST keep the value under its key in `localStorage`, or in `sessionStorage` where
+its `area` is `'session'`.
 
-8.23 `webStore` MUST answer every `get` with a miss, and MUST write nothing, where the process has no
-Web Storage.
+8.23 `store.web` MUST answer every `get` with a miss, and MUST write nothing, where the process has
+no Web Storage.
 
-8.24 `webStore`'s `watch` MUST call what it is handed when another document writes or clears its key
-in its area.
+8.24 `store.web`'s `watch` MUST call what it is handed when another document writes or clears its
+key in its area.
 
-8.25 `sqliteStore` MUST keep the value in one row of its table under its key, and MUST create the
+8.25 `store.sqlite` MUST keep the value in one row of its table under its key, and MUST create the
 table where it does not exist.
 
-8.26 `webStore`, `sqliteStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST answer a miss for a value whose `ttl`, as their `set` received it, has passed.
+8.26 `store.web`, `store.sqlite`, `store.redis`, `store.indexedDB` and `store.cookies` MUST answer a miss for a value whose `ttl`, as their `set` received it, has passed.
 
-8.27 `webStore`, `sqliteStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST run their `schema` on what `get` reads, and MUST throw what it refuses, per 8.15.
+8.27 `store.web`, `store.sqlite`, `store.redis`, `store.indexedDB` and `store.cookies` MUST run their `schema` on what `get` reads, and MUST throw what it refuses, per 8.15.
 
-8.28 `webStore`, `sqliteStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST keep the value as JSON.
+8.28 `store.web`, `store.sqlite`, `store.redis`, `store.indexedDB` and `store.cookies` MUST keep the value as JSON.
 
-8.29 `webStore`, `sqliteStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST keep the value under the app name followed by its key.
+8.29 `store.web`, `store.sqlite`, `store.redis`, `store.indexedDB` and `store.cookies` MUST keep the value under the app name followed by its key.
 
-8.30 `webStore`, `redisStore`, `indexedDBStore` and `cookiesStore` MUST answer a `get` that reads the
-text they last read or wrote with the value they answered for that text.
+8.30 `store.web`, `store.redis`, `store.indexedDB` and `store.cookies` MUST answer a `get` that reads
+the text they last read or wrote with the value they answered for that text.
 
-8.31 `redisStore` MUST keep the value under its key in Redis.
+8.31 `store.redis` MUST keep the value under its key in Redis.
 
-8.32 `redisStore` MUST hand Redis a finite `ttl` as the key's own expiry.
+8.32 `store.redis` MUST hand Redis a finite `ttl` as the key's own expiry.
 
-8.33 `redisStore`'s `watch` MUST call what it is handed when the key's keyspace channel, in the
+8.33 `store.redis`'s `watch` MUST call what it is handed when the key's keyspace channel, in the
 database its client selected, carries an event.
 
-8.34 `indexedDBStore` MUST keep the value under its key in a table of the `abide` IndexedDB database.
+8.34 `store.indexedDB` MUST keep the value under its key in a table of the `abide` IndexedDB
+database.
 
-8.35 `indexedDBStore` MUST answer every `get` with a synchronous miss, and MUST write nothing, where
-the process has no IndexedDB.
+8.35 `store.indexedDB` MUST answer every `get` with a synchronous miss, and MUST write nothing,
+where the process has no IndexedDB.
 
-8.36 `indexedDBStore`'s `watch` MUST call what it is handed when an `indexedDBStore` in another
+8.36 `store.indexedDB`'s `watch` MUST call what it is handed when a `store.indexedDB` in another
 document writes its key.
 
-8.37 `cookiesStore` MUST keep the value in a cookie, read and written through `cookies()`.
+8.37 `store.cookies` MUST keep the value in a cookie, read and written through `cookies()`.
 
-8.38 `cookiesStore` MUST write a finite `ttl` as the cookie's `Max-Age`, and an infinite one as 400
-days.
+8.38 `store.cookies` MUST write a finite `ttl` as the cookie's `Max-Age`, and an infinite one as
+400 days.
 
-8.39 `cookiesStore`'s `set` MUST throw for a value whose cookie would pass 4096 bytes.
+8.39 `store.cookies`'s `set` MUST throw for a value whose cookie would pass 4096 bytes.
 
-8.40 `cookiesStore`'s `watch` MUST call what it is handed where the browser reports a change to its
+8.40 `store.cookies`'s `watch` MUST call what it is handed where the browser reports a change to its
 cookie, per 22.6.
 
 # 9. Streams and wired values
@@ -971,14 +972,14 @@ excludes `null` and `undefined`, naming `s.ready`.
 
 15.6 `Failed` MUST be structural.
 
-15.7 `notFound` MUST be returned where no route matched.
+15.7 `refuse.notFound` MUST be returned where no route matched.
 
-15.8 `validationError` MUST be returned where a `schema` or an `args` gate refuses, or where a call's
+15.8 `refuse.validation` MUST be returned where a `schema` or an `args` gate refuses, or where a call's
 args leave a parameter of its route no spelling as a segment (30.3, 30.19) — in process as over the
 wire, and before the handler runs — at status 422.
 
-15.9 An implementation MUST declare no refusal names beyond those `notFound`, `validationError` and
-`aborted` carry and the one 17.4 names.
+15.9 An implementation MUST declare no refusal names beyond those `refuse.notFound`,
+`refuse.validation` and `refuse.aborted` carry and the one 17.4 names.
 
 15.10 An expression statement whose type is `Failed` MUST be a compile error naming both repairs.
 
@@ -1015,9 +1016,9 @@ MUST run its body again for the next reach rather than serve that answer.
 name as `type`, or `about:blank` titled by its status's reason phrase where it was not declared, its
 message as `detail`, and its data as a `data` member.
 
-15.22 The `notFound` 15.7 returns, and the 405 15.17 answers at a route, MUST be painted as a page's
-failure where the request prefers `text/html` over `application/json`, and MUST cross as 15.21
-states otherwise.
+15.22 The `refuse.notFound` 15.7 returns, and the 405 15.17 answers at a route, MUST be painted as
+a page's failure where the request prefers `text/html` over `application/json`, and MUST cross as
+15.21 states otherwise.
 
 # 16. Handlers and transports
 
@@ -1163,7 +1164,8 @@ produced.
 load passed a `signal`, and every one of those has aborted.
 
 16.49 A load ended under 16.48 MUST keep serving what its value held, MUST report `s.busy` false,
-MUST refuse with `aborted` at status 499, and MUST abort the request carrying it where one does.
+MUST refuse with `refuse.aborted` at status 499, and MUST abort the request carrying it where one
+does.
 
 16.50 A `HEAD` MUST be answered by the `GET` handler mounted at its address.
 
@@ -1202,7 +1204,7 @@ included, and MUST report `s.busy` false.
 that call passed.
 
 16.63 A throw answered once its request's signal has aborted — a handler's or a page render's — MUST
-answer `aborted` at 499, and MUST NOT report the throw as unexpected.
+answer `refuse.aborted` at 499, and MUST NOT report the throw as unexpected.
 
 16.64 An `Rpc` over a plain function MUST NOT run that function before the first call reaches it.
 
@@ -3945,7 +3947,7 @@ names or a HEIC or HEIF, which 44.52 draws, reading its `items` where its `files
 
 44.57 `assistant` MUST hand its `Provider` a `limits.signal` that aborts once the request's signal
 aborts or once the `signal` its caller passed does, and once that signal aborts MUST end the
-conversation without waiting for the provider to, refused with `aborted` at status 499.
+conversation without waiting for the provider to, refused with `refuse.aborted` at status 499.
 
 44.58 A bridge MUST find the visitor's MCP servers, at each turn, in each `--mcp-config` the visitor
 passed after `--`, or where they passed none, in the user scope of their Claude Code configuration,

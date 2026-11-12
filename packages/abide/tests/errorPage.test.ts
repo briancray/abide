@@ -6,12 +6,12 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const ROOT_ERROR = `<script>
-import { notFound, props, type Failed } from '@abide/abide'
+import { props, refuse, type Failed } from '@abide/abide'
 
 const { failure } = props<{ failure: Failed<string, unknown> }>()
 </script>
 
-{#if notFound.is(failure)}
+{#if refuse.notFound.is(failure)}
 <h1 id="root">No such page</h1>
 <p id="where">Nothing answers {failure.data.method} {failure.data.path}.</p>
 {:else}
@@ -51,9 +51,9 @@ export default POST(() => redirect('/elsewhere', 303))
 
 // 41.1, 35.2 — A DETAIL PAGE WHOSE RECORD IS NOT THERE. The handler refuses, the page reads the
 // refusal while it is built, and nothing of the document has gone out yet.
-const RECORD = `import { GET, notFound } from '@abide/abide/server'
+const RECORD = `import { GET, refuse } from '@abide/abide/server'
 
-export default GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first record' } : notFound()))
+export default GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first record' } : refuse.notFound()))
 `
 
 const RECORD_PAGE = `<script>
@@ -102,7 +102,7 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// 35.2, 15.7 — AN ADDRESS NOTHING ANSWERS IS `notFound`, rendered by the nearest error page at 404.
+// 35.2, 15.7 — AN ADDRESS NOTHING ANSWERS IS `refuse.notFound`, rendered by the nearest error page at 404.
 // 38.29 — A PAINTED ERROR PAGE IS A DOCUMENT, in the encoding the request takes. THE REVERT: answer
 // `renderDocument`'s bytes as `new Response(document)` in `answerFailure`; no `content-encoding`.
 test('an unmatched address renders the root error page at 404 — 35.2, 38.29', async () => {

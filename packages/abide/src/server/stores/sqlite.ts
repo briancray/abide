@@ -15,7 +15,7 @@ const OPENED = new Map<string, Database>()
  * 8.25, 8.29 — the table is made where it is missing, and its shape is the store's: the key, the value as
  * JSON, and the deadline 8.26 reads, as epoch milliseconds or `NULL` for never.
  */
-export function sqliteStore<Stored>(
+export function sqlite<Stored>(
     database: Database | string,
     key: string,
     options?: { table?: string; schema?: Schema<Stored> },
@@ -23,7 +23,7 @@ export function sqliteStore<Stored>(
     const table = options?.table ?? 'abide_store'
     if (!IDENTIFIER.test(table))
         throw new Error(
-            `sqliteStore's table ${JSON.stringify(table)} is not an SQL identifier.`,
+            `store.sqlite's table ${JSON.stringify(table)} is not an SQL identifier.`,
         )
     const db = typeof database === 'string' ? opened(database) : database
     db.run(

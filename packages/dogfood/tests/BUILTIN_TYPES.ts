@@ -48,9 +48,9 @@ export const BUILTIN_TYPES = new Set([
     // Bun
     'CookieInit',
     'CookieStoreDeleteOptions',
-    // `bun:sqlite`'s connection, which `sqliteStore` takes.
+    // `bun:sqlite`'s connection, which `store.sqlite` takes.
     'Database',
-    // `bun`'s Redis connection, which `redisStore` takes.
+    // `bun`'s Redis connection, which `store.redis` takes.
     'RedisClient',
     'Server',
     // Interop

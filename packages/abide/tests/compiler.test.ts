@@ -179,9 +179,10 @@ test('the compiler is not reachable from the server seam', async () => {
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
     // owns: `render` is 35.4's, the five methods are 16.2's, `request`, `requestIP`, `response` and
     // `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the hooks are 37's —
-    // `onError` among the shared seam's, the server's own exported over the browser's (37.16) —
-    // `trace` is 24's and `config` is 27's; the six response helpers are 17's, `reachable` is
-    // 23's, `assistant`, `claudeApi` and `claudeCode` are 45's, `sqliteStore` is 8.25's, `redisStore` 8.31's and `database` 47's.
+    // `onError` among the shared seam's, the server's own exported over the browser's (37.16), and
+    // `store` the same way, the server's carrying `sqlite` (8.25) and `redis` (8.31) beside the
+    // shared three — `trace` is 24's and `config` is 27's; the six response helpers are 17's,
+    // `reachable` is 23's, `assistant`, `claudeApi` and `claudeCode` are 45's and `database` 47's.
     // What only emitted code calls is on `server/runtime.ts`, not here.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
@@ -212,9 +213,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'page',
             'reachable',
             'redirect',
-            'redisStore',
             'render',
-            'sqliteStore',
             'request',
             'requestIP',
             'response',
@@ -223,6 +222,15 @@ test('the compiler is not reachable from the server seam', async () => {
             'trace',
         ].sort(),
     )
+    // `store` is the server's over the shared one, and carries the two members only a server has.
+    // THE REVERT: drop `export * as store` from `src/server/index.ts`; the shared three answer.
+    expect({
+        server: Object.keys(server.store).sort(),
+        shared: Object.keys((await import('#shared')).store).sort(),
+    }).toEqual({
+        server: ['cookies', 'indexedDB', 'redis', 'sqlite', 'web'],
+        shared: ['cookies', 'indexedDB', 'web'],
+    })
 })
 
 // 38.107, 38.108 — WHAT THE BUILD READS AS A HOOK CALL IS EVERY HOOK abide exports: `abide routes`

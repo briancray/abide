@@ -295,9 +295,9 @@ import Section from '#src/lib/Section.abide'
         <table>
             <thead><tr><th>abide's own refusal</th><th>Status</th><th>When</th></tr></thead>
             <tbody>
-                <tr><td><code>notFound</code></td><td>404</td><td>nothing answers the address, with the path and method as data</td></tr>
-                <tr><td><code>validationError</code></td><td>422</td><td>a schema or an <code>args</code> gate refused, with the issues as data</td></tr>
-                <tr><td><code>aborted</code></td><td>499</td><td>every caller waiting on a load passed a <code>signal</code> and every one aborted, or the client left</td></tr>
+                <tr><td><code>refuse.notFound</code></td><td>404</td><td>nothing answers the address, with the path and method as data</td></tr>
+                <tr><td><code>refuse.validation</code></td><td>422</td><td>a schema or an <code>args</code> gate refused, with the issues as data</td></tr>
+                <tr><td><code>refuse.aborted</code></td><td>499</td><td>every caller waiting on a load passed a <code>signal</code> and every one aborted, or the client left</td></tr>
             </tbody>
         </table>
     </Section>

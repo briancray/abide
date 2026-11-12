@@ -14,7 +14,7 @@
 
 import { type Failed, isFailed, isFailedNamed } from '../Failed.ts'
 import { namedLogger } from '../log.ts'
-import { validationError } from '../refuse.ts'
+import { refuse } from '../refuse.ts'
 import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
@@ -1286,7 +1286,7 @@ function accept(cell: Cell, value: unknown): unknown {
         // 15.8: a schema that refused is a `ValidationError` at 422 — the request parsed
         // and its contents are wrong, which is exactly what a schema that RAN found out.
         if (answer.issues !== null)
-            return refused(cell, validationError<Found>(answer.issues))
+            return refused(cell, refuse.validation<Found>(answer.issues))
         checked = answer.value
     }
     const transform = cell.transform
@@ -1319,7 +1319,7 @@ function acceptIntoStream(cell: Cell, stream: Stream, value: unknown): unknown {
     if (cell.schema !== null) {
         const answer = runSchema(cell.schema, value)
         if (answer.issues !== null)
-            return refused(cell, validationError<Found>(answer.issues))
+            return refused(cell, refuse.validation<Found>(answer.issues))
         checked = answer.value
     }
     const transform = cell.transform
@@ -2333,7 +2333,7 @@ function gateThrough(cell: Cell, raw: unknown): void {
         const answer = runSchema(cell.schema, checked)
         if (answer.issues !== null) {
             // 4.9: nothing is stored, so the snapshot before this one goes on serving.
-            refused(cell, validationError<Found>(answer.issues))
+            refused(cell, refuse.validation<Found>(answer.issues))
             return
         }
         checked = answer.value

@@ -74,11 +74,12 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `reactive` | `<Accepted>() => [Accepted extends Rpc<infer Value, infer Args, infer Failures, infer Produced> ? true : false] extends [true] ? Reactive<StoredOf<CallOf<Accepted>>, StoredOf<CallOf<Accepted>>, AdoptedFailures<CallOf<Accepted>>, AdoptedProduced<CallOf<Accepted>, StoredOf<CallOf<Accepted>>>> : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty overload, for a value nothing has written yet. | 4.14, 4.19 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21 |
-| `webStore` | `<Stored>(key: string, options?: { area?: 'local' \| 'session'; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's Web Storage. | 8.22, 8.23, 8.24, 8.26, 8.27, 8.28, 8.29, 8.30 |
-| `sqliteStore` | `<Stored>(database: Database \| string, key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a `bun:sqlite` table, from `@abide/abide/server`. | 8.25, 8.26, 8.27, 8.28, 8.29 |
-| `redisStore` | `<Stored>(client: RedisClient \| string, key: string, options?: { schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a Redis key through `bun`'s `RedisClient`, from `@abide/abide/server`. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33 |
-| `indexedDBStore` | `<Stored>(key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's IndexedDB. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.34, 8.35, 8.36 |
-| `cookiesStore` | `<Stored>(name: string, options?: { path?: string; domain?: string; sameSite?: 'strict' \| 'lax' \| 'none'; secure?: boolean; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a cookie. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.37, 8.38, 8.39, 8.40 |
+| `store` | `{ web; indexedDB; cookies }`, and `sqlite` and `redis` beside them from `@abide/abide/server` | The `Store`s abide ships, as one namespace. | 8.22, 8.25, 8.31, 8.34, 8.37 |
+| `store.web` | `<Stored>(key: string, options?: { area?: 'local' \| 'session'; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's Web Storage. | 8.22, 8.23, 8.24, 8.26, 8.27, 8.28, 8.29, 8.30 |
+| `store.sqlite` | `<Stored>(database: Database \| string, key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a `bun:sqlite` table, a member of `@abide/abide/server`'s `store` alone. | 8.25, 8.26, 8.27, 8.28, 8.29 |
+| `store.redis` | `<Stored>(client: RedisClient \| string, key: string, options?: { schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a Redis key through `bun`'s `RedisClient`, a member of `@abide/abide/server`'s `store` alone. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33 |
+| `store.indexedDB` | `<Stored>(key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's IndexedDB. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.34, 8.35, 8.36 |
+| `store.cookies` | `<Stored>(name: string, options?: { path?: string; domain?: string; sameSite?: 'strict' \| 'lax' \| 'none'; secure?: boolean; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a cookie. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.37, 8.38, 8.39, 8.40 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
 
@@ -200,9 +201,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in-process and over a wire alike. | 15.1, 15.2, 15.6, 16.40, 16.41, 15.21 |
 | `isFailed` | `(value: unknown) => value is Failed<string, unknown>` | Whether a value is a refusal. | 15.6 |
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.4, 15.5 |
-| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | abide's own refusal for an address nothing answers. | 15.7, 15.9, 15.22 |
-| `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | abide's own refusal for a schema or an `args` gate that refused, or a call's route parameter no segment can spell. | 15.8, 15.9 |
-| `aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | abide's own refusal for a load every caller aborted, and for a client that left. | 15.9, 16.49, 16.63 |
+| `refuse.notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | abide's own refusal for an address nothing answers. | 15.7, 15.9, 15.22 |
+| `refuse.validation` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | abide's own refusal for a schema or an `args` gate that refused, or a call's route parameter no segment can spell. | 15.8, 15.9 |
+| `refuse.aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | abide's own refusal for a load every caller aborted, and for a client that left. | 15.9, 16.49, 16.63 |
 | `myError(data)` DISCARDED | compile error | A `Failed` built and thrown away. | 15.10 |
 
 ## Tracking

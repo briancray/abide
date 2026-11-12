@@ -5,12 +5,12 @@
 
 import { filledSegments } from './filledSegments.ts'
 import { putOwn } from './putOwn.ts'
-import { validationError } from './refuse.ts'
+import { refuse } from './refuse.ts'
 import { parseRoutePattern, type Segment } from './routePattern.ts'
 
 /** 15.8 — a parameter no address carries, refused as args a gate refused. */
 function pathRefusal(name: string, message: string): unknown {
-    return validationError<Record<string, unknown>>({ [name]: [message] })
+    return refuse.validation<Record<string, unknown>>({ [name]: [message] })
 }
 
 /** A handler's address, parsed once: its segments and the names its parameters take. */
