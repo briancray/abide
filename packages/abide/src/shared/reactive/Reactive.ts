@@ -1502,6 +1502,24 @@ function refused(cell: Cell, failure: unknown): unknown {
 }
 
 /**
+ * `refused` for a body's own answer — a throw, a returned `Failed`, a load it handed back rejecting.
+ *
+ * 2.2 OVER 4.16 — AN OPENING IS NOTHING TO GO ON SERVING. It is the value being empty and mints no
+ * ordinal, so a body failing over it has failed with no value landed: the opening is dropped and the
+ * refusal cascades as a first run's would. Held instead, a value built on it before the failure
+ * never reran — no production moved — and stood not ready with no `error()` for good, where one
+ * built after it threw. A write's refusal stays on `refused` alone: a rejected write is 2.3's.
+ */
+function refusedAnswer(cell: Cell, failure: unknown): void {
+    if (cell.servable && cell.ordinal === 0) {
+        cell.servable = false
+        cell.direct = false
+        cell.landed = false
+    }
+    refused(cell, failure)
+}
+
+/**
  * Takes in a write or a body's answer, waiting on it first where it is a load.
  *
  * A load. 4.2: a load given to a write makes the value loaded, at construction and at
@@ -1528,7 +1546,7 @@ function absorb(cell: Cell, result: unknown, answered: boolean): void {
     ;(result as PromiseLike<unknown>).then(
         (settled) => {
             if (cell.generation !== generation) return
-            if (answered && isFailed(settled)) refused(cell, settled)
+            if (answered && isFailed(settled)) refusedAnswer(cell, settled)
             // 9.6 — a run's promise resolving to an async generator hands one back too. Its
             // probes move so `streamingOrSettled` hears the value turn.
             else if (isAsyncGenerator(settled)) {
@@ -1545,7 +1563,8 @@ function absorb(cell: Cell, result: unknown, answered: boolean): void {
         },
         (failed) => {
             if (cell.generation !== generation) return
-            refused(cell, failed)
+            if (answered) refusedAnswer(cell, failed)
+            else refused(cell, failed)
         },
     )
 }
@@ -1863,7 +1882,7 @@ function run(cell: Cell): void {
             abortRun(cell)
             return
         }
-        refused(cell, thrown)
+        refusedAnswer(cell, thrown)
         return
     }
     TRACKING.reader = previous
@@ -1916,7 +1935,7 @@ function run(cell: Cell): void {
     // body's throw does above, a refusal being the same observable move whichever way the body
     // said it.
     if (!primitive && isFailed(produced)) {
-        refused(cell, produced)
+        refusedAnswer(cell, produced)
         return
     }
     // 9.6 — ON ANY RUN: `() => flag() ? rows() : 0` hands its generator back once the flag turns.
