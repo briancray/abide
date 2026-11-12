@@ -3922,7 +3922,7 @@ MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `c
 
 44.73 A `pairing` built in a component's setup MUST, once that component is disposed, stop reading and
 following `/__abide/pairing` where no other `pairing` reads it, remove the blur listener a `start`
-added, and clear every timer `start` and `copyInstall` set.
+added, clear the wait a `start` set, and leave `copied` and `step` where they stand.
 
 44.74 `/__abide/pairing` MUST NOT grant a tool the request asking it names.
 

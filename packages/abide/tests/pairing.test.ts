@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, jest, spyOn, test } from 'bun:test'
 
 import { GET } from '#server'
 import { config } from '#server/config.ts'
+import { flushSync } from '#shared'
 import { PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { BridgeStatus } from '#shared/BridgeStatus.ts'
 import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
@@ -192,16 +193,19 @@ test('copyInstall copies the install command and holds copied — 44.72', async 
     expect(written).toEqual([UNPAIRED.install])
     expect(pair.copied()).toBe(true)
     jest.advanceTimersByTime(1200)
+    // The write back is the copy's ttl (6.2), and `step` follows it at the end of that turn.
+    flushSync()
     expect(`${pair.copied()} ${pair.step()}`).toBe('false click')
     dispose()
 })
 
 // 44.73 — A DISPOSED PAIRING LEAVES NOTHING RUNNING: its read of `/__abide/pairing` and its follow, the
-// blur listener a click added and the timers a click and a copy set — asserted by what the timers
-// would have written, since bun's `jest.getTimerCount` still counts a cleared one. THE REVERT: drop
-// the `owned(…)` call in `pairing.ts`; this reports `blur listeners: 1, step: install, copied: false,
-// read aborted: false, unfollowed: 0`.
-test('dispose stops the read and clears the blur listener and both timers — 44.73', async () => {
+// blur listener a click added, the wait it set and the write back a copy armed — asserted by what
+// they would have written, since bun's `jest.getTimerCount` still counts a cleared one. `copied`'s write
+// back is its ttl's, which the setup's end stops (6.14). THE REVERT: drop the `owned(…)` call in
+// `pairing.ts`; this reports `blur listeners: 1, step: install, copied: true, read aborted:
+// undefined, unfollowed: 0`.
+test("dispose stops the read, the blur listener, the wait and the copy's write back — 44.73", async () => {
     const { pair, dispose } = built()
     await landed(pair, UNPAIRED)
     clipboardWrites([])
@@ -233,6 +237,7 @@ test('dispose stops the read and clears the blur listener and both timers — 44
     const listeningAfter = listening
     // Past both waits: a timer left standing would have moved `step` and `copied` by now.
     jest.advanceTimersByTime(5000)
+    flushSync()
     expect(
         `blur listeners: ${listeningAfter}, step: ${pair.step()}, copied: ${pair.copied()}, read aborted: ${asked[0]?.signal?.aborted}, unfollowed: ${unfollowed}`,
     ).toBe(

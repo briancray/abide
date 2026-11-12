@@ -23,7 +23,7 @@ import { MUX_FOLLOWS } from './MUX_FOLLOWS.ts'
 import { onPrincipalRotated } from './principalRotated.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
-import { owned, unowned } from './reactive/watch.ts'
+import { owned, unowned, watch } from './reactive/watch.ts'
 import { rpcRequest } from './rpcRequest.ts'
 
 /** How long a click waits for the page to blur, or the bridge to pair, before offering the install. */
@@ -49,9 +49,13 @@ export function pairing(): {
             : undefined,
     ) as Reactive<BridgeStatus | undefined>
     const step = reactive<'click' | 'waiting' | 'install'>('click')
-    const copied = reactive(false)
+    // 44.72 — 6.2 writes `false` back `COPIED_FOR` after a copy, and that is what ends the install
+    // step; 6.14 stops it with the setup, for 44.73.
+    const copied = reactive(false, { ttl: COPIED_FOR })
+    watch([copied], () => {
+        if (!copied.peek()) step.set('click')
+    })
     let waiting: ReturnType<typeof setTimeout> | undefined
-    let copying: ReturnType<typeof setTimeout> | undefined
     let onBlur: (() => void) | undefined
     // A click reads the status as it stands, and one that has not landed has no link to open.
     const current = (): BridgeStatus | undefined =>
@@ -68,8 +72,6 @@ export function pairing(): {
         disposed = true
         read?.release()
         stopWaiting()
-        clearTimeout(copying)
-        copying = undefined
     })
     return {
         status,
@@ -102,12 +104,6 @@ export function pairing(): {
             await navigator.clipboard.writeText(install)
             if (disposed) return
             copied.set(true)
-            clearTimeout(copying)
-            copying = setTimeout(() => {
-                copying = undefined
-                copied.set(false)
-                step.set('click')
-            }, COPIED_FOR)
         },
     }
 }
