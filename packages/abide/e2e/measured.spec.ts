@@ -1,4 +1,4 @@
-// 32.79-32.85 AND 23.30 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out, so
+// 32.79-32.85, 32.91, 32.92 AND 23.30 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out, so
 // whether an observer delivers a size, an intersection or a media change is a question only a
 // browser can answer — in both engines, since each ships its own observers.
 
@@ -61,6 +61,50 @@ const narrow = media('(max-width: 600px)')
 #placed { height: 10px; }
 </style>`
 
+// 32.91, 32.92 — A SCROLLER STANDING INSIDE THE VIEWPORT, ANOTHER BELOW THE FOLD, AND TWO BORDER
+// BOXES, one of them written vertically.
+const MEASURED_AGAINST = `<script>
+import { reactive } from '@abide/abide'
+
+let scroller = reactive<HTMLElement>()
+let low = reactive<HTMLElement>()
+let head = reactive<boolean>()
+let tail = reactive<boolean>()
+let inside = reactive<boolean>()
+let insideViewport = reactive<boolean>()
+let bordered = reactive<{ width: number; height: number }>()
+let upright = reactive<{ width: number; height: number }>()
+</script>
+
+<main>
+    <p id="head-seen">{String(head)}</p>
+    <p id="tail-seen">{String(tail)}</p>
+    <p id="inside-seen">{String(inside)} {String(insideViewport)}</p>
+    <p id="bordered">{bordered === undefined ? 'unmeasured' : bordered.width + 'x' + bordered.height}</p>
+    <p id="upright">{upright === undefined ? 'unmeasured' : upright.width + 'x' + upright.height}</p>
+    <div id="sized" bind:size={bordered} sizeBox="border"></div>
+    <div id="sized-upright" bind:size={upright} sizeBox="border"></div>
+    <div id="scroller" bind:element={scroller}>
+        <p id="head" bind:visible={head} visibleIn={scroller}>head</p>
+        <div class="gap"></div>
+        <p id="tail" bind:visible={tail} visibleIn={scroller}>tail</p>
+    </div>
+    <div class="fold"></div>
+    <div id="low" bind:element={low}>
+        <p bind:visible={inside} visibleIn={low}>inside</p>
+        <p bind:visible={insideViewport}>inside</p>
+    </div>
+</main>
+
+<style>
+#sized, #sized-upright { width: 200px; height: 100px; padding: 10px; border: 2px solid; }
+#sized-upright { writing-mode: vertical-rl; }
+#scroller { height: 100px; margin-top: 100px; overflow-y: auto; }
+#scroller p { margin: 0; height: 20px; }
+.gap { height: 100px; }
+.fold { height: 3000px; }
+</style>`
+
 let server: Subprocess | undefined
 let base = ''
 
@@ -68,7 +112,11 @@ let base = ''
 test.beforeAll(async ({}, testInfo) => {
     ;({ base, server } = await servedFixture(
         `e2e-measured-${testInfo.project.name}`,
-        { 'layout.abide': LAYOUT, 'index.abide': PAGE },
+        {
+            'layout.abide': LAYOUT,
+            'index.abide': PAGE,
+            'against.abide': MEASURED_AGAINST,
+        },
     ))
 })
 
@@ -262,4 +310,74 @@ test('media hydrates the arm the server painted and swaps it without a warning �
     await expect(page.locator('#wide-arm')).toHaveCount(0)
     await expect(page.locator('#size')).toHaveText('200x100')
     expect(warned).toEqual([])
+})
+
+// 32.92 — THE BORDER BOX, PADDING AND BORDER IN: 200x100 with 10px of padding and a 2px border is
+// 224x124, and the same box written vertically is 224x124 too — its inline size is its height. THE
+// REVERT: write `contentRect` for a `sizeBox="border"` element in `deliverSizes`; both read 200x100.
+// Turning the axes is the unit test's (`bindMeasured.test.ts`, 124x224 without it).
+test('sizeBox="border" writes the border box, in physical axes — 32.92', async ({
+    page,
+}) => {
+    const served = await (await fetch(`${base}/against`)).text()
+    expect(served.toLowerCase()).not.toContain('sizebox')
+    await page.goto(`${base}/against`)
+    await expect(page.locator('#bordered')).toHaveText('224x124')
+    await expect(page.locator('#upright')).toHaveText('224x124')
+})
+
+// 32.91 — A ROOT IS WHAT VISIBILITY IS MEASURED AGAINST. In a scroller standing in the viewport, the
+// head is visible and the tail is not; scrolled, the head is out of the scroller while it still
+// stands in the viewport. Two elements in one root are one observer. THE REVERT: drop `{ root }` in
+// `Rooted`; the scroller clips its elements against the viewport too, so they read as before, and
+// what fails is the count — no observer rooted at the scroller. The next test is what tells them apart.
+test('bind:visible with visibleIn follows a scroller, sharing one observer — 32.91, 32.82', async ({
+    page,
+}) => {
+    await page.addInitScript(() => {
+        const roots: unknown[] = []
+        ;(globalThis as { __ROOTS__?: unknown[] }).__ROOTS__ = roots
+        const Native = IntersectionObserver
+        globalThis.IntersectionObserver = class extends Native {
+            constructor(
+                callback: IntersectionObserverCallback,
+                options?: IntersectionObserverInit,
+            ) {
+                super(callback, options)
+                roots.push(
+                    options?.root instanceof Element ? options.root.id : null,
+                )
+            }
+        }
+    })
+    await page.setViewportSize({ width: 1024, height: 768 })
+    await page.goto(`${base}/against`)
+    await expect(page.locator('#head-seen')).toHaveText('true')
+    await expect(page.locator('#tail-seen')).toHaveText('false')
+    await page.evaluate(() => {
+        ;(document.getElementById('scroller') as Element).scrollTop = 50
+    })
+    await expect(page.locator('#head-seen')).toHaveText('false')
+    await expect(page.locator('#tail-seen')).toHaveText('true')
+    const headBottom = await page.evaluate(
+        () =>
+            (document.getElementById('head') as Element).getBoundingClientRect()
+                .bottom,
+    )
+    expect(headBottom).toBeGreaterThan(0)
+    const roots = await page.evaluate(
+        () => (globalThis as { __ROOTS__?: unknown[] }).__ROOTS__,
+    )
+    expect(roots?.filter((root) => root === 'scroller')).toHaveLength(1)
+})
+
+// 32.91 — THE DISTINGUISHING CASE: a scroller below the fold holds an element in its own view, which
+// is visible in the scroller and not in the viewport. THE REVERT: drop `{ root }` in `Rooted`; it
+// reads `false false`.
+test('bind:visible with visibleIn measures against the root, not the viewport — 32.91', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1024, height: 768 })
+    await page.goto(`${base}/against`)
+    await expect(page.locator('#inside-seen')).toHaveText('true false')
 })

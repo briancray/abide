@@ -765,9 +765,17 @@ function elementUnits(
             )
         // 32.79, 32.80, 32.86 — A MEASUREMENT, ONE WAY: the element is observed and the value
         // written, and nothing watches the value.
+        // 32.91, 32.92 — what it measures against rides along: a static box as the string, an
+        // expression as a thunk the bind watches, so a root or a box that moves is measured again.
         else if (one.kind === 'measured')
             binds.push(
-                `${lowering.use(MEASURES[one.measure])}(${element}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
+                `${lowering.use(MEASURES[one.measure])}(${element}, ${lowering.reference(one.attribute)}, ${SCOPE}${
+                    one.option === undefined
+                        ? ''
+                        : one.option.expression
+                          ? `, () => (${lowering.binding(one.option)})`
+                          : `, ${JSON.stringify(one.option.value)}`
+                })`,
             )
         else if (one.kind === 'bound')
             binds.push(

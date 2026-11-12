@@ -973,6 +973,46 @@ let placed = reactive<{ top: number; left: number }>()
     ])
 }, 60_000)
 
+// 32.94 — WHAT A MEASURED BIND MEASURES AGAINST IS HELD TO WHAT IT CAN BE: a root is an element, a
+// document or nothing, read by name, so an element's `Reactive` is the element it holds; a box is
+// one of two words. The three above the line check clean; the two below it are refused. THE REVERT:
+// open `visibleIn` and `sizeBox` with `(` in `openerOf`; neither below is refused.
+test('visibleIn and sizeBox are held to a root and a box — 32.94', async () => {
+    const measured = appFixture({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                skipLibCheck: true,
+            },
+            include: ['.'],
+        }),
+        'index.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let box = reactive<HTMLElement>()
+let seen = reactive(false)
+let size = reactive<{ width: number; height: number }>()
+let border = reactive<'content' | 'border'>('border')
+</script>
+<div bind:element={box}><p bind:visible={seen} visibleIn={box}></p></div>
+<div bind:size={size} sizeBox={border}></div>
+<div bind:size={size} sizeBox="border"></div>
+<p bind:visible={seen} visibleIn={seen}></p>
+<div bind:size={size} sizeBox={seen ? 'margin' : 'border'}></div>`,
+    })
+    expect(
+        (await checkApp(measured)).map(({ line, code }) => ({ line, code })),
+    ).toEqual([
+        { line: 12, code: 2345 },
+        { line: 13, code: 2345 },
+    ])
+}, 60_000)
+
 // 33.23 THROUGH `abide check` — a component typed `& Attributes<'button'>` that spreads its rest onto a
 // `<button>`: a caller's static text, a bare attribute, microdata and a typed listener are each held
 // to what a button takes, and a `type` it does not take is refused. THE REVERT: drop `Written` from

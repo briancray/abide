@@ -87,6 +87,8 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>bind:size</code></td><td>any element, to its content-box <code>{'{ width, height }'}</code>, written as it is laid out and never read back</td></tr>
                 <tr><td><code>bind:visible</code></td><td>any element, to whether it is in the viewport, written the same way</td></tr>
                 <tr><td><code>bind:rect</code></td><td>any element, to its rectangle in the viewport, as <code>getBoundingClientRect</code> reports it</td></tr>
+                <tr><td><code>{'visibleIn={root}'}</code></td><td>beside <code>bind:visible</code>, measures against an element you hold, such as a scroller, rather than the viewport</td></tr>
+                <tr><td><code>sizeBox="border"</code></td><td>beside <code>bind:size</code>, writes the border box, padding and border in, rather than the content box</td></tr>
                 <tr><td><code>{'bind:value={{get, set}}'}</code></td><td>a field to a pair you write, where the value is computed</td></tr>
                 <tr><td><code>{'bind:prop={state}'}</code></td><td>a component's prop, so the child's write reaches your value</td></tr>
             </tbody>
@@ -98,6 +100,13 @@ import Section from '#src/lib/Section.abide'
             holds what you gave it. Every bound element shares one observer, and an element that
             leaves is no longer observed. The server has no layout and writes nothing for any of
             the three.</p>
+
+        <p><code>visibleIn</code> takes an element, usually one <code>bind:element</code> gave
+            you. Until it holds one, nothing is observed. The elements measured against one root
+            share an observer, and that observer stops when the last of them leaves.
+            <code>sizeBox</code> is <code>"content"</code> or <code>"border"</code>, and either
+            box is written as <code>width</code> and <code>height</code> on screen, whatever the
+            writing mode.</p>
 
         <p><code>bind:rect</code> reads again in the frame after the element resizes, the page or
             anything in it scrolls, the window resizes, or the element moves for any other reason,

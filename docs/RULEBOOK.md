@@ -2417,10 +2417,12 @@ those strings, and a `<select multiple>` a list of the strings its value's items
 string where they hold none. A `type` or a `multiple` written as an expression, or absent beside a
 spread, MUST be held to the union of what each value of it writes.
 
-32.79 `bind:size` MUST write the element's content-box `width` and `height`, as one record, at each
-observation of a size the value does not already hold.
+32.79 `bind:size` MUST write the element's content-box `width` and `height`, or its border box's
+where 32.92 asks for it, as one record, at each observation of a size the value does not already
+hold.
 
-32.80 `bind:visible` MUST write whether the element intersects the viewport, at each observation.
+32.80 `bind:visible` MUST write whether the element intersects the viewport, or the root 32.91
+names, at each observation.
 
 32.81 `abide check` MUST hold the `set` of a `bind:size` to a record of a numeric `width` and
 `height`, of a `bind:rect` to a record of a numeric `x`, `y`, `top`, `left`, `right`, `bottom`,
@@ -2428,7 +2430,8 @@ observation of a size the value does not already hold.
 the three.
 
 32.82 Every `bind:size` in a document MUST be observed by one shared observer, every `bind:visible`
-by one other, and every `bind:rect` by a third.
+measured against one root by one other per root, the viewport being one, and every `bind:rect` by
+a third.
 
 32.83 A `bind:size` or a `bind:visible` MUST NOT write its value before the first observation of its
 element, and MUST NOT read the element's layout to write it.
@@ -2458,6 +2461,23 @@ preceded, and MUST be made again only in a frame whose read found the element mo
 resized since it was made. A frame a scroll preceded MUST ask for the frame after it, which answers
 that scroll under 32.89, so the observers stand again once the scroll is over. It MUST cost no work
 while neither moves.
+
+32.91 A `visibleIn` beside a `bind:visible` MUST name the root the bind measures against, and
+MUST be read as the element's attributes are, so a change of what it holds observes the element
+against the new root. While it holds no root the element MUST NOT be observed, and the value holds
+what it last held. A root's observer MUST be disconnected when the last element measured against it
+stops being observed.
+
+32.92 A `sizeBox` of `"border"` beside a `bind:size` MUST make it write the element's border-box
+`width` and `height`, and one of `"content"` its content box. Both MUST be the physical axes
+whatever the element's writing mode, and a change of the box MUST observe the element again.
+
+32.93 A `visibleIn` or a `sizeBox` on an element without its bind, a `visibleIn` written as static
+text, or a `sizeBox` written as static text other than `content` or `border`, MUST be a build
+error. The server MUST write nothing for either, and the client MUST set neither as an attribute.
+
+32.94 `abide check` MUST hold a `visibleIn` to an element, a document, `null` or `undefined`, and a
+`sizeBox` to `'content'` or `'border'`.
 
 # 33. Props
 
