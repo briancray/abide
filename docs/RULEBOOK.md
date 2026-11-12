@@ -3920,7 +3920,8 @@ separated by commas, and none where it names none.
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
 44.69 `pairing`'s `status` MUST be the last `BridgeStatus` `/__abide/pairing` answered the browser,
-and MUST be `undefined` where a server builds it.
+MUST fail with the failure of a read of it that failed, and MUST be `undefined` where a server builds
+it.
 
 44.70 `pairing`'s `start` MUST do nothing while `status` holds no `BridgeStatus`, and otherwise MUST
 set `step` to `waiting` and navigate the page to the status's `link`.

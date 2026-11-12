@@ -131,6 +131,24 @@ test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44
     dispose()
 })
 
+// 44.69 — A READ THAT FAILED IS THE STATUS'S FAILURE, so a page can say the assistant is unavailable
+// rather than wait on a status that never lands. THE REVERT: answer `undefined` from `status`'s body
+// where the copy failed, as it did; `status` stays ready and undefined, with no error, for good.
+test('a pairing /__abide/pairing fails to answer fails its status with that failure — 44.69', async () => {
+    globalThis.fetch = (async () =>
+        new Response('down', { status: 503 })) as unknown as typeof fetch
+    const { pair, dispose } = built()
+    for (let turn = 0; turn < 50 && pair.status.error() === undefined; turn++)
+        await Bun.sleep(0)
+    const failure = pair.status.error() as { status?: number } | undefined
+    expect(
+        `failed ${failure !== undefined}, status ${failure?.status}, value ${pair.status.peek()}`,
+    ).toBe('failed true, status 503, value undefined')
+    pair.start()
+    expect(pair.step()).toBe('click')
+    dispose()
+})
+
 // 44.75 — READ ONCE AND FOLLOWED: a pairing that changes is read again when the mux says so, and two
 // `pairing` on one page share the one read and the one follow. THE REVERT: skip `MUX_FOLLOWS.follow`
 // in `pairing.ts`; the pushed status never lands and `landed` reports the unpaired one.
