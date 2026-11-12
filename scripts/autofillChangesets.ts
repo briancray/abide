@@ -130,11 +130,12 @@ for (const hash of hashes) {
     if (owners.length === 0) {
         continue
     }
-    // A changeset committed alongside the change is authoritative — leave it be.
-    const addedChangeset = entries.some((line) =>
-        /^A\s+\.changeset\/(?!README\.md).+\.md$/.test(line),
+    // A changeset committed alongside the change is authoritative — leave it be. A follow-up that
+    // EDITS a pending changeset rather than adding one has been written into that changeset too.
+    const wroteChangeset = entries.some((line) =>
+        /^[AM]\s+\.changeset\/(?!README\.md).+\.md$/.test(line),
     )
-    if (addedChangeset) {
+    if (wroteChangeset) {
         continue
     }
     const short = hash.slice(0, 7)
