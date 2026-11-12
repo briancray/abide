@@ -430,7 +430,7 @@ holds.
 requests in flight have drained, before `onStop` runs and within 42.17's deadline.
 
 7.28 Every failure that fills `s.error` on a value declaring `poll`, an entry of a `Keyed` declaring
-it included, MUST warn on `abide:reactive` naming the value.
+it included, and is not a failed revalidation, MUST warn on `abide:reactive` naming the value.
 
 7.29 A `reactive` with a body declaring `poll`, built where 7.23 has no owner to stop it, MUST NOT
 run its body where it is built.

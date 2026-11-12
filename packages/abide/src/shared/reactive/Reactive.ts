@@ -42,10 +42,10 @@ import { NotLanded } from './NotLanded.ts'
 import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
 import {
     firstRunStarted,
+    isPolled,
     markPolled,
     ownedPoll,
     refuseBadPoll,
-    warnPolledFailure,
 } from './poll.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
@@ -1384,6 +1384,79 @@ function standWrite(cell: Cell, stream: Stream, value: unknown): number {
 }
 
 /**
+ * The logger a value's own trouble warns through: a failed revalidation (4.12), a polled run that
+ * failed (7.28), a store that failed (8.12).
+ */
+const REACTIVE_LOG = namedLogger('abide:reactive')
+
+/**
+ * The load each value's `s.refresh` started over what it was serving (4.12), by the generation and
+ * the stream run it began at — and the value whose refresh is running its producer now, for a body
+ * that fails in that same run.
+ *
+ * OFF THE CELL, AND READ ONLY WHERE A FAILURE LANDS: a refresh writes it and `refused` reads it, so
+ * neither a read nor a write pays for it. A mark a later load outlived is told apart by the stamp
+ * rather than cleared, which would cost every production a delete.
+ */
+const REVALIDATIONS = new WeakMap<Cell, LoadStamp>()
+let refreshing: Cell | null = null
+
+/** Runs the producer for `s.refresh`, marking the load a revalidation where a value is served. */
+function revalidate(cell: Cell): void {
+    if (!cell.servable) {
+        reload(cell)
+        return
+    }
+    const outer = refreshing
+    refreshing = cell
+    try {
+        reload(cell)
+    } finally {
+        refreshing = outer
+    }
+    if (cell.loading) REVALIDATIONS.set(cell, loadStamp(cell))
+}
+
+/** Which load a value has in flight: a body's by its generation, a stream's by its run. */
+type LoadStamp = { generation: number; run: number }
+
+function loadStamp(cell: Cell): LoadStamp {
+    return { generation: cell.generation, run: ownStream(cell)?.run ?? -1 }
+}
+
+/**
+ * Warns on `abide:reactive` of a failure landing on `cell`, where a clause asks for it.
+ *
+ * 4.12 — A FAILED REVALIDATION, named, once: the failure is masked by the value still served, so a
+ * reader sees nothing of it. `loading` is whether a load was in flight as it landed, which tells
+ * the load a refresh started from a write refused after it. 7.28 — any other failure of a value
+ * declaring `poll`, a job's first run among them, which has no reader for the failure to reach.
+ */
+function warnFailure(cell: Cell, failure: unknown, loading: boolean): void {
+    if (cell.servable) {
+        let revalidated = refreshing === cell
+        if (!revalidated && loading) {
+            const stamp = REVALIDATIONS.get(cell)
+            if (stamp !== undefined) {
+                const now = loadStamp(cell)
+                revalidated =
+                    stamp.generation === now.generation && stamp.run === now.run
+            }
+        }
+        if (revalidated) {
+            REVALIDATIONS.delete(cell)
+            REACTIVE_LOG.warning(
+                `${cell.label}: a revalidation failed, and what it held is still served.`,
+                failure,
+            )
+            return
+        }
+    }
+    if (isPolled(cell))
+        REACTIVE_LOG.warning(`${cell.label}: a polled run failed.`, failure)
+}
+
+/**
  * Leaves a failure standing as `s.error`; returns it.
  *
  * 4.10: WHAT A REFUSED WRITE LEAVES BEHIND is the standing `s.error`, and this is the one
@@ -1402,9 +1475,10 @@ function standWrite(cell: Cell, stream: Stream, value: unknown): number {
  * there would be a wake on an unchanged value (5.1).
  */
 function refused(cell: Cell, failure: unknown): unknown {
+    const loading = cell.loading
     cell.loading = false
     cell.failure = failure
-    warnPolledFailure(cell, cell.label, failure)
+    warnFailure(cell, failure, loading)
     // BOTH PROBES MOVED AND NEITHER IS ON THE VALUE EDGE: `busy` went false where the load
     // had set it true, and `error` went from nothing to this. A guard that asked about
     // either is woken here or never.
@@ -3069,7 +3143,7 @@ function refreshOne(cell: Cell): void {
 function reloadNow(cell: Cell): void {
     // A refresh IS the reload an invalidate owed, so the read after it must not run a second.
     if (cell.owes === OWES_RELOAD) reloadOwed(cell)
-    else reload(cell)
+    else revalidate(cell)
 }
 
 /**
@@ -3245,16 +3319,9 @@ function readStore(cell: Cell, persisted: Persisted): unknown {
 
 const STORE_UNREAD = 'could not be read, and is taken as a miss. RULEBOOK 8.15'
 
-/**
- * The logger a store failure warns through.
- *
- * 8.12 — under the namespace the clause names; a failed write also reaches `onError`, through
- * `storeWriteFailed`.
- */
-const STORE_LOG = namedLogger('abide:reactive')
-
 function warnStore(cell: Cell, what: string, failed: unknown): void {
-    STORE_LOG.warning(`${cell.label}: a store ${what}.`, failed)
+    // 8.12 — a failed write also reaches `onError`, through `storeWriteFailed`.
+    REACTIVE_LOG.warning(`${cell.label}: a store ${what}.`, failed)
 }
 
 /**

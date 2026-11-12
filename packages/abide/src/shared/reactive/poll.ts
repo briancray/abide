@@ -11,15 +11,12 @@
 // `App.listen` makes its first run (7.29, 7.30) and `App.stop` stops it (7.26, 7.27). Filed here rather
 // than on the cell, for the same reason.
 
-import { namedLogger } from '../log.ts'
 import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
 import type { Reactive } from './Reactive.ts'
 import { unrefTimer } from './unrefTimer.ts'
 import { owned, owning } from './watch.ts'
 
 type Polled = Pick<Reactive<unknown>, 'busy' | 'refresh' | 'then'>
-
-const POLL_LOG = namedLogger('abide:reactive')
 
 /** A poll 7.23 has no owner to stop: its clock, and the values the clock refreshes. */
 type Unowned = {
@@ -60,14 +57,9 @@ export function markPolled(record: object): void {
     POLLED.add(record)
 }
 
-/** Warns on `abide:reactive` where `record` declares `poll` (7.28). */
-export function warnPolledFailure(
-    record: object,
-    label: string,
-    failure: unknown,
-): void {
-    if (POLLED.has(record))
-        POLL_LOG.warning(`${label}: a polled run failed.`, failure)
+/** Whether `record` declares `poll`, for 7.28's warning. */
+export function isPolled(record: object): boolean {
+    return POLLED.has(record)
 }
 
 /**

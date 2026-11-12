@@ -193,13 +193,15 @@ const ARMS: Record<string, (job: Job) => Promise<() => Promise<void>>> = {
     },
 }
 
-// 7.20, 7.21, 7.26, 7.27, 7.28 — THE CONTRACT, both arms. A run in flight when the stop is asked is
+// 4.12, 7.20, 7.21, 7.26, 7.27, 7.28 — THE CONTRACT, both arms. A run in flight when the stop is asked is
 // waited on, and none starts after it.
 //
 // THE REVERTS, on the abide arm: drop `stopUnownedPolls` from `stopOnce`, and `ended at the stop:
-// false, runs after the stop: 2`; drop `warnPolledFailure` from `refused`, and `warned: 0`.
+// false, runs after the stop: 2`; drop `warnFailure` from `refused`, and `warned: 0` — the second run
+// fails over the first one's value, so it is a failed revalidation (4.12) that warns, and 7.28 does not
+// warn a second time.
 for (const [arm, start] of Object.entries(ARMS))
-    test(`a job runs one at a time, logs a failed run and goes on, and stops with the app waiting on its run — ${arm}, 7.20, 7.21, 7.26, 7.27, 7.28`, async () => {
+    test(`a job runs one at a time, logs a failed run and goes on, and stops with the app waiting on its run — ${arm}, 4.12, 7.20, 7.21, 7.26, 7.27, 7.28`, async () => {
         const job: Job = { runs: 0, ended: 0, overlapped: 0, failed: '' }
         const before = (log.records.peek() ?? []).length
         const stop = await start(job)
