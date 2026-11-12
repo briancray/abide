@@ -119,6 +119,9 @@ test('a refused seed is the refusal, and the principal it refuses is unauthentic
 // THE REVERT: `await` the answer in `seededDocument` unconditionally, as it was; every read below is
 // in flight — `ready()` false, the document a `Promise` — though the answer is already there.
 test('a seed painted settled is read settled, at once — 41.25, 41.27', () => {
+    // Whatever an earlier file in this process left the one document holding, dropped before the
+    // seed is there to be taken.
+    principalMembers().document.invalidate()
     const settled = (text: string) => ({
         promise: Promise.resolve(),
         painted: 1,

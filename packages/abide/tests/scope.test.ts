@@ -19,6 +19,7 @@ import {
 import { response } from '#server/response.ts'
 import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
 import { cellOf } from '#shared/reactive/cellShape.ts'
+import { ambient } from '#shared/reactive/index.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { GET, POST } from '#shared/rpc.ts'
 
@@ -46,6 +47,26 @@ test('a value built outside every request is one value per request — 11.32', a
     expect(runs).toBe(3)
     // Outside a request it is the value built at import, which neither request wrote.
     expect(visits()).toBe(0)
+})
+
+// 11.32 — A FRAMEWORK AMBIENT FIRST BUILT INSIDE A REQUEST BUILDS ITS HOME OUTSIDE IT. `principal`'s
+// members are built on first access, which on a server is a request: a home built there read that
+// request's instance of what it derives from, and outside every request answered the first caller's
+// value for the life of the process — a test then read a released request's signed-in document where
+// its own was due. THE REVERT: build the home with `make()` in `Filed`'s constructor, as it was;
+// `doubled` reads 10 where 2 is due, and 10 again where 6 is due after the write outside.
+test('an ambient first built inside a request derives its home outside it — 11.32', async () => {
+    const base = ambient(1)
+    let doubled: (() => number) | undefined
+    await inScope(new Request('http://app/a'), async () => {
+        base.set(5)
+        doubled = ambient(() => base() * 2)
+        expect(doubled()).toBe(10)
+    })
+    expect(doubled!()).toBe(2)
+    base.set(3)
+    await Bun.sleep(0)
+    expect(doubled!()).toBe(6)
 })
 
 // 11.71 — A STORE BUILT AT IMPORT ON A SERVER IS NOT READ UNTIL ITS VALUE IS REACHED, so a store
