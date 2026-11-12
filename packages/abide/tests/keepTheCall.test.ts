@@ -31,8 +31,12 @@ function held(): () => void {
     return gate.resolve
 }
 
+// How many times the handler ran, so a wait that ran the write again shows.
+let recorded = 0
+
 const recordBalance = POST(
     async ({ account, amount }: Balance) => {
+        recorded += 1
         await answer
         if (account === 'closed') return AccountClosed({ account })
         return { account, amount }
@@ -97,7 +101,8 @@ test('a kept call is busy in flight, refused, and dropped for the next call — 
     await settled(saving)
     expect(saving()).toEqual({ account: 'checking', amount: 5 })
     expect(busy).toEqual([false, true, false, true, false])
-    expect(errors).toEqual([
+    // `toStrictEqual`: `toEqual` passes an array short of its trailing `undefined`s.
+    expect(errors).toStrictEqual([
         undefined,
         undefined,
         'AccountClosed',
@@ -206,4 +211,117 @@ test('reactive<typeof rpc>() is typed as the call — 4.19', () => {
     expect(one).toBe(plain)
     const none: undefined = reactive<number>().issues()
     expect(none).toBeUndefined()
+})
+
+// 2.7, 2.8 — AFTER THE CALL LANDS IS `then` ON THE KEPT VALUE, with no second wait to keep: the call
+// runs once whatever waits on it, the follow-up runs once per call that answered, and a refusal is
+// handed to the second argument while it stands on `error` as before. A `then` made before a second
+// submit is answered by the call the form keeps when it settles, which is that second one: the form
+// has one call, and its answer is the one after-success is for. 11.16 is what makes it so: a call
+// adopted with nothing to serve leaves the form nothing to serve, so a `then` waits for it. THE
+// REVERT: have `mirror` in `Reactive.ts` return where the adopted has nothing to serve, without
+// unserving — the refused submit's `then` is answered with the last call's 5: `[5, 5, 7, 7]`.
+test('then on a kept call follows each answer once, and leaves a refusal on error — 2.7, 2.8', async () => {
+    const saving = reactive<typeof recordBalance>()
+    const saved: (number | undefined)[] = []
+    const refused: string[] = []
+    const before = recorded
+    const after = (balance: Balance): void => {
+        saved.push(balance.amount)
+    }
+    const otherwise = (failure: unknown): void => {
+        refused.push((failure as Error).name)
+    }
+    let release = held()
+    saving.set(recordBalance({ account: 'savings', amount: 5 }))
+    saving.then(after, otherwise)
+    release()
+    await settled(saving)
+
+    release = held()
+    saving.set(recordBalance({ account: 'closed', amount: 5 }))
+    saving.then(after, otherwise)
+    release()
+    await settled(saving)
+    expect(saving.error()?.name).toBe('AccountClosed')
+
+    release = held()
+    saving.set(recordBalance({ account: 'savings', amount: 6 }))
+    saving.then(after, otherwise)
+    saving.set(recordBalance({ account: 'savings', amount: 7 }))
+    saving.then(after, otherwise)
+    release()
+    await settled(saving)
+    expect(saved).toEqual([5, 7, 7])
+    expect(refused).toEqual(['AccountClosed'])
+    expect(recorded - before).toBe(4)
+
+    // A `then` arm answering anything types: one result type per arm, as `PromiseLike` has.
+    const closed: Promise<boolean> = saving.then(
+        () => true,
+        () => false,
+    )
+    expect(await closed).toBe(true)
+})
+
+// 11.61, 11.16, 11.50 — KEEPING NO CALL IS ADOPTING A VALUE NOTHING HAS WRITTEN: `saving =
+// reactive<typeof save>()` drops the standing refusal, reads not ready, and writes nothing into the
+// call it stops keeping — where `saving = undefined` is a write, which 11.59 hands to that call.
+// The `error` reader hears the drop once, after the call's `busy` move and its refusal. THE REVERT:
+// drop the `failureOf(cell) !== wasFailure` arm from `adopt` in `Reactive.ts`; the reader never
+// hears the refusal leave — 3 entries, the last `'AccountClosed'`, where a fourth is owed.
+test('a kept call is let go by keeping one nothing has written — 11.16, 11.50, 11.61', async () => {
+    const saving = reactive<typeof recordBalance>()
+    const errors: (string | undefined)[] = []
+    using _error = {
+        [Symbol.dispose]: watch(() => {
+            errors.push(saving.error()?.name)
+        }),
+    }
+    flushSync()
+    const release = held()
+    const call = recordBalance({ account: 'closed', amount: 5 })
+    saving.set(call)
+    release()
+    await settled(saving)
+    saving.set(reactive<typeof recordBalance>())
+    flushSync()
+    expect(errors).toStrictEqual([
+        undefined,
+        undefined,
+        'AccountClosed',
+        undefined,
+    ])
+    expect([saving.ready(), saving.busy()]).toEqual([false, false])
+    expect(call.error()?.name).toBe('AccountClosed')
+})
+
+const closeAccount = POST(async ({ account }: { account: string }) => {
+    await answer
+    if (account === 'closed') return AccountClosed({ account })
+    return undefined
+})
+
+// 4.19 FOR A UNION — ONE BUSY AND ONE ERROR FOR A FLOW CALLING ONE OF SEVERAL HANDLERS: the value is
+// typed over every call it may keep, its failures the union of theirs, and each call is adopted as
+// any one is. Checked by `bun run typecheck` as much as by the run.
+test('reactive<typeof a | typeof b>() keeps a call of either — 4.19', async () => {
+    const removing = reactive<typeof recordBalance | typeof closeAccount>()
+    removing.set(closeAccount({ account: 'closed' }))
+    await settled(removing)
+    const failure = removing.error()
+    if (removing.isError(failure, 'AccountClosed')) {
+        const account: string = failure.data.account
+        expect(account).toBe('closed')
+    }
+    removing.set(recordBalance({ account: 'checking', amount: 5 }))
+    await settled(removing)
+    const kept: Balance | undefined = removing.peek()
+    expect(kept).toEqual({ account: 'checking', amount: 5 })
+    const refusal = removing.error()
+    if (removing.isError(refusal, 'ValidationError')) {
+        // Either call's issues: `account` is in both, and `amount` only in `recordBalance`'s.
+        const account: string[] | undefined = refusal.data.account
+        expect(account).toBeUndefined()
+    }
 })

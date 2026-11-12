@@ -191,6 +191,19 @@ export type AdoptedProduced<Computed, Otherwise> =
         : Otherwise
 
 /**
+ * The `Reactive` one call of an `Rpc` hands back, for each `Rpc` in `Calls` — a union of them where
+ * `Calls` is a union, which `reactive` folds into one value.
+ */
+type CallOf<Calls> =
+    Calls extends Rpc<infer Value, infer Args, infer Failures, infer Produced>
+        ? ReturnType<Rpc<Value, Args, Failures, Produced>>
+        : never
+/** What a `Reactive` in `Calls` stores — the union over `Calls`, distributed. */
+type StoredOf<Calls> =
+    Calls extends Reactive<infer Stored, never, unknown, unknown>
+        ? Stored
+        : never
+/**
  * A value opening at `undefined`: `reactive<User | undefined>(undefined)`, loaded at `undefined`
  * (4.15).
  *
@@ -356,13 +369,28 @@ export function reactive<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
  * A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.9).
  *
  * 4.19 — `reactive<typeof save>()` IS THE VALUE A CALL OF `save` IS, so the value a call is written to
- * carries its value and its failures, as `Issues<typeof save>` reads its args (19.26). The tuple
- * keeps a union from distributing, which typed `reactive<User | undefined>()` as two values.
+ * carries its value and its failures, as `Issues<typeof save>` reads its args (19.26). The test
+ * distributes INSIDE the tuple, so it holds where every member of a union is an `Rpc`, and the tuple
+ * keeps the answer one value — undistributed, `reactive<User | undefined>()` was typed as two. One
+ * `Rpc` inferred from a union of them matched neither, and typed `reactive<typeof a | typeof b>()`
+ * as a value holding a handler.
  */
-export function reactive<Accepted>(): [Accepted] extends [
-    Rpc<infer Value, infer Args, infer Failures, infer Produced>,
-]
-    ? ReturnType<Rpc<Value, Args, Failures, Produced>>
+export function reactive<Accepted>(): [
+    Accepted extends Rpc<
+        infer _Value,
+        infer _Args,
+        infer _Failures,
+        infer _Produced
+    >
+        ? true
+        : false,
+] extends [true]
+    ? Reactive<
+          StoredOf<CallOf<Accepted>>,
+          StoredOf<CallOf<Accepted>>,
+          AdoptedFailures<CallOf<Accepted>>,
+          AdoptedProduced<CallOf<Accepted>, StoredOf<CallOf<Accepted>>>
+      >
     : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>
 export function reactive(
     // A REST TUPLE rather than two parameters, so the count of what was passed is read: 4.14 has no

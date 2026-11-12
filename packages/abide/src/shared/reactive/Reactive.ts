@@ -301,10 +301,12 @@ export type Reactive<
     watch(effect: (value: Stored) => void | (() => void)): () => void
     /** What one run produced: the settled value once, or a stream's chunks to its close (2.5, 2.6). */
     [Symbol.asyncIterator](): AsyncIterator<Produced>
-    then<Result>(
-        onSettled?: (value: Stored) => Result | PromiseLike<Result>,
-        onFailed?: (error: unknown) => Result | PromiseLike<Result>,
-    ): Promise<Result>
+    // A RESULT TYPE PER ARM, as `PromiseLike` has: with one, `then(close, () => {})` took the empty
+    // arm's `void` as the result and refused a `close` that answers anything.
+    then<Settled = Stored, Refused = never>(
+        onSettled?: (value: Stored) => Settled | PromiseLike<Settled>,
+        onFailed?: (error: unknown) => Refused | PromiseLike<Refused>,
+    ): Promise<Settled | Refused>
     catch<Result>(
         onFailed: (error: unknown) => Result | PromiseLike<Result>,
     ): Promise<Stored | Result>
