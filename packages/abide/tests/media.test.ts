@@ -4,6 +4,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
+import { inReleasedScope } from '#server/requestScope.ts'
 import { flushSync } from '#shared'
 import { beginHydration, endHydration } from '#shared/hydrating.ts'
 import { media } from '#shared/media.ts'
@@ -34,6 +35,27 @@ test('media follows matchMedia and its change event — 23.30', () => {
     viewport(1024)
     flushSync()
     expect(narrow()).toBe(false)
+})
+
+// 23.30 — A QUERY FIRST ASKED BY A REQUEST ANSWERS THE BROWSER'S OUTSIDE IT: in a test process a page
+// fetched from the app asks first, and a component mounted after it reads the same value. THE REVERT:
+// build `followed` in `media` without `runInScope(undefined, …)`; it records the request as its
+// scope, its body runs there for good, and it reads `after it false, refreshed false`.
+test('a query a request asked first answers the browser after it — 23.30', async () => {
+    viewport(1024)
+    const query = '(min-width: 640px)'
+    const inRequest = await inReleasedScope(
+        new Request('http://app/'),
+        async () => media(query)(),
+    )
+    const after = media(query)
+    flushSync()
+    const read = after()
+    after.refresh()
+    flushSync()
+    expect(
+        `in the request ${inRequest}, after it ${read}, refreshed ${after()}`,
+    ).toBe('in the request false, after it true, refreshed true')
 })
 
 // 23.32 — ONE VALUE AND ONE LISTENER PER QUERY: a component mounted fifty times asks fifty times.
