@@ -3204,10 +3204,10 @@ the range.
 
 38.124 The project `abide scaffold` writes MUST carry a `bench` script that runs `harness-bench`.
 
-38.125 `abide format` MUST hand each `<script>` block and each `<style>` of every `.abide` under the
-directories named, or under the app where none are, to `bun fmt` as TypeScript and as CSS, under the
-options `bun fmt` reads for that file, and MUST leave as written a file those options'
-`ignorePatterns` name.
+38.125 `abide format` MUST hand each `<script>` block and each `<style>` of every `.abide` named, of
+every one under the directories named, or under the app where none are, to `bun fmt` as TypeScript
+and as CSS, under the options `bun fmt` reads for that file, and MUST leave as written a file those
+options' `ignorePatterns` name.
 
 38.126 `abide format` MUST hand each expression a slot, an attribute, a spread, a `{#if}`, a
 `{:else if}` or a `{#for}` holds to `bun fmt` as an expression, and MUST keep one as written where
@@ -3246,6 +3246,16 @@ where that declaration's options are not an object written inline.
 
 38.136 `abide dev`, `abide start`, the executable's `start` and the app 38.53 serves MUST listen on
 the interface `--hostname` names alone, and on every interface where it names none.
+
+38.137 `abide format` MUST leave as it is a file it has formatted: a second run over what a run
+wrote MUST write the same text, a block comment's lines in a script block, a style and an expression
+at any nesting included.
+
+38.138 `abide check` MUST check each arm of an `{#if}`, and every body nested in one, under what its
+condition and the conditions of the arms before it established, as TypeScript checks nested `if`
+statements — a value a branch-local `<script>` declares as much as one the file's `<script>` does —
+and MUST NOT carry what a condition established past a write of the value, nor into a function the
+arm declares.
 
 # 39. Head and view transitions
 

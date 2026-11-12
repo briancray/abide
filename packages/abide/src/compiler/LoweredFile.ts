@@ -20,7 +20,7 @@ import {
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { COMPONENT_STAND_IN } from './checkedShadow.ts'
 import { lineOf } from './lineOf.ts'
-import { CHECKED_VALUES } from './Lowering.ts'
+import { CHECKED_RECORD } from './Lowering.ts'
 import type { Span } from './projectShadow.ts'
 import type { ShadowHost } from './ShadowHost.ts'
 import { CHECKED_SUFFIX, ShadowMap } from './ShadowMap.ts'
@@ -194,7 +194,7 @@ export class LoweredFile {
                     )
                 }
                 return {
-                    signature: signature.replaceAll(`${CHECKED_VALUES}.`, ''),
+                    signature: signature.replaceAll(CHECKED_RECORD, ''),
                     documentation,
                     definitions,
                 }

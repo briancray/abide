@@ -87,7 +87,7 @@ const DISK: Host = {
         check: inApp(check),
         format: (given) =>
             given.positionals.length > 1
-                ? format(namedDirectories(given.positionals), given)
+                ? format(namedPaths(given.positionals), given)
                 : inApp(({ root }) => format([root], given))(given),
         routes: inApp(routes),
         compile: inApp(compile),
@@ -720,7 +720,7 @@ async function check(
     { root }: AppDirectories,
     { positionals }: Given,
 ): Promise<number> {
-    const within = namedDirectories(positionals)
+    const within = namedPaths(positionals)
     const found: Diagnosis[] = []
     for (const diagnosis of await checkApp(root))
         if (
@@ -739,8 +739,8 @@ async function check(
     return errors > 0 ? 1 : 0
 }
 
-/** The directories a command's `[dir…]` names, each as the real path a finding is filed under. */
-function namedDirectories(positionals: string[]): string[] {
+/** The paths a command's `[path…]` names, each as the real path a finding is filed under. */
+function namedPaths(positionals: string[]): string[] {
     const named: string[] = []
     for (const directory of positionals.slice(1))
         named.push(realOrAsGiven(resolve(directory)))
@@ -748,8 +748,8 @@ function namedDirectories(positionals: string[]): string[] {
 }
 
 /**
- * `abide format`: formats every `.abide` under `within` — the directories named, or the app where
- * none are — and fails where any file was left as written. 38.125, 38.128.
+ * `abide format`: formats every `.abide` `within` names — a file named, every one under a directory
+ * named, or the app where none are — and fails where any file was left as written. 38.125, 38.128.
  *
  * `--check` writes nothing, and fails where a file would change. 38.129.
  *
@@ -758,10 +758,18 @@ function namedDirectories(positionals: string[]): string[] {
  */
 async function format(within: string[], { values }: Given): Promise<number> {
     const paths: string[] = []
-    for (const directory of within)
-        for (const name of namesUnder(directory, '**/*.abide'))
-            if (!name.split('/').some(skipped))
-                paths.push(`${directory}/${name}`)
+    for (const named of within) {
+        // a path that names nothing is a directory holding no `.abide`, as `namesUnder` reads it
+        const stat = await Bun.file(named)
+            .stat()
+            .catch(() => undefined)
+        if (stat?.isFile() === true) {
+            paths.push(named)
+            continue
+        }
+        for (const name of namesUnder(named, '**/*.abide'))
+            if (!name.split('/').some(skipped)) paths.push(`${named}/${name}`)
+    }
     let changed = 0
     let errors = 0
     // A file's pieces are formatted in parallel already, so files are taken a few at a time.

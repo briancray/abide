@@ -126,7 +126,10 @@ export async function formatAbide(
     const [batch, ...formattedCodes] = await Promise.all([
         formatExpressions(path, expressions),
         ...codes.map((code) =>
-            runFormatter(`${path}.${code.language}`, code.text),
+            runFormatter(
+                `${path}.${code.language}`,
+                dedented(code.text, code.language),
+            ),
         ),
     ])
     const answered = [...expressions, ...codes]
@@ -611,7 +614,7 @@ async function formatExpressions(
 
 /** `expression` as the argument of the batch's call number `index`. */
 function callOf(index: number, expression: Expression): string {
-    return `__abide_${index}(${expression.text}\n)\n`
+    return `__abide_${index}(${dedented(expression.text, 'ts')}\n)\n`
 }
 
 /** `expression` as `bun fmt` printed its call `entry`, or as it stands where none came back. */
@@ -704,6 +707,30 @@ function shiftLines(
         offset += line.length + 1
     }
     return lines.join('\n')
+}
+
+/**
+ * `code` with every line after the first moved left by the least indentation among them — the
+ * nesting where the piece stands, which abide writes back (`indented`). `bun fmt` keeps a block
+ * comment's lines after its first as they are handed to it, so a piece handed over still indented
+ * comes back with that indentation and gains it again on every run.
+ */
+function dedented(code: string, language: 'ts' | 'css'): string {
+    let least = Infinity
+    shiftLines(
+        code,
+        (line) => {
+            if (!isBlank(line)) least = Math.min(least, leadingSpace(line))
+            return line
+        },
+        language,
+    )
+    if (least === Infinity || least === 0) return code
+    return shiftLines(
+        code,
+        (line) => line.slice(Math.min(least, leadingSpace(line))),
+        language,
+    )
 }
 
 /** `code` with every line after the first moved right by `indent`, a blank line left blank. */

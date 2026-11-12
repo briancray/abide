@@ -112,6 +112,11 @@ export type Read = {
     byValue: boolean
     /** 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes. */
     local: boolean
+    /**
+     * 14.8 — on a read of a name a branch-local `<script>` declares, where the projection declares
+     * it, or -1 for every other read.
+     */
+    declaredAt: number
     /** 33.20 — on the `props` call, the keys its pattern defaults; on a default's opening, its key. */
     keys: string[]
     /** 23.9 — the read is abide's `route.params`, which a page or a layout types by its route. */
@@ -152,6 +157,7 @@ export function newRead(
         held: false,
         byValue: false,
         local: false,
+        declaredAt: -1,
         keys: [],
         routeParams: false,
         item: -1,
