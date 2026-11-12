@@ -3247,6 +3247,10 @@ where that declaration's options are not an object written inline.
 38.136 `abide dev`, `abide start`, the executable's `start` and the app 38.53 serves MUST listen on
 the interface `--hostname` names alone, and on every interface where it names none.
 
+38.137 `abide format` MUST leave as it is a file it has formatted: a second run over what a run
+wrote MUST write the same text, a block comment's lines in a script block, a style and an expression
+at any nesting included.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

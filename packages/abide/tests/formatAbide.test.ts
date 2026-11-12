@@ -245,6 +245,58 @@ test('a formatted file formats to itself', async () => {
     expect(second.text).toBe(first.text)
 })
 
+// THE REVERT: hand `bun fmt` each piece as it stands rather than `dedented`; `bun fmt` keeps a
+// block comment's lines after its first as written, abide indents them again where the piece
+// stands, and every run moves them further right — the `{#if}` setup's by 8 columns a run.
+test('a block comment formats to itself in every kind of script, at every depth — 38.137', async () => {
+    const comment = (indent: string): string =>
+        `${indent}/* first\n${indent}   second */\n${indent}let x${indent.length} = 1`
+    const source = `<script module>
+${comment('    ')}
+</script>
+<script server>
+${comment('    ')}
+</script>
+<script>
+${comment('    ')}
+</script>
+<style>
+    /* first
+       second */
+    p { color: red; }
+</style>
+{#component Row()}
+    <script>
+${comment('        ')}
+    </script>
+    <p>row</p>
+{/component}
+<main>
+    {#if a}
+        <script>
+${comment('            ')}
+        </script>
+        <div>
+            {#for item of items}
+                <script>
+${comment('                    ')}
+                </script>
+                <button onclick={() => {
+                    /* first
+                       second */
+                    a = a + 1
+                }}>{item}</button>
+            {/for}
+        </div>
+    {/if}
+</main>
+`
+    const once = await formatted(source)
+    expect(once.findings).toEqual([])
+    const twice = await formatted(once.text)
+    expect(twice.text).toBe(once.text)
+})
+
 // THE REVERT: drop `ignoredByConfig`; the generated page is reformatted under its generator.
 test('a file the [fmt] ignorePatterns name is kept as written — 38.125', async () => {
     const source = '<p>{ a+1 }</p>\n'
