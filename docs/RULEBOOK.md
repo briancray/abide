@@ -1355,6 +1355,9 @@ from being refreshed.
 16.104 An entry of a mutation's `refreshes` naming an `Rpc`, a pattern and options MUST refresh as
 `rpc.refresh` given that pattern and those options does.
 
+16.105 A handler whose value may hold `undefined` as an array or tuple item MUST be a compile error
+naming the handler and the path to it.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
