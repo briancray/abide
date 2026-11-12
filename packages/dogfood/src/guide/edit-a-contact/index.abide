@@ -84,34 +84,45 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>bind:open</code></td><td>a <code>&lt;details&gt;</code>, to whether it is open</td></tr>
                 <tr><td><code>bind:group</code></td><td>radios to one value, or checkboxes to an array of their <code>value</code>s</td></tr>
                 <tr><td><code>bind:files</code></td><td>a file input, to an array of the files picked</td></tr>
-                <tr><td><code>bind:size</code></td><td>any element, to its content-box <code>{'{ width, height }'}</code>, written as it is laid out and never read back</td></tr>
-                <tr><td><code>bind:visible</code></td><td>any element, to whether it is in the viewport, written the same way</td></tr>
-                <tr><td><code>bind:rect</code></td><td>any element, to its rectangle in the viewport, as <code>getBoundingClientRect</code> reports it</td></tr>
-                <tr><td><code>{'visibleIn={root}'}</code></td><td>beside <code>bind:visible</code>, measures against an element you hold, such as a scroller, rather than the viewport</td></tr>
-                <tr><td><code>sizeBox="border"</code></td><td>beside <code>bind:size</code>, writes the border box, padding and border in, rather than the content box</td></tr>
                 <tr><td><code>{'bind:value={{get, set}}'}</code></td><td>a field to a pair you write, where the value is computed</td></tr>
                 <tr><td><code>{'bind:prop={state}'}</code></td><td>a component's prop, so the child's write reaches your value</td></tr>
             </tbody>
         </table>
 
-        <p><code>bind:size</code>, <code>bind:visible</code> and <code>bind:rect</code> run one
-            way. The browser measures and writes the value, and nothing you write reaches the
-            element. The first measurement lands after the first layout, so until then the value
-            holds what you gave it. Every bound element shares one observer, and an element that
-            leaves is no longer observed. The server has no layout and writes nothing for any of
-            the three.</p>
+        <p>An element's size, whether it is in view and where it sits are not values a field
+            writes, so they are not binds. <code>observe</code> measures them, and
+            <code>bind:element</code> takes what it hands back, one adaptor or a list of them.
+            Each writes a reactive value you hand it, or calls a function you hand it instead.</p>
 
-        <p><code>visibleIn</code> takes an element, usually one <code>bind:element</code> gave
-            you. Until it holds one, nothing is observed. The elements measured against one root
-            share an observer, and that observer stops when the last of them leaves.
-            <code>sizeBox</code> is <code>"content"</code> or <code>"border"</code>, and either
-            box is written as <code>width</code> and <code>height</code> on screen, whatever the
-            writing mode.</p>
+        <table>
+            <thead><tr><th>You write</th><th>What it measures</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'bind:element={observe.size(box)}'}</code></td><td>the element's content box, as <code>{'{ width, height }'}</code></td></tr>
+                <tr><td><code>{"observe.size(box, { box: 'border' })"}</code></td><td>the border box instead, padding and border in</td></tr>
+                <tr><td><code>{'bind:element={observe.visible(seen)}'}</code></td><td>whether the element is in the viewport</td></tr>
+                <tr><td><code>{'observe.visible(seen, { in: scroller })'}</code></td><td>whether it is in view inside an element you hold, such as a scroller</td></tr>
+                <tr><td><code>{'bind:element={observe.rect(placed)}'}</code></td><td>its rectangle in the viewport, as <code>getBoundingClientRect</code> reports it</td></tr>
+                <tr><td><code>{'bind:element={[observe.rect(placed), observe.size(box)]}'}</code></td><td>both, on one element</td></tr>
+            </tbody>
+        </table>
 
-        <p><code>bind:rect</code> reads again in the frame after the element resizes, the page or
+        <p>A measurement runs one way. The browser measures and writes the value, and nothing you
+            write reaches the element. The first measurement lands after the first layout, so until
+            then the value holds what you gave it. Every observed element shares one observer, and
+            an element that leaves is no longer observed. The server has no layout and runs none of
+            it.</p>
+
+        <p><code>in</code> takes an element, usually one <code>bind:element</code> gave you. Until
+            it holds one, nothing is observed. The elements measured against one root share an
+            observer, and that observer stops when the last of them leaves. <code>box</code> is
+            <code>"content"</code> or <code>"border"</code>, and either box is written as
+            <code>width</code> and <code>height</code> on screen, whatever the writing mode. Hand
+            either option a reactive value and the element is measured again when it changes.</p>
+
+        <p><code>observe.rect</code> reads again in the frame after the element resizes, the page or
             anything in it scrolls, the window resizes, or the element moves for any other reason,
             such as a sibling above growing: one read per element per frame, however many events
-            arrived. Each bound element has an <code>IntersectionObserver</code> of its own, fitted
+            arrived. Each observed element has an <code>IntersectionObserver</code> of its own, fitted
             to its last rectangle, which costs nothing while it stays put and is made again after
             each move. For a crosshair or a hover that follows the pointer, call
             <code>getBoundingClientRect()</code> in the event handler instead.</p>
@@ -126,7 +137,7 @@ import Section from '#src/lib/Section.abide'
             <thead><tr><th>You write</th><th>You get</th></tr></thead>
             <tbody>
                 <tr><td><code>foo</code> wherever the declared type of its position is not a <code>Reactive</code></td><td>a live read</td></tr>
-                <tr><td><code>const x: Reactive&lt;…&gt; = foo</code> / a <code>Reactive&lt;…&gt;</code>-typed parameter, return or <code>bind:</code> operand</td><td>the <code>Reactive</code> itself</td></tr>
+                <tr><td><code>const x: Reactive&lt;…&gt; = foo</code> / a <code>Reactive&lt;…&gt;</code>-typed parameter, object literal member, return or <code>bind:</code> operand</td><td>the <code>Reactive</code> itself</td></tr>
                 <tr><td><code>const [a, b] = foo</code> / <code>...foo</code></td><td>one read, taken apart</td></tr>
                 <tr><td><code>const &#123; a, b: c &#125; = bar()</code> where a member is a <code>Reactive</code></td><td>each name read and written as that <code>Reactive</code>, as if declared on its own</td></tr>
                 <tr><td><code>foo = bar</code></td><td>a write</td></tr>
@@ -225,7 +236,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>{'style:prop={value}'}</code></td><td>one style property</td></tr>
                 <tr><td><code>{'{...expr}'}</code></td><td>every attribute on an element, or every prop on a component</td></tr>
                 <tr><td><code>{'on<event>={fn}'}</code></td><td>a native listener, removed with its element</td></tr>
-                <tr><td><code>{'bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}'}</code></td><td>the element itself, to focus or measure</td></tr>
+                <tr><td><code>{'bind:element={Reactive<Element> | ((element: Element) => void | Disposer) | ((element: Element) => void | Disposer)[]}'}</code></td><td>the element itself, to focus or measure, or a list of callbacks each handed it</td></tr>
             </tbody>
         </table>
     </Section>

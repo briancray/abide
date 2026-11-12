@@ -839,6 +839,13 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: false,
     },
     {
+        route: '/reference/observe',
+        names: ['observe'],
+        entry: '@abide/abide',
+        group: 'Helpers',
+        typeOnly: false,
+    },
+    {
         route: '/reference/abide-files',
         names: [],
         entry: undefined,

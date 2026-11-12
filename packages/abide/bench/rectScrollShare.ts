@@ -1,5 +1,5 @@
-// THE SCROLL SHARE OF `bind:rect` — what a scroll of 60 frames costs the main thread with N bound
-// elements, and how much of it is the position observers 32.87 keeps (made again per 32.90).
+// THE SCROLL SHARE OF `observe.rect` — what a scroll of 60 frames costs the main thread with N bound
+// elements, and how much of it is the position observers 32.85 keeps (made again per 32.88).
 //
 // CHROMIUM OVER CDP, because the cost is Blink's as much as the script's: a new
 // `IntersectionObserver` is constructed and observed in script, but its first intersection is
@@ -9,7 +9,7 @@
 // work the two arms differ in.
 //
 // `bun run bench:rect` — N = 10, 100, 500, three runs each; `bun run bench:rect 2000 5000` for
-// other sizes. Measured before 32.90 left scrolled frames unarmed, the observers were 31% of the
+// other sizes. Measured before 32.88 left scrolled frames unarmed, the observers were 31% of the
 // frame at N = 10 and 65% at N = 500, and the whole frame crossed 16.7 ms near N = 4500.
 
 import { chromium } from '@playwright/test'
@@ -32,12 +32,14 @@ const LAYOUT = `<html lang="en">
 </html>`
 
 const page = (count: number): string => `<script>
+import { observe } from '@abide/abide'
+
 const rows = Array.from({ length: ${count} }, (_, index) => index)
-const sink = { set: (next) => { globalThis.__RECT_WRITES__ = (globalThis.__RECT_WRITES__ ?? 0) + 1 } }
+const sink = () => { globalThis.__RECT_WRITES__ = (globalThis.__RECT_WRITES__ ?? 0) + 1 }
 </script>
 
 <main>
-    {#for row of rows by row}<div class="row" bind:rect={sink}>{row}</div>{/for}
+    {#for row of rows by row}<div class="row" bind:element={observe.rect(sink)}>{row}</div>{/for}
     <div class="spacer"></div>
 </main>
 

@@ -763,20 +763,6 @@ function elementUnits(
             binds.push(
                 `${lowering.use('bindFiles')}(${element}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
             )
-        // 32.79, 32.80, 32.86 — A MEASUREMENT, ONE WAY: the element is observed and the value
-        // written, and nothing watches the value.
-        // 32.91, 32.92 — what it measures against rides along: a static box as the string, an
-        // expression as a thunk the bind watches, so a root or a box that moves is measured again.
-        else if (one.kind === 'measured')
-            binds.push(
-                `${lowering.use(MEASURES[one.measure])}(${element}, ${lowering.reference(one.attribute)}, ${SCOPE}${
-                    one.option === undefined
-                        ? ''
-                        : one.option.expression
-                          ? `, () => (${lowering.binding(one.option)})`
-                          : `, ${JSON.stringify(one.option.value)}`
-                })`,
-            )
         else if (one.kind === 'bound')
             binds.push(
                 `${lowering.use('bindProperty')}(${element}, ${JSON.stringify(one.bind)}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
@@ -853,13 +839,6 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
 // `Scope`). In the framework's own `__` namespace because a row binds the AUTHOR's item name as a
 // parameter in the same scope.
 const SCOPE = '__scope'
-
-// The runtime binding each measured `bind:` is handed to.
-const MEASURES = {
-    size: 'bindSize',
-    visible: 'bindVisible',
-    rect: 'bindRect',
-} as const
 
 // Which runtime write each kind of attribute binding is handed to. A record rather than a chain
 // of ternaries, so a sixth kind is a row here and the call site stays one line — all take the

@@ -10,7 +10,8 @@ import { holdWhileLeaving } from './leave.ts'
  * 32.9 — THE NODE, HANDED OVER. Two forms and one call site: a `Reactive` of an element takes
  * the node as its value, and a callback takes it as its argument and may hand back a `Disposer`
  * — which is what a third-party widget wants, set up where the node arrives and torn down where
- * it goes, rather than in a pair of lifecycle hooks that have to be kept in step.
+ * it goes, rather than in a pair of lifecycle hooks that have to be kept in step. A list holds
+ * either form, each handed the node — what an element measured by more than one `observe` is.
  *
  * THE BRAND IS READ FIRST (1.6). A `Reactive` is callable and thenable, so a test for a function
  * answers true for one — and the reference would have been handed to the value instead of being
@@ -31,6 +32,21 @@ export function bindElement(
     element: Element,
     value: unknown,
 ): Disposer | undefined {
+    if (!Array.isArray(value)) return handOver(element, value)
+    // 32.9 — A LIST IS EACH OF ITS CALLBACKS, in order, and its teardown each of their disposers.
+    let disposers: Disposer[] | undefined
+    for (const one of value) {
+        const disposer = handOver(element, one)
+        if (disposer !== undefined) (disposers ??= []).push(disposer)
+    }
+    if (disposers === undefined) return undefined
+    const held = disposers
+    return () => {
+        for (const disposer of held) disposer()
+    }
+}
+
+function handOver(element: Element, value: unknown): Disposer | undefined {
     if (isReactive(value)) {
         ;(value as unknown as { set(next: unknown): void }).set(element)
         return undefined

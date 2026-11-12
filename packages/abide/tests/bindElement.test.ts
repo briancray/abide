@@ -72,6 +72,31 @@ let open = reactive(true)
     expect((globalThis as { __TORN__?: number }).__TORN__).toBe(1)
 })
 
+// 32.9 — A LIST IS EACH OF ITS CALLBACKS: every one handed the node and every `Disposer` run when
+// it leaves, in the list's order. THE REVERT: hand a list over as one value
+// (`handOver(element, value)` for an array too); nothing in it is called, and the log reads `` and
+// `` where it reads `ab` and `AB`.
+test('a list hands the node to each, and runs each disposer — 32.9', async () => {
+    ;(globalThis as { __LOG__?: string }).__LOG__ = ''
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let open = reactive(true)
+const log = (entry: string) => () => {
+    ;(globalThis as { __LOG__?: string }).__LOG__ += entry
+    return () => { (globalThis as { __LOG__?: string }).__LOG__ += entry.toUpperCase() }
+}
+</script>
+
+<button id="toggle" onclick={() => { open = !open }}>toggle</button>
+{#if open}<div id="widget" bind:element={[log('a'), log('b')]}>widget</div>{/if}`)
+
+    flushSync()
+    expect((globalThis as { __LOG__?: string }).__LOG__).toBe('ab')
+    click('#toggle')
+    expect((globalThis as { __LOG__?: string }).__LOG__).toBe('abAB')
+})
+
 // 32.38 — AN EXIT: a `Disposer` handing back a thenable keeps the element in the document until it
 // settles, which is where `element.animate(…).finished` goes. An arm's swap and a row the reconcile
 // drops both hold it, and the arm's replacement is in place beside it meanwhile. THE REVERT: have

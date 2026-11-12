@@ -67,7 +67,8 @@ async function resolvedFrom(
     return undefined
 }
 
-/** The names a barrel exports, and whether each is a type alone — following `export *`. */
+/** The names a barrel exports, and whether each is a type alone — following `export *`, and an
+ * `export * as` as the one name. */
 async function exportsOf(file: string): Promise<Map<string, boolean>> {
     const names = new Map<string, boolean>()
     const source = (await Bun.file(file).text()).replace(/\/\/[^\n]*/g, '')
@@ -77,6 +78,9 @@ async function exportsOf(file: string): Promise<Map<string, boolean>> {
             for (const [name, typeOnly] of await exportsOf(target))
                 names.set(name, typeOnly)
     }
+    // A namespace is one name, a value, whatever its members are.
+    for (const [, name] of source.matchAll(/export \* as (\w+) from '[^']+'/g))
+        names.set(name as string, false)
     for (const [, allTypes, list, from] of source.matchAll(
         /export (type )?\{([^}]*)\}(?: from '([^']+)')?/g,
     )) {

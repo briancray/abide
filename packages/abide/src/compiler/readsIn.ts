@@ -19,9 +19,12 @@ import {
     isNamedImports,
     isNewExpression,
     isObjectBindingPattern,
+    isObjectLiteralExpression,
     isParenthesizedExpression,
     isPropertyAccessExpression,
+    isPropertyAssignment,
     isReturnStatement,
+    isShorthandPropertyAssignment,
     isVariableDeclaration,
     isVariableDeclarationList,
     isVariableStatement,
@@ -250,7 +253,7 @@ export async function readsIn(
             if (read.local) read.declaredAt = (names[index] as Node).getStart()
             named.push(read)
             located.push({ node, read })
-            if (read.shape === 'value')
+            if (read.shape === 'value' || read.shape === 'shorthand')
                 holding.push(holdIn(checker, abide, node, read))
         }
     await Promise.all(holding)
@@ -460,8 +463,9 @@ async function admitsNullish(type: Type): Promise<boolean> {
  *
  * 31.3 — the three the clause names: a call's parameter, an annotated binding, an annotated
  * return. An array literal
- * passes its position through, because `watch([a, b], …)` is the parameter's own shape. Anything
- * else is `undefined` and stays a read.
+ * passes its position through, because `watch([a, b], …)` is the parameter's own shape, and an
+ * object literal's member is the member of the type the literal's own position declares —
+ * `observe.size(box, { box: shape })`'s option. Anything else is `undefined` and stays a read.
  *
  * THE PARAMETER IS ASKED OF THE SIGNATURE'S TARGET, the generic declaration, and never of the
  * instantiated one: `structuredClone<T>(value: T)` INFERS `T` from this very argument, and an
@@ -479,6 +483,22 @@ async function declaredType(
     )
         top = top.parent
     const parent = top.parent
+    if (
+        (isPropertyAssignment(parent) && parent.initializer === top) ||
+        (isShorthandPropertyAssignment(parent) && parent.name === top)
+    ) {
+        const literal = parent.parent
+        if (!isObjectLiteralExpression(literal)) return undefined
+        const name = parent.name
+        if (!isIdentifier(name)) return undefined
+        const outer = await declaredType(checker, literal)
+        const present = outer && (await checker.getNonNullableType(outer))
+        const member =
+            present && (await checker.getPropertyOfType(present, name.text))
+        return member === undefined
+            ? undefined
+            : checker.getTypeOfSymbol(member)
+    }
     if (
         (isCallExpression(parent) || isNewExpression(parent)) &&
         parent.expression !== top

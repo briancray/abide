@@ -33,6 +33,7 @@ export const BUILTIN_TYPES = new Set([
     // Web platform
     'AbortSignal',
     'DataTransfer',
+    'Document',
     'Element',
     'File',
     'HTMLButtonElement',

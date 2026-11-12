@@ -1,4 +1,4 @@
-// 32.79-32.85, 32.91, 32.92 AND 23.30 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out, so
+// 32.79-32.90 AND 23.30 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out, so
 // whether an observer delivers a size, an intersection or a media change is a question only a
 // browser can answer — in both engines, since each ships its own observers.
 
@@ -20,7 +20,7 @@ const LAYOUT = `<html lang="en">
 </html>`
 
 const PAGE = `<script>
-import { media, reactive } from '@abide/abide'
+import { media, observe, reactive } from '@abide/abide'
 
 let box = reactive<{ width: number; height: number } | undefined>(undefined)
 let wide = reactive(false)
@@ -44,11 +44,11 @@ const narrow = media('(max-width: 600px)')
     <button id="grow" onclick={() => { tall = true }}>grow</button>
     <div class:tall={tall}></div>
     <div class="half"></div>
-    <div id="placed" bind:rect={placed}></div>
-    <div id="box" class:wide={wide} bind:size={box}></div>
-    {#for row of rows by row}<div class="row" bind:size={{ set: (next) => { sizes = { ...sizes, [row]: next.width } } }}></div>{/for}
+    <div id="placed" bind:element={observe.rect(placed)}></div>
+    <div id="box" class:wide={wide} bind:element={observe.size(box)}></div>
+    {#for row of rows by row}<div class="row" bind:element={observe.size((next) => { sizes = { ...sizes, [row]: next.width } })}></div>{/for}
     <div class="spacer"></div>
-    <div id="far" bind:visible={seen}>far</div>
+    <div id="far" bind:element={observe.visible(seen)}>far</div>
 </main>
 
 <style>
@@ -61,10 +61,10 @@ const narrow = media('(max-width: 600px)')
 #placed { height: 10px; }
 </style>`
 
-// 32.91, 32.92 — A SCROLLER STANDING INSIDE THE VIEWPORT, ANOTHER BELOW THE FOLD, AND TWO BORDER
+// 32.89, 32.90 — A SCROLLER STANDING INSIDE THE VIEWPORT, ANOTHER BELOW THE FOLD, AND TWO BORDER
 // BOXES, one of them written vertically.
 const MEASURED_AGAINST = `<script>
-import { reactive } from '@abide/abide'
+import { observe, reactive } from '@abide/abide'
 
 let scroller = reactive<HTMLElement>()
 let low = reactive<HTMLElement>()
@@ -82,17 +82,17 @@ let upright = reactive<{ width: number; height: number }>()
     <p id="inside-seen">{String(inside)} {String(insideViewport)}</p>
     <p id="bordered">{bordered === undefined ? 'unmeasured' : bordered.width + 'x' + bordered.height}</p>
     <p id="upright">{upright === undefined ? 'unmeasured' : upright.width + 'x' + upright.height}</p>
-    <div id="sized" bind:size={bordered} sizeBox="border"></div>
-    <div id="sized-upright" bind:size={upright} sizeBox="border"></div>
+    <div id="sized" bind:element={observe.size(bordered, { box: 'border' })}></div>
+    <div id="sized-upright" bind:element={observe.size(upright, { box: 'border' })}></div>
     <div id="scroller" bind:element={scroller}>
-        <p id="head" bind:visible={head} visibleIn={scroller}>head</p>
+        <p id="head" bind:element={observe.visible(head, { in: scroller })}>head</p>
         <div class="gap"></div>
-        <p id="tail" bind:visible={tail} visibleIn={scroller}>tail</p>
+        <p id="tail" bind:element={observe.visible(tail, { in: scroller })}>tail</p>
     </div>
     <div class="fold"></div>
     <div id="low" bind:element={low}>
-        <p bind:visible={inside} visibleIn={low}>inside</p>
-        <p bind:visible={insideViewport}>inside</p>
+        <p bind:element={observe.visible(inside, { in: low })}>inside</p>
+        <p bind:element={observe.visible(insideViewport)}>inside</p>
     </div>
 </main>
 
@@ -124,10 +124,10 @@ test.afterAll(() => {
     server?.kill()
 })
 
-// 32.79, 32.83, 32.84 — THE SERVER WRITES NOTHING AND THE BROWSER MEASURES: the content box, padding
+// 32.79, 32.82 — THE SERVER WRITES NOTHING AND THE BROWSER MEASURES: the content box, padding
 // out, and again when the layout moves. THE REVERT: measure `borderBoxSize` in `deliverSizes`; the
 // box reads 220x120.
-test('bind:size writes the content box, and follows it — 32.79', async ({
+test('observe.size writes the content box, and follows it — 32.79', async ({
     page,
 }) => {
     const served = await (await fetch(`${base}/`)).text()
@@ -139,11 +139,11 @@ test('bind:size writes the content box, and follows it — 32.79', async ({
     await expect(page.locator('#size')).toHaveText('300x100')
 })
 
-// 32.82, 32.85 — ONE OBSERVER OF EACH KIND FOR EVERY BOUND ELEMENT ON THE PAGE — two
-// `ResizeObserver`s, one for the six `bind:size`s and one for the `bind:rect` — and a row that leaves
+// 32.81, 32.83 — ONE OBSERVER OF EACH KIND FOR EVERY BOUND ELEMENT ON THE PAGE — two
+// `ResizeObserver`s, one for the six `observe.size`s and one for the `observe.rect` — and a row that leaves
 // is unobserved. Counted by wrapping the browser's own constructor and `unobserve` before the page
-// loads. THE REVERT: `observer = new ResizeObserver(…)` in place of `??=` in `bindSize`; 7 are made.
-test('every bind:size shares one ResizeObserver, and a row that leaves is unobserved — 32.82, 32.85', async ({
+// loads. THE REVERT: `observer = new ResizeObserver(…)` in place of `??=` in `observe/size.ts`; 7 are made.
+test('every observe.size shares one ResizeObserver, and a row that leaves is unobserved — 32.81, 32.83', async ({
     page,
 }) => {
     await page.addInitScript(() => {
@@ -181,7 +181,7 @@ test('every bind:size shares one ResizeObserver, and a row that leaves is unobse
 
 // 32.80 — AN ELEMENT BELOW THE FOLD IS NOT VISIBLE UNTIL IT IS SCROLLED TO. THE REVERT: write `true`
 // in `deliverIntersections` whatever `isIntersecting` says; `#seen` reads true before the scroll.
-test('bind:visible follows the element into the viewport — 32.80', async ({
+test('observe.visible follows the element into the viewport — 32.80', async ({
     page,
 }) => {
     await page.goto(`${base}/`)
@@ -201,17 +201,17 @@ test('media follows the viewport — 23.30', async ({ page }) => {
     await expect(page.locator('#narrow')).toHaveText('true')
 })
 
-// 32.86 — A SCROLL MOVES `top` AND SO DOES A WINDOW RESIZE THAT MOVES THE ELEMENT, each answered in
+// 32.84 — A SCROLL MOVES `top` AND SO DOES A WINDOW RESIZE THAT MOVES THE ELEMENT, each answered in
 // the frame after it, and the value reads what the browser reports there. THE REVERT: drop the
-// scroll listener from `bindRect`; `top` keeps its first reading after the scroll.
-test('bind:rect follows a scroll and a window resize — 32.86', async ({
+// scroll listener from `observe/rect.ts`; `top` keeps its first reading after the scroll.
+test('observe.rect follows a scroll and a window resize — 32.84', async ({
     page,
 }) => {
     const served = await (await fetch(`${base}/`)).text()
     expect(served).toMatch(/<p id="top"[^>]*>unmeasured<\/p>/)
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.goto(`${base}/`)
-    // The rows' widths fill a line above `#placed` after the first frame — a move 32.87 sees — so
+    // The rows' widths fill a line above `#placed` after the first frame — a move 32.85 sees — so
     // the page is read once it has settled.
     await expect(page.locator('#rows')).toHaveText('40,40,40,40,40')
     const reported = () =>
@@ -236,10 +236,10 @@ test('bind:rect follows a scroll and a window resize — 32.86', async ({
     await expect(page.locator('#top')).toHaveText(resized)
 })
 
-// 32.87 — A SIBLING ABOVE GROWS, AND `#placed` MOVES WITH NO SCROLL, NO WINDOW RESIZE AND NO RESIZE
+// 32.85 — A SIBLING ABOVE GROWS, AND `#placed` MOVES WITH NO SCROLL, NO WINDOW RESIZE AND NO RESIZE
 // OF ITS OWN: its position observer sees the move. THE REVERT: skip `arm` in `measure`; `top` keeps
 // the reading from before the growth, 50px short.
-test('bind:rect follows a move nothing else reports — 32.87', async ({
+test('observe.rect follows a move nothing else reports — 32.85', async ({
     page,
 }) => {
     await page.setViewportSize({ width: 1024, height: 768 })
@@ -263,11 +263,11 @@ test('bind:rect follows a move nothing else reports — 32.87', async ({
     await expect(page.locator('#top')).toHaveText(after)
 })
 
-// 32.87, 32.90 — THE SAME MOVE RIGHT AFTER A SCROLL. A scrolled frame makes no position observer, so
+// 32.85, 32.88 — THE SAME MOVE RIGHT AFTER A SCROLL. A scrolled frame makes no position observer, so
 // what sees the growth is the one made in the frame after the scroll. THE REVERT: drop
 // `if (scrolling) schedule()` in `measure`; in chromium `top` keeps the reading from the scroll, 50px
 // short (575 -> 525).
-test('bind:rect follows a move nothing else reports right after a scroll — 32.87, 32.90', async ({
+test('observe.rect follows a move nothing else reports right after a scroll — 32.85, 32.88', async ({
     page,
 }) => {
     await page.setViewportSize({ width: 1024, height: 768 })
@@ -312,26 +312,24 @@ test('media hydrates the arm the server painted and swaps it without a warning �
     expect(warned).toEqual([])
 })
 
-// 32.92 — THE BORDER BOX, PADDING AND BORDER IN: 200x100 with 10px of padding and a 2px border is
+// 32.90 — THE BORDER BOX, PADDING AND BORDER IN: 200x100 with 10px of padding and a 2px border is
 // 224x124, and the same box written vertically is 224x124 too — its inline size is its height. THE
-// REVERT: write `contentRect` for a `sizeBox="border"` element in `deliverSizes`; both read 200x100.
-// Turning the axes is the unit test's (`bindMeasured.test.ts`, 124x224 without it).
-test('sizeBox="border" writes the border box, in physical axes — 32.92', async ({
+// REVERT: write `contentRect` for a bordered element in `deliverSizes`; both read 200x100.
+// Turning the axes is the unit test's (`observe.test.ts`, 124x224 without it).
+test("observe.size's box: 'border' writes the border box, in physical axes — 32.90", async ({
     page,
 }) => {
-    const served = await (await fetch(`${base}/against`)).text()
-    expect(served.toLowerCase()).not.toContain('sizebox')
     await page.goto(`${base}/against`)
     await expect(page.locator('#bordered')).toHaveText('224x124')
     await expect(page.locator('#upright')).toHaveText('224x124')
 })
 
-// 32.91 — A ROOT IS WHAT VISIBILITY IS MEASURED AGAINST. In a scroller standing in the viewport, the
+// 32.89 — A ROOT IS WHAT VISIBILITY IS MEASURED AGAINST. In a scroller standing in the viewport, the
 // head is visible and the tail is not; scrolled, the head is out of the scroller while it still
 // stands in the viewport. Two elements in one root are one observer. THE REVERT: drop `{ root }` in
 // `Rooted`; the scroller clips its elements against the viewport too, so they read as before, and
 // what fails is the count — no observer rooted at the scroller. The next test is what tells them apart.
-test('bind:visible with visibleIn follows a scroller, sharing one observer — 32.91, 32.82', async ({
+test('observe.visible in a root follows a scroller, sharing one observer — 32.89, 32.81', async ({
     page,
 }) => {
     await page.addInitScript(() => {
@@ -371,10 +369,10 @@ test('bind:visible with visibleIn follows a scroller, sharing one observer — 3
     expect(roots?.filter((root) => root === 'scroller')).toHaveLength(1)
 })
 
-// 32.91 — THE DISTINGUISHING CASE: a scroller below the fold holds an element in its own view, which
+// 32.89 — THE DISTINGUISHING CASE: a scroller below the fold holds an element in its own view, which
 // is visible in the scroller and not in the viewport. THE REVERT: drop `{ root }` in `Rooted`; it
 // reads `false false`.
-test('bind:visible with visibleIn measures against the root, not the viewport — 32.91', async ({
+test('observe.visible in a root measures against the root, not the viewport — 32.89', async ({
     page,
 }) => {
     await page.setViewportSize({ width: 1024, height: 768 })

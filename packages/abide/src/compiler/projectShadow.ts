@@ -621,9 +621,6 @@ function openerOf(
     if (isComponentTag(tag)) return ['untyped', `${ANY}(`]
     if (isEventName(lowerName))
         return ['listener', `${ON}(${JSON.stringify(lowerName.slice(2))}, `]
-    // 32.94 — what a measured bind measures against is held to what the bind can measure against.
-    if (lowerName === 'visiblein') return ['attribute', `${VISIBLE_IN}(`]
-    if (lowerName === 'sizebox') return ['attribute', `${SIZE_BOX}(`]
     return ['attribute', '(']
 }
 
@@ -635,13 +632,6 @@ function openerOf(
  * could be, so the `set` is held to the union of their writes.
  */
 function bindOpenerOf(node: ElementNode, lowerName: string): string {
-    // 32.81 — a measured bind is written and never read, so its operand needs a `set` and no more.
-    if (
-        lowerName === 'bind:size' ||
-        lowerName === 'bind:visible' ||
-        lowerName === 'bind:rect'
-    )
-        return `${BIND_MEASURES}(${JSON.stringify(lowerName.slice('bind:'.length))})(`
     const kind = writesOf(node, lowerName)
     return kind === undefined
         ? `${BIND}(`
@@ -694,11 +684,6 @@ const BIND = '__bind'
 /** 32.78 — what an element's `bind:` is opened with where the shadow knows what the element writes. */
 const BIND_WRITES = '__bindWrites'
 const BOUND = '__bound'
-/** 32.81 — what a measured `bind:` is opened with: a `set` taking what the measurement writes. */
-const BIND_MEASURES = '__bindMeasures'
-/** 32.94 — what a `visibleIn` and a `sizeBox` on an element are opened with. */
-const VISIBLE_IN = '__visibleIn'
-const SIZE_BOX = '__sizeBox'
 
 /** 33.6 — the type a written prop's cell is checked as, which is the framework's own. */
 const REACTIVE = `import(${JSON.stringify(FRAMEWORK_SOURCES.reactive)}).Reactive`
@@ -725,9 +710,6 @@ type ${BIND_WRITES}Option<Value> = [Extract<Value, string>] extends [never] ? ${
 type ${BIND_WRITES}Options<Value> = Value extends readonly (infer Item)[] ? [Extract<Item, string>] extends [never] ? string[] : Extract<Item, string>[] : string[]
 type ${BIND_WRITES}Of<Kind, Value> = Kind extends 'boolean' ? boolean : Kind extends 'files' ? File[] : Kind extends 'number' ? number | undefined : Kind extends 'input' ? string | number | undefined : Kind extends 'option' ? ${BIND_WRITES}Option<Value> : Kind extends 'options' ? ${BIND_WRITES}Options<Value> : Kind extends 'select' ? ${BIND_WRITES}Option<Value> | ${BIND_WRITES}Options<Value> : ${BIND_WRITES}Text<Value>
 declare function ${BIND_WRITES}<Kind extends string>(kind: Kind): <Value>(value: { (): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown } | { get(): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown }) => void
-declare function ${BIND_MEASURES}<Kind extends 'size' | 'visible' | 'rect'>(kind: Kind): (value: { set: (value: Kind extends 'size' ? { width: number; height: number } : Kind extends 'rect' ? { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number } : boolean) => unknown }) => void
-declare function ${VISIBLE_IN}(root: Element | Document | null | undefined): void
-declare function ${SIZE_BOX}(box: 'content' | 'border'): void
 declare function ${BOUND}<Value>(value: ${REACTIVE}<Value, any, any, any>): Value
 declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unknown }): Value
 declare function __restValues<Accessors>(record: Accessors): { [Key in keyof Accessors]: NonNullable<Accessors[Key]> extends () => infer Value ? Value : never }

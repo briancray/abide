@@ -102,17 +102,6 @@ export type ClassifiedAttribute = {
     // 32.9 — the node itself, which a server has none of: written out it was `bind:element=""`,
     // inert and a tell. The client does not set it either; what the value takes is the element.
     | { kind: 'element' }
-    // 32.79, 32.80, 32.86 — a measurement of the element, which a server has none of either (32.84): the
-    // client writes the value from a shared observer and never reads it back into the element.
-    // `option` is the attribute that says what it measures against (32.91, 32.92), where there is one.
-    | {
-          kind: 'measured'
-          measure: MeasuredBind
-          option: Attribute | undefined
-      }
-    // 32.93 — what a measured bind measures against, handed to the bind rather than written: the
-    // server writes nothing for it and the client sets no attribute.
-    | { kind: 'option' }
     // 32.4 — a native listener on the element itself, reached by the same walk a text node is. The
     // server writes nothing, so a handler cannot fire from a document that never hydrated.
     | { kind: 'handler'; event: string }
@@ -196,10 +185,6 @@ export function classifyAttributes(
             })
             continue
         }
-        if (MEASURE_OPTIONS.has(attribute.lowerName)) {
-            classified.push({ attribute, live: false, kind: 'option' })
-            continue
-        }
         if (!attribute.expression) {
             classified.push({
                 attribute,
@@ -219,7 +204,6 @@ export function classifyAttributes(
             continue
         }
         const bind = valueBindOf(attribute.lowerName)
-        const measure = measuredBindOf(attribute.lowerName)
         if (bind !== undefined)
             classified.push({
                 attribute,
@@ -237,14 +221,6 @@ export function classifyAttributes(
             })
         else if (isElementBind(attribute.lowerName))
             classified.push({ attribute, live, kind: 'element' })
-        else if (measure !== undefined)
-            classified.push({
-                attribute,
-                live,
-                kind: 'measured',
-                measure,
-                option: optionOf(node, measure),
-            })
         else if (isEventName(attribute.lowerName))
             classified.push({
                 attribute,
@@ -265,7 +241,7 @@ export function classifyAttributes(
  * and a binding for it is a reader woken on every page for nothing.
  */
 export function isBound(one: ClassifiedAttribute): boolean {
-    if (one.kind === 'static' || one.kind === 'option') return false
+    if (one.kind === 'static') return false
     if (one.kind === 'dynamic') return one.live
     if (one.kind === 'merged') return one.toggles !== undefined && one.live
     return true
@@ -391,20 +367,15 @@ function heldClasses(groups: MergeGroup[]): string[] {
 function refuseBinds(node: ElementNode): void {
     for (const attribute of node.attributes) {
         const lower = attribute.lowerName
-        const measures = MEASURE_OPTIONS.get(lower)
-        if (measures !== undefined) {
-            refuseOption(node, attribute, measures)
-            continue
-        }
-        if (
-            !lower.startsWith('bind:') ||
-            lower === 'bind:element' ||
-            measuredBindOf(lower) !== undefined
-        )
-            continue
+        const measured = MEASURED.get(lower)
+        if (measured !== undefined)
+            throw new Error(
+                `abide: <${node.tag}> has ${attribute.name}, and an element is measured by an adaptor its bind:element takes — ${measured}. RULEBOOK 32.91.`,
+            )
+        if (!lower.startsWith('bind:') || lower === 'bind:element') continue
         if (valueBindOf(lower) === undefined)
             throw new Error(
-                `abide: <${node.tag}> has ${attribute.name}, which binds nothing — an element binds ${VALUE_BINDS.join(', ')}, ${MEASURED_BINDS.join(', ')} or element. RULEBOOK 32.74.`,
+                `abide: <${node.tag}> has ${attribute.name}, which binds nothing — an element binds ${VALUE_BINDS.join(', ')} or element. RULEBOOK 32.74.`,
             )
         const owned =
             lower === 'bind:group' ? 'checked' : lower.slice('bind:'.length)
@@ -518,69 +489,19 @@ const VALUE_BINDS = ['value', 'checked', 'open', 'group', 'files'] as const
 type ValueBind = (typeof VALUE_BINDS)[number]
 
 /**
- * The binds that measure an element and write what they measured, never reading the value back.
- *
- * 32.84, 32.72 — the server writes nothing for one, and it owns no attribute: `<input size="20"
- * bind:size={box}>` is the attribute and a measurement, two things rather than two owners of one.
+ * 32.91 — THE ATTRIBUTES THAT READ AS A MEASUREMENT, by folded name, and the `observe` spelling that
+ * is one: refused with it rather than written as an attribute nothing reads.
  */
-const MEASURED_BINDS = ['size', 'visible', 'rect'] as const
-type MeasuredBind = (typeof MEASURED_BINDS)[number]
-
-/**
- * The attributes that say what a measured bind measures against, by folded name, and the bind each
- * belongs to: 32.91's root, 32.92's box. Named for the bind they qualify, so a reader of the tag
- * pairs them without being told.
- */
-const MEASURE_OPTIONS = new Map<string, MeasuredBind>([
-    ['visiblein', 'visible'],
-    ['sizebox', 'size'],
+const MEASURED = new Map<string, string>([
+    ['bind:size', '`bind:size={x}` is `bind:element={observe.size(x)}`'],
+    [
+        'bind:visible',
+        '`bind:visible={x}` is `bind:element={observe.visible(x)}`',
+    ],
+    ['bind:rect', '`bind:rect={x}` is `bind:element={observe.rect(x)}`'],
+    ['visiblein', '`visibleIn={root}` is `observe.visible(x, { in: root })`'],
+    ['sizebox', '`sizeBox="border"` is `observe.size(x, { box: \'border\' })`'],
 ])
-
-/** 32.92 — what a static `sizeBox` may say. */
-const SIZE_BOXES = ['content', 'border']
-
-/** The option attribute beside a measured bind, or `undefined` where the tag carries none. */
-function optionOf(
-    node: ElementNode,
-    measure: MeasuredBind,
-): Attribute | undefined {
-    for (const attribute of node.attributes)
-        if (MEASURE_OPTIONS.get(attribute.lowerName) === measure)
-            return attribute
-    return undefined
-}
-
-/**
- * 32.93 — AN OPTION QUALIFIES ITS BIND, so one without it is refused rather than written as an
- * attribute nothing reads; a root is an element, which no static value is; and a static box is
- * one of the two the bind measures.
- */
-function refuseOption(
-    node: ElementNode,
-    attribute: Attribute,
-    measures: MeasuredBind,
-): void {
-    if (attributeOf(node, `bind:${measures}`) === undefined)
-        throw new Error(
-            `abide: <${node.tag}> has ${attribute.name} and no bind:${measures} — it says what bind:${measures} measures against, and there is nothing to measure. RULEBOOK 32.93.`,
-        )
-    if (attribute.expression) return
-    if (measures === 'visible')
-        throw new Error(
-            `abide: <${node.tag}> has ${attribute.name}="${attribute.value}" — the root is an element, which a static value cannot be. Write ${attribute.name}={element}. RULEBOOK 32.93.`,
-        )
-    if (!SIZE_BOXES.includes(attribute.value))
-        throw new Error(
-            `abide: <${node.tag}> has ${attribute.name}="${attribute.value}" — the box is "content" or "border". RULEBOOK 32.93.`,
-        )
-}
-
-/** The measured bind a folded attribute name is, or `undefined` for any other attribute. */
-function measuredBindOf(lowerName: string): MeasuredBind | undefined {
-    if (!lowerName.startsWith('bind:')) return undefined
-    const bind = lowerName.slice('bind:'.length) as MeasuredBind
-    return MEASURED_BINDS.includes(bind) ? bind : undefined
-}
 
 /** The value bind a folded attribute name is, or `undefined` for any other attribute. */
 function valueBindOf(lowerName: string): ValueBind | undefined {
@@ -691,8 +612,6 @@ function explicitNames(node: ElementNode): string[] {
     for (const attribute of node.attributes) {
         if (attribute.name === '...') continue
         const lower = attribute.lowerName
-        if (measuredBindOf(lower) !== undefined || MEASURE_OPTIONS.has(lower))
-            continue
         const name = lower.startsWith('class:')
             ? 'class'
             : lower.startsWith('style:')

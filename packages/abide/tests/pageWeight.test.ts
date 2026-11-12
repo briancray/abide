@@ -83,3 +83,53 @@ let count = reactive(0, { store: webStore('count') })
     // 8.22 — nor a store the page does not import.
     expect(light.includes(WEB_STORE)).toBe(false)
 }, 60_000)
+
+// Names each `observe` adaptor's module reads off the platform, which survive minification: the
+// border box is `size`'s alone, `isIntersecting` `visible`'s, and `rootMargin` `rect`'s.
+const SIZE_OBSERVER = 'borderBoxSize'
+const VISIBLE_OBSERVER = 'isIntersecting'
+const RECT_OBSERVER = 'rootMargin'
+
+// THE REVERT: have `observe/index.ts` bind the three as `const`s of its own rather than re-export
+// them, and the size page loads `visible`'s and `rect`'s observers with its own — `isIntersecting`
+// and `rootMargin` both found. Re-exported, `export * as observe` keeps only the member read.
+test('a page using observe.size loads neither observe.visible nor observe.rect — 38.94', async () => {
+    const app = appFixture({
+        'index.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let count = reactive(0)
+</script>
+
+<button onclick={() => { count = count + 1 }}>{count}</button>`,
+        'sized/index.abide': `<script>
+import { observe, reactive } from '@abide/abide'
+
+let box = reactive({ width: 0, height: 0 })
+</script>
+
+<div bind:element={observe.size(box, { box: 'border' })}>{box.width}</div>`,
+        'all/index.abide': `<script>
+import { observe, reactive } from '@abide/abide'
+
+let seen = reactive(false)
+let placed = reactive<{ x: number }>()
+</script>
+
+<div bind:element={[observe.visible(seen), observe.rect(placed)]}>{seen}</div>`,
+    })
+    const out = `${app}/.abide`
+    const built = await buildApp(app)
+    expect(built.exitCode, built.stderr).toBe(0)
+    const all = await closureText(out, 'all/index.abide')
+    expect(all.includes(VISIBLE_OBSERVER)).toBe(true)
+    expect(all.includes(RECT_OBSERVER)).toBe(true)
+    const sized = await closureText(out, 'sized/index.abide')
+    expect(sized.includes(SIZE_OBSERVER)).toBe(true)
+    expect(sized.includes(VISIBLE_OBSERVER)).toBe(false)
+    expect(sized.includes(RECT_OBSERVER)).toBe(false)
+    const light = await closureText(out, 'index.abide')
+    expect(light.includes(SIZE_OBSERVER)).toBe(false)
+    expect(light.includes(VISIBLE_OBSERVER)).toBe(false)
+    expect(light.includes(RECT_OBSERVER)).toBe(false)
+}, 60_000)
