@@ -174,6 +174,18 @@ import Snippet from '#src/lib/Snippet.abide'
             <code>abide:reactive</code> under the value's name, and the next tick runs it again.
             The app's stop ends the clock and waits for the run in flight before
             <code>onStop</code>, inside the same <code>ABIDE_STOP_TIMEOUT</code> as the requests.</p>
+
+        <p>A number is a clock that ticks from the first run, whatever the runs take. A job whose
+            run is long spells <code>{"poll: { every, after: 'settle' }"}</code> instead, and the next
+            run starts <code>every</code> milliseconds after the last one ended. <code>delay</code>
+            puts the first run off once the app starts serving. A function there is called when
+            the app starts, so the wait can come from something outside the process, such as when a
+            file was last written. A read still runs the job at once.</p>
+
+        <p>A run that should not be waited on reads <code>stopSignal()</code>. The stop aborts it
+            before waiting, so the run ends early and the stop waits only for that. A job that is
+            switched off by configuration checks <code>config()</code> at the top of its body and
+            returns. The worker in the next section reads the signal.</p>
     </Section>
 
     <Section title="Heavy work runs in a worker thread">
@@ -207,8 +219,8 @@ import Snippet from '#src/lib/Snippet.abide'
             <tbody>
                 <tr><td>how many workers</td><td>one per run, ended in the generator's <code>finally</code>, which also runs when a <code>refresh()</code> discards the run in flight</td></tr>
                 <tr><td>whether it keeps the process up</td><td><code>{'{ ref: false }'}</code>, so a run in flight never keeps the process alive</td></tr>
-                <tr><td>when it runs</td><td>hourly, as a job: <code>poll</code> puts the first run off until the app starts serving or the scores are read, so a test that never reads them never starts a worker</td></tr>
-                <tr><td>what happens at stop</td><td>the stop waits for a run in flight, as it does for any job, and the worker ends with the run. Past <code>ABIDE_STOP_TIMEOUT</code> nothing ends it but the process</td></tr>
+                <tr><td>when it runs</td><td>as a job, an hour after the last scoring ended, with <code>{"after: 'settle'"}</code>, and first a minute after the app starts serving, with <code>delay</code>. A test that never reads the scores never starts a worker</td></tr>
+                <tr><td>what happens at stop</td><td><code>stopSignal()</code> aborts, the generator returns, and its <code>finally</code> ends the worker. The stop then waits only for that</td></tr>
                 <tr><td>what it can read</td><td>only what it is sent. A worker loads its own copy of every module, so the deals go in by <code>postMessage</code></td></tr>
             </tbody>
         </table>
