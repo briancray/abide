@@ -20,7 +20,7 @@ import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
 
-import { type McpReply, McpSurface } from './generatedSurfaces.ts'
+import { mcpFailure, type McpReply, McpSurface } from './generatedSurfaces.ts'
 import { request, within } from './requestScope.ts'
 import type { Listed } from './surfaceOf.ts'
 
@@ -292,15 +292,37 @@ type McpForward = (method: string, params: unknown) => Promise<McpReply>
 // the type rather than on it, since a `Toolbox` is public and this is not.
 const FORWARDS = new WeakMap<Toolbox, McpForward>()
 
-/** Where `tools` sends an MCP request whole. 44.17. */
+/**
+ * Where `tools` sends an MCP request whole. 44.17.
+ *
+ * A `Toolbox` a provider narrowed or built is answered from its OWN `list` and `call` — a provider
+ * handing another the tools it chose is the turn's toolbox too — and the protocol around them is the
+ * app's, which no tool changes.
+ */
 export function forwardOf(tools: Toolbox): McpForward {
-    const forward = FORWARDS.get(tools)
-    if (forward === undefined)
-        throw new Error(
-            'abide: an MCP request is answered from the Toolbox `assistant` built, and this one it did not.',
+    const built = FORWARDS.get(tools)
+    if (built !== undefined) return built
+    return async (method, params) => {
+        if (method === 'tools/list') return { result: { tools: tools.list } }
+        if (method !== 'tools/call')
+            return NO_SURFACE.answer(method, undefined, NO_ASKER)
+        const { name, arguments: input } = (params ?? {}) as {
+            name?: unknown
+            arguments?: unknown
+        }
+        let listed = false
+        for (const tool of tools.list) if (tool.name === name) listed = true
+        if (!listed) return mcpFailure(-32602, `No tool named ${String(name)}.`)
+        const { content, failed } = await tools.call(
+            name as string,
+            input ?? {},
         )
-    return forward
+        return { result: { content, isError: failed } }
+    }
 }
+
+// The protocol's own requests ask nothing of the asker, so what answers them is asked as nobody.
+const NO_ASKER = new Request('http://abide.invalid/')
 
 // Without `mcp` there is no surface to forward to, so this is the protocol over nothing — and
 // nothing is published, so nothing is ever called.
