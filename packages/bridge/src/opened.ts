@@ -77,7 +77,7 @@ export function question(
     const asker = name === undefined ? site : `${name} (${site})`
     const owner = name ?? site
     const auto = inAutoMode(settings.claudeArgs)
-        ? `Claude Code stays in auto mode: it does safe steps on its own and asks you on ${site}’s page before anything risky.`
+        ? 'Claude Code will run with permissions in auto mode: it will do safe steps on its own and ask you before anything risky.'
         : ''
     // One headline at every level, so what is asked for is read in the body, where there is room for it.
     const headline = `${asker} is requesting access to Claude Code.`
@@ -88,8 +88,8 @@ export function question(
         ]
     else if (pairing.full)
         said = [
-            `It’s asking for full access: anything your Claude Code can do, on your Claude account. ${auto}`,
-            `Or allow only ${owner}’s own tools, so it can answer from the site without touching this computer.`,
+            auto,
+            `Optionally allow only ${owner}’s own tools, which is safest but may limit ${owner}’s full functionality.`,
         ]
     else if (pairing.tools.length === 0)
         said = [
@@ -104,15 +104,17 @@ export function question(
                 `Your Claude Code has no ${serversNamed(unserved)} MCP server, so it can’t use ${unserved.join(', ')}. Add it with \`claude mcp add --scope user\` first.`,
             )
     }
-    // 44.91 — the app's own words, quoted and said to be its own, ahead of what the bridge says.
-    if (note !== undefined) said.unshift(`${owner} says: “${note}”`)
+    // 44.91 — the app's own words, said to be its own, ahead of what the bridge says.
+    if (note !== undefined) said.unshift(`From ${owner}: ${note}`)
     // A variable's value is only named, never shown: it is as likely a token as a host.
     const kept = [...settings.claudeArgs, ...Object.keys(settings.env)]
     if (kept.length > 0)
         said.push(
             `It also gets what you gave install for every site: ${kept.join(' ')}.`,
         )
-    said.push(`Allow it only if you just asked to pair on ${site}.`)
+    // A site asking for full access offers its own tools alone in its place, which says enough.
+    if (!pairing.full || settings.full === true)
+        said.push(`Allow it only if you just asked to pair on ${site}.`)
     let body = ''
     for (const paragraph of said)
         if (paragraph.trim() !== '')

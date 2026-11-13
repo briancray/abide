@@ -110,7 +110,7 @@ import Section from '#src/lib/Section.abide'
         <p>The question can say why, in the app's own words. Pass <code>note</code> beside
             <code>tools</code> or <code>full</code>, or set <code>ABIDE_BRIDGE_NOTE</code> for
             <code>pairing()</code>. The note travels with the pairing's code, never in its link, and
-            the question shows it under its headline as one quoted line said by the app, cut at 200
+            the question shows it under its headline as one line from the app, cut at 200
             characters. Everything else in the question is the bridge's own.</p>
 
         <Code code={`onConfig(() => ({ ABIDE_BRIDGE_NOTE: 'So it can file your deals.' }))`} />

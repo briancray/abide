@@ -4282,8 +4282,8 @@ bridge, whatever release the link names.
 PNG of at most 1 MB answered within 3 seconds, and the desktop's own otherwise.
 
 44.91 A bridge asking per 44.42 MUST show the note `/__abide/bridge` names for the link's code (44.63)
-under the headline, quoted after the app's name or the site and said to be its own, as one line of at
-most 200 characters, and MUST NOT show it in the headline.
+under the headline, after `From` and the app's name or the site, as one line of at most 200
+characters, and MUST NOT show it in the headline.
 
 # 45. Offline
 

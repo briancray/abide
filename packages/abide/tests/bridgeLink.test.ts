@@ -147,7 +147,7 @@ test('the question names the app beside its site, and is titled by it — 44.42'
     expect(asked.headline).toBe(
         'CRM (crm.example/app) is requesting access to Claude Code.',
     )
-    expect(asked.body).toContain('Or allow only CRM’s own tools')
+    expect(asked.body).toContain('Optionally allow only CRM’s own tools')
     expect(question(PAIRING, SETTINGS).title).toBe('crm.example/app')
 })
 
@@ -161,11 +161,11 @@ test('the question shows the app’s note as its own words — 44.91', () => {
     })
     expect(asked.headline).not.toContain('file your deals')
     expect(asked.body.split('\n\n')[0]).toBe(
-        'CRM says: “So it can file your deals.”',
+        'From CRM: So it can file your deals.',
     )
     expect(
         question(PAIRING, SETTINGS, [], { note: 'Why.' }).body.split('\n\n')[0],
-    ).toBe('crm.example/app says: “Why.”')
+    ).toBe('From crm.example/app: Why.')
 })
 
 // 44.90 — THE ICON IS THE SITE'S OWN `/icon.png`, and only where it is a PNG no larger than an app
@@ -203,9 +203,11 @@ test('a link asking for full access is asked naming no tool — 44.42, 44.86', (
     expect(asked.headline).toBe(
         'crm.example/app is requesting access to Claude Code.',
     )
-    expect(asked.body.split('\n\n')[0]).toContain('It’s asking for full access')
+    expect(asked.body.split('\n\n')[0]).toContain('auto mode')
     expect(said(asked)).not.toContain('WebSearch')
-    expect(asked.body).toContain('Or allow only crm.example/app’s own tools')
+    expect(asked.body).toContain(
+        'Optionally allow only crm.example/app’s own tools, which is safest',
+    )
 })
 
 // 44.42, 44.44 — WHAT INSTALL KEPT IS ASKED ABOUT TOO: it reaches every site the visitor allows, so the
