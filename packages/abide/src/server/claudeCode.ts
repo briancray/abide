@@ -1,5 +1,5 @@
 // 44.13 — THE CLAUDE CODE ON THE VISITOR'S OWN MACHINE AS A `Provider`, reached through the bridge they
-// paired (`bridgeRelay.ts`). Claude Code runs its own loop there; what this side does is hand it the
+// paired (`bridgeRelay.ts`), or in the desktop app's window, through its own (44.77). Claude Code runs its own loop there; what this side does is hand it the
 // turn and answer the MCP requests it makes from the `Toolbox` — in this request's scope, as this
 // asker (44.7) — so its tools are the site's and nothing of the visitor's machine is one.
 //
@@ -25,6 +25,7 @@ import { declare } from '#shared/rpc.ts'
 import { blocksOf, forwardOf, type Provider } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import {
+    fromDesktopWindow,
     mintCode,
     pairingNow,
     pairingStatus,
@@ -65,6 +66,7 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
             yield* runTurn({
                 caller: askingCaller(),
                 signedIn: signedInAs(),
+                local: fromDesktopWindow(),
                 prompt: foldedContent(messages),
                 config,
                 maxTurns,
@@ -194,6 +196,7 @@ async function* bridge(
         signedInAs(),
         options.tools ?? [],
         request().signal,
+        fromDesktopWindow(),
     ))
         yield { paired, missing, ...commandFor(code, options) }
 }
@@ -223,6 +226,7 @@ const pairingHandler = declare('GET')(
             askingCaller(),
             signedInAs(),
             tools,
+            fromDesktopWindow(),
         )
         return {
             paired,

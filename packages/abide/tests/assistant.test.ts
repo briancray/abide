@@ -1199,6 +1199,89 @@ console.log(JSON.stringify({ status: answer.status, text: await answer.text() })
     expect(printed.text).toContain('"text":"saw \\"ada\\""')
 }, 30_000)
 
+// 44.77, 44.78, 44.79 — THE DESKTOP APP'S OWN BRIDGE: a request carrying the window's credential is
+// paired with no code spent and no bridge running, its turn is given every tool it asks for, and its
+// status lacks only an MCP tool whose server the user scope does not hold; the same request without
+// the credential, or with another, is not paired at all. THE REVERTS: read `local` as `false` in
+// `fromDesktopWindow`, and the window's status is unpaired and its turn refused 409; pass `trusted:
+// false` to the local core, and `--tools` reads empty.
+test('the desktop app’s window is paired with this machine’s Claude Code — 44.77, 44.78, 44.79', async () => {
+    const configured = await scratch({
+        '.claude.json': {
+            mcpServers: {
+                calendar: { type: 'http', url: 'http://calendar.test' },
+            },
+        },
+    })
+    const shim = `${configured}/bin/claude`
+    await Bun.write(shim, `#!/bin/sh\nexec bun ${FAKE_CLAUDE} "$@"\n`)
+    await spawned(['chmod', '+x', shim])
+    await Bun.write(
+        `${app}/desktop.ts`,
+        `import { servedBuild } from '${SERVER}/appBuild.ts'
+import { serveLocally } from '${SERVER}/bridgeRelay.ts'
+import { bootApp } from '${SERVER}/createApp.ts'
+
+const served = await servedBuild('${app}', '${app}/.abide', undefined)
+const app = await bootApp(served.origin, served.load)
+await serveLocally('window-secret')
+const page = (credential: string) => ({ cookie: 'who=ada; abide-caller=desk' + credential })
+const status = async (credential: string) => {
+    const answer = await app.fetch(new Request('http://app.test/__abide/pairing', { headers: page(credential) }))
+    return answer.json()
+}
+const ask = async (credential: string) => {
+    const answer = await app.fetch(new Request('http://app.test/ask', {
+        method: 'POST',
+        headers: { ...page(credential), 'content-type': 'application/json', accept: 'application/jsonl' },
+        body: JSON.stringify({ via: 'code', config: { tools: ['WebSearch', 'mcp__calendar__meetings', 'mcp__nowhere__x'] }, messages: [{ role: 'user', content: 'who am I?' }] }),
+    }))
+    return { status: answer.status, text: await answer.text() }
+}
+// The tools asked for are ABIDE_BRIDGE_TOOLS', which this app is started with.
+const window = await status('; abide-desktop=window-secret')
+const stranger = await status('; abide-desktop=guessed')
+const asked = await ask('; abide-desktop=window-secret')
+const refused = await ask('')
+await app.stop()
+console.log(JSON.stringify({ window, stranger, asked, refused }))
+process.exit(0)
+`,
+    )
+    const printed = await lastLinePrinted<{
+        window: { paired: boolean; missing: string[] }
+        stranger: { paired: boolean }
+        asked: { status: number; text: string }
+        refused: { status: number }
+    }>(['bun', `${app}/desktop.ts`], {
+        cwd: app,
+        env: {
+            ...environment,
+            PATH: `${configured}/bin:${environment.PATH}`,
+            CLAUDE_CONFIG_DIR: configured,
+            ABIDE_BRIDGE_TOOLS:
+                'WebSearch,mcp__calendar__meetings,mcp__nowhere__x',
+        },
+    })
+    expect(printed.window).toMatchObject({
+        paired: true,
+        missing: ['mcp__nowhere__x'],
+    })
+    expect(printed.stranger.paired).toBe(false)
+    expect(printed.asked.status).toBe(200)
+    expect(printed.asked.text).toContain('"text":"saw \\"ada\\""')
+    expect(printed.refused.status).toBe(409)
+    const record = (await Bun.file(RECORD).json()) as {
+        args: string[]
+        config: { mcpServers: Record<string, unknown> }
+    }
+    expect(record.args[record.args.indexOf('--tools') + 1]).toBe('WebSearch')
+    expect(Object.keys(record.config.mcpServers).sort()).toEqual([
+        'app',
+        'calendar',
+    ])
+}, 30_000)
+
 // The command a site shows names the bridge release that speaks this relay.
 test('the pairing command names the bridge package’s own version', async () => {
     const own = (await Bun.file(`${BRIDGE}package.json`).json()) as {

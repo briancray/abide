@@ -18,8 +18,13 @@
 //
 // Every frame on that stream is written here; what the rest of the server sees is a turn run, a
 // pairing's status as it changes, and a pairing code.
+//
+// 44.77 — THE DESKTOP APP'S OWN BRIDGE is one more `Bridge`, filed under no pairing: its frames are
+// read in this process by the same core a bridge runs (`@abide/bridge/serveTurns`), and its reports
+// land here as a post's would. It stands in for any pairing a request from the window asks after.
 
 import { isFailed } from '#shared/Failed.ts'
+import { namedLogger } from '#shared/log.ts'
 import { refuse } from '#shared/refuse.ts'
 
 import { answered } from './answerFailure.ts'
@@ -31,6 +36,7 @@ import { fileIn } from './fileIn.ts'
 import { Inbox } from './Inbox.ts'
 import { holderOf, signedInAs } from './principal.ts'
 import { randomToken } from './randomToken.ts'
+import { request } from './requestScope.ts'
 import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
 import { onSignInChanged } from './signInChanged.ts'
 
@@ -67,6 +73,8 @@ type Bridge = {
 /** A pairing as a status stream says it: whether a bridge is paired, the code that pairs one, and what it cannot give. */
 export type PairingState = { paired: boolean; code: string; missing: string[] }
 
+const RELAY_LOG = namedLogger('abide:assistant')
+
 /** How long a pairing code stands unused. */
 const CODE_LIFETIME = 10 * 60_000
 // How long a bridge outlives the last page watching it, so a reload does not end it.
@@ -84,6 +92,119 @@ const FOLLOWERS = new Map<
     string,
     Set<(caller: string, signedIn: string) => void>
 >()
+
+/** The cookie the desktop app's window carries its credential in. 44.79. */
+export const DESKTOP_COOKIE = 'abide-desktop'
+
+// 44.77 — the desktop app's own bridge: the credential its window holds, the bridge once a turn has
+// started it, and the MCP servers 44.58 last found in the user scope.
+const LOCAL: {
+    secret: string
+    bridge: Bridge | undefined
+    servers: ReadonlySet<string>
+} = { secret: '', bridge: undefined, servers: new Set() }
+
+/**
+ * Lends this machine's Claude Code to every request carrying `secret` in `DESKTOP_COOKIE` — the
+ * desktop app's window onto the app it started. 44.77, 44.79. Settles once the user scope's MCP
+ * servers are read (44.58); a page watching before then is told when they are.
+ */
+export function serveLocally(secret: string): Promise<void> {
+    LOCAL.secret = secret
+    return refreshLocalServers()
+}
+
+/** Whether the request being answered is from the desktop app's window, by its credential. 44.79. */
+export function fromDesktopWindow(): boolean {
+    if (LOCAL.secret === '') return false
+    const cookie = request().headers.get('cookie')
+    return (
+        cookie !== null &&
+        new Bun.CookieMap(cookie).get(DESKTOP_COOKIE) === LOCAL.secret
+    )
+}
+
+/** Whether the desktop app's own bridge stands for a request `local` says is from its window: Claude Code is found. */
+function localStands(local: boolean): boolean {
+    return local && Bun.which('claude') !== null
+}
+
+/** Whether a pairing is paired: by a code, or by the desktop app's own bridge. */
+function pairedFor(key: string, local: boolean): boolean {
+    return BY_KEY.has(key) || localStands(local)
+}
+
+/** What of `tools` the bridge a pairing reaches cannot make available. 44.60. */
+function missingFor(
+    key: string,
+    local: boolean,
+    tools: readonly string[],
+): string[] {
+    const bridge = BY_KEY.get(key)
+    if (bridge !== undefined) return missingOf(tools, bridge.missing)
+    const missing: string[] = []
+    if (!localStands(local)) return missing
+    // 44.78 — given every tool asked for, it lacks only an MCP tool whose server 44.58 does not find.
+    for (const tool of tools) {
+        const server = serverOfTool(tool)
+        if (server !== undefined && !LOCAL.servers.has(server))
+            missing.push(tool)
+    }
+    return missing
+}
+
+/** The MCP server `tool` is of, as 44.29 names it, or `undefined` for a built-in. */
+function serverOfTool(tool: string): string | undefined {
+    if (!tool.startsWith('mcp__')) return undefined
+    const rest = tool.slice('mcp__'.length)
+    const end = rest.indexOf('__')
+    return end === -1 ? rest : rest.slice(0, end)
+}
+
+/** Reads the user scope's MCP servers again, and tells every page watching where they changed. 44.58, 44.61. */
+async function refreshLocalServers(): Promise<void> {
+    const { visitorServers } = await import('@abide/bridge/grant')
+    const found = new Set((await visitorServers(undefined)).keys())
+    const before = [...LOCAL.servers].join(',')
+    LOCAL.servers = found
+    if ([...found].join(',') === before) return
+    for (const wakes of WATCHERS.values()) for (const wake of wakes) wake()
+}
+
+/** The desktop app's own bridge, started on its first turn. */
+async function localBridge(): Promise<Bridge> {
+    if (LOCAL.bridge !== undefined) return LOCAL.bridge
+    const { serveTurns } = await import('@abide/bridge/serveTurns')
+    if (LOCAL.bridge !== undefined) return LOCAL.bridge
+    const bridge: Bridge = {
+        key: '',
+        token: '',
+        frames: new Inbox(),
+        turns: new Map(),
+        watched: false,
+        idle: undefined,
+        held: undefined,
+        asked: [],
+        missing: [],
+    }
+    LOCAL.bridge = bridge
+    const core = serveTurns({
+        site: 'this app',
+        claude: 'claude',
+        claudeArgs: [],
+        trusted: true,
+        report: (report) => delivered(bridge, report),
+        say: (line) => RELAY_LOG.debug(line),
+        beforeTurn: refreshLocalServers,
+    })
+    // 44.30 — the runs end with the process.
+    process.once('exit', core.stop)
+    void (async () => {
+        for await (const frame of bridge.frames)
+            core.take(frame as Parameters<typeof core.take>[0])
+    })()
+    return bridge
+}
 
 // 44.34 — A STATUS STREAM OPENED BEFORE A SIGN-IN carries the cookies it was opened with, so it hears
 // of the new one, or of the caller a sign-out rotated it to (26.9), here rather than off its own
@@ -142,9 +263,12 @@ export async function* runTurn({
     maxTurns,
     answer,
     signal,
+    local,
 }: {
     caller: string
     signedIn: string
+    /** Whether the request is from the desktop app's window (`fromDesktopWindow`). */
+    local: boolean
     prompt: unknown[]
     config: unknown
     maxTurns: number
@@ -152,7 +276,10 @@ export async function* runTurn({
     answer: (method: string, params: unknown) => Promise<unknown>
     signal: AbortSignal
 }): AsyncGenerator<ProviderEvent> {
-    const bridge = BY_KEY.get(pairingKey(caller, signedIn))
+    const key = pairingKey(caller, signedIn)
+    const bridge =
+        BY_KEY.get(key) ??
+        (localStands(local) ? await localBridge() : undefined)
     // 44.13, 44.33 — nothing paired by this sign-in is the page's cue to show the command.
     if (bridge === undefined)
         throw refuse(
@@ -205,6 +332,7 @@ export async function* pairingStatus(
     signedIn: string,
     tools: readonly string[],
     signal: AbortSignal,
+    local: boolean,
 ): AsyncGenerator<PairingState> {
     // A change landing while the loop was not waiting — paused at its `yield` — stays queued, so it
     // looks again; a look that finds nothing new yields nothing.
@@ -234,7 +362,6 @@ export async function* pairingStatus(
                 watchingKey = key
                 pairing = undefined
             }
-            const bridge = BY_KEY.get(key)
             if (
                 pairing === undefined ||
                 pairing.expires <= Date.now() ||
@@ -242,13 +369,10 @@ export async function* pairingStatus(
             )
                 pairing = mintCode(caller, signedIn, tools)
             const state: PairingState = {
-                paired: bridge !== undefined,
+                paired: pairedFor(key, local),
                 code: pairing.code,
                 // 44.60 — of what this stream's code asks for: two on one page may ask for different tools.
-                missing:
-                    bridge === undefined
-                        ? []
-                        : missingOf(tools, bridge.missing),
+                missing: missingFor(key, local, tools),
             }
             const saying = `${state.paired} ${state.code} ${state.missing.join(',')}`
             if (saying !== said) {
@@ -284,6 +408,7 @@ export function pairingNow(
     caller: string,
     signedIn: string,
     tools: readonly string[],
+    local: boolean,
 ): PairingState {
     const key = pairingKey(caller, signedIn)
     const at = `${key}\n${tools.join(',')}`
@@ -304,11 +429,10 @@ export function pairingNow(
         standing = { code, expires, expiry }
         STANDING.set(at, standing)
     }
-    const bridge = BY_KEY.get(key)
     return {
-        paired: bridge !== undefined,
+        paired: pairedFor(key, local),
         code: standing.code,
-        missing: bridge === undefined ? [] : missingOf(tools, bridge.missing),
+        missing: missingFor(key, local, tools),
     }
 }
 
@@ -537,16 +661,19 @@ async function relay(request: Request): Promise<Response> {
             return answered(refuse(400, 'A reported line is not JSON.'))
         }
     }
-    for (const report of reports) {
-        // 44.60 — what the pairing asked for and the bridge cannot give, as the page's status says it.
-        if (report.type === 'missing') {
-            bridge.missing = missingOf(bridge.asked, report.tools)
-            wakeWatchers(bridge.key)
-            continue
-        }
-        const turn = bridge.turns.get(report.turn)
-        if (turn === undefined) continue
-        turn.push(item(report.type as TurnItem['kind'], report))
-    }
+    for (const report of reports) delivered(bridge, report)
     return new Response(null, { status: 204 })
+}
+
+/** Hands what `bridge` reported to the turn it is of, or to the pairing's status. */
+function delivered(bridge: Bridge, report: BridgeReport): void {
+    // 44.60 — what the pairing asked for and the bridge cannot give, as the page's status says it.
+    if (report.type === 'missing') {
+        bridge.missing = missingOf(bridge.asked, report.tools)
+        wakeWatchers(bridge.key)
+        return
+    }
+    bridge.turns
+        .get(report.turn)
+        ?.push(item(report.type as TurnItem['kind'], report))
 }

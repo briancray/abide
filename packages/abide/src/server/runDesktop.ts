@@ -7,6 +7,7 @@
 
 import { ICON_ADDRESSES, MENU_BAR_ICON_ADDRESS } from '#shared/NATIVE_FILES.ts'
 
+import { DESKTOP_COOKIE, serveLocally } from './bridgeRelay.ts'
 import { dataDirectory, derived as appDerived } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type AppOrigin, bootEntered, enterApp } from './createApp.ts'
@@ -16,6 +17,7 @@ import { executableName } from './executableName.ts'
 import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
 import { launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
+import { loginShellPath } from './loginShellPath.ts'
 import { LOOPBACK } from './LOOPBACK.ts'
 import type { MenuBarIcon } from './menuBarExtra.ts'
 import { openDesktopWindow } from './openDesktopWindow.ts'
@@ -79,9 +81,13 @@ async function launch(
     { launch: launchModule, document, icon, accent, publicKey }: Desktop,
     extraIcon: MenuBarIcon | undefined,
 ): Promise<void> {
+    // 44.80 — what a terminal would find, for the app and for the Claude Code its own bridge runs.
+    const path = loginShellPath()
     // 37.1 — ENTERED ONCE, before the window: the start form reads `onConfig` and the launcher's
     // `onLauncher` is filed. Every start after it boots in what this entered (`bootEntered`).
     await enterApp(origin)
+    const found = await path
+    if (found !== undefined) process.env.PATH = found
     // 38.85 — a launcher page that fails to load leaves the built-in page, with its defaults.
     const launchPage = await launchModule?.().catch((thrown: unknown) => {
         reportUnexpected(thrown)
@@ -98,6 +104,12 @@ async function launch(
         bootEntered(load),
     )
     const token = randomToken(16, 'hex')
+    // 44.77, 44.79 — THE WINDOW'S CREDENTIAL, held in a cookie the launcher sets on every page it
+    // answers: a cookie is the host's and not the port's, so the app on loopback reads it too, and
+    // `SameSite=Strict` keeps a page of any other site from sending it there.
+    const secret = randomToken(16, 'hex')
+    void serveLocally(secret)
+    const credential = `${DESKTOP_COOKIE}=${secret}; Path=/; HttpOnly; SameSite=Strict`
     // 27.3 — the same derived layer `resolve` starts from, under what was given.
     const derived = (): Record<string, string | undefined> => ({
         ...appDerived(),
@@ -112,41 +124,49 @@ async function launch(
             const url = new URL(request.url)
             if (!url.pathname.startsWith(`/${token}/`))
                 return plainAnswer('not found', 404)
-            const action = url.pathname.slice(token.length + 2)
-            if (
-                options.start &&
-                request.method === 'POST' &&
-                action === 'start'
-            ) {
-                const form = await request.formData()
-                const values: Record<string, string> = {}
-                // THE LAST VALUE OF A NAME: a checkbox follows the hidden `false` it stands in for
-                // when unchecked, so `get` — the first — would read every checked box as `false`.
-                for (const field of configFields(derived()))
-                    values[field.name] = String(
-                        form.getAll(field.name).at(-1) ?? '',
-                    )
-                const started = await session.start(values)
-                return started === undefined ? onwards() : page('start')
-            }
-            if (
-                options.connect &&
-                request.method === 'POST' &&
-                action === 'connect'
-            ) {
-                const connected = await session.connect(
-                    String((await request.formData()).get('url') ?? ''),
-                )
-                return connected === undefined ? onwards() : page('connect')
-            }
-            // The Connect… menu item asks for the page with its connect form open.
-            return page(
-                url.searchParams.get('focus') === 'connect'
-                    ? 'connect'
-                    : undefined,
+            const answer = await answerLauncher(
+                request,
+                url,
+                url.pathname.slice(token.length + 2),
             )
+            answer.headers.append('set-cookie', credential)
+            return answer
         },
     })
+    const answerLauncher = async (
+        request: Request,
+        url: URL,
+        action: string,
+    ): Promise<Response> => {
+        if (options.start && request.method === 'POST' && action === 'start') {
+            const form = await request.formData()
+            const values: Record<string, string> = {}
+            // THE LAST VALUE OF A NAME: a checkbox follows the hidden `false` it stands in for
+            // when unchecked, so `get` — the first — would read every checked box as `false`.
+            for (const field of configFields(derived()))
+                values[field.name] = String(
+                    form.getAll(field.name).at(-1) ?? '',
+                )
+            const started = await session.start(values)
+            return started === undefined ? onwards() : page('start')
+        }
+        if (
+            options.connect &&
+            request.method === 'POST' &&
+            action === 'connect'
+        ) {
+            const connected = await session.connect(
+                String((await request.formData()).get('url') ?? ''),
+            )
+            return connected === undefined ? onwards() : page('connect')
+        }
+        // What the window opens on at launch, through here so it carries the credential.
+        if (action === 'open') return onwards()
+        // The Connect… menu item asks for the page with its connect form open.
+        return page(
+            url.searchParams.get('focus') === 'connect' ? 'connect' : undefined,
+        )
+    }
     const base = `${launcher.url.origin}/${token}/`
     // 38.71 — the answer to a start or a connect that took: the app the window now shows.
     const onwards = (): Response =>
@@ -208,7 +228,7 @@ async function launch(
         extraIcon,
     )
     await session.resume(options)
-    navigate(session.shown ?? base)
+    navigate(`${base}open`)
     if (updater === undefined) return
     // 38.142 — as it launches and hourly after; a feed that cannot be reached is tried again at
     // the next, and only a refusal is reported (38.143).

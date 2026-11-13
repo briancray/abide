@@ -119,10 +119,15 @@ function siteFlags(config: Omit<ClaudeCodeConfig, 'tools'>): string[] {
 async function launchFlags(
     config: ClaudeCodeConfig,
     visitor: string[],
+    trusted: boolean,
 ): Promise<{ flags: string[]; grant: Grant }> {
     const { tools: asked, ...options } = config
-    // 44.15 — the visitor's servers reach a turn only as the tools it was given are of them.
-    const { grant, args } = await grantFor(asked ?? [], visitor)
+    // 44.15 — the visitor's servers reach a turn only as the tools it was given are of them; 44.78 —
+    // the desktop app's own bridge is given every one the turn asks for.
+    const { grant, args } = await grantFor(
+        asked ?? [],
+        trusted ? ['--tools', (asked ?? []).join(','), ...visitor] : visitor,
+    )
     const allowed = takeFlag(args, ['--allowedTools', '--allowed-tools'])
     const sources = takeFlag(args, ['--setting-sources']) ?? []
     const flags = [
@@ -173,13 +178,19 @@ export async function claudeTurn(
     options: {
         claude: string
         claudeArgs: string[]
+        /** Every tool the turn asks for is granted, as by the desktop app's own bridge. 44.78. */
+        trusted: boolean
         mcpUrl: string
         signal: AbortSignal
         report: (event: ProviderEvent) => void
         say: (line: string) => void
     },
 ): Promise<void> {
-    const { flags, grant } = await launchFlags(turn.config, options.claudeArgs)
+    const { flags, grant } = await launchFlags(
+        turn.config,
+        options.claudeArgs,
+        options.trusted,
+    )
     for (const notice of withheldNotices(grant)) options.say(notice)
     const directory = await mkdtemp(`${tmpdir()}/abide-bridge-`)
     const config = `${directory}/mcp.json`

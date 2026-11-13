@@ -313,6 +313,7 @@ function openPanel(
             nsString('developerExtrasEnabled'),
         )
     send(view, 'setUIDelegate:', uiDelegate)
+    send(view, 'setNavigationDelegate:', uiDelegate)
     // 38.140 — the panel's page is the desktop app's as much as the window's is.
     send(view, 'setCustomUserAgent:', nsString(desktopUserAgent(version)))
     send(window, 'setContentView:', view)

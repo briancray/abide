@@ -61,7 +61,7 @@ function grantedOf(values: string[] | undefined): Set<string> {
 }
 
 /** The server an MCP tool name is of — `calendar` for `mcp__calendar__meetings` or `mcp__calendar` — or `undefined` for a built-in. */
-function serverOf(tool: string): string | undefined {
+export function serverOf(tool: string): string | undefined {
     if (!tool.startsWith('mcp__')) return undefined
     const rest = tool.slice('mcp__'.length)
     const end = rest.indexOf('__')

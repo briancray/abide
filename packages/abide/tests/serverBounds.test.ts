@@ -108,6 +108,7 @@ test('the bridge relay bounds its body and refuses a line that is not JSON whole
     const turn = runTurn({
         caller: 'bounds',
         signedIn: SIGNED_OUT,
+        local: false,
         prompt: [],
         config: {},
         maxTurns: 1,

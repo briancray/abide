@@ -18,6 +18,10 @@
         "access": "public",
         "provenance": true
     },
+    "exports": {
+        "./serveTurns": "./src/serveTurns.ts",
+        "./grant": "./src/grant.ts"
+    },
     "bin": {
         "abide-bridge": "./bin/abideBridge.ts"
     },

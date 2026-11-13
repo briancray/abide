@@ -3492,6 +3492,10 @@ quit the app.
 38.173 Activating the app `abide bundle` writes from the Dock MUST bring its window to the front
 where it is hidden.
 
+38.174 The window `abide bundle`'s executable opens, and its menu bar extra's panel, MUST hand a
+navigation to a scheme other than `http`, `https`, `about`, `blob`, `data` and `file` to the system
+to open, and MUST NOT load it.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -3994,7 +3998,8 @@ is `max_turns`, and MUST NOT run that call.
 44.12 `provider.claudeApi` MUST send the results of one turn's tool calls back in one message.
 
 44.13 `provider.claudeCode` MUST run a turn on the Claude Code of the bridge paired with the asking
-browser, and MUST refuse 409 where none is paired.
+browser, or of the desktop app's own bridge where 44.77 pairs it, and MUST refuse 409 where neither
+is paired.
 
 44.14 A code `provider.claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that
 asked for it, once, and MUST NOT pair once it has expired.
@@ -4210,6 +4215,23 @@ pairing changes, and where the code it was last answered with expires or pairs.
 `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` answers MUST carry after a `--`,
 behind the command's `--tools`, the arguments every `onPairing` answers in the asking request's
 scope, each quoted where a shell would split or expand it, and the link MUST carry none of them.
+
+44.77 A request from the window `abide bundle`'s executable opens onto the app it started, by the
+credential 44.79 hands it, MUST read as paired with the desktop app's own bridge — this machine's
+Claude Code, run in the app's process — whatever browser and sign-in it carries, with no code spent
+and no question asked, wherever `claude` is on the `PATH` it runs with; a bridge paired by a code
+MUST run the turn where both are.
+
+44.78 The desktop app's own bridge MUST make available, without asking, every tool a turn's `tools`
+names that is built-in or of an MCP server 44.58 finds in the user scope, and a `BridgeStatus` it
+pairs MUST carry as `missing` each tool it names of a server 44.58 does not find.
+
+44.79 The desktop app MUST hand its window a credential minted at each launch, in a cookie `HttpOnly`
+and `SameSite=Strict`, and MUST NOT read a request as from its window by anything else — its user
+agent (38.141) included.
+
+44.80 The desktop app MUST run with the `PATH` the visitor's login shell sets, where that shell says
+one within 3 seconds.
 
 # 45. Offline
 

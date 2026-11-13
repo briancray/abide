@@ -63,6 +63,7 @@
         "./src/ui/socketWire.ts"
     ],
     "dependencies": {
+        "@abide/bridge": "workspace:*",
         "typescript": "^7.0.2"
     },
     "devDependencies": {

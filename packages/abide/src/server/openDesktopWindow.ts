@@ -299,6 +299,7 @@ export function openDesktopWindow(
     }
     const uiDelegate = send(uiDelegateClass(), 'new')
     send(view, 'setUIDelegate:', uiDelegate)
+    send(view, 'setNavigationDelegate:', uiDelegate)
     send(view, 'setCustomUserAgent:', nsString(desktopUserAgent(version)))
     if (options.vibrancy === undefined) send(window, 'setContentView:', view)
     else {
@@ -701,11 +702,33 @@ export function openDesktopWindow(
     return navigate
 }
 
-// What a page asks of its window: a link out opens in the browser, and `alert` and `confirm` are
-// sheets the page waits on.
+// What a page asks of its window: a link out opens in the browser, one of a scheme the web view
+// cannot load opens in the app that takes it, and `alert` and `confirm` are sheets the page waits on.
+// The window's and the panel's web views take one of these as their UI delegate and their
+// navigation delegate alike.
 let uiDelegate: Id = null
 function uiDelegateClass(): Id {
     uiDelegate ??= definedClass('AbideUIDelegate', {
+        // 38.174 — WebKit fails a navigation to a scheme it has no loader for, where a browser hands it
+        // to the system: an `abide-bridge:` link (44.70), `mailto:`, an app's own.
+        'webView:decidePolicyForNavigationAction:decisionHandler:': {
+            types: 'v@:@@@?',
+            args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+            returns: FFIType.void,
+            run: (_view: Id, action: Id, decide: Id) => {
+                const url = send(send(action, 'request'), 'URL')
+                const scheme = url === null ? '' : stringOf(send(url, 'scheme'))
+                const loads = url === null || WEB_SCHEMES.has(scheme)
+                if (!loads)
+                    send(
+                        send(objcClass('NSWorkspace'), 'sharedWorkspace'),
+                        'openURL:',
+                        url,
+                    )
+                // WKNavigationActionPolicyAllow, or Cancel.
+                callBlock(decide, [FFIType.i64], loads ? 1 : 0)
+            },
+        },
         'webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:':
             {
                 types: '@@:@@@@',
@@ -744,6 +767,9 @@ function uiDelegateClass(): Id {
     })
     return uiDelegate
 }
+
+// What the web view loads itself; any other scheme is the system's to open.
+const WEB_SCHEMES = new Set(['http', 'https', 'about', 'blob', 'data', 'file'])
 
 function windowButton(window: Id, button: number): Id {
     return sendTyped(

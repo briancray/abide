@@ -7,21 +7,17 @@
 // inside the page's own request, as the person at the page. No credential of theirs reaches this
 // machine, and none of this machine's reaches the site.
 
-import type { ProviderEvent } from '@abide/abide/server'
-
 import { BRIDGE_PATH } from './BRIDGE_PATH.ts'
-import { claudeTurn, type TurnRequest } from './claudeTurn.ts'
 import { grantFor, withheldNotices } from './grant.ts'
 import { HEARTBEAT_MILLISECONDS } from './HEARTBEAT_MILLISECONDS.ts'
 import { siteOf } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
 import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
+import { serveTurns, type TurnFrame, type TurnReport } from './serveTurns.ts'
 import { siteTls } from './siteTls.ts'
 
 // How long reports gather before they are posted, so a streamed reply is not a post per token.
 const BATCH_MILLISECONDS = 15
-// 44.24 — how long a relayed MCP request waits for the site's reply.
-const REPLY_MILLISECONDS = 120_000
 // 44.25 — the first wait before redialing a dropped stream, doubled per failed dial up to the last.
 const FIRST_REDIAL_MILLISECONDS = 250
 const LAST_REDIAL_MILLISECONDS = 8_000
@@ -30,51 +26,10 @@ export const SILENCE_MILLISECONDS = 3 * HEARTBEAT_MILLISECONDS
 
 type SiteFrame =
     | { type: 'paired'; token: string; tools?: string[] }
-    | ({ type: 'turn' } & TurnRequest)
-    | {
-          type: 'reply'
-          turn: string
-          id: number
-          reply: Record<string, unknown>
-      }
-    | { type: 'cancel'; turn: string }
+    | TurnFrame
     | { type: 'bye' }
 
-type Report =
-    | { type: 'event'; turn: string; event: ProviderEvent }
-    | {
-          type: 'mcp'
-          turn: string
-          id: number
-          method: string
-          params: unknown
-      }
-    | { type: 'end'; turn: string }
-    | { type: 'fail'; turn: string; message: string }
-    | { type: 'missing'; tools: string[] }
-
-/** A relayed MCP request the site has yet to reply to. */
-type Waiting = {
-    turn: string
-    method: string
-    answer: (reply: Record<string, unknown>) => void
-    deadline: ReturnType<typeof setTimeout>
-}
-
-/** 44.46 — the abort reason of a turn the site missed part of, which it reports failed with. */
-class MissedTurn extends Error {}
-
-/** What Claude Code is answered where the site never replied: a failed call, or a JSON-RPC error. */
-function unanswered(method: string, message: string): Record<string, unknown> {
-    return method === 'tools/call'
-        ? {
-              result: {
-                  content: [{ type: 'text', text: message }],
-                  isError: true,
-              },
-          }
-        : { error: { code: -32603, message } }
-}
+type Report = TurnReport | { type: 'missing'; tools: string[] }
 
 /** Pairs with `site` by `code`, and serves its turns until the site or the stream ends it. */
 export async function bridge(options: {
@@ -92,7 +47,6 @@ export async function bridge(options: {
     // sentence naming the site by its host. The detail goes to Claude Code, in the failure it is answered.
     const host = new URL(site).host
     const say = options.say ?? ((line: string) => console.error(line))
-    const replyMilliseconds = options.replyMilliseconds ?? REPLY_MILLISECONDS
     const silenceMilliseconds =
         options.silenceMilliseconds ?? SILENCE_MILLISECONDS
     // What cuts the stream being read, where it went silent.
@@ -111,14 +65,6 @@ export async function bridge(options: {
         )
 
     let token = ''
-    const waiting = new Map<number, Waiting>()
-    const answer = (id: number, reply: Record<string, unknown>): void => {
-        const waiter = waiting.get(id)
-        if (waiter === undefined) return
-        waiting.delete(id)
-        clearTimeout(waiter.deadline)
-        waiter.answer(reply)
-    }
     const outbox: Report[] = []
     let flushing: Promise<void> = Promise.resolve()
     let scheduled = false
@@ -165,13 +111,10 @@ export async function bridge(options: {
             // A lost `missing` is said again by the next look, rather than taken as said.
             if (item.type === 'missing') reported = undefined
             else
-                turns
-                    .get(item.turn)
-                    ?.abort(
-                        new MissedTurn(
-                            `The site missed part of this turn, so it was ended: ${failure}`,
-                        ),
-                    )
+                core.miss(
+                    item.turn,
+                    `The site missed part of this turn, so it was ended: ${failure}`,
+                )
     }
     // One post at a time, in order: a turn's `end` never overtakes its last event.
     const report = (item: Report): void => {
@@ -209,114 +152,27 @@ export async function bridge(options: {
         report({ type: 'missing', tools: missing })
     }
 
-    const turns = new Map<string, AbortController>()
+    const core = serveTurns({
+        site,
+        claude: options.claude ?? 'claude',
+        claudeArgs: options.claudeArgs ?? [],
+        trusted: false,
+        report,
+        say: sayOnce,
+        beforeTurn: reportMissing,
+        ...(options.replyMilliseconds === undefined
+            ? {}
+            : { replyMilliseconds: options.replyMilliseconds }),
+    })
     // 44.30 — A SIGNAL ENDS THE RUNS WITH THE BRIDGE: exiting on one skips every `finally`, so a run
     // still going would outlive it, orphaned.
     const signals = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 } as const
     const stopped = (signal: keyof typeof signals): void => {
-        for (const controller of turns.values()) controller.abort()
+        core.cancelAll()
         process.exit(signals[signal])
     }
     for (const signal of Object.keys(signals) as (keyof typeof signals)[])
         process.on(signal, stopped)
-    let asked = 0
-    const secret = crypto.randomUUID()
-    const shim = Bun.serve({
-        hostname: '127.0.0.1',
-        port: 0,
-        // A tool call takes as long as its handler does: the reply deadline (44.24) bounds the wait,
-        // where bun's own idle timeout would cut every call past 10 seconds.
-        idleTimeout: 0,
-        async fetch(request) {
-            const [, given, turn] = new URL(request.url).pathname.split('/')
-            if (given !== secret || turn === undefined || !turns.has(turn))
-                return new Response(null, { status: 404 })
-            if (request.method !== 'POST')
-                return new Response(null, {
-                    status: 405,
-                    headers: { allow: 'POST' },
-                })
-            const message = (await request.json()) as {
-                id?: number | string
-                method: string
-                params?: unknown
-            }
-            // A notification is acknowledged here; there is nothing for the site to answer.
-            if (message.id === undefined)
-                return new Response(null, { status: 202 })
-            const id = ++asked
-            const method = message.method
-            const reply = new Promise<Record<string, unknown>>((done) => {
-                waiting.set(id, {
-                    turn,
-                    method,
-                    answer: done,
-                    // 44.24 — a reply lost on the way is a failure Claude Code is told of.
-                    deadline: setTimeout(
-                        () =>
-                            answer(
-                                id,
-                                unanswered(
-                                    method,
-                                    `${site} sent no reply within ${replyMilliseconds} ms.`,
-                                ),
-                            ),
-                        replyMilliseconds,
-                    ),
-                })
-            })
-            report({
-                type: 'mcp',
-                turn,
-                id,
-                method: message.method,
-                params: message.params,
-            })
-            return Response.json({
-                jsonrpc: '2.0',
-                id: message.id,
-                ...(await reply),
-            })
-        },
-    })
-
-    const run = async (turn: TurnRequest): Promise<void> => {
-        const controller = new AbortController()
-        turns.set(turn.id, controller)
-        await reportMissing()
-        // A cancel or a signal aborts with no reason of its own, and ends the turn as asked.
-        const missed = (): string | undefined =>
-            controller.signal.reason instanceof MissedTurn
-                ? controller.signal.reason.message
-                : undefined
-        try {
-            await claudeTurn(turn, {
-                claude: options.claude ?? 'claude',
-                claudeArgs: options.claudeArgs ?? [],
-                mcpUrl: `http://127.0.0.1:${shim.port}/${secret}/${turn.id}`,
-                signal: controller.signal,
-                report: (event) =>
-                    report({ type: 'event', turn: turn.id, event }),
-                say: sayOnce,
-            })
-            const message = missed()
-            if (message === undefined) report({ type: 'end', turn: turn.id })
-            else report({ type: 'fail', turn: turn.id, message })
-        } catch (thrown) {
-            report({
-                type: 'fail',
-                turn: turn.id,
-                message:
-                    missed() ??
-                    (thrown instanceof Error ? thrown.message : String(thrown)),
-            })
-        } finally {
-            turns.delete(turn.id)
-            for (const [id, waiter] of waiting)
-                if (waiter.turn === turn.id)
-                    answer(id, unanswered(waiter.method, 'The turn ended.'))
-        }
-    }
 
     // 44.25 — THE STREAM REDIALED BY ITS TOKEN, each wait twice the last, until the site refuses it or
     // stops holding the pairing.
@@ -377,15 +233,10 @@ export async function bridge(options: {
                             `Connected to ${host}. Close the page to disconnect.`,
                         )
                         void reportMissing()
-                    } else if (frame.type === 'turn') void run(frame)
-                    else if (frame.type === 'reply')
-                        answer(frame.id, frame.reply)
-                    else if (frame.type === 'cancel')
-                        turns.get(frame.turn)?.abort()
-                    else if (frame.type === 'bye') {
+                    } else if (frame.type === 'bye') {
                         bye = true
                         break
-                    }
+                    } else core.take(frame)
                 }
             } catch {
                 // A stream cut mid-read is a drop like one that ended.
@@ -400,10 +251,10 @@ export async function bridge(options: {
     } finally {
         for (const signal of Object.keys(signals) as (keyof typeof signals)[])
             process.off(signal, stopped)
-        for (const controller of turns.values()) controller.abort()
+        core.cancelAll()
         await flushing
         await flush()
-        shim.stop(true)
+        core.stop()
         say(`Disconnected from ${host}.`)
     }
 }

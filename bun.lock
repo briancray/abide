@@ -13,11 +13,12 @@
     },
     "packages/abide": {
       "name": "@abide/abide",
-      "version": "0.126.2",
+      "version": "0.130.1",
       "bin": {
         "abide": "./bin/abide.ts",
       },
       "dependencies": {
+        "@abide/bridge": "workspace:*",
         "typescript": "^7.0.2",
       },
       "devDependencies": {
@@ -26,7 +27,7 @@
     },
     "packages/bridge": {
       "name": "@abide/bridge",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "bin": {
         "abide-bridge": "./bin/abideBridge.ts",
       },
@@ -179,7 +180,7 @@
     },
     "packages/harness": {
       "name": "@abide/harness",
-      "version": "0.4.0",
+      "version": "0.4.2",
       "bin": {
         "harness-bench": "./src/runner/harnessBench.ts",
       },
@@ -190,7 +191,7 @@
         "@abide/abide": "workspace:*",
       },
       "peerDependencies": {
-        "@abide/abide": ">=0.126.2",
+        "@abide/abide": ">=0.130.1",
         "@playwright/test": "^1.64.0",
       },
       "optionalPeers": [
