@@ -596,9 +596,9 @@ test('a Linux desktop asks with zenity or kdialog, or not at all — 44.64, 44.8
 // order was before, and Allow answers only the site's tools.
 test('each button answers what it says, Don’t Allow last — 44.86', () => {
     const answered = (offer: boolean): string[] =>
-        buttonsOf(offer)
-            .map((label, index) => `${label}: ${answerAt(index, offer)}`)
-            .reverse()
+        buttonsOf(offer).map(
+            (label, index) => `${label}: ${answerAt(index, offer)}`,
+        )
     expect(answered(true)).toEqual([
         'Allow: allow',
         'Only Site Tools: siteTools',
