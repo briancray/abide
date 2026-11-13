@@ -5,7 +5,7 @@
    every package. */
 @import "tailwindcss" source("..");
 /* The CRM's tokens, element defaults and example vocabulary, which every chapter app ships too. */
-@import "../../examples/crm-01/src/lib/crm.css";
+@import "../../examples/crm/src/lib/crm.css";
 /* The chapter apps the cards render, which sit beside `src` rather than in it. */
 @source "../../examples";
 

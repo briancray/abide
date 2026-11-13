@@ -1,19 +1,19 @@
 <script>
 import { url } from '@abide/abide'
-import ContactList from 'crm-01/src/contacts/lib/ContactList.abide'
-import contactListSource from 'crm-01/src/contacts/lib/ContactList.abide' with { type: 'text' }
-import contactListBenchSource from 'crm-01/src/contacts/lib/ContactList.bench.ts' with { type: 'text' }
-import contactListTestSource from 'crm-01/src/contacts/lib/ContactList.test.ts' with { type: 'text' }
-import ContactNote from 'crm-01/src/contacts/lib/ContactNote.abide'
-import contactNoteSource from 'crm-01/src/contacts/lib/ContactNote.abide' with { type: 'text' }
-import contactNoteTestSource from 'crm-01/src/contacts/lib/ContactNote.test.ts' with { type: 'text' }
-import PageTiming from 'crm-01/src/contacts/lib/PageTiming.abide'
-import pageTimingSource from 'crm-01/src/contacts/lib/PageTiming.abide' with { type: 'text' }
-import pageTimingTestSource from 'crm-01/src/contacts/lib/PageTiming.test.ts' with { type: 'text' }
-import StarButton from 'crm-01/src/contacts/lib/StarButton.abide'
-import starButtonSource from 'crm-01/src/contacts/lib/StarButton.abide' with { type: 'text' }
-import starButtonTestSource from 'crm-01/src/contacts/lib/StarButton.test.ts' with { type: 'text' }
-import listContactsSource from 'crm-01/src/contacts/listContacts.handler.ts' with { type: 'text' }
+import ContactList from 'crm/src/contacts/lib/ContactList.abide'
+import contactListSource from 'crm/src/contacts/lib/ContactList.abide' with { type: 'text' }
+import contactListBenchSource from 'crm/src/contacts/lib/ContactList.bench.ts' with { type: 'text' }
+import contactListTestSource from 'crm/src/contacts/lib/ContactList.test.ts' with { type: 'text' }
+import ContactNote from 'crm/src/contacts/lib/ContactNote.abide'
+import contactNoteSource from 'crm/src/contacts/lib/ContactNote.abide' with { type: 'text' }
+import contactNoteTestSource from 'crm/src/contacts/lib/ContactNote.test.ts' with { type: 'text' }
+import PageTiming from 'crm/src/contacts/lib/PageTiming.abide'
+import pageTimingSource from 'crm/src/contacts/lib/PageTiming.abide' with { type: 'text' }
+import pageTimingTestSource from 'crm/src/contacts/lib/PageTiming.test.ts' with { type: 'text' }
+import StarButton from 'crm/src/contacts/lib/StarButton.abide'
+import starButtonSource from 'crm/src/contacts/lib/StarButton.abide' with { type: 'text' }
+import starButtonTestSource from 'crm/src/contacts/lib/StarButton.test.ts' with { type: 'text' }
+import listContactsSource from 'crm/src/contacts/listContacts.handler.ts' with { type: 'text' }
 
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
@@ -89,7 +89,7 @@ bun run dev`} />
     <Section title="A page reads a handler like a value">
         <Example
             id="crm-01-contact-list"
-            app="crm-01"
+            app="crm"
             title="`listContacts` — a handler file, read like a value"
             summary="The contacts page lists every contact. The list is empty until the handler answers, then fills in."
             files={{
@@ -118,7 +118,7 @@ bun run dev`} />
     <Section title="The page is sent before the data lands">
         <Example
             id="crm-01-page-sent-first"
-            app="crm-01"
+            app="crm"
             title="The whole contacts page, before the contacts answer"
             summary="The contacts handler takes 400 ms. Request the page the way a browser does, and compare when it is complete with when the contacts answer."
             files={{
@@ -145,7 +145,7 @@ bun run dev`} />
     <Section title="A value is read and written by name">
         <Example
             id="crm-01-star"
-            app="crm-01"
+            app="crm"
             title="`starred` — read by name, written by name"
             summary="Grace Hopper is the contact you call most. Star her, then take the star off."
             files={{
@@ -164,7 +164,7 @@ bun run dev`} />
     <Section title="Every value is a `Reactive`">
         <Example
             id="crm-01-one-type"
-            app="crm-01"
+            app="crm"
             title="`Reactive` — four ways to get a value, one way to ask"
             summary="A note on a contact. Watch which rows say … on arrival, then type a note and save it."
             files={{

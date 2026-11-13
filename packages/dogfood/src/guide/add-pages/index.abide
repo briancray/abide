@@ -1,46 +1,46 @@
 <script>
 import { url } from '@abide/abide'
-import companyTabsSpecSource from 'crm-06/e2e/CompanyTabs.test.ts' with { type: 'text' }
-import layoutSpecSource from 'crm-06/e2e/Layout.test.ts' with { type: 'text' }
-import idPageSource from 'crm-06/src/companies/[id=SLUG].abide' with { type: 'text' }
-import companyPageTestSource from 'crm-06/src/companies/CompanyPage.test.ts' with { type: 'text' }
-import errorPageSource from 'crm-06/src/companies/error.abide' with { type: 'text' }
-import errorPageTestSource from 'crm-06/src/companies/ErrorPage.test.ts' with { type: 'text' }
-import exportCompaniesSource from 'crm-06/src/companies/exportCompanies.handler.ts' with { type: 'text' }
-import getCompanySource from 'crm-06/src/companies/getCompany.handler.ts' with { type: 'text' }
-import headTestSource from 'crm-06/src/companies/Head.test.ts' with { type: 'text' }
-import indexPageSource from 'crm-06/src/companies/index.abide' with { type: 'text' }
-import layoutSource from 'crm-06/src/companies/layout.abide' with { type: 'text' }
-import layoutTestSource from 'crm-06/src/companies/Layout.test.ts' with { type: 'text' }
-import CompaniesFrame from 'crm-06/src/companies/lib/CompaniesFrame.abide'
-import companiesFrameSource from 'crm-06/src/companies/lib/CompaniesFrame.abide' with { type: 'text' }
-import CompanyPages from 'crm-06/src/companies/lib/CompanyPages.abide'
-import companyPagesSource from 'crm-06/src/companies/lib/CompanyPages.abide' with { type: 'text' }
-import companySheetSource from 'crm-06/src/companies/lib/CompanySheet.abide' with { type: 'text' }
-import CompanyTabs from 'crm-06/src/companies/lib/CompanyTabs.abide'
-import companyTabsSource from 'crm-06/src/companies/lib/CompanyTabs.abide' with { type: 'text' }
-import companyTabsTestSource from 'crm-06/src/companies/lib/CompanyTabs.test.ts' with { type: 'text' }
-import ExportButton from 'crm-06/src/companies/lib/ExportButton.abide'
-import exportButtonSource from 'crm-06/src/companies/lib/ExportButton.abide' with { type: 'text' }
-import exportButtonTestSource from 'crm-06/src/companies/lib/ExportButton.test.ts' with { type: 'text' }
-import MissingCompany from 'crm-06/src/companies/lib/MissingCompany.abide'
-import missingCompanySource from 'crm-06/src/companies/lib/MissingCompany.abide' with { type: 'text' }
-import PastedName from 'crm-06/src/companies/lib/PastedName.abide'
-import pastedNameSource from 'crm-06/src/companies/lib/PastedName.abide' with { type: 'text' }
-import SheetPreview from 'crm-06/src/companies/lib/SheetPreview.abide'
-import sheetPreviewSource from 'crm-06/src/companies/lib/SheetPreview.abide' with { type: 'text' }
-import sheetPreviewTestSource from 'crm-06/src/companies/lib/SheetPreview.test.ts' with { type: 'text' }
-import SlowCompany from 'crm-06/src/companies/lib/SlowCompany.abide'
-import slowCompanySource from 'crm-06/src/companies/lib/SlowCompany.abide' with { type: 'text' }
-import TabTitle from 'crm-06/src/companies/lib/TabTitle.abide'
-import tabTitleSource from 'crm-06/src/companies/lib/TabTitle.abide' with { type: 'text' }
-import TransitionFrame from 'crm-06/src/companies/lib/TransitionFrame.abide'
-import transitionFrameSource from 'crm-06/src/companies/lib/TransitionFrame.abide' with { type: 'text' }
-import matcherTestSource from 'crm-06/src/companies/Matcher.test.ts' with { type: 'text' }
-import previewCompanySource from 'crm-06/src/companies/previewCompany.handler.ts' with { type: 'text' }
-import slugSource from 'crm-06/src/companies/SLUG.param.ts' with { type: 'text' }
-import streamingTestSource from 'crm-06/src/companies/Streaming.test.ts' with { type: 'text' }
-import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.ts' with { type: 'text' }
+import companyTabsSpecSource from 'crm/e2e/CompanyTabs.test.ts' with { type: 'text' }
+import layoutSpecSource from 'crm/e2e/Layout.test.ts' with { type: 'text' }
+import idPageSource from 'crm/src/companies/[id=SLUG].abide' with { type: 'text' }
+import companyPageTestSource from 'crm/src/companies/CompanyPage.test.ts' with { type: 'text' }
+import errorPageSource from 'crm/src/companies/error.abide' with { type: 'text' }
+import errorPageTestSource from 'crm/src/companies/ErrorPage.test.ts' with { type: 'text' }
+import exportCompaniesSource from 'crm/src/companies/exportCompanies.handler.ts' with { type: 'text' }
+import getCompanySource from 'crm/src/companies/getCompany.handler.ts' with { type: 'text' }
+import headTestSource from 'crm/src/companies/Head.test.ts' with { type: 'text' }
+import indexPageSource from 'crm/src/companies/index.abide' with { type: 'text' }
+import layoutSource from 'crm/src/companies/layout.abide' with { type: 'text' }
+import layoutTestSource from 'crm/src/companies/Layout.test.ts' with { type: 'text' }
+import CompaniesFrame from 'crm/src/companies/lib/CompaniesFrame.abide'
+import companiesFrameSource from 'crm/src/companies/lib/CompaniesFrame.abide' with { type: 'text' }
+import CompanyPages from 'crm/src/companies/lib/CompanyPages.abide'
+import companyPagesSource from 'crm/src/companies/lib/CompanyPages.abide' with { type: 'text' }
+import companySheetSource from 'crm/src/companies/lib/CompanySheet.abide' with { type: 'text' }
+import CompanyTabs from 'crm/src/companies/lib/CompanyTabs.abide'
+import companyTabsSource from 'crm/src/companies/lib/CompanyTabs.abide' with { type: 'text' }
+import companyTabsTestSource from 'crm/src/companies/lib/CompanyTabs.test.ts' with { type: 'text' }
+import ExportButton from 'crm/src/companies/lib/ExportButton.abide'
+import exportButtonSource from 'crm/src/companies/lib/ExportButton.abide' with { type: 'text' }
+import exportButtonTestSource from 'crm/src/companies/lib/ExportButton.test.ts' with { type: 'text' }
+import MissingCompany from 'crm/src/companies/lib/MissingCompany.abide'
+import missingCompanySource from 'crm/src/companies/lib/MissingCompany.abide' with { type: 'text' }
+import PastedName from 'crm/src/companies/lib/PastedName.abide'
+import pastedNameSource from 'crm/src/companies/lib/PastedName.abide' with { type: 'text' }
+import SheetPreview from 'crm/src/companies/lib/SheetPreview.abide'
+import sheetPreviewSource from 'crm/src/companies/lib/SheetPreview.abide' with { type: 'text' }
+import sheetPreviewTestSource from 'crm/src/companies/lib/SheetPreview.test.ts' with { type: 'text' }
+import SlowCompany from 'crm/src/companies/lib/SlowCompany.abide'
+import slowCompanySource from 'crm/src/companies/lib/SlowCompany.abide' with { type: 'text' }
+import TabTitle from 'crm/src/companies/lib/TabTitle.abide'
+import tabTitleSource from 'crm/src/companies/lib/TabTitle.abide' with { type: 'text' }
+import TransitionFrame from 'crm/src/companies/lib/TransitionFrame.abide'
+import transitionFrameSource from 'crm/src/companies/lib/TransitionFrame.abide' with { type: 'text' }
+import matcherTestSource from 'crm/src/companies/Matcher.test.ts' with { type: 'text' }
+import previewCompanySource from 'crm/src/companies/previewCompany.handler.ts' with { type: 'text' }
+import slugSource from 'crm/src/companies/SLUG.param.ts' with { type: 'text' }
+import streamingTestSource from 'crm/src/companies/Streaming.test.ts' with { type: 'text' }
+import viewTransitionTestSource from 'crm/src/companies/ViewTransition.test.ts' with { type: 'text' }
 
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
@@ -109,7 +109,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`[id=SLUG].abide` answers for every company">
         <Example
             id="crm-06-company-page"
-            app="crm-06"
+            app="crm"
             title="`[id=SLUG].abide` — one file for every company"
             summary="Two companies, one page file. Pick one: the address changes, and the page loads the company the address names."
             files={{
@@ -137,7 +137,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A param file says what an id looks like">
         <Example
             id="crm-06-param-matcher"
-            app="crm-06"
+            app="crm"
             title="`SLUG.param.ts` — an address that cannot be an id never reaches the page"
             summary="A rep pastes a company's name where its id goes. No id has a capital or a space, so no page takes the address, and nothing asks the database for it."
             files={{
@@ -181,7 +181,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A layout holds what the companies pages share">
         <Example
             id="crm-06-layout"
-            app="crm-06"
+            app="crm"
             title="`layout.abide` — the header the companies pages share, built once"
             summary="The companies header holds a note for the call you are on. Type one, then open a company and come back: the page changes, and the note stays."
             files={{
@@ -210,7 +210,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`route.query` keeps a page's state in the address">
         <Example
             id="crm-06-navigate"
-            app="crm-06"
+            app="crm"
             title="`route.query(defaults)` — the query as one value, written by navigating"
             summary="A company page keeps its open tab in the address, so a link can open it. Type a draft, then switch tabs: the address moves, and the draft stays."
             files={{
@@ -250,7 +250,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A view transition carries the company across pages">
         <Example
             id="crm-06-view-transition"
-            app="crm-06"
+            app="crm"
             title="`view-transition-name` — a company name that moves to where it lands"
             summary="A rep opens a company from the list, and the name they clicked becomes the heading they land on. Open one and watch it travel."
             files={{
@@ -273,7 +273,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A page's `<head>` wins over its layout's, key by key">
         <Example
             id="crm-06-head"
-            app="crm-06"
+            app="crm"
             title="`<head>` in a page and its layout — the deepest title wins"
             summary="The companies layout titles every page, and a company page titles itself. Open each in a tab of its own: the company's tab takes its name."
             files={{
@@ -297,7 +297,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="The page goes out before the company lands">
         <Example
             id="crm-06-streaming"
-            app="crm-06"
+            app="crm"
             title="A hole per value in flight — the page first, the company after"
             summary="The company database takes over a second. Load the page again: the labels arrive at once, and each value fills its own hole when the company lands."
             files={{
@@ -329,7 +329,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`error.abide` answers when a page cannot">
         <Example
             id="crm-06-error-page"
-            app="crm-06"
+            app="crm"
             title="`error.abide` — a company that is not there"
             summary="An old link points at a company that was merged away. The handler refuses at once, and the companies error page answers with a 404."
             files={{
@@ -360,7 +360,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`onError` reports what the caller is not told">
         <Example
             id="crm-06-error-report"
-            app="crm-06"
+            app="crm"
             title="`onError(fn)` — the tracker hears what the caller is not told"
             summary="The export worker has stopped answering. Run the export: the button gets a bare 500, and the hook in the companies layout gets the reason."
             files={{
@@ -385,7 +385,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`render` builds a document from a component">
         <Example
             id="crm-06-render"
-            app="crm-06"
+            app="crm"
             title="`render(component)` — an account sheet from the component itself"
             summary="A rep sends a customer a one-page account sheet. The handler renders the sheet component into a document of its own, and the frame shows it."
             files={{

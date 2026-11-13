@@ -1,7 +1,0 @@
-<script>
-import exportDeals from '../exportDeals.handler.ts'
-</script>
-
-<div class="row">
-    <a href={exportDeals.url()} download="deals.csv">Download deals.csv</a>
-</div>

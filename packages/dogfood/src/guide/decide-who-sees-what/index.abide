@@ -1,56 +1,56 @@
 <script>
 import { url } from '@abide/abide'
-import addContactSource from 'crm-07/src/account/addContact.handler.ts' with { type: 'text' }
-import adminErrorSource from 'crm-07/src/account/admin/error.abide' with { type: 'text' }
-import getTeamSource from 'crm-07/src/account/admin/getTeam.handler.ts' with { type: 'text' }
-import adminLayoutSource from 'crm-07/src/account/admin/layout.abide' with { type: 'text' }
-import exportContactsSource from 'crm-07/src/account/exportContacts.handler.ts' with { type: 'text' }
-import getCommissionSource from 'crm-07/src/account/getCommission.handler.ts' with { type: 'text' }
-import getContactSource from 'crm-07/src/account/getContact.handler.ts' with { type: 'text' }
-import getStatementSource from 'crm-07/src/account/getStatement.handler.ts' with { type: 'text' }
-import accountPageSource from 'crm-07/src/account/index.abide' with { type: 'text' }
-import AddContact from 'crm-07/src/account/lib/AddContact.abide'
-import addContactComponentSource from 'crm-07/src/account/lib/AddContact.abide' with { type: 'text' }
-import addContactTestSource from 'crm-07/src/account/lib/AddContact.test.ts' with { type: 'text' }
-import AdminSection from 'crm-07/src/account/lib/AdminSection.abide'
-import adminSectionSource from 'crm-07/src/account/lib/AdminSection.abide' with { type: 'text' }
-import adminSectionTestSource from 'crm-07/src/account/lib/AdminSection.test.ts' with { type: 'text' }
-import adminsOnlySource from 'crm-07/src/account/lib/adminsOnly.ts' with { type: 'text' }
-import Badge from 'crm-07/src/account/lib/Badge.abide'
-import badgeSource from 'crm-07/src/account/lib/Badge.abide' with { type: 'text' }
-import badgeTestSource from 'crm-07/src/account/lib/Badge.test.ts' with { type: 'text' }
-import ContactCard from 'crm-07/src/account/lib/ContactCard.abide'
-import contactCardSource from 'crm-07/src/account/lib/ContactCard.abide' with { type: 'text' }
-import contactCardTestSource from 'crm-07/src/account/lib/ContactCard.test.ts' with { type: 'text' }
-import Density from 'crm-07/src/account/lib/Density.abide'
-import densitySource from 'crm-07/src/account/lib/Density.abide' with { type: 'text' }
-import densityTestSource from 'crm-07/src/account/lib/Density.test.ts' with { type: 'text' }
-import ExportContacts from 'crm-07/src/account/lib/ExportContacts.abide'
-import exportContactsComponentSource from 'crm-07/src/account/lib/ExportContacts.abide' with { type: 'text' }
-import exportContactsTestSource from 'crm-07/src/account/lib/ExportContacts.test.ts' with { type: 'text' }
-import PartnerStatement from 'crm-07/src/account/lib/PartnerStatement.abide'
-import partnerStatementSource from 'crm-07/src/account/lib/PartnerStatement.abide' with { type: 'text' }
-import partnerStatementTestSource from 'crm-07/src/account/lib/PartnerStatement.test.ts' with { type: 'text' }
-import SalesReport from 'crm-07/src/account/lib/SalesReport.abide'
-import salesReportComponentSource from 'crm-07/src/account/lib/SalesReport.abide' with { type: 'text' }
-import salesReportTestSource from 'crm-07/src/account/lib/SalesReport.test.ts' with { type: 'text' }
-import SignIn from 'crm-07/src/account/lib/SignIn.abide'
-import signInComponentSource from 'crm-07/src/account/lib/SignIn.abide' with { type: 'text' }
-import signInTestSource from 'crm-07/src/account/lib/SignIn.test.ts' with { type: 'text' }
-import SignInAgain from 'crm-07/src/account/lib/SignInAgain.abide'
-import signInAgainSource from 'crm-07/src/account/lib/SignInAgain.abide' with { type: 'text' }
-import signInAgainTestSource from 'crm-07/src/account/lib/SignInAgain.test.ts' with { type: 'text' }
-import SyncContact from 'crm-07/src/account/lib/SyncContact.abide'
-import syncContactComponentSource from 'crm-07/src/account/lib/SyncContact.abide' with { type: 'text' }
-import syncContactTestSource from 'crm-07/src/account/lib/SyncContact.test.ts' with { type: 'text' }
-import Widget from 'crm-07/src/account/lib/Widget.abide'
-import widgetSource from 'crm-07/src/account/lib/Widget.abide' with { type: 'text' }
-import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type: 'text' }
-import salesReportSource from 'crm-07/src/account/salesReport.handler.ts' with { type: 'text' }
-import signInSource from 'crm-07/src/account/signIn.handler.ts' with { type: 'text' }
-import signOutSource from 'crm-07/src/account/signOut.handler.ts' with { type: 'text' }
-import syncContactSource from 'crm-07/src/account/syncContact.handler.ts' with { type: 'text' }
-import rootLayoutSource from 'crm-07/src/layout.abide' with { type: 'text' }
+import addContactSource from 'crm/src/account/addContact.handler.ts' with { type: 'text' }
+import adminErrorSource from 'crm/src/account/admin/error.abide' with { type: 'text' }
+import getTeamSource from 'crm/src/account/admin/getTeam.handler.ts' with { type: 'text' }
+import adminLayoutSource from 'crm/src/account/admin/layout.abide' with { type: 'text' }
+import exportContactsSource from 'crm/src/account/exportContacts.handler.ts' with { type: 'text' }
+import getCommissionSource from 'crm/src/account/getCommission.handler.ts' with { type: 'text' }
+import getContactSource from 'crm/src/account/getContact.handler.ts' with { type: 'text' }
+import getStatementSource from 'crm/src/account/getStatement.handler.ts' with { type: 'text' }
+import accountPageSource from 'crm/src/account/index.abide' with { type: 'text' }
+import AddContact from 'crm/src/account/lib/AddContact.abide'
+import addContactComponentSource from 'crm/src/account/lib/AddContact.abide' with { type: 'text' }
+import addContactTestSource from 'crm/src/account/lib/AddContact.test.ts' with { type: 'text' }
+import AdminSection from 'crm/src/account/lib/AdminSection.abide'
+import adminSectionSource from 'crm/src/account/lib/AdminSection.abide' with { type: 'text' }
+import adminSectionTestSource from 'crm/src/account/lib/AdminSection.test.ts' with { type: 'text' }
+import adminsOnlySource from 'crm/src/account/lib/adminsOnly.ts' with { type: 'text' }
+import Badge from 'crm/src/account/lib/Badge.abide'
+import badgeSource from 'crm/src/account/lib/Badge.abide' with { type: 'text' }
+import badgeTestSource from 'crm/src/account/lib/Badge.test.ts' with { type: 'text' }
+import ContactCard from 'crm/src/account/lib/ContactCard.abide'
+import contactCardSource from 'crm/src/account/lib/ContactCard.abide' with { type: 'text' }
+import contactCardTestSource from 'crm/src/account/lib/ContactCard.test.ts' with { type: 'text' }
+import Density from 'crm/src/account/lib/Density.abide'
+import densitySource from 'crm/src/account/lib/Density.abide' with { type: 'text' }
+import densityTestSource from 'crm/src/account/lib/Density.test.ts' with { type: 'text' }
+import ExportContacts from 'crm/src/account/lib/ExportContacts.abide'
+import exportContactsComponentSource from 'crm/src/account/lib/ExportContacts.abide' with { type: 'text' }
+import exportContactsTestSource from 'crm/src/account/lib/ExportContacts.test.ts' with { type: 'text' }
+import PartnerStatement from 'crm/src/account/lib/PartnerStatement.abide'
+import partnerStatementSource from 'crm/src/account/lib/PartnerStatement.abide' with { type: 'text' }
+import partnerStatementTestSource from 'crm/src/account/lib/PartnerStatement.test.ts' with { type: 'text' }
+import SalesReport from 'crm/src/account/lib/SalesReport.abide'
+import salesReportComponentSource from 'crm/src/account/lib/SalesReport.abide' with { type: 'text' }
+import salesReportTestSource from 'crm/src/account/lib/SalesReport.test.ts' with { type: 'text' }
+import SignIn from 'crm/src/account/lib/SignIn.abide'
+import signInComponentSource from 'crm/src/account/lib/SignIn.abide' with { type: 'text' }
+import signInTestSource from 'crm/src/account/lib/SignIn.test.ts' with { type: 'text' }
+import SignInAgain from 'crm/src/account/lib/SignInAgain.abide'
+import signInAgainSource from 'crm/src/account/lib/SignInAgain.abide' with { type: 'text' }
+import signInAgainTestSource from 'crm/src/account/lib/SignInAgain.test.ts' with { type: 'text' }
+import SyncContact from 'crm/src/account/lib/SyncContact.abide'
+import syncContactComponentSource from 'crm/src/account/lib/SyncContact.abide' with { type: 'text' }
+import syncContactTestSource from 'crm/src/account/lib/SyncContact.test.ts' with { type: 'text' }
+import Widget from 'crm/src/account/lib/Widget.abide'
+import widgetSource from 'crm/src/account/lib/Widget.abide' with { type: 'text' }
+import widgetTestSource from 'crm/src/account/lib/Widget.test.ts' with { type: 'text' }
+import salesReportSource from 'crm/src/account/salesReport.handler.ts' with { type: 'text' }
+import signInSource from 'crm/src/account/signIn.handler.ts' with { type: 'text' }
+import signOutSource from 'crm/src/account/signOut.handler.ts' with { type: 'text' }
+import syncContactSource from 'crm/src/account/syncContact.handler.ts' with { type: 'text' }
+import rootLayoutSource from 'crm/src/layout.abide' with { type: 'text' }
 
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
@@ -66,7 +66,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`principal.set` signs a caller in">
         <Example
             id="crm-07-sign-in"
-            app="crm-07"
+            app="crm"
             title="`principal.set` — sign in, sign out"
             summary="A team member signs in to the CRM by email, and signs out again."
             files={{
@@ -113,7 +113,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`onPrincipal` turns the id in the cookie into a member">
         <Example
             id="crm-07-member"
-            app="crm-07"
+            app="crm"
             title="`onPrincipal(fn)` — an id in the cookie, a member on the page"
             summary="The cookie holds a team member's id and nothing else. Sign in as either member and the page greets them by name and role."
             files={{
@@ -152,7 +152,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`cookies()` reads and writes a cookie on both sides">
         <Example
             id="crm-07-density"
-            app="crm-07"
+            app="crm"
             title="`cookies()` — one jar, read on both sides"
             summary="The contact list's density, kept in a cookie. Pick one and reload: the server paints the one you picked."
             files={{
@@ -177,7 +177,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A handler decides which fields a caller may read">
         <Example
             id="crm-07-deal-value"
-            app="crm-07"
+            app="crm"
             title="`principal.resolved` in a handler — the deal value, for admins"
             summary="Grace Hopper's contact card. Maya is an admin and sees the deal value; Theo is in sales and sees the rest."
             files={{
@@ -200,7 +200,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A `middleware` rung refuses before the handler runs">
         <Example
             id="crm-07-admins-only"
-            app="crm-07"
+            app="crm"
             title="`middleware: [rung]` — admins only"
             summary="Exporting every contact is for admins. Export signed out, as Theo, then as Maya."
             files={{
@@ -229,7 +229,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A layout's rung guards a whole section">
         <Example
             id="crm-07-admin-section"
-            app="crm-07"
+            app="crm"
             title="`middleware(rung)` in a layout — one refusal, answered in each lane"
             summary="Everything under the admin section is for admins, and its handler names no rung of its own. Open the section as Theo, then as Maya."
             files={{
@@ -259,7 +259,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`onRefusal` hears a session end on any call">
         <Example
             id="crm-07-sign-in-again"
-            app="crm-07"
+            app="crm"
             title="`onRefusal(fn)` — one hook for every call refused 401"
             summary="Your commission is for a member signed in. Sign in as Theo, then as Nobody: the next call is refused 401, and the card asks for a sign-in."
             files={{
@@ -286,7 +286,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`crossOrigin` opens one handler to a partner">
         <Example
             id="crm-07-partner"
-            app="crm-07"
+            app="crm"
             title="`crossOrigin: ['https://books.example']` — one partner, named back"
             summary="The bookkeeping partner's site reads an account statement from its own pages. Ask as the partner, then as any other site."
             files={{
@@ -322,7 +322,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`timeout` bounds how long a call may go without progress">
         <Example
             id="crm-07-timeout"
-            app="crm-07"
+            app="crm"
             title="`timeout` — milliseconds without progress, not since the first byte"
             summary="Sales by region, a row every 300 ms, under a 500 ms timeout. North runs longer than the timeout and finishes; south stops producing after its first row."
             files={{
@@ -360,7 +360,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`reachable` refuses at once while a host is down">
         <Example
             id="crm-07-billing"
-            app="crm-07"
+            app="crm"
             title="`reachable(host)` — ask once, refuse at once"
             summary="Billing has stopped answering. Copy a contact to it twice: the first copy waits out the check, and the second is refused before it leaves."
             files={{
@@ -384,7 +384,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`response()` sets the status a handler answers with">
         <Example
             id="crm-07-created"
-            app="crm-07"
+            app="crm"
             title="`response()` — a status the handler decides"
             summary="An integration adds contacts through the API, and expects 201 and the address of the new record."
             files={{
@@ -416,7 +416,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`csp()` lets the app's own scripts run, and nothing else">
         <Example
             id="crm-07-csp"
-            app="crm-07"
+            app="crm"
             title="`csp()` — your own scripts run, a stranger's do not"
             summary="A support widget somebody pasted into the CRM from another origin. Add it, and the page's policy refuses it."
             files={{

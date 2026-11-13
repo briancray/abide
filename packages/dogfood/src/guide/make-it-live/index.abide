@@ -1,32 +1,32 @@
 <script>
 import { url } from '@abide/abide'
-import exportCsvSource from 'crm-05/src/activity/exportCsv.handler.ts' with { type: 'text' }
-import feedSource from 'crm-05/src/activity/feed.handler.ts' with { type: 'text' }
-import AccountFeed from 'crm-05/src/activity/lib/AccountFeed.abide'
-import accountFeedSource from 'crm-05/src/activity/lib/AccountFeed.abide' with { type: 'text' }
-import accountFeedTestSource from 'crm-05/src/activity/lib/AccountFeed.test.ts' with { type: 'text' }
-import activitySource from 'crm-05/src/activity/lib/activity.ts' with { type: 'text' }
-import ActivityHistory from 'crm-05/src/activity/lib/ActivityHistory.abide'
-import activityHistorySource from 'crm-05/src/activity/lib/ActivityHistory.abide' with { type: 'text' }
-import activityHistoryTestSource from 'crm-05/src/activity/lib/ActivityHistory.test.ts' with { type: 'text' }
-import CsvExport from 'crm-05/src/activity/lib/CsvExport.abide'
-import csvExportSource from 'crm-05/src/activity/lib/CsvExport.abide' with { type: 'text' }
-import csvExportTestSource from 'crm-05/src/activity/lib/CsvExport.test.ts' with { type: 'text' }
-import feedsSource from 'crm-05/src/activity/lib/feeds.ts' with { type: 'text' }
-import lastActivitySource from 'crm-05/src/activity/lib/LastActivity.abide' with { type: 'text' }
-import QuickLog from 'crm-05/src/activity/lib/QuickLog.abide'
-import quickLogSource from 'crm-05/src/activity/lib/QuickLog.abide' with { type: 'text' }
-import quickLogBenchSource from 'crm-05/src/activity/lib/QuickLog.bench.ts' with { type: 'text' }
-import quickLogTestSource from 'crm-05/src/activity/lib/QuickLog.test.ts' with { type: 'text' }
-import RecentActivity from 'crm-05/src/activity/lib/RecentActivity.abide'
-import recentActivitySource from 'crm-05/src/activity/lib/RecentActivity.abide' with { type: 'text' }
-import recentActivityTestSource from 'crm-05/src/activity/lib/RecentActivity.test.ts' with { type: 'text' }
-import Wallboard from 'crm-05/src/activity/lib/Wallboard.abide'
-import wallboardSource from 'crm-05/src/activity/lib/Wallboard.abide' with { type: 'text' }
-import wallboardTestSource from 'crm-05/src/activity/lib/Wallboard.test.ts' with { type: 'text' }
-import logToFeedSource from 'crm-05/src/activity/logToFeed.handler.ts' with { type: 'text' }
-import olderActivitySource from 'crm-05/src/activity/olderActivity.handler.ts' with { type: 'text' }
-import tickerSource from 'crm-05/src/activity/ticker.handler.ts' with { type: 'text' }
+import exportCsvSource from 'crm/src/activity/exportCsv.handler.ts' with { type: 'text' }
+import feedSource from 'crm/src/activity/feed.handler.ts' with { type: 'text' }
+import AccountFeed from 'crm/src/activity/lib/AccountFeed.abide'
+import accountFeedSource from 'crm/src/activity/lib/AccountFeed.abide' with { type: 'text' }
+import accountFeedTestSource from 'crm/src/activity/lib/AccountFeed.test.ts' with { type: 'text' }
+import activitySource from 'crm/src/activity/lib/activity.ts' with { type: 'text' }
+import ActivityHistory from 'crm/src/activity/lib/ActivityHistory.abide'
+import activityHistorySource from 'crm/src/activity/lib/ActivityHistory.abide' with { type: 'text' }
+import activityHistoryTestSource from 'crm/src/activity/lib/ActivityHistory.test.ts' with { type: 'text' }
+import CsvExport from 'crm/src/activity/lib/CsvExport.abide'
+import csvExportSource from 'crm/src/activity/lib/CsvExport.abide' with { type: 'text' }
+import csvExportTestSource from 'crm/src/activity/lib/CsvExport.test.ts' with { type: 'text' }
+import feedsSource from 'crm/src/activity/lib/feeds.ts' with { type: 'text' }
+import lastActivitySource from 'crm/src/activity/lib/LastActivity.abide' with { type: 'text' }
+import QuickLog from 'crm/src/activity/lib/QuickLog.abide'
+import quickLogSource from 'crm/src/activity/lib/QuickLog.abide' with { type: 'text' }
+import quickLogBenchSource from 'crm/src/activity/lib/QuickLog.bench.ts' with { type: 'text' }
+import quickLogTestSource from 'crm/src/activity/lib/QuickLog.test.ts' with { type: 'text' }
+import RecentActivity from 'crm/src/activity/lib/RecentActivity.abide'
+import recentActivitySource from 'crm/src/activity/lib/RecentActivity.abide' with { type: 'text' }
+import recentActivityTestSource from 'crm/src/activity/lib/RecentActivity.test.ts' with { type: 'text' }
+import Wallboard from 'crm/src/activity/lib/Wallboard.abide'
+import wallboardSource from 'crm/src/activity/lib/Wallboard.abide' with { type: 'text' }
+import wallboardTestSource from 'crm/src/activity/lib/Wallboard.test.ts' with { type: 'text' }
+import logToFeedSource from 'crm/src/activity/logToFeed.handler.ts' with { type: 'text' }
+import olderActivitySource from 'crm/src/activity/olderActivity.handler.ts' with { type: 'text' }
+import tickerSource from 'crm/src/activity/ticker.handler.ts' with { type: 'text' }
 
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
@@ -43,7 +43,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A channel is an array anything can append to">
         <Example
             id="crm-05-channel"
-            app="crm-05"
+            app="crm"
             title="`reactive<Activity[]>([])` — a channel anything can reach"
             summary="A quick-log bar on a contact, and a line above it that reports the last touch. Log a call and watch a component the bar never names."
             files={{
@@ -74,7 +74,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A channel keeps its last few entries">
         <Example
             id="crm-05-recent"
-            app="crm-05"
+            app="crm"
             title="`patch` with a trim — the last three entries"
             summary="The same channel listed in full, already three entries long. Log a meeting and watch the top of the list."
             files={{
@@ -101,7 +101,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A channel on the server reaches every open tab">
         <Example
             id="crm-05-live-feed"
-            app="crm-05"
+            app="crm"
             title="`GET` + `POST` — one account's feed, every tab"
             summary="The activity feed on Hopper & Co. Open this page in a second tab, log a call in either, and both lists grow."
             files={{
@@ -153,7 +153,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A handler that yields sends each entry as it is read">
         <Example
             id="crm-05-stream"
-            app="crm-05"
+            app="crm"
             title="`async function*` — the archive, an entry at a time"
             summary="Hopper & Co's older activity, read from a slow archive. The list fills an entry at a time."
             files={{
@@ -193,7 +193,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="An export is written as its rows are read">
         <Example
             id="crm-05-csv"
-            app="crm-05"
+            app="crm"
             title="`response.bytes(values)` — a CSV written as the cursor reaches each row"
             summary="A rep takes an account's activity into a spreadsheet. The preview above the link is the file it downloads."
             files={{
@@ -227,7 +227,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A wallboard is sent events whatever it asks for">
         <Example
             id="crm-05-ticker"
-            app="crm-05"
+            app="crm"
             title="`response.sse(values)` — events, whoever asks"
             summary="A wallboard by the sales floor reads today's deal moves with the plain request its script has always sent."
             files={{

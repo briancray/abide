@@ -1,9 +1,0 @@
-<script>
-import { url } from '@abide/abide'
-</script>
-
-<div class="row">
-    <a href={url('/companies')} target="_blank">All companies</a>
-    <a href={url('/companies/[id=SLUG]', { id: 'hopper-and-co' })}
-        target="_blank">Hopper & Co</a>
-</div>

@@ -1,44 +1,44 @@
 <script>
 import { url } from '@abide/abide'
-import AddressField from 'crm-02/src/profile/lib/AddressField.abide'
-import addressFieldSource from 'crm-02/src/profile/lib/AddressField.abide' with { type: 'text' }
-import addressFieldTestSource from 'crm-02/src/profile/lib/AddressField.test.ts' with { type: 'text' }
-import avatarSource from 'crm-02/src/profile/lib/Avatar.abide' with { type: 'text' }
-import CallLog from 'crm-02/src/profile/lib/CallLog.abide'
-import callLogSource from 'crm-02/src/profile/lib/CallLog.abide' with { type: 'text' }
-import callLogTestSource from 'crm-02/src/profile/lib/CallLog.test.ts' with { type: 'text' }
-import callRowSource from 'crm-02/src/profile/lib/CallRow.abide' with { type: 'text' }
-import ContactCard from 'crm-02/src/profile/lib/ContactCard.abide'
-import contactCardSource from 'crm-02/src/profile/lib/ContactCard.abide' with { type: 'text' }
-import contactCardTestSource from 'crm-02/src/profile/lib/ContactCard.test.ts' with { type: 'text' }
-import ContactFields from 'crm-02/src/profile/lib/ContactFields.abide'
-import contactFieldsSource from 'crm-02/src/profile/lib/ContactFields.abide' with { type: 'text' }
-import contactFieldsBenchSource from 'crm-02/src/profile/lib/ContactFields.bench.ts' with { type: 'text' }
-import contactFieldsTestSource from 'crm-02/src/profile/lib/ContactFields.test.ts' with { type: 'text' }
-import ContactPanel from 'crm-02/src/profile/lib/ContactPanel.abide'
-import contactPanelSource from 'crm-02/src/profile/lib/ContactPanel.abide' with { type: 'text' }
-import contactPanelTestSource from 'crm-02/src/profile/lib/ContactPanel.test.ts' with { type: 'text' }
-import ContactRename from 'crm-02/src/profile/lib/ContactRename.abide'
-import contactRenameSource from 'crm-02/src/profile/lib/ContactRename.abide' with { type: 'text' }
-import contactRenameTestSource from 'crm-02/src/profile/lib/ContactRename.test.ts' with { type: 'text' }
-import customerBadgeSource from 'crm-02/src/profile/lib/CustomerBadge.abide' with { type: 'text' }
-import FollowUp from 'crm-02/src/profile/lib/FollowUp.abide'
-import followUpSource from 'crm-02/src/profile/lib/FollowUp.abide' with { type: 'text' }
-import followUpTestSource from 'crm-02/src/profile/lib/FollowUp.test.ts' with { type: 'text' }
-import leadBadgeSource from 'crm-02/src/profile/lib/LeadBadge.abide' with { type: 'text' }
-import nameDraftSource from 'crm-02/src/profile/lib/NameDraft.abide' with { type: 'text' }
-import PhoneField from 'crm-02/src/profile/lib/PhoneField.abide'
-import phoneFieldSource from 'crm-02/src/profile/lib/PhoneField.abide' with { type: 'text' }
-import phoneFieldTestSource from 'crm-02/src/profile/lib/PhoneField.test.ts' with { type: 'text' }
-import ProfileSummary from 'crm-02/src/profile/lib/ProfileSummary.abide'
-import profileSummarySource from 'crm-02/src/profile/lib/ProfileSummary.abide' with { type: 'text' }
-import profileSummaryTestSource from 'crm-02/src/profile/lib/ProfileSummary.test.ts' with { type: 'text' }
-import StageBadges from 'crm-02/src/profile/lib/StageBadges.abide'
-import stageBadgesSource from 'crm-02/src/profile/lib/StageBadges.abide' with { type: 'text' }
-import stageBadgesTestSource from 'crm-02/src/profile/lib/StageBadges.test.ts' with { type: 'text' }
-import Tags from 'crm-02/src/profile/lib/Tags.abide'
-import tagsSource from 'crm-02/src/profile/lib/Tags.abide' with { type: 'text' }
-import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 'text' }
+import AddressField from 'crm/src/profile/lib/AddressField.abide'
+import addressFieldSource from 'crm/src/profile/lib/AddressField.abide' with { type: 'text' }
+import addressFieldTestSource from 'crm/src/profile/lib/AddressField.test.ts' with { type: 'text' }
+import avatarSource from 'crm/src/profile/lib/Avatar.abide' with { type: 'text' }
+import CallLog from 'crm/src/profile/lib/CallLog.abide'
+import callLogSource from 'crm/src/profile/lib/CallLog.abide' with { type: 'text' }
+import callLogTestSource from 'crm/src/profile/lib/CallLog.test.ts' with { type: 'text' }
+import callRowSource from 'crm/src/profile/lib/CallRow.abide' with { type: 'text' }
+import ContactCard from 'crm/src/profile/lib/ContactCard.abide'
+import contactCardSource from 'crm/src/profile/lib/ContactCard.abide' with { type: 'text' }
+import contactCardTestSource from 'crm/src/profile/lib/ContactCard.test.ts' with { type: 'text' }
+import ContactFields from 'crm/src/profile/lib/ContactFields.abide'
+import contactFieldsSource from 'crm/src/profile/lib/ContactFields.abide' with { type: 'text' }
+import contactFieldsBenchSource from 'crm/src/profile/lib/ContactFields.bench.ts' with { type: 'text' }
+import contactFieldsTestSource from 'crm/src/profile/lib/ContactFields.test.ts' with { type: 'text' }
+import ContactPanel from 'crm/src/profile/lib/ContactPanel.abide'
+import contactPanelSource from 'crm/src/profile/lib/ContactPanel.abide' with { type: 'text' }
+import contactPanelTestSource from 'crm/src/profile/lib/ContactPanel.test.ts' with { type: 'text' }
+import ContactRename from 'crm/src/profile/lib/ContactRename.abide'
+import contactRenameSource from 'crm/src/profile/lib/ContactRename.abide' with { type: 'text' }
+import contactRenameTestSource from 'crm/src/profile/lib/ContactRename.test.ts' with { type: 'text' }
+import customerBadgeSource from 'crm/src/profile/lib/CustomerBadge.abide' with { type: 'text' }
+import FollowUp from 'crm/src/profile/lib/FollowUp.abide'
+import followUpSource from 'crm/src/profile/lib/FollowUp.abide' with { type: 'text' }
+import followUpTestSource from 'crm/src/profile/lib/FollowUp.test.ts' with { type: 'text' }
+import leadBadgeSource from 'crm/src/profile/lib/LeadBadge.abide' with { type: 'text' }
+import nameDraftSource from 'crm/src/profile/lib/NameDraft.abide' with { type: 'text' }
+import PhoneField from 'crm/src/profile/lib/PhoneField.abide'
+import phoneFieldSource from 'crm/src/profile/lib/PhoneField.abide' with { type: 'text' }
+import phoneFieldTestSource from 'crm/src/profile/lib/PhoneField.test.ts' with { type: 'text' }
+import ProfileSummary from 'crm/src/profile/lib/ProfileSummary.abide'
+import profileSummarySource from 'crm/src/profile/lib/ProfileSummary.abide' with { type: 'text' }
+import profileSummaryTestSource from 'crm/src/profile/lib/ProfileSummary.test.ts' with { type: 'text' }
+import StageBadges from 'crm/src/profile/lib/StageBadges.abide'
+import stageBadgesSource from 'crm/src/profile/lib/StageBadges.abide' with { type: 'text' }
+import stageBadgesTestSource from 'crm/src/profile/lib/StageBadges.test.ts' with { type: 'text' }
+import Tags from 'crm/src/profile/lib/Tags.abide'
+import tagsSource from 'crm/src/profile/lib/Tags.abide' with { type: 'text' }
+import tagsTestSource from 'crm/src/profile/lib/Tags.test.ts' with { type: 'text' }
 
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
@@ -51,7 +51,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A field and its value are one copy">
         <Example
             id="crm-02-bind-value"
-            app="crm-02"
+            app="crm"
             title="`bind:value` — the field writes the value, and the value fills the field"
             summary="A contact's email, with what a save would send. Type a new one."
             files={{
@@ -158,7 +158,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A transform shapes what the record keeps">
         <Example
             id="crm-02-transform"
-            app="crm-02"
+            app="crm"
             title={'`reactive(v, { transform })` — the record keeps the digits'}
             summary="A phone number typed with punctuation. Type one in the usual way."
             files={{
@@ -178,7 +178,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A derived value follows the fields it read">
         <Example
             id="crm-02-derived"
-            app="crm-02"
+            app="crm"
             title="`reactive(() => …)` — initials and a count, computed from the fields"
             summary="A profile's initials and how much of it is filled in. Change the name, then add a phone."
             files={{
@@ -203,7 +203,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A write through a path copies down the path">
         <Example
             id="crm-02-path-write"
-            app="crm-02"
+            app="crm"
             title={'`bind:value={contact.address.city}` — a write two levels down'}
             summary="A contact's city, inside its address. Type a new city."
             files={{
@@ -249,7 +249,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A keyed list removes one row and leaves the rest">
         <Example
             id="crm-02-keyed-list"
-            app="crm-02"
+            app="crm"
             title={'`{#for tag of tags by tag}` — a row per tag, kept by its key'}
             summary="A contact's tags. Remove one."
             files={{
@@ -272,7 +272,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A branch is in the page only while its condition holds">
         <Example
             id="crm-02-conditional"
-            app="crm-02"
+            app="crm"
             title={'`{#if}` — a date field that exists only when asked for'}
             summary="A follow-up reminder for this contact. Tick the box, then clear it."
             files={{
@@ -292,7 +292,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A component reads its props live">
         <Example
             id="crm-02-props"
-            app="crm-02"
+            app="crm"
             title="`props()` — the avatar follows the name it was handed"
             summary="A contact card with an avatar component. Change the name."
             files={{
@@ -330,7 +330,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="An edit to a copy of a prop stands until the prop changes">
         <Example
             id="crm-02-prop-draft"
-            app="crm-02"
+            app="crm"
             title={'`reactive(() => name)` — a draft that starts over with each contact'}
             summary="A display name field under two contacts. Edit Grace's, then open Ada."
             files={{
@@ -351,7 +351,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A one-item keyed loop builds its markup again">
         <Example
             id="crm-02-fresh-subtree"
-            app="crm-02"
+            app="crm"
             title={'`{#for shown of [open] by shown}` — a panel built fresh per contact'}
             summary="A contact panel that fades in. Open Ada, then Grace."
             files={{
@@ -378,7 +378,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A component's styles reach only its own markup">
         <Example
             id="crm-02-scoped-style"
-            app="crm-02"
+            app="crm"
             title="`<style>` — two components, one class name, two rules"
             summary="A lead badge and a customer badge, side by side. Each styles its own badge class in its own color."
             files={{
@@ -408,7 +408,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A script runs per instance, and a module script once">
         <Example
             id="crm-02-script"
-            app="crm-02"
+            app="crm"
             title="`<script>` and `<script module>` — per row, and once"
             summary="Two contact rows from one component. Log a call on the first."
             files={{

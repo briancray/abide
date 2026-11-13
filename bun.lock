@@ -40,16 +40,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@abide/abide": "workspace:*",
-        "crm-01": "workspace:*",
-        "crm-02": "workspace:*",
-        "crm-03": "workspace:*",
-        "crm-04": "workspace:*",
-        "crm-05": "workspace:*",
-        "crm-06": "workspace:*",
-        "crm-07": "workspace:*",
-        "crm-08": "workspace:*",
-        "crm-09": "workspace:*",
-        "crm-10": "workspace:*",
+        "crm": "workspace:*",
         "zod": "^4.6.7",
       },
       "devDependencies": {
@@ -58,116 +49,8 @@
         "tailwindcss": "^4.3.5",
       },
     },
-    "packages/dogfood/examples/crm-01": {
-      "name": "crm-01",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-02": {
-      "name": "crm-02",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-03": {
-      "name": "crm-03",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-04": {
-      "name": "crm-04",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-05": {
-      "name": "crm-05",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-06": {
-      "name": "crm-06",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-07": {
-      "name": "crm-07",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-08": {
-      "name": "crm-08",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-09": {
-      "name": "crm-09",
-      "dependencies": {
-        "@abide/abide": "workspace:*",
-      },
-      "devDependencies": {
-        "@abide/harness": "workspace:*",
-        "@types/bun": "latest",
-        "bun-plugin-tailwind": "^0.1.2",
-        "tailwindcss": "^4.3.5",
-      },
-    },
-    "packages/dogfood/examples/crm-10": {
-      "name": "crm-10",
+    "packages/dogfood/examples/crm": {
+      "name": "crm",
       "dependencies": {
         "@abide/abide": "workspace:*",
       },
@@ -335,25 +218,7 @@
 
     "cac": ["cac@7.1.0", "", {}, "sha512-LMDU/U2yA4IPIY8KT0NsNPWEYZvAMkbgyspxJ6btJaYV+WMDOHAZCmB0lsTObiHaRS1V/ztKAl7+TSkTqXyeoA=="],
 
-    "crm-01": ["crm-01@workspace:packages/dogfood/examples/crm-01"],
-
-    "crm-02": ["crm-02@workspace:packages/dogfood/examples/crm-02"],
-
-    "crm-03": ["crm-03@workspace:packages/dogfood/examples/crm-03"],
-
-    "crm-04": ["crm-04@workspace:packages/dogfood/examples/crm-04"],
-
-    "crm-05": ["crm-05@workspace:packages/dogfood/examples/crm-05"],
-
-    "crm-06": ["crm-06@workspace:packages/dogfood/examples/crm-06"],
-
-    "crm-07": ["crm-07@workspace:packages/dogfood/examples/crm-07"],
-
-    "crm-08": ["crm-08@workspace:packages/dogfood/examples/crm-08"],
-
-    "crm-09": ["crm-09@workspace:packages/dogfood/examples/crm-09"],
-
-    "crm-10": ["crm-10@workspace:packages/dogfood/examples/crm-10"],
+    "crm": ["crm@workspace:packages/dogfood/examples/crm"],
 
     "dogfood": ["dogfood@workspace:packages/dogfood"],
 

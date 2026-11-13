@@ -1,56 +1,56 @@
 <script>
 import { url } from '@abide/abide'
-import getForecastSource from 'crm-04/src/pipeline/getForecast.handler.ts' with { type: 'text' }
-import getStageSource from 'crm-04/src/pipeline/getStage.handler.ts' with { type: 'text' }
-import getTargetSource from 'crm-04/src/pipeline/getTarget.handler.ts' with { type: 'text' }
-import dealDetailSource from 'crm-04/src/pipeline/lib/DealDetail.abide' with { type: 'text' }
-import DealFeed from 'crm-04/src/pipeline/lib/DealFeed.abide'
-import dealFeedSource from 'crm-04/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
-import dealFeedTestSource from 'crm-04/src/pipeline/lib/DealFeed.test.ts' with { type: 'text' }
-import DealLink from 'crm-04/src/pipeline/lib/DealLink.abide'
-import dealLinkSource from 'crm-04/src/pipeline/lib/DealLink.abide' with { type: 'text' }
-import dealLinkTestSource from 'crm-04/src/pipeline/lib/DealLink.test.ts' with { type: 'text' }
-import DealNote from 'crm-04/src/pipeline/lib/DealNote.abide'
-import dealNoteSource from 'crm-04/src/pipeline/lib/DealNote.abide' with { type: 'text' }
-import dealNoteTestSource from 'crm-04/src/pipeline/lib/DealNote.test.ts' with { type: 'text' }
-import DealPicker from 'crm-04/src/pipeline/lib/DealPicker.abide'
-import dealPickerSource from 'crm-04/src/pipeline/lib/DealPicker.abide' with { type: 'text' }
-import dealPickerTestSource from 'crm-04/src/pipeline/lib/DealPicker.test.ts' with { type: 'text' }
-import dealRowSource from 'crm-04/src/pipeline/lib/DealRow.abide' with { type: 'text' }
-import DealSearch from 'crm-04/src/pipeline/lib/DealSearch.abide'
-import dealSearchSource from 'crm-04/src/pipeline/lib/DealSearch.abide' with { type: 'text' }
-import dealSearchTestSource from 'crm-04/src/pipeline/lib/DealSearch.test.ts' with { type: 'text' }
-import Forecast from 'crm-04/src/pipeline/lib/Forecast.abide'
-import forecastSource from 'crm-04/src/pipeline/lib/Forecast.abide' with { type: 'text' }
-import forecastTestSource from 'crm-04/src/pipeline/lib/Forecast.test.ts' with { type: 'text' }
-import QualifyBoard from 'crm-04/src/pipeline/lib/QualifyBoard.abide'
-import qualifyBoardSource from 'crm-04/src/pipeline/lib/QualifyBoard.abide' with { type: 'text' }
-import qualifyBoardTestSource from 'crm-04/src/pipeline/lib/QualifyBoard.test.ts' with { type: 'text' }
-import stageAverageSource from 'crm-04/src/pipeline/lib/StageAverage.abide' with { type: 'text' }
-import StageBoard from 'crm-04/src/pipeline/lib/StageBoard.abide'
-import stageBoardSource from 'crm-04/src/pipeline/lib/StageBoard.abide' with { type: 'text' }
-import stageBoardTestSource from 'crm-04/src/pipeline/lib/StageBoard.test.ts' with { type: 'text' }
-import stageCountSource from 'crm-04/src/pipeline/lib/StageCount.abide' with { type: 'text' }
-import stageTileSource from 'crm-04/src/pipeline/lib/StageTile.abide' with { type: 'text' }
-import StageTiles from 'crm-04/src/pipeline/lib/StageTiles.abide'
-import stageTilesSource from 'crm-04/src/pipeline/lib/StageTiles.abide' with { type: 'text' }
-import stageTilesBenchSource from 'crm-04/src/pipeline/lib/StageTiles.bench.ts' with { type: 'text' }
-import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
-import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
-import TargetLog from 'crm-04/src/pipeline/lib/TargetLog.abide'
-import targetLogSource from 'crm-04/src/pipeline/lib/TargetLog.abide' with { type: 'text' }
-import targetLogTestSource from 'crm-04/src/pipeline/lib/TargetLog.test.ts' with { type: 'text' }
-import targetStoreSource from 'crm-04/src/pipeline/lib/targetStore.ts' with { type: 'text' }
-import TeamTarget from 'crm-04/src/pipeline/lib/TeamTarget.abide'
-import teamTargetSource from 'crm-04/src/pipeline/lib/TeamTarget.abide' with { type: 'text' }
-import teamTargetTestSource from 'crm-04/src/pipeline/lib/TeamTarget.test.ts' with { type: 'text' }
-import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
-import listTargetsSource from 'crm-04/src/pipeline/listTargets.handler.ts' with { type: 'text' }
-import qualifyLeadSource from 'crm-04/src/pipeline/qualifyLead.handler.ts' with { type: 'text' }
-import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
-import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
-import setTargetSource from 'crm-04/src/pipeline/setTarget.handler.ts' with { type: 'text' }
-import winDealSource from 'crm-04/src/pipeline/winDeal.handler.ts' with { type: 'text' }
+import getForecastSource from 'crm/src/pipeline/getForecast.handler.ts' with { type: 'text' }
+import getStageSource from 'crm/src/pipeline/getStage.handler.ts' with { type: 'text' }
+import getTargetSource from 'crm/src/pipeline/getTarget.handler.ts' with { type: 'text' }
+import dealDetailSource from 'crm/src/pipeline/lib/DealDetail.abide' with { type: 'text' }
+import DealFeed from 'crm/src/pipeline/lib/DealFeed.abide'
+import dealFeedSource from 'crm/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
+import dealFeedTestSource from 'crm/src/pipeline/lib/DealFeed.test.ts' with { type: 'text' }
+import DealLink from 'crm/src/pipeline/lib/DealLink.abide'
+import dealLinkSource from 'crm/src/pipeline/lib/DealLink.abide' with { type: 'text' }
+import dealLinkTestSource from 'crm/src/pipeline/lib/DealLink.test.ts' with { type: 'text' }
+import DealNote from 'crm/src/pipeline/lib/DealNote.abide'
+import dealNoteSource from 'crm/src/pipeline/lib/DealNote.abide' with { type: 'text' }
+import dealNoteTestSource from 'crm/src/pipeline/lib/DealNote.test.ts' with { type: 'text' }
+import DealPicker from 'crm/src/pipeline/lib/DealPicker.abide'
+import dealPickerSource from 'crm/src/pipeline/lib/DealPicker.abide' with { type: 'text' }
+import dealPickerTestSource from 'crm/src/pipeline/lib/DealPicker.test.ts' with { type: 'text' }
+import dealRowSource from 'crm/src/pipeline/lib/DealRow.abide' with { type: 'text' }
+import DealSearch from 'crm/src/pipeline/lib/DealSearch.abide'
+import dealSearchSource from 'crm/src/pipeline/lib/DealSearch.abide' with { type: 'text' }
+import dealSearchTestSource from 'crm/src/pipeline/lib/DealSearch.test.ts' with { type: 'text' }
+import Forecast from 'crm/src/pipeline/lib/Forecast.abide'
+import forecastSource from 'crm/src/pipeline/lib/Forecast.abide' with { type: 'text' }
+import forecastTestSource from 'crm/src/pipeline/lib/Forecast.test.ts' with { type: 'text' }
+import QualifyBoard from 'crm/src/pipeline/lib/QualifyBoard.abide'
+import qualifyBoardSource from 'crm/src/pipeline/lib/QualifyBoard.abide' with { type: 'text' }
+import qualifyBoardTestSource from 'crm/src/pipeline/lib/QualifyBoard.test.ts' with { type: 'text' }
+import stageAverageSource from 'crm/src/pipeline/lib/StageAverage.abide' with { type: 'text' }
+import StageBoard from 'crm/src/pipeline/lib/StageBoard.abide'
+import stageBoardSource from 'crm/src/pipeline/lib/StageBoard.abide' with { type: 'text' }
+import stageBoardTestSource from 'crm/src/pipeline/lib/StageBoard.test.ts' with { type: 'text' }
+import stageCountSource from 'crm/src/pipeline/lib/StageCount.abide' with { type: 'text' }
+import stageTileSource from 'crm/src/pipeline/lib/StageTile.abide' with { type: 'text' }
+import StageTiles from 'crm/src/pipeline/lib/StageTiles.abide'
+import stageTilesSource from 'crm/src/pipeline/lib/StageTiles.abide' with { type: 'text' }
+import stageTilesBenchSource from 'crm/src/pipeline/lib/StageTiles.bench.ts' with { type: 'text' }
+import stageTilesTestSource from 'crm/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
+import stageValueSource from 'crm/src/pipeline/lib/StageValue.abide' with { type: 'text' }
+import TargetLog from 'crm/src/pipeline/lib/TargetLog.abide'
+import targetLogSource from 'crm/src/pipeline/lib/TargetLog.abide' with { type: 'text' }
+import targetLogTestSource from 'crm/src/pipeline/lib/TargetLog.test.ts' with { type: 'text' }
+import targetStoreSource from 'crm/src/pipeline/lib/targetStore.ts' with { type: 'text' }
+import TeamTarget from 'crm/src/pipeline/lib/TeamTarget.abide'
+import teamTargetSource from 'crm/src/pipeline/lib/TeamTarget.abide' with { type: 'text' }
+import teamTargetTestSource from 'crm/src/pipeline/lib/TeamTarget.test.ts' with { type: 'text' }
+import listDealsSource from 'crm/src/pipeline/listDeals.handler.ts' with { type: 'text' }
+import listTargetsSource from 'crm/src/pipeline/listTargets.handler.ts' with { type: 'text' }
+import qualifyLeadSource from 'crm/src/pipeline/qualifyLead.handler.ts' with { type: 'text' }
+import saveNoteSource from 'crm/src/pipeline/saveNote.handler.ts' with { type: 'text' }
+import searchDealsSource from 'crm/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
+import setTargetSource from 'crm/src/pipeline/setTarget.handler.ts' with { type: 'text' }
+import winDealSource from 'crm/src/pipeline/winDeal.handler.ts' with { type: 'text' }
 
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
@@ -65,7 +65,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A call with the same arguments is one load">
         <Example
             id="crm-04-stage-shared"
-            app="crm-04"
+            app="crm"
             title={'`getStage({ stage })` — one entry per set of arguments'}
             summary="Three panels, each with its own stage picker. Put one on won, and then the others."
             files={{
@@ -109,7 +109,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`refresh` reloads now, and `invalidate` marks stale">
         <Example
             id="crm-04-stale"
-            app="crm-04"
+            app="crm"
             title="`refresh()` and `invalidate()` — the two ways back to the server"
             summary="The weighted forecast, with both buttons under it. Press Reload now, then Mark stale."
             files={{
@@ -143,7 +143,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A confirmation goes back to how it started">
         <Example
             id="crm-04-ttl-reset"
-            app="crm-04"
+            app="crm"
             title={'`reactive(false, { ttl: 2_000 })` — a flag that falls back on its own'}
             summary="A deal with a button that copies its link. Copy it, and watch the button."
             files={{
@@ -169,7 +169,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="After a write, reload only the entries it changed">
         <Example
             id="crm-04-refresh-stages"
-            app="crm-04"
+            app="crm"
             title={'`getStage.refresh({ stage })` — reload a slice of a keyed value'}
             summary="A board of the four stages. Win a lead, and watch which stages load again."
             files={{
@@ -205,7 +205,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`refreshes` reloads every tab showing what a write changed">
         <Example
             id="crm-04-refreshes"
-            app="crm-04"
+            app="crm"
             title={"`POST(write, { refreshes: ['stage:lead'] })` — reload by tag after a write"}
             summary="The same board, with a write that says what it changed. Qualify a lead, in two tabs if you have them."
             files={{
@@ -259,7 +259,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A search box waits for the typing to stop">
         <Example
             id="crm-04-search"
-            app="crm-04"
+            app="crm"
             title={'`{ debounce }` — one search once the typing stops'}
             summary="A search over the deals. Type hopper quickly, and watch the results rather than the field."
             files={{
@@ -296,7 +296,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`patch` changes one row of a list in place">
         <Example
             id="crm-04-patch"
-            app="crm-04"
+            app="crm"
             title="`deals.patch(mutate)` — change what is held, and wake its readers"
             summary="The deal list, loaded once. Updates arrive one deal at a time; apply a few."
             files={{
@@ -324,7 +324,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="Two components far apart share one value">
         <Example
             id="crm-04-share"
-            app="crm-04"
+            app="crm"
             title="`reactive.share(key, build)` — one value for a subtree"
             summary="A detail panel above a row of deals. Pick a deal, and the panel follows."
             files={{
@@ -352,7 +352,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`watch` runs something outside the page when a value changes">
         <Example
             id="crm-04-autosave"
-            app="crm-04"
+            app="crm"
             title="`watch(effect)` — save a note a beat after the typing stops"
             summary="A note on a deal, saved to the server while you type. Type a sentence quickly, and watch the saved line."
             files={{
@@ -408,7 +408,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A `store` keeps a value between visits">
         <Example
             id="crm-04-store"
-            app="crm-04"
+            app="crm"
             title={'`{ store }` — where a value lives between visits'}
             summary="The quarter's target, which the whole team works to. Set a new one, then reload the page."
             files={{
@@ -460,7 +460,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A `database` keeps what a restart would lose">
         <Example
             id="crm-04-database"
-            app="crm-04"
+            app="crm"
             title={"`database(name, { migrations })` — the server's own SQLite file"}
             summary="Every target the team has set, read from a file on the server. Set one, and the list still holds it after a restart."
             serverFiles={['src/pipeline/lib/crmDatabase.server.ts']}

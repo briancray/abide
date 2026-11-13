@@ -1,0 +1,31 @@
+{
+    "name": "crm",
+    "private": true,
+    "type": "module",
+    "description": "The CRM every example in the abide docs is drawn from",
+    "scripts": {
+        "check": "abide check",
+        "format": "abide format && bun fmt",
+        "dev": "abide dev",
+        "build": "abide build",
+        "start": "abide start",
+        "routes": "abide routes",
+        "test": "bun test",
+        "bench": "harness-bench"
+    },
+    "imports": {
+        "#src/*": [
+            "./src/*",
+            "./src/*.ts"
+        ]
+    },
+    "dependencies": {
+        "@abide/abide": "workspace:*"
+    },
+    "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+        "bun-plugin-tailwind": "^0.1.2",
+        "tailwindcss": "^4.3.5"
+    }
+}

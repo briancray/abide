@@ -1,29 +1,29 @@
 <script>
 import { url } from '@abide/abide'
-import askAssistantSource from 'crm-09/src/assistant/askAssistant.handler.ts' with { type: 'text' }
-import askClaudeSource from 'crm-09/src/assistant/askClaude.handler.ts' with { type: 'text' }
-import askClaudeCodeSource from 'crm-09/src/assistant/askClaudeCode.handler.ts' with { type: 'text' }
-import exportContactsSource from 'crm-09/src/assistant/exportContacts.handler.ts' with { type: 'text' }
-import AssistantChat from 'crm-09/src/assistant/lib/AssistantChat.abide'
-import assistantChatSource from 'crm-09/src/assistant/lib/AssistantChat.abide' with { type: 'text' }
-import assistantChatTestSource from 'crm-09/src/assistant/lib/AssistantChat.test.ts' with { type: 'text' }
-import ClaudeApiRequest from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide'
-import claudeApiRequestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide' with { type: 'text' }
-import claudeApiRequestTestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.test.ts' with { type: 'text' }
-import ClaudeCodeBridge from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide'
-import claudeCodeBridgeSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide' with { type: 'text' }
-import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.test.ts' with { type: 'text' }
-import ModelToolCall from 'crm-09/src/assistant/lib/ModelToolCall.abide'
-import modelToolCallSource from 'crm-09/src/assistant/lib/ModelToolCall.abide' with { type: 'text' }
-import modelToolCallTestSource from 'crm-09/src/assistant/lib/ModelToolCall.test.ts' with { type: 'text' }
-import OpenApiOperation from 'crm-09/src/assistant/lib/OpenApiOperation.abide'
-import openApiOperationSource from 'crm-09/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
-import openApiOperationTestSource from 'crm-09/src/assistant/lib/OpenApiOperation.test.ts' with { type: 'text' }
-import WithheldExport from 'crm-09/src/assistant/lib/WithheldExport.abide'
-import withheldExportSource from 'crm-09/src/assistant/lib/WithheldExport.abide' with { type: 'text' }
-import withheldExportTestSource from 'crm-09/src/assistant/lib/WithheldExport.test.ts' with { type: 'text' }
-import searchContactsSource from 'crm-09/src/assistant/searchContacts.handler.ts' with { type: 'text' }
-import messagesSource from 'crm-09/src/assistant/v1/messages.handler.ts' with { type: 'text' }
+import askAssistantSource from 'crm/src/assistant/askAssistant.handler.ts' with { type: 'text' }
+import askClaudeSource from 'crm/src/assistant/askClaude.handler.ts' with { type: 'text' }
+import askClaudeCodeSource from 'crm/src/assistant/askClaudeCode.handler.ts' with { type: 'text' }
+import exportContactsSource from 'crm/src/assistant/exportContacts.handler.ts' with { type: 'text' }
+import AssistantChat from 'crm/src/assistant/lib/AssistantChat.abide'
+import assistantChatSource from 'crm/src/assistant/lib/AssistantChat.abide' with { type: 'text' }
+import assistantChatTestSource from 'crm/src/assistant/lib/AssistantChat.test.ts' with { type: 'text' }
+import ClaudeApiRequest from 'crm/src/assistant/lib/ClaudeApiRequest.abide'
+import claudeApiRequestSource from 'crm/src/assistant/lib/ClaudeApiRequest.abide' with { type: 'text' }
+import claudeApiRequestTestSource from 'crm/src/assistant/lib/ClaudeApiRequest.test.ts' with { type: 'text' }
+import ClaudeCodeBridge from 'crm/src/assistant/lib/ClaudeCodeBridge.abide'
+import claudeCodeBridgeSource from 'crm/src/assistant/lib/ClaudeCodeBridge.abide' with { type: 'text' }
+import claudeCodeBridgeTestSource from 'crm/src/assistant/lib/ClaudeCodeBridge.test.ts' with { type: 'text' }
+import ModelToolCall from 'crm/src/assistant/lib/ModelToolCall.abide'
+import modelToolCallSource from 'crm/src/assistant/lib/ModelToolCall.abide' with { type: 'text' }
+import modelToolCallTestSource from 'crm/src/assistant/lib/ModelToolCall.test.ts' with { type: 'text' }
+import OpenApiOperation from 'crm/src/assistant/lib/OpenApiOperation.abide'
+import openApiOperationSource from 'crm/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
+import openApiOperationTestSource from 'crm/src/assistant/lib/OpenApiOperation.test.ts' with { type: 'text' }
+import WithheldExport from 'crm/src/assistant/lib/WithheldExport.abide'
+import withheldExportSource from 'crm/src/assistant/lib/WithheldExport.abide' with { type: 'text' }
+import withheldExportTestSource from 'crm/src/assistant/lib/WithheldExport.test.ts' with { type: 'text' }
+import searchContactsSource from 'crm/src/assistant/searchContacts.handler.ts' with { type: 'text' }
+import messagesSource from 'crm/src/assistant/v1/messages.handler.ts' with { type: 'text' }
 
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
@@ -49,7 +49,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="OpenAPI is generated from the handler files">
         <Example
             id="crm-09-openapi"
-            app="crm-09"
+            app="crm"
             title="`/__abide/openapi.json` — the operation, from the handler file"
             summary="A partner's integration wants the CRM's contact search as an OpenAPI operation. Read the app's document: the operation carries the handler's sentence and its typed argument."
             files={{
@@ -85,7 +85,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="MCP lets a model call the handlers">
         <Example
             id="crm-09-mcp"
-            app="crm-09"
+            app="crm"
             title="`/__abide/mcp` — the search handler, as a model sees it"
             summary="A model is asked who works at Hopper. Ask the app's MCP endpoint for its tools, then call one as the model's client does."
             files={{
@@ -117,7 +117,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`clients` keeps a handler off a surface">
         <Example
             id="crm-09-withhold"
-            app="crm-09"
+            app="crm"
             title={'`clients: { mcp: false }` — off the tool list, on the network'}
             summary="The export button reads every contact at once, and no model needs that. Ask the MCP endpoint for its tools, then ask the export's own address."
             files={{
@@ -154,7 +154,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="An assistant on the site calls the CRM's handlers">
         <Example
             id="crm-09-assistant-tools"
-            app="crm-09"
+            app="crm"
             title={"`assistant(messages, provider, { mcp: true })` — the CRM's handlers as its tools"}
             summary="A rep asks the CRM's assistant where Ada works. The model here is a recording with fixed lines; the tool call it makes runs the CRM's own search handler."
             files={{
@@ -201,7 +201,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`provider.claudeApi` sends the request body you wrote">
         <Example
             id="crm-09-claude-api"
-            app="crm-09"
+            app="crm"
             title="`provider.claudeApi(config)` — the request body you wrote, sent as written"
             summary="The assistant on Anthropic's API, its baseURL pointed at a stand-in in the CRM that answers with the body it was sent. Ask, and read the request."
             files={{
@@ -227,7 +227,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="`provider.claudeCode` runs on the visitor's own Claude Code">
         <Example
             id="crm-09-claude-code"
-            app="crm-09"
+            app="crm"
             title="`provider.claudeCode(config)` — a turn on the reader's own Claude Code"
             summary="The assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; pair with a click or run the command in a terminal, and ask again."
             files={{

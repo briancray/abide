@@ -1,32 +1,32 @@
 <script>
 import { url } from '@abide/abide'
-import createDealSource from 'crm-03/src/deals/createDeal.handler.ts' with { type: 'text' }
-import exportDealsHandlerSource from 'crm-03/src/deals/exportDeals.handler.ts' with { type: 'text' }
-import getDealSource from 'crm-03/src/deals/getDeal.handler.ts' with { type: 'text' }
-import DealDetail from 'crm-03/src/deals/lib/DealDetail.abide'
-import dealDetailSource from 'crm-03/src/deals/lib/DealDetail.abide' with { type: 'text' }
-import dealDetailBenchSource from 'crm-03/src/deals/lib/DealDetail.bench.ts' with { type: 'text' }
-import dealDetailTestSource from 'crm-03/src/deals/lib/DealDetail.test.ts' with { type: 'text' }
-import DealNotes from 'crm-03/src/deals/lib/DealNotes.abide'
-import dealNotesSource from 'crm-03/src/deals/lib/DealNotes.abide' with { type: 'text' }
-import dealNotesTestSource from 'crm-03/src/deals/lib/DealNotes.test.ts' with { type: 'text' }
-import DealStage from 'crm-03/src/deals/lib/DealStage.abide'
-import dealStageSource from 'crm-03/src/deals/lib/DealStage.abide' with { type: 'text' }
-import dealStageTestSource from 'crm-03/src/deals/lib/DealStage.test.ts' with { type: 'text' }
-import ExportDeals from 'crm-03/src/deals/lib/ExportDeals.abide'
-import exportDealsSource from 'crm-03/src/deals/lib/ExportDeals.abide' with { type: 'text' }
-import exportDealsTestSource from 'crm-03/src/deals/lib/ExportDeals.test.ts' with { type: 'text' }
-import NewDeal from 'crm-03/src/deals/lib/NewDeal.abide'
-import newDealSource from 'crm-03/src/deals/lib/NewDeal.abide' with { type: 'text' }
-import newDealTestSource from 'crm-03/src/deals/lib/NewDeal.test.ts' with { type: 'text' }
-import Pipeline from 'crm-03/src/deals/lib/Pipeline.abide'
-import pipelineSource from 'crm-03/src/deals/lib/Pipeline.abide' with { type: 'text' }
-import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { type: 'text' }
-import QuickDeal from 'crm-03/src/deals/lib/QuickDeal.abide'
-import quickDealSource from 'crm-03/src/deals/lib/QuickDeal.abide' with { type: 'text' }
-import quickDealTestSource from 'crm-03/src/deals/lib/QuickDeal.test.ts' with { type: 'text' }
-import listDealsSource from 'crm-03/src/deals/listDeals.handler.ts' with { type: 'text' }
-import moveDealSource from 'crm-03/src/deals/moveDeal.handler.ts' with { type: 'text' }
+import createDealSource from 'crm/src/deals/createDeal.handler.ts' with { type: 'text' }
+import exportDealsHandlerSource from 'crm/src/deals/exportDeals.handler.ts' with { type: 'text' }
+import getDealSource from 'crm/src/deals/getDeal.handler.ts' with { type: 'text' }
+import DealDetail from 'crm/src/deals/lib/DealDetail.abide'
+import dealDetailSource from 'crm/src/deals/lib/DealDetail.abide' with { type: 'text' }
+import dealDetailBenchSource from 'crm/src/deals/lib/DealDetail.bench.ts' with { type: 'text' }
+import dealDetailTestSource from 'crm/src/deals/lib/DealDetail.test.ts' with { type: 'text' }
+import DealNotes from 'crm/src/deals/lib/DealNotes.abide'
+import dealNotesSource from 'crm/src/deals/lib/DealNotes.abide' with { type: 'text' }
+import dealNotesTestSource from 'crm/src/deals/lib/DealNotes.test.ts' with { type: 'text' }
+import DealStage from 'crm/src/deals/lib/DealStage.abide'
+import dealStageSource from 'crm/src/deals/lib/DealStage.abide' with { type: 'text' }
+import dealStageTestSource from 'crm/src/deals/lib/DealStage.test.ts' with { type: 'text' }
+import ExportDeals from 'crm/src/deals/lib/ExportDeals.abide'
+import exportDealsSource from 'crm/src/deals/lib/ExportDeals.abide' with { type: 'text' }
+import exportDealsTestSource from 'crm/src/deals/lib/ExportDeals.test.ts' with { type: 'text' }
+import NewDeal from 'crm/src/deals/lib/NewDeal.abide'
+import newDealSource from 'crm/src/deals/lib/NewDeal.abide' with { type: 'text' }
+import newDealTestSource from 'crm/src/deals/lib/NewDeal.test.ts' with { type: 'text' }
+import Pipeline from 'crm/src/deals/lib/Pipeline.abide'
+import pipelineSource from 'crm/src/deals/lib/Pipeline.abide' with { type: 'text' }
+import pipelineTestSource from 'crm/src/deals/lib/Pipeline.test.ts' with { type: 'text' }
+import QuickDeal from 'crm/src/deals/lib/QuickDeal.abide'
+import quickDealSource from 'crm/src/deals/lib/QuickDeal.abide' with { type: 'text' }
+import quickDealTestSource from 'crm/src/deals/lib/QuickDeal.test.ts' with { type: 'text' }
+import listDealsSource from 'crm/src/deals/listDeals.handler.ts' with { type: 'text' }
+import moveDealSource from 'crm/src/deals/moveDeal.handler.ts' with { type: 'text' }
 
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
@@ -62,7 +62,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A page calls a handler with typed arguments">
         <Example
             id="crm-03-deal"
-            app="crm-03"
+            app="crm"
             title={'`getDeal({ id })` — a handler called with typed arguments'}
             summary="Pick a deal. The page asks the server for that one, and its fields fill in when it lands."
             files={{
@@ -98,7 +98,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A refresh keeps the figures on screen">
         <Example
             id="crm-03-pipeline"
-            app="crm-03"
+            app="crm"
             title="`busy()` and `ready()` — a first load and a refresh, told apart"
             summary="The pipeline's total. Wait for it, then press Refresh: the old figure stays until the new one lands."
             files={{
@@ -138,7 +138,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A handler only one file calls stays in that file">
         <Example
             id="crm-03-notes"
-            app="crm-03"
+            app="crm"
             title="`const getNotes = GET(fn)` — a handler its own file calls"
             summary="The notes on a deal, which only this card shows. The handler sits in the card's own server block."
             files={{
@@ -179,7 +179,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A new deal is checked before it is written">
         <Example
             id="crm-03-new-deal"
-            app="crm-03"
+            app="crm"
             title={'`POST(fn, { args })` — a write checked before it runs'}
             summary="A new deal with no company and an amount of 0. Press Add deal: the server refuses it, with a message filed under each field that is wrong."
             files={{
@@ -224,7 +224,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="The form clears once the deal is added">
         <Example
             id="crm-03-quick-deal"
-            app="crm-03"
+            app="crm"
             title={'`saving.then(…)` — the next step, once the call lands'}
             summary="Sales adds renewals one after another. Press Add deal: the name clears when the server has the deal, ready for the next."
             files={{
@@ -285,7 +285,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A refusal carries a name the page can match">
         <Example
             id="crm-03-move"
-            app="crm-03"
+            app="crm"
             title="`moveDeal.isError(error, 'DealClosed')` — the refusal, matched by name"
             summary="Move the open deal between stages, then try to move the deal already won. The server refuses, and says why."
             files={{
@@ -329,7 +329,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="A handler can answer with a file">
         <Example
             id="crm-03-export"
-            app="crm-03"
+            app="crm"
             title="`exportDeals.url()` — a CSV file a link downloads"
             summary="Sales wants the pipeline in a spreadsheet. The link downloads every deal as a CSV file."
             files={{

@@ -1,44 +1,44 @@
 <script>
 import { url } from '@abide/abide'
-import envSource from 'crm-08/.env' with { type: 'text' }
-import getDealScoresSource from 'crm-08/src/ops/getDealScores.handler.ts' with { type: 'text' }
-import getFollowUpsSource from 'crm-08/src/ops/getFollowUps.handler.ts' with { type: 'text' }
-import getPoolSource from 'crm-08/src/ops/getPool.handler.ts' with { type: 'text' }
-import getRetriesSource from 'crm-08/src/ops/getRetries.handler.ts' with { type: 'text' }
-import opsPageSource from 'crm-08/src/ops/index.abide' with { type: 'text' }
-import billingSource from 'crm-08/src/ops/lib/billing.ts' with { type: 'text' }
-import CallLog from 'crm-08/src/ops/lib/CallLog.abide'
-import callLogSource from 'crm-08/src/ops/lib/CallLog.abide' with { type: 'text' }
-import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 'text' }
-import Console from 'crm-08/src/ops/lib/Console.abide'
-import consoleSource from 'crm-08/src/ops/lib/Console.abide' with { type: 'text' }
-import consoleTestSource from 'crm-08/src/ops/lib/Console.test.ts' with { type: 'text' }
-import DealScores from 'crm-08/src/ops/lib/DealScores.abide'
-import dealScoresSource from 'crm-08/src/ops/lib/DealScores.abide' with { type: 'text' }
-import dealScoresTestSource from 'crm-08/src/ops/lib/DealScores.test.ts' with { type: 'text' }
-import dealScoresValueSource from 'crm-08/src/ops/lib/dealScores.ts' with { type: 'text' }
-import FollowUps from 'crm-08/src/ops/lib/FollowUps.abide'
-import followUpsSource from 'crm-08/src/ops/lib/FollowUps.abide' with { type: 'text' }
-import followUpsTestSource from 'crm-08/src/ops/lib/FollowUps.test.ts' with { type: 'text' }
-import followUpsJobSource from 'crm-08/src/ops/lib/followUps.ts' with { type: 'text' }
-import Health from 'crm-08/src/ops/lib/Health.abide'
-import healthSource from 'crm-08/src/ops/lib/Health.abide' with { type: 'text' }
-import healthTestSource from 'crm-08/src/ops/lib/Health.test.ts' with { type: 'text' }
-import OfflineBanner from 'crm-08/src/ops/lib/OfflineBanner.abide'
-import offlineBannerSource from 'crm-08/src/ops/lib/OfflineBanner.abide' with { type: 'text' }
-import offlineBannerTestSource from 'crm-08/src/ops/lib/OfflineBanner.test.ts' with { type: 'text' }
-import Pool from 'crm-08/src/ops/lib/Pool.abide'
-import poolSource from 'crm-08/src/ops/lib/Pool.abide' with { type: 'text' }
-import poolTestSource from 'crm-08/src/ops/lib/Pool.test.ts' with { type: 'text' }
-import Retries from 'crm-08/src/ops/lib/Retries.abide'
-import retriesSource from 'crm-08/src/ops/lib/Retries.abide' with { type: 'text' }
-import retriesTestSource from 'crm-08/src/ops/lib/Retries.test.ts' with { type: 'text' }
-import scoreWorkerSource from 'crm-08/src/ops/lib/scoreWorker.ts' with { type: 'text' }
-import Sync from 'crm-08/src/ops/lib/Sync.abide'
-import syncSource from 'crm-08/src/ops/lib/Sync.abide' with { type: 'text' }
-import syncTestSource from 'crm-08/src/ops/lib/Sync.test.ts' with { type: 'text' }
-import logCallSource from 'crm-08/src/ops/logCall.handler.ts' with { type: 'text' }
-import syncContactSource from 'crm-08/src/ops/syncContact.handler.ts' with { type: 'text' }
+import envSource from 'crm/.env' with { type: 'text' }
+import getDealScoresSource from 'crm/src/ops/getDealScores.handler.ts' with { type: 'text' }
+import getFollowUpsSource from 'crm/src/ops/getFollowUps.handler.ts' with { type: 'text' }
+import getPoolSource from 'crm/src/ops/getPool.handler.ts' with { type: 'text' }
+import getRetriesSource from 'crm/src/ops/getRetries.handler.ts' with { type: 'text' }
+import opsPageSource from 'crm/src/ops/index.abide' with { type: 'text' }
+import billingSource from 'crm/src/ops/lib/billing.ts' with { type: 'text' }
+import CallLog from 'crm/src/ops/lib/CallLog.abide'
+import callLogSource from 'crm/src/ops/lib/CallLog.abide' with { type: 'text' }
+import callLogTestSource from 'crm/src/ops/lib/CallLog.test.ts' with { type: 'text' }
+import Console from 'crm/src/ops/lib/Console.abide'
+import consoleSource from 'crm/src/ops/lib/Console.abide' with { type: 'text' }
+import consoleTestSource from 'crm/src/ops/lib/Console.test.ts' with { type: 'text' }
+import DealScores from 'crm/src/ops/lib/DealScores.abide'
+import dealScoresSource from 'crm/src/ops/lib/DealScores.abide' with { type: 'text' }
+import dealScoresTestSource from 'crm/src/ops/lib/DealScores.test.ts' with { type: 'text' }
+import dealScoresValueSource from 'crm/src/ops/lib/dealScores.ts' with { type: 'text' }
+import FollowUps from 'crm/src/ops/lib/FollowUps.abide'
+import followUpsSource from 'crm/src/ops/lib/FollowUps.abide' with { type: 'text' }
+import followUpsTestSource from 'crm/src/ops/lib/FollowUps.test.ts' with { type: 'text' }
+import followUpsJobSource from 'crm/src/ops/lib/followUps.ts' with { type: 'text' }
+import Health from 'crm/src/ops/lib/Health.abide'
+import healthSource from 'crm/src/ops/lib/Health.abide' with { type: 'text' }
+import healthTestSource from 'crm/src/ops/lib/Health.test.ts' with { type: 'text' }
+import OfflineBanner from 'crm/src/ops/lib/OfflineBanner.abide'
+import offlineBannerSource from 'crm/src/ops/lib/OfflineBanner.abide' with { type: 'text' }
+import offlineBannerTestSource from 'crm/src/ops/lib/OfflineBanner.test.ts' with { type: 'text' }
+import Pool from 'crm/src/ops/lib/Pool.abide'
+import poolSource from 'crm/src/ops/lib/Pool.abide' with { type: 'text' }
+import poolTestSource from 'crm/src/ops/lib/Pool.test.ts' with { type: 'text' }
+import Retries from 'crm/src/ops/lib/Retries.abide'
+import retriesSource from 'crm/src/ops/lib/Retries.abide' with { type: 'text' }
+import retriesTestSource from 'crm/src/ops/lib/Retries.test.ts' with { type: 'text' }
+import scoreWorkerSource from 'crm/src/ops/lib/scoreWorker.ts' with { type: 'text' }
+import Sync from 'crm/src/ops/lib/Sync.abide'
+import syncSource from 'crm/src/ops/lib/Sync.abide' with { type: 'text' }
+import syncTestSource from 'crm/src/ops/lib/Sync.test.ts' with { type: 'text' }
+import logCallSource from 'crm/src/ops/logCall.handler.ts' with { type: 'text' }
+import syncContactSource from 'crm/src/ops/syncContact.handler.ts' with { type: 'text' }
 
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
@@ -53,7 +53,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="The deployment overrides a setting's default">
         <Example
             id="crm-08-config"
-            app="crm-08"
+            app="crm"
             title="`onConfig(fn)` and `config()` — a default the deployment overrides"
             summary="The CRM retries a failed call 3 times by default, and this deployment's .env says 5. The page adds one for the first try and shows 6."
             files={{
@@ -116,7 +116,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Work at start runs before the first request">
         <Example
             id="crm-08-start"
-            app="crm-08"
+            app="crm"
             title="`onStart(fn)` — work the first request cannot race"
             summary="The CRM's database pool takes a moment to connect. Reload: both times stay where the boot put them, the pool first."
             files={{
@@ -148,7 +148,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Background work is a value on a clock">
         <Example
             id="crm-08-job"
-            app="crm-08"
+            app="crm"
             title={'`reactive(async function* () { … }, { global: true, poll })` — a job'}
             summary="Every five minutes the CRM walks the leads and lists the ones still waiting on a follow-up. The list is here before anyone asks for it."
             files={{
@@ -192,7 +192,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Heavy work runs in a worker thread">
         <Example
             id="crm-08-worker"
-            app="crm-08"
+            app="crm"
             title={'`new Worker(url)` behind `reactive(async function* () { … })` — work off the main thread'}
             summary="Scoring every deal takes long enough to stall every request the server is answering. It runs in a worker, and the scores arrive one deal at a time."
             files={{
@@ -230,7 +230,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Log namespaces are turned on one at a time">
         <Example
             id="crm-08-log"
-            app="crm-08"
+            app="crm"
             title="`log.named` and `DEBUG` — one namespace on, one off"
             summary="Billing and sync each log under their own name, and DEBUG names billing. Send an invoice, then poll: only the invoice is written."
             files={{
@@ -288,7 +288,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="One trace id covers everything one request did">
         <Example
             id="crm-08-trace"
-            app="crm-08"
+            app="crm"
             title="`trace()` — the id on every line a request writes"
             summary="Syncing a contact logs in the handler, and the billing module it calls times its work and logs again. Sync, and every line carries the request's trace; sync again for a new one."
             files={{
@@ -328,7 +328,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A load balancer reads the health check">
         <Example
             id="crm-08-health"
-            app="crm-08"
+            app="crm"
             title="`onHealth(fn)` — your fields beside the baseline"
             summary="The load balancer in front of the CRM asks whether the database is up. The page reads the same answer through health()."
             files={{
@@ -362,7 +362,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="The browser going offline is a reactive value">
         <Example
             id="crm-08-offline"
-            app="crm-08"
+            app="crm"
             title="`online` — the connection, read by name"
             summary="On a train the network comes and goes. Take the browser offline in DevTools' Network panel and the banner says so."
             files={{
@@ -394,7 +394,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A call logged offline is sent when the network is back">
         <Example
             id="crm-08-outbox"
-            app="crm-08"
+            app="crm"
             title="`offline` — what a call settles to with no network"
             summary="A call logged on a train should not be lost in a tunnel. Take the browser offline in DevTools' Network panel, log a call, then go back online."
             files={{

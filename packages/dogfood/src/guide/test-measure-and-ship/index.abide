@@ -1,42 +1,42 @@
 <script>
 import { url } from '@abide/abide'
-import bunfigSource from 'crm-10/bunfig.toml' with { type: 'text' }
-import dockerfileSource from 'crm-10/Dockerfile' with { type: 'text' }
-import topDealsSpecSource from 'crm-10/e2e/TopDeals.test.ts' with { type: 'text' }
-import testRowsSource from 'crm-10/scripts/testRows.ts' with { type: 'text' }
-import launcherSource from 'crm-10/src/native/launcher.abide' with { type: 'text' }
-import getSummarySource from 'crm-10/src/reports/getSummary.handler.ts' with { type: 'text' }
-import reportsPageSource from 'crm-10/src/reports/index.abide' with { type: 'text' }
-import ClosedTiles from 'crm-10/src/reports/lib/ClosedTiles.abide'
-import closedTilesSource from 'crm-10/src/reports/lib/ClosedTiles.abide' with { type: 'text' }
-import closedTilesTestSource from 'crm-10/src/reports/lib/ClosedTiles.test.ts' with { type: 'text' }
-import closedTotalsSource from 'crm-10/src/reports/lib/closedTotals.ts' with { type: 'text' }
-import DealsExport from 'crm-10/src/reports/lib/DealsExport.abide'
-import dealsExportSource from 'crm-10/src/reports/lib/DealsExport.abide' with { type: 'text' }
-import dealsExportTestSource from 'crm-10/src/reports/lib/DealsExport.test.ts' with { type: 'text' }
-import dealsOfSource from 'crm-10/src/reports/lib/dealsOf.ts' with { type: 'text' }
-import Forecast from 'crm-10/src/reports/lib/Forecast.abide'
-import forecastSource from 'crm-10/src/reports/lib/Forecast.abide' with { type: 'text' }
-import forecastBenchSource from 'crm-10/src/reports/lib/Forecast.bench.ts' with { type: 'text' }
-import forecastTestSource from 'crm-10/src/reports/lib/Forecast.test.ts' with { type: 'text' }
-import forecastLogicSource from 'crm-10/src/reports/lib/forecast.ts' with { type: 'text' }
-import moneySource from 'crm-10/src/reports/lib/money.ts' with { type: 'text' }
-import PipelineSummary from 'crm-10/src/reports/lib/PipelineSummary.abide'
-import pipelineSummarySource from 'crm-10/src/reports/lib/PipelineSummary.abide' with { type: 'text' }
-import pipelineSummaryTestSource from 'crm-10/src/reports/lib/PipelineSummary.test.ts' with { type: 'text' }
-import StageTiles from 'crm-10/src/reports/lib/StageTiles.abide'
-import stageTilesSource from 'crm-10/src/reports/lib/StageTiles.abide' with { type: 'text' }
-import stageTilesTestSource from 'crm-10/src/reports/lib/StageTiles.test.ts' with { type: 'text' }
-import summarizeStageSource from 'crm-10/src/reports/lib/summarizeStage.ts' with { type: 'text' }
-import TopDeals from 'crm-10/src/reports/lib/TopDeals.abide'
-import topDealsSource from 'crm-10/src/reports/lib/TopDeals.abide' with { type: 'text' }
-import topFiveSource from 'crm-10/src/reports/lib/topFive.ts' with { type: 'text' }
-import UpdateNotice from 'crm-10/src/reports/lib/UpdateNotice.abide'
-import updateNoticeSource from 'crm-10/src/reports/lib/UpdateNotice.abide' with { type: 'text' }
-import updateNoticeTestSource from 'crm-10/src/reports/lib/UpdateNotice.test.ts' with { type: 'text' }
-import WonDeals from 'crm-10/src/reports/lib/WonDeals.abide'
-import wonDealsSource from 'crm-10/src/reports/lib/WonDeals.abide' with { type: 'text' }
-import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { type: 'text' }
+import bunfigSource from 'crm/bunfig.toml' with { type: 'text' }
+import dockerfileSource from 'crm/Dockerfile' with { type: 'text' }
+import topDealsSpecSource from 'crm/e2e/TopDeals.test.ts' with { type: 'text' }
+import testRowsSource from 'crm/scripts/testRows.ts' with { type: 'text' }
+import launcherSource from 'crm/src/native/launcher.abide' with { type: 'text' }
+import getSummarySource from 'crm/src/reports/getSummary.handler.ts' with { type: 'text' }
+import reportsPageSource from 'crm/src/reports/index.abide' with { type: 'text' }
+import ClosedTiles from 'crm/src/reports/lib/ClosedTiles.abide'
+import closedTilesSource from 'crm/src/reports/lib/ClosedTiles.abide' with { type: 'text' }
+import closedTilesTestSource from 'crm/src/reports/lib/ClosedTiles.test.ts' with { type: 'text' }
+import closedTotalsSource from 'crm/src/reports/lib/closedTotals.ts' with { type: 'text' }
+import DealsExport from 'crm/src/reports/lib/DealsExport.abide'
+import dealsExportSource from 'crm/src/reports/lib/DealsExport.abide' with { type: 'text' }
+import dealsExportTestSource from 'crm/src/reports/lib/DealsExport.test.ts' with { type: 'text' }
+import dealsOfSource from 'crm/src/reports/lib/dealsOf.ts' with { type: 'text' }
+import Forecast from 'crm/src/reports/lib/Forecast.abide'
+import forecastSource from 'crm/src/reports/lib/Forecast.abide' with { type: 'text' }
+import forecastBenchSource from 'crm/src/reports/lib/Forecast.bench.ts' with { type: 'text' }
+import forecastTestSource from 'crm/src/reports/lib/Forecast.test.ts' with { type: 'text' }
+import forecastLogicSource from 'crm/src/reports/lib/forecast.ts' with { type: 'text' }
+import moneySource from 'crm/src/reports/lib/money.ts' with { type: 'text' }
+import PipelineSummary from 'crm/src/reports/lib/PipelineSummary.abide'
+import pipelineSummarySource from 'crm/src/reports/lib/PipelineSummary.abide' with { type: 'text' }
+import pipelineSummaryTestSource from 'crm/src/reports/lib/PipelineSummary.test.ts' with { type: 'text' }
+import StageTiles from 'crm/src/reports/lib/StageTiles.abide'
+import stageTilesSource from 'crm/src/reports/lib/StageTiles.abide' with { type: 'text' }
+import stageTilesTestSource from 'crm/src/reports/lib/StageTiles.test.ts' with { type: 'text' }
+import summarizeStageSource from 'crm/src/reports/lib/summarizeStage.ts' with { type: 'text' }
+import TopDeals from 'crm/src/reports/lib/TopDeals.abide'
+import topDealsSource from 'crm/src/reports/lib/TopDeals.abide' with { type: 'text' }
+import topFiveSource from 'crm/src/reports/lib/topFive.ts' with { type: 'text' }
+import UpdateNotice from 'crm/src/reports/lib/UpdateNotice.abide'
+import updateNoticeSource from 'crm/src/reports/lib/UpdateNotice.abide' with { type: 'text' }
+import updateNoticeTestSource from 'crm/src/reports/lib/UpdateNotice.test.ts' with { type: 'text' }
+import WonDeals from 'crm/src/reports/lib/WonDeals.abide'
+import wonDealsSource from 'crm/src/reports/lib/WonDeals.abide' with { type: 'text' }
+import wonDealsTestSource from 'crm/src/reports/lib/WonDeals.test.ts' with { type: 'text' }
 
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
@@ -52,7 +52,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A test holds the app with `createApp`">
         <Example
             id="crm-10-app-fetch"
-            app="crm-10"
+            app="crm"
             title="`createApp()` — the app a test holds, with no port"
             summary="The reports page opens on a summary of the pipeline. Its test asks the app for the same handler the tiles read, as a request, and reads the answer the wire would carry."
             files={{
@@ -93,7 +93,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A test mounts a component and counts what a click did">
         <Example
             id="crm-10-range-switch"
-            app="crm-10"
+            app="crm"
             title="`mount(component)` and `measure(body)` — the DOM calls one click made"
             summary="The closed-deals tiles total the last 7 or 30 days. Its test switches the range and asserts that two numbers changed and nothing was built."
             files={{
@@ -154,7 +154,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Publish a count the DOM cannot see">
         <Example
             id="crm-10-publish-count"
-            app="crm-10"
+            app="crm"
             title="`publishedBy(work, source, fields)` — a count your own code keeps"
             summary="Three tiles show the deals in one stage. The stage summary counts its own passes, and the test asserts one pass per switch."
             files={{
@@ -183,7 +183,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A gate fails with the fix taken out">
         <Example
             id="crm-10-gate"
-            app="crm-10"
+            app="crm"
             title={'`gate(name, { revert, worth }, body)` — a test that runs its own revert'}
             summary="Every won deal's amount goes through one formatter. Winning a deal builds none, and the gate puts the formatter-per-amount version back to prove the test can tell."
             files={{
@@ -218,7 +218,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A bench prices code at two sizes">
         <Example
             id="crm-10-forecast-bench"
-            app="crm-10"
+            app="crm"
             title="`batch(spec)` — one op, timed at two sizes"
             summary="The forecast weights every deal by the odds of its stage. Advance a deal and the forecast moves; the bench times that among 100 deals and among 1,000."
             files={{
@@ -274,7 +274,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Find which layer a click spends its time in">
         <Example
             id="crm-10-layer-share"
-            app="crm-10"
+            app="crm"
             title="`traceOp(page, op, body)` and `shares(trace, spec)` — one layer's part of a click"
             summary="Ranking five thousand deals takes a sort and a render. Its spec clicks the other ranking in Chromium and asks what part of the click the sort was."
             files={{
@@ -306,7 +306,7 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A render's bytes grow by the same amount per deal">
         <Example
             id="crm-10-export-bytes"
-            app="crm-10"
+            app="crm"
             title="`bytes(of)` — what a render sends, compared across sizes"
             summary="The export renders every deal as a table row on the server. Its test renders it at 20, 40 and 80 deals and asserts every deal adds the same bytes."
             files={{
@@ -505,7 +505,7 @@ abide bundle --required --notes CHANGES.md`} />
     <Section title="Tell people an update is waiting">
         <Example
             id="crm-10-update-notice"
-            app="crm-10"
+            app="crm"
             title="`pendingUpdate` — an update waiting for a restart"
             summary="A browser stages no update, so this card stays empty here. Its test plays the window, telling the page of an update and then of a required one."
             files={{
