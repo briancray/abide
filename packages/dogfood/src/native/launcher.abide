@@ -1,5 +1,22 @@
 <script server>
+// THE DOCS AS A NATIVE APP (`bun run --filter abide-docs bundle`): served in the app's own process,
+// so every page and every example works with no network, and paired with this machine's Claude Code
+// (44.77), so the prompt answers with no pairing step. A window drawn under its titlebar, which the
+// site bar stands in for (`SiteBar.abide`), and a menu bar extra whose panel is the prompt alone.
 import { onLauncher } from '@abide/abide/server'
 
-onLauncher(() => ({ width: 1200, height: 820 }))
+onLauncher(() => ({
+    width: 1280,
+    height: 860,
+    minWidth: 720,
+    minHeight: 520,
+    titlebar: 'inset',
+    vibrancy: 'sidebar',
+    appearance: 'system',
+    menuBarExtra: true,
+    panelWidth: 440,
+    panelHeight: 600,
+    // The feed `abide bundle` writes beside the app, which the site serves at `/native` (38.146).
+    update: 'https://abide.dev/native',
+}))
 </script>

@@ -1,5 +1,5 @@
 {
-    "name": "dogfood",
+    "name": "abide-docs",
     "version": "0.0.0",
     "private": true,
     "type": "module",
@@ -15,7 +15,8 @@
         "compile": "abide compile",
         "start": "abide start --port 3131",
         "dev": "abide dev",
-        "typecheck": "bun check"
+        "typecheck": "bun check",
+        "bundle": "abide bundle"
     },
     "dependencies": {
         "@abide/abide": "workspace:*",

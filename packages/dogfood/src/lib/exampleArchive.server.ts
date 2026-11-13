@@ -24,7 +24,7 @@ function published(dependencies: Record<string, string> | undefined): void {
             dependencies[name] = PUBLISHED[name] ?? '*'
 }
 
-/** The app as a gzipped tarball, or `undefined` for a name that is not a chapter app. */
+/** The app as a gzipped tarball, or `undefined` for a name that is not the CRM. */
 export async function exampleArchive(app: string): Promise<Blob | undefined> {
     const directory = await exampleDirectory(app)
     if (directory === undefined) return undefined

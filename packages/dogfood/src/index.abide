@@ -1,17 +1,10 @@
 <script>
-import { type RouteLiteral, url } from '@abide/abide'
+import { raw, type RouteLiteral, url } from '@abide/abide'
 
 import Doc from '#src/lib/Doc.abide'
-import Lead from '#src/lib/Lead.abide'
+import { inline } from '#src/lib/inline.ts'
 import Section from '#src/lib/Section.abide'
 import { SITE } from '#src/lib/SITE.ts'
-import { pageAt } from '#src/lib/sitePages.ts'
-
-// The chapters, as `SITE` lists them (40.31).
-const chapters = SITE.flatMap(({ pages }) =>
-    pages.filter((page) => page.route.startsWith('/guide/')),
-)
-const reference = pageAt('/reference')
 </script>
 
 <Doc>
@@ -19,27 +12,19 @@ const reference = pageAt('/reference')
         handler you would have written anyway is the whole of the API, its type is the same on both
         sides, and loading, reloading, streaming and failing are all one type.</p>
 
-    <p>These docs build one app, a CRM, in ten chapters. Each chapter adds what the CRM needs next,
-        and ends with the CRM as an app you can download and run. Every card is a file from that app,
-        with the tests and the bench the app runs on it.</p>
+    <p>Every primitive has a page of its own: what it is for, an example running from the CRM the
+        docs draw on, and every row REGISTRY gives it. Ask the bar at the top how to do something,
+        and the answer is written from these pages, with their examples running inside it.</p>
 
-    <p>The handler a page calls is also an OpenAPI operation, an MCP tool and a CLI command: one
-        handler, four surfaces, so a model reaches the CRM through the same code a person does. See
-        <a href={url('/guide/open-it-to-machines')}>{pageAt('/guide/open-it-to-machines').nav}</a>.</p>
-
-    <Section title="The guide, chapter by chapter">
-        <ol>
-            {#for chapter of chapters by chapter.route}
-                <li>
-                    <p><a href={url(chapter.route as RouteLiteral)}>{chapter.nav}</a></p>
-                    <Lead of={chapter.route} />
-                </li>
-            {/for}
-        </ol>
-    </Section>
-
-    <Section title={reference.title}>
-        <Lead of="/reference" />
-        <p>Read on: <a href={url(reference.route as RouteLiteral)}>{reference.title}</a></p>
-    </Section>
+    {#for group of SITE}
+        <Section title={group.group}>
+            <p>{raw(inline(group.description))}</p>
+            <dl class="index">
+                {#for page of group.pages}
+                    <dt><a href={url(page.route as RouteLiteral)}>{raw(inline(page.title))}</a></dt>
+                    <dd>{raw(inline(page.description))}</dd>
+                {/for}
+            </dl>
+        </Section>
+    {/for}
 </Doc>

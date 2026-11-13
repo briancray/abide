@@ -79,7 +79,7 @@ export default defineConfig({
             // gate that only starts is a gate against whatever was last built — a page edited and
             // not rebuilt passes or fails on the previous markup, which cost a debugging session.
             command:
-                'bun run --filter dogfood build && bun run --filter dogfood start',
+                'bun run --filter abide-docs build && bun run --filter abide-docs start',
             url: BASE,
             reuseExistingServer: !process.env.CI,
             stdout: 'pipe',

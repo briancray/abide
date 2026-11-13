@@ -1,9 +1,9 @@
-// WHERE A CHAPTER APP IS ON DISK: `examples/<app>` beside the docs app, walked up to from this module
+// WHERE THE CRM IS ON DISK: `examples/<app>` beside the docs app, walked up to from this module
 // rather than computed from its depth, because where the server's modules sit is the build's business.
 
-const APP_NAME = /^crm-\d\d$/
+const APP_NAME = /^crm$/
 
-/** The chapter app's directory, or `undefined` for a name that is not one — a name is never a path. */
+/** The CRM's directory, or `undefined` for a name that is not one — a name is never a path. */
 export async function exampleDirectory(
     app: string,
 ): Promise<string | undefined> {

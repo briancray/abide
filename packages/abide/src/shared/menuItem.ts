@@ -28,6 +28,7 @@ export type MenuRole =
 /** One entry in the native app's menu bar, or in a menu under it. */
 export type MenuItem =
     | 'separator'
+    | MenuEntry
     | {
           label: string
           /** The shortcut, modifiers first: `cmd+shift+k`. */

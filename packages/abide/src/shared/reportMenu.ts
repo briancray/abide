@@ -31,13 +31,14 @@ export function reportMenu(menus: readonly MenuItem[]): void {
 
 function tell(item: MenuItem): NativeMenuItem {
     if (item === 'separator') return item
-    const answered = item.items === undefined && !('role' in item && item.role)
+    const items = 'items' in item ? item.items : undefined
+    const answered = items === undefined && !('role' in item && item.role)
     const told: NativeMenuItem = {
         label: item.label,
         key: item.key,
         role: 'role' in item ? item.role : undefined,
         id: answered ? numbered.length : undefined,
-        items: item.items?.map(tell),
+        items: items?.map(tell),
     }
     if (answered) numbered.push(item)
     return told

@@ -13,7 +13,7 @@ import { expect, test } from 'bun:test'
 import {
     CITATION,
     rulebookClauses,
-} from '../../dogfood/scripts/rulebookClauses.ts'
+} from '../../dogfood/src/rulebook/lib/rulebookClauses.ts'
 
 const ABIDE = new URL('../', import.meta.url)
 const PACKAGES = new URL('../../', import.meta.url)

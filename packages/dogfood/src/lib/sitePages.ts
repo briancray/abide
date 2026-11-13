@@ -1,51 +1,42 @@
-import { REFERENCE } from './REFERENCE.ts'
-import { SITE, type SitePage } from './SITE.ts'
+import { SITE, type SiteGroup, type SitePage } from './SITE.ts'
 
-// An export's page is titled with its names and opens on the line that imports them; a group's page
-// holds what that part of the registry writes in place rather than imports.
-function referencePageOf(page: (typeof REFERENCE)[number]): SitePage {
-    if (page.entry === undefined)
-        return {
-            route: page.route,
-            title: page.group,
-            nav: page.group,
-            intent: '',
-            lead: `${page.group}: what is written in place rather than imported.`,
-        }
-    const names = page.names.map((name) => `\`${name}\``).join(' / ')
-    return {
-        route: page.route,
-        title: names,
-        nav: names,
-        intent: '',
-        lead: `\`import ${page.typeOnly ? 'type ' : ''}{ ${page.names.join(', ')} } from '${page.entry}'\``,
-    }
+/** The home page: the index of every group, under the prompt. Not a primitive, so not in `SITE`. */
+export const HOME: SitePage = {
+    route: '/',
+    title: 'abide',
+    nav: 'Overview',
+    description:
+        'Type-safe reactive async interfaces for humans and machines. One type, both sides, no API layer.',
+    registry: '',
 }
 
-/**
- * Every section in reading order: `SITE`'s, with the reference's generated pages after its overview
- * (40.42) — what the nav, the gates and the markdown bundle walk.
- */
-export const SECTIONS: readonly {
-    section: string
-    pages: readonly SitePage[]
-}[] = SITE.map((group) =>
-    group.section === 'Reference'
-        ? {
-              ...group,
-              pages: [...group.pages, ...REFERENCE.map(referencePageOf)],
-          }
-        : group,
-)
+// THE SITE MAP READ BY ROUTE, walked once: every page in reading order, and the group each is in.
+const ORDER: SitePage[] = [HOME]
+const GROUP_OF = new Map<string, SiteGroup>()
+for (const group of SITE)
+    for (const page of group.pages) {
+        ORDER.push(page)
+        GROUP_OF.set(page.route, group)
+    }
 
-// THE SITE MAP READ BY ROUTE, walked once: every page in reading order.
-const ORDER: SitePage[] = []
-for (const group of SECTIONS) for (const page of group.pages) ORDER.push(page)
+/** Every page in reading order, the home page first: what the markdown bundle walks. */
+export const PAGES: readonly SitePage[] = ORDER
 
 /** The page at `route`, which every docs page is — a route `SITE` does not list throws. */
 export function pageAt(route: string): SitePage {
     for (const page of ORDER) if (page.route === route) return page
     throw new Error(`docs: ${route} is not in SITE`)
+}
+
+/** Whether `route` is a page of the site, rather than the rulebook or a page of the CRM. */
+export function isSitePage(route: string): boolean {
+    for (const page of ORDER) if (page.route === route) return true
+    return false
+}
+
+/** The group a page is listed under, or `undefined` for the home page. */
+export function groupOf(route: string): SiteGroup | undefined {
+    return GROUP_OF.get(route)
 }
 
 /** The pages before and after `route` in reading order. */

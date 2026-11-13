@@ -16,11 +16,22 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 </script>
 
 <script>
-import { url } from '@abide/abide'
+import { onMenu, route, url, watch } from '@abide/abide'
 
 import DocsNav from '#src/lib/DocsNav.abide'
+import { ASK_ITEM, MENUS } from '#src/lib/nativeMenus.ts'
 import SiteBar from '#src/lib/SiteBar.abide'
+import UpdateBanner from '#src/lib/UpdateBanner.abide'
 import '#src/lib/app.css'
+
+// `?card=<id>` is one example card alone, as the prompt frames it in an answer (`Shown.abide`).
+const query = route.query({ card: '' })
+
+// The native app's menu bar; in a browser, nothing reads it (38.88).
+onMenu(() => MENUS)
+watch(() =>
+    ASK_ITEM.on(() => (document.getElementById('ask') as HTMLInputElement | null)?.focus()),
+)
 </script>
 
 <html lang="en">
@@ -43,7 +54,7 @@ import '#src/lib/app.css'
          />
     </head>
 <body
-        class="grid grid-cols-[15.5rem_minmax(0,44rem)_1fr]
+        class="{query.card ? 'embed' : ''} grid grid-cols-[15.5rem_minmax(0,44rem)_1fr]
         max-rail:grid-cols-[15.5rem_minmax(0,1fr)] max-lg:grid-cols-1
         bg-paper font-sans text-prose/6 text-ink antialiased"
     >
@@ -52,6 +63,7 @@ import '#src/lib/app.css'
         focus:rounded-md focus:bg-raised focus:px-3 focus:py-2"
             href="#content"
         >Skip to content</a>
+<UpdateBanner />
 <SiteBar />
 <DocsNav />
 <slot />

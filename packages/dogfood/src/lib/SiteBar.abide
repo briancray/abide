@@ -1,38 +1,36 @@
 <script>
-// THE BAR OVER EVERY PAGE, the layout's like the sidebar under it — so where you are comes from
-// the route for the same reason: a layout outlives the page it wraps (41.11) — the route's literal,
-// and every link through `url`, for the reason `DocsNav` gives.
+// THE BAR OVER EVERY PAGE, the layout's like the sidebar under it: the brand, the prompt, and the way
+// to the native app. Where you are comes from the route, for the reason `DocsNav` gives.
 //
-// `aria-current="true"` rather than `"page"`: a tab marks the PLACE you are in, and the sidebar's
-// link is the page — two `"page"` marks on one document would each claim the same thing.
-import { route, url } from '@abide/abide'
-
+// SPANS EVERY COLUMN of the body grid, and its own first column is the sidebar's, so the brand sits
+// over the nav and the prompt starts where a page's title does. Sticky, which is why the sidebar and
+// the rail stop at `bar` rather than at the top of the viewport.
 //
-// SPANS EVERY COLUMN of the body grid, and its own two are the sidebar's and the reading column's,
-// so the brand sits over the nav and the tabs start where a page's title does. Sticky, which is why
-// the sidebar and the rail stop at `bar` rather than at the top of the viewport.
-//
-// A TAB'S UNDERLINE SITS ON THE BAR'S OWN RULE, so where you are reads as the bar opening onto the
-// page under it: `-mb-px` sets the 2px line over the 1px border rather than above it.
+// IN THE NATIVE APP THE BAR IS THE TITLEBAR (38.155): a press on it drags the window, and its start
+// edge clears the window's controls by `--abide-titlebar-inset` (38.153), which is 0 in a browser.
 //
 // `site` and `brand` carry no rule — they are what `e2e/dev.spec.ts` finds the bar by, and it
 // edits the brand's markup as written, which is why its span is styled from the link.
 //
-// NOT OVER A CHAPTER APP'S PAGE (40.37), which is that app rather than the site — and
-// with no bar, the body lays it out as that app's page rather than as the site's grid (`app.css`).
-import { isFramed, SITE_TABS, tabOf } from './siteSections.ts'
+// NOT OVER A PAGE OF THE CRM (40.37), which is that app rather than the site — and with no bar, the
+// body lays it out as that app's page rather than as the site's grid (`app.css`).
+import { native, route, type RouteLiteral, url } from '@abide/abide'
 
-const TAB =
-    '-mb-px flex items-center border-b-2 font-medium text-chrome/4 whitespace-nowrap no-underline transition-[color,border-color] duration-120 ease-[ease]'
+import Ask from './Ask.abide'
+import { isFramed } from './siteSections.ts'
 </script>
 
 {#if !isFramed(route.name())}
-    <header class="site sticky top-0 z-1 col-span-full grid h-bar grid-cols-[15.5rem_minmax(0,1fr)] border-b border-rule bg-paper max-lg:grid-cols-[auto_minmax(0,1fr)]">
-        <a class="brand flex items-baseline gap-tight self-center px-4 font-display text-title/5 font-bold tracking-display text-ink no-underline *:font-mono *:text-micro/2 *:font-medium *:tracking-brand *:text-muted *:uppercase" href={url('/')}>abide<span>docs</span></a>
-        <nav class="flex gap-flow overflow-x-auto px-10 max-lg:px-5" aria-label="Site">
-            {#for tab of SITE_TABS}
-                {#if tab.href === tabOf(route.name())}<a class="{TAB} border-signal text-ink" href={url(tab.href)} aria-current="true">{tab.label}</a>{:else}<a class="{TAB} border-transparent text-muted hover:text-ink" href={url(tab.href)}>{tab.label}</a>{/if}
-            {/for}
-        </nav>
+    <header
+        class="site sticky top-0 z-2 col-span-full grid h-bar grid-cols-[15.5rem_minmax(0,1fr)_auto] items-center border-b border-rule bg-paper/92 backdrop-blur-sm max-lg:grid-cols-[auto_minmax(0,1fr)_auto]"
+        data-abide-titlebar
+    >
+        <a class="brand flex items-baseline gap-tight self-center px-4 pl-[calc(1rem+var(--abide-titlebar-inset,0px))] font-display text-title/5 font-bold tracking-display text-ink no-underline *:font-mono *:text-micro/2 *:font-medium *:tracking-brand *:text-muted *:uppercase" href={url('/')}>abide<span>docs</span></a>
+        <div class="relative px-10 max-lg:px-3"><Ask /></div>
+        {#if native() === undefined}
+            <a class="px-4 text-chrome text-muted no-underline hover:text-ink" href={url('/configuration/native' as RouteLiteral)} title="These docs as a native app, with Claude Code paired already">Native app</a>
+        {:else}
+            <span class="px-4 font-mono text-micro text-muted" title="The native app's version">v{native()?.version}</span>
+        {/if}
     </header>
 {/if}

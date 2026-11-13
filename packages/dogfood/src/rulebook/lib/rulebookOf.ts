@@ -8,7 +8,7 @@ import { CLAUSE } from './CLAUSE.ts'
 // and never an edit here. A clause and a group are anchored by their own number — `#41.10`, `#41` —
 // which is the address an editor or a citation links to.
 //
-// The clause match is `CLAUSE`, shared with `dogfood/scripts/rulebookClauses.ts`, the reading the
+// The clause match is `CLAUSE`, shared with `rulebookClauses.ts`, the reading the
 // citation gates use. The paragraph split is not, and `tests/rulebookPage.test.ts` holds the two to
 // the same ids: a page also breaks before a heading that opens with no blank line above it.
 

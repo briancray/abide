@@ -1,38 +1,33 @@
 // THE DOCS AS MARKDOWN, for a reader with no browser: every page at its own address with `.md` on
 // the end, `abide.md` holding them all in reading order, and `llms.txt` pointing an agent at that.
-// And every chapter app as a tarball, at `/examples/<app>.tar.gz`.
+// And the CRM as a tarball, at `/examples/crm.tar.gz`.
 // A rung the root layout files as middleware, so it answers addresses no route has (37.3). Each
 // page's markdown is read off the page the app renders, so the words have the one home.
-import { type Middleware, type RouteLiteral, url } from '@abide/abide'
+import type { Middleware } from '@abide/abide'
 
 import { exampleArchive } from './exampleArchive.server.ts'
-import { markdownOf } from './markdownOf.server.ts'
-import { markdownAddressOf, SECTIONS } from './sitePages.ts'
+import { pageMarkdown } from './pageMarkdown.server.ts'
+import { SITE } from './SITE.ts'
+import { markdownAddressOf, PAGES } from './sitePages.ts'
 
 const MARKDOWN = { 'content-type': 'text/markdown; charset=utf-8' }
 
 // Built once per process: the pages do not change while it runs.
 let bundled: Promise<string> | undefined
 
-async function pageMarkdown(route: string, origin: string): Promise<string> {
-    const page = await fetch(new URL(url(route as RouteLiteral), origin))
-    return markdownOf(await page.text())
-}
-
 async function bundle(origin: string): Promise<string> {
     let contents = ''
-    let body = ''
-    for (const group of SECTIONS) {
-        contents += `\n**${group.section}**\n\n`
-        for (const page of group.pages) {
-            const address = markdownAddressOf(page.route).slice(1)
-            contents += `- ${page.nav} — \`${address}\`${page.stub ? ' (stub)' : ''}\n`
-            body += `\n---\n\n<!-- ${address} -->\n\n${await pageMarkdown(page.route, origin)}`
-        }
+    for (const group of SITE) {
+        contents += `\n**${group.group}**\n\n`
+        for (const page of group.pages)
+            contents += `- ${page.nav} — \`${markdownAddressOf(page.route).slice(1)}\`: ${page.description}\n`
     }
+    let body = ''
+    for (const page of PAGES)
+        body += `\n---\n\n<!-- ${markdownAddressOf(page.route).slice(1)} -->\n\n${await pageMarkdown(page.route, origin)}`
     return `# abide documentation
 
-The whole of the abide documentation in reading order. Every page is also served on its own
+Every abide primitive, a page each, grouped by what it is for. Every page is also served on its own
 at its address with \`.md\` on the end, and the links below point at those files.
 
 ## Contents
@@ -66,11 +61,10 @@ export const serveDownloads: Middleware<Response> = async (
         bundled ??= bundle(origin)
         return new Response(await bundled, { headers: MARKDOWN })
     }
-    for (const group of SECTIONS)
-        for (const page of group.pages)
-            if (pathname === markdownAddressOf(page.route))
-                return new Response(await pageMarkdown(page.route, origin), {
-                    headers: MARKDOWN,
-                })
+    for (const page of PAGES)
+        if (pathname === markdownAddressOf(page.route))
+            return new Response(await pageMarkdown(page.route, origin), {
+                headers: MARKDOWN,
+            })
     return next()
 }

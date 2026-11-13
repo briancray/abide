@@ -1,0 +1,142 @@
+<script>
+// ONE `<show/>` OF AN ANSWER, rendered from the same docs tool Claude read it with, so what the
+// reader sees is what the model was answered — never a description of it.
+//
+// AN EXAMPLE IS ITS OWN PAGE, FRAMED: the card runs where it is embedded on the site, with its
+// handlers, its tests and its bench, and `?card=` shows that card alone (`Example.abide`). Running it
+// in the answer instead would put every example of the CRM into the bar's bundle on every page.
+import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
+
+import clause from '#src/ask/tools/clause.handler.ts'
+import examples from '#src/ask/tools/examples.handler.ts'
+import name from '#src/ask/tools/name.handler.ts'
+import results from '#src/ask/tools/results.handler.ts'
+import source from '#src/ask/tools/source.handler.ts'
+import type { Show } from '#src/ask/lib/AnswerPart.ts'
+
+import Code from './Code.abide'
+import { languageOf } from './highlight.ts'
+import { inline } from './inline.ts'
+import { isSitePage, pageAt } from './sitePages.ts'
+import { slice } from './slice.ts'
+
+const { show } = props<{ show: Show }>()
+
+const card = reactive(() =>
+    show.kind === 'example'
+        ? examples().then((all) => all.find((one) => one.id === show.value))
+        : undefined,
+)
+const code = reactive(() => (show.kind === 'code' ? source({ path: show.value }) : ''))
+const rows = reactive(() => (show.kind === 'name' ? name({ name: show.value }) : []))
+const quoted = reactive(() => (show.kind === 'clause' ? clause({ number: show.value }) : undefined))
+const reported = reactive(() => (show.kind === 'results' ? results({ path: show.value }) : null))
+const page = show.kind === 'page' || show.kind === 'open'
+    ? isSitePage(show.value) ? pageAt(show.value) : undefined
+    : undefined
+
+// The framed card reports its own height, so the frame is as tall as the card and never scrolls.
+let height = reactive(320)
+function follow(frame: Element) {
+    const listen = (event: MessageEvent) => {
+        if (event.source === (frame as HTMLIFrameElement).contentWindow && typeof event.data?.cardHeight === 'number')
+            height = event.data.cardHeight
+    }
+    addEventListener('message', listen)
+    return () => removeEventListener('message', listen)
+}
+
+// A `from` the model wrote that no line opens shows the whole file rather than failing the answer.
+function excerpt(text: string, from: string | undefined): string {
+    if (from === undefined) return text.trimEnd()
+    try {
+        return slice(text, [from], `show ${show.value}`)
+    } catch {
+        return text.trimEnd()
+    }
+}
+const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
+</script>
+
+{#if show.kind === 'example'}
+    {#if card.error()}
+        <p class="shown-missing">No example named <code>{show.value}</code>.</p>
+    {:else if card}
+        <iframe
+            class="shown-card"
+            title={card.title.replaceAll('`', '')}
+            src="{url(card.route as RouteLiteral)}?card={card.id}"
+            style:height="{height}px"
+            bind:element={follow}
+        ></iframe>
+    {:else if card.ready()}
+        <p class="shown-missing">No example named <code>{show.value}</code>.</p>
+    {/if}
+{:else if show.kind === 'code'}
+    {#if code.error()}
+        <p class="shown-missing">No file of the CRM at <code>{show.value}</code>.</p>
+    {:else if code}
+        <Code code={excerpt(code, show.from)} language={languageOf(show.value)} caption={show.value} />
+    {/if}
+{:else if show.kind === 'name'}
+    {#if rows.length > 0}
+        <table class="shown-rows">
+            <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+            <tbody>
+                {#for row of rows}
+                    <tr>
+                        <td><a href={url(row.route as RouteLiteral)}>{raw(inline(row.name))}</a></td>
+                        <td>{raw(inline(row.signature))}</td>
+                        <td>{raw(inline(row.meaning))}</td>
+                    </tr>
+                {/for}
+            </tbody>
+        </table>
+    {:else if rows.ready()}
+        <p class="shown-missing">REGISTRY has no row for <code>{show.value}</code>.</p>
+    {/if}
+{:else if show.kind === 'clause'}
+    {#if quoted.error()}
+        <p class="shown-missing">The rulebook has no clause {show.value}.</p>
+    {:else if quoted}
+        <blockquote class="shown-clause">
+            <a href="{url('/rulebook' as RouteLiteral)}#{quoted.number}">{quoted.number}</a>
+            {raw(inline(quoted.text))}
+        </blockquote>
+    {/if}
+{:else if show.kind === 'results'}
+    {#if reported?.kind === 'bench'}
+        <figure class="shown-results">
+            <figcaption>{show.value}</figcaption>
+            <ul class="ex-results" data-kind="bench">
+                {#for arm of Object.keys(reported.arms)}
+                    <li><span>{arm}</span>{nanoseconds(reported.arms[arm] ?? 0)} per op</li>
+                {/for}
+                <li><small>{reported.claim} · {reported.n} ops a sample</small></li>
+            </ul>
+        </figure>
+    {:else if reported?.kind === 'test'}
+        <figure class="shown-results">
+            <figcaption>{show.value}</figcaption>
+            <ul class="ex-results">
+                {#for one of reported.cases}
+                    <li data-passed={String(one.failure === null)}>
+                        <span>{one.failure === null ? 'pass' : 'fail'}</span>
+                        {one.name}
+                        <small>{one.milliseconds.toFixed(0)} ms</small>
+                    </li>
+                {/for}
+            </ul>
+        </figure>
+    {:else if reported.ready()}
+        <p class="shown-missing">No results kept for <code>{show.value}</code>. Run <code>bun run examples:results</code>.</p>
+    {/if}
+{:else if page}
+    <a class="shown-page" href={url(page.route as RouteLiteral)}>
+        <span>{show.kind === 'open' ? 'Opened' : 'Read'}</span>
+        <strong>{raw(inline(page.title))}</strong>
+        <small>{raw(inline(page.description))}</small>
+    </a>
+{:else}
+    <p class="shown-missing">No page at <code>{show.value}</code>.</p>
+{/if}

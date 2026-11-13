@@ -1,0 +1,52 @@
+<script module>
+// A PAGE'S REGISTRY ROWS, read off docs/REGISTRY.md as it renders (40.47): the rows of the section
+// the page's `SITE` entry names, under the headings REGISTRY writes them under, each clause a row
+// cites linked to its anchor on the rulebook (40.45).
+import { registryRows } from './registryRows.ts'
+
+import REGISTRY from '../../../../docs/REGISTRY.md' with { type: 'text' }
+
+const ROWS = registryRows(REGISTRY)
+</script>
+
+<script>
+import { raw, reactive, route, type RouteLiteral, url } from '@abide/abide'
+
+import type { Heading } from './Heading.ts'
+import { inline, slugify } from './inline.ts'
+import { sectionsOf } from './registryRows.ts'
+import { pageAt } from './sitePages.ts'
+
+const page = pageAt(route.name())
+const sections = sectionsOf(ROWS, page.registry)
+const rulebook = url('/rulebook' as RouteLiteral)
+const TITLE = 'Reference'
+
+// THE RAIL'S HEADINGS, filed here rather than by a `<Section>` per heading: the sections are a
+// loop, and the reference is always the last thing on the page.
+const headings = reactive.share('docHeadings', () => reactive([]))
+const filed: Heading[] = [{ id: 'reference', title: TITLE, level: 2 }]
+for (const section of sections)
+    if (section.heading !== page.registry)
+        filed.push({ id: slugify(section.heading), title: section.heading, level: 3 })
+headings = [...headings, ...filed]
+</script>
+
+<section class="registry"><div class="flow">
+        <h2 id="reference">{TITLE}</h2>
+        {#for section of sections}
+            {#if section.heading !== page.registry}
+                <h3 id={slugify(section.heading)}>{raw(inline(section.heading))}</h3>
+            {/if}
+            {#for table of section.tables}
+                <table>
+                    <thead><tr>{#for cell of table.header}<th>{cell}</th>{/for}</tr></thead>
+                    <tbody>
+                        {#for row of table.rows}
+                            <tr>{#for cell, index of row.cells}<td>{#if table.header[index] === 'Rules' && cell !== '—'}{#for clause, at of cell.split(/,\s*/)}{at > 0 ? ', ' : ''}<a href="{rulebook}#{clause}">{clause}</a>{/for}{:else}{raw(inline(cell))}{/if}</td>{/for}</tr>
+                        {/for}
+                    </tbody>
+                </table>
+            {/for}
+        {/for}
+    </div></section>

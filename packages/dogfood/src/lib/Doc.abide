@@ -1,6 +1,7 @@
 <script>
-// A docs page: its header and opening paragraph from `SITE`, what the page writes, the thread to
-// the pages either side, and the rail — the page's own headings, and its two markdown downloads.
+// A docs page: its header from `SITE` — the group it is in, its title and what it is for — what the
+// page writes, the thread to the pages either side, and the rail: the page's own headings, and its
+// two markdown downloads.
 //
 // WHICH PAGE COMES FROM THE ROUTE, so a page names nothing about itself: its words are `SITE`'s,
 // keyed by where it is served. A document — a page read off a file in `docs/` — is not in `SITE`,
@@ -20,7 +21,12 @@ import {
 import { inline } from './inline.ts'
 import { installDocs } from './installDocs.ts'
 import type { SitePage } from './SITE.ts'
-import { markdownAddressOf, neighborsOf, pageAt } from './sitePages.ts'
+import {
+    groupOf,
+    markdownAddressOf,
+    neighborsOf,
+    pageAt,
+} from './sitePages.ts'
 
 const { documentPage } = props<{ documentPage?: SitePage }>()
 const page = documentPage ?? pageAt(route.name())
@@ -28,6 +34,7 @@ const { previous, next } =
     documentPage === undefined
         ? neighborsOf(page.route)
         : { previous: undefined, next: undefined }
+const group = groupOf(page.route)
 const plain = page.title.replaceAll('`', '')
 const markdown =
     documentPage === undefined
@@ -46,18 +53,15 @@ const headings = reactive.share('docHeadings', () => reactive([]))
 
 <main id="content">
     <header>
-        {#if page.stub}
-            <p class="notice">Stub — title and intent decided, prose not written.</p>
+        {#if group}
+            <p class="eyebrow">{raw(inline(group.group))}</p>
         {/if}
         <h1>{raw(inline(page.title))}</h1>
-        {#if page.intent}
-            <p class="intent">{raw(inline(page.intent))}</p>
+        {#if page.description}
+            <p class="intent">{raw(inline(page.description))}</p>
         {/if}
     </header>
     <div class="flow">
-        {#if page.lead}
-            <p>{raw(inline(page.lead))}</p>
-        {/if}
         <slot />
     </div>
     {#if previous || next}

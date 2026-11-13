@@ -1,0 +1,176 @@
+<script>
+// THE PROMPT AT THE TOP OF EVERY PAGE: a question to the visitor's own Claude Code, answered from the
+// docs' tools and rendered as it is written — prose, code, and the live things a `<show/>` names.
+//
+// THE CONVERSATION OUTLIVES A NAVIGATION: the bar is the layout's, and a layout outlives the page it
+// wraps (41.11), so `<show open/>` can move the page under an answer without ending it.
+//
+// THE TRANSCRIPT IS THE WORDS, the rendering is not: each turn sends every earlier question and the
+// text Claude wrote for it (44.4), and what was rendered from that text stays here.
+import {
+    navigate,
+    pairing,
+    raw,
+    reactive,
+    type RouteLiteral,
+    url,
+    watch,
+} from '@abide/abide'
+
+import answer from '#src/ask/answer.handler.ts'
+import type { AnswerPart } from '#src/ask/lib/AnswerPart.ts'
+
+import Code from './Code.abide'
+import Shown from './Shown.abide'
+
+type Message = { role: 'user' | 'assistant'; content: string }
+
+const { status, step, copied, start, copyInstall } = pairing()
+
+let question = reactive('')
+let open = reactive(false)
+let transcript = reactive<Message[]>([])
+let turns = reactive<{ question: string; parts: AnswerPart[] }[]>([])
+let asking = reactive<Message[] | undefined>(undefined)
+
+const events = reactive(() => (asking ? answer({ messages: asking }) : []))
+
+// The answer so far: its finished blocks, the one being written, and the docs tool it last called.
+const live = reactive(() => {
+    const parts: AnswerPart[] = []
+    let tail: AnswerPart | undefined
+    let tool: string | undefined
+    for (const event of events) {
+        if (event.type === 'part') parts.push(event.part)
+        else if (event.type === 'tail') tail = event.part
+        else if (event.type === 'tool') tool = event.name
+    }
+    return { parts, tail, tool }
+})
+
+// `<show open/>` moves the page under the answer once, as the block arrives.
+let opened = 0
+watch(() => {
+    const parts = live.parts
+    for (; opened < parts.length; opened += 1) {
+        const part = parts[opened]
+        if (part?.kind === 'show' && part.show.kind === 'open')
+            navigate(url(part.show.value as RouteLiteral))
+    }
+})
+
+// An answer that ended is kept as a turn, and the next question is asked over the whole transcript.
+watch(() => {
+    const last = events.at(-1)
+    if (last?.type !== 'done' || asking === undefined) return
+    const asked = asking.at(-1)?.content ?? ''
+    turns = [...turns, { question: asked, parts: live.parts }]
+    transcript = [...asking, { role: 'assistant', content: last.text }]
+    asking = undefined
+    opened = 0
+})
+
+function ask(event: SubmitEvent) {
+    event.preventDefault()
+    const text = question.trim()
+    if (text === '' || (asking !== undefined && !events.error())) return
+    open = true
+    opened = 0
+    asking = [...transcript, { role: 'user', content: text }]
+    question = ''
+}
+
+function clear() {
+    transcript = []
+    turns = []
+    asking = undefined
+}
+
+// ⌘K from anywhere on the page, and the native app's Ask menu item, land in the prompt.
+function focusOnKey(input: Element) {
+    const listen = (event: KeyboardEvent) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+            event.preventDefault()
+            ;(input as HTMLInputElement).focus()
+        }
+    }
+    addEventListener('keydown', listen)
+    return () => removeEventListener('keydown', listen)
+}
+</script>
+
+<form class="ask" onsubmit={ask}>
+    <input
+        id="ask"
+        type="search"
+        autocomplete="off"
+        placeholder="Ask how to do anything in abide…"
+        aria-label="Ask Claude about abide"
+        bind:value={question}
+        bind:element={focusOnKey}
+        onfocus={() => (open = turns.length > 0 || asking !== undefined || !status?.paired)}
+     />
+    <kbd>⌘K</kbd>
+    <button type="submit" disabled={(asking !== undefined && !events.error()) || !status?.paired}>Ask</button>
+</form>
+
+{#if open}
+    <section class="answers" aria-label="Answers">
+        <header>
+            <span class="eyebrow">Claude Code · answers from these docs</span>
+            {#if turns.length > 0}<button class="quiet" onclick={clear}>New conversation</button>{/if}
+            <button class="quiet" aria-label="Close" onclick={() => (open = false)}>Close</button>
+        </header>
+
+        {#if !status}
+            <p class="status">Connecting…</p>
+        {:else if !status.paired}
+            <div class="pair flow">
+                <p>The answers come from your own Claude Code, run on your machine with these docs as its
+                    only tools. Pair it with this browser once; the native app is paired already.</p>
+                {#if step === 'install'}
+                    <pre>{status.install}</pre>
+                    <div class="row">
+                        <button onclick={copyInstall}>{copied ? 'Copied' : 'Copy'}</button>
+                        <span class="status">then pair again</span>
+                    </div>
+                {:else}
+                    <pre>{status.command}</pre>
+                    <div class="row">
+                        <button disabled={step === 'waiting'} onclick={start}>
+                            {step === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>
+                        <span class="status">or run the command in a terminal</span>
+                    </div>
+                {/if}
+            </div>
+        {/if}
+
+        {#for turn, index of turns by index}
+            <article class="turn">
+                <p class="asked">{turn.question}</p>
+                {#for part, at of turn.parts by at}
+                    {#if part.kind === 'html'}<div class="flow">{raw(part.html)}</div>{:else if part.kind === 'code'}<Code code={part.code} language={part.language} />{:else}<Shown show={part.show} />{/if}
+                {/for}
+            </article>
+        {/for}
+
+        {#if asking}
+            <article class="turn">
+                <p class="asked">{asking.at(-1)?.content}</p>
+                {#for part, at of live.parts by at}
+                    {#if part.kind === 'html'}<div class="flow">{raw(part.html)}</div>{:else if part.kind === 'code'}<Code code={part.code} language={part.language} />{:else}<Shown show={part.show} />{/if}
+                {/for}
+                {#if live.tail?.kind === 'html'}
+                    <div class="flow">{raw(live.tail.html)}</div>
+                {:else if live.tail?.kind === 'code'}
+                    <Code code={live.tail.code} language={live.tail.language} />
+                {/if}
+                {#if events.error()}
+                    <p class="status">{events.error()?.message}</p>
+                {:else}
+                    <p class="status thinking">{live.tool ? `Reading the docs: ${live.tool}…` : 'Thinking…'}</p>
+                {/if}
+            </article>
+        {/if}
+    </section>
+{/if}

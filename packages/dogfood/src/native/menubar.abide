@@ -1,0 +1,12 @@
+<script>
+// THE MENU BAR EXTRA'S PANEL (38.167): the prompt alone, for a question asked without bringing the
+// window forward. It is no page of the site, so the layout draws neither the bar nor the sidebar
+// around it (`siteSections.ts`).
+import Ask from '#src/lib/Ask.abide'
+</script>
+
+<head><title>Ask abide</title></head>
+
+<main class="col-span-full p-3" data-abide-titlebar>
+    <div class="relative"><Ask /></div>
+</main>

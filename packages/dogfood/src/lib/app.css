@@ -1,12 +1,12 @@
-/* TAILWIND, wired the way `/guide/edit-a-contact` teaches an app to wire
+/* TAILWIND, wired the way `/abide-files/blocks` teaches an app to wire
    it: `bun-plugin-tailwind` in this package's `bunfig.toml`, and this file opening with the import.
    `source("..")` scans `src/`, the directory above this one's `lib`, whatever directory the build
    was started from — the plugin's default is the working directory, and from the repo root that is
    every package. */
 @import "tailwindcss" source("..");
-/* The CRM's tokens, element defaults and example vocabulary, which every chapter app ships too. */
+/* The CRM's tokens, element defaults and example vocabulary, which the CRM ships too. */
 @import "../../examples/crm/src/lib/crm.css";
-/* The chapter apps the cards render, which sit beside `src` rather than in it. */
+/* The CRM the cards render, which sits beside `src` rather than in it. */
 @source "../../examples";
 
 /* THE SITE'S OWN TOKENS, beside the CRM's: syntax colors, the site bar and the rail. */
@@ -195,8 +195,17 @@
         @apply max-w-170 text-title/8 text-muted;
     }
 
-    .notice {
-        @apply rounded-md border border-dashed border-rule px-4 py-3 text-chrome text-muted;
+    /* The home page's index: a primitive's page, and what it is for, one under the other. */
+    .index {
+        @apply grid grid-cols-[minmax(9rem,auto)_1fr] gap-x-6 gap-y-2 max-sm:grid-cols-1;
+    }
+
+    .index dd {
+        @apply m-0 text-muted max-sm:mb-2;
+    }
+
+    .eyebrow {
+        @apply font-mono text-micro/2 font-medium tracking-caps text-muted uppercase;
     }
 
     /* The signature: a snippet's spine names the side it runs on. */
@@ -400,4 +409,102 @@ body:not(:has(> .site)) {
 html:has(> body > .site)::view-transition-old(root),
 html:has(> body > .site)::view-transition-new(root) {
     animation: none;
+}
+
+/* THE PROMPT AND ITS ANSWERS (`Ask.abide`). The answers hang under the bar over the page, so the page a
+   `<show open/>` moved stays where the reader can see it arrive. */
+@layer components {
+    .ask {
+        @apply flex items-center gap-snug rounded-lg border border-rule bg-raised px-3 py-1 focus-within:border-signal;
+    }
+
+    .ask input {
+        @apply min-w-0 flex-1 border-0 bg-transparent p-1 text-prose shadow-none outline-none focus:shadow-none;
+    }
+
+    .ask kbd {
+        @apply font-mono text-micro text-muted max-sm:hidden;
+    }
+
+    .answers {
+        @apply absolute top-[calc(100%+0.5rem)] right-10 left-10 z-3 flex max-h-[min(72vh,52rem)] flex-col gap-section overflow-y-auto rounded-lg border border-rule bg-paper p-6 shadow-xl max-lg:right-3 max-lg:left-3;
+    }
+
+    .answers > header {
+        @apply flex items-center gap-snug;
+    }
+
+    .answers > header .eyebrow {
+        @apply flex-1;
+    }
+
+    .answers pre {
+        @apply overflow-x-auto rounded-md border border-rule bg-raised p-3 text-chrome;
+    }
+
+    .turn {
+        @apply flex flex-col gap-flow;
+    }
+
+    .turn .asked {
+        @apply self-end rounded-lg bg-signal/10 px-3 py-2 font-medium;
+    }
+
+    .thinking {
+        @apply animate-board-pulse;
+    }
+
+    button.quiet {
+        @apply border-0 bg-transparent px-2 py-1 text-chrome text-muted shadow-none hover:text-ink;
+    }
+
+    .shown-card {
+        @apply w-full rounded-lg border-0;
+    }
+
+    .shown-missing {
+        @apply text-chrome text-muted;
+    }
+
+    .shown-clause {
+        @apply m-0 border-l-2 border-signal pl-4 text-chrome;
+    }
+
+    .shown-clause a {
+        @apply mr-2 font-mono;
+    }
+
+    .shown-results figcaption {
+        @apply font-mono text-micro text-muted;
+    }
+
+    .shown-page {
+        @apply flex flex-col gap-hair rounded-lg border border-rule bg-raised px-4 py-3 no-underline hover:border-signal;
+    }
+
+    .shown-page span {
+        @apply font-mono text-micro tracking-caps text-muted uppercase;
+    }
+
+    .shown-page small {
+        @apply text-chrome text-muted;
+    }
+
+    .shown-rows {
+        @apply text-chrome;
+    }
+}
+
+/* ONE CARD, FRAMED: everything that neither holds the card nor is inside it goes, and what holds it
+   stops being the site's grid. `data-embedded` is the card's own (`Example.abide`). */
+body.embed {
+    @apply block bg-transparent p-0;
+}
+
+body.embed :is(*):not(:has([data-embedded=true]), [data-embedded=true], [data-embedded=true] *) {
+    display: none;
+}
+
+body.embed :has([data-embedded=true]) {
+    @apply m-0 block border-0 p-0;
 }

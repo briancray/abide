@@ -1,0 +1,12 @@
+<script>
+// The update the native app has staged (38.148), offered where every page shows it; `undefined` in a
+// browser, so nothing renders there.
+import { pendingUpdate } from '@abide/abide'
+</script>
+
+{#if pendingUpdate}
+    <p class="update col-span-full flex items-center justify-center gap-snug border-b border-rule bg-signal/10 px-4 py-1 text-chrome">
+        abide docs {pendingUpdate.version} {pendingUpdate.required ? 'has to be installed to go on.' : 'installs when you quit.'}
+        <button class="quiet" onclick={() => pendingUpdate?.install()}>Restart now</button>
+    </p>
+{/if}

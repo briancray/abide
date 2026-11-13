@@ -15,7 +15,7 @@ const resultsOf = GET(async ({ app }: { app: string }) => {
 
 // 16.29 — A SERVER FILE'S TEXT IS READ HERE, never imported into the page: the browser's bundle is
 // fenced from every server file, and its source is shown to a reader the way the app's tarball
-// already ships it (40.41). Only a server file of a chapter app, by a path below its root.
+// already ships it (40.41). Only a server file of the CRM, by a path below its root.
 const SERVER_FILE = /^src\/(?:[\w-]+\/)*[\w-]+\.server\.ts$/
 const serverSources = GET(
     async ({ app, paths }: { app: string; paths: string[] }) => {
@@ -34,7 +34,7 @@ const serverSources = GET(
 // 40.5 — an example card: the component itself, running, above a tab per file it is made of. The
 // render is never a tab; it is what the example IS, and the files are what you consult about it.
 // A test or a bench file's tab renders what that file last reported, above its source.
-import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
+import { props, raw, reactive, route, type RouteLiteral, url } from '@abide/abide'
 
 import { highlight, sideOf } from './highlight.ts'
 import { inline } from './inline.ts'
@@ -53,11 +53,26 @@ const {
     summary: string
     /** Each file the example is made of, by the path a reader is shown, to its text. */
     files: Record<string, string>
-    /** Server files of the chapter app, by their path in it, whose text is read on the server. */
+    /** Server files of the CRM, by their path in it, whose text is read on the server. */
     serverFiles?: string[]
-    /** The chapter app the files are from, which the card links to and offers as a download. */
+    /** The app the files are from, which the card links to and offers as a download. */
     app?: string
 }>()
+
+// FRAMED IN AN ANSWER, `?card=` names this card: the page shows it alone (`app.css`'s `.embed`) and
+// tells the frame how tall it is, so the answer holding it never scrolls inside it (`Shown.abide`).
+const embedded = route.query({ card: '' }).card === id
+function reportHeight(card: Element) {
+    if (!embedded || parent === window) return
+    const observer = new ResizeObserver(([entry]) =>
+        parent.postMessage(
+            { cardHeight: Math.ceil(entry?.borderBoxSize[0]?.blockSize ?? 0) },
+            location.origin,
+        ),
+    )
+    observer.observe(card)
+    return () => observer.disconnect()
+}
 
 const paths = [...serverFiles, ...Object.keys(files)]
 const shownSources = reactive(() =>
@@ -84,7 +99,7 @@ const results = reactive(() =>
 const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
 </script>
 
-<figure class="example" id={id}>
+<figure class="example" id={id} data-embedded={embedded ? 'true' : 'false'} bind:element={reportHeight}>
     <figcaption>
         <span class="ex-title">{raw(inline(title))}</span>
         <span class="ex-summary">{summary}</span>

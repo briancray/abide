@@ -1,6 +1,6 @@
 <script>
 // RULEBOOK.md, served as the docs app builds: the file is the page's text, so the page cannot hold
-// a clause the file does not (40.34). It is a document rather than a guide, so it is not in `SITE`
+// a clause the file does not (40.34). It is a document rather than a primitive's page, so it is not in `SITE`
 // and none of the voice gates read it — every clause carries a requirement keyword by design.
 import { raw, reactive } from '@abide/abide'
 
@@ -20,8 +20,8 @@ headings = filed
     route: '/rulebook',
     title: 'Rulebook',
     nav: 'Rulebook',
-    intent: summary,
-    lead: '',
+    description: summary,
+    registry: '',
 }}>
     {raw(html)}
 </Doc>
