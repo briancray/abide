@@ -89,7 +89,7 @@ export function question(
     else if (pairing.full)
         said = [
             auto,
-            `Optionally allow only ${owner}’s own tools, which is safest but may limit ${owner}’s full functionality.`,
+            'Only Site Tools is the safest option but may limit full functionality.',
         ]
     else if (pairing.tools.length === 0)
         said = [

@@ -143,15 +143,19 @@ async function iconFile(
     return file
 }
 
-/** The buttons a question is answered with, right to left: Don't Allow first, so Return presses it. */
+/**
+ * The buttons a question is answered with, right to left as macOS and Windows lay them: Don't Allow
+ * last on the right, where Return presses it, the site's own tools beside it, and Allow first.
+ */
 export function buttonsOf(offerSiteTools: boolean): string[] {
-    return offerSiteTools ? [DENY, ALLOW_FULL, SITE_TOOLS] : [DENY, ALLOW]
+    return offerSiteTools ? [DENY, SITE_TOOLS, ALLOW_FULL] : [DENY, ALLOW]
 }
 
 /** The answer the button at `index` of `buttonsOf(offerSiteTools)` gives; any other is a no. */
 export function answerAt(index: number, offerSiteTools: boolean): Answer {
-    if (index === 1) return 'allow'
-    return index === 2 && offerSiteTools ? 'siteTools' : 'deny'
+    const pressed = buttonsOf(offerSiteTools)[index]
+    if (pressed === SITE_TOOLS) return 'siteTools'
+    return pressed === ALLOW || pressed === ALLOW_FULL ? 'allow' : 'deny'
 }
 
 /**

@@ -13,7 +13,7 @@ import {
     allowedSites,
     forget,
 } from '../../bridge/src/allowedSites.ts'
-import { linuxQuestion } from '../../bridge/src/desktop.ts'
+import { answerAt, buttonsOf, linuxQuestion } from '../../bridge/src/desktop.ts'
 import { grantOf, visitorServers } from '../../bridge/src/grant.ts'
 import {
     appIn,
@@ -147,7 +147,7 @@ test('the question names the app beside its site, and is titled by it — 44.42'
     expect(asked.headline).toBe(
         'CRM (crm.example/app) is requesting access to Claude Code.',
     )
-    expect(asked.body).toContain('Optionally allow only CRM’s own tools')
+    expect(asked.title).toBe('CRM')
     expect(question(PAIRING, SETTINGS).title).toBe('crm.example/app')
 })
 
@@ -206,7 +206,7 @@ test('a link asking for full access is asked naming no tool — 44.42, 44.86', (
     expect(asked.body.split('\n\n')[0]).toContain('auto mode')
     expect(said(asked)).not.toContain('WebSearch')
     expect(asked.body).toContain(
-        'Optionally allow only crm.example/app’s own tools, which is safest',
+        'Only Site Tools is the safest option but may limit full functionality.',
     )
 })
 
@@ -550,6 +550,23 @@ test('a Linux desktop asks with zenity or kdialog, or not at all — 44.64, 44.8
         '--yesno',
     )
     expect(linuxQuestion(asked, true, () => false)).toBeUndefined()
+})
+
+// 44.86 — EACH BUTTON ANSWERS WHAT IT SAYS, whatever order they are laid in: Allow first, Only Site
+// Tools beside it, and Don't Allow last, where Return presses it. THE REVERT: answer by position as the
+// order was before, and Allow Full Access answers only the site's tools.
+test('each button answers what it says, Don’t Allow last — 44.86', () => {
+    const answered = (offer: boolean): string[] =>
+        buttonsOf(offer)
+            .map((label, index) => `${label}: ${answerAt(index, offer)}`)
+            .reverse()
+    expect(answered(true)).toEqual([
+        'Allow Full Access: allow',
+        'Only Site Tools: siteTools',
+        'Don’t Allow: deny',
+    ])
+    expect(answered(false)).toEqual(['Allow: allow', 'Don’t Allow: deny'])
+    expect(answerAt(-1000, true)).toBe('deny')
 })
 
 afterAll(removeTemporaryModules)
