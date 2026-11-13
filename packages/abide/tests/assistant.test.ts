@@ -112,6 +112,7 @@ export const bridge = GET(() => provider.claudeCode.bridge(), { ...HIDDEN, timeo
 export const command = GET(() => provider.claudeCode.bridgeCommand(), HIDDEN)
 
 export const granting = GET(() => provider.claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
+export const askingFull = GET(() => provider.claudeCode.bridgeCommand({ full: true }), HIDDEN)
 
 export const asking = GET(() => provider.claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
 
@@ -780,11 +781,30 @@ test('a pairing link carries what its command does, and its code pairs — 44.40
         code: code as string,
         version: BRIDGE_VERSION,
         tools: claudeArgs.split(' ')[1]?.split(',') ?? [],
+        full: false,
     })
     await pairBridge('nine', read?.code)
     const lines = await statusOf('nine')
     expect((await lines.next()).value).toMatchObject({ paired: true })
     await lines.return(undefined)
+}, 30_000)
+
+// 44.85, 44.40 — A SITE ASKS FOR FULL ACCESS in its command, as the visitor's own `--full` ahead of any
+// `--`, and in its link. THE REVERT: drop the `--full` `commandFor` writes, and the command reads as
+// one granting nothing.
+test('a pairing minted with full asks for it in its command and its link — 44.40, 44.85', async () => {
+    const [full, plain] = await Promise.all(
+        ['askingFull', 'command'].map(async (route) => {
+            const answer = await Bun.fetch(`${base}/${route}`, {
+                headers: asPage('nine'),
+            })
+            return (await answer.json()) as { command: string; link: string }
+        }),
+    )
+    expect(full?.command.split(' ').slice(4)).toEqual(['--full'])
+    expect(pairingOf(full?.link ?? '')?.full).toBe(true)
+    expect(plain?.command).not.toContain('--full')
+    expect(pairingOf(plain?.link ?? '')?.full).toBe(false)
 }, 30_000)
 
 // 44.16 — AN OPTION THAT REACHES THE VISITOR'S MACHINE IS NOT THE SITE'S TO SET: the turn fails naming
@@ -1111,8 +1131,6 @@ test('a code names who it was minted for, without being spent — 44.63', async 
         holderOf({
             site: base,
             code: await pairingCode(caller),
-            version: BRIDGE_VERSION,
-            tools: [],
         })
     const signedOut = await holder('held-one')
     expect(signedOut).toBeString()
@@ -1129,54 +1147,73 @@ test('a code names who it was minted for, without being spent — 44.63', async 
     expect(signedOut).toMatch(/^browser\.[\w-]+$/)
 
     const code = await pairingCode('held-one')
-    expect(
-        await holderOf({ site: base, code, version: '1.0.0', tools: [] }),
-    ).toBe(signedOut)
+    expect(await holderOf({ site: base, code })).toBe(signedOut)
     await pairBridge('held-one', code)
     const spent = await Bun.fetch(`${base}${BRIDGE_ADDRESS}?holder=${code}`)
     expect(spent.status).toBe(403)
     await spent.text()
 }, 30_000)
 
-// 44.62, 44.42 — A SITE ALWAYS ALLOWED PAIRS UNASKED ONLY FOR WHOEVER IT WAS ALLOWED FOR. The visitor
-// answers always to a link minted for their browser; the next link minted there pairs unasked, while
-// one minted at another browser — an attacker's own code, put in front of them — and one asking for a
-// tool beyond the ones allowed are both asked. THE REVERT: have `allowsUnasked` match the site alone,
-// and the attacker's link pairs unasked: asked twice rather than three times.
-test('an always-allowed site pairs unasked only for the holder it was allowed for — 44.42, 44.62', async () => {
+// 44.62, 44.88 — AN ALLOWED SITE PAIRS UNASKED ONLY FOR WHOEVER IT WAS ALLOWED FOR. The visitor allows
+// a link minted for their browser; the next link minted there pairs unasked, while one minted at
+// another browser — an attacker's own code, put in front of them — and one asking for a tool beyond the
+// ones allowed are both asked. THE REVERT: have `allowedAs` match the site alone, and the attacker's
+// link pairs unasked: asked twice rather than three times.
+test('an allowed site pairs unasked only for the holder it was allowed for — 44.62, 44.88', async () => {
     const allowed = `${await scratch({})}/allowed.json`
     const asked: boolean[] = []
-    const answers: Answer[] = ['always', 'deny', 'once']
+    const answers: Answer[] = ['allow', 'deny', 'allow', 'siteTools']
     const visitor = async (
-        _question: string,
-        offerAlways: boolean,
+        _question: unknown,
+        offerSiteTools: boolean,
     ): Promise<Answer> => {
-        asked.push(offerAlways)
+        asked.push(offerSiteTools)
         return answers.shift() ?? 'deny'
     }
-    const link = async (caller: string, tools: string[] = []) => ({
+    const link = async (
+        caller: string,
+        tools: string[] = [],
+        full = false,
+    ): Promise<Pairing> => ({
         site: base,
         code: await pairingCode(caller),
         version: BRIDGE_VERSION,
         tools,
+        full,
     })
-    const consent = async (pairing: Pairing): Promise<boolean> =>
+    const consent = (pairing: Pairing): Promise<Pairing | undefined> =>
         consented(pairing, SETTINGS_KEPT_NONE, allowed, visitor, () => {})
-    expect(await consent(await link('victim'))).toBe(true)
-    expect(await consent(await link('victim'))).toBe(true)
-    expect(await consent(await link('attacker'))).toBe(false)
-    expect(await consent(await link('victim', ['WebSearch']))).toBe(true)
-    expect(asked).toEqual([true, true, true])
-    // A code the site names no holder for is asked, and never offered always.
+    expect(await consent(await link('victim'))).toBeDefined()
+    expect(await consent(await link('victim'))).toBeDefined()
+    expect(await consent(await link('attacker'))).toBeUndefined()
+    expect(await consent(await link('victim', ['WebSearch']))).toBeDefined()
+    expect(asked).toEqual([false, false, false])
+    // 44.86 — an ask for full access is offered the site's own tools, and is kept as answered.
     expect(
-        await consent({
-            site: base,
-            code: 'unminted',
-            version: BRIDGE_VERSION,
-            tools: [],
-        }),
-    ).toBe(false)
-    expect(asked).toEqual([true, true, true, false])
+        await consent(await link('victim', ['WebSearch'], true)),
+    ).toMatchObject({
+        tools: [],
+        full: false,
+    })
+    expect(
+        await consent(await link('victim', ['WebSearch'], true)),
+    ).toMatchObject({
+        tools: [],
+        full: false,
+    })
+    expect(asked).toEqual([false, false, false, true])
+    // A code the site names no holder for is asked every time: nothing is kept for it.
+    const unminted: Pairing = {
+        site: base,
+        code: 'unminted',
+        version: BRIDGE_VERSION,
+        tools: [],
+        full: false,
+    }
+    answers.push('allow', 'allow')
+    expect(await consent(unminted)).toBeDefined()
+    expect(await consent(unminted)).toBeDefined()
+    expect(asked).toEqual([false, false, false, true, false, false])
 }, 30_000)
 
 // 44.3 — a transcript ending on the model's own turn is refused before any provider is reached.

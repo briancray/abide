@@ -7,7 +7,11 @@ import { serveDownloads } from '#src/lib/serveDownloads.ts'
 // The sign-in examples need a secret: one per process, or the deployment's.
 const PRINCIPAL_SECRET = crypto.randomUUID()
 
-onConfig(() => ({ ABIDE_PRINCIPAL_SECRET: PRINCIPAL_SECRET }))
+// 44.85 — the pairing the Ask panel shows asks the visitor's Claude Code for full access.
+onConfig(() => ({
+    ABIDE_PRINCIPAL_SECRET: PRINCIPAL_SECRET,
+    ABIDE_BRIDGE_FULL: true,
+}))
 
 middleware(serveDownloads)
 

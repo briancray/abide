@@ -38,7 +38,7 @@ import {
     watchFollowedPairing,
 } from './bridgeRelay.ts'
 import { callerOf } from './callerOf.ts'
-import { config, ownOrigin } from './config.ts'
+import { config, ownOrigin, settingOn } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
 import { HOOKS, inOrder } from './hooks.ts'
 import { followedOwn, mountedOwn } from './mountHandlers.ts'
@@ -61,8 +61,11 @@ export type ClaudeCodeConfig = {
     tools?: string[]
 }
 
-/** The tools a pairing command grants, as the visitor would after its `--`. 44.32. */
-type PairingOptions = Pick<ClaudeCodeConfig, 'tools'>
+/**
+ * The tools a pairing command grants, as the visitor would after its `--` (44.32), and whether it asks
+ * for everything the visitor's Claude Code has, as their `--full` (44.85).
+ */
+type PairingOptions = Pick<ClaudeCodeConfig, 'tools'> & { full?: boolean }
 
 /** The visitor's own Claude Code, reached through the bridge paired to their browser. */
 function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
@@ -130,7 +133,8 @@ function askingCaller(): string {
 /**
  * The command and the link that pair a bridge with this browser, and when their code stops standing.
  * 44.14. The `tools` it is given are written after the command's `--` and in the link, so the visitor
- * running either grants them (44.29, 44.32, 44.40).
+ * running either grants them (44.29, 44.32, 44.40), and `full` is the command's `--full` and the
+ * link's ask for it (44.85).
  */
 function bridgeCommand(options: PairingOptions = {}): {
     command: string
@@ -147,12 +151,12 @@ function bridgeCommand(options: PairingOptions = {}): {
 }
 
 /**
- * The command and the link that pair a bridge by `code`, granting `tools`, and the command that
- * installs the app the link opens — of the release the command runs, 44.56.
+ * The command and the link that pair a bridge by `code`, granting `tools` and asking for `full`, and
+ * the command that installs the app the link opens — of the release the command runs, 44.56.
  */
 function commandFor(
     code: string,
-    { tools }: PairingOptions,
+    { tools, full }: PairingOptions,
 ): { command: string; link: string; install: string } {
     const site = `${ownOrigin(request().url)}${mounted('')}`
     const granted = tools?.length ? tools.join(',') : undefined
@@ -162,13 +166,14 @@ function commandFor(
         version: bridgePackage.version,
     })
     if (granted !== undefined) query.set('tools', granted)
+    if (full === true) query.set('full', '1')
     // 44.76 — the site's own arguments after the tools, in the command and the install alike; the
     // link carries none (44.44), so an install is how a link opened later runs with them.
     const added = pairingArgs()
     const options =
         granted === undefined ? added : ['--tools', granted, ...added]
     return {
-        command: `bunx @abide/bridge@${bridgePackage.version} ${site} ${code}${afterDashes(options)}`,
+        command: `bunx @abide/bridge@${bridgePackage.version} ${site} ${code}${full === true ? ' --full' : ''}${afterDashes(options)}`,
         link: `${BRIDGE_SCHEME}://pair?${query}`,
         install: `bunx @abide/bridge@${bridgePackage.version} install${afterDashes(added)}`,
     }
@@ -234,7 +239,8 @@ export const claudeCode: typeof claudeCodeProvider & {
 } = Object.assign(claudeCodeProvider, { bridge, bridgeCommand, permit })
 
 // 44.67 — THE PAIRING A BROWSER'S `pairing` READS, as a handler abide mounts rather than one each app
-// writes: the asking browser's pairing as it stands, granting the tools `ABIDE_BRIDGE_TOOLS` names.
+// writes: the asking browser's pairing as it stands, granting the tools `ABIDE_BRIDGE_TOOLS` names,
+// and asking for full access where `ABIDE_BRIDGE_FULL` is on (44.85).
 // 44.74 — THE SERVER DECIDES THEM: the parameter is declared only so the value is keyed and the call
 // runs it (1.7, as `health`'s is), and whatever a request names in it is never read. 44.68 — on no
 // generated surface.
@@ -257,7 +263,10 @@ const pairingHandler = declare('GET')(
         return {
             paired,
             missing,
-            ...commandFor(code, tools.length === 0 ? {} : { tools }),
+            ...commandFor(code, {
+                ...(tools.length === 0 ? {} : { tools }),
+                full: settingOn('ABIDE_BRIDGE_FULL'),
+            }),
         }
     },
     { clients: { ui: false, mcp: false, cli: false, openapi: false } },

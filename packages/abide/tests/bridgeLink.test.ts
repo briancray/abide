@@ -9,8 +9,8 @@ import { spawned } from '@abide/harness/gate'
 
 import {
     allowAlways,
+    allowedAs,
     allowedSites,
-    allowsUnasked,
     forget,
 } from '../../bridge/src/allowedSites.ts'
 import { linuxQuestion } from '../../bridge/src/desktop.ts'
@@ -40,13 +40,21 @@ const PAIRING: Pairing = {
     code: 'abc_DEF-123',
     version: '0.4.0',
     tools: ['WebSearch', 'WebFetch'],
+    full: false,
+}
+
+/** What the visitor reads of a question: its headline, then its body. */
+function said(asked: { headline: string; body: string }): string {
+    return `${asked.headline}\n\n${asked.body}`
 }
 
 function linkOf(fields: Record<string, string>): string {
     return `${PAIRING_SCHEME}://pair?${new URLSearchParams(fields)}`
 }
 
-const GOOD = { ...PAIRING, tools: PAIRING.tools.join(',') }
+// A link asks for full access only by naming it, so the plain one names nothing of it.
+const { full: _full, ...LINKED } = PAIRING
+const GOOD = { ...LINKED, tools: PAIRING.tools.join(',') }
 
 const SETTINGS = {
     bun: '/opt/bun/bin/bun',
@@ -66,6 +74,7 @@ const KEPT = {
 
 test('a link is read as the pairing it names — 44.41', () => {
     expect(pairingOf(linkOf(GOOD))).toEqual(PAIRING)
+    expect(pairingOf(linkOf({ ...GOOD, full: '1' }))?.full).toBe(true)
     const { tools: _tools, ...untooled } = GOOD
     expect(pairingOf(linkOf(untooled))?.tools).toEqual([])
     expect(
@@ -90,6 +99,7 @@ test('a link that would be read as more than a pairing is refused — 44.41', ()
         linkOf({ ...GOOD, tools: 'WebSearch --add-dir /' }),
         linkOf({ ...GOOD, tools: 'mcp__calendar meetings' }),
         linkOf({ ...GOOD, tools: 'mcp__calendar;rm' }),
+        linkOf({ ...GOOD, full: 'yes' }),
         GOOD.site,
         `other://pair?${new URLSearchParams(GOOD)}`,
         `${PAIRING_SCHEME}://elsewhere?${new URLSearchParams(GOOD)}`,
@@ -98,23 +108,42 @@ test('a link that would be read as more than a pairing is refused — 44.41', ()
         expect(pairingOf(refused)).toBeUndefined()
 })
 
-// 44.42 — EVERY LINK IS ASKED, and the question names what the link would run. There is no kept
-// answer to test: a code proves the site minted it, not that this visitor asked for it.
-test('the question names the site, every tool and the release it asks for — 44.42', () => {
+// 44.42 — EVERY LINK IS ASKED, and the question names what the link would run: the site, as the
+// visitor reads it, in the headline with every tool it asks for.
+test('the question names the site and every tool it asks for — 44.42', () => {
     const asked = question(PAIRING, SETTINGS)
-    expect(asked).toContain(PAIRING.site)
-    expect(asked).toContain('WebSearch, WebFetch')
-    expect(asked).toContain(`@abide/bridge ${PAIRING.version}`)
-    expect(asked).not.toContain('gave install')
-    expect(question({ ...PAIRING, tools: [] }, SETTINGS)).toContain(
+    expect(asked.headline).toContain('crm.example/app')
+    expect(asked.headline).toContain('WebSearch, WebFetch')
+    expect(asked.body).toContain('auto mode')
+    expect(said(asked)).not.toContain('gave install')
+    expect(said(asked)).not.toContain(PAIRING.version)
+    expect(question({ ...PAIRING, tools: [] }, SETTINGS).headline).toContain(
         'none of this computer’s',
     )
+    // Options that leave auto mode are not called auto mode.
+    expect(
+        question(PAIRING, {
+            ...SETTINGS,
+            claudeArgs: ['--permission-mode', 'acceptEdits'],
+        }).body,
+    ).not.toContain('auto mode')
+})
+
+// 44.42, 44.86 — AN ASK FOR FULL ACCESS NAMES NO TOOL: it says what it asks for, and that the site's own
+// tools alone may be allowed instead.
+test('a link asking for full access is asked naming no tool — 44.42, 44.86', () => {
+    const asked = question({ ...PAIRING, full: true }, SETTINGS)
+    expect(asked.headline).toBe(
+        'crm.example/app is requesting full access to your local Claude Code.',
+    )
+    expect(said(asked)).not.toContain('WebSearch')
+    expect(asked.body).toContain('Or allow only crm.example/app’s own tools')
 })
 
 // 44.42, 44.44 — WHAT INSTALL KEPT IS ASKED ABOUT TOO: it reaches every site the visitor allows, so the
 // question names each option and each variable — by name, since a value may be a token.
 test('the question names the options and variables install kept, and no value — 44.42, 44.44', () => {
-    const asked = question(PAIRING, KEPT)
+    const asked = said(question(PAIRING, KEPT))
     expect(asked).toContain('--mcp-config /Users/me/sources.mcp.json')
     expect(asked).toContain('GH_HOST GH_TOKEN')
     expect(asked).not.toContain('secret-token')
@@ -175,9 +204,20 @@ test('an install run --full runs every link full, and asks saying so — 44.42, 
         '--tools',
         'WebSearch,WebFetch',
     ])
-    const asked = question(PAIRING, full)
-    expect(asked).toContain('everything your Claude Code can do')
+    const asked = said(question(PAIRING, full))
+    expect(asked).toContain('give every site full access')
     expect(asked).not.toContain('WebSearch, WebFetch')
+})
+
+// 44.87 — A LINK RUNS FULL ONLY AS ALLOWED: the pairing `consented` answers carries the allowed ask, and
+// the bridge runs `--full` for it. THE REVERT: drop `pairing.full` from `bridgeArguments`, and an
+// allowed ask runs with the link's tools alone.
+test('a link whose ask for full access was allowed runs full — 44.87', () => {
+    expect(
+        bridgeArguments({ ...PAIRING, tools: [], full: true }, SETTINGS).slice(
+            5,
+        ),
+    ).toEqual(['--claude', '/opt/claude/claude', '--full'])
 })
 
 // 44.29 — AN MCP TOOL IS A TOOL TOO: a link asks for one by Claude Code's name for it, or for all of a
@@ -262,32 +302,52 @@ test('the question names each MCP tool whose server the visitor lacks — 44.65'
         claudeArgs: ['--mcp-config', sources],
     })
     expect(unserved).toEqual(['mcp__calendar__meetings'])
-    const asked = question(pairing, SETTINGS, unserved)
+    const asked = said(question(pairing, SETTINGS, unserved))
     expect(asked).toContain('no calendar MCP server')
     expect(asked).toContain('claude mcp add --scope user')
-    expect(question(pairing, SETTINGS)).not.toContain('MCP server')
+    expect(said(question(pairing, SETTINGS))).not.toContain('MCP server')
 })
 
-// 44.62, 44.66 — WHAT IS ALWAYS ALLOWED IS KEPT PER SITE AND HOLDER, grows by the tools allowed since,
-// and is forgotten by site or whole.
-test('a site is always allowed per holder, and forgotten — 44.62, 44.66', async () => {
+// 44.62, 44.66, 44.88 — WHAT IS ALLOWED IS KEPT PER SITE AND HOLDER, grows by the tools allowed since,
+// keeps an ask for full access as answered, and is forgotten by site or whole.
+test('a site is allowed per holder, and forgotten — 44.62, 44.66, 44.88', async () => {
     const file = `${temporaryModule({}, `${tmpdir()}/`)}/allowed.json`
     expect(await allowedSites(file)).toEqual([])
     await allowAlways(file, 'https://a.example', 'h1', ['WebSearch'])
     await allowAlways(file, 'https://a.example', 'h1', ['mcp__calendar'])
     await allowAlways(file, 'https://b.example', 'h2', [])
     await allowAlways(file, 'http://localhost:3000/app', 'h3', [])
+    await allowAlways(file, 'https://c.example', 'h4', [], false)
+    await allowAlways(file, 'https://d.example', 'h5', [], true)
     const sites = await allowedSites(file)
+    const asking = (tools: string[], full = false) => ({ tools, full })
     expect(
-        allowsUnasked(sites, 'https://a.example', 'h1', [
-            'mcp__calendar',
-            'WebSearch',
-        ]),
-    ).toBe(true)
-    expect(allowsUnasked(sites, 'https://a.example', 'h2', [])).toBe(false)
-    expect(allowsUnasked(sites, 'https://a.example', 'h1', ['WebFetch'])).toBe(
-        false,
-    )
+        allowedAs(
+            sites,
+            'https://a.example',
+            'h1',
+            asking(['mcp__calendar', 'WebSearch']),
+        ),
+    ).toBeDefined()
+    expect(
+        allowedAs(sites, 'https://a.example', 'h2', asking([])),
+    ).toBeUndefined()
+    expect(
+        allowedAs(sites, 'https://a.example', 'h1', asking(['WebFetch'])),
+    ).toBeUndefined()
+    // An ask for full access never answered is asked; one answered pairs as it was answered.
+    expect(
+        allowedAs(sites, 'https://a.example', 'h1', asking([], true)),
+    ).toBeUndefined()
+    expect(
+        allowedAs(sites, 'https://c.example', 'h4', asking([], true))?.full,
+    ).toBe(false)
+    // Full access allowed covers whatever a narrower link asks for.
+    expect(
+        allowedAs(sites, 'https://d.example', 'h5', asking(['Bash'])),
+    ).toBeDefined()
+    expect(await forget(file, 'c.example')).toBe(1)
+    expect(await forget(file, 'd.example')).toBe(1)
     expect(await forget(file, 'https://a.example/')).toBe(1)
     // A bare name is the site kept under either scheme.
     expect(await forget(file, 'localhost:3000/app/')).toBe(1)
@@ -347,21 +407,26 @@ test('Linux and Windows register the scheme to start the handler with the link �
 })
 
 // 44.64 — A QUESTION THAT CANNOT BE SHOWN IS A NO: a Linux desktop asks with `zenity`, else `kdialog`,
-// and offers always as a third button only where it was offered; with neither there is no question.
-test('a Linux desktop asks with zenity or kdialog, or not at all — 44.64', () => {
-    const zenity = linuxQuestion('q', true, (tool) => tool === 'zenity')
+// and offers the site's own tools as a third button only where a link asks for full access (44.86);
+// with neither there is no question. zenity's headline is bold markup, so what a site names is escaped.
+test('a Linux desktop asks with zenity or kdialog, or not at all — 44.64, 44.86', () => {
+    const asked = { headline: '<i>a.example</i> asks', body: 'b & c' }
+    const zenity = linuxQuestion(asked, true, (tool) => tool === 'zenity')
     expect(zenity?.[0]).toBe('zenity')
     expect(zenity).toContain('--extra-button')
+    expect(zenity).toContain(
+        '<b>&lt;i&gt;a.example&lt;/i&gt; asks</b>\n\nb &amp; c',
+    )
     expect(
-        linuxQuestion('q', false, (tool) => tool === 'zenity'),
+        linuxQuestion(asked, false, (tool) => tool === 'zenity'),
     ).not.toContain('--extra-button')
-    expect(linuxQuestion('q', true, (tool) => tool === 'kdialog')).toContain(
+    expect(linuxQuestion(asked, true, (tool) => tool === 'kdialog')).toContain(
         '--yesnocancel',
     )
-    expect(linuxQuestion('q', false, (tool) => tool === 'kdialog')).toContain(
+    expect(linuxQuestion(asked, false, (tool) => tool === 'kdialog')).toContain(
         '--yesno',
     )
-    expect(linuxQuestion('q', true, () => false)).toBeUndefined()
+    expect(linuxQuestion(asked, true, () => false)).toBeUndefined()
 })
 
 afterAll(removeTemporaryModules)

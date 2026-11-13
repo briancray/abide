@@ -13,12 +13,12 @@ import { appendFile } from 'node:fs/promises' // bun has no append of its own
 
 import {
     allowAlways,
+    allowedAs,
     allowedIn,
     allowedSites,
-    allowsUnasked,
 } from './allowedSites.ts'
 import { BRIDGE_PATH } from './BRIDGE_PATH.ts'
-import { type Answer, ask, notify } from './desktop.ts'
+import { type Answer, ask, notify, type Question } from './desktop.ts'
 import { grantFor, serversNamed } from './grant.ts'
 import { type Pairing, pairingOf } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
@@ -38,32 +38,70 @@ export type HandlerSettings = {
     env: Record<string, string>
 }
 
+/** A site as the visitor reads it: what a link names, without its scheme. */
+function shownSite(site: string): string {
+    return site.slice(site.indexOf('://') + 3)
+}
+
+/** Whether the visitor's options leave Claude Code in auto mode (44.81). */
+function inAutoMode(claudeArgs: readonly string[]): boolean {
+    for (const arg of claudeArgs)
+        if (
+            arg.startsWith('--permission-mode') ||
+            arg.startsWith('--dangerously-skip-permissions')
+        )
+            return false
+    return true
+}
+
 /**
- * What the visitor is asked before `pairing` runs, naming each MCP tool it asks for of a server their
- * Claude Code is not configured with, `unserved` (44.65).
+ * What the visitor is asked before `pairing` runs (44.42): a site asking for full access is named as
+ * asking for it, and none of its tools (44.85); else each tool it asks for, and each MCP tool of a
+ * server their Claude Code is not configured with, `unserved` (44.65).
  */
 export function question(
     pairing: Pairing,
     settings: HandlerSettings,
     unserved: readonly string[] = [],
-): string {
-    const tools =
-        settings.full === true
-            ? 'You installed this to give every site everything your Claude Code can do: its tools, MCP servers and settings. Anything auto mode won’t approve on its own is asked on the site’s page.'
-            : pairing.tools.length === 0
-              ? 'It gets none of this computer’s tools.'
-              : `It also asks for these tools of this computer’s: ${pairing.tools.join(', ')}.`
-    const missing =
-        unserved.length === 0
-            ? ''
-            : `\n\nYour Claude Code has no ${serversNamed(unserved)} MCP server, so it can’t give ${unserved.join(', ')}. Add it with \`claude mcp add --scope user\` before you ask.`
+): Question {
+    const site = shownSite(pairing.site)
+    const auto = inAutoMode(settings.claudeArgs)
+        ? `Claude Code stays in auto mode: it does safe steps on its own and asks you on ${site}’s page before anything risky.`
+        : ''
+    let headline: string
+    let said: string[]
+    if (settings.full === true) {
+        headline = `${site} wants to use your Claude Code. You installed it to give every site full access.`
+        said = [auto]
+    } else if (pairing.full) {
+        headline = `${site} is requesting full access to your local Claude Code.`
+        said = [
+            `It could do anything your Claude Code can, on your Claude account. ${auto}`,
+            `Or allow only ${site}’s own tools, so it can answer from the site without touching this computer.`,
+        ]
+    } else if (pairing.tools.length === 0) {
+        headline = `${site} wants to use your Claude Code with its own tools only. It gets none of this computer’s.`
+        said = []
+    } else {
+        headline = `${site} wants to use your Claude Code with its own tools, plus these of this computer’s: ${pairing.tools.join(', ')}.`
+        said = [auto]
+        if (unserved.length > 0)
+            said.push(
+                `Your Claude Code has no ${serversNamed(unserved)} MCP server, so it can’t use ${unserved.join(', ')}. Add it with \`claude mcp add --scope user\` first.`,
+            )
+    }
     // A variable's value is only named, never shown: it is as likely a token as a host.
-    const names = Object.keys(settings.env)
-    const kept =
-        settings.claudeArgs.length === 0 && names.length === 0
-            ? ''
-            : `\n\nIt also gets what you gave install for every site: ${[...settings.claudeArgs, ...names].join(' ')}.`
-    return `${pairing.site} wants to use your Claude Code as its assistant, with its own tools, on your Claude account.\n\n${tools}${missing}${kept}\n\nIt runs @abide/bridge ${pairing.version}. Allow it only if you just asked to pair on that site.`
+    const kept = [...settings.claudeArgs, ...Object.keys(settings.env)]
+    if (kept.length > 0)
+        said.push(
+            `It also gets what you gave install for every site: ${kept.join(' ')}.`,
+        )
+    said.push(`Allow it only if you just asked to pair on ${site}.`)
+    let body = ''
+    for (const paragraph of said)
+        if (paragraph.trim() !== '')
+            body += `${body === '' ? '' : '\n\n'}${paragraph.trim()}`
+    return { headline, body }
 }
 
 /**
@@ -83,7 +121,7 @@ export function bridgeArguments(
         pairing.code,
         '--claude',
         settings.claude,
-        ...(settings.full === true ? ['--full'] : []),
+        ...(settings.full === true || pairing.full ? ['--full'] : []),
         ...(claudeArgs.length === 0 ? [] : ['--', ...claudeArgs]),
     ]
 }
@@ -124,7 +162,9 @@ function directoryOf(file: string): string {
  * Who `pairing`'s code was minted for, as `/__abide/bridge` names them (44.63), or `undefined` where the
  * site names no one — a release before it did, or a code it did not mint.
  */
-export async function holderOf(pairing: Pairing): Promise<string | undefined> {
+export async function holderOf(
+    pairing: Pick<Pairing, 'site' | 'code'>,
+): Promise<string | undefined> {
     try {
         const answer = await fetch(
             `${pairing.site}${BRIDGE_PATH}?holder=${encodeURIComponent(pairing.code)}`,
@@ -156,41 +196,64 @@ export async function unservedOf(
     return grant.unserved
 }
 
+/** `pairing` with only the site's own tools: none of this machine's, and not full. 44.85. */
+function siteToolsOnly(pairing: Pairing): Pairing {
+    return { ...pairing, tools: [], full: false }
+}
+
 /**
- * Whether `pairing` may pair: unasked where the visitor always allows its site for the holder its code
- * was minted for and it asks for no tool beyond those allowed then (44.62), else as `askVisitor`
- * answers — offering to always allow only where the site named a holder — keeping an always in
- * `allowedFile`.
+ * `pairing` as the visitor allows it, or `undefined` where they do not: unasked where they allowed its
+ * site before for the holder its code was minted for, as they allowed it then (44.62), else as
+ * `askVisitor` answers — offering the site's own tools alone where it asks for full access (44.85) —
+ * keeping what they allowed in `allowedFile` where the site named a holder (44.86).
  */
 export async function consented(
     pairing: Pairing,
     settings: HandlerSettings,
     allowedFile: string,
-    askVisitor: (question: string, offerAlways: boolean) => Promise<Answer>,
+    askVisitor: (
+        question: Question,
+        offerSiteTools: boolean,
+    ) => Promise<Answer>,
     say: (line: string) => void,
-): Promise<boolean> {
+): Promise<Pairing | undefined> {
     // None waits on another, and the holder is a round trip to the site.
     const [holder, allowed, unserved] = await Promise.all([
         holderOf(pairing),
         allowedSites(allowedFile),
         unservedOf(pairing, settings),
     ])
-    if (
-        holder !== undefined &&
-        allowsUnasked(allowed, pairing.site, holder, pairing.tools)
-    ) {
-        say(
-            `Pairing with ${new URL(pairing.site).host}, which you always allow.`,
-        )
-        return true
+    // An install run `--full` gives full access to every link, so a link's ask for it is moot.
+    const asksFull = pairing.full && settings.full !== true
+    const before =
+        holder === undefined
+            ? undefined
+            : allowedAs(allowed, pairing.site, holder, {
+                  tools: pairing.tools,
+                  full: asksFull,
+              })
+    if (before !== undefined) {
+        say(`Pairing with ${shownSite(pairing.site)}, which you always allow.`)
+        return asksFull && before.full === false
+            ? siteToolsOnly(pairing)
+            : pairing
     }
     const answer = await askVisitor(
         question(pairing, settings, unserved),
-        holder !== undefined,
+        asksFull,
     )
-    if (answer === 'always' && holder !== undefined)
-        await allowAlways(allowedFile, pairing.site, holder, pairing.tools)
-    return answer !== 'deny'
+    if (answer === 'deny') return undefined
+    const allowedAsAnswered =
+        answer === 'siteTools' ? siteToolsOnly(pairing) : pairing
+    if (holder !== undefined)
+        await allowAlways(
+            allowedFile,
+            pairing.site,
+            holder,
+            allowedAsAnswered.tools,
+            asksFull ? answer === 'allow' : undefined,
+        )
+    return allowedAsAnswered
 }
 
 /**
@@ -224,13 +287,17 @@ async function open(link: string): Promise<number> {
     const notifications = notifier()
     const log = `${import.meta.dir}/../bridge.log`
     let logged = Promise.resolve()
-    function say(line: string): void {
+    /** Writes `line` to the log alone. */
+    function record(line: string): void {
         console.error(line)
         logged = logged.then(() =>
             appendFile(log, `${new Date().toISOString()} ${line}\n`).catch(
                 () => {},
             ),
         )
+    }
+    function say(line: string): void {
+        record(line)
         notifications.show(line)
     }
     async function settled(code: number): Promise<number> {
@@ -239,7 +306,7 @@ async function open(link: string): Promise<number> {
         return code
     }
     try {
-        return settled(await pairWith(link, say))
+        return settled(await pairWith(link, say, record))
     } catch (thrown) {
         // The applet discards this process's output, so a throw is only seen if it is said.
         say(
@@ -252,6 +319,7 @@ async function open(link: string): Promise<number> {
 async function pairWith(
     link: string,
     say: (line: string) => void,
+    record: (line: string) => void,
 ): Promise<number> {
     const pairing = pairingOf(link)
     if (pairing === undefined) {
@@ -261,17 +329,16 @@ async function pairWith(
     const settings = (await Bun.file(
         `${import.meta.dir}/settings.json`,
     ).json()) as HandlerSettings
-    if (
-        !(await consented(
-            pairing,
-            settings,
-            allowedIn(import.meta.dir),
-            ask,
-            say,
-        ))
+    record(`${pairing.site} asks for @abide/bridge ${pairing.version}.`)
+    const allowed = await consented(
+        pairing,
+        settings,
+        allowedIn(import.meta.dir),
+        ask,
+        say,
     )
-        return 0
-    const running = Bun.spawn(bridgeArguments(pairing, settings), {
+    if (allowed === undefined) return 0
+    const running = Bun.spawn(bridgeArguments(allowed, settings), {
         stdout: 'ignore',
         stderr: 'pipe',
         // The visitor's own `--env` last, so a `PATH` they gave install wins over the one it found.

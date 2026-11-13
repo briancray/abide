@@ -97,6 +97,16 @@ import Section from '#src/lib/Section.abide'
 
         <Code code={`bunx @abide/bridge <site> <code> --full`} />
 
+        <p>A site can ask for it. Pass <code>full: true</code> to
+            <code>provider.claudeCode.bridge</code> or <code>provider.claudeCode.bridgeCommand</code>,
+            or turn on <code>ABIDE_BRIDGE_FULL</code> for <code>pairing()</code>, and the command
+            carries <code>--full</code> and the link asks for full access. Opening that link names no
+            tool: it says the site is requesting full access to the visitor's Claude Code, and offers
+            Allow Full Access, Only Site Tools and Don't Allow. Only Site Tools pairs with the site's
+            own tools and none of the machine's.</p>
+
+        <Code code={`onConfig(() => ({ ABIDE_BRIDGE_FULL: true }))`} />
+
         <p><code>bunx @abide/bridge</code> runs <code>abide-bridge &lt;site&gt; &lt;code&gt;</code>.
             <code>--claude &lt;path&gt;</code> names the Claude Code to run where
             <code>claude</code> is not on the <code>PATH</code>, and each
@@ -160,18 +170,21 @@ import Section from '#src/lib/Section.abide'
             classes on Windows. <code>abide-bridge install</code> takes the same
             <code>--full</code>, <code>--claude</code>, <code>--env</code> and options after
             <code>--</code> as the command, and keeps them: every link it opens runs Claude Code with
-            them, and no link can set any of them. Opening a link asks first. The question names the
-            site, the tools and the bridge release it asks for, any tool whose server they lack, and
-            the options and variable names install kept, or says the site gets everything where
-            install was run <code>--full</code>. Then it runs that release, as the command would. A Linux desktop with neither
+            them, and no link can set any of them. A link's ask for full access runs only where the
+            visitor allows it. Opening a link asks first. The question names the site and the tools it
+            asks for, any tool whose server they lack, and the options and variable names install
+            kept, or says the site asks for full access, or that it gets it where install was run
+            <code>--full</code>. Then it runs the bridge release the link names, as the command would. A Linux desktop with neither
             <code>zenity</code> nor <code>kdialog</code> cannot ask, so it pairs nothing from a
             link.</p>
 
-        <p>The visitor can answer Always Allow. A link only proves the site minted its code, never
-            that this visitor asked for it, so the bridge keeps the answer for the site and for whom
-            the code was minted: the signed-in member, or the browser when nobody is. A later link
-            pairs unasked only where its code was minted for the same one and asks for no new tool.
-            A code someone else minted and put in front of them is asked about.
+        <p>Allow is kept. A link only proves the site minted its code, never that this visitor
+            asked for it, so the bridge keeps the answer for the site and for whom the code was
+            minted: the signed-in member, or the browser when nobody is. A later link pairs unasked
+            only where its code was minted for the same one and asks for no new tool, and for full
+            access only where they answered that ask before, as they answered it. A site allowed full
+            access pairs unasked whatever it asks for. A code someone else minted and put in front of
+            them is asked about, and so is every link from a site that names nobody.
             <code>abide-bridge forget</code> asks again for one site, or every one, and
             <code>abide-bridge uninstall</code> takes away everything install wrote.</p>
 
@@ -190,6 +203,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>pairing</code></td><td>This browser's pairing in a page: <code>status</code>, <code>step</code> and <code>copied</code>, with <code>start</code> to pair with a click, <code>copyInstall</code> to copy the install command and <code>stop</code> to let it go.</td></tr>
                 <tr><td><code>/__abide/pairing</code></td><td>Where <code>pairing</code> reads this browser's status, followed over the socket. On no generated surface.</td></tr>
                 <tr><td><code>ABIDE_BRIDGE_TOOLS</code></td><td>The tools <code>/__abide/pairing</code> grants, separated by commas. Unset, none.</td></tr>
+                <tr><td><code>ABIDE_BRIDGE_FULL</code></td><td>Whether <code>/__abide/pairing</code> asks for full access. Unset, it does not.</td></tr>
                 <tr><td><code>onPairing</code></td><td>The options every pairing's command and install command carry after <code>--</code>, for the person asking.</td></tr>
                 <tr><td><code>provider.claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>

@@ -35,16 +35,6 @@ let turns = reactive<{ question: string; parts: AnswerPart[] }[]>([])
 let asking = reactive<Message[] | undefined>(undefined)
 let answered = reactive<string[]>([])
 
-// 44.82 — EVERYTHING THE VISITOR'S CLAUDE CODE HAS is theirs to give, so the commands the panel shows
-// run the bridge `--full`: a site cannot mint one that does, and the visitor copies it knowing so. The
-// flag goes before any `--`, whose arguments are Claude Code's own.
-function withFull(command: string): string {
-    const at = command.indexOf(' -- ')
-    return at === -1
-        ? `${command} --full`
-        : `${command.slice(0, at)} --full${command.slice(at)}`
-}
-
 const events = reactive(() => (asking ? answer({ messages: asking }) : []))
 
 // The answer so far: its finished blocks, the one being written, and the docs tool it last called.
@@ -153,18 +143,18 @@ function focusOnKey(input: Element) {
             <p class="status">Connecting…</p>
         {:else if !status.paired}
             <div class="pair flow">
-                <p>The answers come from your own Claude Code, run on your machine. Run its bridge with
-                    <code>--full</code> and it can also build what you ask for with everything your Claude
-                    Code has, asking you here before anything it is unsure of. Pair it with this browser
-                    once; the native app is paired already, and runs it <code>--full</code>.</p>
+                <p>The answers come from your own Claude Code, run on your machine. This site asks it for
+                    full access, so it can also build what you ask for, asking you here before anything
+                    risky; you can allow it only these docs instead. Pair it with this browser once; the
+                    native app is paired already, with full access.</p>
                 {#if step === 'install'}
-                    <pre>{withFull(status.install)}</pre>
+                    <pre>{status.install}</pre>
                     <div class="row">
                         <button onclick={copyInstall}>{copied ? 'Copied' : 'Copy'}</button>
                         <span class="status">then pair again</span>
                     </div>
                 {:else}
-                    <pre>{withFull(status.command)}</pre>
+                    <pre>{status.command}</pre>
                     <div class="row">
                         <button disabled={step === 'waiting'} onclick={start}>
                             {step === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>

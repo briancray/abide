@@ -1,7 +1,7 @@
 // A PAIRING AS A LINK: what a site shows beside its command (44.40), opened by the handler
 // `abide-bridge install` registers. It carries what the command does — the site, the code, the bridge
-// release that speaks the site's relay and the tools of this machine it asks for — and nothing more,
-// and the handler asks the visitor before it runs one (44.42).
+// release that speaks the site's relay, the tools of this machine it asks for and whether it asks for
+// all of them (44.85) — and nothing more, and the handler asks the visitor before it runs one (44.42).
 
 import { PAIRING_SCHEME } from './PAIRING_SCHEME.ts'
 
@@ -11,6 +11,8 @@ export type Pairing = {
     code: string
     version: string
     tools: string[]
+    /** The site asks for everything the visitor's Claude Code has, as `--full` gives it. 44.85. */
+    full: boolean
 }
 
 // A release on npm, never a range, a tag or a path: the version is laid into `bun x`'s package spec.
@@ -38,6 +40,7 @@ export function pairingOf(link: string): Pairing | undefined {
     const site = url.searchParams.get('site') ?? ''
     const code = url.searchParams.get('code') ?? ''
     const version = url.searchParams.get('version') ?? ''
+    const full = url.searchParams.get('full')
     const tools = (url.searchParams.get('tools') ?? '')
         .split(',')
         .filter((tool) => tool !== '')
@@ -57,7 +60,8 @@ export function pairingOf(link: string): Pairing | undefined {
         siteUrl.search !== '' ||
         siteUrl.hash !== '' ||
         !CODE.test(code) ||
-        !RELEASE.test(version)
+        !RELEASE.test(version) ||
+        (full !== null && full !== '1')
     )
         return undefined
     for (const tool of tools) if (!TOOL.test(tool)) return undefined
@@ -66,6 +70,7 @@ export function pairingOf(link: string): Pairing | undefined {
         code,
         version,
         tools,
+        full: full === '1',
     }
 }
 

@@ -4099,16 +4099,15 @@ as one text piece.
 
 44.40 A pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints MUST
 carry, beside its command, a link in the `abide-bridge` scheme naming the same site, code, bridge
-release and tools.
+release and tools, and whether it asks for full access (44.85).
 
 44.41 A bridge MUST open only a link of the `abide-bridge` scheme whose site is https or loopback and
 whose release is a version alone, and MUST run the release it names.
 
 44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, save where 44.62
-pairs it unasked, naming the site, the tools and the bridge release the link asks for — or, where
-`abide-bridge install` was run `--full`, that it gives everything 44.82 does — and the options and the
-names of the variables `abide-bridge install` kept (44.44), and MUST offer to always
-allow the site only where `/__abide/bridge` named a holder for the link's code (44.63).
+pairs it unasked, naming the site and the tools the link asks for — or, where it asks for full access,
+that it does and no tool; or, where `abide-bridge install` was run `--full`, that it gives everything
+44.82 does — and the options and the names of the variables `abide-bridge install` kept (44.44).
 
 44.43 `abide-bridge install` MUST write what opens links under the visitor's own home — Application
 Support on macOS, `XDG_DATA_HOME` on Linux, `LOCALAPPDATA` on Windows — and register it with that
@@ -4118,7 +4117,7 @@ wrote.
 44.44 `abide-bridge install` MUST keep the Claude Code options after its `--`, each `--env
 NAME=VALUE` and the `--full` it is given, and a bridge opening an `abide-bridge` link MUST run Claude
 Code with those options ahead of the link's tools and with those variables set, and run `--full` where
-install was, and a link MUST NOT set any of them.
+install was, and a link MUST NOT set any of them, save as 44.87 runs it `--full`.
 
 44.45 A bridge MUST say that `/__abide/bridge` did not take a report once, and not again until a
 report is taken, and MUST NOT say it while it redials per 44.25.
@@ -4173,9 +4172,10 @@ bridge last reported it cannot make available (44.29), and none while no bridge 
 44.61 A bridge MUST report to `/__abide/bridge` the tools its pairing's code asked for that it cannot
 make available once it pairs, and again before a turn wherever they changed.
 
-44.62 A bridge opening an `abide-bridge` link MUST pair without asking only where the visitor chose to
-always allow its site for the holder `/__abide/bridge` names for its code (44.63), and the link asks
-for no tool beyond those allowed when they chose.
+44.62 A bridge opening an `abide-bridge` link MUST pair without asking only where 44.88 kept its site
+allowed for the holder `/__abide/bridge` names for its code (44.63), and then only where full access
+was allowed, or the link asks for full access and that ask was answered, or it asks for no tool beyond
+those allowed.
 
 44.63 `/__abide/bridge` MUST name, for a code minted and unspent, a holder without spending the code —
 the same for every code minted to one sign-in, or signed out to one browser, and different for any
@@ -4191,7 +4191,8 @@ none.
 
 44.67 `/__abide/pairing` MUST answer the asking browser's `BridgeStatus` as it stands, with the code
 it answered last while that is unspent and unexpired, granting the tools `ABIDE_BRIDGE_TOOLS` names
-separated by commas, and none where it names none.
+separated by commas, and none where it names none, and minted as 44.85 mints one with `full` where
+`ABIDE_BRIDGE_FULL` is on.
 
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
@@ -4256,6 +4257,20 @@ refuse 404 otherwise; a prompt it allows MUST run with the input the event named
 
 44.84 A bridge MUST deny a permission prompt `/__abide/bridge` sent no answer to within 120 seconds,
 or whose turn ended first.
+
+44.85 A pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints with `full`
+MUST carry `--full` in its command ahead of any `--`, and one minted without it MUST NOT.
+
+44.86 A bridge opening an `abide-bridge` link that asks for full access MUST offer the visitor to allow
+only the site's own tools, and, so allowed, now or as 44.62 pairs it, MUST pair with no tool of the
+visitor's machine.
+
+44.87 A bridge opening an `abide-bridge` link MUST run `--full` only where `abide-bridge install` was
+run `--full`, or the link asks for full access and the visitor allowed it, now or as 44.62 pairs it.
+
+44.88 A bridge the visitor allowed to pair from a link MUST keep its site allowed for the holder
+`/__abide/bridge` names for the link's code (44.63), with the tools the link asked for and the answer
+to its ask for full access, and MUST keep nothing where `/__abide/bridge` named no holder.
 
 # 45. Offline
 

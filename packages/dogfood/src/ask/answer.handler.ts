@@ -12,7 +12,8 @@ import { SYSTEM_PROMPT } from './lib/SYSTEM_PROMPT.server.ts'
 
 // The docs' own tools, `src/ask/tools/*`: the app's MCP surface also lists the CRM's handlers, which
 // the examples call and a question about abide never needs. What the visitor's machine offers besides
-// is theirs to grant: a bridge run `--full` hands the turn everything their Claude Code has (44.82).
+// is theirs to grant: a pairing they allowed full access hands the turn everything their Claude Code
+// has (44.82, 44.85).
 const DOCS_TOOL = /_ask_tools_/
 
 const claudeCode = provider.claudeCode({ systemPrompt: SYSTEM_PROMPT })
