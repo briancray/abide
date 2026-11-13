@@ -51,7 +51,7 @@ import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { publicKeyOf, publishUpdate, updateKey } from '#server/updateFeed.ts'
 import { escapeText } from '#shared/escapeText.ts'
-import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
+import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/NATIVE_FILES.ts'
 
 import abidePackage from '../package.json' with { type: 'json' }
 
@@ -381,7 +381,7 @@ async function compileExecutable(
 }
 
 /**
- * The document `src/launcher.abide` renders into: abide's own, which the page writes its
+ * The document `src/native/launcher.abide` renders into: abide's own, which the page writes its
  * `<html>` onto (35.15).
  *
  * 38.84 — THE PAGE'S OWN `<style>` IS IN ITS HEAD. A component's stylesheet reaches a browser with

@@ -777,7 +777,10 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `**/<NAME>.param.ts` | A param file: the matcher a segment naming `NAME` matches by. | 23.22, 23.24, 23.25, 23.26 |
 | `**/<name>.handler.ts` | A handler file: the handler its default export declares, at its directory's route and then `<name>`. | 16.2, 16.28, 16.73, 16.74, 19.1, 23.14, 23.22 |
 | `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
-| `src/launcher.abide` | The desktop launcher, beside the root layout: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
+| `src/native/` | The desktop app's own pages, which are no routes of the app's. | 23.15, 23.33 |
+| `src/native/launcher.abide` | The desktop launcher: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
+| `src/native/menubar.abide` | The page the menu bar extra's panel shows. | 38.167, 38.168, 38.169, 38.171 |
+| `src/public/icon-menubar.png` | The file answered at `/icon-menubar.png`, and the menu bar extra's icon. | 36.11, 38.166 |
 | `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
 | `**/error.abide` | The page a refusal renders in. | 35.2, 35.3, 35.14, 35.18 |
 | `**/node_modules/**/*.abide` | A component a dependency ships as source, compiled with the app that imports it. | 34.23, 34.24, 34.25, 34.26, 34.27, 38.99 |
@@ -799,18 +802,21 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2, 37.7, 37.13 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7, 37.13 |
 | `onPairing` | `(args: () => readonly string[]) => () => void` | The Claude Code arguments every pairing's command and install carry after `--`, for the person asking. | 37.7, 37.13, 44.76 |
-| `onLauncher` | `(options: () => LauncherOptions) => () => void` | The window the desktop app opens and the forms its launcher offers. | 38.80, 38.81, 38.83, 38.86, 38.102, 38.107 |
+| `onLauncher` | `(options: () => LauncherOptions) => () => void` | The window the desktop app opens and the forms its launcher offers. | 38.80, 38.81, 38.83, 38.86, 38.102, 38.107, 38.156 |
 
 ## The desktop app
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `LauncherOptions` | `{ width?: number; height?: number; minWidth?: number; minHeight?: number; update?: string } & ({ start?: true; connect?: boolean } \| { start: false; connect?: true })` | What an `onLauncher` may answer. | 38.80, 38.81, 38.142, 38.143, 38.144 |
+| `LauncherOptions` | `{ width?: number; height?: number; minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number; titlebar?: 'standard' \| 'hidden' \| 'inset'; vibrancy?: 'titlebar' \| 'selection' \| 'menu' \| 'popover' \| 'sidebar' \| 'headerView' \| 'sheet' \| 'windowBackground' \| 'hudWindow' \| 'fullScreenUI' \| 'toolTip' \| 'contentBackground' \| 'underWindowBackground' \| 'underPageBackground'; appearance?: 'system' \| 'light' \| 'dark'; resizable?: boolean; fullScreen?: boolean; alwaysOnTop?: boolean; shadow?: boolean; rememberFrame?: boolean; inspector?: boolean; dock?: boolean; menuBarExtra?: boolean; panelWidth?: number; panelHeight?: number; update?: string } & ({ start?: true; connect?: boolean } \| { start: false; connect?: true })` | What an `onLauncher` may answer. | 38.80, 38.81, 38.142, 38.143, 38.144, 38.150, 38.151, 38.152, 38.154, 38.157, 38.158, 38.159, 38.160, 38.161, 38.162, 38.163, 38.165, 38.166, 38.168, 38.172, 38.173 |
+| `data-abide-titlebar` | `attribute` | The element a press drags the desktop app's window by. | 38.155, 38.164 |
+| `--abide-titlebar-height` | `<length>` | The height of the titlebar the desktop app's page is drawn under. | 38.153 |
+| `--abide-titlebar-inset` | `<length>` | The width the desktop app's window controls take from the page's start edge. | 38.153 |
 | `desktop` | `() => { version: string } \| undefined` | The version of the desktop app whose window the work running is for, a hint any client can claim. | 38.140, 38.141 |
 | `pendingUpdate` | `Reactive<StagedUpdate \| undefined>` | The update the desktop app's window has staged, waiting for it to restart. | 38.142, 38.148 |
 | `StagedUpdate` | `class StagedUpdate { version: string; required: boolean; notes: string \| undefined }` | What `pendingUpdate` holds. | 38.146, 38.148 |
 | `StagedUpdate.install` | `() => void` | Restarts the desktop app into the update. | 38.144, 38.145 |
-| `onMenu` | `(read: () => readonly MenuItem[]) => () => void` | The menus a layout or a page adds to the desktop app's menu bar while it stands. | 38.88, 38.92 |
+| `onMenu` | `(read: () => readonly MenuItem[]) => () => void` | The menus a layout or a page adds to the desktop app's menu bar while it stands. | 38.88, 38.92, 38.170 |
 | `MenuItem` | `'separator' \| MenuEntry \| { label: string; key?: string; role?: MenuRole; href?: string; items?: MenuItem[] }` | One entry in the menu bar or in a menu under it. | 38.89, 38.90 |
 | `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front' \| 'update'` | What a menu item does natively. | 38.74, 38.89, 38.145, 38.149 |
 | `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item the page that files it answers. | 38.91 |

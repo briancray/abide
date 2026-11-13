@@ -11,6 +11,7 @@ import {
     BRIDGE_ADDRESS,
     HEALTH_ADDRESS,
     MCP_ADDRESS,
+    MENU_BAR_ADDRESS,
     OPENAPI_ADDRESS,
     PRIVATE_HANDLERS_ADDRESS,
 } from '#shared/ADDRESSES.ts'
@@ -273,12 +274,14 @@ export function laneOf(app: AppSources, request: Request): Lane {
 /**
  * Whether `asked` is an address abide answers out of the command's own files.
  *
- * 16.70 — a private handler is answered by the route table, below abide's own namespace.
+ * 16.70, 38.167 — a private handler and the menu bar extra's page are answered by the route table,
+ * below abide's own namespace.
  */
 function isFrameworkAddress(asked: string): boolean {
     return (
         asked.startsWith(`${ABIDE_ADDRESS}/`) &&
-        !asked.startsWith(`${PRIVATE_HANDLERS_ADDRESS}/`)
+        !asked.startsWith(`${PRIVATE_HANDLERS_ADDRESS}/`) &&
+        asked !== MENU_BAR_ADDRESS
     )
 }
 

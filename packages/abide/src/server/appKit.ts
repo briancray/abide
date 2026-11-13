@@ -3,7 +3,8 @@
 //
 // NO STRUCT IS PASSED BY VALUE. A `CGRect` is four doubles in registers on arm64 and a block on the
 // stack on x86-64, and `bun:ffi` can only spell the first; every call here takes scalars and
-// pointers, and a frame is set through `setContentSize:` — two doubles, the same in both ABIs.
+// pointers, and a frame is set through `setContentSize:` — two doubles, the same in both ABIs — and
+// read through key-value coding, which boxes it in an `NSValue` that copies it into memory of ours.
 
 import { CFunction, CString, dlopen, FFIType, JSCallback, read } from 'bun:ffi'
 
@@ -135,6 +136,24 @@ export function nsBoolean(value: boolean): Id {
         FFIType.ptr,
         value,
     ) as Id
+}
+
+/** The `NSRect` `object` answers at `key`, as its origin and size: `[x, y, width, height]`. */
+export function rectOf(
+    object: Id,
+    key: string,
+): [number, number, number, number] {
+    const bytes = new Uint8Array(32)
+    sendTyped(
+        send(object, 'valueForKey:', nsString(key)),
+        'getValue:size:',
+        [FFIType.ptr, FFIType.u64],
+        FFIType.void,
+        bytes,
+        32,
+    )
+    const rect = new Float64Array(bytes.buffer)
+    return [rect[0] ?? 0, rect[1] ?? 0, rect[2] ?? 0, rect[3] ?? 0]
 }
 
 // Kept for the process's life: the runtime holds each one as a method's implementation.

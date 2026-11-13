@@ -295,7 +295,7 @@ export function onPrincipal(
 /**
  * Files what the desktop app's window and launcher are; returns what unfiles it.
  *
- * 38.80 — called in `src/launcher.abide` alone (38.107), and read as the app launches.
+ * 38.80 — called in `src/native/launcher.abide` alone (38.107), and read as the app launches.
  */
 export function onLauncher(options: () => LauncherOptions): () => void {
     return filed(HOOKS.launcher, options)

@@ -5,6 +5,8 @@
 // loopback for the window alone. What the window shows is the `DesktopSession`'s; the window itself
 // is `openDesktopWindow`'s.
 
+import { ICON_ADDRESSES, MENU_BAR_ICON_ADDRESS } from '#shared/NATIVE_FILES.ts'
+
 import { dataDirectory, derived as appDerived } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type AppOrigin, bootEntered, enterApp } from './createApp.ts'
@@ -15,6 +17,7 @@ import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
 import { launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
 import { LOOPBACK } from './LOOPBACK.ts'
+import type { MenuBarIcon } from './menuBarExtra.ts'
 import { openDesktopWindow } from './openDesktopWindow.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { randomToken } from './randomToken.ts'
@@ -24,7 +27,7 @@ import { type BuildParts, builtSources } from './servedApp.ts'
 
 /** What `abide bundle` read of the launcher's files, carried in the executable. */
 export type Desktop = {
-    /** 38.82 — `src/launcher.abide`'s page, where the app has one that paints. */
+    /** 38.82 — `src/native/launcher.abide`'s page, where the app has one that paints. */
     launch:
         (() => Promise<{ default: (props: Launch) => Component }>) | undefined
     /** The document the launch page renders into, its stylesheet already in its head (38.84). */
@@ -44,13 +47,37 @@ export async function runDesktop(
 ): Promise<void> {
     if (Bun.argv.length > 2 || process.platform !== 'darwin')
         return runCompiled(origin, parts, specifiers)
-    await launch(origin, () => builtSources(parts), desktop)
+    await launch(
+        origin,
+        () => builtSources(parts),
+        desktop,
+        await menuBarIcon(parts.published),
+    )
+}
+
+/**
+ * 38.166 — what the menu bar extra is drawn from: the public `/icon-menubar.png` as a template the
+ * platform tints, else `/icon.png` as it is, else nothing.
+ */
+async function menuBarIcon(
+    published: Map<string, string>,
+): Promise<MenuBarIcon | undefined> {
+    for (const [address, template] of [
+        [MENU_BAR_ICON_ADDRESS, true],
+        [ICON_ADDRESSES.png, false],
+    ] as const) {
+        const path = published.get(address.slice(1))
+        if (path !== undefined)
+            return { bytes: await Bun.file(path).bytes(), template }
+    }
+    return undefined
 }
 
 async function launch(
     origin: AppOrigin,
     load: () => ReturnType<typeof builtSources>,
     { launch: launchModule, document, icon, accent, publicKey }: Desktop,
+    extraIcon: MenuBarIcon | undefined,
 ): Promise<void> {
     // 37.1 — ENTERED ONCE, before the window: the start form reads `onConfig` and the launcher's
     // `onLauncher` is filed. Every start after it boots in what this entered (`bootEntered`).
@@ -178,6 +205,7 @@ async function launch(
         base,
         session,
         updater,
+        extraIcon,
     )
     await session.resume(options)
     navigate(session.shown ?? base)

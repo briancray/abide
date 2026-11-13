@@ -17,6 +17,7 @@ import {
     nsBoolean,
     nsString,
     objcClass,
+    rectOf,
     selector,
     send,
     sendTyped,
@@ -27,10 +28,26 @@ import type { DesktopUpdater } from './DesktopUpdater.ts'
 import { desktopUserAgent } from './desktopUserAgent.ts'
 import { reportUnexpected } from './hooks.ts'
 import { installMenu } from './installMenu.ts'
-import type { Launcher } from './launcherOptions.ts'
+import { type Launcher, VIBRANCY_MATERIALS } from './launcherOptions.ts'
 import { menuBar } from './menuBar.ts'
+import { type MenuBarIcon, openMenuBarExtra } from './menuBarExtra.ts'
+import { windowBridge } from './windowBridge.ts'
 
 const DRAIN_MILLISECONDS = 8
+
+// NSWindowStyleMask.
+const TITLED = 1
+const CLOSABLE = 2
+const MINIATURIZABLE = 4
+const RESIZABLE = 8
+const FULL_SIZE_CONTENT_VIEW = 1 << 15
+// NSWindowCollectionBehavior.
+const FULL_SCREEN_PRIMARY = 1 << 7
+const FULL_SCREEN_NONE = 1 << 9
+const FLOATING_WINDOW_LEVEL = 3
+const UNIFIED_TOOLBAR_STYLE = 3
+const CLOSE_BUTTON = 0
+const ZOOM_BUTTON = 2
 
 /**
  * Opens the app's window on a blank page and answers how to point it at an address.
@@ -47,15 +64,17 @@ export function openDesktopWindow(
     base: string,
     session: DesktopSession,
     updater: DesktopUpdater | undefined,
+    menuBarIcon: MenuBarIcon | undefined,
 ): (address: string) => void {
     const application = send(objcClass('NSApplication'), 'sharedApplication')
     // Regular: a Dock icon and a menu bar, which a process outside a `.app` does not get by default.
+    // 38.165 — accessory: neither.
     sendTyped(
         application,
         'setActivationPolicy:',
         [FFIType.i64],
         FFIType.void,
-        0,
+        options.dock ? 0 : 1,
     )
     let quitting = false
     // 38.145 — set by a restart the person asked for, so the update installed is opened.
@@ -94,11 +113,23 @@ export function openDesktopWindow(
                         return 0
                     },
                 },
+                // 38.172 — the menu bar extra outlives the window it shows and hides.
                 'applicationShouldTerminateAfterLastWindowClosed:': {
                     types: 'c@:@',
                     args: [FFIType.ptr],
                     returns: FFIType.bool,
-                    run: () => true,
+                    run: () => !options.menuBarExtra,
+                },
+                // 38.173.
+                'applicationShouldHandleReopen:hasVisibleWindows:': {
+                    types: 'c@:@c',
+                    args: [FFIType.ptr, FFIType.bool],
+                    returns: FFIType.bool,
+                    run: (_application: Id, visible: boolean) => {
+                        if (!visible)
+                            send(window, 'makeKeyAndOrderFront:', null)
+                        return true
+                    },
                 },
             }),
             'new',
@@ -110,9 +141,87 @@ export function openDesktopWindow(
     process.on('unhandledRejection', reportUnexpected)
     process.on('uncaughtException', reportUnexpected)
 
+    // 38.157.
+    if (options.appearance !== 'system')
+        send(
+            application,
+            'setAppearance:',
+            send(
+                objcClass('NSAppearance'),
+                'appearanceNamed:',
+                nsString(
+                    options.appearance === 'dark'
+                        ? 'NSAppearanceNameDarkAqua'
+                        : 'NSAppearanceNameAqua',
+                ),
+            ),
+        )
+
     const window = created('NSWindow')
-    // Titled, closable, miniaturizable, resizable.
-    sendTyped(window, 'setStyleMask:', [FFIType.u64], FFIType.void, 15)
+    const drawnUnder = options.titlebar !== 'standard'
+    sendTyped(
+        window,
+        'setStyleMask:',
+        [FFIType.u64],
+        FFIType.void,
+        TITLED |
+            CLOSABLE |
+            MINIATURIZABLE |
+            // 38.158.
+            (options.resizable ? RESIZABLE : 0) |
+            // 38.152.
+            (drawnUnder ? FULL_SIZE_CONTENT_VIEW : 0),
+    )
+    if (drawnUnder) {
+        sendTyped(
+            window,
+            'setTitlebarAppearsTransparent:',
+            [FFIType.bool],
+            FFIType.void,
+            true,
+        )
+        // NSWindowTitleHidden.
+        sendTyped(window, 'setTitleVisibility:', [FFIType.i64], FFIType.void, 1)
+    }
+    // 38.152 — `inset` is the titlebar a unified toolbar makes, with nothing in the toolbar.
+    if (options.titlebar === 'inset') {
+        const toolbar = created('NSToolbar')
+        sendTyped(
+            toolbar,
+            'setShowsBaselineSeparator:',
+            [FFIType.bool],
+            FFIType.void,
+            false,
+        )
+        send(window, 'setToolbar:', toolbar)
+        sendTyped(
+            window,
+            'setToolbarStyle:',
+            [FFIType.i64],
+            FFIType.void,
+            UNIFIED_TOOLBAR_STYLE,
+        )
+    }
+    // 38.159.
+    sendTyped(
+        window,
+        'setCollectionBehavior:',
+        [FFIType.u64],
+        FFIType.void,
+        options.fullScreen ? FULL_SCREEN_PRIMARY : FULL_SCREEN_NONE,
+    )
+    // 38.160.
+    if (options.alwaysOnTop)
+        sendTyped(
+            window,
+            'setLevel:',
+            [FFIType.i64],
+            FFIType.void,
+            FLOATING_WINDOW_LEVEL,
+        )
+    // 38.161.
+    if (!options.shadow)
+        sendTyped(window, 'setHasShadow:', [FFIType.bool], FFIType.void, false)
     sendTyped(
         window,
         'setReleasedWhenClosed:',
@@ -136,72 +245,286 @@ export function openDesktopWindow(
         options.minWidth,
         options.minHeight,
     )
+    // 38.150.
+    if (Number.isFinite(options.maxWidth) || Number.isFinite(options.maxHeight))
+        sendTyped(
+            window,
+            'setContentMaxSize:',
+            [FFIType.f64, FFIType.f64],
+            FFIType.void,
+            Math.min(options.maxWidth, Number.MAX_VALUE),
+            Math.min(options.maxHeight, Number.MAX_VALUE),
+        )
     send(window, 'center')
-    // Where the window was and how large, as the last launch left it.
-    sendTyped(
-        window,
-        'setFrameAutosaveName:',
-        [FFIType.ptr],
-        FFIType.bool,
-        nsString(`${appName} window`),
-    )
+    // 38.162 — where the window was and how large, as the last launch left it.
+    if (options.rememberFrame)
+        sendTyped(
+            window,
+            'setFrameAutosaveName:',
+            [FFIType.ptr],
+            FFIType.bool,
+            nsString(`${appName} window`),
+        )
+    // 38.156 — the background the last page reported, so the window opens on it rather than a flash.
+    const background = session.remembered.background
+    if (background !== null && options.vibrancy === undefined)
+        send(window, 'setBackgroundColor:', colorOf(background))
     send(window, 'setTitle:', nsString(appName))
 
     const view = created('WKWebView')
-    send(
-        send(send(view, 'configuration'), 'preferences'),
-        'setValue:forKey:',
-        nsBoolean(true),
-        nsString('developerExtrasEnabled'),
-    )
-    if (
+    // 38.163.
+    if (options.inspector) {
+        send(
+            send(send(view, 'configuration'), 'preferences'),
+            'setValue:forKey:',
+            nsBoolean(true),
+            nsString('developerExtrasEnabled'),
+        )
+        if (
+            sendTyped(
+                view,
+                'respondsToSelector:',
+                [FFIType.ptr],
+                FFIType.bool,
+                selector('setInspectable:'),
+            )
+        )
+            sendTyped(
+                view,
+                'setInspectable:',
+                [FFIType.bool],
+                FFIType.void,
+                true,
+            )
+    }
+    const uiDelegate = send(uiDelegateClass(), 'new')
+    send(view, 'setUIDelegate:', uiDelegate)
+    send(view, 'setCustomUserAgent:', nsString(desktopUserAgent(version)))
+    if (options.vibrancy === undefined) send(window, 'setContentView:', view)
+    else {
+        // 38.154 — the material is the content view, and the page is drawn over it with no ground.
+        const material = created('NSVisualEffectView')
+        sendTyped(
+            material,
+            'setMaterial:',
+            [FFIType.i64],
+            FFIType.void,
+            VIBRANCY_MATERIALS[options.vibrancy],
+        )
+        // NSVisualEffectBlendingModeBehindWindow.
+        sendTyped(material, 'setBlendingMode:', [FFIType.i64], FFIType.void, 0)
+        send(window, 'setContentView:', material)
+        send(material, 'addSubview:', view)
         sendTyped(
             view,
-            'respondsToSelector:',
-            [FFIType.ptr],
-            FFIType.bool,
-            selector('setInspectable:'),
+            'setTranslatesAutoresizingMaskIntoConstraints:',
+            [FFIType.bool],
+            FFIType.void,
+            false,
         )
-    )
-        sendTyped(view, 'setInspectable:', [FFIType.bool], FFIType.void, true)
-    send(view, 'setUIDelegate:', send(uiDelegateClass(), 'new'))
-    send(view, 'setCustomUserAgent:', nsString(desktopUserAgent(version)))
-    send(window, 'setContentView:', view)
+        for (const edge of [
+            'topAnchor',
+            'bottomAnchor',
+            'leadingAnchor',
+            'trailingAnchor',
+        ])
+            sendTyped(
+                send(
+                    send(view, edge),
+                    'constraintEqualToAnchor:',
+                    send(material, edge),
+                ),
+                'setActive:',
+                [FFIType.bool],
+                FFIType.void,
+                true,
+            )
+        send(
+            view,
+            'setValue:forKey:',
+            nsBoolean(false),
+            nsString('drawsBackground'),
+        )
+    }
     send(
         view,
         'loadHTMLString:baseURL:',
         nsString(
-            '<!doctype html><style>:root{color-scheme:light dark;background:#f5f5f7}@media (prefers-color-scheme:dark){:root{background:#1c1c1e}}</style>',
+            options.vibrancy !== undefined
+                ? '<!doctype html>'
+                : background !== null
+                  ? `<!doctype html><style>:root{background:rgb(${background.join(' ')})}</style>`
+                  : '<!doctype html><style>:root{color-scheme:light dark;background:#f5f5f7}@media (prefers-color-scheme:dark){:root{background:#1c1c1e}}</style>',
         ),
         null,
     )
+
+    // 38.153 — WHAT THE PAGE IS TOLD OF ITS TITLEBAR, installed again whenever it changes: at each
+    // navigation, once the window has laid out, and at each turn into and out of full screen.
+    const controller = send(
+        send(view, 'configuration'),
+        'userContentController',
+    )
+    const bridge = `(${windowBridge.toString()})()`
+    let fullScreen = false
+    const titlebarScript = (): string => {
+        let height = 0
+        let inset = 0
+        if (drawnUnder && !fullScreen) {
+            height =
+                rectOf(window, 'frame')[3] -
+                rectOf(window, 'contentLayoutRect')[3]
+            const [zoomX, , zoomWidth] = rectOf(
+                windowButton(window, ZOOM_BUTTON),
+                'frame',
+            )
+            // As wide again as the gap the close button keeps from the edge.
+            const [margin] = rectOf(windowButton(window, CLOSE_BUTTON), 'frame')
+            inset = zoomX + zoomWidth + margin
+        }
+        return `document.documentElement.style.setProperty('--abide-titlebar-height','${height}px');document.documentElement.style.setProperty('--abide-titlebar-inset','${inset}px')`
+    }
+    const userScript = (source: string): Id =>
+        sendTyped(
+            send(objcClass('WKUserScript'), 'alloc'),
+            'initWithSource:injectionTime:forMainFrameOnly:',
+            [FFIType.ptr, FFIType.i64, FFIType.bool],
+            FFIType.ptr,
+            nsString(source),
+            // WKUserScriptInjectionTimeAtDocumentStart: after the root element exists.
+            0,
+            true,
+        ) as Id
+    const tellTitlebar = (): void => {
+        const told = titlebarScript()
+        send(controller, 'removeAllUserScripts')
+        send(controller, 'addUserScript:', userScript(bridge))
+        send(controller, 'addUserScript:', userScript(told))
+        send(
+            view,
+            'evaluateJavaScript:completionHandler:',
+            nsString(told),
+            null,
+        )
+    }
+    send(
+        controller,
+        'addScriptMessageHandler:name:',
+        send(
+            definedClass('AbideWindowBridge', {
+                'userContentController:didReceiveScriptMessage:': {
+                    types: 'v@:@@',
+                    args: [FFIType.ptr, FFIType.ptr],
+                    returns: FFIType.void,
+                    run: (_controller: Id, message: Id) => {
+                        const [kind, ...rest] = stringOf(
+                            send(message, 'body'),
+                        ).split(' ')
+                        // 38.155 — the press that posted this is the event AppKit is handling.
+                        if (kind === 'drag') {
+                            const event = send(application, 'currentEvent')
+                            if (event !== null)
+                                send(
+                                    window,
+                                    'performWindowDragWithEvent:',
+                                    event,
+                                )
+                        } else if (kind === 'zoom') titlebarDoubleClick(window)
+                        // 38.156.
+                        else if (
+                            kind === 'background' &&
+                            options.vibrancy === undefined
+                        ) {
+                            const color = rest.map(Number) as [
+                                number,
+                                number,
+                                number,
+                            ]
+                            send(window, 'setBackgroundColor:', colorOf(color))
+                            session
+                                .rememberBackground(color)
+                                .catch(reportUnexpected)
+                        }
+                    },
+                },
+            }),
+            'new',
+        ),
+        nsString('abideWindow'),
+    )
+    const fullScreenChanged = (entered: boolean) => (): void => {
+        fullScreen = entered
+        tellTitlebar()
+    }
+    send(
+        window,
+        'setDelegate:',
+        send(
+            definedClass('AbideWindowDelegate', {
+                'windowDidEnterFullScreen:': {
+                    types: 'v@:@',
+                    args: [FFIType.ptr],
+                    returns: FFIType.void,
+                    run: fullScreenChanged(true),
+                },
+                'windowDidExitFullScreen:': {
+                    types: 'v@:@',
+                    args: [FFIType.ptr],
+                    returns: FFIType.void,
+                    run: fullScreenChanged(false),
+                },
+            }),
+            'new',
+        ),
+    )
     // 38.88 — THE MENU BAR IS THE PAGE'S: the defaults until the page the window loads tells it
     // what its route exports, and again after every navigation it makes.
+    // 38.166.
+    const extra = options.menuBarExtra
+        ? openMenuBarExtra(
+              appName,
+              version,
+              menuBarIcon,
+              options,
+              window,
+              uiDelegate,
+              () => session.shown,
+          )
+        : undefined
     let shownMenu: NativeMenuItem[] = []
     const showMenu = (told: NativeMenuItem[]): void => {
         shownMenu = told
-        installMenu(
+        const built = installMenu(
             menuBar(appName, options.connect, told, updateLabel()),
-            (item) => {
-                if (item.role === 'update') return checkForUpdates()
-                if (item.role === 'connect')
-                    return navigate(`${base}?focus=connect`)
-                // 38.74.
-                if (item.role === 'disconnect')
-                    return void session.forget().then(() => navigate(base))
-                if (item.role === 'reload') return void send(view, 'reload')
-                // 38.90, 38.91 — the page that numbered the item does what it means.
-                if (item.id !== undefined)
-                    send(
-                        view,
-                        'evaluateJavaScript:completionHandler:',
-                        nsString(
-                            `dispatchEvent(new CustomEvent('abide:menu', { detail: ${item.id} }))`,
-                        ),
-                        null,
-                    )
-            },
+            choose,
+            // 38.170.
+            extra === undefined
+                ? undefined
+                : [
+                      ...told,
+                      ...(told.length === 0 ? [] : (['separator'] as const)),
+                      { label: `Quit ${appName}`, role: 'quit', key: 'cmd+q' },
+                  ],
         )
+        extra?.setMenu(built)
+    }
+    const choose = (item: Exclude<NativeMenuItem, 'separator'>): void => {
+        if (item.role === 'update') return checkForUpdates()
+        if (item.role === 'connect') return navigate(`${base}?focus=connect`)
+        // 38.74.
+        if (item.role === 'disconnect')
+            return void session.forget().then(() => navigate(base))
+        if (item.role === 'reload') return void send(view, 'reload')
+        // 38.90, 38.91 — the page that numbered the item does what it means.
+        if (item.id !== undefined)
+            send(
+                view,
+                'evaluateJavaScript:completionHandler:',
+                nsString(
+                    `dispatchEvent(new CustomEvent('abide:menu', { detail: ${item.id} }))`,
+                ),
+                null,
+            )
     }
     const updateLabel = (): string | undefined =>
         updater === undefined
@@ -324,6 +647,8 @@ export function openDesktopWindow(
     const navigate = (address: string): void => {
         // 38.92.
         showMenu([])
+        tellTitlebar()
+        extra?.closePanel()
         send(
             view,
             'loadRequest:',
@@ -418,6 +743,47 @@ function uiDelegateClass(): Id {
             },
     })
     return uiDelegate
+}
+
+function windowButton(window: Id, button: number): Id {
+    return sendTyped(
+        window,
+        'standardWindowButton:',
+        [FFIType.u64],
+        FFIType.ptr,
+        button,
+    ) as Id
+}
+
+/** An opaque `NSColor` of sRGB bytes. */
+function colorOf([red, green, blue]: [number, number, number]): Id {
+    return sendTyped(
+        objcClass('NSColor'),
+        'colorWithSRGBRed:green:blue:alpha:',
+        [FFIType.f64, FFIType.f64, FFIType.f64, FFIType.f64],
+        FFIType.ptr,
+        red / 255,
+        green / 255,
+        blue / 255,
+        1,
+    ) as Id
+}
+
+/** 38.155 — what a double press on the titlebar does, as the system's setting for it names. */
+function titlebarDoubleClick(window: Id): void {
+    const action = stringOf(
+        send(
+            send(objcClass('NSUserDefaults'), 'standardUserDefaults'),
+            'stringForKey:',
+            nsString('AppleActionOnDoubleClick'),
+        ),
+    )
+    if (action === 'None') return
+    send(
+        window,
+        action === 'Minimize' ? 'performMiniaturize:' : 'performZoom:',
+        null,
+    )
 }
 
 // An `NSAlert` with the page's message; answers whether it was accepted.

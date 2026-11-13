@@ -8,7 +8,7 @@ import {
     OPENAPI_ADDRESS,
     PRINCIPAL_ADDRESS,
 } from '#shared/ADDRESSES.ts'
-import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
+import { LAUNCHER_PAGE, MENU_BAR_PAGE } from '#shared/NATIVE_FILES.ts'
 import {
     coversRoute,
     parseRoutePattern,
@@ -429,7 +429,7 @@ async function refuseModuleHooks(
 }
 
 /**
- * Refuses, naming the file, where anything but the root's `launcher.abide` calls `onLauncher`.
+ * Refuses, naming the file, where anything but `native/launcher.abide` calls `onLauncher`.
  *
  * 38.107 — the launch loads that file alone, so a call anywhere else is never read.
  */
@@ -503,8 +503,11 @@ function routesOf(
         const pattern = source.route as string
         const page = parseRoutePattern(pattern)
         const around: string[] = []
-        for (const layout of layouts)
-            if (coversRoute(layout.segments, page)) around.push(layout.source)
+        // 38.167 — the menu bar extra's page stands outside every layout.
+        if (source.position !== MENU_BAR_PAGE)
+            for (const layout of layouts)
+                if (coversRoute(layout.segments, page))
+                    around.push(layout.source)
         ;(source.kind === 'page' ? routes : errors).push({
             pattern,
             source: source.relative,

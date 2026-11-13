@@ -1,4 +1,4 @@
-// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107 — the desktop launcher's session, options, accent
+// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165 — the desktop launcher's session, options, accent
 // and own page, apart from the window: none of the four needs one to be checked.
 //
 // THE REVERT, for the accent: average every opaque pixel instead of binning by hue, and dogfood's
@@ -16,9 +16,10 @@ import { iconAccent, inkOn } from '#server/iconAccent.ts'
 import { type Launcher, launcherOf } from '#server/launcherOptions.ts'
 import { type Launch, launcherPage } from '#server/launcherPage.ts'
 import { LISTENING } from '#server/requestScope.ts'
-import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
+import { windowBridge } from '#server/windowBridge.ts'
+import { LAUNCHER_PAGE } from '#shared/NATIVE_FILES.ts'
 
-import { appFixture, buildApp } from './builtApp.ts'
+import { appFixture, buildApp, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)
@@ -59,14 +60,93 @@ test('what onLauncher answers fills its defaults and refuses what it does not ta
     )
 })
 
-// 38.80 — THE `onLauncher` `launcher.abide`'s SERVER BLOCK CALLS IS WHAT THE LAUNCH READS: the file is
+test('the window options take their own values and default to a standard window — 38.150-38.163, 38.165', () => {
+    expect(launcherOf({})).toMatchObject({
+        titlebar: 'standard',
+        vibrancy: undefined,
+        appearance: 'system',
+        resizable: true,
+        fullScreen: true,
+        alwaysOnTop: false,
+        shadow: true,
+        rememberFrame: true,
+        inspector: true,
+        dock: true,
+        menuBarExtra: false,
+        panelWidth: 360,
+        panelHeight: 480,
+        maxWidth: Number.POSITIVE_INFINITY,
+    })
+    expect(
+        launcherOf({
+            titlebar: 'inset',
+            vibrancy: 'sidebar',
+            appearance: 'dark',
+        }),
+    ).toMatchObject({
+        titlebar: 'inset',
+        vibrancy: 'sidebar',
+        appearance: 'dark',
+    })
+    expect(launcherOf({ titlebar: 'frameless' })).toContain(
+        '`titlebar` is not a launcher option, or "frameless"',
+    )
+    expect(launcherOf({ vibrancy: 'toString' })).toContain('`vibrancy`')
+    expect(launcherOf({ resizable: 'no' })).toContain('`resizable`')
+    expect(launcherOf({ dock: false })).toMatchObject({ dock: false })
+})
+
+test('a maximum below the minimum is refused — 38.151', () => {
+    expect(launcherOf({ maxWidth: 400 })).toContain(
+        'maximum size below its minimum size',
+    )
+    expect(launcherOf({ maxWidth: 400, minWidth: 300 })).toMatchObject({
+        maxWidth: 400,
+    })
+})
+
+// 38.155 — THE BRIDGE DECIDES FROM THE PAGE WHICH PRESSES ARE THE TITLEBAR'S. THE REVERT: drop the
+// control check, and the press on the button inside the titlebar posts a drag — 2 where 1 is due.
+test('a press on the titlebar drags and a double press zooms, and a control in it is left alone — 38.155', () => {
+    const posted: string[] = []
+    const scope = globalThis as { webkit?: unknown }
+    scope.webkit = {
+        messageHandlers: {
+            abideWindow: {
+                postMessage: (message: string) => posted.push(message),
+            },
+        },
+    }
+    const header = document.createElement('header')
+    header.setAttribute('data-abide-titlebar', '')
+    header.innerHTML = '<span>Deals</span><button>New</button>'
+    document.body.append(header)
+    const press = (target: Element, detail: number): void => {
+        target.dispatchEvent(
+            new MouseEvent('mousedown', { bubbles: true, button: 0, detail }),
+        )
+    }
+    windowBridge()
+    try {
+        press(header.querySelector('span') as Element, 1)
+        press(header.querySelector('button') as Element, 1)
+        press(header, 2)
+        press(document.body, 1)
+        expect(posted).toEqual(['drag', 'zoom'])
+    } finally {
+        header.remove()
+        delete scope.webkit
+    }
+})
+
+// 38.80 — THE `onLauncher` `native/launcher.abide`'s SERVER BLOCK CALLS IS WHAT THE LAUNCH READS: the file is
 // imported out of the build as `runDesktop` imports it, and the last one filed is the answer read.
 // THE REVERT: have `onLauncher` file nothing (`return () => {}` in `hooks.ts`); importing the file
 // files 0 where 1 is due, and the launch would read the default width, 1100, where 1200 is due.
 test('the launch reads what launcher.abide files with onLauncher — 38.80', async () => {
     const app = appFixture({
         'index.abide': '<main>home</main>',
-        'launcher.abide': `<script server>
+        'native/launcher.abide': `<script server>
 import { onLauncher } from '@abide/abide/server'
 
 onLauncher(() => ({ width: 1200 }))
@@ -103,6 +183,29 @@ onLauncher(() => ({ width: 1200 }))
     expect(built.stderr).toContain('38.107')
 }, 30_000)
 
+// 38.167 — THE MENU BAR EXTRA'S PAGE IS ANSWERED BY THE APP, OUTSIDE EVERY LAYOUT, at an address in
+// abide's own namespace. THE REVERTS: drop the `MENU_BAR_ADDRESS` arm of `isFrameworkAddress`; the
+// framework lane answers it, a 404. Or drop the `MENU_BAR_PAGE` guard in `routesOf`; the root
+// layout's `chrome` wraps the panel.
+test('native/menubar.abide is a page answered outside every layout — 38.167', async () => {
+    const { base, stop } = await serveApp({
+        'index.abide': '<main>home</main>',
+        'layout.abide': '<nav>chrome</nav><slot/>',
+        'native/menubar.abide': '<main>panel</main>',
+    })
+    try {
+        const answered = await fetch(`${base}/__abide/menubar`)
+        expect(answered.status).toBe(200)
+        const html = await answered.text()
+        expect(html).toContain('<main')
+        expect(html).toContain('panel')
+        expect(html).not.toContain('chrome')
+        expect(await (await fetch(`${base}/`)).text()).toContain('chrome')
+    } finally {
+        stop()
+    }
+}, 30_000)
+
 const PAGE: Launch = {
     name: 'ledger',
     start: '/start',
@@ -114,6 +217,12 @@ const PAGE: Launch = {
     icon: undefined,
     accent: undefined,
 }
+
+test('the launcher page is dragged by a strip as tall as the titlebar — 38.164', () => {
+    expect(launcherPage(PAGE)).toContain(
+        '<div class="titlebar" data-abide-titlebar></div>',
+    )
+})
 
 test('a start that asks for nothing posts from the page, with no dialog — 38.102', () => {
     const page = launcherPage(PAGE)

@@ -15,7 +15,7 @@ import { inkOn } from './iconAccent.ts'
 const SYSTEM_ACCENT = '#0a84ff'
 
 /**
- * What a launch page is rendered with: `src/launcher.abide`'s props, and the built-in page's.
+ * What a launch page is rendered with: `src/native/launcher.abide`'s props, and the built-in page's.
  *
  * 38.83 — a form the launcher does not offer has no address to post to.
  */
@@ -177,9 +177,11 @@ input:focus, select:focus { outline: 3px solid var(--ring); outline-offset: 0; b
 .issue, .failure { color: var(--bad); margin: 0; font-size: 12px; }
 .failure { margin-bottom: 14px; -webkit-user-select: text; user-select: text; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.titlebar { position: fixed; inset: 0 0 auto; height: var(--abide-titlebar-height, 0px); }
 </style>
 </head>
 <body>
+<div class="titlebar" data-abide-titlebar></div>
 <main>
     ${page.icon === undefined ? `<div class="mark" aria-hidden="true">${escapeText(page.name.charAt(0).toUpperCase())}</div>` : `<img class="icon" src="${escapeAttribute(page.icon)}" alt="">`}
     <h1>${name}</h1>

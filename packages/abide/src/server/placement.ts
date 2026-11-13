@@ -3,12 +3,14 @@
 // each. The route GRAMMAR is `routePattern`'s, which the browser's router reads too; this half is the
 // build's and the server's alone, so it stays out of the client's closure.
 
-import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
+import { MENU_BAR_ADDRESS } from '#shared/ADDRESSES.ts'
+import { MENU_BAR_PAGE, NATIVE_DIRECTORY } from '#shared/NATIVE_FILES.ts'
 
 import { RESERVED_DIRECTORIES } from './RESERVED_DIRECTORIES.ts'
 
 /** Where a file sits in an app, which is what it is to every reader (`placeOf`). */
-export type Place = 'address' | 'public' | 'lib' | 'dependency' | 'skipped'
+export type Place =
+    'address' | 'public' | 'lib' | 'native' | 'dependency' | 'skipped'
 
 /** Whether a `.abide` is a page, a layout, an error page or a component. */
 type FileKind = 'page' | 'layout' | 'error' | 'component'
@@ -37,11 +39,11 @@ export type Placement = {
  * The file at `relative` placed at `position`.
  *
  * 23.21 — WHERE IT SITS, THEN ITS NAME. Every `.abide` directly in an address directory is a page
- * but a `layout.abide`, an `error.abide` and the root's `launcher.abide`; one under a fence is a
- * component whatever it is called. 37.1 — its hooks are filed at an address's own route; under a
- * `lib` directory, at the route of the directory holding it, so a component an admin page renders
- * runs under the admin route's rungs; under a `public` directory, for a dependency's file, and for
- * the launcher (38.82), at the root's.
+ * but a `layout.abide` and an `error.abide`; one under a fence is a component whatever it is called,
+ * save the menu bar extra's page (38.167). 37.1 — its hooks are filed at an address's own route;
+ * under a `lib` directory, at the route of the directory holding it, so a component an admin page
+ * renders runs under the admin route's rungs; under a `public` or the `native` directory, and for a
+ * dependency's file, at the root's.
  *
  * `position` is RELATIVE TO THE APP'S ROOT: its directories are its route, so an absolute path would
  * read the machine's directories as the app's.
@@ -50,7 +52,18 @@ export function placement(relative: string, position = relative): Placement {
     const place = placeOf(position)
     let kind: FileKind = 'component'
     let scope = '/'
-    if (place === 'address' && position !== LAUNCHER_PAGE) {
+    // 38.167 — the menu bar extra's page, answered in abide's namespace.
+    if (position === MENU_BAR_PAGE)
+        return {
+            relative,
+            position,
+            place,
+            kind: 'page',
+            route: MENU_BAR_ADDRESS,
+            scope: '/',
+            dependency: placeOf(relative) === 'dependency',
+        }
+    if (place === 'address') {
         const name = position.slice(position.lastIndexOf('/') + 1)
         kind =
             name === 'layout.abide'
@@ -82,6 +95,7 @@ export function placement(relative: string, position = relative): Placement {
  *   are its package's layout and none of the app's;
  * - `skipped` — under a dot directory, which no walk of the app enters;
  * - `public` or `lib` — 23.15: under that fence, the nearest to the root deciding;
+ * - `native` — 23.33: under the root's `native` directory, which is a fence there alone;
  * - `address` — 23.14: everywhere else, its directories the segments of its route.
  *
  * The last part is the file itself, so a path ending in `/` is a directory and every part is read.
@@ -89,6 +103,7 @@ export function placement(relative: string, position = relative): Placement {
 export function placeOf(path: string): Place {
     if (path.startsWith('../') || path.startsWith('/')) return 'dependency'
     const parts = path.split('/')
+    if (parts.length > 1 && parts[0] === NATIVE_DIRECTORY) return 'native'
     for (let index = 0; index < parts.length - 1; index += 1) {
         const part = parts[index] as string
         if (skipped(part))

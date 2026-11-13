@@ -4,7 +4,7 @@ import bunfigSource from 'crm-10/bunfig.toml' with { type: 'text' }
 import dockerfileSource from 'crm-10/Dockerfile' with { type: 'text' }
 import topDealsSpecSource from 'crm-10/e2e/TopDeals.test.ts' with { type: 'text' }
 import testRowsSource from 'crm-10/scripts/testRows.ts' with { type: 'text' }
-import launcherSource from 'crm-10/src/launcher.abide' with { type: 'text' }
+import launcherSource from 'crm-10/src/native/launcher.abide' with { type: 'text' }
 import getSummarySource from 'crm-10/src/reports/getSummary.handler.ts' with { type: 'text' }
 import reportsPageSource from 'crm-10/src/reports/index.abide' with { type: 'text' }
 import ClosedTiles from 'crm-10/src/reports/lib/ClosedTiles.abide'
@@ -433,12 +433,18 @@ abide bundle --out ~/Applications/CRM.app`} />
             <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. The first launch
             offers Start, which runs the app here, and Connect…, which opens one running at a URL.</p>
 
-        <Snippet source={launcherSource} path="src/launcher.abide" />
+        <Snippet source={launcherSource} path="src/native/launcher.abide" />
 
-        <p><code>src/launcher.abide</code> sits beside the root layout, and what its
+        <p><code>src/native/launcher.abide</code> is no page of the CRM's, and what its
             <code>onLauncher</code> answers sets the window and the forms. The answer is a
-            <code>LauncherOptions</code>: the window's size and floor, and <code>start</code> or
-            <code>connect</code> set to <code>false</code> to drop a form. Markup in the same file
+            <code>LauncherOptions</code>: the window's size, floor and ceiling, how it is drawn,
+            and <code>start</code> or <code>connect</code> set to <code>false</code> to drop a
+            form. <code>titlebar: 'hidden'</code> or <code>'inset'</code> draws the page under
+            the window's controls. The page then reads <code>--abide-titlebar-height</code> and
+            <code>--abide-titlebar-inset</code> to keep clear of them, and is dragged by any
+            element marked <code>data-abide-titlebar</code>. The window takes its color from the
+            page's own background, and <code>dock: false</code> leaves out the Dock icon and the
+            menu bar with it. Markup in the same file
             replaces the launch page, and is rendered with a <code>Launch</code>, whose
             <code>fields</code> hold one <code>ConfigField</code> per input the start form asks
             for.</p>
@@ -453,6 +459,13 @@ abide bundle --out ~/Applications/CRM.app`} />
             hands back what stops it, which is what <code>watch</code> takes. In a browser nothing
             picks an item, and the page runs unchanged.</p>
 
+        <p>With <code>menuBarExtra: true</code> the CRM also sits in the menu bar, drawn from
+            <code>src/public/icon-menubar.png</code>. A click opens
+            <code>src/native/menubar.abide</code> in a panel under it, a page outside every
+            layout, <code>panelWidth</code> by <code>panelHeight</code>. Without that file a click
+            shows and hides the window. A right click lists the page's menus and Quit, and
+            closing the window keeps the CRM running up there.</p>
+
         <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['{#if !desktop()}']} />
 
         <p>A browser has no menu bar, so there the page offers the same print as a button.
@@ -464,7 +477,7 @@ abide bundle --out ~/Applications/CRM.app`} />
     </Section>
 
     <Section title="Keep the desktop app current">
-        <Snippet source={launcherSource} path="src/launcher.abide" from={['update:']} />
+        <Snippet source={launcherSource} path="src/native/launcher.abide" from={['update:']} />
 
         <p>Each person runs their own copy of the CRM, so a new version has to reach every copy.
             <code>update</code> in what <code>onLauncher</code> answers is the address the copies

@@ -27,6 +27,9 @@ export const CLIENT_ADDRESS = `${ABIDE_ADDRESS}/client`
 /** Where a private handler is answered, below its file's path and then its name (16.70). */
 export const PRIVATE_HANDLERS_ADDRESS = `${ABIDE_ADDRESS}/handlers`
 
+/** Where the page the menu bar extra's panel shows is answered, outside every layout (38.167). */
+export const MENU_BAR_ADDRESS = `${ABIDE_ADDRESS}/menubar`
+
 // 20.5, 20.9, 36.7 — the generated surfaces, which the CLI reaches as well as the server answers.
 
 /** The generated OpenAPI document. */

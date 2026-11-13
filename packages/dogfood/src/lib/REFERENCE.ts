@@ -874,6 +874,13 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: true,
     },
     {
+        route: '/reference/types/StagedUpdate',
+        names: ['StagedUpdate'],
+        entry: '@abide/abide',
+        group: 'Configuration',
+        typeOnly: true,
+    },
+    {
         route: '/reference/desktop',
         names: ['desktop'],
         entry: '@abide/abide',
@@ -886,13 +893,6 @@ export const REFERENCE: readonly ReferencePage[] = [
         entry: '@abide/abide',
         group: 'Configuration',
         typeOnly: false,
-    },
-    {
-        route: '/reference/types/StagedUpdate',
-        names: ['StagedUpdate'],
-        entry: '@abide/abide',
-        group: 'Configuration',
-        typeOnly: true,
     },
     {
         route: '/reference/onMenu',

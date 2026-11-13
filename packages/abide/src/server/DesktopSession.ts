@@ -17,6 +17,8 @@ type Remembered = {
     values: Record<string, string>
     url: string
     port: number
+    /** 38.156 — the page's background as sRGB bytes, `null` before a page has reported one. */
+    background: [number, number, number] | null
 }
 
 type Failure = NonNullable<Launch['failure']>
@@ -60,6 +62,7 @@ export class DesktopSession {
             values: {},
             url: '',
             port: 0,
+            background: null,
             ...(await Bun.file(`${directory}/desktop.json`)
                 .json()
                 .catch(() => ({}))),
@@ -171,6 +174,22 @@ export class DesktopSession {
             await this.start(last.start)
         else if (options.connect && last !== null && 'connect' in last)
             await this.connect(last.connect)
+    }
+
+    /** 38.156 — the background the window opens on at the next launch. */
+    async rememberBackground(
+        background: [number, number, number],
+    ): Promise<void> {
+        const last = this.remembered.background
+        if (
+            last !== null &&
+            last[0] === background[0] &&
+            last[1] === background[1] &&
+            last[2] === background[2]
+        )
+            return
+        this.remembered.background = background
+        await this.remember()
     }
 
     private refuse(failure: Failure): Failure {

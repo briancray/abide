@@ -44,7 +44,7 @@ export type { BridgeStatus, ClaudeCodeConfig } from './claudeCode.ts'
 export { provider } from './provider.ts'
 // 27 — the resolved configuration.
 export { type Config, config } from './config.ts'
-// 38.82 — the props `src/launcher.abide` is rendered with.
+// 38.82 — the props `src/native/launcher.abide` is rendered with.
 export type { ConfigField } from './configFields.ts'
 // 47 — the app's SQLite database, opened and migrated on first use.
 export { database } from './database.ts'

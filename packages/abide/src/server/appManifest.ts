@@ -3,9 +3,9 @@
 // clearing it after a spell unvisited.
 
 import { APP_MANIFEST_ADDRESS } from '#shared/ADDRESSES.ts'
-import { ICON_ADDRESSES } from '#shared/LAUNCHER_FILES.ts'
 import { appName } from '#shared/log.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
+import { ICON_ADDRESSES } from '#shared/NATIVE_FILES.ts'
 
 import { pngSize } from './pngSize.ts'
 

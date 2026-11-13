@@ -16,6 +16,7 @@ import { type Dirent, readdirSync } from 'node:fs' // bun has no directory listi
 
 import type { Diagnostics } from '#compiler/Diagnostics.ts'
 import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
+import { NATIVE_DIRECTORY } from '#shared/NATIVE_FILES.ts'
 
 import { packageDirectory } from './packageDirectory.ts'
 import {
@@ -97,7 +98,11 @@ function walk(
         const path = `${relative}${entry.name}`
         if (entry.isDirectory()) {
             let within = reserved
-            if (RESERVED_DIRECTORIES.has(entry.name)) {
+            // 23.33 — `native` is a fence at the root alone.
+            if (
+                RESERVED_DIRECTORIES.has(entry.name) ||
+                (relative === '' && entry.name === NATIVE_DIRECTORY)
+            ) {
                 if (reserved !== undefined)
                     refusals.at(
                         path,
@@ -167,7 +172,8 @@ function walk(
             )
         else if (place === 'public')
             files.published.set(path, publicAddress(path, fence.path))
-        else if (place === 'lib' && isModule(path)) files.modules.push(path)
+        else if ((place === 'lib' || place === 'native') && isModule(path))
+            files.modules.push(path)
     }
 }
 

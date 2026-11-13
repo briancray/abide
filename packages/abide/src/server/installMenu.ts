@@ -69,12 +69,14 @@ let target: Id = null
 
 /**
  * Builds `menu` as the application's menu bar; `choose` is handed each item AppKit does not answer
- * itself when it is picked.
+ * itself when it is picked, in it and in `extra` — the menu bar extra's menu (38.170), built in the
+ * same pass so both number their items from one list, and answered built.
  */
 export function installMenu(
     menu: NativeMenuItem[],
     choose: (item: Choice) => void,
-): void {
+    extra: NativeMenuItem[] | undefined,
+): Id {
     target ??= send(
         definedClass('AbideMenuTarget', {
             'choose:': {
@@ -108,6 +110,10 @@ export function installMenu(
         'setMainMenu:',
         bar,
     )
+    if (extra === undefined) return null
+    const built = send(objcClass('NSMenu'), 'new')
+    for (const item of extra) send(built, 'addItem:', menuItem(item))
+    return built
 }
 
 function menuItem(item: NativeMenuItem): Id {

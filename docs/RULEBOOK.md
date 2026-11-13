@@ -118,7 +118,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | sink | What 35.7 defines. |
 | implementation | Anything claiming conformance to this document. |
 | dependency's `.abide` | A `.abide` file under a `node_modules` directory or outside the app's root. |
-| fence | A `public` or `lib` directory. |
+| fence | A `public` or `lib` directory, or the root's `native` directory. |
 | server file | A file named `<name>.server.<extension>`. |
 | test file | A `.test.ts` file. |
 | declaration file | A `.d.ts` file. |
@@ -126,6 +126,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | param file | A file of the app's own named `<NAME>.param.ts`, directly in a directory under no fence. |
 | matcher | What a param file declares, and what a segment naming it matches by. |
 | private handler | A handler a `<script server>` declares. |
+| menu bar extra | The item `menuBarExtra` puts in the platform's menu bar. |
 | chapter app | The app the documentation's story has built by the end of one chapter, kept whole so a reader can download it and run it. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
@@ -1835,7 +1836,7 @@ matcher is an alternation of literals as the union of those literals.
 file's being `.handler.ts`, and an `index.abide`'s, a `layout.abide`'s and an `error.abide`'s MUST be
 its directory's.
 
-23.15 A file under a fence MUST NOT have a route.
+23.15 A file under a fence MUST NOT have a route, save `src/native/menubar.abide` (38.167).
 
 23.16 A fence under a fence MUST be a build error naming both.
 
@@ -1851,7 +1852,7 @@ below the named directory as 23.14 routes the app's own, and a specifier naming 
 error naming the mount.
 
 23.21 A `.abide` of the app's own directly in a directory under no fence MUST be a page, save a
-`layout.abide`, an `error.abide` and the root's `launcher.abide`.
+`layout.abide` and an `error.abide`.
 
 23.22 A file of the app's own directly in a directory under no fence MUST be a `.abide`, a handler
 file (`<name>.handler.ts`), a param file (`<NAME>.param.ts`), a test file (`<name>.test.ts`), a bench
@@ -1890,6 +1891,9 @@ follow its `change` event, save while 41.32 holds it.
 
 23.32 `media` MUST hand back the same value for the same query text, and MUST NOT add a listener
 for a query it already holds.
+
+23.33 The root's `native` directory MUST be a fence, and a `native` directory anywhere else MUST
+NOT be one.
 
 # 24. Tracing
 
@@ -3166,14 +3170,14 @@ as 38.46 names the executable.
 38.79 `abide bundle` MUST give the `.app` the icon the public file answered at `/icon.icns` holds,
 or one drawn at every size from the one at `/icon.png` where there is no `.icns`.
 
-38.80 The desktop app MUST read what the `onLauncher` `src/launcher.abide` calls answers as it
+38.80 The desktop app MUST read what the `onLauncher` `src/native/launcher.abide` calls answers as it
 launches, and MUST refuse to launch on a key it does not take, or a value of a type the key does not
 take.
 
 38.81 `LauncherOptions` MUST NOT admit turning off both `start` and `connect`, and the desktop app
 MUST refuse to launch on an `onLauncher` answer that does.
 
-38.82 Where the app's `src/launcher.abide` has markup of its own, the launcher MUST render it
+38.82 Where the app's `src/native/launcher.abide` has markup of its own, the launcher MUST render it
 through `render`, bound to the `Launch` it would show, in place of its own page; one holding script
 blocks alone MUST leave the launcher's own page standing.
 
@@ -3181,10 +3185,10 @@ blocks alone MUST leave the launcher's own page standing.
 answered, and MUST NOT be done again at launch, and turning `connect` off MUST take the `connect`
 item out of the default menu bar.
 
-38.84 The page `src/launcher.abide` renders MUST carry its own `<style>` in the head of the
+38.84 The page `src/native/launcher.abide` renders MUST carry its own `<style>` in the head of the
 document it renders into.
 
-38.85 A `src/launcher.abide` that fails to render MUST reach `onError`, and the launcher MUST
+38.85 A `src/native/launcher.abide` that fails to render MUST reach `onError`, and the launcher MUST
 show its own page in its place.
 
 38.86 The window MUST open at the `width` and `height` `onLauncher` answers where no launch
@@ -3239,7 +3243,7 @@ last checked holds there, as 38.39 answers a hover.
 
 38.101 The launcher's accent MUST be the most saturated hue of the app's icon (38.79), taken when
 `abide bundle` runs, and the platform's own accent where the icon gives none; `Launch` MUST carry
-the accent and the icon to `src/launcher.abide`.
+the accent and the icon to `src/native/launcher.abide`.
 
 38.102 The launcher's own page MUST show the app's icon, its name and a button for each form
 `onLauncher` leaves on. A button whose form asks for anything MUST open it in a modal dialog,
@@ -3258,7 +3262,7 @@ published package holds.
 38.106 The documentation named by the instructions a project `abide scaffold` writes imports (38.104)
 MUST be every page as one markdown file, in reading order.
 
-38.107 `onLauncher` called anywhere but `src/launcher.abide` MUST be a build error naming that file.
+38.107 `onLauncher` called anywhere but `src/native/launcher.abide` MUST be a build error naming that file.
 
 38.108 `abide routes` MUST print every route with each method it answers and the file answering
 it, every private handler with its address and its file, every matcher a route names with the
@@ -3411,6 +3415,81 @@ be `undefined` on a server and in a page no such window holds.
 
 38.149 The `update` role MUST stand in the application menu where `onLauncher` answers an `update`,
 and MUST NOT stand there otherwise.
+
+38.150 The window MUST NOT be resized above the `maxWidth` and `maxHeight` `onLauncher` answers.
+
+38.151 The desktop app MUST refuse to launch on an `onLauncher` answer whose `maxWidth` or
+`maxHeight` is below its `minWidth` or `minHeight`.
+
+38.152 Where `onLauncher` answers a `titlebar` of `hidden` or `inset`, the page MUST fill the window
+under a transparent titlebar that shows no title, with the window's controls where the platform puts
+them, and `inset` MUST be the taller titlebar of a window with a unified toolbar.
+
+38.153 The window MUST set `--abide-titlebar-height` and `--abide-titlebar-inset` on the root element
+of every page it loads, as the height of the titlebar the page is drawn under and the width the
+window's controls take from its start edge, and MUST set both to `0px` where the `titlebar` is
+`standard` or the window is in full screen.
+
+38.154 Where `onLauncher` answers a `vibrancy`, the window MUST draw that material behind the page,
+and MUST draw no background of its own between the material and the page.
+
+38.155 A primary press on an element inside a `data-abide-titlebar` element MUST move the window with
+the pointer, and a double press MUST zoom or minimize the window as the platform's titlebar setting
+names, unless the press lands on a link, a control or a focusable element inside it.
+
+38.156 Where `onLauncher` answers no `vibrancy`, the window MUST take its background from the
+opaque background of the page's root element, or of its body where the root's is not opaque, after
+each load and each change of `prefers-color-scheme`, and MUST open on the last one taken at the next
+launch.
+
+38.157 The desktop app MUST draw in the `appearance` `onLauncher` answers, and `system` MUST follow
+the platform's.
+
+38.158 The window MUST NOT be resizable where `onLauncher` answers `resizable: false`.
+
+38.159 The window MUST NOT enter full screen where `onLauncher` answers `fullScreen: false`.
+
+38.160 The window MUST stand above other apps' windows where `onLauncher` answers
+`alwaysOnTop: true`.
+
+38.161 The window MUST cast no shadow where `onLauncher` answers `shadow: false`.
+
+38.162 Where `onLauncher` answers `rememberFrame: false`, the window MUST open centered at the
+`width` and `height` it answers at every launch.
+
+38.163 Where `onLauncher` answers `inspector: false`, the page MUST NOT be open to Web Inspector.
+
+38.164 The launcher's own page MUST carry a `data-abide-titlebar` element across its top as tall as
+`--abide-titlebar-height`.
+
+38.165 Where `onLauncher` answers `dock: false`, the desktop app MUST show neither a Dock icon nor a
+menu bar.
+
+38.166 Where `onLauncher` answers `menuBarExtra: true`, the desktop app MUST put an item in the
+platform's menu bar, drawn from the public file at `/icon-menubar.png` as a template image, else from
+the one at `/icon.png`, else as the app's name.
+
+38.167 `src/native/menubar.abide` MUST be a page answered at `/__abide/menubar` below the app's mount,
+and MUST NOT be rendered through any layout.
+
+38.168 A primary click on the menu bar extra, where the window shows an app that answers 38.167's
+page, MUST open that page in a panel `panelWidth` wide and `panelHeight` tall hung under the item,
+and MUST close the panel where it is open.
+
+38.169 A primary click on the menu bar extra, where the window shows no app or one that does not
+answer 38.167's page, MUST bring the window to the front, and MUST hide it where it is in front.
+
+38.170 A secondary click on the menu bar extra MUST open a menu of the menus the page the window
+shows filed with `onMenu`, outermost first, then an item that quits the app, a separator between
+them where there are any.
+
+38.171 The menu bar extra's panel MUST close when it stops being the key window.
+
+38.172 Where `onLauncher` answers `menuBarExtra: true`, closing the window MUST hide it rather than
+quit the app.
+
+38.173 Activating the app `abide bundle` writes from the Dock MUST bring its window to the front
+where it is hidden.
 
 # 39. Head and view transitions
 

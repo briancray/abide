@@ -147,13 +147,11 @@ async function compiledTree(
 // nothing. Where it sits decides, so no name an author picks can be read as a component's.
 //
 // THE REVERT: have `placement` answer `page` for an `index.abide` alone, as it once did for a
-// `page.abide`; `media/Card.abide` is then no route — 1 route where 2 are due. Or compare
-// `LAUNCHER_PAGE` with the name rather than the path; `media/launcher.abide` reads as a component.
+// `page.abide`; `media/Card.abide` is then no route — 1 route where 2 are due.
 test('a .abide directly in an address directory is a page, and one under lib is not — 23.21', async () => {
     expect(placement('media/Card.abide').kind).toBe('page')
     expect(placement('media/lib/Card.abide').kind).toBe('component')
-    expect(placement('launcher.abide').kind).toBe('component')
-    expect(placement('media/launcher.abide').kind).toBe('page')
+    expect(placement('launcher.abide').kind).toBe('page')
     const beside = await compiledTree({ 'media/Card.abide': '<p>card</p>' })
     expect(beside.routes).toEqual(['/', '/media/Card'])
     const fenced = await compiledTree({ 'media/lib/Card.abide': '<p>card</p>' })
@@ -272,13 +270,13 @@ test('a hook called in a module that is no .abide nor handler file is a build er
     expect(unrelated.refused).toBe('')
 })
 
-// 38.107 — `onLauncher` IS READ FROM THE ROOT'S `launcher.abide` ALONE, so a call anywhere else is
+// 38.107 — `onLauncher` IS READ FROM `native/launcher.abide` ALONE, so a call anywhere else is
 // options no window ever opens with. Refused naming the file that made it.
 //
 // THE REVERT: drop the `refuseStrayLauncher` call in `compileApp`; the page's call builds, and
 // its options are filed where the launcher never reads them. Or skip a name after a `.` in
 // `hookCalls`; the handler file's `server.onLauncher(…)` builds.
-test('onLauncher called in a page is a build error, and in the root launcher.abide is not — 38.107', async () => {
+test('onLauncher called in a page is a build error, and in native/launcher.abide is not — 38.107', async () => {
     const LAUNCHES = `<script server>
 import { onLauncher } from '@abide/abide/server'
 
@@ -299,8 +297,30 @@ export default server.GET(() => 'ok')
     })
     expect(member.refused).toContain('media/getLaunch.handler.ts')
     expect(member.refused).toContain('RULEBOOK 38.107')
-    expect(await compiledTree({ 'launcher.abide': LAUNCHES })).toEqual({
+    expect(await compiledTree({ 'native/launcher.abide': LAUNCHES })).toEqual({
         routes: ['/'],
         refused: '',
     })
+    // The root launcher.abide of before is a page now, and its call is refused naming where it goes.
+    const moved = await compiledTree({ 'launcher.abide': LAUNCHES })
+    expect(moved.refused).toContain('src/native/launcher.abide')
+})
+
+// 23.33, 38.167 — THE ROOT'S `native` IS A FENCE, AND THE MENU BAR EXTRA'S PAGE IS ITS ONE ROUTE: it
+// answers in abide's own namespace, and a `native` directory anywhere else is an address like any.
+//
+// THE REVERT: drop the `native` arm of `placeOf`; `native/Card.abide` is a page at `/native/Card` —
+// 3 routes where 2 are due.
+test("the root native directory is a fence whose menubar.abide is a page in abide's namespace — 23.33, 38.167", async () => {
+    expect(placement('native/Card.abide').kind).toBe('component')
+    expect(placement('native/menubar.abide')).toMatchObject({
+        kind: 'page',
+        route: '/__abide/menubar',
+    })
+    expect(placement('media/native/Card.abide').kind).toBe('page')
+    const tree = await compiledTree({
+        'native/menubar.abide': '<p>panel</p>',
+        'native/Card.abide': '<p>card</p>',
+    })
+    expect(tree).toEqual({ routes: ['/', '/__abide/menubar'], refused: '' })
 })
