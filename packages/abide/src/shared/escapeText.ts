@@ -75,7 +75,7 @@ export function escapeQuote(text: string): string {
 }
 
 /**
- * A `style:prop` value escaped for markup and cut at its first `;`.
+ * A `style:prop` value cut at its first `;` and escaped for markup.
  *
  * 32.10 — A `style:prop` SETS ONE PROPERTY, and `;` is the one character that lets a value say
  * otherwise. The attribute escaping cannot see it, because `;` is ordinary in every other
@@ -83,9 +83,28 @@ export function escapeQuote(text: string): string {
  * …` — seven declarations from the slot that declares one, and an overlay over the page. Cut at
  * the separator rather than encoded, because there is no encoding of `;` a CSS parser reads as a
  * literal semicolon inside a value.
+ *
+ * CUT BEFORE IT IS ESCAPED: the escaping writes a `;` of its own into every `&quot;` and `&amp;`,
+ * so `url("/a?x=1&y=2")` cut after it served `url(&quot` — a value the browser's own write never
+ * held, and a request for a URL nobody named.
  */
 export function escapeStyleValue(value: unknown): string {
-    return oneStyleValue(escapeAttribute(value))
+    return escapeQuote(escapeMarkup(oneStyleValue(textOf(value))))
+}
+
+/**
+ * `before`, a declaration list, with `property: value` after it, or `before` alone where `value`
+ * is empty — 32.94, as the browser's CSSOM write of `''` removes the property.
+ */
+export function withDeclaration(
+    before: string,
+    property: string,
+    value: string,
+): string {
+    if (value === '') return before
+    return before === ''
+        ? `${property}: ${value}`
+        : `${before}; ${property}: ${value}`
 }
 
 /**

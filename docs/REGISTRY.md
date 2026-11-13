@@ -648,7 +648,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6, 32.78 |
 | `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer) \| ((element: Element) => void \| Disposer)[]}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
 | `class:name={cond}` | Toggles a class. | 32.10, 32.71 |
-| `style:prop={value}` | Sets one style property. | 32.10, 32.19, 32.71 |
+| `style:prop={value}` | Sets one style property. | 32.10, 32.19, 32.71, 32.94 |
 | `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13 |
 | static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.27, 32.28 |
 

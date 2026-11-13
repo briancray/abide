@@ -2559,6 +2559,9 @@ MUST throw.
 32.93 In a browser, a slot rendering a value branded by `raw` into the document the runtime loaded in
 MUST create no node but those its markup parses to, whatever was parsed before it.
 
+32.94 A `style:prop` whose value is `null`, `undefined` or empty up to its first `;` MUST declare
+nothing, whether the server writes it or the browser does.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

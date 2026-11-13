@@ -814,7 +814,7 @@ test('an interpolated style lowers to one attribute per property', async () => {
         ['c', 'w'],
     )
     expect(emitted).toContain(
-        '"<div style=\\"" + "color: " + __escapeStyleValue(__slotValue(() => `${c()}`)) + "; width: " + __escapeStyleValue(__slotValue(() => `${w()}px`))',
+        '"<div style=\\"" + __withDeclaration(__withDeclaration("", "color", __escapeStyleValue(__slotValue(() => `${c()}`))), "width", __escapeStyleValue(__slotValue(() => `${w()}px`)))',
     )
     expect(inlineBuild(emitted).match(/style=\\"/g)).toHaveLength(1)
 
@@ -1441,6 +1441,11 @@ test('an interpolated style property cannot set a second one', async () => {
         '__escapeStyleValue(__slotValue(() => v()))',
     )
     expect(escapeStyleValue('red; position: fixed; top: 0')).toBe('red')
+    // CUT BEFORE IT IS ESCAPED: the escaping writes a `;` into every `&quot;` and `&amp;`. THE
+    // REVERT: escape first, as `oneStyleValue(escapeAttribute(value))`; this reports `url(&quot`.
+    expect(escapeStyleValue('url("/a?x=1&y=2"); top: 0')).toBe(
+        'url(&quot;/a?x=1&amp;y=2&quot;)',
+    )
     // A WHOLE `style={expr}` IS A DECLARATION LIST and keeps the attribute escaping.
     expect(await serverOf('<div style={s}>x</div>', ['s'])).toContain(
         '__attributeMarkup("style", __slotValue(() => s()))',

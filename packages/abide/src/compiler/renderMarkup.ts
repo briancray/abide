@@ -735,7 +735,7 @@ export function mergedValue(
     render: ValueRender,
 ): string {
     return group.name === 'style'
-        ? styleValue(group.plain, group.directives, render)
+        ? styleValue(group.plain, group.directives, lowering, render)
         : classValue(group.plain, group.directives, lowering, render)
 }
 
@@ -745,37 +745,44 @@ export function mergedValue(
  * Each value takes the same rewrite the whole-value path takes, so one attribute has one answer
  * however the author spelled it: 32.27 for a STATIC declaration, which is the author's own markup,
  * and the full escape for an interpolated one, which is 32.1's.
+ *
+ * 32.94 — A VALUE THAT DECLARES NOTHING IS LEFT OUT, separator and all, so where it is computed the
+ * list is joined where it renders (`withDeclaration`) rather than here: which pieces are written is
+ * not known until the values are read. Up to the first computed piece the list is a string the
+ * build writes whole.
  */
 function styleValue(
     plain: Attribute | undefined,
     styles: readonly Attribute[],
+    lowering: Lowering,
     render: ValueRender,
 ): string {
-    const parts: string[] = []
-    if (plain !== undefined)
-        parts.push(
-            plain.expression
-                ? render.dynamic(plain)
-                : render.bytes(escapeQuote(plain.value)),
-            render.bytes('; '),
-        )
+    // The list so far: as markup while every piece of it is static, and as an emitted expression
+    // from the first piece that is not.
+    let markup = ''
+    let computed: string | undefined
+    if (plain !== undefined) {
+        if (plain.expression) computed = render.dynamic(plain)
+        else markup = escapeQuote(plain.value)
+    }
     for (const attribute of styles) {
         const property = attribute.name.slice('style:'.length)
-        const lead = parts.length === 0 ? '' : '; '
         if (!attribute.expression) {
-            parts.push(
-                render.bytes(
-                    `${lead}${property}: ${escapeQuote(attribute.value)}`,
-                ),
-            )
+            const value = escapeQuote(attribute.value)
+            if (value === '') continue
+            if (computed === undefined) {
+                markup =
+                    markup === ''
+                        ? `${property}: ${value}`
+                        : `${markup}; ${property}: ${value}`
+                continue
+            }
+            computed = `${lowering.use('withDeclaration')}(${computed}, ${render.bytes(property)}, ${render.bytes(value)})`
             continue
         }
-        parts.push(
-            render.bytes(`${lead}${property}: `),
-            render.declaration(attribute),
-        )
+        computed = `${lowering.use('withDeclaration')}(${computed ?? render.bytes(markup)}, ${render.bytes(property)}, ${render.declaration(attribute)})`
     }
-    return concat(parts)
+    return computed ?? render.bytes(markup)
 }
 
 /**

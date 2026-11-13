@@ -13,7 +13,12 @@ export {
     selectedMarkup,
 } from './boundValue.ts'
 // 32.1 — the escaping.
-export { escapeAttribute, escapeStyleValue, escapeText } from './escapeText.ts'
+export {
+    escapeAttribute,
+    escapeStyleValue,
+    escapeText,
+    withDeclaration,
+} from './escapeText.ts'
 // 32.15's run-time half: what a `{#for}` subject iterates as — the server's emitted block, the
 // client's `updateList`, and the markup a client builds for a row.
 export { listOf } from './listOf.ts'

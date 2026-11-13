@@ -219,8 +219,8 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 // empty attribute was permanent, and the test below asserted it and called that the answer.
 //
 // EACH ABSENCE IS THE ONE ALREADY DECIDED WHERE IT LANDS — an attribute holding `undefined` is
-// absent (32.37), and `escapeStyleValue` reads it as '' through `textOf`, so nothing new was decided
-// to make this work.
+// absent (32.37), and a `style:` value read as '' through `textOf` declares nothing (32.94), so
+// nothing new was decided to make this work.
 //
 // THE REVERT: make `unlandable` answer `lowered` unconditionally and `render` throws
 // `NotLanded: reactive has not landed` — no document at all, on a page whose static markup is
@@ -242,9 +242,7 @@ const width = reactive(() => Promise.resolve('40px'))
     // The holes: both values are still in flight, so both render as the absence they escape to.
     expect(document.querySelector('#attr')?.hasAttribute('title')).toBe(false)
     expect(html).not.toContain('40px')
-    expect(document.querySelector('#styled')?.getAttribute('style')).toBe(
-        'width: ',
-    )
+    expect(document.querySelector('#styled')?.getAttribute('style')).toBe('')
 
     // AND BOTH FILL. THE REVERT: drop the `plan.attributes` loop in `emitRegion` — the document
     // is identical and both values stay empty for the life of the page.
@@ -788,7 +786,7 @@ let wide = reactive('10px')
 <button id="claim" onclick={() => { look = 'width: 5px' }}>claim</button>
 <button id="narrow" onclick={() => { wide = '' }}>narrow</button></main>`)
 
-    expect(html).toContain('style="color: red; ; width: 10px"')
+    expect(html).toContain('style="color: red; width: 10px"')
     const style = () => (document.querySelector('#out') as HTMLElement).style
     // THE FIRST RUN OVER A SERVED PAGE WRITES NOTHING: every declaration is there already.
     const mountWork = measure(() => {
@@ -813,6 +811,44 @@ let wide = reactive('10px')
     expect(style().width).toBe('10px')
     click('#narrow')
     expect(style().width).toBe('5px')
+})
+
+// 32.10, 32.94 — A `style:prop` VALUE IS CUT AT ITS OWN `;` AND NOT THE ESCAPING'S, and one that
+// declares nothing is left out, separator and all — served, and built where an arm is filled. The
+// browser's own write removes a property for `''`, so a served `background-image: ` was a
+// declaration no binding run ever writes.
+//
+// THE REVERTS: escape before the cut in `escapeStyleValue`; the served list reads `url(&quot;
+// background-size: contain`. Have `withDeclaration` write an empty value; it reads
+// `color: ; background-image: …`, served and built alike.
+test('a style: value keeps its quotes and ampersands, and one declaring nothing is left out — 32.10, 32.94', async () => {
+    const { html, mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+const image = reactive('url("/a?x=1&y=2")')
+const tone = reactive<string | undefined>(undefined)
+let open = reactive(false)
+</script>
+
+<main><p id="served" style:color={tone} style:background-image={image} style:background-size="contain">x</p>
+{#if open}<p id="built" style:color={tone} style:background-image={image} style:background-size="contain">y</p>{/if}
+<button id="open" onclick={() => { open = true }}>open</button></main>`)
+
+    expect(html).toContain(
+        'style="background-image: url(&quot;/a?x=1&amp;y=2&quot;); background-size: contain"',
+    )
+    const listed =
+        'background-image: url("/a?x=1&y=2"); background-size: contain'
+    expect(document.querySelector('#served')?.getAttribute('style')).toBe(
+        listed,
+    )
+    const mountWork = measure(() => {
+        mount()
+        flushSync()
+    })
+    expect(mountWork.styleWrites).toBe(0)
+    click('#open')
+    expect(document.querySelector('#built')?.getAttribute('style')).toBe(listed)
 })
 
 // 32.71 — THE GROUP RESOLVES AS THE SERVER'S MERGED LIST DOES, a shorthand on one side and a
