@@ -101,9 +101,9 @@ import Section from '#src/lib/Section.abide'
             <code>provider.claudeCode.bridge</code> or <code>provider.claudeCode.bridgeCommand</code>,
             or turn on <code>ABIDE_BRIDGE_FULL</code> for <code>pairing()</code>, and the command
             carries <code>--full</code> and the link asks for full access. Opening that link names no
-            tool: it says the site is requesting full access to the visitor's Claude Code, and offers
-            Allow, Only Site Tools and Don't Allow. Only Site Tools pairs with the site's
-            own tools and none of the machine's.</p>
+            tool: it says the site requests full access. A link asking for full access or for any
+            tool of the machine offers Allow, Only Site Tools and Don't Allow, and Only Site Tools
+            pairs with the site's own tools and none of the machine's.</p>
 
         <Code code={`onConfig(() => ({ ABIDE_BRIDGE_FULL: true }))`} />
 
@@ -189,9 +189,9 @@ import Section from '#src/lib/Section.abide'
         <p>Allow is kept. A link only proves the site minted its code, never that this visitor
             asked for it, so the bridge keeps the answer for the site and for whom the code was
             minted: the signed-in member, or the browser when nobody is. A later link pairs unasked
-            only where its code was minted for the same one and asks for no new tool, and for full
-            access only where they answered that ask before, as they answered it. A site allowed full
-            access pairs unasked whatever it asks for. A code someone else minted and put in front of
+            only where its code was minted for the same one and asks for no new tool and not for
+            full access. A site granted full access, or only its own tools, pairs unasked whatever it
+            asks for, with what it was granted. A code someone else minted and put in front of
             them is asked about, and so is every link from a site that names nobody.
             <code>abide-bridge forget</code> asks again for one site, or every one, and
             <code>abide-bridge uninstall</code> takes away everything install wrote.</p>

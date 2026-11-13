@@ -118,14 +118,16 @@ test('the question names the site and every tool it asks for — 44.42', () => {
     expect(asked.headline).toBe(
         'crm.example/app is requesting access to Claude Code.',
     )
-    expect(asked.body.split('\n\n')[0]).toContain(
-        'plus these of this computer’s: WebSearch, WebFetch.',
+    expect(asked.body.split('\n\n')[0]).toBe(
+        'Requested tools from this computer: WebSearch, WebFetch.',
     )
     expect(asked.body).toContain('auto mode')
+    expect(asked.body).toContain('Only Site Tools is the safest option')
     expect(said(asked)).not.toContain('gave install')
     expect(said(asked)).not.toContain(PAIRING.version)
-    expect(question({ ...PAIRING, tools: [] }, SETTINGS).body).toContain(
-        'none of this computer’s',
+    // 44.86 — asking for nothing of this machine's, there is nothing to narrow, and no auto mode to say.
+    expect(question({ ...PAIRING, tools: [] }, SETTINGS).body).toBe(
+        'Requested tools from this computer: none.',
     )
     // Options that leave auto mode are not called auto mode.
     expect(
@@ -203,7 +205,9 @@ test('a link asking for full access is asked naming no tool — 44.42, 44.86', (
     expect(asked.headline).toBe(
         'crm.example/app is requesting access to Claude Code.',
     )
-    expect(asked.body.split('\n\n')[0]).toContain('auto mode')
+    expect(asked.body.split('\n\n')[0]).toBe(
+        'Requested tools from this computer: full access.',
+    )
     expect(said(asked)).not.toContain('WebSearch')
     expect(asked.body).toContain(
         'Only Site Tools is the safest option but may limit full functionality.',
@@ -275,8 +279,11 @@ test('an install run --full runs every link full, and asks saying so — 44.42, 
         'WebSearch,WebFetch',
     ])
     const asked = said(question(PAIRING, full))
-    expect(asked).toContain('give every site full access')
+    expect(asked).toContain(
+        'Requested tools from this computer: all, as you installed the bridge to give every site.',
+    )
     expect(asked).not.toContain('WebSearch, WebFetch')
+    expect(asked).not.toContain('Only Site Tools')
 })
 
 // 44.87 — A LINK RUNS FULL ONLY AS ALLOWED: the pairing `consented` answers carries the allowed ask, and
@@ -423,8 +430,8 @@ test('a site is allowed per holder, and forgotten — 44.62, 44.66, 44.88', asyn
     await allowAlways(file, 'https://a.example', 'h1', ['mcp__calendar'])
     await allowAlways(file, 'https://b.example', 'h2', [])
     await allowAlways(file, 'http://localhost:3000/app', 'h3', [])
-    await allowAlways(file, 'https://c.example', 'h4', [], false)
-    await allowAlways(file, 'https://d.example', 'h5', [], true)
+    await allowAlways(file, 'https://c.example', 'h4', [], 'siteTools')
+    await allowAlways(file, 'https://d.example', 'h5', [], 'full')
     const sites = await allowedSites(file)
     const asking = (tools: string[], full = false) => ({ tools, full })
     expect(
@@ -446,8 +453,9 @@ test('a site is allowed per holder, and forgotten — 44.62, 44.66, 44.88', asyn
         allowedAs(sites, 'https://a.example', 'h1', asking([], true)),
     ).toBeUndefined()
     expect(
-        allowedAs(sites, 'https://c.example', 'h4', asking([], true))?.full,
-    ).toBe(false)
+        allowedAs(sites, 'https://c.example', 'h4', asking(['Bash'], true))
+            ?.granted,
+    ).toBe('siteTools')
     // Full access allowed covers whatever a narrower link asks for.
     expect(
         allowedAs(sites, 'https://d.example', 'h5', asking(['Bash'])),

@@ -4174,8 +4174,8 @@ bridge last reported it cannot make available (44.29), and none while no bridge 
 make available once it pairs, and again before a turn wherever they changed.
 
 44.62 A bridge opening an `abide-bridge` link MUST pair without asking only where 44.88 kept its site
-allowed for the holder `/__abide/bridge` names for its code (44.63), and then only where full access
-was allowed, or the link asks for full access and that ask was answered, or it asks for no tool beyond
+allowed for the holder `/__abide/bridge` names for its code (44.63), and then only where full access or
+only the site's own tools was granted, or the link asks neither for full access nor for any tool beyond
 those allowed.
 
 44.63 `/__abide/bridge` MUST name, for a code minted and unspent, a holder without spending the code —
@@ -4263,7 +4263,8 @@ or whose turn ended first.
 44.85 A pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints with `full`
 MUST carry `--full` in its command ahead of any `--`, and one minted without it MUST NOT.
 
-44.86 A bridge opening an `abide-bridge` link that asks for full access MUST offer the visitor to allow
+44.86 A bridge opening an `abide-bridge` link that asks for full access or for any tool of the
+visitor's machine, where `abide-bridge install` was not run `--full`, MUST offer the visitor to allow
 only the site's own tools, and, so allowed, now or as 44.62 pairs it, MUST pair with no tool of the
 visitor's machine.
 
@@ -4271,8 +4272,9 @@ visitor's machine.
 run `--full`, or the link asks for full access and the visitor allowed it, now or as 44.62 pairs it.
 
 44.88 A bridge the visitor allowed to pair from a link MUST keep its site allowed for the holder
-`/__abide/bridge` names for the link's code (44.63), with the tools the link asked for and the answer
-to its ask for full access, and MUST keep nothing where `/__abide/bridge` named no holder.
+`/__abide/bridge` names for the link's code (44.63), with the tools the link asked for and whether they
+granted full access or only the site's own tools, and MUST keep nothing where `/__abide/bridge` named no
+holder.
 
 44.89 `abide-bridge install` run from a copy of the bridge outside any `node_modules` MUST open every
 `abide-bridge` link with that copy's handler as it stands when the link opens, and run that copy's

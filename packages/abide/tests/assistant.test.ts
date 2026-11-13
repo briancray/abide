@@ -1224,8 +1224,10 @@ test('an allowed site pairs unasked only for the holder it was allowed for — 4
     expect(await consent(await link('victim'))).toBeDefined()
     expect(await consent(await link('attacker'))).toBeUndefined()
     expect(await consent(await link('victim', ['WebSearch']))).toBeDefined()
-    expect(asked).toEqual([false, false, false])
-    // 44.86 — an ask for full access is offered the site's own tools, and is kept as answered.
+    // 44.86 — the site's own tools alone are offered only where a link asks for this machine's.
+    expect(asked).toEqual([false, false, true])
+    // An ask for full access is offered them too, and only the site's own tools, once chosen, are
+    // what the site gets unasked from then on, whatever it asks for.
     expect(
         await consent(await link('victim', ['WebSearch'], true)),
     ).toMatchObject({
@@ -1238,7 +1240,11 @@ test('an allowed site pairs unasked only for the holder it was allowed for — 4
         tools: [],
         full: false,
     })
-    expect(asked).toEqual([false, false, false, true])
+    expect(await consent(await link('victim', ['WebFetch']))).toMatchObject({
+        tools: [],
+        full: false,
+    })
+    expect(asked).toEqual([false, false, true, true])
     // A code the site names no holder for is asked every time: nothing is kept for it.
     const unminted: Pairing = {
         site: base,
@@ -1250,7 +1256,7 @@ test('an allowed site pairs unasked only for the holder it was allowed for — 4
     answers.push('allow', 'allow')
     expect(await consent(unminted)).toBeDefined()
     expect(await consent(unminted)).toBeDefined()
-    expect(asked).toEqual([false, false, false, true, false, false])
+    expect(asked).toEqual([false, false, true, true, false, false])
 }, 30_000)
 
 // 44.3 — a transcript ending on the model's own turn is refused before any provider is reached.

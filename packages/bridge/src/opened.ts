@@ -58,6 +58,17 @@ function inAutoMode(claudeArgs: readonly string[]): boolean {
 }
 
 /**
+ * Whether the question for `pairing` offers the site's own tools alone: where it asks for anything of
+ * this machine's, and install did not already give every site everything. 44.86.
+ */
+export function offersSiteTools(
+    pairing: Pairing,
+    settings: HandlerSettings,
+): boolean {
+    return settings.full !== true && (pairing.full || pairing.tools.length > 0)
+}
+
+/**
  * What the visitor is asked before `pairing` runs (44.42), by the app `asker` names beside its site
  * where the site names one, with its `note` as its own words (44.91): a site asking for full access is named as asking for it, and none of its tools
  * (44.85); else each tool it asks for, and each MCP tool of a server their Claude Code is not
@@ -79,31 +90,28 @@ export function question(
     const auto = inAutoMode(settings.claudeArgs)
         ? 'Claude Code will run with permissions in auto mode: it will do safe steps on its own and ask you before anything risky.'
         : ''
-    // One headline at every level, so what is asked for is read in the body, where there is room for it.
+    // One headline at every level, and what is asked for read in the body, each level alike.
     const headline = `${asker} is requesting access to Claude Code.`
-    let said: string[]
-    if (settings.full === true)
-        said = [
-            `You installed the bridge to give every site full access. ${auto}`,
-        ]
-    else if (pairing.full)
-        said = [
-            auto,
+    const asked =
+        settings.full === true
+            ? 'all, as you installed the bridge to give every site'
+            : pairing.full
+              ? 'full access'
+              : pairing.tools.length === 0
+                ? 'none'
+                : pairing.tools.join(', ')
+    const said = [`Requested tools from this computer: ${asked}.`]
+    // The site's own tools are approved without asking (44.81), so auto mode is said only of this machine's.
+    if (settings.full === true || pairing.full || pairing.tools.length > 0)
+        said.push(auto)
+    if (unserved.length > 0 && !pairing.full && settings.full !== true)
+        said.push(
+            `Your Claude Code has no ${serversNamed(unserved)} MCP server, so it can’t use ${unserved.join(', ')}. Add it with \`claude mcp add --scope user\` first.`,
+        )
+    if (offersSiteTools(pairing, settings))
+        said.push(
             'Only Site Tools is the safest option but may limit full functionality.',
-        ]
-    else if (pairing.tools.length === 0)
-        said = [
-            `It’s asking for its own tools only, and gets none of this computer’s.`,
-        ]
-    else {
-        said = [
-            `It’s asking for its own tools, plus these of this computer’s: ${pairing.tools.join(', ')}. ${auto}`,
-        ]
-        if (unserved.length > 0)
-            said.push(
-                `Your Claude Code has no ${serversNamed(unserved)} MCP server, so it can’t use ${unserved.join(', ')}. Add it with \`claude mcp add --scope user\` first.`,
-            )
-    }
+        )
     // 44.91 — the app's own words, said to be its own, ahead of what the bridge says.
     if (note !== undefined) said.unshift(`From ${owner}: ${note}`)
     // A variable's value is only named, never shown: it is as likely a token as a host.
@@ -112,9 +120,6 @@ export function question(
         said.push(
             `It also gets what you gave install for every site: ${kept.join(' ')}.`,
         )
-    // A site asking for full access offers its own tools alone in its place, which says enough.
-    if (!pairing.full || settings.full === true)
-        said.push(`Allow it only if you just asked to pair on ${site}.`)
     let body = ''
     for (const paragraph of said)
         if (paragraph.trim() !== '')
@@ -282,7 +287,7 @@ export async function unservedOf(
     return grant.unserved
 }
 
-/** `pairing` with only the site's own tools: none of this machine's, and not full. 44.85. */
+/** `pairing` with only the site's own tools: none of this machine's, and not full. 44.86. */
 function siteToolsOnly(pairing: Pairing): Pairing {
     return { ...pairing, tools: [], full: false }
 }
@@ -290,8 +295,8 @@ function siteToolsOnly(pairing: Pairing): Pairing {
 /**
  * `pairing` as the visitor allows it, or `undefined` where they do not: unasked where they allowed its
  * site before for the holder its code was minted for, as they allowed it then (44.62), else as
- * `askVisitor` answers — offering the site's own tools alone where it asks for full access (44.85) —
- * keeping what they allowed in `allowedFile` where the site named a holder (44.86).
+ * `askVisitor` answers — offering the site's own tools alone where it asks for anything of this
+ * machine's (44.86) — keeping what they allowed in `allowedFile` where the site named a holder (44.88).
  */
 export async function consented(
     pairing: Pairing,
@@ -324,16 +329,14 @@ export async function consented(
         say(
             `Pairing with ${asker.name ?? shownSite(pairing.site)}, which you always allow.`,
         )
-        return asksFull && before.full === false
-            ? siteToolsOnly(pairing)
-            : pairing
+        return before.granted === 'siteTools' ? siteToolsOnly(pairing) : pairing
     }
     const answer = await askVisitor(
         {
             ...question(pairing, settings, unserved, asker),
             icon,
         },
-        asksFull,
+        offersSiteTools(pairing, settings),
     )
     if (answer === 'deny') return undefined
     const allowedAsAnswered =
@@ -344,7 +347,11 @@ export async function consented(
             pairing.site,
             holder,
             allowedAsAnswered.tools,
-            asksFull ? answer === 'allow' : undefined,
+            answer === 'siteTools'
+                ? 'siteTools'
+                : asksFull
+                  ? 'full'
+                  : undefined,
         )
     return allowedAsAnswered
 }

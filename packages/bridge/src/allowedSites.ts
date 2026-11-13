@@ -1,20 +1,19 @@
 // THE SITES A VISITOR ALWAYS ALLOWS (44.62), kept beside the handler install wrote so uninstall takes
 // them too. ONE PER SITE AND HOLDER: a link pairs unasked only where its code was minted for the same
 // holder `/__abide/bridge` named when the visitor allowed it — a code an attacker minted is minted for
-// the attacker, and is asked about. A site's ask for full access (44.85) is kept as it was answered,
-// so a site the visitor allowed only its own tools is not asked again, and runs with only those.
+// the attacker, and is asked about. A visitor who allowed a site full access, or only its own tools
+// (44.86), is not asked again: it runs as they allowed it, whatever it asks for.
 import { siteOf } from './pairingLink.ts'
 
 /**
- * A site paired unasked, for one holder, while a link asks for none but `tools` — and, where it asks
- * for full access, run full as `full` answered it: `true` allowed, `false` only the site's own tools,
- * and asked about while it was never answered.
+ * A site paired unasked, for one holder, while a link asks for none but `tools` — or whatever it asks
+ * for, where the visitor `granted` it full access or only its own tools.
  */
 export type AllowedSite = {
     site: string
     holder: string
     tools: string[]
-    full?: boolean
+    granted?: 'full' | 'siteTools'
 }
 
 /** The file the sites `directory`'s handler always allows are kept in. */
@@ -30,8 +29,8 @@ export async function allowedSites(file: string): Promise<AllowedSite[]> {
 
 /**
  * The site `sites` let a link for `site`, minted for `holder`, pair unasked as, or `undefined` where
- * they do not: it asks for a tool beyond those allowed, or for full access never answered. 44.62.
- * A site allowed full access pairs unasked whatever it asks for.
+ * they do not: it asks for a tool beyond those allowed, or for full access, and was granted neither
+ * full access nor only its own tools. 44.62.
  */
 export function allowedAs(
     sites: readonly AllowedSite[],
@@ -41,9 +40,8 @@ export function allowedAs(
 ): AllowedSite | undefined {
     for (const allowed of sites)
         if (allowed.site === site && allowed.holder === holder) {
-            // Full access allowed covers any tool a narrower link asks for.
-            if (allowed.full === true) return allowed
-            if (asked.full) return allowed.full === false ? allowed : undefined
+            if (allowed.granted !== undefined) return allowed
+            if (asked.full) return undefined
             for (const tool of asked.tools)
                 if (!allowed.tools.includes(tool)) return undefined
             return allowed
@@ -52,15 +50,15 @@ export function allowedAs(
 }
 
 /**
- * Keeps `site` always allowed for `holder`, with `tools` beside the ones allowed before, and an ask for
- * full access answered `full` where one was.
+ * Keeps `site` always allowed for `holder`, with `tools` beside the ones allowed before, and — where
+ * the visitor answered so — `granted` full access or only its own tools.
  */
 export async function allowAlways(
     file: string,
     site: string,
     holder: string,
     tools: readonly string[],
-    full?: boolean,
+    granted?: 'full' | 'siteTools',
 ): Promise<void> {
     const sites = await allowedSites(file)
     let entry = sites.find(
@@ -72,7 +70,7 @@ export async function allowAlways(
     }
     for (const tool of tools)
         if (!entry.tools.includes(tool)) entry.tools.push(tool)
-    if (full !== undefined) entry.full = full
+    if (granted !== undefined) entry.granted = granted
     await Bun.write(file, JSON.stringify(sites, null, 4))
 }
 
