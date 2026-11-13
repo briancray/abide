@@ -450,6 +450,10 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply self-end rounded-lg bg-signal/10 px-3 py-2 font-medium;
     }
 
+    .permission {
+        @apply flex flex-col gap-snug rounded-lg border border-signal bg-signal/8 p-4;
+    }
+
     .thinking {
         @apply animate-board-pulse;
     }

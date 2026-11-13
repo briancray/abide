@@ -19,6 +19,7 @@ import {
 
 import answer from '#src/ask/answer.handler.ts'
 import type { AnswerPart } from '#src/ask/lib/AnswerPart.ts'
+import permit from '#src/ask/permit.handler.ts'
 
 import Code from './Code.abide'
 import Shown from './Shown.abide'
@@ -32,6 +33,17 @@ let open = reactive(false)
 let transcript = reactive<Message[]>([])
 let turns = reactive<{ question: string; parts: AnswerPart[] }[]>([])
 let asking = reactive<Message[] | undefined>(undefined)
+let answered = reactive<string[]>([])
+
+// 44.82 — EVERYTHING THE VISITOR'S CLAUDE CODE HAS is theirs to give, so the commands the panel shows
+// run the bridge `--full`: a site cannot mint one that does, and the visitor copies it knowing so. The
+// flag goes before any `--`, whose arguments are Claude Code's own.
+function withFull(command: string): string {
+    const at = command.indexOf(' -- ')
+    return at === -1
+        ? `${command} --full`
+        : `${command.slice(0, at)} --full${command.slice(at)}`
+}
 
 const events = reactive(() => (asking ? answer({ messages: asking }) : []))
 
@@ -40,13 +52,28 @@ const live = reactive(() => {
     const parts: AnswerPart[] = []
     let tail: AnswerPart | undefined
     let tool: string | undefined
+    let waiting: { id: string; name: string; input: string } | undefined
     for (const event of events) {
         if (event.type === 'part') parts.push(event.part)
         else if (event.type === 'tail') tail = event.part
         else if (event.type === 'tool') tool = event.name
+        else if (event.type === 'permission' && !answered.includes(event.id))
+            waiting = {
+                id: event.id,
+                name: event.name,
+                input: JSON.stringify(event.input, null, 2),
+            }
     }
-    return { parts, tail, tool }
+    return { parts, tail, tool, waiting }
 })
+
+// 44.83 — only this browser can answer, once; a prompt left alone is denied after two minutes (44.84).
+async function answerPermission(allow: boolean) {
+    const waiting = live.waiting
+    if (waiting === undefined) return
+    answered = [...answered, waiting.id]
+    await permit({ id: waiting.id, allow })
+}
 
 // `<show open/>` moves the page under the answer once, as the block arrives.
 let opened = 0
@@ -126,20 +153,22 @@ function focusOnKey(input: Element) {
             <p class="status">Connecting…</p>
         {:else if !status.paired}
             <div class="pair flow">
-                <p>The answers come from your own Claude Code, run on your machine with these docs as its
-                    only tools. Pair it with this browser once; the native app is paired already.</p>
+                <p>The answers come from your own Claude Code, run on your machine. Run its bridge with
+                    <code>--full</code> and it can also build what you ask for with everything your Claude
+                    Code has, asking you here before anything it is unsure of. Pair it with this browser
+                    once; the native app is paired already, and runs it <code>--full</code>.</p>
                 {#if step === 'install'}
-                    <pre>{status.install}</pre>
+                    <pre>{withFull(status.install)}</pre>
                     <div class="row">
                         <button onclick={copyInstall}>{copied ? 'Copied' : 'Copy'}</button>
                         <span class="status">then pair again</span>
                     </div>
                 {:else}
-                    <pre>{status.command}</pre>
+                    <pre>{withFull(status.command)}</pre>
                     <div class="row">
                         <button disabled={step === 'waiting'} onclick={start}>
                             {step === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>
-                        <span class="status">or run the command in a terminal</span>
+                        <span class="status">or run the command in a terminal — a link opens the bridge as it was installed</span>
                     </div>
                 {/if}
             </div>
@@ -164,6 +193,16 @@ function focusOnKey(input: Element) {
                     <div class="flow">{raw(live.tail.html)}</div>
                 {:else if live.tail?.kind === 'code'}
                     <Code code={live.tail.code} language={live.tail.language} />
+                {/if}
+                {#if live.waiting}
+                    <div class="permission">
+                        <p>Claude Code asks to run <code>{live.waiting.name}</code></p>
+                        <pre>{live.waiting.input}</pre>
+                        <div class="row">
+                            <button onclick={() => answerPermission(true)}>Allow</button>
+                            <button class="quiet" onclick={() => answerPermission(false)}>Deny</button>
+                        </div>
+                    </div>
                 {/if}
                 {#if events.error()}
                     <p class="status">{events.error()?.message}</p>

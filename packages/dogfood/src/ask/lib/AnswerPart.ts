@@ -17,9 +17,13 @@ export type AnswerPart =
     | { kind: 'code'; language: string; code: string }
     | { kind: 'show'; show: Show }
 
-/** What `answer` streams: a finished block, the block being written, a docs tool called, the end. */
+/**
+ * What `answer` streams: a finished block, the block being written, a tool called, a tool the visitor's
+ * Claude Code asks leave to run (44.81), the end.
+ */
 export type AnswerEvent =
     | { type: 'part'; part: AnswerPart }
     | { type: 'tail'; part: AnswerPart | undefined }
     | { type: 'tool'; name: string }
+    | { type: 'permission'; id: string; name: string; input: unknown }
     | { type: 'done'; text: string; stop: string }
