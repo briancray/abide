@@ -82,8 +82,8 @@ import Section from '#src/lib/Section.abide'
         <Example
             id="one-type"
             app="crm"
-            title="`Reactive` \u2014 four ways to get a value, one way to ask"
-            summary="A note on a contact. Watch which rows say \u2026 on arrival, then type a note and save it."
+            title="`Reactive` — four ways to get a value, one way to ask"
+            summary="A note on a contact. Watch which rows say … on arrival, then type a note and save it."
             files={{
                 'src/contacts/lib/ContactNote.abide': contactNoteSource,
                 'src/contacts/lib/ContactNote.test.ts': contactNoteTestSource,

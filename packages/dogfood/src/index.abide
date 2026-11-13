@@ -1,10 +1,18 @@
 <script>
-import { raw, type RouteLiteral, url } from '@abide/abide'
+import { raw, reactive, type RouteLiteral, url } from '@abide/abide'
 
 import Doc from '#src/lib/Doc.abide'
-import { inline } from '#src/lib/inline.ts'
-import Section from '#src/lib/Section.abide'
+import type { Heading } from '#src/lib/Heading.ts'
+import { inline, slugify } from '#src/lib/inline.ts'
 import { SITE } from '#src/lib/SITE.ts'
+
+// THE RAIL'S HEADINGS, filed here rather than by a `<Section>` per group: the groups are a loop, and
+// a heading filed from inside one lands after `<Doc>` has decided whether there is a rail.
+const headings = reactive.share('docHeadings', () => reactive([]))
+const filed: Heading[] = []
+for (const group of SITE)
+    filed.push({ id: slugify(group.group), title: group.group, level: 2 })
+headings = filed
 </script>
 
 <Doc>
@@ -17,13 +25,14 @@ import { SITE } from '#src/lib/SITE.ts'
         and the answer is written from these pages, with their examples running inside it.</p>
 
     {#for group of SITE}
-        <Section title={group.group}>
-            <p>{raw(inline(group.description))}</p>
-            <ul class="index">
-                {#for page of group.pages}
-                    <li><a href={url(page.route as RouteLiteral)}>{raw(inline(page.title))}</a> — {raw(inline(page.description))}</li>
-                {/for}
-            </ul>
-        </Section>
+        <section><div class="flow">
+                <h2 id={slugify(group.group)}>{raw(inline(group.group))}</h2>
+                <p>{raw(inline(group.description))}</p>
+                <ul class="index">
+                    {#for page of group.pages}
+                        <li><a href={url(page.route as RouteLiteral)}>{raw(inline(page.title))}</a> — {raw(inline(page.description))}</li>
+                    {/for}
+                </ul>
+            </div></section>
     {/for}
 </Doc>

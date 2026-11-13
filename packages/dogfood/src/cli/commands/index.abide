@@ -29,8 +29,8 @@ import Snippet from '#src/lib/Snippet.abide'
                 <tr><td><code>src/getGreeting.test.ts</code></td><td>a test that calls the handler</td></tr>
                 <tr><td><code>src/index.test.ts</code></td><td>a test that mounts the page, clicks it, and counts the work the click did</td></tr>
                 <tr><td><code>src/lib/app.css</code></td><td>the stylesheet the layout imports: Tailwind, built by the plugin <code>bunfig.toml</code> declares</td></tr>
-                <tr><td><code>CLAUDE.md</code> \u00B7 <code>AGENTS.md</code></td><td>notes for a coding agent, importing the <code>ABIDE.md</code> the installed package holds: where its docs, as one markdown file, and its registry and rulebook are</td></tr>
-                <tr><td><code>Dockerfile</code> \u00B7 <code>.dockerignore</code></td><td>an image holding the compiled server and nothing else of the app</td></tr>
+                <tr><td><code>CLAUDE.md</code> · <code>AGENTS.md</code></td><td>notes for a coding agent, importing the <code>ABIDE.md</code> the installed package holds: where its docs, as one markdown file, and its registry and rulebook are</td></tr>
+                <tr><td><code>Dockerfile</code> · <code>.dockerignore</code></td><td>an image holding the compiled server and nothing else of the app</td></tr>
                 <tr><td><code>package.json</code></td><td>the scripts <code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>format</code>, <code>bench</code> and <code>routes</code></td></tr>
             </tbody>
         </table>
@@ -42,9 +42,9 @@ import Snippet from '#src/lib/Snippet.abide'
             <tbody>
                 <tr><td><code>abide scaffold &lt;name&gt;</code></td><td>writes a starter app</td></tr>
                 <tr><td><code>abide dev [--port &lt;n&gt;] [--hostname &lt;host&gt;]</code></td><td>serves the app and restarts it on every save; takes the first free port from 3000, or the one you name, on every interface or the one you name</td></tr>
-                <tr><td><code>abide run &lt;file&gt; [args\u2026]</code></td><td>runs one script with the app's own modules, such as a script that loads contacts from a spreadsheet</td></tr>
-                <tr><td><code>--help</code> \u00B7 <code>-h</code> \u00B7 <code>abide help</code></td><td>prints every command</td></tr>
-                <tr><td><code>--version</code> \u00B7 <code>-v</code></td><td>prints the version installed</td></tr>
+                <tr><td><code>abide run &lt;file&gt; [args…]</code></td><td>runs one script with the app's own modules, such as a script that loads contacts from a spreadsheet</td></tr>
+                <tr><td><code>--help</code> · <code>-h</code> · <code>abide help</code></td><td>prints every command</td></tr>
+                <tr><td><code>--version</code> · <code>-v</code></td><td>prints the version installed</td></tr>
             </tbody>
         </table>
 

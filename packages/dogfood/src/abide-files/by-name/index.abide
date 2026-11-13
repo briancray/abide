@@ -17,7 +17,7 @@ import Section from '#src/lib/Section.abide'
         <Example
             id="star"
             app="crm"
-            title="`starred` \u2014 read by name, written by name"
+            title="`starred` — read by name, written by name"
             summary="Grace Hopper is the contact you call most. Star her, then take the star off."
             files={{
                 'src/contacts/lib/StarButton.abide': starButtonSource,

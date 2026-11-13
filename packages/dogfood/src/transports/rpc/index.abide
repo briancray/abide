@@ -67,7 +67,7 @@ import Section from '#src/lib/Section.abide'
         <Example
             id="contact-list"
             app="crm"
-            title="`listContacts` \u2014 a handler file, read like a value"
+            title="`listContacts` — a handler file, read like a value"
             summary="The contacts page lists every contact. The list is empty until the handler answers, then fills in."
             files={{
                 'src/contacts/lib/ContactList.abide': contactListSource,
