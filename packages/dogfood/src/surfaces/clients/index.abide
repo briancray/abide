@@ -1,8 +1,66 @@
 <script>
+import exportContactsSource from 'crm/src/assistant/exportContacts.handler.ts' with { type: 'text' }
+import WithheldExport from 'crm/src/assistant/lib/WithheldExport.abide'
+import withheldExportSource from 'crm/src/assistant/lib/WithheldExport.abide' with { type: 'text' }
+import withheldExportTestSource from 'crm/src/assistant/lib/WithheldExport.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <p>A handler file already carries an address, a method, an argument type and a description.
+        That is everything an OpenAPI operation, an MCP tool and a command need, so the build derives
+        all three from the same route table the browser's calls come from.</p>
+
+    <table>
+        <thead><tr><th>Surface</th><th>Who reads it</th><th>Where</th></tr></thead>
+        <tbody>
+            <tr><td><code>ui</code></td><td>a page</td><td><code>import searchContacts from './searchContacts.handler.ts'</code></td></tr>
+            <tr><td><code>openapi</code></td><td>a generated client, an API gateway</td><td><code>/__abide/openapi.json</code></td></tr>
+            <tr><td><code>mcp</code></td><td>a model</td><td><code>/__abide/mcp</code></td></tr>
+            <tr><td><code>cli</code></td><td>a person or a script in a terminal</td><td><code>abide call</code></td></tr>
+        </tbody>
+    </table>
+
+    <Section title="`clients` keeps a handler off a surface">
+        <Example
+            id="withhold"
+            app="crm"
+            title={'`clients: { mcp: false }` — off the tool list, on the network'}
+            summary="The export button reads every contact at once, and no model needs that. Ask the MCP endpoint for its tools, then ask the export's own address."
+            files={{
+                'src/assistant/lib/WithheldExport.abide': withheldExportSource,
+                'src/assistant/exportContacts.handler.ts': exportContactsSource,
+                'src/assistant/lib/WithheldExport.test.ts': withheldExportTestSource,
+            }}
+        >
+            <WithheldExport />
+        </Example>
+
+        <p>The export is not a tool, and its address still answers. <code>clients</code> decides
+            what is listed, never who may call: put a rung on a handler that some callers may not
+            reach.</p>
+
+        <p><code>Clients</code> has one key per surface, and each defaults to
+            <code>true</code>.</p>
+
+        <table>
+            <thead><tr><th>Key</th><th>Set to <code>false</code></th></tr></thead>
+            <tbody>
+                <tr><td><code>ui</code></td><td>No page can import the handler: the import is a compile error naming it. The stand-in in <code>v1/messages.handler.ts</code> sets it.</td></tr>
+                <tr><td><code>openapi</code></td><td>No operation in <code>/__abide/openapi.json</code>.</td></tr>
+                <tr><td><code>mcp</code></td><td>No tool on <code>/__abide/mcp</code>, and none for the assistant.</td></tr>
+                <tr><td><code>cli</code></td><td>Not callable with <code>abide call</code>.</td></tr>
+            </tbody>
+        </table>
+
+        <p>A handler that returns a whole <code>Response</code> starts with <code>mcp</code> and
+            <code>cli</code> off, having no result type to publish. A handler declared in a
+            <code>&lt;script server&gt;</code> is on no surface at all.</p>
+    </Section>
+
     <Registry />
 </Doc>

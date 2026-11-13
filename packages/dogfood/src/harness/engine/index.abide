@@ -1,8 +1,47 @@
 <script>
+import topDealsSpecSource from 'crm/e2e/TopDeals.test.ts' with { type: 'text' }
+import TopDeals from 'crm/src/reports/lib/TopDeals.abide'
+import topDealsSource from 'crm/src/reports/lib/TopDeals.abide' with { type: 'text' }
+import topFiveSource from 'crm/src/reports/lib/topFive.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="Find which layer a click spends its time in">
+        <Example
+            id="layer-share"
+            app="crm"
+            title="`traceOp(page, op, body)` and `shares(trace, spec)` — one layer's part of a click"
+            summary="Ranking five thousand deals takes a sort and a render. Its spec clicks the other ranking in Chromium and asks what part of the click the sort was."
+            files={{
+                'src/reports/lib/TopDeals.abide': topDealsSource,
+                'src/reports/lib/topFive.ts': topFiveSource,
+                'e2e/TopDeals.test.ts': topDealsSpecSource,
+            }}
+        >
+            <TopDeals />
+        </Example>
+
+        <p>A faster sort saves at most the part of the click the sort was. Find that part before
+            changing the sort. The code marks its layer with <code>performance.measure</code>, and the
+            spec marks the whole click the same way, from the click to the frame that shows it.</p>
+
+        <p><code>traceOp</code> records what Chromium did over that window, as a
+            <code>Trace</code>: the user timing, and the style recalculations, layouts, paints and
+            forced layouts. <code>shares</code> divides the layer by the op, as a
+            <code>SharesSpec</code> names them, and hands back a <code>Shares</code>.
+            <code>ceilingCpu</code> is the part of the processor's time the layer took.
+            <code>ceilingObserved</code> is zero whenever the whole click fits in a frame, because a
+            person sees the result at the same frame either way.</p>
+
+        <p><code>measuresNamed</code> lists every measure of one name in a trace, and
+            <code>durationOf</code> sums them. The trace is read over the DevTools protocol, so the
+            spec is a Playwright test that runs in Chromium against the served app.</p>
+    </Section>
+
     <Registry />
 </Doc>

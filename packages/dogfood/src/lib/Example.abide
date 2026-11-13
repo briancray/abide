@@ -34,7 +34,14 @@ const serverSources = GET(
 // 40.5 — an example card: the component itself, running, above a tab per file it is made of. The
 // render is never a tab; it is what the example IS, and the files are what you consult about it.
 // A test or a bench file's tab renders what that file last reported, above its source.
-import { props, raw, reactive, route, type RouteLiteral, url } from '@abide/abide'
+import {
+    props,
+    raw,
+    reactive,
+    route,
+    type RouteLiteral,
+    url,
+} from '@abide/abide'
 
 import { highlight, sideOf } from './highlight.ts'
 import { inline } from './inline.ts'
@@ -61,7 +68,8 @@ const {
 
 // FRAMED IN AN ANSWER, `?card=` names this card: the page shows it alone (`app.css`'s `.embed`) and
 // tells the frame how tall it is, so the answer holding it never scrolls inside it (`Shown.abide`).
-const embedded = route.query({ card: '' }).card === id
+const query = route.query({ card: '' })
+const embedded = query.card === id
 function reportHeight(card: Element) {
     if (!embedded || parent === window) return
     const observer = new ResizeObserver(([entry]) =>

@@ -1,8 +1,507 @@
 <script>
+import { url } from '@abide/abide'
+import exportContactsSource from 'crm/src/account/exportContacts.handler.ts' with { type: 'text' }
+import getStatementSource from 'crm/src/account/getStatement.handler.ts' with { type: 'text' }
+import adminsOnlySource from 'crm/src/account/lib/adminsOnly.ts' with { type: 'text' }
+import ExportContacts from 'crm/src/account/lib/ExportContacts.abide'
+import exportContactsComponentSource from 'crm/src/account/lib/ExportContacts.abide' with { type: 'text' }
+import exportContactsTestSource from 'crm/src/account/lib/ExportContacts.test.ts' with { type: 'text' }
+import PartnerStatement from 'crm/src/account/lib/PartnerStatement.abide'
+import partnerStatementSource from 'crm/src/account/lib/PartnerStatement.abide' with { type: 'text' }
+import partnerStatementTestSource from 'crm/src/account/lib/PartnerStatement.test.ts' with { type: 'text' }
+import SalesReport from 'crm/src/account/lib/SalesReport.abide'
+import salesReportComponentSource from 'crm/src/account/lib/SalesReport.abide' with { type: 'text' }
+import salesReportTestSource from 'crm/src/account/lib/SalesReport.test.ts' with { type: 'text' }
+import salesReportSource from 'crm/src/account/salesReport.handler.ts' with { type: 'text' }
+import exportCsvSource from 'crm/src/activity/exportCsv.handler.ts' with { type: 'text' }
+import feedSource from 'crm/src/activity/feed.handler.ts' with { type: 'text' }
+import AccountFeed from 'crm/src/activity/lib/AccountFeed.abide'
+import accountFeedSource from 'crm/src/activity/lib/AccountFeed.abide' with { type: 'text' }
+import accountFeedTestSource from 'crm/src/activity/lib/AccountFeed.test.ts' with { type: 'text' }
+import ActivityHistory from 'crm/src/activity/lib/ActivityHistory.abide'
+import activityHistorySource from 'crm/src/activity/lib/ActivityHistory.abide' with { type: 'text' }
+import activityHistoryTestSource from 'crm/src/activity/lib/ActivityHistory.test.ts' with { type: 'text' }
+import CsvExport from 'crm/src/activity/lib/CsvExport.abide'
+import csvExportSource from 'crm/src/activity/lib/CsvExport.abide' with { type: 'text' }
+import csvExportTestSource from 'crm/src/activity/lib/CsvExport.test.ts' with { type: 'text' }
+import feedsSource from 'crm/src/activity/lib/feeds.ts' with { type: 'text' }
+import Wallboard from 'crm/src/activity/lib/Wallboard.abide'
+import wallboardSource from 'crm/src/activity/lib/Wallboard.abide' with { type: 'text' }
+import wallboardTestSource from 'crm/src/activity/lib/Wallboard.test.ts' with { type: 'text' }
+import logToFeedSource from 'crm/src/activity/logToFeed.handler.ts' with { type: 'text' }
+import olderActivitySource from 'crm/src/activity/olderActivity.handler.ts' with { type: 'text' }
+import tickerSource from 'crm/src/activity/ticker.handler.ts' with { type: 'text' }
+import ContactList from 'crm/src/contacts/lib/ContactList.abide'
+import contactListSource from 'crm/src/contacts/lib/ContactList.abide' with { type: 'text' }
+import contactListBenchSource from 'crm/src/contacts/lib/ContactList.bench.ts' with { type: 'text' }
+import contactListTestSource from 'crm/src/contacts/lib/ContactList.test.ts' with { type: 'text' }
+import listContactsSource from 'crm/src/contacts/listContacts.handler.ts' with { type: 'text' }
+import exportDealsHandlerSource from 'crm/src/deals/exportDeals.handler.ts' with { type: 'text' }
+import getDealSource from 'crm/src/deals/getDeal.handler.ts' with { type: 'text' }
+import DealDetail from 'crm/src/deals/lib/DealDetail.abide'
+import dealDetailSource from 'crm/src/deals/lib/DealDetail.abide' with { type: 'text' }
+import dealDetailBenchSource from 'crm/src/deals/lib/DealDetail.bench.ts' with { type: 'text' }
+import dealDetailTestSource from 'crm/src/deals/lib/DealDetail.test.ts' with { type: 'text' }
+import ExportDeals from 'crm/src/deals/lib/ExportDeals.abide'
+import exportDealsSource from 'crm/src/deals/lib/ExportDeals.abide' with { type: 'text' }
+import exportDealsTestSource from 'crm/src/deals/lib/ExportDeals.test.ts' with { type: 'text' }
+import getStageSource from 'crm/src/pipeline/getStage.handler.ts' with { type: 'text' }
+import QualifyBoard from 'crm/src/pipeline/lib/QualifyBoard.abide'
+import qualifyBoardSource from 'crm/src/pipeline/lib/QualifyBoard.abide' with { type: 'text' }
+import qualifyBoardTestSource from 'crm/src/pipeline/lib/QualifyBoard.test.ts' with { type: 'text' }
+import qualifyLeadSource from 'crm/src/pipeline/qualifyLead.handler.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <p>Every server call is a handler: a function wrapped in <code>GET</code>,
+        <code>POST</code>, <code>PATCH</code> or one of their siblings. A page imports it and calls it
+        like any function. There is no route to register, no <code>fetch</code> and no client to keep in step
+        with the server.</p>
+
+    <Section title="A page reads a handler like a value">
+        <Example
+            id="contact-list"
+            app="crm"
+            title="`listContacts` \u2014 a handler file, read like a value"
+            summary="The contacts page lists every contact. The list is empty until the handler answers, then fills in."
+            files={{
+                'src/contacts/lib/ContactList.abide': contactListSource,
+                'src/contacts/listContacts.handler.ts': listContactsSource,
+                'src/contacts/lib/ContactList.test.ts': contactListTestSource,
+                'src/contacts/lib/ContactList.bench.ts': contactListBenchSource,
+            }}
+        >
+            <ContactList />
+        </Example>
+
+        <p>The bench reads the list once the handler has answered, among 100 contacts and among
+            1,000. Its ratio is what a read costs as the list grows: a read hands back what the
+            handler answered, and copies nothing.</p>
+
+        <p><code>listContacts.handler.ts</code> runs on the server. The list imports it like any module,
+            and the browser is sent a call under the same name in its place, so there is no
+            <code>fetch</code>, no route to register, and no second copy of the contact type.</p>
+
+        <p>The test mounts the list, and the handler runs in process. A handler only one file
+            calls can live in that file's <code>&lt;script server&gt;</code> instead. See
+            <a href={url('/abide-files/blocks')}>Script and style blocks</a>.</p>
+    </Section>
+
+    <Section title="A page calls a handler with typed arguments">
+        <Example
+            id="deal"
+            app="crm"
+            title={'`getDeal({ id })` — a handler called with typed arguments'}
+            summary="Pick a deal. The page asks the server for that one, and its fields fill in when it lands."
+            files={{
+                'src/deals/lib/DealDetail.abide': dealDetailSource,
+                'src/deals/getDeal.handler.ts': getDealSource,
+                'src/deals/lib/DealDetail.test.ts': dealDetailTestSource,
+                'src/deals/lib/DealDetail.bench.ts': dealDetailBenchSource,
+            }}
+        >
+            <DealDetail />
+        </Example>
+
+        <p>The bench picks a deal once the handler has answered it, among 100 deals and among 1,000.
+            Its ratio is what a pick costs as the pipeline grows: the page holds the one deal its
+            arguments name, and never the rest.</p>
+
+        <p>The annotation <code>{'{ id: string }'}</code> is the handler's <code>Args</code>, and
+            what it returns is its <code>Value</code>. <code>GET</code> builds the runtime schema from
+            that annotation, so a request whose arguments do not match it is refused with 422 before the
+            handler runs.</p>
+
+        <p>In the browser the import is an <code>Rpc</code>: a call under the same name, with the
+            same types, sent over http. The call hands back a reactive value rather than a promise, so
+            the page reads <code>deal.name</code> by name and the probes are on the result.</p>
+
+        <p>Reading <code>deal</code> starts the load. The page renders with a hole where each
+            field goes, and the holes fill when the deal lands.</p>
+
+        <p>The <code>description</code> is the sentence every surface shows for the handler:
+            OpenAPI, MCP and the CLI. <code>refuse(404)</code> answers a deal that does not exist.</p>
+    </Section>
+
+    <Section title="Four methods declare a write">
+        <table>
+            <thead><tr><th>You write</th><th>For</th><th>Arguments travel</th></tr></thead>
+            <tbody>
+                <tr><td><code>POST(fn)</code></td><td>a new deal</td><td>in the body</td></tr>
+                <tr><td><code>PATCH(fn)</code></td><td>a change to part of one</td><td>in the body</td></tr>
+                <tr><td><code>PUT(fn)</code></td><td>a deal replaced whole</td><td>in the body</td></tr>
+                <tr><td><code>DELETE(fn)</code></td><td>a deal removed</td><td>in the URL, flat</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>POST</code> / <code>PUT</code> / <code>PATCH</code> / <code>DELETE</code> each take
+            what <code>GET</code> takes and are called the way it is. The page never names the method;
+            the handler carries it. A <code>GET</code> must not write, because a link on another
+            site can reach it with your user's cookie attached.</p>
+    </Section>
+
+    <Section title="A handler can answer with a file">
+        <Example
+            id="export"
+            app="crm"
+            title="`exportDeals.url()` — a CSV file a link downloads"
+            summary="Sales wants the pipeline in a spreadsheet. The link downloads every deal as a CSV file."
+            files={{
+                'src/deals/lib/ExportDeals.abide': exportDealsSource,
+                'src/deals/exportDeals.handler.ts': exportDealsHandlerSource,
+                'src/deals/lib/ExportDeals.test.ts': exportDealsTestSource,
+            }}
+        >
+            <ExportDeals />
+        </Example>
+
+        <p>A handler that returns a <code>Blob</code> answers with the blob's own type, so this one
+            is <code>text/csv</code>. A link cannot call a handler, so it takes the address:
+            <code>rpc.url</code> is derived from the file's path and the mount, never typed out.</p>
+
+        <table>
+            <thead><tr><th>You return</th><th>The caller gets</th></tr></thead>
+            <tbody>
+                <tr><td><code>response.page</code></td><td>a rendered document as <code>text/html</code>: a stored invoice as it was sent</td></tr>
+                <tr><td><code>response.json</code></td><td>JSON whatever the caller's <code>Accept</code> says, with <code>null</code> for nothing</td></tr>
+                <tr><td><code>response.redirect</code></td><td>a navigation to another address, at a <code>RedirectStatus</code>: 301, 302, 303, 307 or 308</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th>A handler's member</th><th>What you get</th></tr></thead>
+            <tbody>
+                <tr><td><code>rpc.url</code></td><td>the address, with the args written in, for a link, a form or a webhook</td></tr>
+                <tr><td><code>rpc.method</code></td><td>the verb it was declared with</td></tr>
+                <tr><td><code>rpc.address</code></td><td>its route, once its file has loaded, in a test as in the app</td></tr>
+                <tr><td><code>rpc.raw</code></td><td>the <code>Response</code> itself, for a header or a body you read yourself</td></tr>
+                <tr><td><code>rpc.description</code></td><td>the sentence it was declared with</td></tr>
+            </tbody>
+        </table>
+
+        <p>Every answer carries headers you did not write:</p>
+
+        <table>
+            <thead><tr><th>Header</th><th>On</th></tr></thead>
+            <tbody>
+                <tr><td><code>x-content-type-options: nosniff</code></td><td>everything, so a browser never guesses a type</td></tr>
+                <tr><td><code>cache-control: private, no-store</code></td><td>a page, a handler's answer and any refusal, until the handler sets its own</td></tr>
+                <tr><td><code>cache-control: private, max-age=&lt;ttl&gt;</code></td><td>a <code>GET</code> over a <code>global</code> value</td></tr>
+                <tr><td><code>cache-control: no-store</code></td><td>the OpenAPI document and the MCP endpoint</td></tr>
+                <tr><td><code>cache-control: public, max-age=31536000, immutable</code></td><td>the built bundle, named by its content hash</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`refreshes` reloads every tab showing what a write changed">
+        <Example
+            id="refreshes"
+            app="crm"
+            title={"`POST(write, { refreshes: ['stage:lead'] })` — reload by tag after a write"}
+            summary="The same board, with a write that says what it changed. Qualify a lead, in two tabs if you have them."
+            files={{
+                'src/pipeline/lib/QualifyBoard.abide': qualifyBoardSource,
+                'src/pipeline/qualifyLead.handler.ts': qualifyLeadSource,
+                'src/pipeline/getStage.handler.ts': getStageSource,
+                'src/pipeline/lib/QualifyBoard.test.ts': qualifyBoardTestSource,
+            }}
+        >
+            <QualifyBoard />
+        </Example>
+
+        <p>The button calls <code>qualifyLead()</code> and nothing after it. The handler lists the
+            tags it changes, and <code>getStage</code> tags each entry with its stage, so the
+            <code>lead</code> and <code>qualified</code> entries reload and the other two do not.
+            The refresh runs on the server, so every tab showing those stages reloads them, not only
+            the one that clicked.</p>
+
+        <p>It runs once the write has answered and before the answer is sent, so the caller's next
+            read is already the reload. A call that is refused, by the handler or by a
+            <code>middleware</code> rung, refreshes nothing, and a streamed answer refreshes when
+            its last chunk is read. Where the tags depend on the call, pass a function of its
+            arguments: <code>{'refreshes: ({ id }) => [`deal:${id}`]'}</code>.</p>
+
+        <p>Where what changed belongs to whoever called, name it by who they are. Each rep's
+            pipeline is one entry of a keyed value, and the function runs in the call's request
+            (16.101), so it may be <code>async</code> and read <code>principal</code>.
+            <code>{'refreshes: async () => [[pipelines, { repId: (await principal.resolved).id }]]'}</code>
+            reloads that rep's entry, as <code>{'refresh(pipelines, { repId })'}</code> would. Only
+            the tabs following it are sent the new pipeline. One list can name tags, selections and
+            <code>[selection, pattern]</code> pairs together.</p>
+
+        <p>Some views belong to one browser: a draft, a cart, the deals one person has starred.
+            A refresh on the server reaches every tab following the handler, so pass the browser it
+            is for: <code>{'getStarred.refresh(undefined, { caller: true })'}</code> reloads the
+            copies the browser making this request follows, in every tab of it, and leaves every
+            other browser alone. A write says the same as a triple,
+            <code>{'refreshes: [[getStarred, undefined, { caller: true }]]'}</code>, and a call no
+            browser made reaches none. Only the server knows a browser's caller, so a page that
+            passes one is told so.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'{ caller }'}</code></td><td>the second argument to <code>rpc.refresh</code> and <code>rpc.invalidate</code> on the server: reach only the browser whose <code>principal.caller</code> it is, or <code>true</code> for the one making the request</td></tr>
+                <tr><td><code>refreshes</code></td><td>the tags, selections, <code>[selection, pattern]</code> pairs and <code>[rpc, pattern, {'{ caller }'}]</code> triples a write refreshes each time it answers, or a function of its arguments returning them, <code>async</code> where it reads <code>principal</code>. <code>POST</code>, <code>PUT</code>, <code>PATCH</code> and <code>DELETE</code> take it; <code>GET</code> does not, since a read changes nothing to refresh</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A channel on the server reaches every open tab">
+        <Example
+            id="live-feed"
+            app="crm"
+            title="`GET` + `POST` — one account's feed, every tab"
+            summary="The activity feed on Hopper & Co. Open this page in a second tab, log a call in either, and both lists grow."
+            files={{
+                'src/activity/lib/AccountFeed.abide': accountFeedSource,
+                'src/activity/lib/feeds.ts': feedsSource,
+                'src/activity/feed.handler.ts': feedSource,
+                'src/activity/logToFeed.handler.ts': logToFeedSource,
+                'src/activity/lib/AccountFeed.test.ts': accountFeedTestSource,
+            }}
+        >
+            <AccountFeed />
+        </Example>
+
+        <table>
+            <thead><tr><th>You write</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'reactive(fn, { global: true })'}</code></td><td>the channels, one per account, shared by every caller</td></tr>
+                <tr><td><code>GET(feeds)</code></td><td>its address: a tab reading it follows it</td></tr>
+                <tr><td><code>POST(…)</code></td><td>the way in: a handler that patches a channel</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>global: true</code> puts the channels in one cache for the whole process. Leave it
+            out and a value on the server belongs to one request, so every caller gets a channel of
+            their own and nobody sees anybody's calls. The body takes <code>account</code>, so there
+            is one channel per account, and <code>ttl</code> lets one nobody has written to for an
+            hour go. <code>{"by: 'id'"}</code> tells one entry from another, and every tab's copy
+            carries it, so <code>{'{#for entry of entries}'}</code> keys its rows by id with no key
+            of its own.</p>
+
+        <p>A tab reading <code>feed</code> is subscribed to it, over one web socket that every
+            followed <code>GET</code> on the page shares. The button does not paint its own entry. It
+            calls <code>logToFeed</code>, the handler patches the channel, and what the patch wrote goes
+            to every tab following it, this one included. Each write travels as a
+            <code>PatchOp</code>, so a new entry is one <code>add</code> rather than the whole
+            channel.</p>
+
+        <p>The server writes each entry: its id, its kind and its time. A caller can only pick a
+            kind the server knows, so nobody forges an entry, and who may log at all is the
+            <code>POST</code>'s own middleware. The call hands back the same <code>Reactive</code>
+            the handler had, its <code>Produced</code> type included, so <code>entries.length</code>
+            and <code>{'{#for entry of entries}'}</code> read it like any array.</p>
+
+        <p>The channel lives in memory. A restart starts it empty, and each instance of the app holds
+            its own. Activity anyone must scroll back past that belongs in your database, behind an
+            ordinary handler.</p>
+    </Section>
+
+    <Section title="A handler that yields sends each entry as it is read">
+        <Example
+            id="stream"
+            app="crm"
+            title="`async function*` — the archive, an entry at a time"
+            summary="Hopper & Co's older activity, read from a slow archive. The list fills an entry at a time."
+            files={{
+                'src/activity/lib/ActivityHistory.abide': activityHistorySource,
+                'src/activity/olderActivity.handler.ts': olderActivitySource,
+                'src/activity/lib/ActivityHistory.test.ts': activityHistoryTestSource,
+            }}
+        >
+            <ActivityHistory />
+        </Example>
+
+        <p>A handler written as an async generator streams. Each <code>yield</code> goes out as it
+            happens, one JSON value per line, and a proxy in front passes each line on rather than
+            holding it.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>You get</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'{#for entry of entries}'}</code></td><td>every entry so far, and each one after as it lands</td></tr>
+                <tr><td><code>entries.busy()</code></td><td>true until the stream closes</td></tr>
+                <tr><td><code>await entries</code></td><td>every entry, at the close</td></tr>
+                <tr><td><code>{'for await (const entry of entries)'}</code></td><td>each entry of the run, once, ending at the close</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>for await (… of s)</code> walks the run through
+            <code>s[Symbol.asyncIterator]</code>: from its first entry to its close, so a reader that
+            starts halfway still gets every entry. On a value that does not stream it yields the
+            settled value once and ends. The test walks the run.</p>
+
+        <p>A page rendered on the server is not held for an unfinished stream. What the stream had
+            produced is inline, and the browser picks up the rest. The transcript held for that
+            handoff is capped by <code>ABIDE_MAX_STREAM_BUFFER_SIZE</code>, in bytes, unbounded by
+            default. Past it the browser runs the handler again.</p>
+    </Section>
+
+    <Section title="An export is written as its rows are read">
+        <Example
+            id="csv"
+            app="crm"
+            title="`response.bytes(values)` — a CSV written as the cursor reaches each row"
+            summary="A rep takes an account's activity into a spreadsheet. The preview above the link is the file it downloads."
+            files={{
+                'src/activity/lib/CsvExport.abide': csvExportSource,
+                'src/activity/exportCsv.handler.ts': exportCsvSource,
+                'src/activity/lib/CsvExport.test.ts': csvExportTestSource,
+            }}
+        >
+            <CsvExport />
+        </Example>
+
+        <p>A helper fixes how a stream is framed, and nothing a caller asks for moves it off.
+            Each takes <code>Values&lt;T&gt;</code>: an array, an iterable, an async iterable or a
+            <code>ReadableStream</code>.</p>
+
+        <table>
+            <thead><tr><th>The handler returns</th><th>The caller gets</th></tr></thead>
+            <tbody>
+                <tr><td>an async generator</td><td>JSON Lines, or events for a caller asking for <code>text/event-stream</code></td></tr>
+                <tr><td><code>response.jsonl(values)</code></td><td>JSON Lines, whatever the caller asks for: a list sent a line at a time</td></tr>
+                <tr><td><code>response.sse(values)</code></td><td>server-sent events, whatever the caller asks for</td></tr>
+                <tr><td><code>response.bytes(values)</code></td><td>the chunks as they are, <code>application/octet-stream</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>A stream whose first chunk is binary is sent as bytes without the helper.
+            <code>response.bytes</code> says so before there is a first chunk, so an account with no activity
+            downloads an empty file rather than an empty JSON answer.</p>
+    </Section>
+
+    <Section title="A wallboard is sent events whatever it asks for">
+        <Example
+            id="ticker"
+            app="crm"
+            title="`response.sse(values)` — events, whoever asks"
+            summary="A wallboard by the sales floor reads today's deal moves with the plain request its script has always sent."
+            files={{
+                'src/activity/lib/Wallboard.abide': wallboardSource,
+                'src/activity/ticker.handler.ts': tickerSource,
+                'src/activity/lib/Wallboard.test.ts': wallboardTestSource,
+            }}
+        >
+            <Wallboard />
+        </Example>
+
+        <p>A wallboard script, like <code>curl</code>, asks for nothing in particular, and an
+            async generator answers that caller with JSON Lines. <code>response.sse</code> fixes the answer as
+            events, <code>data: </code> and a JSON value per event, so the board reads it with the
+            event-stream parser it already has. An <code>EventSource</code> asks for events by name,
+            and gets them from any streaming handler without the helper.</p>
+    </Section>
+
+    <Section title="A `middleware` rung refuses before the handler runs">
+        <Example
+            id="admins-only"
+            app="crm"
+            title="`middleware: [rung]` — admins only"
+            summary="Exporting every contact is for admins. Export signed out, as Theo, then as Maya."
+            files={{
+                'src/account/lib/ExportContacts.abide': exportContactsComponentSource,
+                'src/account/exportContacts.handler.ts': exportContactsSource,
+                'src/account/lib/adminsOnly.ts': adminsOnlySource,
+                'src/account/lib/ExportContacts.test.ts': exportContactsTestSource,
+            }}
+        >
+            <ExportContacts />
+        </Example>
+
+        <p>A rung is a <code>Middleware</code>: it is handed <code>next</code> and the call's
+            context, and either returns <code>next()</code> or answers in the handler's place.
+            Returning <code>refuse(403, …)</code> refuses, and neither the handler nor any rung after
+            it runs. A rung outside it is handed the answer from <code>next()</code>, the
+            <code>403</code> response the caller gets, and never the refusal itself. A throw escapes
+            every rung rather than unwinding through them.</p>
+
+        <p>The rung sits on the handler, so it runs on every call: from a browser, from another
+            handler, and from a page rendering on the server. It reads arguments through
+            <code>ctx.args()</code>, which parses the body on its first call. So a rung that never asks
+            refuses a signed-out caller before their body is parsed or checked.</p>
+    </Section>
+
+    <Section title="`crossOrigin` opens one handler to a partner">
+        <Example
+            id="partner"
+            app="crm"
+            title="`crossOrigin: ['https://books.example']` — one partner, named back"
+            summary="The bookkeeping partner's site reads an account statement from its own pages. Ask as the partner, then as any other site."
+            files={{
+                'src/account/lib/PartnerStatement.abide': partnerStatementSource,
+                'src/account/getStatement.handler.ts': getStatementSource,
+                'src/account/lib/PartnerStatement.test.ts': partnerStatementTestSource,
+            }}
+        >
+            <PartnerStatement />
+        </Example>
+
+        <p>The answer names the partner in <code>access-control-allow-origin</code>, and the
+            browser hands the statement only to a page from that origin. Every other handler in the
+            CRM stays same-origin, because nothing widened it.</p>
+
+        <table>
+            <thead><tr><th><code>crossOrigin</code></th><th>Who may read the answer</th></tr></thead>
+            <tbody>
+                <tr><td>absent</td><td>the app's own pages</td></tr>
+                <tr><td><code>['https://books.example']</code></td><td>those origins</td></tr>
+                <tr><td><code>true</code></td><td>any origin, with the caller's cookies, so keep it for answers that do not depend on who asked</td></tr>
+            </tbody>
+        </table>
+
+        <p>abide answers the <code>OPTIONS</code> preflight a cross-origin <code>POST</code> sends,
+            outside every rung. On a mutation, <code>crossOrigin</code> replaces the same-origin check
+            a <code>POST</code> otherwise gets. Every rpc answer carries <code>vary: origin</code>, so
+            a cache keeps one copy per asking origin. Pages carry
+            <code>referrer-policy: strict-origin-when-cross-origin</code>, so a link off the CRM does
+            not hand another site the path a member was on.</p>
+    </Section>
+
+    <Section title="`timeout` bounds how long a call may go without progress">
+        <Example
+            id="timeout"
+            app="crm"
+            title="`timeout` — milliseconds without progress, not since the first byte"
+            summary="Sales by region, a row every 300 ms, under a 500 ms timeout. North runs longer than the timeout and finishes; south stops producing after its first row."
+            files={{
+                'src/account/lib/SalesReport.abide': salesReportComponentSource,
+                'src/account/salesReport.handler.ts': salesReportSource,
+                'src/account/lib/SalesReport.test.ts': salesReportTestSource,
+            }}
+        >
+            <SalesReport />
+        </Example>
+
+        <p>On a handler that yields, the bound is per row. So one number lets a long report run
+            and still catches a source that has stopped. A call past it is refused
+            <code>504</code>, and the rows already sent stay on the page.</p>
+
+        <p>Without one, nothing is cut short: the server never closes a connection under a call it
+            is still answering, a slow handler or a quiet stream alike. Its sibling is
+            <code>maxBodySize</code>: the bytes a mutation's body may carry, refused <code>413</code>
+            before a declared oversize body is read.</p>
+
+        <table>
+            <thead><tr><th>Setting</th><th>Default</th><th>What it bounds</th></tr></thead>
+            <tbody>
+                <tr><td><code>ABIDE_RPC_TIMEOUT</code></td><td>none</td><td>the <code>timeout</code> of a handler that names none</td></tr>
+                <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td>none</td><td>the <code>maxBodySize</code> of a handler that names none</td></tr>
+                <tr><td><code>ABIDE_MAX_SOCKET_MESSAGE_SIZE</code></td><td>1 MiB</td><td>one message a browser sends over the socket</td></tr>
+                <tr><td><code>ABIDE_MAX_SOCKET_SUBSCRIPTIONS</code></td><td>1024</td><td>the values one connection may follow at once</td></tr>
+            </tbody>
+        </table>
+
+        <p>None of these is a rate limit. A caller sending many small, fast requests passes every
+            ceiling, and a rung keyed on <code>principal.caller</code> is where a rate limit goes.</p>
+    </Section>
+
     <Registry />
 </Doc>

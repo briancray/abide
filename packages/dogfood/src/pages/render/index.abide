@@ -1,8 +1,71 @@
 <script>
+import companySheetSource from 'crm/src/companies/lib/CompanySheet.abide' with { type: 'text' }
+import SheetPreview from 'crm/src/companies/lib/SheetPreview.abide'
+import sheetPreviewSource from 'crm/src/companies/lib/SheetPreview.abide' with { type: 'text' }
+import sheetPreviewTestSource from 'crm/src/companies/lib/SheetPreview.test.ts' with { type: 'text' }
+import previewCompanySource from 'crm/src/companies/previewCompany.handler.ts' with { type: 'text' }
+import PageTiming from 'crm/src/contacts/lib/PageTiming.abide'
+import pageTimingSource from 'crm/src/contacts/lib/PageTiming.abide' with { type: 'text' }
+import pageTimingTestSource from 'crm/src/contacts/lib/PageTiming.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="The page is sent before the data lands">
+        <Example
+            id="page-sent-first"
+            app="crm"
+            title="The whole contacts page, before the contacts answer"
+            summary="The contacts handler takes 400 ms. Request the page the way a browser does, and compare when it is complete with when the contacts answer."
+            files={{
+                'src/contacts/lib/PageTiming.abide': pageTimingSource,
+                'src/contacts/lib/PageTiming.test.ts': pageTimingTestSource,
+            }}
+        >
+            <PageTiming />
+        </Example>
+
+        <p>Reading <code>contacts</code> starts the load, and the document does not wait for it.
+            The page goes out as soon as it is built, with a hole where the list goes, and the hole
+            fills when the contacts land. Neither file has a loading branch in it.</p>
+
+        <p>The browser's call for the contacts is answered from what the server render already
+            fetched, so the handler runs once. The cost is a client with no JavaScript: its hole
+            stays empty.</p>
+
+        <p>A page's <code>&lt;script&gt;</code> runs on the server to render it, then again in the
+            browser. That is why the card reads <code>location</code> inside the click and not at the
+            top of its script.</p>
+    </Section>
+
+    <Section title="`render` builds a document from a component">
+        <Example
+            id="render"
+            app="crm"
+            title="`render(component)` — an account sheet from the component itself"
+            summary="A rep sends a customer a one-page account sheet. The handler renders the sheet component into a document of its own, and the frame shows it."
+            files={{
+                'src/companies/lib/SheetPreview.abide': sheetPreviewSource,
+                'src/companies/previewCompany.handler.ts': previewCompanySource,
+                'src/companies/lib/CompanySheet.abide': companySheetSource,
+                'src/companies/lib/SheetPreview.test.ts': sheetPreviewTestSource,
+            }}
+        >
+            <SheetPreview />
+        </Example>
+
+        <p><code>CompanySheet(&#123; company &#125;)</code> is a <code>Component</code>: the
+            component bound to its props, not yet rendered. <code>render</code> turns it into the
+            document's bytes, built whole, and <code>response.page</code> answers with them as HTML.</p>
+
+        <p>A component written inside <code>&lt;html&gt;</code> is the whole document, so the
+            sheet carries its own styles and no bundle. The CRM's root layout writes its document the
+            same way.</p>
+    </Section>
+
     <Registry />
 </Doc>

@@ -37,7 +37,8 @@ async function readExamples(): Promise<SiteExample[]> {
             const id = ATTRIBUTE('id').exec(opening)?.[1]
             if (id === undefined) continue
             const files: string[] = []
-            for (const key of opening.matchAll(FILE_KEY)) files.push(key[1] ?? '')
+            for (const key of opening.matchAll(FILE_KEY))
+                files.push(key[1] ?? '')
             examples.push({
                 id,
                 route,

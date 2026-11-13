@@ -1,4 +1,4 @@
-import { url, type RouteLiteral } from '@abide/abide'
+import { type RouteLiteral, url } from '@abide/abide'
 
 import type { AnswerPart, Show } from './AnswerPart.ts'
 
@@ -14,9 +14,16 @@ const SITE_HREF = /href="(\/[^"]*)"/g
 /** Markdown as HTML: no raw markup from the model, and no address but the web's and the site's. */
 function htmlOf(markdown: string): string {
     return Bun.markdown
-        .html(markdown, { noHtmlBlocks: true, noHtmlSpans: true, autolinks: true })
+        .html(markdown, {
+            noHtmlBlocks: true,
+            noHtmlSpans: true,
+            autolinks: true,
+        })
         .replace(UNSAFE_HREF, 'href="#"')
-        .replace(SITE_HREF, (_whole, path: string) => `href="${url(path as RouteLiteral)}"`)
+        .replace(
+            SITE_HREF,
+            (_whole, path: string) => `href="${url(path as RouteLiteral)}"`,
+        )
 }
 
 /**
@@ -30,11 +37,15 @@ export class AnswerWriter {
     text = ''
     private line = ''
     private prose: string[] = []
-    private fence: { marker: string; language: string; lines: string[] } | undefined =
+    private fence:
+        { marker: string; language: string; lines: string[] } | undefined =
         undefined
 
     /** Takes a delta of the answer; answers the blocks it finished, and the one still open. */
-    write(delta: string): { parts: AnswerPart[]; tail: AnswerPart | undefined } {
+    write(delta: string): {
+        parts: AnswerPart[]
+        tail: AnswerPart | undefined
+    } {
         this.text += delta
         const parts: AnswerPart[] = []
         const lines = (this.line + delta).split('\n')
@@ -67,7 +78,11 @@ export class AnswerWriter {
         const fence = FENCE.exec(line.trimStart())
         if (fence) {
             this.flush(parts)
-            this.fence = { marker: fence[1] ?? '```', language: fence[2] ?? '', lines: [] }
+            this.fence = {
+                marker: fence[1] ?? '```',
+                language: fence[2] ?? '',
+                lines: [],
+            }
             return
         }
         const show = SHOW.exec(line.trim())
@@ -90,7 +105,11 @@ export class AnswerWriter {
     }
 
     private code(fence: { language: string; lines: string[] }): AnswerPart {
-        return { kind: 'code', language: fence.language, code: fence.lines.join('\n') }
+        return {
+            kind: 'code',
+            language: fence.language,
+            code: fence.lines.join('\n'),
+        }
     }
 
     private tail(): AnswerPart | undefined {
@@ -101,7 +120,8 @@ export class AnswerWriter {
             })
         const open = [...this.prose, this.line].join('\n').trim()
         // A line that may yet be a `<show/>` is not shown as prose while it is written.
-        if (open === '' || this.line.trimStart().startsWith('<show')) return undefined
+        if (open === '' || this.line.trimStart().startsWith('<show'))
+            return undefined
         return { kind: 'html', html: htmlOf(open) }
     }
 }

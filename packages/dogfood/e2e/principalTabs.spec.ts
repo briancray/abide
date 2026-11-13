@@ -7,7 +7,7 @@
 // and the contact card still reads `admins only` where Maya, an admin, signed in.
 import { expect, test } from '@playwright/test'
 
-const PAGE = 'guide/decide-who-sees-what'
+const PAGE = 'ambient/principal'
 
 function underMount(address: string): string {
     const base = test.info().project.use.baseURL ?? ''
@@ -23,14 +23,11 @@ test('a sign-in in one tab reaches the other tabs of the browser — 26.24', asy
     await first.goto(underMount(PAGE), { waitUntil: 'networkidle' })
     await second.goto(underMount(PAGE), { waitUntil: 'networkidle' })
     // The sign-in card: the page carries other cards that read the principal beside it.
-    const card = (page: typeof first) =>
-        page.locator('#crm-07-sign-in .ex-render')
+    const card = (page: typeof first) => page.locator('#sign-in .ex-render')
     // The card's one button reads which side of a sign-in the tab is on.
     const button = (page: typeof first) => card(page).getByRole('button')
     // The contact card's deal value, which only an admin reads.
-    const dealValue = second
-        .locator('#crm-07-deal-value .ex-render strong')
-        .nth(1)
+    const dealValue = second.locator('#deal-value .ex-render strong').nth(1)
     await expect(button(second)).toHaveText('Sign in')
     await expect(dealValue).toHaveText('admins only')
     await button(first).click()

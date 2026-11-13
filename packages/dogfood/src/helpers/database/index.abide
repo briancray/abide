@@ -1,8 +1,86 @@
 <script>
+import TargetLog from 'crm/src/pipeline/lib/TargetLog.abide'
+import targetLogSource from 'crm/src/pipeline/lib/TargetLog.abide' with { type: 'text' }
+import targetLogTestSource from 'crm/src/pipeline/lib/TargetLog.test.ts' with { type: 'text' }
+import listTargetsSource from 'crm/src/pipeline/listTargets.handler.ts' with { type: 'text' }
+import setTargetSource from 'crm/src/pipeline/setTarget.handler.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A `database` keeps what a restart would lose">
+        <Example
+            id="database"
+            app="crm"
+            title={"`database(name, { migrations })` — the server's own SQLite file"}
+            summary="Every target the team has set, read from a file on the server. Set one, and the list still holds it after a restart."
+            serverFiles={['src/pipeline/lib/crmDatabase.server.ts']}
+            files={{
+                'src/pipeline/lib/TargetLog.abide': targetLogSource,
+                'src/pipeline/listTargets.handler.ts': listTargetsSource,
+                'src/pipeline/setTarget.handler.ts': setTargetSource,
+                'src/pipeline/lib/TargetLog.test.ts': targetLogTestSource,
+            }}
+        >
+            <TargetLog />
+        </Example>
+
+        <p><code>database</code>, from <code>@abide/abide/server</code>, hands back a function. Its
+            first call opens <code>crm.sqlite</code> in <code>APP_DATA_DIR</code>, and every call
+            after hands back the same <code>bun:sqlite</code> <code>Database</code>, so a handler
+            writes plain SQL against it.</p>
+
+        <p>Each migration runs once, in order, and the file remembers how many it has run. A new
+            column is one more string at the end of the list, never an edit to one already there.
+            A migration can be a function too, for rows a first boot seeds, and it can seed through
+            the app's own helpers: the opener called inside it hands back the database it is
+            migrating. If one throws, none of
+            that boot's migrations are kept. A file a newer build migrated is refused rather than
+            opened, unless the opener says <code>{'{ openNewer: true }'}</code>: then it opens as it
+            stands, runs nothing and keeps its count, so switching back from a branch that added a
+            migration still opens the file.</p>
+
+        <p>In place of a name, <code>database</code> takes a path to the file, or
+            <code>':memory:'</code>, or a function handing back either. Anything holding a
+            <code>/</code> or a <code>.</code> is a path, so <code>'todos.sqlite'</code> is that
+            file, and a relative one starts from the working directory, as it would anywhere else. The function is called as the file opens, so
+            <code>{'database(() => config().TODOS_DB)'}</code> opens wherever the running app is
+            configured to keep it.</p>
+
+        <p>An app that made its file before it used <code>database</code> points at it where it
+            is, and writes its first migration with <code>CREATE TABLE IF NOT EXISTS</code>. The
+            file has run no migration yet, so the first one runs over tables already there and
+            keeps their rows, and every one after it runs as usual.</p>
+
+        <p>Under <code>bun test</code> each test file opens each database empty, in a scratch
+            directory of its own, whatever it names, so a test never writes the file the app serves
+            and never reads another test file's rows. Two openers of one file share it, as a second
+            connection does, and the function is still called, so a check inside it still throws. The
+            app closes the file as it stops, and the next call opens it again as it was.
+            <code>close()</code> does the same by hand, and <code>{'close({ remove: true })'}</code>
+            deletes the file the opener last opened, even after the app's stop closed it, so the next call
+            opens it empty.</p>
+
+        <p>A store and the app's own tables share one file when <code>store.sqlite</code> is handed
+            the opener itself: <code>{"store.sqlite(crmDatabase, 'target')"}</code>. The store calls
+            it at each read and write, so it opens the file again after a stop closed it. Handed a
+            string, <code>store.sqlite</code> opens it as <code>database</code> would, scratch
+            directory and all.</p>
+
+        <p><code>open</code> runs at every open, before the migrations, for what a connection sets
+            rather than what the file keeps: <code>{"open: (db) => db.run('PRAGMA synchronous = NORMAL')"}</code>.
+            <code>strict</code>, <code>readonly</code> and <code>safeIntegers</code> go to
+            <code>bun:sqlite</code> as given. A function naming the file is called as the file opens
+            and at no other call, so a path that changes takes effect at the next open, after
+            <code>close()</code>. A test that points the path somewhere else partway through a file
+            calls <code>close()</code> first, or it goes on reading the file it opened. A function
+            that hands back anything but a string, such as a config key with no value yet, throws
+            rather than open a file named for it.</p>
+    </Section>
+
     <Registry />
 </Doc>

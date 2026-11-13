@@ -1,8 +1,50 @@
 <script>
+import DealsExport from 'crm/src/reports/lib/DealsExport.abide'
+import dealsExportSource from 'crm/src/reports/lib/DealsExport.abide' with { type: 'text' }
+import dealsExportTestSource from 'crm/src/reports/lib/DealsExport.test.ts' with { type: 'text' }
+import dealsOfSource from 'crm/src/reports/lib/dealsOf.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A render's bytes grow by the same amount per deal">
+        <Example
+            id="export-bytes"
+            app="crm"
+            title="`bytes(of)` — what a render sends, compared across sizes"
+            summary="The export renders every deal as a table row on the server. Its test renders it at 20, 40 and 80 deals and asserts every deal adds the same bytes."
+            files={{
+                'src/reports/lib/DealsExport.abide': dealsExportSource,
+                'src/reports/lib/dealsOf.ts': dealsOfSource,
+                'src/reports/lib/DealsExport.test.ts': dealsExportTestSource,
+            }}
+        >
+            <DealsExport />
+        </Example>
+
+        <p><code>bytes</code> measures a <code>Response</code>, a <code>Blob</code>, a string or a
+            buffer by its length. One size says little, because the table around the rows is in it
+            too. Three sizes say how the cost grows. An export that repeated earlier rows in every new
+            one passes at 20 deals and fails here.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>ticks</code></td><td>the microtask turns a call took to settle; a value already held settles in none</td></tr>
+                <tr><td><code>retained</code></td><td>the live objects a body left behind, by type</td></tr>
+                <tr><td><code>closures</code></td><td>the functions and scopes a body left behind</td></tr>
+                <tr><td><code>allocated</code></td><td>what a body allocates per run, as a mean over a batch</td></tr>
+            </tbody>
+        </table>
+
+        <p>The last three read the engine's heap, and throw where a DOM is preloaded, because the
+            DOM's own objects would be counted with yours. Run them through
+            <code>inAFreshProcess</code>.</p>
+    </Section>
+
     <Registry />
 </Doc>

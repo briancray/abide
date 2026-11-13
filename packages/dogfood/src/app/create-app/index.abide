@@ -1,8 +1,56 @@
 <script>
+import getSummarySource from 'crm/src/reports/getSummary.handler.ts' with { type: 'text' }
+import PipelineSummary from 'crm/src/reports/lib/PipelineSummary.abide'
+import pipelineSummarySource from 'crm/src/reports/lib/PipelineSummary.abide' with { type: 'text' }
+import pipelineSummaryTestSource from 'crm/src/reports/lib/PipelineSummary.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A test holds the app with `createApp`">
+        <Example
+            id="app-fetch"
+            app="crm"
+            title="`createApp()` — the app a test holds, with no port"
+            summary="The reports page opens on a summary of the pipeline. Its test asks the app for the same handler the tiles read, as a request, and reads the answer the wire would carry."
+            files={{
+                'src/reports/lib/PipelineSummary.abide': pipelineSummarySource,
+                'src/reports/getSummary.handler.ts': getSummarySource,
+                'src/reports/lib/PipelineSummary.test.ts': pipelineSummaryTestSource,
+            }}
+        >
+            <PipelineSummary />
+        </Example>
+
+        <p><code>createApp</code> builds the app from the directory it runs in, the way
+            <code>abide start</code> does, and binds no port. Run <code>bun test</code> from the app's
+            own directory. <code>app.fetch</code> takes a <code>Request</code> through everything a
+            served one goes through: the middleware, the argument checks, the headers and the status a
+            refusal carries.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>App</code></td><td>what <code>createApp</code> hands back, to a test, a script or a host</td></tr>
+                <tr><td><code>App.fetch</code></td><td>one request, through the whole app, in this process, as the <code>principal</code> and the <code>caller</code> you give it</td></tr>
+                <tr><td><code>App.run</code></td><td>runs a function inside one request's scope, so two reads of one key load once, signed in as the <code>principal</code> claims you give it</td></tr>
+                <tr><td><code>App.listen</code></td><td>binds the socket, for a test that needs a real <code>WebSocket</code></td></tr>
+                <tr><td><code>App.stop</code></td><td>stops the app: every <code>onStop</code>, wrapped around draining what is in flight</td></tr>
+                <tr><td><code>App[Symbol.asyncDispose]</code></td><td><code>stop</code>, under the name <code>await using</code> calls</td></tr>
+            </tbody>
+        </table>
+
+        <p>Hold the app with <code>await using</code> and it stops when the test ends, a failed one
+            included. An app nobody stops leaves open whatever <code>onStart</code> opened, and the
+            suite hangs with no report at all.</p>
+
+        <p>A <code>.test.ts</code> has no address, so a test sits beside the file it tests and is
+            never served.</p>
+    </Section>
+
     <Registry />
 </Doc>

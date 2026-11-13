@@ -1,8 +1,55 @@
 <script>
+import companyTabsSpecSource from 'crm/e2e/CompanyTabs.test.ts' with { type: 'text' }
+import CompanyTabs from 'crm/src/companies/lib/CompanyTabs.abide'
+import companyTabsSource from 'crm/src/companies/lib/CompanyTabs.abide' with { type: 'text' }
+import companyTabsTestSource from 'crm/src/companies/lib/CompanyTabs.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="`route.query` keeps a page's state in the address">
+        <Example
+            id="navigate"
+            app="crm"
+            title="`route.query(defaults)` — the query as one value, written by navigating"
+            summary="A company page keeps its open tab in the address, so a link can open it. Type a draft, then switch tabs: the address moves, and the draft stays."
+            files={{
+                'src/companies/lib/CompanyTabs.abide': companyTabsSource,
+                'src/companies/lib/CompanyTabs.test.ts': companyTabsTestSource,
+                'e2e/CompanyTabs.test.ts': companyTabsSpecSource,
+            }}
+        >
+            <CompanyTabs />
+        </Example>
+
+        <p><code>route.query</code> reads each member its defaults name off the address, as the
+            type of its default: a number, <code>true</code> or <code>false</code>, text, or a list of
+            text from a name repeated. A member missing, or one that does not parse, reads as its
+            default. A member the defaults do not name is left in the address for whoever reads it.</p>
+
+        <p>Assign one member, <code>query.tab = name</code>, and only that member changes. Assign the
+            whole value, <code>query = &#123; tab: 'notes' &#125;</code>, and every member you leave
+            out goes back to its default. Either write is one navigation that writes over the history
+            entry, so Back leaves the company rather than stepping through every tab, and a member at
+            its default is left out of the address. On a server it reads the request's address, and a
+            write throws, as <code>navigate</code> refuses there.</p>
+
+        <p>An address that matches the page already shown moves <code>route.url</code> and keeps
+            the page mounted. Another page's address mounts that page in place, without reloading the
+            document. A plain <code>&lt;a href&gt;</code> click does the same, and so does
+            <code>navigate(address, &#123; replace, keepScroll &#125;)</code>. Reach for
+            <code>navigate</code> when code decides where to go. <code>route.navigating</code> is
+            true while a navigation is in flight, which is what a progress bar reads.</p>
+
+        <p><code>navigate(-1)</code> steps back through the history the way <code>history.go</code>
+            does, and its promise settles once the page it steps to is on screen.
+            <code>route.index</code> is the entry's place in the history the app wrote: a step back of
+            up to that many entries stays inside the app.</p>
+    </Section>
+
     <Registry />
 </Doc>

@@ -1,8 +1,84 @@
 <script>
+import StarButton from 'crm/src/contacts/lib/StarButton.abide'
+import starButtonSource from 'crm/src/contacts/lib/StarButton.abide' with { type: 'text' }
+import starButtonTestSource from 'crm/src/contacts/lib/StarButton.test.ts' with { type: 'text' }
+import AddressField from 'crm/src/profile/lib/AddressField.abide'
+import addressFieldSource from 'crm/src/profile/lib/AddressField.abide' with { type: 'text' }
+import addressFieldTestSource from 'crm/src/profile/lib/AddressField.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A value is read and written by name">
+        <Example
+            id="star"
+            app="crm"
+            title="`starred` \u2014 read by name, written by name"
+            summary="Grace Hopper is the contact you call most. Star her, then take the star off."
+            files={{
+                'src/contacts/lib/StarButton.abide': starButtonSource,
+                'src/contacts/lib/StarButton.test.ts': starButtonTestSource,
+            }}
+        >
+            <StarButton />
+        </Example>
+
+        <p>Naming <code>starred</code> in the markup reads it and follows it from then on.
+            Assigning to it writes it and wakes everything that read it, with no re-render to ask
+            for.</p>
+    </Section>
+
+    <Section title="Where a reactive value's name is written decides what it reaches">
+        <p><code>reactive</code> holds a value, and inside a <code>.abide</code> file its name
+            reads and writes it. The sugar sits over two explicit members, <code>s</code> and
+            <code>s.set</code>, and a <code>.ts</code> file writes those out.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>You get</th></tr></thead>
+            <tbody>
+                <tr><td><code>foo</code> wherever the declared type of its position is not a <code>Reactive</code></td><td>a live read</td></tr>
+                <tr><td><code>const x: Reactive&lt;…&gt; = foo</code> / a <code>Reactive&lt;…&gt;</code>-typed parameter, object literal member, return or <code>bind:</code> operand</td><td>the <code>Reactive</code> itself</td></tr>
+                <tr><td><code>const [a, b] = foo</code> / <code>...foo</code></td><td>one read, taken apart</td></tr>
+                <tr><td><code>const &#123; a, b: c &#125; = bar()</code> where a member is a <code>Reactive</code></td><td>each name read and written as that <code>Reactive</code>, as if declared on its own</td></tr>
+                <tr><td><code>foo = bar</code></td><td>a write</td></tr>
+                <tr><td><code>foo.bar</code></td><td>the value's <code>bar</code>, or the <code>Reactive</code>'s own <code>bar</code> where it declares one the value does not</td></tr>
+                <tr><td><code>foo.bar(…)</code></td><td>the value's method where it has one, and otherwise a member of the <code>Reactive</code> such as <code>busy</code></td></tr>
+                <tr><td><code>foo()</code> / <code>foo.set(v)</code></td><td>the explicit read and write</td></tr>
+                <tr><td><code>await foo</code></td><td>the value, once it has settled</td></tr>
+                <tr><td><code>refresh(foo)</code> / a <code>Selection</code>-typed parameter</td><td>the <code>Reactive</code> itself</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A write through a path copies down the path">
+        <Example
+            id="path-write"
+            app="crm"
+            title={'`bind:value={contact.address.city}` — a write two levels down'}
+            summary="A contact's city, inside its address. Type a new city."
+            files={{
+                'src/profile/lib/AddressField.abide': addressFieldSource,
+                'src/profile/lib/AddressField.test.ts': addressFieldTestSource,
+            }}
+        >
+            <AddressField />
+        </Example>
+
+        <p>The binding writes through the path, the way <code>contact.address.city = city</code>
+            would: it copies <code>contact</code>, copies its <code>address</code>, sets
+            <code>city</code>, and writes the new record back. The copy wakes the readers. A record
+            changed in place is the object it already was, and nothing downstream has a reason to
+            read it again.</p>
+
+        <p><code>foo.bar = v</code> is that write wherever you spell it, and so is
+            <code>foo.push(v)</code>: where the value is an array, <code>tags.push(tag)</code> runs on a
+            copy and writes the copy back. The array's type decides it, so a class's own
+            <code>push</code> stays the class's call.</p>
+    </Section>
+
     <Registry />
 </Doc>

@@ -18,7 +18,7 @@ import { raw, route, type RouteLiteral, url } from '@abide/abide'
 
 import { inline } from './inline.ts'
 import { SITE } from './SITE.ts'
-import { isFramed } from './siteSections.ts'
+import { isFramed } from './sitePages.ts'
 
 // `-ml-2` IS NOT SPACING: it pulls the link's own padding back off the rail so the TEXT lines up
 // with the group name above it, hover surface and all. `sidebar` carries no rule — it is what

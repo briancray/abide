@@ -1,0 +1,19 @@
+[
+    "/reactive/tracking",
+    "/transports/headers",
+    "/ai/pairing",
+    "/ambient/request",
+    "/ambient/media",
+    "/ambient/server",
+    "/ambient/is-server",
+    "/helpers/url",
+    "/helpers/navigate",
+    "/helpers/observe",
+    "/configuration/environment",
+    "/harness/preload",
+    "/harness/rows",
+    "/harness/runner",
+    "/harness/abide",
+    "/cli/commands",
+    "/cli/bridge"
+]

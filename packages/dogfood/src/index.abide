@@ -19,12 +19,11 @@ import { SITE } from '#src/lib/SITE.ts'
     {#for group of SITE}
         <Section title={group.group}>
             <p>{raw(inline(group.description))}</p>
-            <dl class="index">
+            <ul class="index">
                 {#for page of group.pages}
-                    <dt><a href={url(page.route as RouteLiteral)}>{raw(inline(page.title))}</a></dt>
-                    <dd>{raw(inline(page.description))}</dd>
+                    <li><a href={url(page.route as RouteLiteral)}>{raw(inline(page.title))}</a> — {raw(inline(page.description))}</li>
                 {/for}
-            </dl>
+            </ul>
         </Section>
     {/for}
 </Doc>

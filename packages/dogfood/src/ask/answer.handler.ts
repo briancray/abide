@@ -25,13 +25,23 @@ const docsOnly: Provider = {
 }
 
 export default POST(
-    async function* ({ messages }: { messages: AssistantMessage[] }): AsyncGenerator<AnswerEvent> {
+    async function* ({
+        messages,
+    }: {
+        messages: AssistantMessage[]
+    }): AsyncGenerator<AnswerEvent> {
         const writer = new AnswerWriter()
-        for await (const event of assistant(messages, docsOnly, { mcp: true })) {
+        for await (const event of assistant(messages, docsOnly, {
+            mcp: true,
+        })) {
             if (event.type === 'tool') {
                 // The text either side of a call is two turns of the model's: never one paragraph.
-                for (const part of writer.write('\n\n').parts) yield { type: 'part', part }
-                yield { type: 'tool', name: event.name.replace(/^.*_ask_tools_/, '') }
+                for (const part of writer.write('\n\n').parts)
+                    yield { type: 'part', part }
+                yield {
+                    type: 'tool',
+                    name: event.name.replace(/^.*_ask_tools_/, ''),
+                }
                 continue
             }
             if (event.type === 'text') {
@@ -48,7 +58,8 @@ export default POST(
         }
     },
     {
-        description: "Asks the visitor's Claude Code how to do something in abide.",
+        description:
+            "Asks the visitor's Claude Code how to do something in abide.",
         clients: { mcp: false },
     },
 )

@@ -1,8 +1,58 @@
 <script>
+import DealNotes from 'crm/src/deals/lib/DealNotes.abide'
+import dealNotesSource from 'crm/src/deals/lib/DealNotes.abide' with { type: 'text' }
+import dealNotesTestSource from 'crm/src/deals/lib/DealNotes.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A handler file answers at its own path">
+        <p>A file named <code>&lt;name&gt;.handler.ts</code> beside the pages is a handler file. Its
+            default export is the handler, and its path below <code>src</code> is the address it answers on.</p>
+
+        <table>
+            <thead><tr><th>File below <code>src</code></th><th>Answers on</th></tr></thead>
+            <tbody>
+                <tr><td><code>**/&lt;name&gt;.handler.ts</code></td><td>its directory's route, then <code>&lt;name&gt;</code></td></tr>
+                <tr><td><code>deals/getDeal.handler.ts</code></td><td><code>GET /deals/getDeal</code></td></tr>
+                <tr><td><code>users/getUser.handler.ts</code></td><td><code>GET /users/getUser</code></td></tr>
+                <tr><td><code>health.handler.ts</code></td><td><code>GET /health</code></td></tr>
+                <tr><td><code>media/[id]/save.handler.ts</code></td><td><code>POST /media/42/save</code>, with <code>id</code> in its args</td></tr>
+                <tr><td><code>media/[id]/lib/Comments.abide</code></td><td><code>/__abide/handlers/media/id/lib/Comments/addComment</code>, for the <code>addComment</code> its <code>&lt;script server&gt;</code> declares</td></tr>
+            </tbody>
+        </table>
+
+        <p>A handler file exports its handler and nothing else. A page imports it, a script calls
+            its address, and the CLI and MCP offer it as a command and a tool.</p>
+    </Section>
+
+    <Section title="A handler only one file calls stays in that file">
+        <Example
+            id="notes"
+            app="crm"
+            title="`const getNotes = GET(fn)` — a handler its own file calls"
+            summary="The notes on a deal, which only this card shows. The handler sits in the card's own server block."
+            files={{
+                'src/deals/lib/DealNotes.abide': dealNotesSource,
+                'src/deals/lib/DealNotes.test.ts': dealNotesTestSource,
+            }}
+        >
+            <DealNotes />
+        </Example>
+
+        <p>A <code>&lt;script server&gt;</code> runs on the server alone. It declares
+            <code>getNotes</code> as a <code>const</code>, and the same file's script and markup call it
+            by name. A <code>.abide</code> exports nothing, so no other file can import it.</p>
+
+        <p>It still answers over http, below <code>/__abide/handlers</code> at its file's path and
+            then its name. That address is listed on no surface, and the test calls it to show it is
+            there. When a second file needs the handler, move it into a handler file:
+            <code>const getNotes =</code> becomes <code>export default</code>.</p>
+    </Section>
+
     <Registry />
 </Doc>

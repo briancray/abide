@@ -1,8 +1,48 @@
 <script>
+import idPageSource from 'crm/src/companies/[id=SLUG].abide' with { type: 'text' }
+import getCompanySource from 'crm/src/companies/getCompany.handler.ts' with { type: 'text' }
+import SlowCompany from 'crm/src/companies/lib/SlowCompany.abide'
+import slowCompanySource from 'crm/src/companies/lib/SlowCompany.abide' with { type: 'text' }
+import streamingTestSource from 'crm/src/companies/Streaming.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="The page goes out before the company lands">
+        <Example
+            id="streaming"
+            app="crm"
+            title="A hole per value in flight — the page first, the company after"
+            summary="The company database takes over a second. Load the page again: the labels arrive at once, and each value fills its own hole when the company lands."
+            files={{
+                'src/companies/lib/SlowCompany.abide': slowCompanySource,
+                'src/companies/[id=SLUG].abide': idPageSource,
+                'src/companies/getCompany.handler.ts': getCompanySource,
+                'src/companies/Streaming.test.ts': streamingTestSource,
+            }}
+        >
+            <SlowCompany />
+        </Example>
+
+        <p>Nothing holds the document for a value. The page gets one turn to start its loads, and
+            a value that answers in that turn is painted. A value still in flight leaves a hole, and
+            the browser's own call fills it, so the document carries no copy of the answer.</p>
+
+        <table>
+            <thead><tr><th>The hole</th><th>What fills</th></tr></thead>
+            <tbody>
+                <tr><td><code>&#123;text&#125;</code> in markup</td><td>the text</td></tr>
+                <tr><td><code>href=&#123;x&#125;</code>, any attribute</td><td>the attribute, on the element itself</td></tr>
+                <tr><td><code>class:</code>, <code>style:</code>, <code>bind:</code></td><td>the class, the style property, the bound property</td></tr>
+                <tr><td><code>&lt;title&gt;&#123;name&#125;&lt;/title&gt;</code></td><td>the element's <code>textContent</code>, so the tab title fills too</td></tr>
+                <tr><td><code>&lt;textarea&gt;&#123;v&#125;&lt;/textarea&gt;</code></td><td>its <code>defaultValue</code>, so a reader's typing is kept</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
     <Registry />
 </Doc>

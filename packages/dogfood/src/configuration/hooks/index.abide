@@ -1,8 +1,185 @@
 <script>
+import adminErrorSource from 'crm/src/account/admin/error.abide' with { type: 'text' }
+import getTeamSource from 'crm/src/account/admin/getTeam.handler.ts' with { type: 'text' }
+import adminLayoutSource from 'crm/src/account/admin/layout.abide' with { type: 'text' }
+import getCommissionSource from 'crm/src/account/getCommission.handler.ts' with { type: 'text' }
+import AdminSection from 'crm/src/account/lib/AdminSection.abide'
+import adminSectionSource from 'crm/src/account/lib/AdminSection.abide' with { type: 'text' }
+import adminSectionTestSource from 'crm/src/account/lib/AdminSection.test.ts' with { type: 'text' }
+import Badge from 'crm/src/account/lib/Badge.abide'
+import badgeSource from 'crm/src/account/lib/Badge.abide' with { type: 'text' }
+import badgeTestSource from 'crm/src/account/lib/Badge.test.ts' with { type: 'text' }
+import SignInAgain from 'crm/src/account/lib/SignInAgain.abide'
+import signInAgainSource from 'crm/src/account/lib/SignInAgain.abide' with { type: 'text' }
+import signInAgainTestSource from 'crm/src/account/lib/SignInAgain.test.ts' with { type: 'text' }
+import signInSource from 'crm/src/account/signIn.handler.ts' with { type: 'text' }
+import exportCompaniesSource from 'crm/src/companies/exportCompanies.handler.ts' with { type: 'text' }
+import layoutSource from 'crm/src/companies/layout.abide' with { type: 'text' }
+import ExportButton from 'crm/src/companies/lib/ExportButton.abide'
+import exportButtonSource from 'crm/src/companies/lib/ExportButton.abide' with { type: 'text' }
+import exportButtonTestSource from 'crm/src/companies/lib/ExportButton.test.ts' with { type: 'text' }
+import getPoolSource from 'crm/src/ops/getPool.handler.ts' with { type: 'text' }
+import Pool from 'crm/src/ops/lib/Pool.abide'
+import poolSource from 'crm/src/ops/lib/Pool.abide' with { type: 'text' }
+import poolTestSource from 'crm/src/ops/lib/Pool.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="`onError` reports what the caller is not told">
+        <Example
+            id="error-report"
+            app="crm"
+            title="`onError(fn)` — the tracker hears what the caller is not told"
+            summary="The export worker has stopped answering. Run the export: the button gets a bare 500, and the hook in the companies layout gets the reason."
+            files={{
+                'src/companies/lib/ExportButton.abide': exportButtonSource,
+                'src/companies/exportCompanies.handler.ts': exportCompaniesSource,
+                'src/companies/layout.abide': layoutSource,
+                'src/companies/lib/ExportButton.test.ts': exportButtonTestSource,
+            }}
+        >
+            <ExportButton />
+        </Example>
+
+        <p><code>onError</code> runs on an unexpected error in any request below the file that
+            called it. Send the error to a tracker there. The caller gets a 500 with nothing about the
+            cause, so a stack trace never reaches a browser.</p>
+
+        <p>The button's <code>catch</code> gets whatever was thrown. <code>isFailed</code> says
+            whether that is a refusal, which carries a <code>status</code> and a
+            <code>message</code>, before the button reads either.</p>
+    </Section>
+
+    <Section title="`onPrincipal` turns the id in the cookie into a member">
+        <Example
+            id="member"
+            app="crm"
+            title="`onPrincipal(fn)` — an id in the cookie, a member on the page"
+            summary="The cookie holds a team member's id and nothing else. Sign in as either member and the page greets them by name and role."
+            files={{
+                'src/account/lib/Badge.abide': badgeSource,
+                'src/account/signIn.handler.ts': signInSource,
+                'src/account/lib/Badge.test.ts': badgeTestSource,
+            }}
+        >
+            <Badge />
+        </Example>
+
+        <p><code>onPrincipal</code> is handed the claims and returns your half of the caller. It
+            runs on the server, at most once per request, where the team records are. So the cookie
+            stays small, and a rename shows on the next request rather than at the next sign-in.
+            Filed in any handler file or <code>.abide</code>, it resolves the caller for every
+            route.</p>
+
+        <p>A test signs in without the cookie. <code>app.run(fn, &#123; principal: &#123; id: 'theo' &#125; &#125;)</code>
+            hands those claims to <code>onPrincipal</code> as a sealed cookie's are, and the card's
+            test reads the member they name. <code>app.fetch(request, &#123; principal &#125;)</code>
+            sends one request signed in the same way, and <code>caller</code> beside it names the
+            browser.</p>
+
+        <p>What it returns is read as <code>principal.resolved</code>, typed by
+            <code>Principal</code>. Declare your fields on that interface, as the app's
+            <code>lib/TEAM.server.ts</code> does beside the team it reads. abide's own three fields are <code>authenticated</code>, <code>expiresAt</code> and
+            <code>error</code>, and they win any collision, so a resolver cannot sign a caller in by
+            returning <code>authenticated: true</code>. A resolver that throws fills
+            <code>error</code> and leaves the caller signed out.</p>
+
+        <p>The tabs on this card are <code>lib/SignInAs.abide</code>, which calls the same <code>signIn</code> handler.</p>
+    </Section>
+
+    <Section title="A layout's rung guards a whole section">
+        <Example
+            id="admin-section"
+            app="crm"
+            title="`middleware(rung)` in a layout — one refusal, answered in each lane"
+            summary="Everything under the admin section is for admins, and its handler names no rung of its own. Open the section as Theo, then as Maya."
+            files={{
+                'src/account/lib/AdminSection.abide': adminSectionSource,
+                'src/account/admin/layout.abide': adminLayoutSource,
+                'src/account/admin/getTeam.handler.ts': getTeamSource,
+                'src/account/admin/error.abide': adminErrorSource,
+                'src/account/lib/AdminSection.test.ts': adminSectionTestSource,
+            }}
+        >
+            <AdminSection />
+        </Example>
+
+        <p>The <code>adminsOnly</code> rung a handler names fits a layout too, and there it runs over every page and
+            handler below it. Its refusal is answered in the lane the request was in: the section's
+            <code>error.abide</code> paints it over a page, and a handler answers it as Problem
+            Details. A layout's rung has the request and its <code>lane</code> — what answers it —
+            and not a handler's arguments.</p>
+
+        <p>Filed in the root <code>src/layout.abide</code>, a rung runs before routing, over
+            every request the app answers, abide's own addresses included, each addressed below the
+            mount. A gate over pages alone tests <code>lane === 'page'</code> rather than spelling
+            out which paths are abide's. <code>abide routes</code> lists each rung beside the route
+            it is filed at, and the rungs each handler names.</p>
+    </Section>
+
+    <Section title="`onRefusal` hears a session end on any call">
+        <Example
+            id="sign-in-again"
+            app="crm"
+            title="`onRefusal(fn)` — one hook for every call refused 401"
+            summary="Your commission is for a member signed in. Sign in as Theo, then as Nobody: the next call is refused 401, and the card asks for a sign-in."
+            files={{
+                'src/account/lib/SignInAgain.abide': signInAgainSource,
+                'src/account/getCommission.handler.ts': getCommissionSource,
+                'src/account/lib/SignInAgain.test.ts': signInAgainTestSource,
+            }}
+        >
+            <SignInAgain />
+        </Example>
+
+        <p>A call that is refused does not throw. The refusal lands on the value's
+            <code>error</code>, so <code>onError</code> never hears it. <code>onRefusal</code>, called
+            in a component's <code>&lt;script&gt;</code>, hears every refusal a call from this browser
+            gets while that component stands. That is the server's, a 401 from a proxy in front of it,
+            the 503 for no answer at all, and one a call in <code>outbox</code> gets. Each
+            hook gets the call's method and URL beside the refusal, the nearest component's first.</p>
+
+        <p>The hook hears the refusal and leaves it where it is. The value still refuses, so the card
+            that made the call shows what it shows for any refusal. An aborted call is not a refusal,
+            and a hook filed in a layout hears every page below it.</p>
+    </Section>
+
+    <Section title="Work at start runs before the first request">
+        <Example
+            id="start"
+            app="crm"
+            title="`onStart(fn)` — work the first request cannot race"
+            summary="The CRM's database pool takes a moment to connect. Reload: both times stay where the boot put them, the pool first."
+            files={{
+                'src/ops/lib/Pool.abide': poolSource,
+                'src/ops/getPool.handler.ts': getPoolSource,
+                'src/ops/lib/Pool.test.ts': poolTestSource,
+            }}
+        >
+            <Pool />
+        </Example>
+
+        <p><code>onStart</code> hands you the next step. Work before <code>await start()</code>
+            finishes before the app answers anything; work after it knows the app is up. A hook that
+            throws stops the server from coming up, which is the right answer to a failed
+            migration.</p>
+
+        <p><code>onStop</code> is the mirror: <code>await stop()</code> first, then close what you
+            opened, so the pool outlives the last request that could use it. It runs on
+            <code>SIGTERM</code>, <code>Ctrl-C</code> or a crash, and a second signal ends the process
+            at once. A request still being answered after <code>ABIDE_STOP_TIMEOUT</code>
+            milliseconds, 5000 unless you set it, has its connection closed, and the stop goes on
+            without it.</p>
+
+        <p>A hook is called in a page, a layout or a handler file, and returns a function that
+            removes it. The ones for the whole app go in <code>src/layout.abide</code>, the root layout,
+            whose server block the scaffold already starts with an <code>onStart</code>.</p>
+    </Section>
+
     <Registry />
 </Doc>

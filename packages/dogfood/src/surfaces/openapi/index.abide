@@ -1,8 +1,52 @@
 <script>
+import OpenApiOperation from 'crm/src/assistant/lib/OpenApiOperation.abide'
+import openApiOperationSource from 'crm/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
+import openApiOperationTestSource from 'crm/src/assistant/lib/OpenApiOperation.test.ts' with { type: 'text' }
+import searchContactsSource from 'crm/src/assistant/searchContacts.handler.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="OpenAPI is generated from the handler files">
+        <Example
+            id="openapi"
+            app="crm"
+            title="`/__abide/openapi.json` — the operation, from the handler file"
+            summary="A partner's integration wants the CRM's contact search as an OpenAPI operation. Read the app's document: the operation carries the handler's sentence and its typed argument."
+            files={{
+                'src/assistant/lib/OpenApiOperation.abide': openApiOperationSource,
+                'src/assistant/searchContacts.handler.ts': searchContactsSource,
+                'src/assistant/lib/OpenApiOperation.test.ts': openApiOperationTestSource,
+            }}
+        >
+            <OpenApiOperation />
+        </Example>
+
+        <p>Nobody wrote the operation. The parameter is the handler's argument type and the
+            description is its <code>description</code> option, so the document cannot describe a
+            handler that is not there. A handler added is an operation published, with no step to
+            rerun.</p>
+
+        <p>The document is OpenAPI 3.1, whose schema dialect is JSON Schema, so a handler's schema
+            is published as it is. The test reads the same document from <code>createApp</code>, in
+            process.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>OpenApiDocument</code></td><td>The type of the document, for code that reads it.</td></tr>
+                <tr><td><code>abide openapi [--url &lt;origin&gt;]</code></td><td>Prints the document from the source, for a spec committed beside the code. <code>--url</code> asks a running deployment instead.</td></tr>
+                <tr><td><code>abide:openapi</code></td><td>The log namespace that warns when a handler's schema has no JSON Schema of its own.</td></tr>
+            </tbody>
+        </table>
+
+        <Code code={`abide openapi > openapi.json`} />
+    </Section>
+
     <Registry />
 </Doc>

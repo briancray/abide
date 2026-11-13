@@ -1,8 +1,92 @@
 <script>
+import { url } from '@abide/abide'
+import getContactSource from 'crm/src/account/getContact.handler.ts' with { type: 'text' }
+import ContactCard from 'crm/src/account/lib/ContactCard.abide'
+import contactCardSource from 'crm/src/account/lib/ContactCard.abide' with { type: 'text' }
+import contactCardTestSource from 'crm/src/account/lib/ContactCard.test.ts' with { type: 'text' }
+import SignIn from 'crm/src/account/lib/SignIn.abide'
+import signInComponentSource from 'crm/src/account/lib/SignIn.abide' with { type: 'text' }
+import signInTestSource from 'crm/src/account/lib/SignIn.test.ts' with { type: 'text' }
+import signInSource from 'crm/src/account/signIn.handler.ts' with { type: 'text' }
+import signOutSource from 'crm/src/account/signOut.handler.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="`principal.set` signs a caller in">
+        <Example
+            id="sign-in"
+            app="crm"
+            title="`principal.set` — sign in, sign out"
+            summary="A team member signs in to the CRM by email, and signs out again."
+            files={{
+                'src/account/lib/SignIn.abide': signInComponentSource,
+                'src/account/signIn.handler.ts': signInSource,
+                'src/account/signOut.handler.ts': signOutSource,
+                'src/account/lib/SignIn.test.ts': signInTestSource,
+            }}
+        >
+            <SignIn />
+        </Example>
+
+        <p><code>principal.set(claims)</code> seals the claims into an <code>HttpOnly</code>
+            cookie, and every request that carries it is that member's. <code>principal.clear()</code>
+            signs them out. Both run in a handler, because the cookie is written on its answer. The
+            <code>onPrincipal</code> at the foot of <code>signIn.handler.ts</code> is on
+            <a href={url('/configuration/hooks')}>Lifecycle hooks</a>.</p>
+
+        <p>The answer also tells the browser the caller changed. Every tab of the site refreshes
+            everything it reads, <code>principal</code> among it, so the form's own button flips with
+            nothing passed to it, and nothing on the page goes on showing the last member's data.</p>
+
+        <p>The seal is a JWT signed with <code>ABIDE_PRINCIPAL_SECRET</code>, and it lives for
+            <code>ABIDE_PRINCIPAL_TTL</code> milliseconds, a week unless you set it. The example app
+            keeps a development secret in its <code>.env</code>, so set your own wherever the app is
+            deployed. A comma-separated list rotates a secret in: the first signs, and every one
+            verifies. Under <code>bun test</code> an app that sets no secret is given one, so a test
+            signs in from a fresh clone.</p>
+
+        <table>
+            <thead><tr><th>Read</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>principal.authenticated</code></td><td>whether this caller presented a seal the server accepted</td></tr>
+                <tr><td><code>principal.expiresAt</code></td><td>when the seal lapses</td></tr>
+                <tr><td><code>principal.resolved</code></td><td>who the caller is, as <code>onPrincipal</code> resolved them</td></tr>
+                <tr><td><code>principal.error</code></td><td>the resolver having failed, which leaves the caller signed out</td></tr>
+                <tr><td><code>principal.caller</code></td><td>which browser, signed in or not: a key for a rate limit or a per-device setting, never an identity</td></tr>
+            </tbody>
+        </table>
+
+        <p>Each is a reactive value. A template reading one follows it, and on the server each
+            reads the request being answered.</p>
+    </Section>
+
+    <Section title="A handler decides which fields a caller may read">
+        <Example
+            id="deal-value"
+            app="crm"
+            title="`principal.resolved` in a handler — the deal value, for admins"
+            summary="Grace Hopper's contact card. Maya is an admin and sees the deal value; Theo is in sales and sees the rest."
+            files={{
+                'src/account/lib/ContactCard.abide': contactCardSource,
+                'src/account/getContact.handler.ts': getContactSource,
+                'src/account/lib/ContactCard.test.ts': contactCardTestSource,
+            }}
+        >
+            <ContactCard />
+        </Example>
+
+        <p>The handler reads <code>principal.resolved</code> and leaves the field out. Hiding it in
+            the template would still send it, and anyone opening the network panel would read it.</p>
+
+        <p>The card refreshes nothing itself. A sign-in reads every value on the page again as the
+            new member, the contact among them. The test calls the handler in process, under the
+            cookie each member's sign-in left.</p>
+    </Section>
+
     <Registry />
 </Doc>

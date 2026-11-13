@@ -4,7 +4,8 @@ import { SITE } from '#src/lib/SITE.ts'
 let index = ''
 for (const group of SITE) {
     index += `\n## ${group.group}\n${group.description}\n`
-    for (const page of group.pages) index += `- ${page.route} — ${page.title}: ${page.description}\n`
+    for (const page of group.pages)
+        index += `- ${page.route} — ${page.title}: ${page.description}\n`
 }
 
 /** What Claude is told it is, what it can call, and how it renders, for every question asked. */

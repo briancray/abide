@@ -1,8 +1,57 @@
 <script>
+import billingSource from 'crm/src/ops/lib/billing.ts' with { type: 'text' }
+import Sync from 'crm/src/ops/lib/Sync.abide'
+import syncSource from 'crm/src/ops/lib/Sync.abide' with { type: 'text' }
+import syncTestSource from 'crm/src/ops/lib/Sync.test.ts' with { type: 'text' }
+import syncContactSource from 'crm/src/ops/syncContact.handler.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
+    <Section title="One trace id covers everything one request did">
+        <Example
+            id="trace"
+            app="crm"
+            title="`trace()` — the id on every line a request writes"
+            summary="Syncing a contact logs in the handler, and the billing module it calls times its work and logs again. Sync, and every line carries the request's trace; sync again for a new one."
+            files={{
+                'src/ops/lib/Sync.abide': syncSource,
+                'src/ops/syncContact.handler.ts': syncContactSource,
+                'src/ops/lib/billing.ts': billingSource,
+                'src/ops/lib/Sync.test.ts': syncTestSource,
+            }}
+        >
+            <Sync />
+        </Example>
+
+        <p>Nothing starts a trace and nothing passes it down. The billing module was handed a
+            contact id, and its line carries the trace anyway, because every log line does. A request
+            that arrives with a <code>traceparent</code> header continues that trace.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>trace.span</code></td><td>wraps a body, returns what it returned, and logs its duration as a line</td></tr>
+                <tr><td><code>trace.sampled</code></td><td>whether the caller sampled this trace, carried through unchanged</td></tr>
+                <tr><td><code>trace.headers</code></td><td>the <code>traceparent</code> an outbound <code>fetch</code> carries to the next service</td></tr>
+                <tr><td><code>traceresponse</code></td><td>the response header naming the trace that answered</td></tr>
+                <tr><td><code>server-timing</code></td><td>the response header with the handler's own time, read by the browser's network panel</td></tr>
+            </tbody>
+        </table>
+
+        <p>The billing module's span is the line with a duration in it:</p>
+
+        <Snippet source={billingSource} path="src/ops/lib/billing.ts" from={['await trace.span(']} />
+
+        <p>With <code>timing</code>, a span joins <code>server-timing</code> under its name, so the
+            name has to be a plain token. A call to another service carries the trace on with
+            <code>{'fetch(url, { headers: trace.headers() })'}</code>.</p>
+    </Section>
+
     <Registry />
 </Doc>

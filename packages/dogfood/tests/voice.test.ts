@@ -20,10 +20,10 @@ import { beforeAll, expect, test } from 'bun:test'
 import { docsPages, renderedMarkdown } from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
-// for the whole load against the chapter apps' suites, inside its own five seconds.
+// for the whole load against the other suites, inside its own five seconds.
 beforeAll(() => renderedMarkdown(), 60_000)
 
-// Every written page with the markdown a reader gets, a stub's words not being the voice yet.
+// Every page with the markdown a reader gets.
 async function written(): Promise<
     { route: string; title: string; nav: string; body: string }[]
 > {
@@ -31,13 +31,12 @@ async function written(): Promise<
     const pages: { route: string; title: string; nav: string; body: string }[] =
         []
     for (const page of await docsPages())
-        if (!page.stub)
-            pages.push({
-                route: page.route,
-                title: page.title,
-                nav: page.nav,
-                body: bodies.get(page.route) ?? '',
-            })
+        pages.push({
+            route: page.route,
+            title: page.title,
+            nav: page.nav,
+            body: bodies.get(page.route) ?? '',
+        })
     return pages
 }
 

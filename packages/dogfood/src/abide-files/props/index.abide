@@ -1,8 +1,79 @@
 <script>
+import { url } from '@abide/abide'
+import avatarSource from 'crm/src/profile/lib/Avatar.abide' with { type: 'text' }
+import ContactCard from 'crm/src/profile/lib/ContactCard.abide'
+import contactCardSource from 'crm/src/profile/lib/ContactCard.abide' with { type: 'text' }
+import contactCardTestSource from 'crm/src/profile/lib/ContactCard.test.ts' with { type: 'text' }
+import ContactRename from 'crm/src/profile/lib/ContactRename.abide'
+import contactRenameSource from 'crm/src/profile/lib/ContactRename.abide' with { type: 'text' }
+import contactRenameTestSource from 'crm/src/profile/lib/ContactRename.test.ts' with { type: 'text' }
+import nameDraftSource from 'crm/src/profile/lib/NameDraft.abide' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A component reads its props live">
+        <Example
+            id="props"
+            app="crm"
+            title="`props()` — the avatar follows the name it was handed"
+            summary="A contact card with an avatar component. Change the name."
+            files={{
+                'src/profile/lib/ContactCard.abide': contactCardSource,
+                'src/profile/lib/Avatar.abide': avatarSource,
+                'src/profile/lib/ContactCard.test.ts': contactCardTestSource,
+            }}
+        >
+            <ContactCard />
+        </Example>
+
+        <p>A component is a <code>.abide</code> file, and <code>&lt;Name/&gt;</code> invokes it.
+            <code>props</code> hands back each prop as a live read of what the caller passed, so the
+            avatar follows the field and nothing is rebuilt: the test counts no node made or moved.</p>
+
+        <p>A prop the child only reads holds the caller's <code>Reactive</code> wherever a name
+            would: handed on to a <code>bind:</code> or a <code>Reactive</code>-typed parameter, it
+            passes the <code>Reactive</code> itself. Its probes answer for everything the caller's expression read, so
+            <code>busy(rows)</code> in a table component is busy while the list its page passed
+            loads. <a href={url('/reactive/reactive')}><code>reactive</code></a> lists the
+            probes.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does</th></tr></thead>
+            <tbody>
+                <tr><td><code>&lt;Tag&gt;…&lt;/Tag&gt;</code></td><td>passes the markup between the tags as <code>children</code></td></tr>
+                <tr><td><code>&lt;slot&gt;fallback&lt;/slot&gt;</code></td><td>renders the children, or the fallback when there are none</td></tr>
+                <tr><td><code>{'{#component Name(pattern)}'}</code></td><td>declares a component inline, for a row worth naming but not a file</td></tr>
+                <tr><td><code>Attributes&lt;Tag&gt;</code></td><td>types the props a wrapper passes on to its element</td></tr>
+                <tr><td><code>**/node_modules/**/*.abide</code></td><td>a design system's components, compiled with the app that imports them</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="An edit to a copy of a prop stands until the prop changes">
+        <Example
+            id="prop-draft"
+            app="crm"
+            title={'`reactive(() => name)` — a draft that starts over with each contact'}
+            summary="A display name field under two contacts. Edit Grace's, then open Ada."
+            files={{
+                'src/profile/lib/ContactRename.abide': contactRenameSource,
+                'src/profile/lib/NameDraft.abide': nameDraftSource,
+                'src/profile/lib/ContactRename.test.ts': contactRenameTestSource,
+            }}
+        >
+            <ContactRename />
+        </Example>
+
+        <p>The field is bound to <code>draft</code>, a derived value over the <code>name</code> prop.
+            Typing writes the draft, and the write stands until the body runs again (11.8), which it
+            does when <code>name</code> changes. So opening Ada starts the draft over from her name,
+            and the component stays: the test counts no node made or moved.</p>
+    </Section>
+
     <Registry />
 </Doc>

@@ -1,8 +1,47 @@
 <script>
+import addContactSource from 'crm/src/account/addContact.handler.ts' with { type: 'text' }
+import AddContact from 'crm/src/account/lib/AddContact.abide'
+import addContactComponentSource from 'crm/src/account/lib/AddContact.abide' with { type: 'text' }
+import addContactTestSource from 'crm/src/account/lib/AddContact.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="`response()` sets the status a handler answers with">
+        <Example
+            id="created"
+            app="crm"
+            title="`response()` — a status the handler decides"
+            summary="An integration adds contacts through the API, and expects 201 and the address of the new record."
+            files={{
+                'src/account/lib/AddContact.abide': addContactComponentSource,
+                'src/account/addContact.handler.ts': addContactSource,
+                'src/account/lib/AddContact.test.ts': addContactTestSource,
+            }}
+        >
+            <AddContact />
+        </Example>
+
+        <p><code>response()</code> is the status and headers of the answer being built, before
+            the body is decided. A handler or a rung writes to it and goes on returning a value.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it is, on the server, for the request being answered</th></tr></thead>
+            <tbody>
+                <tr><td><code>request()</code></td><td>the platform's <code>Request</code>: headers, URL, method, signal</td></tr>
+                <tr><td><code>response()</code></td><td>the status and headers being sent back</td></tr>
+                <tr><td><code>request.ip()</code></td><td>the address the request came from, the same under <code>abide dev</code> and <code>abide start</code>, or <code>'in-process'</code> for a call the app made of itself</td></tr>
+                <tr><td><code>server()</code></td><td>the listening <code>Bun.Server</code>, for what abide does not carry</td></tr>
+            </tbody>
+        </table>
+
+        <p>On an rpc route the body is <code>ctx.args()</code>'s. A body reads once, so a rung that
+            reads <code>request().json()</code> leaves nothing for the handler.</p>
+    </Section>
+
     <Registry />
 </Doc>

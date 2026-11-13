@@ -1,8 +1,62 @@
 <script>
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="Serve the app under a sub-path">
+        <Code code={`APP_URL=https://example.com/crm abide start`} />
+
+        <p>Set <code>APP_URL</code> and every page, handler and asset answers below its path.
+            Nothing is rebuilt: <code>url</code>, a handler's address and every asset reference are
+            resolved when they are read, never baked into the build. An address you write out by hand
+            is not, which is one more reason to build them with <code>url</code>.</p>
+
+        <p>A handler file answers at its own route, as <code>/companies/getCompany</code> does, so
+            it moves below the path with the pages. What abide serves for itself is below
+            <code>/__abide/**</code>: the client bundle, the health report, the OpenAPI document, the
+            MCP endpoint, and a private handler.</p>
+    </Section>
+
+    <Section title="Keep the CRM readable offline">
+        <Code code={`ABIDE_OFFLINE=1 abide start`} />
+
+        <p>Where <code>ABIDE_OFFLINE=1</code> turns it on, each page the CRM opens is kept on the
+            device, with the answers its handlers gave, the public files it loaded and the bundle it
+            runs. Off is the default, and a browser that kept the CRM while it was on drops what it
+            kept on its next visit. A page opens from the device at once, however weak the signal,
+            and the network is asked for the next copy behind it. So the visit after a deploy opens
+            the CRM before it, and the visit after that the new one. A reload asks the network
+            first.
+            A handler's kept answer opens the same way. With the network gone, a page opened in the
+            last year loads again with its data and works. One never opened says the device is
+            offline, and a link to it leaves the page you are on standing.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>cache-control: private, stale-while-revalidate=604800, stale-if-error=31536000</code></td><td>what a handler's answer carries, so the device shows what it kept while it asks again</td></tr>
+                <tr><td><code>cache-control: private, max-age=0, stale-if-error=31536000</code></td><td>what a page carries, so the browser's own cache never opens it stale and what the device kept stands in offline</td></tr>
+                <tr><td><code>cache-control: public, max-age=0, stale-if-error=31536000</code></td><td>the same, for a public file</td></tr>
+                <tr><td><code>clear-site-data: "cache"</code></td><td>what a sign-in or a sign-out answers, so the browser forgets what it kept for the last person</td></tr>
+            </tbody>
+        </table>
+
+        <p>What is kept is what those headers allow, and nothing else decides it. A handler that
+            writes <code>cache-control: no-store</code> through <code>response</code> is never kept,
+            and an answer with a <code>ttl</code> is shown from the device until its
+            <code>max-age</code> runs out. A refresh always asks the network.</p>
+
+        <p>With <code>src/public/icon.png</code> beside it, each page also links a manifest, so a
+            phone can add the CRM to its home screen, which is what keeps what was saved there for
+            good.</p>
+
+        <p>A kept page shows what it showed when it was last opened, live updates stop, and a
+            change fails until the network is back. A sign-in, a sign-out or a submitted form clears
+            what was kept, and a new build replaces it. <code>abide dev</code> keeps nothing.</p>
+    </Section>
+
     <Registry />
 </Doc>

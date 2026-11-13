@@ -1,8 +1,173 @@
 <script>
+import idPageSource from 'crm/src/companies/[id=SLUG].abide' with { type: 'text' }
+import companyPageTestSource from 'crm/src/companies/CompanyPage.test.ts' with { type: 'text' }
+import headTestSource from 'crm/src/companies/Head.test.ts' with { type: 'text' }
+import indexPageSource from 'crm/src/companies/index.abide' with { type: 'text' }
+import layoutSource from 'crm/src/companies/layout.abide' with { type: 'text' }
+import CompanyPages from 'crm/src/companies/lib/CompanyPages.abide'
+import companyPagesSource from 'crm/src/companies/lib/CompanyPages.abide' with { type: 'text' }
+import PastedName from 'crm/src/companies/lib/PastedName.abide'
+import pastedNameSource from 'crm/src/companies/lib/PastedName.abide' with { type: 'text' }
+import TabTitle from 'crm/src/companies/lib/TabTitle.abide'
+import tabTitleSource from 'crm/src/companies/lib/TabTitle.abide' with { type: 'text' }
+import TransitionFrame from 'crm/src/companies/lib/TransitionFrame.abide'
+import transitionFrameSource from 'crm/src/companies/lib/TransitionFrame.abide' with { type: 'text' }
+import matcherTestSource from 'crm/src/companies/Matcher.test.ts' with { type: 'text' }
+import slugSource from 'crm/src/companies/SLUG.param.ts' with { type: 'text' }
+import viewTransitionTestSource from 'crm/src/companies/ViewTransition.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A file's path is its address">
+        <table>
+            <thead><tr><th>File</th><th>Answers on</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/companies/index.abide</code></td><td><code>/companies</code></td></tr>
+                <tr><td><code>src/companies/[id=SLUG].abide</code></td><td><code>/companies/hopper-and-co</code>, and every other id</td></tr>
+                <tr><td><code>src/companies/SLUG.param.ts</code></td><td>no address: it says what a segment naming <code>SLUG</code> takes</td></tr>
+                <tr><td><code>src/companies/layout.abide</code></td><td>no address: it wraps every page at <code>/companies</code> and below</td></tr>
+                <tr><td><code>src/companies/error.abide</code></td><td>no address: it answers when a page below it fails</td></tr>
+                <tr><td><code>src/companies/getCompany.handler.ts</code></td><td><code>GET /companies/getCompany</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>An <code>**/index.abide</code> answers its directory's own address, and any other
+            <code>**/&lt;name&gt;.abide</code> adds its name. A part of the path in brackets is a value
+            the page reads:</p>
+
+        <table>
+            <thead><tr><th>Named</th><th>Matches</th><th>In <code>route.params</code></th></tr></thead>
+            <tbody>
+                <tr><td><code>[name]</code></td><td>one segment, required</td><td>text</td></tr>
+                <tr><td><code>[[name]]</code></td><td>one segment or none</td><td>text, absent when nothing matched</td></tr>
+                <tr><td><code>[...name]</code></td><td>every remaining segment</td><td>a list, empty when nothing matched</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`[id=SLUG].abide` answers for every company">
+        <Example
+            id="company-page"
+            app="crm"
+            title="`[id=SLUG].abide` — one file for every company"
+            summary="Two companies, one page file. Pick one: the address changes, and the page loads the company the address names."
+            files={{
+                'src/companies/lib/CompanyPages.abide': companyPagesSource,
+                'src/companies/[id=SLUG].abide': idPageSource,
+                'src/companies/CompanyPage.test.ts': companyPageTestSource,
+            }}
+        >
+            <CompanyPages />
+        </Example>
+
+        <p><code>route.params.id</code> is the segment the address matched, read like any
+            reactive value, so the company the page loads is the one its address names.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>route.name</code></td><td>the pattern that matched, <code>/companies/[id=SLUG]</code> for every company, so a log line keys on the page rather than on each address</td></tr>
+                <tr><td><code>Params</code></td><td>what the segments matched; a query string is never in it</td></tr>
+                <tr><td><code>RouteParams&lt;P&gt;</code></td><td>the type <code>route.params</code> has in a page or layout filed under <code>P</code>, so <code>id</code> is text and a key the route lacks is an error. A component under <code>lib/</code> has no route of its own and reads the loose <code>Params</code>: pass it the value as a prop, or narrow it with <code>RouteParams&lt;'/…'&gt;</code></td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A param file says what an id looks like">
+        <Example
+            id="param-matcher"
+            app="crm"
+            title="`SLUG.param.ts` — an address that cannot be an id never reaches the page"
+            summary="A rep pastes a company's name where its id goes. No id has a capital or a space, so no page takes the address, and nothing asks the database for it."
+            files={{
+                'src/companies/lib/PastedName.abide': pastedNameSource,
+                'src/companies/SLUG.param.ts': slugSource,
+                'src/companies/[id=SLUG].abide': idPageSource,
+                'src/companies/Matcher.test.ts': matcherTestSource,
+            }}
+        >
+            <PastedName />
+        </Example>
+
+        <p>A segment names its matcher after an <code>=</code>. <code>[id=SLUG]</code> takes a part
+            only where the whole of it, decoded, matches the <code>SLUG</code> in
+            <code>SLUG.param.ts</code>, found beside the page or in the nearest directory above it. A part
+            it refuses goes to the next route that could answer the address. The companies have none, so
+            <code>Hopper &amp; Co</code> is a 404, painted by <code>error.abide</code>.</p>
+
+        <table>
+            <thead><tr><th>Named</th><th>Matches</th></tr></thead>
+            <tbody>
+                <tr><td><code>[name=NAME]</code></td><td>one segment the matcher takes</td></tr>
+                <tr><td><code>[[name=NAME]]</code></td><td>one segment the matcher takes, or none</td></tr>
+                <tr><td><code>[...name=NAME]</code></td><td>every remaining segment, each one the matcher takes</td></tr>
+            </tbody>
+        </table>
+
+        <p>The build reads a param file without running it, so it holds one
+            <code>export const</code> named as the file, a regular expression with no flags, and no
+            import. A pattern that repeats a group that itself repeats, or that refers back to a group,
+            is refused: either can make one crafted address slow to test.</p>
+
+        <p>A segment with no matcher never takes a part with a period in it, which is why
+            <code>/favicon.ico</code> never reaches a company page. A matcher replaces that rule for its
+            segment, so one that allows a period lets <code>url</code> write one too. <code>.</code> and
+            <code>..</code> are never taken. Under <code>abide check</code>, a matcher that is a choice
+            of words, <code>/deals|notes/</code>, types the param as those words in
+            <code>route.params</code> and in <code>url</code>.</p>
+    </Section>
+
+    <Section title="A view transition carries the company across pages">
+        <Example
+            id="view-transition"
+            app="crm"
+            title="`view-transition-name` — a company name that moves to where it lands"
+            summary="A rep opens a company from the list, and the name they clicked becomes the heading they land on. Open one and watch it travel."
+            files={{
+                'src/companies/lib/TransitionFrame.abide': transitionFrameSource,
+                'src/companies/index.abide': indexPageSource,
+                'src/companies/[id=SLUG].abide': idPageSource,
+                'src/companies/ViewTransition.test.ts': viewTransitionTestSource,
+            }}
+        >
+            <TransitionFrame />
+        </Example>
+
+        <p>Elements on two pages that share a <code>view-transition-name</code> are animated from
+            one place to the other. A <code>&lt;style&gt;</code> rule naming a view transition turns
+            them on. The build reads it, so an app with none never looks for one at run time. A
+            navigation waits for the DOM to be written, not for the animation. A browser without view
+            transitions navigates as it otherwise would.</p>
+    </Section>
+
+    <Section title="A page's `<head>` wins over its layout's, key by key">
+        <Example
+            id="head"
+            app="crm"
+            title="`<head>` in a page and its layout — the deepest title wins"
+            summary="The companies layout titles every page, and a company page titles itself. Open each in a tab of its own: the company's tab takes its name."
+            files={{
+                'src/companies/lib/TabTitle.abide': tabTitleSource,
+                'src/companies/layout.abide': layoutSource,
+                'src/companies/[id=SLUG].abide': idPageSource,
+                'src/companies/Head.test.ts': headTestSource,
+            }}
+        >
+            <TabTitle />
+        </Example>
+
+        <p>A <code>&lt;head&gt;</code> sits at the top level of a file, never inside a block. A
+            <code>&lt;title&gt;</code> and a <code>&lt;base&gt;</code> by their tag, a
+            <code>&lt;meta&gt;</code> by its <code>name</code> or <code>property</code>, and a
+            <code>&lt;link&gt;</code> by its <code>rel</code> and <code>href</code> each have a key,
+            and the deepest contribution for a key wins. One with no key is appended. Leaving a page puts its layout's
+            title back.</p>
+    </Section>
+
     <Registry />
 </Doc>

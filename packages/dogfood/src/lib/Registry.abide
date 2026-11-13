@@ -1,10 +1,9 @@
 <script module>
+import REGISTRY from '../../../../docs/REGISTRY.md' with { type: 'text' }
 // A PAGE'S REGISTRY ROWS, read off docs/REGISTRY.md as it renders (40.47): the rows of the section
 // the page's `SITE` entry names, under the headings REGISTRY writes them under, each clause a row
 // cites linked to its anchor on the rulebook (40.45).
 import { registryRows } from './registryRows.ts'
-
-import REGISTRY from '../../../../docs/REGISTRY.md' with { type: 'text' }
 
 const ROWS = registryRows(REGISTRY)
 </script>
@@ -28,7 +27,11 @@ const headings = reactive.share('docHeadings', () => reactive([]))
 const filed: Heading[] = [{ id: 'reference', title: TITLE, level: 2 }]
 for (const section of sections)
     if (section.heading !== page.registry)
-        filed.push({ id: slugify(section.heading), title: section.heading, level: 3 })
+        filed.push({
+            id: slugify(section.heading),
+            title: section.heading,
+            level: 3,
+        })
 headings = [...headings, ...filed]
 </script>
 

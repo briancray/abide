@@ -1,8 +1,54 @@
 <script>
 import Doc from '#src/lib/Doc.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="`observe` — size, visibility and position as values">
+        <p>An element's size, whether it is in view and where it sits are not values a field
+            writes, so they are not binds. <code>observe</code> measures them, and
+            <code>bind:element</code> takes what it hands back, one adaptor or a list of them.
+            Each writes a reactive value you hand it, or calls a function you hand it instead.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What it measures</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'bind:element={observe.size(box)}'}</code></td><td>the element's content box, as <code>{'{ width, height }'}</code></td></tr>
+                <tr><td><code>{"observe.size(box, { box: 'border' })"}</code></td><td>the border box instead, padding and border in</td></tr>
+                <tr><td><code>{'bind:element={observe.visible(seen)}'}</code></td><td>whether the element is in the viewport</td></tr>
+                <tr><td><code>{'observe.visible(seen, { in: scroller })'}</code></td><td>whether it is in view inside an element you hold, such as a scroller</td></tr>
+                <tr><td><code>{'bind:element={observe.rect(placed)}'}</code></td><td>its rectangle in the viewport, as <code>getBoundingClientRect</code> reports it</td></tr>
+                <tr><td><code>{'bind:element={[observe.rect(placed), observe.size(box)]}'}</code></td><td>both, on one element</td></tr>
+                <tr><td><code>{'return observe.size(refresh)(node)'}</code></td><td>the size, from inside a <code>bind:element</code> function of your own</td></tr>
+            </tbody>
+        </table>
+
+        <p>A measurement runs one way. The browser measures and writes the value, and nothing you
+            write reaches the element. The first measurement lands after the first layout, so until
+            then the value holds what you gave it. Every observed element shares one observer, and
+            an element that leaves is no longer observed. The server has no layout and runs none of
+            it.</p>
+
+        <p>An adaptor is a function of the element that hands back what stops it, so a
+            <code>bind:element</code> function of your own can call one on the node it is handed,
+            beside the listeners it adds, and stop it with them. It shares the same one observer.</p>
+
+        <p><code>in</code> takes an element, usually one <code>bind:element</code> gave you. Until
+            it holds one, nothing is observed. The elements measured against one root share an
+            observer, and that observer stops when the last of them leaves. <code>box</code> is
+            <code>"content"</code> or <code>"border"</code>, and either box is written as
+            <code>width</code> and <code>height</code> on screen, whatever the writing mode. Hand
+            either option a reactive value and the element is measured again when it changes.</p>
+
+        <p><code>observe.rect</code> reads again in the frame after the element resizes, the page or
+            anything in it scrolls, the window resizes, or the element moves for any other reason,
+            such as a sibling above growing: one read per element per frame, however many events
+            arrived. Each observed element has an <code>IntersectionObserver</code> of its own, fitted
+            to its last rectangle, which costs nothing while it stays put and is made again after
+            each move. For a crosshair or a hover that follows the pointer, call
+            <code>getBoundingClientRect()</code> in the event handler instead.</p>
+    </Section>
+
     <Registry />
 </Doc>

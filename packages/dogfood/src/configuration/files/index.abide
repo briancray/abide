@@ -1,8 +1,118 @@
 <script>
+import { url } from '@abide/abide'
+import layoutSpecSource from 'crm/e2e/Layout.test.ts' with { type: 'text' }
+import errorPageSource from 'crm/src/companies/error.abide' with { type: 'text' }
+import errorPageTestSource from 'crm/src/companies/ErrorPage.test.ts' with { type: 'text' }
+import getCompanySource from 'crm/src/companies/getCompany.handler.ts' with { type: 'text' }
+import layoutSource from 'crm/src/companies/layout.abide' with { type: 'text' }
+import layoutTestSource from 'crm/src/companies/Layout.test.ts' with { type: 'text' }
+import CompaniesFrame from 'crm/src/companies/lib/CompaniesFrame.abide'
+import companiesFrameSource from 'crm/src/companies/lib/CompaniesFrame.abide' with { type: 'text' }
+import MissingCompany from 'crm/src/companies/lib/MissingCompany.abide'
+import missingCompanySource from 'crm/src/companies/lib/MissingCompany.abide' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A file's path is the address it answers">
+        <p>A file's path below <code>src</code> is its address. Nothing else names a route.</p>
+
+        <table>
+            <thead><tr><th>File</th><th>Answers on</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/index.abide</code></td><td><code>/</code></td></tr>
+                <tr><td><code>src/contacts/index.abide</code></td><td><code>/contacts</code></td></tr>
+                <tr><td><code>src/contacts/listContacts.handler.ts</code></td><td><code>GET /contacts/listContacts</code>, the handler its default export declares</td></tr>
+                <tr><td><code>src/contacts/lib/ContactList.abide</code></td><td>no address: a component the pages import</td></tr>
+                <tr><td><code>src/contacts/lib/ContactList.test.ts</code></td><td>no address: what <code>bun test</code> runs</td></tr>
+            </tbody>
+        </table>
+
+        <p>Code that is not an address goes in a directory that never is, and a file's name
+            decides where it runs:</p>
+
+        <table>
+            <thead><tr><th>Path</th><th>What goes in it</th><th>Where it runs</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/**</code></td><td>the app</td><td>both sides, unless its name says otherwise</td></tr>
+                <tr><td><code>src/**/</code></td><td>pages, layouts and handler files, routed by their path</td><td>a page on both sides; a handler on the server, with a call in its place in the browser</td></tr>
+                <tr><td><code>**/lib/**</code></td><td>components and modules</td><td>wherever they are imported</td></tr>
+                <tr><td><code>**/lib/**/&lt;name&gt;.server.&lt;extension&gt;</code></td><td>the database, secrets, anything the browser never loads</td><td>the server alone; a page importing it is a compile error</td></tr>
+                <tr><td><code>**/&lt;name&gt;.test.ts</code></td><td>tests, beside what they test</td><td><code>bun test</code>, never served</td></tr>
+                <tr><td><code>**/&lt;name&gt;.bench.ts</code></td><td>benches, beside what they time</td><td><code>bun run bench</code>, never served</td></tr>
+                <tr><td><code>**/&lt;NAME&gt;.param.ts</code></td><td>what a segment named <code>NAME</code> takes. See <a href={url('/pages/pages')}>Pages and layouts</a></td><td>wherever an address is matched</td></tr>
+                <tr><td><code>**/&lt;name&gt;.d.ts</code></td><td>types, beside what they type</td><td>nowhere; the checker reads them</td></tr>
+                <tr><td><code>**/public/**</code></td><td>files answered as they are</td><td>nowhere; each is sent at its path</td></tr>
+            </tbody>
+        </table>
+
+        <p>Any other file beside the pages fails the build, so listing a directory lists its
+            routes.</p>
+    </Section>
+
+    <Section title="A layout holds what the companies pages share">
+        <Example
+            id="layout"
+            app="crm"
+            title="`layout.abide` — the header the companies pages share, built once"
+            summary="The companies header holds a note for the call you are on. Type one, then open a company and come back: the page changes, and the note stays."
+            files={{
+                'src/companies/lib/CompaniesFrame.abide': companiesFrameSource,
+                'src/companies/layout.abide': layoutSource,
+                'src/companies/Layout.test.ts': layoutTestSource,
+                'e2e/Layout.test.ts': layoutSpecSource,
+            }}
+        >
+            <CompaniesFrame />
+        </Example>
+
+        <p>A <code>**/layout.abide</code> wraps every page at its directory and below, and
+            <code>&lt;slot/&gt;</code> is where the page renders. A navigation between two of its pages
+            swaps what is in the slot and leaves the layout alone, so its inputs, its scroll and
+            anything it was loading stay as they were. Layouts nest: the root layout wraps this one.</p>
+
+        <p>A layout's <code>&lt;script server&gt;</code> files hooks for the same pages. The
+            companies layout files its <code>onError</code> hook there.</p>
+
+        <p>A package can ship pages too. <code>import '…' with &#123; type: 'routes' &#125;</code>
+            in a file of your app serves every page and handler in the named directory below that
+            file's directory, and moving the line moves them.</p>
+    </Section>
+
+    <Section title="`error.abide` answers when a page cannot">
+        <Example
+            id="error-page"
+            app="crm"
+            title="`error.abide` — a company that is not there"
+            summary="An old link points at a company that was merged away. The handler refuses at once, and the companies error page answers with a 404."
+            files={{
+                'src/companies/lib/MissingCompany.abide': missingCompanySource,
+                'src/companies/error.abide': errorPageSource,
+                'src/companies/getCompany.handler.ts': getCompanySource,
+                'src/companies/ErrorPage.test.ts': errorPageTestSource,
+            }}
+        >
+            <MissingCompany />
+        </Example>
+
+        <p>An <code>**/error.abide</code> is found the way a layout is: the nearest one above the
+            page that failed. It gets the refusal as <code>failure</code>, and each refusal's
+            <code>is</code> narrows it. An address no page answers is <code>refuse.notFound</code> too. A
+            page asked with a method other than <code>GET</code> or <code>HEAD</code> is a 405,
+            painted by the same page, with <code>allow: GET, HEAD</code> on the answer.</p>
+
+        <p>The refusal has to come in the page's first turn to set the status. That is why
+            <code>getCompany</code> refuses before it waits. An error page that fails itself hands
+            off to the next one up.</p>
+
+        <p>A request for a page that is neither a navigation nor a <code>fetch</code>, such as an
+            <code>&lt;img&gt;</code> pointed at <code>/companies/initech</code>, gets a 404 with no
+            body, and the page is never set up for it.</p>
+    </Section>
+
     <Registry />
 </Doc>

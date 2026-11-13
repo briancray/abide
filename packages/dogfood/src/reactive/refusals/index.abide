@@ -1,8 +1,59 @@
 <script>
+import DealStage from 'crm/src/deals/lib/DealStage.abide'
+import dealStageSource from 'crm/src/deals/lib/DealStage.abide' with { type: 'text' }
+import dealStageTestSource from 'crm/src/deals/lib/DealStage.test.ts' with { type: 'text' }
+import moveDealSource from 'crm/src/deals/moveDeal.handler.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A refusal carries a name the page can match">
+        <Example
+            id="move"
+            app="crm"
+            title="`moveDeal.isError(error, 'DealClosed')` — the refusal, matched by name"
+            summary="Move the open deal between stages, then try to move the deal already won. The server refuses, and says why."
+            files={{
+                'src/deals/lib/DealStage.abide': dealStageSource,
+                'src/deals/moveDeal.handler.ts': moveDealSource,
+                'src/deals/lib/DealStage.test.ts': dealStageTestSource,
+            }}
+        >
+            <DealStage />
+        </Example>
+
+        <p><code>refuse.named</code> declares a refusal with a name, a status, a message and a
+            schema for its data. The handler refuses by returning it: <code>return myError(data)</code>
+            is the one spelling. A bare <code>myError(data)</code> statement, built and dropped, is a
+            compile error, because the write would carry on as if nothing had been refused.</p>
+
+        <p>Every refusal is a <code>Failed&lt;Name, Data&gt;</code>, in process and over the wire
+            alike. The ones a handler can return are its <code>Failures</code>, so
+            <code>rpc.isError</code> narrows by name and types <code>error.data</code> from the
+            schema. <code>s.isError</code> is the same check on any reactive value, for a refusal the
+            page made itself.</p>
+
+        <p><code>refuse(status)</code> is for where the status is the whole answer. Every one is
+            named <code>HttpError</code>, so <code>moveDeal.isError(error, 'HttpError')</code> narrows to
+            it, and the status is the only thing a caller can tell apart.</p>
+
+        <p>A move that lands writes the server's answer over <code>deal</code>, a derived value, so
+            the page shows the new stage without loading the deal again. The write stands until the
+            body reruns, when <code>id</code> changes.</p>
+
+        <table>
+            <thead><tr><th>abide's own refusal</th><th>Status</th><th>When</th></tr></thead>
+            <tbody>
+                <tr><td><code>refuse.notFound</code></td><td>404</td><td>nothing answers the address, with the path and method as data</td></tr>
+                <tr><td><code>refuse.validation</code></td><td>422</td><td>a schema or an <code>args</code> gate refused, with the issues as data</td></tr>
+                <tr><td><code>refuse.aborted</code></td><td>499</td><td>every caller waiting on a load passed a <code>signal</code> and every one aborted, or the client left</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
     <Registry />
 </Doc>

@@ -1,4 +1,4 @@
-// ONE CHAPTER APP'S TESTS, AS ROWS: `bun packages/dogfood/scripts/exampleTests.ts crm-01 --scope all`.
+// AN EXAMPLE APP'S TESTS, AS ROWS: `bun packages/dogfood/scripts/exampleTests.ts crm --scope all`.
 // Each file runs from the app's own directory, under the app's own `bunfig.toml`, as it does for a
 // reader who downloaded it.
 

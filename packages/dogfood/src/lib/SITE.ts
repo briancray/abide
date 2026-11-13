@@ -353,7 +353,7 @@ export const SITE: readonly SiteGroup[] = [
             {
                 route: '/abide-files/by-name',
                 title: 'Reading and writing by name',
-                nav: 'By name',
+                nav: 'Reading by name',
                 description:
                     'Read a reactive value by its name and assign to it, with the explicit calls still compiling.',
                 registry: 'Reading and writing by name',
@@ -537,7 +537,8 @@ export const SITE: readonly SiteGroup[] = [
                 nav: 'gate',
                 description:
                     'A test whose broken arm can be installed and watched to fail.',
-                registry: '`@abide/harness/gate` — tests whose revert can be run',
+                registry:
+                    '`@abide/harness/gate` — tests whose revert can be run',
             },
             {
                 route: '/harness/rows',

@@ -30,7 +30,9 @@ const query = route.query({ card: '' })
 // The native app's menu bar; in a browser, nothing reads it (38.88).
 onMenu(() => MENUS)
 watch(() =>
-    ASK_ITEM.on(() => (document.getElementById('ask') as HTMLInputElement | null)?.focus()),
+    ASK_ITEM.on(() =>
+        (document.getElementById('ask') as HTMLInputElement | null)?.focus(),
+    ),
 )
 </script>
 

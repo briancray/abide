@@ -1,8 +1,72 @@
 <script>
+import Console from 'crm/src/ops/lib/Console.abide'
+import consoleSource from 'crm/src/ops/lib/Console.abide' with { type: 'text' }
+import consoleTestSource from 'crm/src/ops/lib/Console.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="Log namespaces are turned on one at a time">
+        <Example
+            id="log"
+            app="crm"
+            title="`log.named` and `DEBUG` — one namespace on, one off"
+            summary="Billing and sync each log under their own name, and DEBUG names billing. Send an invoice, then poll: only the invoice is written."
+            files={{
+                'src/ops/lib/Console.abide': consoleSource,
+                'src/ops/lib/Console.test.ts': consoleTestSource,
+            }}
+        >
+            <Console />
+        </Example>
+
+        <p><code>log.named('billing')</code> returns a <code>Logger</code> under the app's name: it
+            writes as <code>crm:billing</code> in the downloaded app, and as
+            <code>dogfood:billing</code> on this page. <code>DEBUG</code> takes the comma and
+            wildcard list you already know: <code>DEBUG=crm:billing,abide:*</code>. It is read from
+            the environment on the server, and the browser gets it from the document.</p>
+
+        <p><code>log</code>, <code>log.warning</code> and <code>log.error</code> always write.
+            <code>log.info</code> and <code>log.debug</code> write when <code>DEBUG</code> names their
+            namespace, and <code>log.enabled()</code> asks first where building the line is the
+            expensive part.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>log.records</code></td><td>the lines kept, as a reactive value: an admin page reads it and follows it</td></tr>
+                <tr><td><code>LogRecord</code></td><td>one line: <code>time</code>, <code>level</code>, <code>namespace</code>, <code>message</code> and <code>trace</code></td></tr>
+                <tr><td><code>ABIDE_MAX_LOG_BUFFER_COUNT</code></td><td>how many lines <code>log.records</code> keeps in memory</td></tr>
+                <tr><td><code>ABIDE_LOG_FORMAT</code></td><td><code>tsv</code> or <code>json</code> for a collector; unset, a terminal's readable form</td></tr>
+                <tr><td><code>NO_COLOR</code></td><td>no color, anywhere</td></tr>
+                <tr><td><code>FORCE_COLOR</code></td><td>the readable form, even into a pipe</td></tr>
+            </tbody>
+        </table>
+
+        <p>abide logs under <code>abide:</code>, so <code>DEBUG=abide:*</code> turns on the
+            framework and nothing of yours. The warning namespaces are each a failure that is otherwise
+            silent, and always write:</p>
+
+        <table>
+            <thead><tr><th>Namespace</th><th>Levels</th><th>What it says</th></tr></thead>
+            <tbody>
+                <tr><td><code>abide:request</code></td><td><code>debug</code></td><td>one line per request</td></tr>
+                <tr><td><code>abide:socket</code></td><td><code>debug</code></td><td>one line per frame on the socket</td></tr>
+                <tr><td><code>abide:lifecycle</code></td><td><code>debug</code> <code>error</code></td><td>a lifecycle hook that ran</td></tr>
+                <tr><td><code>abide:principal</code></td><td><code>debug</code> <code>warning</code></td><td>a signed-in caller set or cleared</td></tr>
+                <tr><td><code>abide:health</code></td><td><code>warning</code></td><td>an <code>onHealth</code> that threw or answered a non-object</td></tr>
+                <tr><td><code>abide:render</code></td><td><code>warning</code></td><td>an error page that itself failed</td></tr>
+                <tr><td><code>abide:refuse</code></td><td><code>warning</code></td><td>a refusal's message formatter that threw</td></tr>
+                <tr><td><code>abide:reactive</code></td><td><code>warning</code></td><td>a failed reload over a value still on screen</td></tr>
+                <tr><td><code>abide:watch</code></td><td><code>warning</code></td><td>a <code>watch</code> that threw</td></tr>
+                <tr><td><code>abide:hydrate</code> / <code>abide:navigate</code></td><td><code>warning</code></td><td>the browser's side</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
     <Registry />
 </Doc>

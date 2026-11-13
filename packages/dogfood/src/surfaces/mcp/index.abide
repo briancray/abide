@@ -1,8 +1,47 @@
 <script>
+import ModelToolCall from 'crm/src/assistant/lib/ModelToolCall.abide'
+import modelToolCallSource from 'crm/src/assistant/lib/ModelToolCall.abide' with { type: 'text' }
+import modelToolCallTestSource from 'crm/src/assistant/lib/ModelToolCall.test.ts' with { type: 'text' }
+import searchContactsSource from 'crm/src/assistant/searchContacts.handler.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="MCP lets a model call the handlers">
+        <Example
+            id="mcp"
+            app="crm"
+            title="`/__abide/mcp` — the search handler, as a model sees it"
+            summary="A model is asked who works at Hopper. Ask the app's MCP endpoint for its tools, then call one as the model's client does."
+            files={{
+                'src/assistant/lib/ModelToolCall.abide': modelToolCallSource,
+                'src/assistant/searchContacts.handler.ts': searchContactsSource,
+                'src/assistant/lib/ModelToolCall.test.ts': modelToolCallTestSource,
+            }}
+        >
+            <ModelToolCall />
+        </Example>
+
+        <p>Every handler the app publishes is a tool, a read as much as a write. The model picks a
+            tool by its <code>description</code>, the same sentence the OpenAPI operation carries, so
+            write one on every handler. A tool with none warns on <code>abide:mcp</code>, and with
+            <code>DEBUG=abide:mcp</code> every call writes a line naming the tool, its status and how
+            long it took.</p>
+
+        <p>The endpoint runs inside the app's own middleware. The rung that decides what a browser
+            may call decides what a model may call, and a declared refusal reaches the model by its
+            name, so it can tell the person why it stopped.</p>
+
+        <p><code>abide mcp [--url &lt;origin&gt;]</code> serves the same tools over stdio, which is
+            what a desktop MCP client expects.</p>
+
+        <Code code={`abide mcp --url https://crm.example`} />
+    </Section>
+
     <Registry />
 </Doc>

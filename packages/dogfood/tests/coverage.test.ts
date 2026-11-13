@@ -1,34 +1,27 @@
-// THE DOCS AGAINST THE REGISTRY, AND AGAINST THEIR OWN RULES (RULEBOOK 40): every capability claimed
-// by one written page, every example card on exactly one teaching page, and the words held to what
+// THE DOCS AGAINST THE REGISTRY, AND AGAINST THEIR OWN RULES (RULEBOOK 40): every REGISTRY section
+// carried by one primitive's page, every example card on exactly one page, and the words held to what
 // docs/BRAND.md asks of a heading, a label and a code sample. The pages are read three ways —
-// `SITE.ts` for what a page claims, its `index.abide` for what it embeds, and the markdown the built
+// `SITE.ts` for what a page carries, its `index.abide` for what it embeds, and the markdown the built
 // app serves for what a reader reads (`docsPages.ts`).
 
 import { beforeAll, expect, test } from 'bun:test'
 
-import {
-    declaredExports,
-    generatedOnDisk,
-    LEAF,
-    referencePages,
-} from '../scripts/referencePages.ts'
 import { cellsOf } from '../src/lib/cellsOf.ts'
-import { REFERENCE } from '../src/lib/REFERENCE.ts'
-import { registryRows, scopeOf } from '../src/lib/referenceOf.ts'
+import { registryRows } from '../src/lib/registryRows.ts'
 import { SITE } from '../src/lib/SITE.ts'
-import { DOCUMENTS, sidebarGroupsOf } from '../src/lib/siteSections.ts'
+import { isFramed } from '../src/lib/sitePages.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
+import { declaredExports } from './declaredExports.ts'
 import {
     allCards,
     cardsOf,
     docsPages,
     DOGFOOD,
-    pageFileOf,
     renderedMarkdown,
 } from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
-// for the whole load against the chapter apps' suites, inside its own five seconds.
+// for the whole load against the other suites, inside its own five seconds.
 beforeAll(() => renderedMarkdown(), 60_000)
 
 const registry = await Bun.file(
@@ -42,8 +35,7 @@ const registry = await Bun.file(
 // Only a `Name | (Type) Signature | …` table carries a SIGNATURE. The others — file
 // conventions, CLI commands, generated headers — put prose in the second cell, and
 // reading that as a signature is what would make one capability restated in two tables
-// look like two capabilities that disagree. The QUALIFIER is the nearest `##`, trimmed
-// to its first code span: "## `memo` — the loaded value" is `memo`.
+// look like two capabilities that disagree. A capability is qualified by its `##` section.
 const capabilities: {
     name: string
     signature: string | undefined
@@ -56,7 +48,7 @@ for (const row of registryRows(registry)) {
     capabilities.push({
         name,
         signature: signed ? (row.cells[1] ?? '') : undefined,
-        section: row.qualifier,
+        section: row.section,
     })
 }
 
@@ -89,15 +81,6 @@ function specSections(): Map<string, Map<string, string | undefined>> {
     return sections
 }
 
-function specCapabilities(): string[] {
-    const keys = new Set<string>()
-    for (const [name, seen] of specSections()) {
-        if (seen.size < 2 || RESTATED.has(name)) keys.add(name)
-        else for (const section of seen.keys()) keys.add(`${section} › ${name}`)
-    }
-    return [...keys]
-}
-
 // A restatement that stopped matching is not a restatement. `onConfig` was written down
 // twice with two different options bags, and both read as authoritative — the drift is
 // invisible unless the two are compared, which nothing did.
@@ -111,60 +94,21 @@ test('a restated capability is restated identically', async () => {
     expect(drifted).toEqual([])
 })
 
-// THIS GATE USED TO PASS ON AN EMPTY FILE: a stub — title and intent decided, prose not written —
-// satisfied it exactly as a written page did. 40.2 asks for a name documented against real `.abide`
-// and `.ts` files, and a list of names in `SITE` is not that. So a stub's claims do not count, and
-// the uncovered set is a RATCHET: written down here, asserted exactly, shrinking only.
-const UNWRITTEN: string[] = []
-
-test('every registry capability is covered by a guide that is written', async () => {
-    const covered = new Set<string>()
-    for (const page of await docsPages()) {
-        if (page.stub) continue
-        for (const name of page.covers ?? []) covered.add(name)
-    }
-    const uncovered = specCapabilities()
-        .filter((name) => !covered.has(name))
-        .sort()
-    expect(uncovered).toEqual([...UNWRITTEN].sort())
-})
-
-// The stub half of the same join: a stub still CLAIMS its names, so nothing falls between the two.
-test('every unwritten capability is claimed by some stub', async () => {
-    const claimed = new Set<string>()
-    for (const page of await docsPages()) {
-        if (!page.stub) continue
-        for (const name of page.covers ?? []) claimed.add(name)
-    }
-    expect(UNWRITTEN.filter((name) => !claimed.has(name))).toEqual([])
-})
-
-test('nothing claims to cover a capability the registry does not have', async () => {
-    const known = new Set(specCapabilities())
-    const unknown: string[] = []
-    for (const page of await docsPages())
-        for (const name of page.covers ?? [])
-            if (!known.has(name)) unknown.push(`${page.route}: ${name}`)
-    expect(unknown).toEqual([])
-})
-
 // A page nobody can reach is a page nobody reads, and a `SITE` entry with no page renders nothing.
 test('every docs page is in SITE, and every SITE entry has its page', async () => {
     const listed = new Set<string>()
     for (const page of await docsPages()) listed.add(page.file)
-    // A document is listed by the reference tab instead.
-    for (const document of DOCUMENTS.pages)
-        listed.add(pageFileOf(document.route))
     const orphans: string[] = []
     for (const path of new Bun.Glob('src/**/index.abide').scanSync({
         cwd: DOGFOOD,
     }))
         if (
             !listed.has(path) &&
-            // An instrument is a page with no siblings to list it beside.
-            sidebarGroupsOf(
+            // The rulebook is a document, and a page of the CRM is that app's.
+            !isFramed(
                 path.slice('src'.length, -'/index.abide'.length) || '/',
-            ).length !== 0
+            ) &&
+            path !== 'src/rulebook/index.abide'
         )
             orphans.push(path)
     const missing: string[] = []
@@ -189,10 +133,10 @@ test('every file a card renders or shows is on disk', async () => {
     expect(missing).toEqual([])
 })
 
-// 40.32 — A CARD RENDERS A COMPONENT FROM A `lib` OF THE CHAPTER APP IT NAMES, so what a reader runs
-// on the page is a file of the app they download, and a `.abide` outside a `lib` would be a page of
-// its own (23.21). THE REVERT: drop a card's `app`, and it is named.
-test('every card renders a component in a lib of its chapter app', async () => {
+// 40.32 — A CARD RENDERS A COMPONENT FROM A `lib` OF THE CRM, so what a reader runs on the page is a
+// file of the app they download, and a `.abide` outside a `lib` would be a page of its own (23.21).
+// THE REVERT: drop a card's `app`, and it is named.
+test('every card renders a component in a lib of the CRM', async () => {
     const strays: string[] = []
     for (const card of await allCards())
         if (
@@ -206,7 +150,7 @@ test('every card renders a component in a lib of its chapter app', async () => {
 
 // 40.3 — A CARD SHOWS ITS TEST: the file of its app that exercises what it renders, so the claim the
 // card makes is one the app reruns. THE REVERT: drop a test tab from a card, and it is named.
-test('every card shows a test of its chapter app', async () => {
+test('every card shows a test of the CRM', async () => {
     const untested: string[] = []
     for (const card of await allCards()) {
         let shown = false
@@ -241,13 +185,11 @@ test('every card has an id no other card has', async () => {
     expect(repeated).toEqual([])
 })
 
-// 40.19 — ONE TEACHING PAGE PER EXAMPLE. A component taught from two pages is code one of those
-// readers was never shown running. `covers` is the discriminant (40.11): an overview carries a
-// section's opening example and teaches no name in it.
+// 40.19 — ONE PAGE PER EXAMPLE. A component taught from two pages is code one of those readers was
+// never shown running.
 test('an example component is taught by exactly one page', async () => {
     const pagesFor = new Map<string, string[]>()
     for (const page of await docsPages()) {
-        if (!page.covers?.length) continue
         for (const card of cardsOf(page))
             pagesFor.set(card.component, [
                 ...(pagesFor.get(card.component) ?? []),
@@ -261,41 +203,20 @@ test('an example component is taught by exactly one page', async () => {
     expect(shared).toEqual([])
 })
 
-// 40.21 — A CHAPTER'S CARDS ARE ITS OWN APP'S: chapter N's cards name `crm-NN`, the app a reader
-// downloads at the end of it. THE REVERT: point one chapter's card at the app before it, and it is named.
-test("every card on a chapter names that chapter's own app", async () => {
-    const chapters: string[] = []
-    for (const group of SITE)
-        for (const page of group.pages)
-            if (page.route.startsWith('/guide/')) chapters.push(page.route)
-    const misnamed: string[] = []
-    for (const card of await allCards()) {
-        const own = `crm-${String(chapters.indexOf(card.route) + 1).padStart(2, '0')}`
-        if (card.app !== own)
-            misnamed.push(`${card.id}: ${card.app} on ${card.route}`)
-    }
-    expect(misnamed).toEqual([])
-})
+// 40.17 — A PAGE RUNS WHAT IT TEACHES. The pages with no card yet are a RATCHET: written down here,
+// asserted exactly, shrinking only — a page that gains a card leaves the list, and one that loses its
+// last card is named. The home page routes rather than teaches. THE REVERT: drop every card from
+// `/reactive/reactive`, and it is named.
+const CARDLESS: string[] = await Bun.file(
+    new URL('./CARDLESS.json', import.meta.url),
+).json()
 
-// 40.17, 40.35, 40.36 — A TEACHING PAGE RUNS WHAT IT TEACHES, or its `SITE` entry says why nothing can: a
-// command run in a terminal, or a deployment's setting. An overview routes (40.11) and a reference
-// page is generated (40.42), so neither is held to it. A `cardless` page that grew a card is a stale mark,
-// and a section with no card on a page that has one is no page this reads.
-// THE REVERT: drop the card from `/pages/add-a-page`, and the page is named.
-test('every teaching page embeds an example, or is marked cardless', async () => {
-    const overviews = new Set<string>()
-    for (const group of SITE) overviews.add(group.pages[0]?.route ?? '')
-    const missing: string[] = []
-    const stale: string[] = []
-    for (const page of await docsPages()) {
-        if (overviews.has(page.route) || page.route.startsWith('/reference'))
-            continue
-        const cards = cardsOf(page).length
-        if (cards === 0 && page.cardless === undefined && !page.stub)
-            missing.push(page.route)
-        if (cards > 0 && page.cardless !== undefined) stale.push(page.route)
-    }
-    expect({ missing, stale }).toEqual({ missing: [], stale: [] })
+test('every page embeds an example, or is on the ratchet of pages with none yet', async () => {
+    const cardless: string[] = []
+    for (const page of await docsPages())
+        if (page.route !== '/' && cardsOf(page).length === 0)
+            cardless.push(page.route)
+    expect(cardless).toEqual(CARDLESS)
 })
 
 // 40.26 — a card follows its heading with nothing between them. A paragraph there is a fourth voice
@@ -314,23 +235,6 @@ test('an example follows its heading directly', async () => {
         }
     }
     expect(separated).toEqual([])
-})
-
-// BRAND, "Documentation structure": the main overview shows one section per area, each through that
-// area's own lead (`<Lead of="…"/>`), so the words have one home. A section added to `SITE` and not
-// to the overview is what makes the home page stop being a map, and the drift is silent.
-test('every section shows its opening on the main overview', async () => {
-    const home = (await docsPages()).find((page) => page.route === '/')
-    const shown = new Set<string>()
-    for (const [, route] of home?.source.matchAll(/<Lead of="([^"]+)"/g) ?? [])
-        shown.add(route as string)
-    const missing: string[] = []
-    for (const group of SITE) {
-        const first = group.pages[0]?.route ?? ''
-        if (first !== '/' && !shown.has(first))
-            missing.push(`${group.section} (${first})`)
-    }
-    expect(missing).toEqual([])
 })
 
 // A heading of the form `Subject: `a`, `b`, `c`` is a GLOSSARY LABEL, and it reads as the whole set —
@@ -541,16 +445,29 @@ test('every type a signature names is declared somewhere', async () => {
     expect([...new Set(dangling)]).toEqual([])
 })
 
-// A capability claimed by two pages is a capability neither page owns.
-test('each capability is claimed by exactly one page', async () => {
-    const claims = new Map<string, string[]>()
-    for (const page of await docsPages())
-        for (const name of page.covers ?? [])
-            claims.set(name, [...(claims.get(name) ?? []), page.route])
-    const shared: string[] = []
-    for (const [name, routes] of claims)
-        if (routes.length > 1) shared.push(`${name}: ${routes.join(', ')}`)
-    expect(shared).toEqual([])
+// 40.43 — EVERY REGISTRY SECTION IS ONE PAGE'S: a section no page carries is rows no reader can look
+// up, and a section two pages name is a second copy. THE REVERT: point `/reactive/watch`'s `registry`
+// at `reactive`'s section, and both are named.
+test('every registry section is carried by exactly one page', async () => {
+    const carriedBy = new Map<string, string[]>()
+    for (const group of SITE)
+        for (const page of group.pages)
+            carriedBy.set(page.registry, [
+                ...(carriedBy.get(page.registry) ?? []),
+                page.route,
+            ])
+    const sections = new Set<string>()
+    for (const row of registryRows(registry)) sections.add(row.section)
+    const wrong: string[] = []
+    for (const section of sections) {
+        const routes = carriedBy.get(section) ?? []
+        if (routes.length !== 1)
+            wrong.push(`${section}: ${routes.join(', ') || 'no page'}`)
+    }
+    for (const [section, routes] of carriedBy)
+        if (!sections.has(section))
+            wrong.push(`${section}: no such section, on ${routes.join(', ')}`)
+    expect(wrong).toEqual([])
 })
 
 // docs/BRAND.md, Documentation structure: "A label stands alone." A nav label is read with no
@@ -566,31 +483,17 @@ test('no nav label begins with a preposition', async () => {
     expect(offenders).toEqual([])
 })
 
-// 40.11 — an overview or a reference page declares no `covers`: a claim from the wrong page is
-// invisible to every coverage gate above, which any claim satisfies.
-test('no overview or reference page declares covers', async () => {
-    const offenders: string[] = []
-    for (const group of SITE)
-        for (const [index, page] of group.pages.entries())
-            if (
-                (index === 0 || page.route.startsWith('/reference')) &&
-                (page.covers?.length ?? 0) > 0
-            )
-                offenders.push(page.route)
-    expect(offenders).toEqual([])
-})
-
 // docs/BRAND.md: a link standing in for a page is read as that page's label, so a RENAME has two
-// halves and only one is in the page renamed. A link to an overview is labeled with the SECTION; a
-// CODE label names an API and the link is where to read about it.
+// halves and only one is in the page renamed. A CODE label names an API and the link is where to read
+// about it.
 test('a link is labeled with the nav of the page it points at', async () => {
     const pages = await docsPages()
     const navOf = new Map<string, string>()
-    const sectionOf = new Map<string, string>()
+    const titleOf = new Map<string, string>()
     for (const group of SITE)
-        for (const [index, page] of group.pages.entries()) {
+        for (const page of group.pages) {
             navOf.set(page.route, page.nav)
-            if (index === 0) sectionOf.set(page.route, group.section)
+            titleOf.set(page.route, page.title)
         }
     const stale: string[] = []
     for (const [route, body] of await renderedMarkdown())
@@ -605,7 +508,7 @@ test('a link is labeled with the nav of the page it points at', async () => {
                 label.startsWith('`')
             )
                 continue
-            if (label !== nav && label !== sectionOf.get(linked))
+            if (label !== nav && label !== titleOf.get(linked))
                 stale.push(
                     `${route}: "${label}" -> ${linked}, whose nav is "${nav}"`,
                 )
@@ -691,52 +594,22 @@ test('every source fence carries a caption', async () => {
     expect(bare).toEqual([])
 })
 
-// 40.42 — THE REFERENCE IS GENERATED, so what is on disk is what the script writes from REGISTRY and
-// the entry points' exports, and a page written or edited by hand is a page the next run deletes. A
-// REGISTRY edit that adds an export or a group fails here until the script is run:
-// `bun packages/dogfood/scripts/referencePages.ts`.
-// THE REVERT: delete a line from a generated page, or drop an entry from `REFERENCE.ts`.
-test('the reference on disk is what the registry and the exports generate', async () => {
-    const { leaf, files } = await referencePages()
-    const stale: string[] = []
-    if ((await Bun.file(LEAF).text()) !== leaf)
-        stale.push('src/lib/REFERENCE.ts')
-    for (const [path, source] of files) {
-        const file = Bun.file(`${DOGFOOD}${path}`)
-        if (!(await file.exists()) || (await file.text()) !== source)
-            stale.push(path)
-    }
-    for (const path of generatedOnDisk()) if (!files.has(path)) stale.push(path)
-    expect(stale).toEqual([])
-})
-
 // Every export REGISTRY writes, as `scope\0name`. Read by a scan of its own — a `Name` cell spelling
 // the export or a member of it, or a `###` heading naming it — rather than by the placement the
 // pages are generated with, so a slip in that is caught rather than agreed with.
+// A section whose heading names an `@abide/harness/…` entry holds that entry's names; every other, abide's.
 const named = new Set<string>()
 for (const row of registryRows(registry)) {
+    const entry = /`(@abide\/[^`]+)`/.exec(row.section)?.[1]
+    const scope = entry ?? 'abide'
     const options = /`([^`]+)`/.exec(row.subsection ?? '')?.[1]
-    if (options) named.add(`${row.scope}\0${options}`)
+    if (options) named.add(`${scope}\0${options}`)
     if (row.header[0] !== 'Name') continue
     for (const [, span] of (row.cells[0] ?? '').matchAll(/`([^`]+)`/g))
-        named.add(`${row.scope}\0${/^[\w$]+/.exec(span as string)?.[0] ?? ''}`)
+        named.add(`${scope}\0${/^[\w$]+/.exec(span as string)?.[0] ?? ''}`)
 }
 
-// 40.42 — EVERY NAME AN APP IMPORTS AND REGISTRY WRITES HAS A PAGE OF ITS OWN. THE REVERT: drop
-// `flushSync` from `REFERENCE.ts`, and it is named.
-test('every export the registry names has a reference page', async () => {
-    const paged = new Set<string>()
-    for (const page of REFERENCE)
-        for (const name of page.names)
-            paged.add(`${scopeOf(page.entry ?? '')}\0${name}`)
-    const missing: string[] = []
-    for (const { entry, scope, name } of await declaredExports())
-        if (named.has(`${scope}\0${name}`) && !paged.has(`${scope}\0${name}`))
-            missing.push(`${entry}: ${name}`)
-    expect(missing).toEqual([])
-})
-
-// THE CONVERSE: EVERY NAME A PUBLIC ENTRY EXPORTS IS ONE REGISTRY WRITES. A name with no row is one
+// EVERY NAME A PUBLIC ENTRY EXPORTS IS ONE REGISTRY WRITES. A name with no row is one
 // an author is offered and told nothing about — what compiled `.abide` output calls belongs on the
 // runtimes it imports from (`packages/abide/src/shared/SPECIFIERS.ts`), not on what an app imports.
 // The two left are types an author can write and no row names yet: a RATCHET, shrinking only.
@@ -753,11 +626,11 @@ test('every export of a public entry is a name the registry writes', async () =>
     expect(unnamed).toEqual(UNREGISTERED)
 })
 
-// 40.43 — EVERY REGISTRY ROW IS ON EXACTLY ONE REFERENCE PAGE, read off the markdown each page serves:
-// a row on none is a name a reader cannot look up, and a row on two is a second copy. A row is its
-// cells save the clauses, which a page writes as links. THE REVERT: send rule f's rows nowhere in
-// `placementsOf`, and every CLI command is on no page.
-test('every registry row is on exactly one reference page', async () => {
+// 40.43 — EVERY REGISTRY ROW IS ON EXACTLY ONE PAGE, read off the markdown each page serves: a row on
+// none is a name a reader cannot look up, and a row on two is a second copy. A row is its cells save
+// the clauses, which a page writes as links. THE REVERT: drop `<Registry />` from a page, and its rows
+// are named.
+test('every registry row is on exactly one page', async () => {
     const key = (cells: string[]): string =>
         cells.slice(0, -1).join(' | ').replace(/\s+/g, ' ')
     const written = new Map<string, number>()
@@ -765,7 +638,6 @@ test('every registry row is on exactly one reference page', async () => {
         written.set(key(row.cells), (written.get(key(row.cells)) ?? 0) + 1)
     const found = new Map<string, string[]>()
     for (const [route, body] of await renderedMarkdown()) {
-        if (!route.startsWith('/reference/')) continue
         for (const line of body.split('\n'))
             if (line.startsWith('| ') && !line.startsWith('| ---')) {
                 const cells = key(cellsOf(line))

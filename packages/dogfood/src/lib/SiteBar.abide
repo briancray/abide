@@ -17,7 +17,7 @@
 import { native, route, type RouteLiteral, url } from '@abide/abide'
 
 import Ask from './Ask.abide'
-import { isFramed } from './siteSections.ts'
+import { isFramed } from './sitePages.ts'
 </script>
 
 {#if !isFramed(route.name())}

@@ -1,8 +1,71 @@
 <script>
+import CallLog from 'crm/src/profile/lib/CallLog.abide'
+import callLogSource from 'crm/src/profile/lib/CallLog.abide' with { type: 'text' }
+import callLogTestSource from 'crm/src/profile/lib/CallLog.test.ts' with { type: 'text' }
+import callRowSource from 'crm/src/profile/lib/CallRow.abide' with { type: 'text' }
+import customerBadgeSource from 'crm/src/profile/lib/CustomerBadge.abide' with { type: 'text' }
+import leadBadgeSource from 'crm/src/profile/lib/LeadBadge.abide' with { type: 'text' }
+import StageBadges from 'crm/src/profile/lib/StageBadges.abide'
+import stageBadgesSource from 'crm/src/profile/lib/StageBadges.abide' with { type: 'text' }
+import stageBadgesTestSource from 'crm/src/profile/lib/StageBadges.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A component's styles reach only its own markup">
+        <Example
+            id="scoped-style"
+            app="crm"
+            title="`<style>` — two components, one class name, two rules"
+            summary="A lead badge and a customer badge, side by side. Each styles its own badge class in its own color."
+            files={{
+                'src/profile/lib/StageBadges.abide': stageBadgesSource,
+                'src/profile/lib/LeadBadge.abide': leadBadgeSource,
+                'src/profile/lib/CustomerBadge.abide': customerBadgeSource,
+                'src/profile/lib/StageBadges.test.ts': stageBadgesTestSource,
+            }}
+        >
+            <StageBadges />
+        </Example>
+
+        <p>A <code>&lt;style&gt;</code> block's rules require the component's scope token, and only
+            that component's markup carries it. So <code>.badge</code> in one file never reaches the
+            other's badge, and neither needs a naming convention.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does</th></tr></thead>
+            <tbody>
+                <tr><td><code>:global(…)</code></td><td>exempts one selector from the scope</td></tr>
+                <tr><td><code>import './app.css'</code></td><td>makes the app's stylesheet a dependency of the component that imports it</td></tr>
+                <tr><td><code>bunfig.toml</code></td><td>declares a bun plugin, such as Tailwind, that builds the stylesheet</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A script runs per instance, and a module script once">
+        <Example
+            id="script"
+            app="crm"
+            title="`<script>` and `<script module>` — per row, and once"
+            summary="Two contact rows from one component. Log a call on the first."
+            files={{
+                'src/profile/lib/CallLog.abide': callLogSource,
+                'src/profile/lib/CallRow.abide': callRowSource,
+                'src/profile/lib/CallLog.test.ts': callLogTestSource,
+            }}
+        >
+            <CallLog />
+        </Example>
+
+        <p>A <code>&lt;script&gt;</code> block runs each time the component is used, top to
+            bottom, so each row has its own <code>calls</code>. A <code>&lt;script module&gt;</code>
+            block runs once for the file, so both rows count up one <code>opened</code>. On a server, a
+            <code>reactive</code> in module scope is still one per request.</p>
+    </Section>
+
     <Registry />
 </Doc>

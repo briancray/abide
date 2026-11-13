@@ -1,8 +1,119 @@
 <script>
+import launcherSource from 'crm/src/native/launcher.abide' with { type: 'text' }
+import reportsPageSource from 'crm/src/reports/index.abide' with { type: 'text' }
+import UpdateNotice from 'crm/src/reports/lib/UpdateNotice.abide'
+import updateNoticeSource from 'crm/src/reports/lib/UpdateNotice.abide' with { type: 'text' }
+import updateNoticeTestSource from 'crm/src/reports/lib/UpdateNotice.test.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
+    <Section title="Ship the CRM as a native app">
+        <Code code={`abide bundle
+    abide bundle --out ~/Applications/CRM.app`} />
+
+        <p><code>abide bundle [--out]</code> wraps the compiled executable in a macOS
+            <code>.app</code> that opens the CRM in a window of its own. Its icon is
+            <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. The first launch
+            offers Start, which runs the app here, and Connect…, which opens one running at a URL.</p>
+
+        <Snippet source={launcherSource} path="src/native/launcher.abide" />
+
+        <p><code>src/native/launcher.abide</code> is no page of the CRM's, and what its
+            <code>onLauncher</code> answers sets the window and the forms. The answer is a
+            <code>LauncherOptions</code>: the window's size, floor and ceiling, how it is drawn,
+            and <code>start</code> or <code>connect</code> set to <code>false</code> to drop a
+            form. <code>titlebar: 'hidden'</code> or <code>'inset'</code> draws the page under
+            the window's controls. The page then reads <code>--abide-titlebar-height</code> and
+            <code>--abide-titlebar-inset</code> to keep clear of them, and is dragged by any
+            element marked <code>data-abide-titlebar</code>. The window takes its color from the
+            page's own background, and <code>dock: false</code> leaves out the Dock icon and the
+            menu bar with it. Markup in the same file
+            replaces the launch page, and is rendered with a <code>Launch</code>, whose
+            <code>fields</code> hold one <code>ConfigField</code> per input the start form asks
+            for.</p>
+
+        <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['const printReport', 'onMenu(', 'watch(']} />
+
+        <p>The reports page adds a Reports menu while it is showing. <code>onMenu</code> is read
+            the way markup is, so the menus follow the page's values. Each entry is a
+            <code>MenuItem</code>: <code>'separator'</code>, an item with an <code>href</code>, one
+            with a <code>MenuRole</code> the platform performs, or a <code>MenuEntry</code> made by
+            <code>menuItem</code>. <code>MenuEntry.on</code> files what runs when it is picked, and
+            hands back what stops it, which is what <code>watch</code> takes. In a browser nothing
+            picks an item, and the page runs unchanged.</p>
+
+        <p>With <code>menuBarExtra: true</code> the CRM also sits in the menu bar, drawn from
+            <code>src/public/icon-menubar.png</code>. A click opens
+            <code>src/native/menubar.abide</code> in a panel under it, a page outside every
+            layout, <code>panelWidth</code> by <code>panelHeight</code>. Without that file a click
+            shows and hides the window. A right click lists the page's menus and Quit, and
+            closing the window keeps the CRM running up there.</p>
+
+        <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['{#if !native()}']} />
+
+        <p>A browser has no menu bar, so there the page offers the same print as a button.
+            <code>native</code> answers the version of the <code>.app</code> whose window the page
+            is in, and <code>undefined</code> in a browser. The window names that version in the user
+            agent of every request it makes, so the server rendering the page reads the same answer
+            the page does, and the button is never drawn in the window and taken away. Any client
+            can send that user agent, so it decides what a page shows, never who may do what.</p>
+    </Section>
+
+    <Section title="Keep the native app current">
+        <Snippet source={launcherSource} path="src/native/launcher.abide" from={['update:']} />
+
+        <p>Each person runs their own copy of the CRM, so a new version has to reach every copy.
+            <code>update</code> in what <code>onLauncher</code> answers is the address the copies
+            look for one at: as they launch, every hour after, and when Check for Updates… is
+            picked from the app menu. A newer version is downloaded beside the app and installed
+            when it quits, and Check for Updates… becomes Restart to Install.</p>
+
+        <Code code={`abide bundle --notes CHANGES.md
+    abide bundle --required --notes CHANGES.md`} />
+
+        <p>Every <code>abide bundle</code> also writes an <code>updates</code> directory beside
+            the <code>.app</code>: the app zipped, and <code>latest.json</code> naming it. Upload
+            the directory to the <code>update</code> address, and every copy older than it updates
+            itself. A copy never installs a version older than its own, so taking an upload back
+            stops new installs of it without undoing the ones that happened. Raise the version in
+            <code>package.json</code> to publish the fix.</p>
+
+        <p>The feed is signed. The first bundle makes the key, prints where it put it, and every
+            bundle after reuses it. Each copy installs only what that key signed, so a host that
+            serves something else installs nothing. Keep a copy of the key: a copy of the app
+            trusts it and no other. To bundle on another machine, set
+            <code>ABIDE_UPDATE_KEY</code> to what the file holds.</p>
+    </Section>
+
+    <Section title="Tell people an update is waiting">
+        <Example
+            id="update-notice"
+            app="crm"
+            title="`pendingUpdate` — an update waiting for a restart"
+            summary="A browser stages no update, so this card stays empty here. Its test plays the window, telling the page of an update and then of a required one."
+            files={{
+                'src/reports/lib/UpdateNotice.abide': updateNoticeSource,
+                'src/reports/lib/UpdateNotice.test.ts': updateNoticeTestSource,
+            }}
+        >
+            <UpdateNotice />
+        </Example>
+
+        <p><code>pendingUpdate</code> holds the update the window has staged as a
+            <code>StagedUpdate</code>: its <code>version</code>, its <code>notes</code>, and
+            whether <code>--required</code> marked it. <code>StagedUpdate.install</code> restarts
+            into it now. A required one opens a dialog that Escape cannot close, and quitting
+            installs it too, so no copy goes on without it. The reports page shows the notice; an
+            app with updates people must not put off renders it from its root layout, so it stands
+            over every page.</p>
+    </Section>
+
     <Registry />
 </Doc>

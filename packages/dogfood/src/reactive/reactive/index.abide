@@ -1,8 +1,640 @@
 <script>
+import activitySource from 'crm/src/activity/lib/activity.ts' with { type: 'text' }
+import lastActivitySource from 'crm/src/activity/lib/LastActivity.abide' with { type: 'text' }
+import QuickLog from 'crm/src/activity/lib/QuickLog.abide'
+import quickLogSource from 'crm/src/activity/lib/QuickLog.abide' with { type: 'text' }
+import quickLogBenchSource from 'crm/src/activity/lib/QuickLog.bench.ts' with { type: 'text' }
+import quickLogTestSource from 'crm/src/activity/lib/QuickLog.test.ts' with { type: 'text' }
+import RecentActivity from 'crm/src/activity/lib/RecentActivity.abide'
+import recentActivitySource from 'crm/src/activity/lib/RecentActivity.abide' with { type: 'text' }
+import recentActivityTestSource from 'crm/src/activity/lib/RecentActivity.test.ts' with { type: 'text' }
+import ContactNote from 'crm/src/contacts/lib/ContactNote.abide'
+import contactNoteSource from 'crm/src/contacts/lib/ContactNote.abide' with { type: 'text' }
+import contactNoteTestSource from 'crm/src/contacts/lib/ContactNote.test.ts' with { type: 'text' }
+import createDealSource from 'crm/src/deals/createDeal.handler.ts' with { type: 'text' }
+import Pipeline from 'crm/src/deals/lib/Pipeline.abide'
+import pipelineSource from 'crm/src/deals/lib/Pipeline.abide' with { type: 'text' }
+import pipelineTestSource from 'crm/src/deals/lib/Pipeline.test.ts' with { type: 'text' }
+import QuickDeal from 'crm/src/deals/lib/QuickDeal.abide'
+import quickDealSource from 'crm/src/deals/lib/QuickDeal.abide' with { type: 'text' }
+import quickDealTestSource from 'crm/src/deals/lib/QuickDeal.test.ts' with { type: 'text' }
+import listDealsSource from 'crm/src/deals/listDeals.handler.ts' with { type: 'text' }
+import getDealScoresSource from 'crm/src/ops/getDealScores.handler.ts' with { type: 'text' }
+import getFollowUpsSource from 'crm/src/ops/getFollowUps.handler.ts' with { type: 'text' }
+import DealScores from 'crm/src/ops/lib/DealScores.abide'
+import dealScoresSource from 'crm/src/ops/lib/DealScores.abide' with { type: 'text' }
+import dealScoresTestSource from 'crm/src/ops/lib/DealScores.test.ts' with { type: 'text' }
+import dealScoresValueSource from 'crm/src/ops/lib/dealScores.ts' with { type: 'text' }
+import FollowUps from 'crm/src/ops/lib/FollowUps.abide'
+import followUpsSource from 'crm/src/ops/lib/FollowUps.abide' with { type: 'text' }
+import followUpsTestSource from 'crm/src/ops/lib/FollowUps.test.ts' with { type: 'text' }
+import followUpsJobSource from 'crm/src/ops/lib/followUps.ts' with { type: 'text' }
+import scoreWorkerSource from 'crm/src/ops/lib/scoreWorker.ts' with { type: 'text' }
+import getForecastSource from 'crm/src/pipeline/getForecast.handler.ts' with { type: 'text' }
+import getStageSource from 'crm/src/pipeline/getStage.handler.ts' with { type: 'text' }
+import getTargetSource from 'crm/src/pipeline/getTarget.handler.ts' with { type: 'text' }
+import dealDetailSource from 'crm/src/pipeline/lib/DealDetail.abide' with { type: 'text' }
+import DealFeed from 'crm/src/pipeline/lib/DealFeed.abide'
+import dealFeedSource from 'crm/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
+import dealFeedTestSource from 'crm/src/pipeline/lib/DealFeed.test.ts' with { type: 'text' }
+import DealLink from 'crm/src/pipeline/lib/DealLink.abide'
+import dealLinkSource from 'crm/src/pipeline/lib/DealLink.abide' with { type: 'text' }
+import dealLinkTestSource from 'crm/src/pipeline/lib/DealLink.test.ts' with { type: 'text' }
+import DealPicker from 'crm/src/pipeline/lib/DealPicker.abide'
+import dealPickerSource from 'crm/src/pipeline/lib/DealPicker.abide' with { type: 'text' }
+import dealPickerTestSource from 'crm/src/pipeline/lib/DealPicker.test.ts' with { type: 'text' }
+import dealRowSource from 'crm/src/pipeline/lib/DealRow.abide' with { type: 'text' }
+import DealSearch from 'crm/src/pipeline/lib/DealSearch.abide'
+import dealSearchSource from 'crm/src/pipeline/lib/DealSearch.abide' with { type: 'text' }
+import dealSearchTestSource from 'crm/src/pipeline/lib/DealSearch.test.ts' with { type: 'text' }
+import Forecast from 'crm/src/pipeline/lib/Forecast.abide'
+import forecastSource from 'crm/src/pipeline/lib/Forecast.abide' with { type: 'text' }
+import forecastTestSource from 'crm/src/pipeline/lib/Forecast.test.ts' with { type: 'text' }
+import stageAverageSource from 'crm/src/pipeline/lib/StageAverage.abide' with { type: 'text' }
+import stageCountSource from 'crm/src/pipeline/lib/StageCount.abide' with { type: 'text' }
+import StageTiles from 'crm/src/pipeline/lib/StageTiles.abide'
+import stageTilesSource from 'crm/src/pipeline/lib/StageTiles.abide' with { type: 'text' }
+import stageTilesBenchSource from 'crm/src/pipeline/lib/StageTiles.bench.ts' with { type: 'text' }
+import stageTilesTestSource from 'crm/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
+import stageValueSource from 'crm/src/pipeline/lib/StageValue.abide' with { type: 'text' }
+import targetStoreSource from 'crm/src/pipeline/lib/targetStore.ts' with { type: 'text' }
+import TeamTarget from 'crm/src/pipeline/lib/TeamTarget.abide'
+import teamTargetSource from 'crm/src/pipeline/lib/TeamTarget.abide' with { type: 'text' }
+import teamTargetTestSource from 'crm/src/pipeline/lib/TeamTarget.test.ts' with { type: 'text' }
+import pipelineListDealsSource from 'crm/src/pipeline/listDeals.handler.ts' with { type: 'text' }
+import searchDealsSource from 'crm/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
+import setTargetSource from 'crm/src/pipeline/setTarget.handler.ts' with { type: 'text' }
+import PhoneField from 'crm/src/profile/lib/PhoneField.abide'
+import phoneFieldSource from 'crm/src/profile/lib/PhoneField.abide' with { type: 'text' }
+import phoneFieldTestSource from 'crm/src/profile/lib/PhoneField.test.ts' with { type: 'text' }
+import ProfileSummary from 'crm/src/profile/lib/ProfileSummary.abide'
+import profileSummarySource from 'crm/src/profile/lib/ProfileSummary.abide' with { type: 'text' }
+import profileSummaryTestSource from 'crm/src/profile/lib/ProfileSummary.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="Every value is a `Reactive`">
+        <Example
+            id="one-type"
+            app="crm"
+            title="`Reactive` \u2014 four ways to get a value, one way to ask"
+            summary="A note on a contact. Watch which rows say \u2026 on arrival, then type a note and save it."
+            files={{
+                'src/contacts/lib/ContactNote.abide': contactNoteSource,
+                'src/contacts/lib/ContactNote.test.ts': contactNoteTestSource,
+            }}
+        >
+            <ContactNote />
+        </Example>
+
+        <p>A value the page owns, a value derived from it, a value loaded from a handler, and a
+            value that waits for its first write: all four come from <code>reactive</code>, and all
+            four are a <code>Reactive</code>. <code>ready()</code> asks each one the same question, so
+            the branch you write for "not here yet" works on every one of them.</p>
+
+        <p>Swapping a local value for a loaded one changes how it is declared and nothing that
+            reads it.</p>
+
+        <p>A <code>Reactive</code> can also be awaited, so code that takes a promise for a load asks
+            <code>isReactive</code> first. A <code>Reactive</code> is a value, even while it loads.</p>
+    </Section>
+
+    <Section title="A transform shapes what the record keeps">
+        <Example
+            id="transform"
+            app="crm"
+            title={'`reactive(v, { transform })` — the record keeps the digits'}
+            summary="A phone number typed with punctuation. Type one in the usual way."
+            files={{
+                'src/profile/lib/PhoneField.abide': phoneFieldSource,
+                'src/profile/lib/PhoneField.test.ts': phoneFieldTestSource,
+            }}
+        >
+            <PhoneField />
+        </Example>
+
+        <p>The transform runs on every write, so the field shows back what was stored rather than
+            what you typed. <code>Accepted</code> is the type a write takes and <code>Stored</code> is
+            the type the transform returns. <code>Shaped</code> is everything a transform can return,
+            a refusal included, and <code>Transformer</code> is the type of the option.</p>
+    </Section>
+
+    <Section title="A derived value follows the fields it read">
+        <Example
+            id="derived"
+            app="crm"
+            title="`reactive(() => …)` — initials and a count, computed from the fields"
+            summary="A profile's initials and how much of it is filled in. Change the name, then add a phone."
+            files={{
+                'src/profile/lib/ProfileSummary.abide': profileSummarySource,
+                'src/profile/lib/ProfileSummary.test.ts': profileSummaryTestSource,
+            }}
+        >
+            <ProfileSummary />
+        </Example>
+
+        <p>Give <code>reactive</code> a body, <code>reactive(() =&gt; …)</code>, and what the body
+            read on its last run is what reruns it. You list no dependencies. The test counts the work:
+            a phone edit walks to the count and never reaches the initials, because the initials never
+            read the phone.</p>
+
+        <p>A body with a parameter, <code>reactive((args) =&gt; …)</code>, is a
+            <code>Keyed</code>: a factory holding one value per set of arguments.</p>
+    </Section>
+
+    <Section title="A refresh keeps the figures on screen">
+        <Example
+            id="pipeline"
+            app="crm"
+            title="`busy()` and `ready()` — a first load and a refresh, told apart"
+            summary="The pipeline's total. Wait for it, then press Refresh: the old figure stays until the new one lands."
+            files={{
+                'src/deals/lib/Pipeline.abide': pipelineSource,
+                'src/deals/listDeals.handler.ts': listDealsSource,
+                'src/deals/lib/Pipeline.test.ts': pipelineTestSource,
+            }}
+        >
+            <Pipeline />
+        </Example>
+
+        <p>A first load is <code>busy()</code> with nothing <code>ready()</code>. A refresh is
+            <code>busy()</code> and still <code>ready()</code>, so the tile keeps the figure it has
+            while the new one loads. One loading flag cannot tell the two apart, and blanks the page on
+            every refresh. <code>refresh(deals)</code> loads the value again.</p>
+
+        <table>
+            <thead><tr><th>Probe</th><th>Answers</th></tr></thead>
+            <tbody>
+                <tr><td><code>s.busy</code></td><td>whether work is in flight for the value</td></tr>
+                <tr><td><code>s.ready</code></td><td>whether there is a value to show</td></tr>
+                <tr><td><code>s.error</code></td><td>the standing failure, handed back rather than thrown</td></tr>
+                <tr><td><code>s.issues</code></td><td>the issues of a standing validation refusal, field by field</td></tr>
+                <tr><td><code>busy</code></td><td>whether anything in a selection is in flight: an app-wide progress bar</td></tr>
+                <tr><td><code>ready</code></td><td>whether everything in a selection has a value</td></tr>
+            </tbody>
+        </table>
+
+        <p>A probe never throws and never starts a load, so it is safe to read before anything has
+            landed. A read of the value itself outside the markup, in a click handler, throws
+            <code>NotLanded</code> until it lands. The value can also be awaited, for a handler or a test: <code>await deals</code>
+            waits for it, and <code>s.then</code>, <code>s.catch</code> and <code>s.finally</code> reach the same
+            settling.</p>
+    </Section>
+
+    <Section title="The form clears once the deal is added">
+        <Example
+            id="quick-deal"
+            app="crm"
+            title={'`saving.then(…)` — the next step, once the call lands'}
+            summary="Sales adds renewals one after another. Press Add deal: the name clears when the server has the deal, ready for the next."
+            files={{
+                'src/deals/lib/QuickDeal.abide': quickDealSource,
+                'src/deals/createDeal.handler.ts': createDealSource,
+                'src/deals/lib/QuickDeal.test.ts': quickDealTestSource,
+            }}
+        >
+            <QuickDeal />
+        </Example>
+
+        <p>The kept call can be awaited like a promise, so what comes after a save is
+            <code>saving.then(…)</code>: clear a field, close a dialog, go to the new deal's page. It
+            runs once the call lands, and the call still runs once. A refusal is already on
+            <code>saving.error()</code>, so a <code>then</code> given one function does not report it
+            as unhandled; an <code>await</code> still throws it. A <code>then</code> made before
+            another press is answered by the call the form keeps when it settles, which is the later
+            one.</p>
+
+        <p><code>then</code> hands back a reactive value of its own rather than a promise: busy until
+            the next step ends, holding what that step answered, and failing with whichever step
+            failed — a refusal passed through with its <code>issues()</code>, or a throw from the
+            step. A step that answers another call is followed until that call lands. Left unread,
+            it is a promise nobody handled, and a throw from the step is reported; kept or read, the
+            throw is on its <code>error()</code> instead.</p>
+
+        <p>The answer is the call's, so the next call drops it until it lands. To keep the last
+            answer on screen through a call in flight or a refusal, write it into the value it is about:
+            <code>{'saving.then((moved) => (deal = moved))'}</code> writes the answer over a derived
+            <code>deal</code>, which keeps it until the next answer lands.</p>
+
+        <p>A form that moves on once it is saved — to the new deal's page, or back to the list —
+            is pressed once: <code>{'disabled={saving.busy() || saving.ready()}'}</code>.
+            <code>ready()</code> holds from the answer until the next call is kept, so the button
+            stays off while the page moves, and a refusal turns it back on. A label that reads
+            <code>busy()</code> stays on through the next step when the form keeps what
+            <code>then</code> hands back, answering what the call did:
+            <code>{'saving = createDeal(…).then(async (made) => { await navigate(…); return made })'}</code>.</p>
+
+        <p>To let go of a call, keep one nothing has made: <code>saving = reactive&lt;typeof
+                createDeal&gt;()</code> leaves no refusal standing and nothing in flight, for a dialog
+            opened again over the last one's error. <code>saving = undefined</code> is not the same:
+            it writes <code>undefined</code> over the answer of the call being kept.</p>
+
+        <p>One value can keep a call of any of several handlers, for a flow with one busy flag and
+            one error: <code>reactive&lt;typeof moveDeal | typeof createDeal&gt;()</code> keeps
+            either, with the failures of both. Its <code>then</code> is handed either answer, so a
+            step that needs the new deal's <code>id</code> keeps the call under its own name first:
+            <code>const made = createDeal(…)</code>, <code>saving = made</code>, then
+            <code>made.then(…)</code>, typed as that call alone.</p>
+
+        <p>A step that is not a call goes under the same busy flag and error by keeping the promise
+            that ends in the call: <code>{'saving = file.text().then((csv) => importDeals({ csv }))'}</code>
+            is busy from reading the file to the server's answer, and its error is whichever step
+            failed.</p>
+    </Section>
+
+    <Section title="A call with the same arguments is one load">
+        <Example
+            id="stage-shared"
+            app="crm"
+            title={'`getStage({ stage })` — one entry per set of arguments'}
+            summary="Three panels, each with its own stage picker. Put one on won, and then the others."
+            files={{
+                'src/pipeline/lib/StageTiles.abide': stageTilesSource,
+                'src/pipeline/lib/StageCount.abide': stageCountSource,
+                'src/pipeline/lib/StageValue.abide': stageValueSource,
+                'src/pipeline/lib/StageAverage.abide': stageAverageSource,
+                'src/pipeline/getStage.handler.ts': getStageSource,
+                'src/pipeline/lib/StageTiles.test.ts': stageTilesTestSource,
+                'src/pipeline/lib/StageTiles.bench.ts': stageTilesBenchSource,
+            }}
+        >
+            <StageTiles />
+        </Example>
+
+        <p>The bench puts all three panels on one stage once each entry has been answered, among 100
+            deals and among 1,000. Its ratio is what a pick costs as the pipeline grows: the panels
+            read the entry the server summed, and never the deals.</p>
+
+        <p>The three panels never speak to each other, and nothing is lifted into a parent. When
+            they ask for the same stage they get the same entry, so the later panels paint at once,
+            with no request. On two stages they are two entries, and each
+            pays for its own.</p>
+
+        <p>A body with a parameter is a keyed value: one entry per set of arguments, held. That is
+            true of a handler like <code>getStage</code>, and of <code>{'reactive((args) => …)'}</code>
+            written in a page. The arguments are its <code>Args</code>, and the key is their JSON with
+            the properties sorted, so argument order never splits an entry.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>reactive</code> body, keyed</td><td><code>{'reactive(({ stage }) => …)'}</code> holds one entry per stage. Its body does not track what it reads; triggers reload it</td></tr>
+                <tr><td><code>k.busy</code>, <code>k.ready</code></td><td>whether any entry of a keyed value, or those a partial <code>Args</code> matches, is loading or has landed</td></tr>
+                <tr><td><code>rpc.busy</code>, <code>rpc.ready</code></td><td>the same two on a handler: <code>{"getStage.busy({ stage: 'won' })"}</code></td></tr>
+                <tr><td><code>global</code></td><td><code>{'{ global: true }'}</code> shares one cache across every caller in the process, where the default is one per request on a server and one per tab in a browser</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`refresh` reloads now, and `invalidate` marks stale">
+        <Example
+            id="stale"
+            app="crm"
+            title="`refresh()` and `invalidate()` — the two ways back to the server"
+            summary="The weighted forecast, with both buttons under it. Press Reload now, then Mark stale."
+            files={{
+                'src/pipeline/lib/Forecast.abide': forecastSource,
+                'src/pipeline/getForecast.handler.ts': getForecastSource,
+                'src/pipeline/lib/Forecast.test.ts': forecastTestSource,
+            }}
+        >
+            <Forecast />
+        </Example>
+
+        <p><code>refresh()</code> loads now and keeps the forecast on screen while it does: the
+            value is <code>busy()</code> and still <code>ready()</code>, and it swaps when the new one
+            lands. <code>invalidate()</code> loads nothing. It marks what is held as wrong, and the
+            next read fetches.</p>
+
+        <p>Reach for one or the other, not both. A reload over a value marked stale has nothing
+            trusted to serve, so the figure blanks until it lands.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>s.refresh</code></td><td>reloads one value now, serving what is held until the new one lands</td></tr>
+                <tr><td><code>s.invalidate</code></td><td>marks one value stale; the next read loads</td></tr>
+                <tr><td><code>ttl</code></td><td><code>{'{ ttl: 60_000 }'}</code> lets a value expire a minute after it loaded. Expiry wakes nobody, and the next read loads. On a value with nothing to load from, it is how long a write stands</td></tr>
+                <tr><td><code>poll</code></td><td><code>{'{ poll: 60_000 }'}</code> refreshes a value every minute for as long as the component or request that built it stands, skipping a minute its load is still running</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A confirmation goes back to how it started">
+        <Example
+            id="ttl-reset"
+            app="crm"
+            title={'`reactive(false, { ttl: 2_000 })` — a flag that falls back on its own'}
+            summary="A deal with a button that copies its link. Copy it, and watch the button."
+            files={{
+                'src/pipeline/lib/DealLink.abide': dealLinkSource,
+                'src/pipeline/lib/DealLink.test.ts': dealLinkTestSource,
+            }}
+        >
+            <DealLink />
+        </Example>
+
+        <p><code>copied</code> has no handler and no body behind it, so its <code>ttl</code> has
+            nothing to load. Instead, two seconds after a write, the value is written back to what it
+            was built with (6.2). There is no <code>setTimeout</code> to clear: a second copy starts
+            the two seconds over (6.11), and the timer stops with the component (6.14), so a link
+            copied from a panel that then closes writes nothing afterwards.</p>
+
+        <p>What is written back is a fresh copy of the value as it was built (6.15), so a
+            <code>patch</code> on an opening list or record never changes what comes back. That
+            makes the opening value plain data: one a copy cannot stand for, such as a class
+            instance, is refused where the value is built (6.16).</p>
+    </Section>
+
+    <Section title="A search box waits for the typing to stop">
+        <Example
+            id="search"
+            app="crm"
+            title={'`{ debounce }` — one search once the typing stops'}
+            summary="A search over the deals. Type hopper quickly, and watch the results rather than the field."
+            files={{
+                'src/pipeline/lib/DealSearch.abide': dealSearchSource,
+                'src/pipeline/searchDeals.handler.ts': searchDealsSource,
+                'src/pipeline/lib/DealSearch.test.ts': dealSearchTestSource,
+            }}
+        >
+            <DealSearch />
+        </Example>
+
+        <p>The debounce is on the query, not on the search. <code>q</code> takes each keystroke and
+            changes once the keys stop for 300 ms, and <code>found</code> is a derived value that calls
+            <code>searchDeals</code> with it, so it runs only when <code>q</code> changes: six
+            keystrokes are one request, with no debounced function to write. The results already held
+            stay on screen meanwhile, and the test counts the searches to prove it.</p>
+
+        <p>The same option on <code>found</code> would hold back its run instead (5.11). Put it on
+            the value the typing writes where several things read it, so they all wait for the same
+            pause.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>debounce</code></td><td>changes once the changes stop for that many ms</td></tr>
+                <tr><td><code>throttle</code></td><td>changes at once, then at most once per window: a live deal count that updates every second, not every message</td></tr>
+                <tr><td><code>identity</code></td><td>what counts as the same value: a new value equal to the held one by it wakes nobody. The default is the reference</td></tr>
+                <tr><td><code>structural</code></td><td><code>{'{ identity: structural }'}</code> compares by content, so a stage whose <code>{'{ count, value }'}</code> reloads unchanged does not repaint</td></tr>
+                <tr><td><code>transform</code></td><td><code>{'{ transform: (names) => names.toSorted() }'}</code> reshapes the results once, as they land, rather than in every reader. The function is a <code>Transformer</code></td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`patch` changes one row of a list in place">
+        <Example
+            id="patch"
+            app="crm"
+            title="`deals.patch(mutate)` — change what is held, and wake its readers"
+            summary="The deal list, loaded once. Updates arrive one deal at a time; apply a few."
+            files={{
+                'src/pipeline/lib/DealFeed.abide': dealFeedSource,
+                'src/pipeline/listDeals.handler.ts': pipelineListDealsSource,
+                'src/pipeline/lib/DealFeed.test.ts': dealFeedTestSource,
+            }}
+        >
+            <DealFeed />
+        </Example>
+
+        <p><code>patch</code> hands you the value already held, lets you change it, and wakes what
+            reads it. One update rewrites one amount: no list refetched, no row rebuilt. The test
+            counts one text write and no nodes made or moved.</p>
+
+        <p>The <code>by deal.id</code> on the loop keeps each row tied to its deal, so the row
+            the update names is the only one that changes.</p>
+
+        <p><code>patch</code> changes the array it holds and copies nothing. A path write in a
+            <code>.abide</code> file, <code>{'deals[0].amount = 27_500'}</code>, also wakes the
+            readers, but copies the path it writes down first. In a <code>.ts</code> file, or where
+            the held value is not plain data, <code>patch</code> is the write that wakes them.</p>
+    </Section>
+
+    <Section title="Two components far apart share one value">
+        <Example
+            id="share"
+            app="crm"
+            title="`reactive.share(key, build)` — one value for a subtree"
+            summary="A detail panel above a row of deals. Pick a deal, and the panel follows."
+            files={{
+                'src/pipeline/lib/DealPicker.abide': dealPickerSource,
+                'src/pipeline/lib/DealRow.abide': dealRowSource,
+                'src/pipeline/lib/DealDetail.abide': dealDetailSource,
+                'src/pipeline/lib/DealPicker.test.ts': dealPickerTestSource,
+            }}
+        >
+            <DealPicker />
+        </Example>
+
+        <p><code>DealPicker</code> creates <code>selectedDeal</code>. Every row and the detail
+            panel ask for the same key, find that one on the way up, and never run their own build.
+            No prop runs between them.</p>
+
+        <p>A value lives in
+            the component that created it and below, so two pickers on one page each get their own.
+            Where a value is one thing for the whole app, export it from a module instead.</p>
+
+        <p><code>Shared</code> is an interface you widen with declaration merging to type each
+            key. It is optional: without it, the type comes from the build function.</p>
+    </Section>
+
+    <Section title="A `store` keeps a value between visits">
+        <Example
+            id="store"
+            app="crm"
+            title={'`{ store }` — where a value lives between visits'}
+            summary="The quarter's target, which the whole team works to. Set a new one, then reload the page."
+            files={{
+                'src/pipeline/lib/TeamTarget.abide': teamTargetSource,
+                'src/pipeline/lib/targetStore.ts': targetStoreSource,
+                'src/pipeline/getTarget.handler.ts': getTargetSource,
+                'src/pipeline/setTarget.handler.ts': setTargetSource,
+                'src/pipeline/lib/TeamTarget.test.ts': teamTargetTestSource,
+            }}
+        >
+            <TeamTarget />
+        </Example>
+
+        <p>A <code>Store</code> is a <code>get</code> and a <code>set</code>. The value reads the
+            store when it is built and falls back to <code>500_000</code> on a miss without writing it,
+            and every change is written back. The reads and writes in the markup do not change.</p>
+
+        <p>This store goes through two handlers, so the target is one value on the server: the
+            next visit opens on it, and so does everyone else's, painted right the first time. After
+            a write, <code>set</code> invalidates the read it made, so the next read asks the server
+            rather than this tab's copy. A setting one visitor alone sees, such as a theme, belongs
+            in a cookie instead.</p>
+
+        <p>Where the stored value can change from outside the app, such as a file another program
+            edits, the store adds <code>watch</code>. It is handed a function to call when that
+            happens, and returns the function that stops watching. The value reads <code>get</code>
+            again, and the body does not run.</p>
+
+        <p>Five stores come with abide, the members of <code>store</code>, for the places a value most often lives:</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>Where the value lives</th></tr></thead>
+            <tbody>
+                <tr><td><code>store.web</code></td><td><code>{"store.web('layout')"}</code> keeps it in this browser's <code>localStorage</code>, or <code>sessionStorage</code> with <code>{"{ area: 'session' }"}</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
+                <tr><td><code>store.sqlite</code></td><td><code>{"store.sqlite(crmDatabase, 'target')"}</code>, on <code>@abide/abide/server</code>'s <code>store</code> alone, keeps it in a SQLite table of the file a <code>database</code> opener opens, so a restarted server opens on it</td></tr>
+                <tr><td><code>store.redis</code></td><td><code>{"store.redis(Bun.redis, 'target')"}</code>, on <code>@abide/abide/server</code>'s <code>store</code> alone, keeps it in a Redis key that Redis expires with the <code>ttl</code>, so every server behind one Redis opens on it. Where Redis reports changes to its keys, it follows a write another server makes</td></tr>
+                <tr><td><code>store.indexedDB</code></td><td><code>{"store.indexedDB('draft')"}</code> keeps it in this browser's IndexedDB, for a value too large for <code>localStorage</code>, and follows a write another tab makes. On the server it is never there, so the page renders the fallback</td></tr>
+                <tr><td><code>store.cookies</code></td><td><code>{"store.cookies('theme')"}</code> keeps it in a cookie, which the browser sends with every request, so the server renders the stored value rather than the fallback. A cookie holds 4 KB at most</td></tr>
+            </tbody>
+        </table>
+
+        <p>Each keeps the value under the app's name and then the key, so two apps sharing one origin
+            or one Redis never read each other's. Each keeps it as JSON with the value's
+            <code>ttl</code> beside it, and passes what it reads through a <code>schema</code> when
+            given one: a restore skips the value's own, so an entry an older build wrote is a miss
+            rather than a wrong value.</p>
+    </Section>
+
+    <Section title="A channel is an array anything can append to">
+        <Example
+            id="channel"
+            app="crm"
+            title="`reactive<Activity[]>([])` — a channel anything can reach"
+            summary="A quick-log bar on a contact, and a line above it that reports the last touch. Log a call and watch a component the bar never names."
+            files={{
+                'src/activity/lib/activity.ts': activitySource,
+                'src/activity/lib/QuickLog.abide': quickLogSource,
+                'src/activity/lib/LastActivity.abide': lastActivitySource,
+                'src/activity/lib/QuickLog.test.ts': quickLogTestSource,
+                'src/activity/lib/QuickLog.bench.ts': quickLogBenchSource,
+            }}
+        >
+            <QuickLog />
+        </Example>
+
+        <p>The bench logs a call to a channel of 100 entries, and of 1,000, letting the oldest go
+            each time. Its ratio is what a log costs as the channel grows: the patch changes the
+            entries in place, and the channel is never copied.</p>
+
+        <p><code>activity.ts</code> holds the channel and the one function that writes it. The bar
+            imports the function, the readout imports the channel, and neither imports the other. No
+            prop is threaded between them and no provider wraps them.</p>
+
+        <p>The readout derives <code>last</code> as <code>activity.at(-1)</code>, and follows the
+            channel the way any derived value follows what it read. Opened with an array, the channel
+            has landed: it is <code>ready()</code> at once and never <code>busy()</code> where it is
+            written.</p>
+    </Section>
+
+    <Section title="A channel keeps its last few entries">
+        <Example
+            id="recent"
+            app="crm"
+            title="`patch` with a trim — the last three entries"
+            summary="The same channel listed in full, already three entries long. Log a meeting and watch the top of the list."
+            files={{
+                'src/activity/lib/RecentActivity.abide': recentActivitySource,
+                'src/activity/lib/activity.ts': activitySource,
+                'src/activity/lib/RecentActivity.test.ts': recentActivityTestSource,
+            }}
+        >
+            <RecentActivity />
+        </Example>
+
+        <p>The trim is one line in the patch that appends: <code>if (entries.length &gt; 3)
+                entries.shift()</code>. <code>patch</code> hands you the array the channel holds and
+            changes it in place, so the push and the trim are one write. abide puts no cap on the
+            array. The condition is yours: a count here, an age or a byte total where that is what
+            bounds it. Keep the push and the trim in one function every writer calls, and the cap
+            belongs to the channel rather than to whichever caller remembered it.</p>
+
+        <p>A value keeps no past of its own. Where you want what came before, make the value the
+            array and append where you write, as here. An undo stack is the same: an array the app
+            pushes into.</p>
+    </Section>
+
+    <Section title="Background work is a value on a clock">
+        <Example
+            id="job"
+            app="crm"
+            title={'`reactive(async function* () { … }, { global: true, poll })` — a job'}
+            summary="Every five minutes the CRM walks the leads and lists the ones still waiting on a follow-up. The list is here before anyone asks for it."
+            files={{
+                'src/ops/lib/FollowUps.abide': followUpsSource,
+                'src/ops/lib/followUps.ts': followUpsJobSource,
+                'src/ops/getFollowUps.handler.ts': getFollowUpsSource,
+                'src/ops/lib/FollowUps.test.ts': followUpsTestSource,
+            }}
+        >
+            <FollowUps />
+        </Example>
+
+        <p>A job is a reactive value: a body, <code>global</code> so the process has one of it, and a
+            <code>poll</code> for the clock. Its first run is when the app starts serving, after
+            every <code>onStart</code> has run, or when something reads it first; the value holds
+            each lead it has yielded. A test that boots the app and never reads the job never runs
+            it. Nothing else schedules it, so there is no <code>setInterval</code> in
+            <code>onStart</code> to remember and no <code>clearInterval</code> in
+            <code>onStop</code>.</p>
+
+        <p>One run happens at a time: the clock skips a tick while <code>followUps.busy()</code>
+            is true. <code>followUps.refresh()</code> runs it now. A run that throws is written to
+            <code>abide:reactive</code> under the value's name, and the next tick runs it again.
+            The app's stop ends the clock and waits for the run in flight before
+            <code>onStop</code>, inside the same <code>ABIDE_STOP_TIMEOUT</code> as the requests.</p>
+
+        <p>A number is a clock that ticks from the first run, whatever the runs take. A job whose
+            run is long spells <code>{"poll: { every, after: 'settle' }"}</code> instead, and the next
+            run starts <code>every</code> milliseconds after the last one ended. <code>delay</code>
+            puts the first run off once the app starts serving. A function there is called when
+            the app starts, so the wait can come from something outside the process, such as when a
+            file was last written. A read still runs the job at once.</p>
+
+        <p>A run that should not be waited on reads <code>stopSignal()</code>. The stop aborts it
+            before waiting, so the run ends early and the stop waits only for that. A run that
+            gives up by throwing the abort has not failed, and nothing is logged for it. A job that is
+            switched off by configuration checks <code>config()</code> at the top of its body and
+            returns.</p>
+    </Section>
+
+    <Section title="Heavy work runs in a worker thread">
+        <Example
+            id="worker"
+            app="crm"
+            title={'`new Worker(url)` behind `reactive(async function* () { … })` — work off the main thread'}
+            summary="Scoring every deal takes long enough to stall every request the server is answering. It runs in a worker, and the scores arrive one deal at a time."
+            files={{
+                'src/ops/lib/DealScores.abide': dealScoresSource,
+                'src/ops/lib/dealScores.ts': dealScoresValueSource,
+                'src/ops/lib/scoreWorker.ts': scoreWorkerSource,
+                'src/ops/getDealScores.handler.ts': getDealScoresSource,
+                'src/ops/lib/DealScores.test.ts': dealScoresTestSource,
+            }}
+        >
+            <DealScores />
+        </Example>
+
+        <p>A loop that runs for seconds holds the server's one thread, and no request is answered
+            until it ends. A Bun <code>Worker</code> runs it on a thread of its own. The generator
+            wrapping it is an ordinary reactive value: <code>busy()</code> while the worker scores,
+            a score per message, and a throw in the worker refuses the value. The test answers a
+            request while the scores are still coming, which the same loop run inline cannot do.</p>
+
+        <p>This is a plain Bun <code>Worker</code>, and abide does not manage it. You own its
+            lifetime:</p>
+
+        <table>
+            <thead><tr><th>Yours to decide</th><th>What this card does</th></tr></thead>
+            <tbody>
+                <tr><td>how many workers</td><td>one per run, ended in the generator's <code>finally</code>, which also runs when a <code>refresh()</code> discards the run in flight</td></tr>
+                <tr><td>whether it keeps the process up</td><td><code>{'{ ref: false }'}</code>, so a run in flight never keeps the process alive</td></tr>
+                <tr><td>when it runs</td><td>as a job, an hour after the last scoring ended, with <code>{"after: 'settle'"}</code>, and first a minute after the app starts serving, with <code>delay</code>. A test that never reads the scores never starts a worker</td></tr>
+                <tr><td>what happens at stop</td><td><code>stopSignal()</code> aborts, the generator returns, and its <code>finally</code> ends the worker. The stop then waits only for that</td></tr>
+                <tr><td>what it can read</td><td>only what it is sent. A worker loads its own copy of every module, so the deals go in by <code>postMessage</code></td></tr>
+            </tbody>
+        </table>
+    </Section>
+
     <Registry />
 </Doc>

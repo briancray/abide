@@ -1,8 +1,53 @@
 <script>
+import accountPageSource from 'crm/src/account/index.abide' with { type: 'text' }
+import Widget from 'crm/src/account/lib/Widget.abide'
+import widgetSource from 'crm/src/account/lib/Widget.abide' with { type: 'text' }
+import widgetTestSource from 'crm/src/account/lib/Widget.test.ts' with { type: 'text' }
+import rootLayoutSource from 'crm/src/layout.abide' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
+    <Section title="`csp()` lets the app's own scripts run, and nothing else">
+        <Example
+            id="csp"
+            app="crm"
+            title="`csp()` — your own scripts run, a stranger's do not"
+            summary="A support widget somebody pasted into the CRM from another origin. Add it, and the page's policy refuses it."
+            files={{
+                'src/account/lib/Widget.abide': widgetSource,
+                'src/layout.abide': rootLayoutSource,
+                'src/account/lib/Widget.test.ts': widgetTestSource,
+            }}
+        >
+            <Widget />
+        </Example>
+
+        <p><code>csp()</code> is a rung, filed in the root layout so it covers every page. Its
+            policy admits the build's own scripts and styles, and the inline script the render writes
+            by a hash taken at build time. The widget's origin is not the app's, so the browser
+            refuses it before a request is made. The docs app serves this page under the same
+            baseline.</p>
+
+        <p>Name a directive to replace it, and the rest stay the baseline's. The companies pages
+            frame the CRM's own pages, so the layout lets this site, and no other, frame them:</p>
+
+        <Snippet source={rootLayoutSource} path="src/layout.abide" from={['middleware(csp(']} />
+
+        <p>An inline script of your own reads <code>csp.nonce()</code>, the nonce this response
+            carries. The account page starts an analytics queue that way:</p>
+
+        <Snippet source={accountPageSource} path="src/account/index.abide" from={['<head>']} />
+
+        <p>Without <code>csp()</code>, a page is still served
+            <code>content-security-policy: frame-ancestors 'none'</code>, so no other site can frame
+            it and steer a click.</p>
+    </Section>
+
     <Registry />
 </Doc>

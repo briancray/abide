@@ -1,8 +1,81 @@
 <script>
+import envSource from 'crm/.env' with { type: 'text' }
+import getRetriesSource from 'crm/src/ops/getRetries.handler.ts' with { type: 'text' }
+import opsPageSource from 'crm/src/ops/index.abide' with { type: 'text' }
+import Retries from 'crm/src/ops/lib/Retries.abide'
+import retriesSource from 'crm/src/ops/lib/Retries.abide' with { type: 'text' }
+import retriesTestSource from 'crm/src/ops/lib/Retries.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
+    <Section title="The deployment overrides a setting's default">
+        <Example
+            id="config"
+            app="crm"
+            title="`onConfig(fn)` and `config()` — a default the deployment overrides"
+            summary="The CRM retries a failed call 3 times by default, and this deployment's .env says 5. The page adds one for the first try and shows 6."
+            files={{
+                'src/ops/lib/Retries.abide': retriesSource,
+                'src/ops/getRetries.handler.ts': getRetriesSource,
+                '.env': envSource
+                    .split('\n')
+                    .filter((line) => line.startsWith('RETRIES'))
+                    .join('\n'),
+                'src/ops/lib/Retries.test.ts': retriesTestSource,
+            }}
+        >
+            <Retries />
+        </Example>
+
+        <p><code>onConfig</code> returns the defaults, and their types are the settings' types:
+            <code>config().RETRIES</code> is a <code>number</code> with no declaration written.
+            <code>RETRIES=5</code> arrives from <code>.env</code> as text and is coerced to the type of
+            the default it overrides, so <code>retries + 1</code> is 6, not 51. A value that will not
+            coerce, such as <code>RETRIES=lots</code>, leaves the default standing.</p>
+
+        <p>The last layer to name a setting wins:</p>
+
+        <table>
+            <thead><tr><th>Layer</th><th>Wins over</th></tr></thead>
+            <tbody>
+                <tr><td>the environment, <code>Env</code></td><td>everything</td></tr>
+                <tr><td>the app's <code>onConfig</code> defaults</td><td>what abide derived</td></tr>
+                <tr><td>what abide derived</td><td>nothing</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>Config</code></td><td>the resolved settings, typed by every <code>onConfig</code>'s defaults</td></tr>
+                <tr><td><code>Env</code></td><td>the process environment as read, every value a string or missing</td></tr>
+                <tr><td><code>ConfigDefaults</code></td><td>the function <code>onConfig</code> takes; synchronous, so a setting that needs a network call is a handler instead</td></tr>
+                <tr><td><code>config.invalidate</code></td><td>has the next read re-read the environment, for a rotated key</td></tr>
+                <tr><td><code>NODE_ENV</code></td><td>the environment name, verbatim: compare it to <code>'production'</code></td></tr>
+                <tr><td><code>APP_NAME</code></td><td>the app's name, from <code>package.json</code> where nothing sets it</td></tr>
+                <tr><td><code>APP_VERSION</code></td><td>the version beside that name</td></tr>
+                <tr><td><code>APP_DATA_DIR</code></td><td>the platform's per-user data directory, for a local database file</td></tr>
+                <tr><td><code>PORT</code></td><td>the port <code>abide start</code> listens on</td></tr>
+            </tbody>
+        </table>
+
+        <p>A setting that has to be right gets a schema. <code>config</code>'s <code>schema</code>
+            is checked last, over the whole document, so it can relate two settings, and what it
+            accepts is merged back over the document. The operations page caps the retries:</p>
+
+        <Snippet source={opsPageSource} path="src/ops/index.abide" from={['onConfig(null']} />
+
+        <p><code>config()</code> throws what <code>onConfig</code> threw, so a configuration that
+            cannot resolve stops the app from starting. <code>config</code> is a server name: a page
+            reads a setting through a handler, like <code>getRetries</code>, and a key no handler
+            returns never reaches a browser.</p>
+    </Section>
+
     <Registry />
 </Doc>

@@ -7,14 +7,25 @@ import REGISTRY from '../../../../../docs/REGISTRY.md' with { type: 'text' }
 
 const ROWS = registryRows(REGISTRY)
 const ROUTE_OF = new Map<string, string>()
-for (const group of SITE) for (const page of group.pages) ROUTE_OF.set(page.registry, page.route)
+for (const group of SITE)
+    for (const page of group.pages) ROUTE_OF.set(page.registry, page.route)
 
 export default GET(
     ({ name }: { name: string }) => {
-        const rows: { name: string; signature: string; meaning: string; rules: string; route: string }[] = []
+        const rows: {
+            name: string
+            signature: string
+            meaning: string
+            rules: string
+            route: string
+        }[] = []
         for (const row of ROWS) {
             const first = row.cells[0] ?? ''
-            if (!first.includes(`\`${name}\``) && !first.includes(`\`${name}<`) && !first.includes(`\`${name}.`))
+            if (
+                !first.includes(`\`${name}\``) &&
+                !first.includes(`\`${name}<`) &&
+                !first.includes(`\`${name}.`)
+            )
                 continue
             rows.push({
                 name: first,

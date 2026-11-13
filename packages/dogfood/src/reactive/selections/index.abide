@@ -1,8 +1,52 @@
 <script>
+import StageBoard from 'crm/src/pipeline/lib/StageBoard.abide'
+import stageBoardSource from 'crm/src/pipeline/lib/StageBoard.abide' with { type: 'text' }
+import stageBoardTestSource from 'crm/src/pipeline/lib/StageBoard.test.ts' with { type: 'text' }
+import stageTileSource from 'crm/src/pipeline/lib/StageTile.abide' with { type: 'text' }
+import winDealSource from 'crm/src/pipeline/winDeal.handler.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="After a write, reload only the entries it changed">
+        <Example
+            id="refresh-stages"
+            app="crm"
+            title={'`getStage.refresh({ stage })` — reload a slice of a keyed value'}
+            summary="A board of the four stages. Win a lead, and watch which stages load again."
+            files={{
+                'src/pipeline/lib/StageBoard.abide': stageBoardSource,
+                'src/pipeline/lib/StageTile.abide': stageTileSource,
+                'src/pipeline/winDeal.handler.ts': winDealSource,
+                'src/pipeline/lib/StageBoard.test.ts': stageBoardTestSource,
+            }}
+        >
+            <StageBoard />
+        </Example>
+
+        <p>Winning a lead moves one deal out of <code>lead</code> and into <code>won</code>. The
+            board reloads those two entries and leaves <code>qualified</code> and
+            <code>proposal</code> alone, because the argument to <code>refresh</code> is a partial
+            <code>Args</code> that picks entries out of the keyed value.</p>
+
+        <p>The triggers also come as free functions, and those take a <code>Selection</code>: the
+            set of entries to act on.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>k.refresh</code>, <code>k.invalidate</code></td><td>the triggers on a keyed value, narrowed by a partial <code>Args</code>; no argument reaches every entry</td></tr>
+                <tr><td><code>rpc.refresh</code>, <code>rpc.invalidate</code></td><td>the same two on a handler, which is what the board calls</td></tr>
+                <tr><td><code>refresh</code>, <code>invalidate</code></td><td><code>refresh(getStage)</code> is <code>getStage.refresh()</code>; with no selection they reach every load in this scope</td></tr>
+                <tr><td><code>Selection</code></td><td>a value, a keyed value, a handler, or <code>{'{ tags: [...] }'}</code></td></tr>
+                <tr><td><code>tags</code></td><td><code>{'{ tags: ({ stage }) => [`stage:${stage}`] }'}</code> labels entries, so <code>{"refresh({ tags: ['stage:won'] })"}</code> reaches every value about that stage, whichever handler it came from</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
     <Registry />
 </Doc>

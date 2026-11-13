@@ -3,15 +3,15 @@
 // what the voice and coverage gates hold the words to.
 
 import { addressOf, BIN } from '../../abide/tests/builtApp.ts'
-import { referenceFileOf } from '../src/lib/referenceOf.ts'
 import type { SitePage } from '../src/lib/SITE.ts'
-import { markdownAddressOf, SECTIONS } from '../src/lib/sitePages.ts'
+import { groupOf, markdownAddressOf, PAGES } from '../src/lib/sitePages.ts'
 
 /** The docs app's root, with a trailing slash. */
 export const DOGFOOD = new URL('../', import.meta.url).pathname
 
 export type DocsPage = SitePage & {
-    section: string
+    /** The group it is listed under, `''` for the home page. */
+    group: string
     /** The `index.abide`, from the docs app's root. */
     file: string
     /** Its text. */
@@ -23,7 +23,7 @@ export type Card = {
     id: string
     /** The page embedding it. */
     route: string
-    /** The chapter app its files are from, where it names one. */
+    /** The app its files are from, where it names one. */
     app: string | undefined
     /** The component it renders, from the docs app's root. */
     component: string
@@ -31,9 +31,8 @@ export type Card = {
     files: Map<string, string>
 }
 
-/** A page's `index.abide`, from the docs app's root — or a generated reference page's file. */
+/** A page's `index.abide`, from the docs app's root. */
 export function pageFileOf(route: string): string {
-    if (route.startsWith('/reference/')) return referenceFileOf(route)
     return `src${route === '/' ? '' : route}/index.abide`
 }
 
@@ -43,16 +42,15 @@ let pages: Promise<DocsPage[]> | undefined
 export function docsPages(): Promise<DocsPage[]> {
     pages ??= (async () => {
         const read: DocsPage[] = []
-        for (const group of SECTIONS)
-            for (const page of group.pages) {
-                const file = pageFileOf(page.route)
-                read.push({
-                    ...page,
-                    section: group.section,
-                    file,
-                    source: await Bun.file(`${DOGFOOD}${file}`).text(),
-                })
-            }
+        for (const page of PAGES) {
+            const file = pageFileOf(page.route)
+            read.push({
+                ...page,
+                group: groupOf(page.route)?.group ?? '',
+                file,
+                source: await Bun.file(`${DOGFOOD}${file}`).text(),
+            })
+        }
         return read
     })()
     return pages
@@ -62,8 +60,8 @@ export function docsPages(): Promise<DocsPage[]> {
 function resolvedFrom(file: string, specifier: string): string {
     if (specifier.startsWith('#src/'))
         return `src/${specifier.slice('#src/'.length)}`
-    // A chapter app, imported by its package name.
-    if (/^crm-\d\d\//.test(specifier)) return `examples/${specifier}`
+    // The CRM, imported by its package name.
+    if (specifier.startsWith('crm/')) return `examples/${specifier}`
     return new URL(specifier, `file://${DOGFOOD}${file}`).pathname.slice(
         DOGFOOD.length,
     )
@@ -88,7 +86,7 @@ export function cardsOf(page: DocsPage): Card[] {
         const listed =
             /files=\{\{([\s\S]*?)\}\}/.exec(attributes as string)?.[1] ?? ''
         const app = /\bapp="([^"]+)"/.exec(attributes as string)?.[1]
-        // A server file's text is read by the card on the server, by its path in the chapter app.
+        // A server file's text is read by the card on the server, by its path in the CRM.
         const server =
             /serverFiles=\{\[([\s\S]*?)\]\}/.exec(attributes as string)?.[1] ??
             ''

@@ -1,8 +1,39 @@
 <script>
+import SyncContact from 'crm/src/account/lib/SyncContact.abide'
+import syncContactComponentSource from 'crm/src/account/lib/SyncContact.abide' with { type: 'text' }
+import syncContactTestSource from 'crm/src/account/lib/SyncContact.test.ts' with { type: 'text' }
+import syncContactSource from 'crm/src/account/syncContact.handler.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="`reachable` refuses at once while a host is down">
+        <Example
+            id="billing"
+            app="crm"
+            title="`reachable(host)` — ask once, refuse at once"
+            summary="Billing has stopped answering. Copy a contact to it twice: the first copy waits out the check, and the second is refused before it leaves."
+            files={{
+                'src/account/lib/SyncContact.abide': syncContactComponentSource,
+                'src/account/syncContact.handler.ts': syncContactSource,
+                'src/account/lib/SyncContact.test.ts': syncContactTestSource,
+            }}
+        >
+            <SyncContact />
+        </Example>
+
+        <p><code>reachable</code> sends the host one <code>HEAD</code>, waits up to five seconds,
+            and holds the answer for a minute for every caller in the process. A host that is down
+            then costs one probe a minute instead of one timeout per call. Any answer counts, a
+            <code>404</code> included: the question is whether something is there to call.</p>
+
+        <p>The answer can be a minute old. The call that follows a <code>true</code> can still
+            fail, and its failure is still the handler's to handle.</p>
+    </Section>
+
     <Registry />
 </Doc>

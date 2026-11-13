@@ -1,8 +1,48 @@
 <script>
+import Health from 'crm/src/ops/lib/Health.abide'
+import healthSource from 'crm/src/ops/lib/Health.abide' with { type: 'text' }
+import healthTestSource from 'crm/src/ops/lib/Health.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A load balancer reads the health check">
+        <Example
+            id="health"
+            app="crm"
+            title="`onHealth(fn)` — your fields beside the baseline"
+            summary="The load balancer in front of the CRM asks whether the database is up. The page reads the same answer through health()."
+            files={{
+                'src/ops/lib/Health.abide': healthSource,
+                'src/ops/lib/Health.test.ts': healthTestSource,
+            }}
+        >
+            <Health />
+        </Example>
+
+        <p><code>GET /__abide/health</code> answers without being declared, with three fields.
+            What <code>onHealth</code> returns is merged over them, and the app's fields win a
+            collision. Widen <code>Health</code> with the <code>declare module</code> block so a page
+            can read <code>account.database</code>.</p>
+
+        <table>
+            <thead><tr><th>Field</th><th>What it says</th></tr></thead>
+            <tbody>
+                <tr><td><code>version</code></td><td>the app's version, <code>0.0.0</code> where the package has none</td></tr>
+                <tr><td><code>abide</code></td><td>the framework's version</td></tr>
+                <tr><td><code>startedAt</code></td><td>when this process came up; a change between two scrapes is a restart</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>health</code> is a handler that takes no arguments, called the same way on both
+            sides. A reporter that throws warns on <code>abide:health</code>, and the baseline still
+            answers. The endpoint goes through the app's <code>middleware</code>, so a rung that
+            refuses callers with no credentials has to let it through.</p>
+    </Section>
+
     <Registry />
 </Doc>

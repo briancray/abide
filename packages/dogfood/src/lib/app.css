@@ -195,13 +195,13 @@
         @apply max-w-170 text-title/8 text-muted;
     }
 
-    /* The home page's index: a primitive's page, and what it is for, one under the other. */
+    /* The home page's index: a primitive's page, and what it is for. */
     .index {
-        @apply grid grid-cols-[minmax(9rem,auto)_1fr] gap-x-6 gap-y-2 max-sm:grid-cols-1;
+        @apply flex list-none flex-col gap-snug p-0 text-muted;
     }
 
-    .index dd {
-        @apply m-0 text-muted max-sm:mb-2;
+    .index a {
+        @apply font-medium;
     }
 
     .eyebrow {

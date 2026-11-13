@@ -3,9 +3,9 @@ import { expect, test } from 'bun:test'
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { tokenize } from '../../abide/src/compiler/tokenize.ts'
-import { rulebookClauses } from '../src/rulebook/lib/rulebookClauses.ts'
 import { cellsOf } from '../src/lib/cellsOf.ts'
-import { registryRows } from '../src/lib/referenceOf.ts'
+import { registryRows } from '../src/lib/registryRows.ts'
+import { rulebookClauses } from '../src/rulebook/lib/rulebookClauses.ts'
 
 // REGISTRY.md holds signatures and RULEBOOK.md holds requirements, and the split is only worth
 // having if it STAYS split. Prose at the top of a document does not make it stay — a rule written

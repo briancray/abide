@@ -1,8 +1,157 @@
 <script>
+import { url } from '@abide/abide'
+import ContactFields from 'crm/src/profile/lib/ContactFields.abide'
+import contactFieldsSource from 'crm/src/profile/lib/ContactFields.abide' with { type: 'text' }
+import contactFieldsBenchSource from 'crm/src/profile/lib/ContactFields.bench.ts' with { type: 'text' }
+import contactFieldsTestSource from 'crm/src/profile/lib/ContactFields.test.ts' with { type: 'text' }
+import ContactPanel from 'crm/src/profile/lib/ContactPanel.abide'
+import contactPanelSource from 'crm/src/profile/lib/ContactPanel.abide' with { type: 'text' }
+import contactPanelTestSource from 'crm/src/profile/lib/ContactPanel.test.ts' with { type: 'text' }
+import FollowUp from 'crm/src/profile/lib/FollowUp.abide'
+import followUpSource from 'crm/src/profile/lib/FollowUp.abide' with { type: 'text' }
+import followUpTestSource from 'crm/src/profile/lib/FollowUp.test.ts' with { type: 'text' }
+import Tags from 'crm/src/profile/lib/Tags.abide'
+import tagsSource from 'crm/src/profile/lib/Tags.abide' with { type: 'text' }
+import tagsTestSource from 'crm/src/profile/lib/Tags.test.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A field and its value are one copy">
+        <Example
+            id="bind-value"
+            app="crm"
+            title="`bind:value` — the field writes the value, and the value fills the field"
+            summary="A contact's email, with what a save would send. Type a new one."
+            files={{
+                'src/profile/lib/ContactFields.abide': contactFieldsSource,
+                'src/profile/lib/ContactFields.test.ts': contactFieldsTestSource,
+                'src/profile/lib/ContactFields.bench.ts': contactFieldsBenchSource,
+            }}
+        >
+            <ContactFields />
+        </Example>
+
+        <p>The bench types into the field once it holds 100 characters, and once it holds 1,000.
+            Its ratio is what a keystroke costs as the value grows: a keystroke writes the value once, and
+            copies nothing.</p>
+
+        <p><code>bind:value</code> sets the field from the value, and writes the value back on
+            <code>input</code> or <code>change</code>. There is no form model beside it and no handler
+            per field. A <code>&lt;textarea&gt;</code> and a <code>&lt;select&gt;</code> take the same
+            binding.</p>
+
+        <p>A value that starts as a number binds as one, and so does an
+            <code>&lt;input type="number"&gt;</code> or a <code>type="range"</code>. Text that reads as
+            a number writes the number, blank text writes <code>undefined</code>, and any other text
+            writes nothing.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What it binds</th></tr></thead>
+            <tbody>
+                <tr><td><code>bind:checked</code></td><td>a checkbox, to a boolean</td></tr>
+                <tr><td><code>bind:open</code></td><td>a <code>&lt;details&gt;</code>, to whether it is open</td></tr>
+                <tr><td><code>bind:group</code></td><td>radios to one value, or checkboxes to an array of their <code>value</code>s</td></tr>
+                <tr><td><code>bind:files</code></td><td>a file input, to an array of the files picked</td></tr>
+                <tr><td><code>{'bind:value={{get, set}}'}</code></td><td>a field to a pair you write, where the value is computed</td></tr>
+                <tr><td><code>{'bind:prop={state}'}</code></td><td>a component's prop, so the child's write reaches your value</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="An expression in the markup follows what it reads">
+        <p>Put <code>{'{}'}</code> around an expression and it updates the one thing it lands
+            on, and nothing around it.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>Where it lands</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'{expr}'}</code></td><td>a text node, escaped</td></tr>
+                <tr><td><code>{'{raw(...)}'}</code></td><td>markup, unescaped and unchecked (32.77): <code>raw</code> brands a string as a <code>Raw</code>, so hand it markup you wrote, never a model's reply or a fetched page as it came</td></tr>
+                <tr><td><code>{'name={expr}'}</code></td><td>one attribute, whole</td></tr>
+                <tr><td><code>{'name="…{expr}…"'}</code></td><td>one attribute, interpolated</td></tr>
+                <tr><td><code>{'class:name={cond}'}</code></td><td>one class, there while the condition holds</td></tr>
+                <tr><td><code>{'style:prop={value}'}</code></td><td>one style property</td></tr>
+                <tr><td><code>{'{...expr}'}</code></td><td>every attribute on an element, or every prop on a component</td></tr>
+                <tr><td><code>{'on<event>={fn}'}</code></td><td>a native listener, removed with its element</td></tr>
+                <tr><td><code>{'bind:element={Reactive<Element> | ((element: Element) => void | Disposer) | ((element: Element) => void | Disposer)[]}'}</code></td><td>the element itself, to focus or measure, or a list of callbacks each handed it</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A keyed list removes one row and leaves the rest">
+        <Example
+            id="keyed-list"
+            app="crm"
+            title={'`{#for tag of tags by tag}` — a row per tag, kept by its key'}
+            summary="A contact's tags. Remove one."
+            files={{
+                'src/profile/lib/Tags.abide': tagsSource,
+                'src/profile/lib/Tags.test.ts': tagsTestSource,
+            }}
+        >
+            <Tags />
+        </Example>
+
+        <p><code>{'{#for item, index of list by key}'}</code> renders its body once per item, and
+            <code>by</code> says which row is which. The test removes the first tag and counts the
+            work: one row goes, and no other row's text is touched. Without <code>by</code> the rows
+            are matched by position, so the two that stay are both rewritten.</p>
+
+        <p>A list shown in more than one place can carry its key on the value instead:
+            <code>{"reactive(contacts, { by: 'id' })"}</code>.</p>
+    </Section>
+
+    <Section title="A branch is in the page only while its condition holds">
+        <Example
+            id="conditional"
+            app="crm"
+            title={'`{#if}` — a date field that exists only when asked for'}
+            summary="A follow-up reminder for this contact. Tick the box, then clear it."
+            files={{
+                'src/profile/lib/FollowUp.abide': followUpSource,
+                'src/profile/lib/FollowUp.test.ts': followUpTestSource,
+            }}
+        >
+            <FollowUp />
+        </Example>
+
+        <p><code>{'{#if cond}'}</code> builds the branch it takes and nothing of the one it does
+            not. Clearing the box removes the date field, and an <code>{'{:else}'}</code> branch would
+            render in its place. <code>{'{#try}'}</code> is the other block: it renders <code>{'{:catch e}'}</code>
+            in place of its whole body when rendering the body throws.</p>
+    </Section>
+
+    <Section title="A one-item keyed loop builds its markup again">
+        <Example
+            id="fresh-subtree"
+            app="crm"
+            title={'`{#for shown of [open] by shown}` — a panel built fresh per contact'}
+            summary="A contact panel that fades in. Open Ada, then Grace."
+            files={{
+                'src/profile/lib/ContactPanel.abide': contactPanelSource,
+                'src/profile/lib/ContactPanel.test.ts': contactPanelTestSource,
+            }}
+        >
+            <ContactPanel />
+        </Example>
+
+        <p>A component reads its props live, so a new contact rewrites the panel in place, and a
+            fade-in on its first paint never plays again. A loop over a one-item list keyed by the
+            contact builds a new row whenever the key changes, and the test finds a new element where
+            the old one was. Reach for it where something only a new element resets has to start
+            over: an animation, focus, an uncontrolled field. State held in reactive values needs
+            no rebuild.</p>
+
+        <p>A page is the same case. Navigating to the page already shown, with other
+            <code>route.params</code>, keeps the page (30.23), so
+            <code>{'{#for each of [route.params.id] by each}'}</code> is how part of it is built again.
+            <a href={url('/ambient/route')}><code>route</code></a> has the params.</p>
+    </Section>
+
     <Registry />
 </Doc>

@@ -21,12 +21,7 @@ import {
 import { inline } from './inline.ts'
 import { installDocs } from './installDocs.ts'
 import type { SitePage } from './SITE.ts'
-import {
-    groupOf,
-    markdownAddressOf,
-    neighborsOf,
-    pageAt,
-} from './sitePages.ts'
+import { groupOf, markdownAddressOf, neighborsOf, pageAt } from './sitePages.ts'
 
 const { documentPage } = props<{ documentPage?: SitePage }>()
 const page = documentPage ?? pageAt(route.name())

@@ -4,12 +4,12 @@
 // and the one thing only a browser can say.
 //
 // THE APP IS THE DOCUMENTATION NOW, so these are gates on the real thing rather than on a pair
-// of demo pages: eighty-five markdown files compiled into pages, one nav, one rail, and every
+// of demo pages: a page per primitive, one nav, one rail, and every
 // example running inline as a component of the page it is on.
 
 import { expect, test } from '@playwright/test'
 
-import { SECTIONS } from '../src/lib/sitePages.ts'
+import { SITE } from '../src/lib/SITE.ts'
 
 // TWO PROJECTS, ONE BUILD: served at the root and again below `/docs` (16.10). Every address a
 // spec asks for goes through `underMount`, so the same spec runs at either mount.
@@ -43,10 +43,10 @@ test.afterEach(() => {
 })
 
 test('a page the server painted carries its own prose', async ({ page }) => {
-    await page.goto(underMount('/guide/edit-a-contact'))
+    await page.goto(underMount('/abide-files/templating'))
 
-    await expect(page.locator('main h1')).toHaveText('Edit a contact')
-    await expect(page).toHaveTitle('Edit a contact — abide')
+    await expect(page.locator('main h1')).toHaveText('Templating')
+    await expect(page).toHaveTitle('Templating — abide')
     // 32.24 THROUGH A PAGE. The body is markdown the build rendered, carried into the page as a
     // `raw` slot — so a table in it is a table rather than the source of one, which is exactly
     // what a client binding over the same slot would have left on screen.
@@ -58,7 +58,7 @@ test('a direct hit is painted by the server, with no script at all', async ({
 }) => {
     await page.context().route('**/__abide/client/**', (route) => route.abort())
     await page.context().route('**/docs.js', (route) => route.abort())
-    await page.goto(underMount('/reference/reactive'))
+    await page.goto(underMount('/reactive/reactive'))
 
     await expect(page.locator('main h1')).toHaveText('reactive')
     await expect(page.locator('nav a[aria-current="page"]')).toHaveText(
@@ -69,7 +69,7 @@ test('a direct hit is painted by the server, with no script at all', async ({
 test('a link to another page navigates without reloading — 30.7', async ({
     page,
 }) => {
-    await page.goto(underMount('/guide/edit-a-contact'))
+    await page.goto(underMount('/abide-files/templating'))
     // A marker a document reload erases, which is the only way to tell the two apart.
     await page.evaluate(() => {
         ;(window as { __KEPT__?: string }).__KEPT__ = 'yes'
@@ -78,22 +78,20 @@ test('a link to another page navigates without reloading — 30.7', async ({
         ).__KEPT__ = 'yes'
     })
 
-    await page.click(`nav a[href="${underMount('/guide/talk-to-the-server')}"]`)
+    await page.click(`nav a[href="${underMount('/transports/rpc')}"]`)
 
-    await expect(page.locator('main h1')).toHaveText('Talk to the server')
+    await expect(page.locator('main h1')).toHaveText('GET / POST and Rpc')
     // 39.6 — the incoming page's head replaced the outgoing page's, by key.
-    await expect(page).toHaveTitle('Talk to the server — abide')
+    await expect(page).toHaveTitle('GET / POST and Rpc — abide')
     expect(
         await page.evaluate(() => (window as { __KEPT__?: string }).__KEPT__),
     ).toBe('yes')
-    expect(new URL(page.url()).pathname).toBe(
-        underMount('/guide/talk-to-the-server'),
-    )
+    expect(new URL(page.url()).pathname).toBe(underMount('/transports/rpc'))
     // THE NAV IS THE ONE THING SHARED BETWEEN TWO PAGES, and the mark on it is the only part
     // that differs — so a navigation that rebuilt the nav from the wrong page's slug shows
     // here and nowhere else.
     await expect(page.locator('nav a[aria-current="page"]')).toHaveText(
-        'Talk to the server',
+        'Handlers',
     )
     // AND IT IS THE SAME NAV. It is the layout's, and a layout is not rebuilt between
     // navigations (41.11) — a marker on the node before the click is still on it after.
@@ -114,15 +112,12 @@ test('a link to another page navigates without reloading — 30.7', async ({
 // that took its listeners (32.9). So the rail here is wired to this page's headings rather than
 // to the ones they arrived on.
 test('the rail follows the page a reader navigated to', async ({ page }) => {
-    await page.goto(underMount('/guide/edit-a-contact'))
-    await page.click(`nav a[href="${underMount('/guide/keep-it-current')}"]`)
-    await expect(page.locator('main h1')).toHaveText('Keep it current')
+    await page.goto(underMount('/abide-files/templating'))
+    await page.click(`nav a[href="${underMount('/reactive/reactive')}"]`)
+    await expect(page.locator('main h1')).toHaveText('reactive')
 
     const first = page.locator('.toc a[href^="#"]').first()
-    await expect(first).toHaveAttribute(
-        'href',
-        '#a-call-with-the-same-arguments-is-one-load',
-    )
+    await expect(first).toHaveAttribute('href', '#every-value-is-a-reactive')
     // The scroll spy marks where you are, and it only can where it re-measured after the
     // navigation — offsets taken against the page a reader left are every heading at once.
     await expect(first).toHaveAttribute('aria-current', 'true')
@@ -134,9 +129,9 @@ test('the rail follows the page a reader navigated to', async ({ page }) => {
 test('an example card runs on a page a reader navigated to', async ({
     page,
 }) => {
-    await page.goto(underMount('/guide/edit-a-contact'))
-    await page.click(`nav a[href="${underMount('/guide/start-an-app')}"]`)
-    const card = page.locator('#crm-01-star .ex-render')
+    await page.goto(underMount('/abide-files/templating'))
+    await page.click(`nav a[href="${underMount('/abide-files/by-name')}"]`)
+    const card = page.locator('#star .ex-render')
     await card.getByRole('button', { name: '☆ Star' }).click()
     await expect(card.getByRole('button')).toHaveText('★ Starred')
 })
@@ -146,15 +141,15 @@ test('an example card runs on a page a reader navigated to', async ({
 // mis-adopts rebuilds itself with only a warning — so what is collected is the page error, the
 // hydration warning and a document or module that FAILED. A handler's 5xx is not collected: a card
 // about a refusal, a timeout or an error report answers one on purpose.
-// TWENTY PAGES A TEST, so the walk runs in parallel rather than as one long one — the reference
-// alone is a page per export.
-const WALKS: { name: string; routes: string[] }[] = []
-for (const group of SECTIONS)
-    for (let at = 0; at < group.pages.length; at += 20)
-        WALKS.push({
-            name: `${group.section} ${at / 20 + 1}`,
-            routes: group.pages.slice(at, at + 20).map((page) => page.route),
-        })
+// A GROUP A TEST, so the walk runs in parallel rather than as one long one.
+const WALKS: { name: string; routes: string[] }[] = [
+    { name: 'the home page', routes: ['/'] },
+]
+for (const group of SITE)
+    WALKS.push({
+        name: group.group,
+        routes: group.pages.map((page) => page.route),
+    })
 for (const walk of WALKS)
     test(`every card under ${walk.name} renders, adopts and answers`, async ({
         page,
@@ -194,10 +189,10 @@ test('a public file and the markdown twins are answered at their own addresses �
 
     // A page's markdown twin, which the app derives from the page rather than serving a file.
     const markdown = await page.request.get(
-        underMount('/guide/edit-a-contact.md'),
+        underMount('/abide-files/templating.md'),
     )
     expect(markdown.status()).toBe(200)
-    expect(await markdown.text()).toContain('# Edit a contact')
+    expect(await markdown.text()).toContain('# Templating')
 
     const bundle = await page.request.get(underMount('/abide.md'))
     expect(bundle.status()).toBe(200)
@@ -225,7 +220,7 @@ test('the bundled stylesheet reaches the page', async ({ page }) => {
 test('the pairing panel shows its command and the page reaches networkidle — 44.75', async ({
     page,
 }) => {
-    await page.goto(underMount('/guide/open-it-to-machines'), {
+    await page.goto(underMount('/ai/provider'), {
         waitUntil: 'networkidle',
         timeout: 15_000,
     })

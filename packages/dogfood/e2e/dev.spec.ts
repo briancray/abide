@@ -92,8 +92,8 @@ test.afterAll(() => {
 test('a save reloads the tab a reader has open — 38.4, 38.15', async ({
     page,
 }) => {
-    await page.goto(`${base}/guide/edit-a-contact`)
-    await expect(page.locator('main h1')).toHaveText('Edit a contact')
+    await page.goto(`${base}/abide-files/templating`)
+    await expect(page.locator('main h1')).toHaveText('Templating')
     // A marker the reload erases, so what is asserted is a new DOCUMENT rather than a patched
     // one — the reload client asks for the page again and nothing survives that.
     await page.evaluate(() => {

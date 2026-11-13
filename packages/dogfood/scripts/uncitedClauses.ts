@@ -16,7 +16,10 @@
 // A NAME IN THE OUTPUT IS A LINE TO READ, never a line to change. Whether the clause still
 // describes what the code does is the reading; this only says nobody wrote the number down.
 
-import { CITATION, rulebookClauses } from '../src/rulebook/lib/rulebookClauses.ts'
+import {
+    CITATION,
+    rulebookClauses,
+} from '../src/rulebook/lib/rulebookClauses.ts'
 
 const ROOT = new URL('../../../', import.meta.url)
 

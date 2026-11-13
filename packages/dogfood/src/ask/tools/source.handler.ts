@@ -9,7 +9,8 @@ export default GET(
     async ({ path }: { path: string }) => {
         const crm = await exampleDirectory('crm')
         const file = crm && CRM_FILE.test(path) && Bun.file(`${crm}/${path}`)
-        if (!file || !(await file.exists())) throw refuse.notFound({ path, method: 'GET' })
+        if (!file || !(await file.exists()))
+            throw refuse.notFound({ path, method: 'GET' })
         return file.text()
     },
     {

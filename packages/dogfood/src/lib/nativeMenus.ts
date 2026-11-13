@@ -11,7 +11,8 @@ export const ASK_ITEM = menuItem({ label: 'Ask Claude…', key: 'cmd+k' })
 const REFERENCE: MenuItem[] = []
 for (const group of SITE) {
     const items: MenuItem[] = []
-    for (const page of group.pages) items.push({ label: plain(page.nav), href: page.route })
+    for (const page of group.pages)
+        items.push({ label: plain(page.nav), href: page.route })
     REFERENCE.push({ label: plain(group.group), items })
 }
 
@@ -20,7 +21,11 @@ export const MENUS: readonly MenuItem[] = [
     { label: 'Ask', items: [ASK_ITEM] },
     {
         label: 'Reference',
-        items: [{ label: 'Overview', key: 'cmd+shift+o', href: '/' }, 'separator', ...REFERENCE],
+        items: [
+            { label: 'Overview', key: 'cmd+shift+o', href: '/' },
+            'separator',
+            ...REFERENCE,
+        ],
     },
     {
         label: 'Help',

@@ -1,8 +1,51 @@
 <script>
+import moneySource from 'crm/src/reports/lib/money.ts' with { type: 'text' }
+import WonDeals from 'crm/src/reports/lib/WonDeals.abide'
+import wonDealsSource from 'crm/src/reports/lib/WonDeals.abide' with { type: 'text' }
+import wonDealsTestSource from 'crm/src/reports/lib/WonDeals.test.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A gate fails with the fix taken out">
+        <Example
+            id="gate"
+            app="crm"
+            title={'`gate(name, { revert, worth }, body)` — a test that runs its own revert'}
+            summary="Every won deal's amount goes through one formatter. Winning a deal builds none, and the gate puts the formatter-per-amount version back to prove the test can tell."
+            files={{
+                'src/reports/lib/WonDeals.abide': wonDealsSource,
+                'src/reports/lib/money.ts': moneySource,
+                'src/reports/lib/WonDeals.test.ts': wonDealsTestSource,
+            }}
+        >
+            <WonDeals />
+        </Example>
+
+        <p>A test about work passes with the fix in or out, because the screen reads the same
+            either way. <code>gate</code> carries the version the fix replaced, as a
+            <code>GateSpec</code>: <code>revert</code> installs it and hands back the undo, and
+            <code>worth</code> is the number that version reports.</p>
+
+        <Code code={`HARNESS_VERIFY_GATES=1 bun test`} />
+
+        <p>With that set, every gate runs a second time with the revert installed, and that run
+            passes only if the test fails reporting every number in <code>worth</code>. A test that
+            cannot tell the two versions apart fails here.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>spawned</code></td><td>runs a command to its end, awaited, and kills it at a deadline naming the command</td></tr>
+                <tr><td><code>inAFreshProcess</code></td><td>runs source in a child <code>bun</code> with no DOM preloaded, for a check the DOM would skew</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
     <Registry />
 </Doc>

@@ -39,11 +39,20 @@ function fenceOnlySections(page: DocsPage): number {
 
 // 40.17 AND 40.6. A section that teaches with a fence it wrote by hand embeds no `<Example>` and
 // quotes nothing that runs, so the code under its heading is a claim no build checks. Revert-verified:
-// one fenced section under a heading with no card names its page.
-test('no teaching page has a section that teaches with a fence alone', async () => {
+// one fenced section under a heading with no card names its page. 40.35: a page whose behavior is a
+// command run in a terminal, or a deployment's setting, has nothing a card could run.
+const COMMANDS_AND_DEPLOYMENT = new Set([
+    '/',
+    '/cli/commands',
+    '/cli/bridge',
+    '/configuration/environment',
+    '/configuration/native',
+])
+
+test('no page has a section that teaches with a fence alone', async () => {
     const fenced: string[] = []
     for (const page of await docsPages())
-        if (page.covers?.length && fenceOnlySections(page))
+        if (!COMMANDS_AND_DEPLOYMENT.has(page.route) && fenceOnlySections(page))
             fenced.push(page.route)
     expect(fenced).toEqual([])
 })

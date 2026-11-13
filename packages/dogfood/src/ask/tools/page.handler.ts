@@ -5,7 +5,8 @@ import { isSitePage } from '#src/lib/sitePages.ts'
 
 export default GET(
     async ({ route }: { route: string }) => {
-        if (!isSitePage(route)) throw refuse.notFound({ path: route, method: 'GET' })
+        if (!isSitePage(route))
+            throw refuse.notFound({ path: route, method: 'GET' })
         return pageMarkdown(route, new URL(request().url).origin)
     },
     {

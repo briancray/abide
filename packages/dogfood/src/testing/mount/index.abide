@@ -1,8 +1,78 @@
 <script>
+import bunfigSource from 'crm/bunfig.toml' with { type: 'text' }
+import ClosedTiles from 'crm/src/reports/lib/ClosedTiles.abide'
+import closedTilesSource from 'crm/src/reports/lib/ClosedTiles.abide' with { type: 'text' }
+import closedTilesTestSource from 'crm/src/reports/lib/ClosedTiles.test.ts' with { type: 'text' }
+import closedTotalsSource from 'crm/src/reports/lib/closedTotals.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
+    <Section title="A test mounts a component and counts what a click did">
+        <Example
+            id="range-switch"
+            app="crm"
+            title="`mount(component)` and `measure(body)` — the DOM calls one click made"
+            summary="The closed-deals tiles total the last 7 or 30 days. Its test switches the range and asserts that two numbers changed and nothing was built."
+            files={{
+                'src/reports/lib/ClosedTiles.abide': closedTilesSource,
+                'src/reports/lib/closedTotals.ts': closedTotalsSource,
+                'src/reports/lib/ClosedTiles.test.ts': closedTilesTestSource,
+            }}
+        >
+            <ClosedTiles />
+        </Example>
+
+        <p><code>mount</code> renders the component the way the server does and hydrates it with
+            the module the browser loads, so the test clicks the listener a reader clicks. It hands
+            back a <code>Mounted</code>, and <code>using</code> stops it when the test ends.</p>
+
+        <p><code>measure</code> counts every DOM call its body makes. A version that rebuilt the
+            tiles shows the same numbers on screen and fails on <code>nodesCreated</code>. The one from
+            <code>@abide/harness/abide</code> hands back an <code>AbideWork</code>: the DOM counts, plus
+            <code>wakes</code>, <code>bindingRuns</code> and <code>descents</code> from abide itself.</p>
+
+        <table>
+            <thead><tr><th>Row of a <code>Work</code></th><th>Counts</th></tr></thead>
+            <tbody>
+                <tr><td><code>nodesCreated</code></td><td><code>create*</code>, <code>cloneNode</code> and <code>importNode</code></td></tr>
+                <tr><td><code>elementsMoved</code></td><td>elements inserted or moved, with their subtrees</td></tr>
+                <tr><td><code>markersMoved</code> · <code>textMoved</code></td><td>comment and text nodes inserted or moved</td></tr>
+                <tr><td><code>dataWrites</code> · <code>redundantDataWrites</code></td><td>text written, and text written over the same text</td></tr>
+                <tr><td><code>attributesSet</code></td><td>attributes set, removed or toggled</td></tr>
+                <tr><td><code>classWrites</code> · <code>styleWrites</code></td><td><code>classList</code> changes, and inline style writes</td></tr>
+                <tr><td><code>listenersBound</code></td><td><code>addEventListener</code> calls</td></tr>
+                <tr><td><code>published</code></td><td>what code on the page counted itself</td></tr>
+            </tbody>
+        </table>
+
+        <p>A DOM member the harness does not count throws while a case is open, rather than
+            reading as zero. <code>patchSet()</code> lists every member it does count.</p>
+
+        <p>The DOM under <code>bun test</code> comes from the <code>preload</code> line in
+            <code>bunfig.toml</code>, which the scaffold writes:</p>
+
+        <Snippet source={bunfigSource} path="bunfig.toml" from={['[test]', 'preload =']} />
+
+        <table>
+            <thead><tr><th>Preload</th><th>What it gives a test</th></tr></thead>
+            <tbody>
+                <tr><td><code>preload = ["@abide/harness/abide/preload"]</code></td><td>a counted DOM, <code>.abide</code> imports as components, and <code>mount</code></td></tr>
+                <tr><td><code>preload = ["@abide/abide/test"]</code></td><td><code>.abide</code> imports as components, for a test that only renders</td></tr>
+                <tr><td><code>preload = ["@abide/harness/preload"]</code></td><td>a counted DOM alone, for code that is not abide</td></tr>
+            </tbody>
+        </table>
+
+        <p>The emulated DOM is JavaScript, so a count from it holds in a browser and a millisecond
+            does not. Count under <code>bun test</code>, and time in a bench. The DOM counts alone come
+            from <code>@abide/harness/measure</code> › <code>measure</code>, which hands back a plain
+            <code>Work</code>.</p>
+    </Section>
+
     <Registry />
 </Doc>

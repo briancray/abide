@@ -1,8 +1,44 @@
 <script>
+import StageTiles from 'crm/src/reports/lib/StageTiles.abide'
+import stageTilesSource from 'crm/src/reports/lib/StageTiles.abide' with { type: 'text' }
+import stageTilesTestSource from 'crm/src/reports/lib/StageTiles.test.ts' with { type: 'text' }
+import summarizeStageSource from 'crm/src/reports/lib/summarizeStage.ts' with { type: 'text' }
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="Publish a count the DOM cannot see">
+        <Example
+            id="publish-count"
+            app="crm"
+            title="`publishedBy(work, source, fields)` — a count your own code keeps"
+            summary="Three tiles show the deals in one stage. The stage summary counts its own passes, and the test asserts one pass per switch."
+            files={{
+                'src/reports/lib/StageTiles.abide': stageTilesSource,
+                'src/reports/lib/summarizeStage.ts': summarizeStageSource,
+                'src/reports/lib/StageTiles.test.ts': stageTilesTestSource,
+            }}
+        >
+            <StageTiles />
+        </Example>
+
+        <p>A recomputation writes nothing to the DOM, so no DOM count can see it. The module counts
+            its own passes on a record under <code>globalThis.__HARNESS_WORK__</code>, the global
+            <code>PUBLISHED_WORK_KEY</code> names. <code>measure</code> zeroes every published record
+            when a case opens, and copies it into <code>work.published</code>, a
+            <code>PublishedWork</code>, when it closes.</p>
+
+        <p><code>publishedBy</code> reads one source back by the fields you expect. A source that
+            published nothing reads as <code>null</code>, and a field the record does not carry
+            throws, so a misspelled counter never reads as one that stayed at zero.</p>
+
+        <p>The three tiles read one derived value, so the summary runs once however many tiles
+            show it. Give each tile its own call and the test reports three.</p>
+    </Section>
+
     <Registry />
 </Doc>

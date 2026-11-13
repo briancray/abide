@@ -7,12 +7,12 @@
 // in the answer instead would put every example of the CRM into the bar's bundle on every page.
 import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
 
+import type { Show } from '#src/ask/lib/AnswerPart.ts'
 import clause from '#src/ask/tools/clause.handler.ts'
 import examples from '#src/ask/tools/examples.handler.ts'
 import name from '#src/ask/tools/name.handler.ts'
 import results from '#src/ask/tools/results.handler.ts'
 import source from '#src/ask/tools/source.handler.ts'
-import type { Show } from '#src/ask/lib/AnswerPart.ts'
 
 import Code from './Code.abide'
 import { languageOf } from './highlight.ts'
@@ -27,19 +27,33 @@ const card = reactive(() =>
         ? examples().then((all) => all.find((one) => one.id === show.value))
         : undefined,
 )
-const code = reactive(() => (show.kind === 'code' ? source({ path: show.value }) : ''))
-const rows = reactive(() => (show.kind === 'name' ? name({ name: show.value }) : []))
-const quoted = reactive(() => (show.kind === 'clause' ? clause({ number: show.value }) : undefined))
-const reported = reactive(() => (show.kind === 'results' ? results({ path: show.value }) : null))
-const page = show.kind === 'page' || show.kind === 'open'
-    ? isSitePage(show.value) ? pageAt(show.value) : undefined
-    : undefined
+const code = reactive(() =>
+    show.kind === 'code' ? source({ path: show.value }) : '',
+)
+const rows = reactive(() =>
+    show.kind === 'name' ? name({ name: show.value }) : [],
+)
+const quoted = reactive(() =>
+    show.kind === 'clause' ? clause({ number: show.value }) : undefined,
+)
+const reported = reactive(() =>
+    show.kind === 'results' ? results({ path: show.value }) : null,
+)
+const page =
+    show.kind === 'page' || show.kind === 'open'
+        ? isSitePage(show.value)
+            ? pageAt(show.value)
+            : undefined
+        : undefined
 
 // The framed card reports its own height, so the frame is as tall as the card and never scrolls.
 let height = reactive(320)
 function follow(frame: Element) {
     const listen = (event: MessageEvent) => {
-        if (event.source === (frame as HTMLIFrameElement).contentWindow && typeof event.data?.cardHeight === 'number')
+        if (
+            event.source === (frame as HTMLIFrameElement).contentWindow &&
+            typeof event.data?.cardHeight === 'number'
+        )
             height = event.data.cardHeight
     }
     addEventListener('message', listen)

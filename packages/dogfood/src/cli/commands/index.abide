@@ -1,8 +1,196 @@
 <script>
+import bunfigSource from 'crm/bunfig.toml' with { type: 'text' }
+import dockerfileSource from 'crm/Dockerfile' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
+    <Section title="`abide scaffold` writes a starter app">
+        <Code code={`bunx @abide/abide scaffold crm
+    cd crm
+    bun install
+    bun run dev`} />
+
+        <p><code>bun run dev</code> runs <code>abide dev</code>, which serves the app on
+            <code>localhost:3000</code> and restarts it on every save, with the open tab reloading behind
+            it.</p>
+
+        <table>
+            <thead><tr><th>The scaffold writes</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/layout.abide</code></td><td>the root layout, around every page</td></tr>
+                <tr><td><code>src/index.abide</code></td><td>a page with a greeting and a click counter</td></tr>
+                <tr><td><code>src/getGreeting.handler.ts</code></td><td>the handler the page reads its greeting from</td></tr>
+                <tr><td><code>src/getGreeting.test.ts</code></td><td>a test that calls the handler</td></tr>
+                <tr><td><code>src/index.test.ts</code></td><td>a test that mounts the page, clicks it, and counts the work the click did</td></tr>
+                <tr><td><code>src/lib/app.css</code></td><td>the stylesheet the layout imports: Tailwind, built by the plugin <code>bunfig.toml</code> declares</td></tr>
+                <tr><td><code>CLAUDE.md</code> \u00B7 <code>AGENTS.md</code></td><td>notes for a coding agent, importing the <code>ABIDE.md</code> the installed package holds: where its docs, as one markdown file, and its registry and rulebook are</td></tr>
+                <tr><td><code>Dockerfile</code> \u00B7 <code>.dockerignore</code></td><td>an image holding the compiled server and nothing else of the app</td></tr>
+                <tr><td><code>package.json</code></td><td>the scripts <code>dev</code>, <code>build</code>, <code>start</code>, <code>test</code>, <code>check</code>, <code>format</code>, <code>bench</code> and <code>routes</code></td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="The `abide` command">
+        <table>
+            <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+            <tbody>
+                <tr><td><code>abide scaffold &lt;name&gt;</code></td><td>writes a starter app</td></tr>
+                <tr><td><code>abide dev [--port &lt;n&gt;] [--hostname &lt;host&gt;]</code></td><td>serves the app and restarts it on every save; takes the first free port from 3000, or the one you name, on every interface or the one you name</td></tr>
+                <tr><td><code>abide run &lt;file&gt; [args\u2026]</code></td><td>runs one script with the app's own modules, such as a script that loads contacts from a spreadsheet</td></tr>
+                <tr><td><code>--help</code> \u00B7 <code>-h</code> \u00B7 <code>abide help</code></td><td>prints every command</td></tr>
+                <tr><td><code>--version</code> \u00B7 <code>-v</code></td><td>prints the version installed</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>abide dev</code> runs the same server <code>abide start</code> does, so a bug you
+            see while you work is a bug you can reproduce in production. A stack trace names the
+            <code>.abide</code> file and the line you wrote.</p>
+    </Section>
+
+    <Section title="`abide routes` prints every address">
+        <p><code>abide routes [--json]</code> prints each address, its method and the file
+            answering it, with every private handler marked <code>(private)</code>. With
+            <code>--json</code> it prints the same as one document. In the CRM, part of what
+            <code>bun run routes</code> prints is:</p>
+
+        <table>
+            <thead><tr><th>Method</th><th>Address</th><th>File below <code>src</code></th></tr></thead>
+            <tbody>
+                <tr><td><code>GET</code></td><td><code>/</code></td><td><code>index.abide</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/__abide/handlers/deals/lib/DealNotes/getNotes</code></td><td><code>deals/lib/DealNotes.abide</code> <code>(private)</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/contacts</code></td><td><code>contacts/index.abide</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/contacts/listContacts</code></td><td><code>contacts/listContacts.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/deals</code></td><td><code>deals/index.abide</code></td></tr>
+                <tr><td><code>POST</code></td><td><code>/deals/createDeal</code></td><td><code>deals/createDeal.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/deals/exportDeals</code></td><td><code>deals/exportDeals.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/deals/getDeal</code></td><td><code>deals/getDeal.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/deals/listDeals</code></td><td><code>deals/listDeals.handler.ts</code></td></tr>
+                <tr><td><code>PATCH</code></td><td><code>/deals/moveDeal</code></td><td><code>deals/moveDeal.handler.ts</code></td></tr>
+                <tr><td><code>GET</code></td><td><code>/profile</code></td><td><code>profile/index.abide</code></td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="Watch a channel from the terminal">
+        <Code code={`abide watch activity/feed account=hopper-co --url http://localhost:3000`} />
+
+        <p><code>abide watch &lt;address&gt; [args]</code> follows a <code>GET</code> and prints
+            its value, then the value again after each patch. The address is the handler's route
+            without its leading <code>/</code>, the args are <code>name=value</code> words, and
+            <code>--url</code> names the running app. Inside the <code>abide</code> shell it is
+            <code>watch activity/feed account=hopper-co</code>.</p>
+
+        <p><code>watch</code> asks the <code>GET</code> for the same event stream any caller may ask for,
+            so what you see is what each tab is sent. With <code>curl</code> it is the value, then
+            each patch as <code>PatchOp</code>s:</p>
+
+        <Code code={`curl -N -H 'Accept: text/event-stream' \\
+      'http://localhost:3000/activity/feed?account=hopper-co'
+    
+    event: value
+    id: 1792159056295002
+    data: [{"id":"9dcf…","kind":"Call","at":"13:57:43"}]
+    
+    event: patch
+    id: 1792159056295003
+    data: [{"op":"add","path":"/-","value":{"id":"344f…","kind":"Email",…}}]`} />
+
+        <p><code>watch</code> only reads. To log from a terminal, call
+            <code>logToFeed</code> as a tab does, and its middleware decides whether the shell may.</p>
+    </Section>
+
+    <Section title="`abide call` runs a handler from the terminal">
+        <Code code={`abide call assistant/searchContacts name=Ada`} />
+
+        <p><code>abide call &lt;address&gt; [args]</code> takes the handler's route without its
+            leading <code>/</code>, and each argument as <code>name=value</code>. The handler's
+            argument type reads each value, and an argument it refuses names the field.</p>
+
+        <table>
+            <thead><tr><th>Exit code</th><th>Means</th></tr></thead>
+            <tbody>
+                <tr><td><code>0</code></td><td>the handler answered</td></tr>
+                <tr><td><code>7</code></td><td>the handler refused</td></tr>
+                <tr><td><code>8</code></td><td>the app faulted</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>abide [--url &lt;origin&gt;] [--port &lt;n&gt;]</code> alone opens a shell on
+            the app, with every handler in scope and Tab completing addresses and argument names.</p>
+
+        <Code code={`abide                           # a shell on the built app
+    abide --url https://crm.example # a shell on a running one`} />
+
+        <p>Without <code>--url</code>, the CLI reads <code>ABIDE_APP_URL</code>, then falls back
+            to the local app. <code>ABIDE_APP_TOKEN</code> is the bearer it sends, so a shell profile
+            per environment is the whole setup.</p>
+    </Section>
+
+    <Section title="Check, build and start the CRM">
+        <Code code={`abide check && abide format --check && abide build && bun test
+    abide start --port 8080`} />
+
+        <p><code>abide check [dir…]</code> type-checks the <code>.abide</code> files as well as
+            the TypeScript, and reports on the line you wrote. <code>abide lsp</code> is the same check
+            in your editor. Run it first in CI, because it is the cheapest failure to report.</p>
+
+        <p><code>abide format [--check] [path…]</code> formats every <code>.abide</code> the way
+            <code>bun fmt</code> formats everything else: its scripts, styles and expressions under
+            the <code>[fmt]</code> options in <code>bunfig.toml</code>, and its markup indented by its
+            nesting. <code>--check</code> writes nothing and fails where a file would change, and
+            <code>abide lsp</code> formats on save the same way. The scaffold's options:</p>
+
+        <Snippet source={bunfigSource} path="bunfig.toml" from={['[fmt]', 'tabWidth', 'semi', 'singleQuote', 'sortImports']} />
+
+        <p><code>abide build</code> writes content-hashed chunks and a manifest naming them.
+            <code>abide start [--port &lt;n&gt;] [--hostname &lt;host&gt;]</code> serves what was built, and builds first where
+            nothing was. Configuration is checked as it starts, so a misconfigured deployment fails to
+            come up.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>**/public/**</code></td><td>a file served at its directory's path, with the bytes as written</td></tr>
+                <tr><td><code>src/public/favicon.ico</code></td><td>the tab icon, at <code>/favicon.ico</code></td></tr>
+                <tr><td><code>src/public/robots.txt</code></td><td>what crawlers read, at <code>/robots.txt</code></td></tr>
+                <tr><td><code>cache-control: public, max-age=0, must-revalidate</code></td><td>what a public file answers, so a browser asks about it every time</td></tr>
+                <tr><td><code>etag</code></td><td>a public file's hash, so asking again costs headers and a 304, not the file</td></tr>
+            </tbody>
+        </table>
+
+        <p>A chunk can be cached for a year because changing it changes its address. A public file
+            keeps its address across deploys, so it revalidates instead.</p>
+    </Section>
+
+    <Section title="Compile the CRM to a single binary">
+        <Code code={`abide compile
+    abide compile --platforms linux-x64,darwin-arm64`} />
+
+        <p><code>abide compile [--target] [--out] [--platforms]</code> writes one executable with
+            the built client, the server and the runtime inside it. <code>--target</code> picks one
+            platform, <code>--platforms</code> builds several in one run, and <code>--out</code> names
+            the file. The executable is <code>abide</code> for this one app:
+            <code>./crm start</code> serves it, and <code>config()</code> still reads the
+            environment.</p>
+
+        <Snippet source={dockerfileSource} path="Dockerfile" />
+
+        <p>The scaffold writes this <code>Dockerfile</code>, and the CRM carries it. Only the
+            executable reaches the second stage, so the image holds no Bun, no source and no
+            <code>node_modules</code>.</p>
+
+        <Code code={`docker build -t crm .
+    docker run -p 3000:3000 -e ABIDE_PRINCIPAL_SECRET crm`} />
+
+        <p><code>.dockerignore</code> keeps <code>.env</code> out of the build, so the deployment
+            sets the principal secret and every other setting itself.</p>
+    </Section>
+
     <Registry />
 </Doc>

@@ -4,7 +4,7 @@
 // THE REVERT: skip sending a patch to a subscription; the other tab keeps the old feed.
 import { expect, test } from '@playwright/test'
 
-const PAGE = 'guide/make-it-live'
+const PAGE = 'transports/rpc'
 
 function underMount(address: string): string {
     const base = test.info().project.use.baseURL ?? ''
@@ -20,8 +20,7 @@ test('an entry one tab logs reaches the other tab', async ({ browser }) => {
         page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
     await first.goto(underMount(PAGE), { waitUntil: 'networkidle' })
     await second.goto(underMount(PAGE), { waitUntil: 'networkidle' })
-    const card = (page: typeof first) =>
-        page.locator('#crm-05-live-feed .ex-render')
+    const card = (page: typeof first) => page.locator('#live-feed .ex-render')
     const feed = (page: typeof first) =>
         card(page).locator('ul.fields').innerText()
     const before = await feed(second)

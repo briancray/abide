@@ -1,8 +1,38 @@
 <script>
+import testRowsSource from 'crm/scripts/testRows.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
+    <Section title="Report the CRM's test results one file at a time">
+        <Snippet source={testRowsSource} path="scripts/testRows.ts" from={['await testRows(']} />
+
+        <Code code={`bun scripts/testRows.ts --list
+    bun scripts/testRows.ts --scope all --filter reports`} />
+
+        <p><code>testRows</code> runs each test file of a <code>TestSuite</code> in a process of its
+            own, and prints one <code>TestRow</code> per line as each file finishes, with a
+            <code>TestCase</code> per test. A dashboard reads the rows as they land, rather than
+            waiting on the whole run.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>rowsCommand</code></td><td>the same command line for your own runner: <code>--list</code>, <code>--scope</code>, <code>--filter</code></td></tr>
+                <tr><td><code>RowItem</code> · <code>RowState</code></td><td>one entry a runner offers, and where it is in its run</td></tr>
+                <tr><td><code>inScope</code> · <code>matchesFilter</code></td><td>the selection, so a page filters with the function the runner selects with</td></tr>
+            </tbody>
+        </table>
+
+        <p>A file whose runner wrote no report is <code>broken</code>, which is different from a
+            red result: a suite that hangs reports nothing. One still running after ten minutes is
+            stopped and reported <code>broken</code> too.</p>
+    </Section>
+
     <Registry />
 </Doc>

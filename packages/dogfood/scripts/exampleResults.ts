@@ -1,4 +1,4 @@
-// EVERY CHAPTER APP'S TESTS AND BENCHES, RUN AND KEPT: `bun run examples:results`. A card's Tests and
+// THE CRM'S TESTS AND BENCHES, RUN AND KEPT: `bun run examples:results`. A card's Tests and
 // Bench views read `examples/<app>/.abide/results.json`, so a page shows what the app's own files
 // reported rather than a figure in its prose. Run serially: a bench shares the machine with nothing.
 

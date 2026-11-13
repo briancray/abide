@@ -1,8 +1,39 @@
 <script>
 import Doc from '#src/lib/Doc.abide'
 import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
+    <Section title="A link names a route, and `url` fills it in">
+        <p>The CRM's companies list links each company with
+            <code>url('/companies/[id=SLUG]', &#123; id: company.id &#125;)</code>. You write the pattern a
+            page is filed under, matcher and all, rather than the address, and <code>url</code> fills in
+            the segments.
+            Leaving out a required one is a compile error, and a pattern no page is filed under is
+            refused by <code>abide check</code>. A query follows the params:
+            <code>url('/companies', &#123;&#125;, &#123; city: 'London' &#125;)</code>. Pass its
+            defaults after it, and a member at its default is left out of the address.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>Routes</code></td><td>every pattern the CRM files a page under, and every public file's address, declared by <code>abide check</code></td></tr>
+                <tr><td><code>RouteLiteral</code></td><td>one of those patterns: what <code>url</code> takes</td></tr>
+                <tr><td><code>Query</code></td><td>the query argument, a record or a <code>URLSearchParams</code></td></tr>
+                <tr><td><code>ParamsOf&lt;P&gt;</code></td><td>the params object pattern <code>P</code> takes</td></tr>
+                <tr><td><code>HasParams&lt;P&gt;</code></td><td>whether <code>P</code> requires one</td></tr>
+                <tr><td><code>HasSegments&lt;P&gt;</code></td><td>whether <code>P</code> has any bracketed segment</td></tr>
+                <tr><td><code>RequiredNames&lt;P&gt;</code></td><td>its <code>[name]</code> segments</td></tr>
+                <tr><td><code>OptionalNames&lt;P&gt;</code></td><td>its <code>[[name]]</code> segments</td></tr>
+                <tr><td><code>RestNames&lt;P&gt;</code></td><td>its <code>[...name]</code> segments</td></tr>
+            </tbody>
+        </table>
+
+        <p>You never write the last six. They are how <code>url</code>'s signature is read off the
+            pattern, and a compile error naming <code>RequiredNames</code> is naming the segment you
+            left out.</p>
+    </Section>
+
     <Registry />
 </Doc>

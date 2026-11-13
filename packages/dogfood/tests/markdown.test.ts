@@ -6,8 +6,7 @@
 import { beforeAll, expect, test } from 'bun:test'
 
 import { withoutExcerpt } from '../src/lib/highlight.ts'
-import { SECTIONS } from '../src/lib/sitePages.ts'
-import { DOCUMENTS } from '../src/lib/siteSections.ts'
+import { PAGES } from '../src/lib/sitePages.ts'
 import {
     allCards,
     cardsOf,
@@ -18,16 +17,13 @@ import {
 } from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
-// for the whole load against the chapter apps' suites, inside its own five seconds.
+// for the whole load against the other suites, inside its own five seconds.
 beforeAll(() => Promise.all([renderedMarkdown(), renderedHtml()]), 60_000)
 
-/** Every route `SITE` lists, and the documents the reference tab lists beside them. */
+/** Every route the site has: its pages, and the rulebook a page links each clause it cites into (40.45). */
 function routes(): Set<string> {
-    const listed = new Set<string>()
-    for (const group of SECTIONS)
-        for (const page of group.pages) listed.add(page.route)
-    // A reference page links each clause it cites into `/rulebook` (40.45).
-    for (const document of DOCUMENTS.pages) listed.add(document.route)
+    const listed = new Set<string>(['/rulebook'])
+    for (const page of PAGES) listed.add(page.route)
     return listed
 }
 
@@ -106,11 +102,10 @@ test('the bundle carries every page, in reading order', async () => {
         (match) => match[1],
     )
     const expected: string[] = []
-    for (const group of SECTIONS)
-        for (const page of group.pages)
-            expected.push(
-                page.route === '/' ? 'index.md' : `${page.route.slice(1)}.md`,
-            )
+    for (const page of PAGES)
+        expected.push(
+            page.route === '/' ? 'index.md' : `${page.route.slice(1)}.md`,
+        )
     expect(markers).toEqual(expected)
 })
 

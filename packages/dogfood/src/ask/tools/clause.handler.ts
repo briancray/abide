@@ -5,12 +5,14 @@ import { rulebookClauses } from '#src/rulebook/lib/rulebookClauses.ts'
 import RULEBOOK from '../../../../../docs/RULEBOOK.md' with { type: 'text' }
 
 const CLAUSES = new Map<string, string>()
-for (const clause of rulebookClauses(RULEBOOK)) CLAUSES.set(clause.id, clause.text)
+for (const clause of rulebookClauses(RULEBOOK))
+    CLAUSES.set(clause.id, clause.text)
 
 export default GET(
     ({ number }: { number: string }) => {
         const text = CLAUSES.get(number)
-        if (text === undefined) throw refuse.notFound({ path: number, method: 'GET' })
+        if (text === undefined)
+            throw refuse.notFound({ path: number, method: 'GET' })
         return { number, text }
     },
     {
