@@ -115,12 +115,16 @@ test('a link that would be read as more than a pairing is refused — 44.41', ()
 // visitor reads it, in the headline with every tool it asks for.
 test('the question names the site and every tool it asks for — 44.42', () => {
     const asked = question(PAIRING, SETTINGS)
-    expect(asked.headline).toContain('crm.example/app')
-    expect(asked.headline).toContain('WebSearch, WebFetch')
+    expect(asked.headline).toBe(
+        'crm.example/app is requesting access to Claude Code.',
+    )
+    expect(asked.body.split('\n\n')[0]).toContain(
+        'plus these of this computer’s: WebSearch, WebFetch.',
+    )
     expect(asked.body).toContain('auto mode')
     expect(said(asked)).not.toContain('gave install')
     expect(said(asked)).not.toContain(PAIRING.version)
-    expect(question({ ...PAIRING, tools: [] }, SETTINGS).headline).toContain(
+    expect(question({ ...PAIRING, tools: [] }, SETTINGS).body).toContain(
         'none of this computer’s',
     )
     // Options that leave auto mode are not called auto mode.
@@ -141,7 +145,7 @@ test('the question names the app beside its site, and is titled by it — 44.42'
     })
     expect(asked.title).toBe('CRM')
     expect(asked.headline).toBe(
-        'CRM (crm.example/app) is requesting full access to your local Claude Code.',
+        'CRM (crm.example/app) is requesting access to Claude Code.',
     )
     expect(asked.body).toContain('Or allow only CRM’s own tools')
     expect(question(PAIRING, SETTINGS).title).toBe('crm.example/app')
@@ -197,8 +201,9 @@ test('the question shows the icon the site publishes, where it is a PNG — 44.9
 test('a link asking for full access is asked naming no tool — 44.42, 44.86', () => {
     const asked = question({ ...PAIRING, full: true }, SETTINGS)
     expect(asked.headline).toBe(
-        'crm.example/app is requesting full access to your local Claude Code.',
+        'crm.example/app is requesting access to Claude Code.',
     )
+    expect(asked.body.split('\n\n')[0]).toContain('It’s asking for full access')
     expect(said(asked)).not.toContain('WebSearch')
     expect(asked.body).toContain('Or allow only crm.example/app’s own tools')
 })

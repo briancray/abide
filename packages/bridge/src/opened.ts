@@ -79,23 +79,26 @@ export function question(
     const auto = inAutoMode(settings.claudeArgs)
         ? `Claude Code stays in auto mode: it does safe steps on its own and asks you on ${site}’s page before anything risky.`
         : ''
-    let headline: string
+    // One headline at every level, so what is asked for is read in the body, where there is room for it.
+    const headline = `${asker} is requesting access to Claude Code.`
     let said: string[]
-    if (settings.full === true) {
-        headline = `${asker} wants to use your Claude Code. You installed it to give every site full access.`
-        said = [auto]
-    } else if (pairing.full) {
-        headline = `${asker} is requesting full access to your local Claude Code.`
+    if (settings.full === true)
         said = [
-            `It could do anything your Claude Code can, on your Claude account. ${auto}`,
+            `You installed the bridge to give every site full access. ${auto}`,
+        ]
+    else if (pairing.full)
+        said = [
+            `It’s asking for full access: anything your Claude Code can do, on your Claude account. ${auto}`,
             `Or allow only ${owner}’s own tools, so it can answer from the site without touching this computer.`,
         ]
-    } else if (pairing.tools.length === 0) {
-        headline = `${asker} wants to use your Claude Code with its own tools only. It gets none of this computer’s.`
-        said = []
-    } else {
-        headline = `${asker} wants to use your Claude Code with its own tools, plus these of this computer’s: ${pairing.tools.join(', ')}.`
-        said = [auto]
+    else if (pairing.tools.length === 0)
+        said = [
+            `It’s asking for its own tools only, and gets none of this computer’s.`,
+        ]
+    else {
+        said = [
+            `It’s asking for its own tools, plus these of this computer’s: ${pairing.tools.join(', ')}. ${auto}`,
+        ]
         if (unserved.length > 0)
             said.push(
                 `Your Claude Code has no ${serversNamed(unserved)} MCP server, so it can’t use ${unserved.join(', ')}. Add it with \`claude mcp add --scope user\` first.`,
