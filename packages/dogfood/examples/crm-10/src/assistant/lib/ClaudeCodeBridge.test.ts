@@ -47,3 +47,15 @@ test('unpaired: refused, with a command and a link', async () => {
         command.split(' ').at(-1),
     )
 })
+
+test('an answer to a prompt nothing is waiting on: refused', async () => {
+    await using app = await createApp()
+    const refused = await app.fetch(
+        fromPage('/assistant/permitClaudeCode', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id: 'none', allow: true }),
+        }),
+    )
+    expect(refused.status).toBe(404)
+})

@@ -6,7 +6,11 @@
 // a site's is laid on as its flag where it only shapes the answer, and its `tools` are a request the
 // visitor's own `--tools` narrows (`grant.ts`). What reaches this machine — a user's settings, a
 // project's CLAUDE.md, the files around it, its shell, the web from its network, its MCP servers — is
-// the visitor's to give, on the bridge's command line, and nothing the site sends can.
+// the visitor's to give, on the bridge's command line, and nothing the site sends can. A bridge run
+// `--full` (44.82) is given all of it, as `claude` run in an empty directory is.
+//
+// A TOOL OF THIS MACHINE IS APPROVED AS AUTO MODE DECIDES, and what it would ask is asked of the page
+// (44.81): the site's own tools alone are approved without asking.
 
 import { mkdtemp, rm } from 'node:fs/promises' // bun has no temporary directory or recursive remove of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
@@ -16,6 +20,7 @@ import type { ClaudeCodeConfig, ProviderEvent } from '@abide/abide/server'
 import {
     type Grant,
     grantFor,
+    PERMISSION_SERVER,
     SERVER_NAME,
     takeFlag,
     withheldNotices,
@@ -25,6 +30,8 @@ import { readLines } from './readLines.ts'
 // Every tool of that server, as `--allowedTools` names them.
 const SERVER_TOOLS = `mcp__${SERVER_NAME}`
 const TOOL_PREFIX = `${SERVER_TOOLS}__`
+/** The tool each permission prompt is asked of, as `--permission-prompt-tool` names it. 44.81. */
+const PERMISSION_TOOL = `mcp__${PERMISSION_SERVER}__ask`
 
 /** What the site asks of one turn: its one message, as Messages API blocks. */
 export type TurnRequest = {
@@ -111,38 +118,40 @@ function siteFlags(config: Omit<ClaudeCodeConfig, 'tools'>): string[] {
 }
 
 /**
- * Every flag but the protocol's: the site's, then the visitor's — so theirs wins where both set one —
- * then the tools the site asked for and the visitor granted (44.29), and no setting source where the
- * visitor named none.
+ * Every flag but the protocol's: the site's, then auto mode, then the visitor's — so theirs wins where
+ * two set one — and of a bridge not run `--full`, the tools the site asked for and the visitor granted
+ * (44.29) and no setting source where the visitor named none. The site's own tools are approved
+ * without asking, beside whatever the visitor's `--allowedTools` approves.
  * Beside them, what the site was given of this machine (`grantFor`).
  */
 async function launchFlags(
     config: ClaudeCodeConfig,
     visitor: string[],
-    trusted: boolean,
+    full: boolean,
 ): Promise<{ flags: string[]; grant: Grant }> {
     const { tools: asked, ...options } = config
-    // 44.15 — the visitor's servers reach a turn only as the tools it was given are of them; 44.78 —
-    // the native app's own bridge is given every one the turn asks for.
-    const { grant, args } = await grantFor(
-        asked ?? [],
-        trusted ? ['--tools', (asked ?? []).join(','), ...visitor] : visitor,
-    )
-    const allowed = takeFlag(args, ['--allowedTools', '--allowed-tools'])
-    const sources = takeFlag(args, ['--setting-sources']) ?? []
+    const { grant, args } = await grantFor(asked ?? [], visitor, full)
+    // 44.82 — the visitor's options as they gave them, and Claude Code's own settings and servers.
+    const given = full ? [...visitor] : args
+    const allowed = takeFlag(given, ['--allowedTools', '--allowed-tools'])
+    const sources = full ? [] : takeFlag(given, ['--setting-sources'])
     const flags = [
         ...siteFlags(options),
-        ...args,
-        '--tools',
-        grant.builtIn.join(','),
-        // The site's own tools are always approved; one of this machine's is approved as granted,
-        // unless the visitor said which calls of it are.
+        '--permission-mode',
+        'auto',
+        ...given,
         '--allowedTools',
         SERVER_TOOLS,
-        ...(allowed ?? [...grant.builtIn, ...grant.mcp]),
-        '--setting-sources',
-        sources.join(','),
+        ...(allowed ?? []),
     ]
+    if (!full)
+        flags.push(
+            '--tools',
+            grant.builtIn.join(','),
+            '--setting-sources',
+            (sources ?? []).join(','),
+            '--strict-mcp-config',
+        )
     return { flags, grant }
 }
 
@@ -178,8 +187,9 @@ export async function claudeTurn(
     options: {
         claude: string
         claudeArgs: string[]
-        /** Every tool the turn asks for is granted, as by the native app's own bridge. 44.78. */
-        trusted: boolean
+        /** Everything `claude` has is given, as by the native app's own bridge. 44.78, 44.82. */
+        full: boolean
+        /** The site's MCP server; the permission server is `${mcpUrl}/permission`. */
         mcpUrl: string
         signal: AbortSignal
         report: (event: ProviderEvent) => void
@@ -189,17 +199,23 @@ export async function claudeTurn(
     const { flags, grant } = await launchFlags(
         turn.config,
         options.claudeArgs,
-        options.trusted,
+        options.full,
     )
-    for (const notice of withheldNotices(grant)) options.say(notice)
+    if (!options.full)
+        for (const notice of withheldNotices(grant)) options.say(notice)
     const directory = await mkdtemp(`${tmpdir()}/abide-bridge-`)
     const config = `${directory}/mcp.json`
     await Bun.write(
         config,
         JSON.stringify({
             mcpServers: {
-                ...grant.servers,
+                // 44.82 — a full bridge's Claude Code reads the visitor's servers where `claude` would.
+                ...(options.full ? {} : grant.servers),
                 [SERVER_NAME]: { type: 'http', url: options.mcpUrl },
+                [PERMISSION_SERVER]: {
+                    type: 'http',
+                    url: `${options.mcpUrl}/permission`,
+                },
             },
         }),
     )
@@ -216,7 +232,8 @@ export async function claudeTurn(
             '--verbose',
             '--include-partial-messages',
             '--no-session-persistence',
-            '--strict-mcp-config',
+            '--permission-prompt-tool',
+            PERMISSION_TOOL,
             '--mcp-config',
             config,
             '--max-turns',

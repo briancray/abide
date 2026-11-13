@@ -33,6 +33,8 @@ export type HandlerSettings = {
     claude: string
     path: string
     claudeArgs: string[]
+    /** `abide-bridge install --full`: every link's bridge is run `--full` (44.82). An older install's settings hold none. */
+    full: boolean
     env: Record<string, string>
 }
 
@@ -46,9 +48,11 @@ export function question(
     unserved: readonly string[] = [],
 ): string {
     const tools =
-        pairing.tools.length === 0
-            ? 'It gets none of this computer’s tools.'
-            : `It also asks for these tools of this computer’s: ${pairing.tools.join(', ')}.`
+        settings.full === true
+            ? 'You installed this to give every site everything your Claude Code can do: its tools, MCP servers and settings. Anything auto mode won’t approve on its own is asked on the site’s page.'
+            : pairing.tools.length === 0
+              ? 'It gets none of this computer’s tools.'
+              : `It also asks for these tools of this computer’s: ${pairing.tools.join(', ')}.`
     const missing =
         unserved.length === 0
             ? ''
@@ -79,6 +83,7 @@ export function bridgeArguments(
         pairing.code,
         '--claude',
         settings.claude,
+        ...(settings.full === true ? ['--full'] : []),
         ...(claudeArgs.length === 0 ? [] : ['--', ...claudeArgs]),
     ]
 }
@@ -145,6 +150,7 @@ export async function unservedOf(
     const { grant } = await grantFor(
         pairing.tools,
         claudeArgsOf(pairing, settings),
+        settings.full === true,
         () => {},
     )
     return grant.unserved

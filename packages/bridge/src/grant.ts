@@ -3,8 +3,14 @@
 // a server's as `mcp__<server>` — and of those, the MCP tools whose server the visitor's own Claude Code
 // configuration holds. A site names tools and never a server: a server is a command this machine runs.
 
-/** What Claude Code names the one MCP server the bridge hands it, and so the prefix on each of its tools. */
+/** What Claude Code names the MCP server the bridge relays to the site, and so the prefix on each of its tools. */
 export const SERVER_NAME = 'app'
+
+/**
+ * What Claude Code names the MCP server the bridge answers itself, whose one tool is asked each
+ * permission prompt — hidden from the model, which never sees a `--permission-prompt-tool`. 44.81.
+ */
+export const PERMISSION_SERVER = 'abide_bridge'
 
 /** What `asked` is given, and why each tool it is not given is not. */
 export type Grant = {
@@ -52,7 +58,7 @@ export function takeFlag(
 }
 
 /** The tools the visitor granted, each `--tools` value split on commas and spaces. */
-function grantedOf(values: string[] | undefined): Set<string> {
+function grantedOf(values: readonly string[] | undefined): Set<string> {
     const granted = new Set<string>()
     for (const value of values ?? [])
         for (const tool of value.split(/[\s,]+/))
@@ -119,8 +125,9 @@ export async function visitorServers(
             configuration.mcpServers ?? {},
         ))
             servers.set(toolNameOf(name), server)
-    // The bridge's own server is the site's, never one of the visitor's.
+    // The bridge's own servers are never one of the visitor's.
     servers.delete(SERVER_NAME)
+    servers.delete(PERMISSION_SERVER)
     return servers
 }
 
@@ -160,7 +167,8 @@ export function grantOf(
 
 /**
  * What a site asking for `asked` is given by a visitor who passed `claudeArgs`, beside those args with
- * `--tools` and `--mcp-config` taken out. The visitor's servers are read only where an MCP tool is asked.
+ * `--tools` and `--mcp-config` taken out — every tool asked, where the bridge runs `full` (44.82). The
+ * visitor's servers are read only where an MCP tool is asked.
  *
  * Throws where an `--mcp-config` they named cannot be read, unless `unreadable` is given: then that is
  * said to it, and the grant is of no server.
@@ -168,10 +176,12 @@ export function grantOf(
 export async function grantFor(
     asked: readonly string[],
     claudeArgs: readonly string[],
+    full: boolean,
     unreadable?: (message: string) => void,
 ): Promise<{ grant: Grant; args: string[] }> {
     const args = [...claudeArgs]
-    const granted = grantedOf(takeFlag(args, ['--tools']))
+    const given = takeFlag(args, ['--tools'])
+    const granted = grantedOf(full ? asked : given)
     const sources = takeFlag(args, ['--mcp-config'])
     let asksMcp = false
     for (const tool of asked) if (serverOf(tool) !== undefined) asksMcp = true

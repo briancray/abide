@@ -37,6 +37,8 @@ export async function bridge(options: {
     code: string
     claude?: string
     claudeArgs?: string[]
+    /** Everything `claude` has is the site's to use, prompts asked of its page. 44.82. */
+    full?: boolean
     say?: (line: string) => void
     replyMilliseconds?: number
     silenceMilliseconds?: number
@@ -47,6 +49,7 @@ export async function bridge(options: {
     // sentence naming the site by its host. The detail goes to Claude Code, in the failure it is answered.
     const host = new URL(site).host
     const say = options.say ?? ((line: string) => console.error(line))
+    const full = options.full ?? false
     const silenceMilliseconds =
         options.silenceMilliseconds ?? SILENCE_MILLISECONDS
     // What cuts the stream being read, where it went silent.
@@ -142,6 +145,7 @@ export async function bridge(options: {
         const { grant } = await grantFor(
             pairingAsked,
             options.claudeArgs ?? [],
+            full,
             sayOnce,
         )
         const missing = [...grant.ungranted, ...grant.unserved]
@@ -156,7 +160,7 @@ export async function bridge(options: {
         site,
         claude: options.claude ?? 'claude',
         claudeArgs: options.claudeArgs ?? [],
-        trusted: false,
+        full,
         report,
         say: sayOnce,
         beforeTurn: reportMissing,
@@ -230,7 +234,9 @@ export async function bridge(options: {
                         token = frame.token
                         pairingAsked = frame.tools ?? []
                         say(
-                            `Connected to ${host}. Close the page to disconnect.`,
+                            full
+                                ? `Connected to ${host}, which can use everything your Claude Code can. Close the page to disconnect.`
+                                : `Connected to ${host}. Close the page to disconnect.`,
                         )
                         void reportMissing()
                     } else if (frame.type === 'bye') {

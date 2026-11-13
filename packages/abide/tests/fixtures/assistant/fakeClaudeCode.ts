@@ -6,12 +6,15 @@
 // It records what it was run with to `$FAKE_RECORD` — its arguments, the prompt, its pid, and the
 // config — and a prompt holding `hang` prints one line and then waits to be killed, one holding `writing`
 // starts the tool call and then waits. A prompt holding `record` adds the MCP server's whole reply to the
-// tool call to the record, and ends there.
+// tool call to the record, and ends there. A prompt holding `permission` first asks the server
+// `--permission-prompt-tool` names whether `Bash` may run `ls`, and says what it was answered — or,
+// holding `record` too, records that answer in place of the tool call's, and ends there.
 
 const args = process.argv.slice(2)
-const configPath = args[args.indexOf('--mcp-config') + 1] as string
+// The bridge's own, last: a visitor's may precede it (44.82).
+const configPath = args[args.lastIndexOf('--mcp-config') + 1] as string
 const config = (await Bun.file(configPath).json()) as {
-    mcpServers: { app: { url: string } }
+    mcpServers: Record<string, { url: string }>
 }
 let input = ''
 for await (const chunk of Bun.stdin.stream())
@@ -44,6 +47,51 @@ print({ type: 'system', subtype: 'init' })
 text('checking')
 if (words.includes('hang')) await new Promise(() => {})
 
+/** One JSON-RPC request to the MCP server `server` of the config, answered. */
+async function rpc(
+    server: string,
+    id: number,
+    method: string,
+    params: unknown,
+): Promise<{ result: { content: { type: string; text: string }[] } }> {
+    const answer = await fetch(config.mcpServers[server]?.url as string, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+    })
+    return (await answer.json()) as never
+}
+
+if (words.includes('permission')) {
+    // `mcp__<server>__<tool>`: the server is the name between the prefix and the last `__`.
+    const named = args[args.indexOf('--permission-prompt-tool') + 1] as string
+    const server = named.slice('mcp__'.length, named.lastIndexOf('__'))
+    const listed = await rpc(server, 1, 'tools/list', {})
+    const asked = await rpc(server, 2, 'tools/call', {
+        name: named.slice(named.lastIndexOf('__') + 2),
+        arguments: {
+            tool_name: 'Bash',
+            input: { command: 'ls' },
+            tool_use_id: 'toolu_0',
+        },
+    })
+    if (words.includes('record')) {
+        await Bun.write(
+            process.env.FAKE_RECORD as string,
+            JSON.stringify({
+                args,
+                prompt,
+                pid: process.pid,
+                listed,
+                reply: asked,
+            }),
+        )
+        print({ type: 'result', subtype: 'success', stop_reason: 'end_turn' })
+        process.exit(0)
+    }
+    text(`permission ${asked.result.content[0]?.text}`)
+}
+
 print({
     type: 'stream_event',
     event: {
@@ -71,7 +119,7 @@ print({
         ],
     },
 })
-const server = config.mcpServers.app
+const server = config.mcpServers.app as { url: string }
 const replied = await (
     await fetch(server.url, {
         method: 'POST',

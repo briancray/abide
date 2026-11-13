@@ -7,7 +7,8 @@
 // that shape the answer. What would give a site power over the visitor's machine — permissions,
 // directory, settings, an MCP server — is not an option here at all, and its `tools`, built-in or of
 // the visitor's own MCP servers, are a request the visitor grants or does not: the bridge decides
-// (44.15, 44.16, 44.29).
+// (44.15, 44.16, 44.29, 44.82). What auto mode would ask the visitor is a `permission` event, which the
+// page answers through `permit` (44.81, 44.83).
 
 export type { BridgeStatus } from '#shared/BridgeStatus.ts'
 
@@ -32,6 +33,7 @@ import {
     mintCode,
     pairingNow,
     pairingStatus,
+    permit as permitPrompt,
     runTurn,
     watchFollowedPairing,
 } from './bridgeRelay.ts'
@@ -208,11 +210,28 @@ async function* bridge(
         yield { paired, missing, ...commandFor(code, options) }
 }
 
+/**
+ * Answers the `permission` event `id` a turn of this browser's bridge is waiting on, allowing the call
+ * or not. 44.83.
+ *
+ * Throws 404 where no prompt of that id is waiting.
+ */
+function permit(id: string, allow: boolean): void {
+    permitPrompt({
+        caller: askingCaller(),
+        signedIn: signedInAs(),
+        local: fromNativeWindow(),
+        id,
+        allow,
+    })
+}
+
 /** The visitor's own Claude Code as a provider, with the pairing that reaches it. */
 export const claudeCode: typeof claudeCodeProvider & {
     bridge: typeof bridge
     bridgeCommand: typeof bridgeCommand
-} = Object.assign(claudeCodeProvider, { bridge, bridgeCommand })
+    permit: typeof permit
+} = Object.assign(claudeCodeProvider, { bridge, bridgeCommand, permit })
 
 // 44.67 — THE PAIRING A BROWSER'S `pairing` READS, as a handler abide mounts rather than one each app
 // writes: the asking browser's pairing as it stands, granting the tools `ABIDE_BRIDGE_TOOLS` names.

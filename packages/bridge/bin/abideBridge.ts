@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
-// `abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]` — the command
-// an abide site shows you to connect your Claude Code to its assistant. `--claude <path>` names the
-// executable where `claude` is not on PATH; each `--env` sets a variable Claude Code runs with; whatever
-// follows `--` is passed to Claude Code as you wrote it, and is how you give a site what reaches this
-// machine — `-- --tools WebSearch,WebFetch` for the built-in tools it asks for.
+// `abide-bridge <site> <code> [--full] [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]` — the
+// command an abide site shows you to connect your Claude Code to its assistant. `--claude <path>` names
+// the executable where `claude` is not on PATH; each `--env` sets a variable Claude Code runs with;
+// whatever follows `--` is passed to Claude Code as you wrote it, and is how you give a site what
+// reaches this machine — `-- --tools WebSearch,WebFetch` for the built-in tools it asks for — and
+// `--full` gives it everything your Claude Code has.
 //
 // `abide-bridge install` takes the same options and builds and registers, on macOS, Linux or Windows,
 // what opens the pairing link a site shows beside its command, so a click pairs instead of a terminal —
@@ -20,19 +21,21 @@ import {
 } from '../src/install.ts'
 
 const USAGE =
-    'usage: abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge install [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge uninstall\n       abide-bridge forget [<site>]'
+    'usage: abide-bridge <site> <code> [--full] [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge install [--full] [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge uninstall\n       abide-bridge forget [<site>]'
 
 const all = process.argv.slice(2)
 const split = all.indexOf('--')
 const args = split === -1 ? all : all.slice(0, split)
 const claudeArgs = split === -1 ? [] : all.slice(split + 1)
 let claude: string | undefined
+let full = false
 const env: Record<string, string> = {}
 const positional: string[] = []
 let malformed = false
 for (let index = 0; index < args.length; index++) {
     const arg = args[index] as string
     if (arg === '--claude') claude = args[++index]
+    else if (arg === '--full') full = true
     else if (arg === '--env') {
         const assignment = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s.exec(
             args[++index] ?? '',
@@ -84,6 +87,7 @@ try {
                 claude: found,
                 path: Bun.env.PATH ?? '',
                 claudeArgs,
+                full,
                 env,
             })
             console.error(
@@ -96,6 +100,7 @@ try {
                 site,
                 code: code as string,
                 claudeArgs,
+                full,
                 claude: found,
             })
         }

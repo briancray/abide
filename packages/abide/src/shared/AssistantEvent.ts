@@ -33,6 +33,7 @@ export type AssistantEvent =
           handler: { method: Method; address: string } | undefined
           value: unknown
       }
+    | { type: 'permission'; id: string; name: string; input: unknown }
     | {
           type: 'done'
           stop: string
