@@ -29,6 +29,7 @@ import {
 } from '../../bridge/src/install.ts'
 import {
     bridgeArguments,
+    iconOf,
     question,
     searchPath,
     unservedOf,
@@ -129,6 +130,47 @@ test('the question names the site and every tool it asks for — 44.42', () => {
             claudeArgs: ['--permission-mode', 'acceptEdits'],
         }).body,
     ).not.toContain('auto mode')
+})
+
+// 44.42 — THE APP'S NAME IS THE SITE'S TO CHOOSE, so the question shows it beside the site it is
+// served from, never in its place, and titles itself by it. THE REVERT: show the name alone, and an app
+// calling itself anything reads as that.
+test('the question names the app beside its site, and is titled by it — 44.42', () => {
+    const asked = question({ ...PAIRING, full: true }, SETTINGS, [], 'CRM')
+    expect(asked.title).toBe('CRM')
+    expect(asked.headline).toBe(
+        'CRM (crm.example/app) is requesting full access to your local Claude Code.',
+    )
+    expect(asked.body).toContain('Or allow only CRM’s own tools')
+    expect(question(PAIRING, SETTINGS).title).toBe('crm.example/app')
+})
+
+// 44.90 — THE ICON IS THE SITE'S OWN `/icon.png`, and only where it is a PNG no larger than an app
+// icon: anything else leaves the desktop's own.
+test('the question shows the icon the site publishes, where it is a PNG — 44.90', async () => {
+    const png = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+    ])
+    const served = Bun.serve({
+        port: 0,
+        fetch(request) {
+            const path = new URL(request.url).pathname
+            if (path === '/png/icon.png') return new Response(png)
+            if (path === '/text/icon.png') return new Response('<svg/>')
+            if (path === '/huge/icon.png')
+                return new Response(new Uint8Array(2 * 1024 * 1024))
+            return new Response('', { status: 404 })
+        },
+    })
+    try {
+        const site = `http://localhost:${served.port}`
+        expect(await iconOf(`${site}/png`)).toEqual(png)
+        expect(await iconOf(`${site}/text`)).toBeUndefined()
+        expect(await iconOf(`${site}/huge`)).toBeUndefined()
+        expect(await iconOf(`${site}/none`)).toBeUndefined()
+    } finally {
+        await served.stop(true)
+    }
 })
 
 // 44.42, 44.86 — AN ASK FOR FULL ACCESS NAMES NO TOOL: it says what it asks for, and that the site's own
@@ -448,9 +490,26 @@ test('Linux and Windows register the scheme to start the handler with the link �
 // and offers the site's own tools as a third button only where a link asks for full access (44.86);
 // with neither there is no question. zenity's headline is bold markup, so what a site names is escaped.
 test('a Linux desktop asks with zenity or kdialog, or not at all — 44.64, 44.86', () => {
-    const asked = { headline: '<i>a.example</i> asks', body: 'b & c' }
-    const zenity = linuxQuestion(asked, true, (tool) => tool === 'zenity')
+    const asked = {
+        title: 'CRM',
+        headline: '<i>a.example</i> asks',
+        body: 'b & c',
+        icon: undefined,
+    }
+    const zenity = linuxQuestion(
+        asked,
+        true,
+        (tool) => tool === 'zenity',
+        '/tmp/icon.png',
+    )
     expect(zenity?.[0]).toBe('zenity')
+    // 44.90 — titled by the app, with its icon.
+    expect(zenity?.slice(2, 6)).toEqual([
+        '--title',
+        'CRM',
+        '--window-icon',
+        '/tmp/icon.png',
+    ])
     expect(zenity).toContain('--extra-button')
     expect(zenity).toContain(
         '<b>&lt;i&gt;a.example&lt;/i&gt; asks</b>\n\nb &amp; c',

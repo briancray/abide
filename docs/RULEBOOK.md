@@ -4105,8 +4105,9 @@ release and tools, and whether it asks for full access (44.85).
 whose release is a version alone, and MUST run the release it names, save as 44.89 runs a checkout.
 
 44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, save where 44.62
-pairs it unasked, naming the site and the tools the link asks for — or, where it asks for full access,
-that it does and no tool; or, where `abide-bridge install` was run `--full`, that it gives everything
+pairs it unasked, naming the site, with the app's name `/__abide/bridge` gives (44.63) beside it and
+never in its place, and the tools the link asks for — or, where it asks for full access, that it does
+and no tool; or, where `abide-bridge install` was run `--full`, that it gives everything
 44.82 does — and the options and the names of the variables `abide-bridge install` kept (44.44).
 
 44.43 `abide-bridge install` MUST write what opens links under the visitor's own home — Application
@@ -4179,7 +4180,7 @@ those allowed.
 
 44.63 `/__abide/bridge` MUST name, for a code minted and unspent, a holder without spending the code —
 the same for every code minted to one sign-in, or signed out to one browser, and different for any
-other — and MUST refuse 403 any other code.
+other — and the app's name, and MUST refuse 403 any other code.
 
 44.64 A bridge opening an `abide-bridge` link on a desktop it cannot ask on MUST NOT pair.
 
@@ -4275,6 +4276,9 @@ to its ask for full access, and MUST keep nothing where `/__abide/bridge` named 
 44.89 `abide-bridge install` run from a copy of the bridge outside any `node_modules` MUST open every
 `abide-bridge` link with that copy's handler as it stands when the link opens, and run that copy's
 bridge, whatever release the link names.
+
+44.90 A bridge asking per 44.42 MUST show the icon the site publishes at `/icon.png` where it is a
+PNG of at most 1 MB answered within 3 seconds, and the desktop's own otherwise.
 
 # 45. Offline
 

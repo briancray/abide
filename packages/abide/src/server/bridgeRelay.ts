@@ -4,7 +4,7 @@
 //
 //   GET  /__abide/bridge?code=…   the pairing, answered by a server-sent stream of what the bridge is
 //                                 to do: the token it posts with, each turn, each tool reply, a cancel.
-//   GET  /__abide/bridge?holder=… who a code was minted for, as an opaque string, without spending it
+//   GET  /__abide/bridge?holder=… who a code was minted for, as an opaque string, without spending it, and the app's name
 //                                 (44.63): what a bridge always allowing a site checks a link against.
 //   GET  /__abide/bridge          the same stream, resumed by the token after it dropped (44.26).
 //   POST /__abide/bridge          what the bridge reports, one frame per line: a turn's events, the
@@ -25,7 +25,7 @@
 // land here as a post's would. It stands in for any pairing a request from the window asks after.
 
 import { isFailed } from '#shared/Failed.ts'
-import { namedLogger } from '#shared/log.ts'
+import { appName, namedLogger } from '#shared/log.ts'
 import { refuse } from '#shared/refuse.ts'
 
 import { answered } from './answerFailure.ts'
@@ -623,11 +623,12 @@ function pair(request: Request): Response {
 }
 
 // 44.63 — WHO A CODE WAS MINTED FOR, read without spending it: a code minted for someone else names
-// someone else, which is what a bridge always allowing a site refuses to pair unasked.
+// someone else, which is what a bridge always allowing a site refuses to pair unasked. Beside it, the
+// app's name, which the bridge's question shows with the site (44.42).
 function holderAnswer(code: string): Response {
     const pairing = standingCode(code)
     if (pairing === undefined) return unknownCode()
-    return Response.json({ holder: pairing.holder })
+    return Response.json({ holder: pairing.holder, name: appName() })
 }
 
 /** What `code` was minted with, while it is unspent and unexpired. */

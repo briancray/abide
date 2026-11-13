@@ -15,7 +15,7 @@ import { SILENCE_MILLISECONDS } from '../../bridge/src/bridge.ts'
 import { BRIDGE_PATH } from '../../bridge/src/BRIDGE_PATH.ts'
 import type { Answer } from '../../bridge/src/desktop.ts'
 import { HEARTBEAT_MILLISECONDS as BRIDGE_HEARTBEAT_MILLISECONDS } from '../../bridge/src/HEARTBEAT_MILLISECONDS.ts'
-import { consented, holderOf } from '../../bridge/src/opened.ts'
+import { askerOf, consented } from '../../bridge/src/opened.ts'
 import { PAIRING_SCHEME } from '../../bridge/src/PAIRING_SCHEME.ts'
 import { type Pairing, pairingOf } from '../../bridge/src/pairingLink.ts'
 import { readLines } from '../../bridge/src/readLines.ts'
@@ -1128,10 +1128,12 @@ test('a paired status carries a command that replaces the paired bridge — 44.5
 // holder is UTF-8-decoded random bytes, `account.` plus replacement characters.
 test('a code names who it was minted for, without being spent — 44.63', async () => {
     const holder = async (caller: string): Promise<string | undefined> =>
-        holderOf({
-            site: base,
-            code: await pairingCode(caller),
-        })
+        (
+            await askerOf({
+                site: base,
+                code: await pairingCode(caller),
+            })
+        ).holder
     const signedOut = await holder('held-one')
     expect(signedOut).toBeString()
     expect(await holder('held-one')).toBe(signedOut)
@@ -1147,7 +1149,11 @@ test('a code names who it was minted for, without being spent — 44.63', async 
     expect(signedOut).toMatch(/^browser\.[\w-]+$/)
 
     const code = await pairingCode('held-one')
-    expect(await holderOf({ site: base, code })).toBe(signedOut)
+    // 44.42 — beside the holder, the app's name, which the question shows with the site.
+    const asker = await askerOf({ site: base, code })
+    expect(asker.holder).toBe(signedOut)
+    expect(asker.name).toBeString()
+    expect(asker.name).not.toBe('')
     await pairBridge('held-one', code)
     const spent = await Bun.fetch(`${base}${BRIDGE_ADDRESS}?holder=${code}`)
     expect(spent.status).toBe(403)

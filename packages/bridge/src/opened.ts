@@ -58,35 +58,40 @@ function inAutoMode(claudeArgs: readonly string[]): boolean {
 }
 
 /**
- * What the visitor is asked before `pairing` runs (44.42): a site asking for full access is named as
- * asking for it, and none of its tools (44.85); else each tool it asks for, and each MCP tool of a
- * server their Claude Code is not configured with, `unserved` (44.65).
+ * What the visitor is asked before `pairing` runs (44.42), by the app `name`d beside its site where the
+ * site names one: a site asking for full access is named as asking for it, and none of its tools
+ * (44.85); else each tool it asks for, and each MCP tool of a server their Claude Code is not
+ * configured with, `unserved` (44.65). Its icon is the caller's to lay on.
  */
 export function question(
     pairing: Pairing,
     settings: HandlerSettings,
     unserved: readonly string[] = [],
+    name?: string,
 ): Question {
     const site = shownSite(pairing.site)
+    // The name is the site's to choose, so the site it is served from is always beside it.
+    const asker = name === undefined ? site : `${name} (${site})`
+    const owner = name ?? site
     const auto = inAutoMode(settings.claudeArgs)
         ? `Claude Code stays in auto mode: it does safe steps on its own and asks you on ${site}’s page before anything risky.`
         : ''
     let headline: string
     let said: string[]
     if (settings.full === true) {
-        headline = `${site} wants to use your Claude Code. You installed it to give every site full access.`
+        headline = `${asker} wants to use your Claude Code. You installed it to give every site full access.`
         said = [auto]
     } else if (pairing.full) {
-        headline = `${site} is requesting full access to your local Claude Code.`
+        headline = `${asker} is requesting full access to your local Claude Code.`
         said = [
             `It could do anything your Claude Code can, on your Claude account. ${auto}`,
-            `Or allow only ${site}’s own tools, so it can answer from the site without touching this computer.`,
+            `Or allow only ${owner}’s own tools, so it can answer from the site without touching this computer.`,
         ]
     } else if (pairing.tools.length === 0) {
-        headline = `${site} wants to use your Claude Code with its own tools only. It gets none of this computer’s.`
+        headline = `${asker} wants to use your Claude Code with its own tools only. It gets none of this computer’s.`
         said = []
     } else {
-        headline = `${site} wants to use your Claude Code with its own tools, plus these of this computer’s: ${pairing.tools.join(', ')}.`
+        headline = `${asker} wants to use your Claude Code with its own tools, plus these of this computer’s: ${pairing.tools.join(', ')}.`
         said = [auto]
         if (unserved.length > 0)
             said.push(
@@ -104,7 +109,7 @@ export function question(
     for (const paragraph of said)
         if (paragraph.trim() !== '')
             body += `${body === '' ? '' : '\n\n'}${paragraph.trim()}`
-    return { headline, body }
+    return { title: owner, headline, body, icon: undefined }
 }
 
 /**
@@ -162,13 +167,16 @@ function directoryOf(file: string): string {
     )
 }
 
+/** The longest app name the question shows; a longer one is cut, so it cannot push the site out of view. */
+const LONGEST_NAME = 60
+
 /**
- * Who `pairing`'s code was minted for, as `/__abide/bridge` names them (44.63), or `undefined` where the
- * site names no one — a release before it did, or a code it did not mint.
+ * Who `pairing`'s code was minted for, as `/__abide/bridge` names them (44.63), and the app's name, or
+ * `undefined` for either where the site names none — a release before it did, or a code it did not mint.
  */
-export async function holderOf(
+export async function askerOf(
     pairing: Pick<Pairing, 'site' | 'code'>,
-): Promise<string | undefined> {
+): Promise<{ holder: string | undefined; name: string | undefined }> {
     try {
         const answer = await fetch(
             `${pairing.site}${BRIDGE_PATH}?holder=${encodeURIComponent(pairing.code)}`,
@@ -176,10 +184,57 @@ export async function holderOf(
         )
         if (!answer.ok) {
             await answer.body?.cancel()
+            return { holder: undefined, name: undefined }
+        }
+        const { holder, name } = (await answer.json()) as {
+            holder?: unknown
+            name?: unknown
+        }
+        // A name is one line of what a reader sees: no control character, nothing past the cut.
+        const shown =
+            typeof name === 'string'
+                ? name
+                      .replace(/\p{Cc}/gu, ' ')
+                      .trim()
+                      .slice(0, LONGEST_NAME)
+                : ''
+        return {
+            holder:
+                typeof holder === 'string' && holder !== ''
+                    ? holder
+                    : undefined,
+            name: shown === '' ? undefined : shown,
+        }
+    } catch {
+        return { holder: undefined, name: undefined }
+    }
+}
+
+/** The largest icon the question shows: an app icon is a few hundred kilobytes at most. */
+const LARGEST_ICON = 1024 * 1024
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+
+/**
+ * The icon `site` publishes at `/icon.png`, abide's app icon (45.15), or `undefined` where
+ * it publishes none, it is no PNG, or it is larger than any app icon — the question waits on it, so it
+ * is given three seconds.
+ */
+export async function iconOf(site: string): Promise<Uint8Array | undefined> {
+    try {
+        const answer = await fetch(`${site}/icon.png`, {
+            tls: siteTls(),
+            signal: AbortSignal.timeout(3_000),
+        })
+        const declared = Number(answer.headers.get('content-length') ?? 0)
+        if (!answer.ok || declared > LARGEST_ICON) {
+            await answer.body?.cancel()
             return undefined
         }
-        const { holder } = (await answer.json()) as { holder?: unknown }
-        return typeof holder === 'string' && holder !== '' ? holder : undefined
+        const bytes = await answer.bytes()
+        if (bytes.length > LARGEST_ICON) return undefined
+        for (let at = 0; at < PNG_SIGNATURE.length; at++)
+            if (bytes[at] !== PNG_SIGNATURE[at]) return undefined
+        return bytes
     } catch {
         return undefined
     }
@@ -221,9 +276,10 @@ export async function consented(
     ) => Promise<Answer>,
     say: (line: string) => void,
 ): Promise<Pairing | undefined> {
-    // None waits on another, and the holder is a round trip to the site.
-    const [holder, allowed, unserved] = await Promise.all([
-        holderOf(pairing),
+    // None waits on another, and the asker and the icon are each a round trip to the site.
+    const [{ holder, name }, icon, allowed, unserved] = await Promise.all([
+        askerOf(pairing),
+        iconOf(pairing.site),
         allowedSites(allowedFile),
         unservedOf(pairing, settings),
     ])
@@ -237,13 +293,18 @@ export async function consented(
                   full: asksFull,
               })
     if (before !== undefined) {
-        say(`Pairing with ${shownSite(pairing.site)}, which you always allow.`)
+        say(
+            `Pairing with ${name ?? shownSite(pairing.site)}, which you always allow.`,
+        )
         return asksFull && before.full === false
             ? siteToolsOnly(pairing)
             : pairing
     }
     const answer = await askVisitor(
-        question(pairing, settings, unserved),
+        {
+            ...question(pairing, settings, unserved, name),
+            icon,
+        },
         asksFull,
     )
     if (answer === 'deny') return undefined
