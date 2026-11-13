@@ -35,6 +35,7 @@ import {
     syncedOver,
 } from './Reactive.ts'
 import { outsideScope, scoped } from './scoped.ts'
+import { SCOPING } from './scoping.ts'
 import { share } from './share.ts'
 
 export { isReactive } from './isReactive.ts'
@@ -413,12 +414,14 @@ export function reactive(
     // (11.34).
     const options = given[1] as
         { global?: boolean; store?: unknown; tags?: string[] } | undefined
-    const built = outsideScope(options?.global === true)
-        ? scoped(
-              () => build(given, keyed),
-              !keyed && options?.store !== undefined,
-          )
-        : build(given, keyed)
+    let built: unknown
+    if (outsideScope(options?.global === true)) {
+        const lazy = !keyed && options?.store !== undefined
+        built = scoped(() => build(given, keyed), lazy)
+        // 41.34 — a declaration's, told to the server, which keeps it where its home has a load in
+        // flight. Not an `ambient`'s: abide builds those where they are first reached, in a browser too.
+        if (!keyed && !lazy) SCOPING.provider?.filed(built)
+    } else built = build(given, keyed)
     // 13.15 — for a `GET` handed this value to read its followers' tags off.
     if (options?.tags !== undefined)
         DECLARED_TAGS.set(built as object, options.tags)

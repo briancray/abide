@@ -45,6 +45,13 @@ export type Scoping = {
         body: (given: Given) => Result,
         given: Given,
     ): Result
+    /**
+     * Told of every unkeyed `reactive` filed as a forwarder with its home built (`scoped.ts`).
+     *
+     * 41.34 — the server keeps each a module declared whose home has a load in flight, for every
+     * render to build up front.
+     */
+    filed(forwarder: unknown): void
 }
 
 export const SCOPING: { provider: Scoping | null } = { provider: null }

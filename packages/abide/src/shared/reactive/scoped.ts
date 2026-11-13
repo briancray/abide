@@ -2,7 +2,8 @@
 // once, when the module is first imported, and every request after that reaches the same object —
 // so the value it hands back is a FORWARDER: outside a request it is the value built at import
 // (the HOME), and inside one it is an instance of its own, built the first time that request
-// reaches it and dropped with the request.
+// reaches it and dropped with the request — or, where building the home started a load, built up
+// front by every render that request makes (41.34), as a browser builds it at import.
 //
 // A FORWARDER RATHER THAN A SCOPE LOOKUP IN THE CORE. A read captures its cell and nothing else,
 // and it is the hottest path in the design; a browser never builds a forwarder, so what the read
@@ -174,6 +175,11 @@ export function scoped(
     Object.setPrototypeOf(read, FORWARDING_PROTOTYPE)
     read[FILED] = filed
     return read
+}
+
+/** 41.34 — builds the instance `value` forwards to in the scope that is current, as a first read does. */
+export function buildHere(value: unknown): void {
+    instanceOf((value as Forwarder)[FILED])
 }
 
 /**

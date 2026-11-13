@@ -11,6 +11,7 @@ import type { ShareScope } from '#shared/reactive/share.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
 
 import { buildDeferred } from './deferredBuilds.ts'
+import { buildFiledLoads } from './filedLoads.ts'
 import { currentRequestScope, inReleasedRender } from './requestScope.ts'
 
 /**
@@ -72,6 +73,7 @@ export async function composePage(
 ): Promise<Rendered> {
     const heads: string[] = []
     const levels: (Rendered & { scope: ShareScope | null })[] = []
+    buildFiledLoads()
     setUpLevels(0, layouts.length + 1, undefined, props, (at, levelProps) => {
         if (at < layouts.length)
             levelProps.children = (): string => {

@@ -815,8 +815,9 @@ naming the cycle.
 
 11.66 `s.set` MUST throw 11.65's refusal, and a body whose answer 11.65 refuses MUST fail with it.
 
-11.67 A `reactive` without `global` MUST be built afresh in each request that reaches it, from its
-declaration and never from what a write outside every request left.
+11.67 A `reactive` without `global` MUST be built afresh in each request that reaches it or whose
+`render` builds it under 41.34, from its declaration and never from what a write outside every
+request left.
 
 11.68 A keyed value's body MUST be handed what its `args` gate returned.
 
@@ -3651,6 +3652,10 @@ an update and not under 41.24.
 
 41.33 An `Rpc` call answering a stream whose run had closed when `render` built the markup from it
 MUST hold every chunk of that run, its run closed, as hydration adopts the page.
+
+41.34 A `render` MUST build the instance 11.67 builds in its request of every `reactive` a module
+declared outside every request whose build there left a load in flight, before it sets up a page
+or a layout.
 
 # 42. The app object
 

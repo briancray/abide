@@ -17,6 +17,7 @@ import type { Params } from '#shared/matchRoute.ts'
 import type { Principal } from '#shared/principal.ts'
 import { type Scope, SCOPING } from '#shared/reactive/scoping.ts'
 
+import { fileIfLoading } from './filedLoads.ts'
 import type { Followers } from './Followers.ts'
 import type { McpSurface } from './generatedSurfaces.ts'
 import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
@@ -141,6 +142,11 @@ SCOPING.provider = {
     serverStops: currentStops,
     run: (scope, body, given) =>
         STORAGE.run(scope as RequestScope | undefined, body, given),
+    // A component's own value in a render outside every request is filed too, and is no declaration
+    // to build again in every render after it.
+    filed: (forwarder) => {
+        if (currentStops() === undefined) fileIfLoading(forwarder)
+    },
 }
 
 /**

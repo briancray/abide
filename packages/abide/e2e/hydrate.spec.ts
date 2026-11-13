@@ -26,6 +26,44 @@ export default GET(async ({ id }: { id: string }) => {
     return { id, word: 'settled' }
 })
 `,
+    // Lands a microtask after it starts, inside the turn a render lets run after setup (41.19).
+    whoami: `import { GET } from '@abide/abide/server'
+
+export default GET(async () => {
+    await Promise.resolve()
+    return { owner: true }
+})
+`,
+}
+
+// 41.34 — A MODULE'S VALUE WHOSE BUILD MAKES A CALL, read by the page's own markup and by a child
+// whose setup makes a call, which 41.28 builds after the turn.
+const MODULE_VALUE = {
+    'lib/me.ts': `import { reactive } from '@abide/abide'
+import whoami from '#src/data/whoami.handler.ts'
+
+export const me = reactive(() => whoami())
+`,
+    'lib/canEdit.ts': `import { reactive } from '@abide/abide'
+import { me } from './me.ts'
+
+export const canEdit = reactive(() => me.ready() && me().owner)
+`,
+    'lib/Deferred.abide': `<script>
+import { reactive } from '@abide/abide'
+import getValue from '#src/data/getValue.handler.ts'
+import { canEdit } from './canEdit.ts'
+
+const value = reactive(() => getValue({ id: 'deferred' }))
+</script>
+
+<p id="deferred">{#if canEdit()}<b>edit</b>{:else}<i>view</i>{/if}{value.busy() ? '' : value().word}</p>`,
+    'owner/index.abide': `<script>
+import Deferred from '../lib/Deferred.abide'
+import { canEdit } from '../lib/canEdit.ts'
+</script>
+
+<main><p id="inline">{#if canEdit()}<b>edit</b>{:else}<i>view</i>{/if}</p><Deferred /></main>`,
 }
 
 // EACH ARM'S BUTTON HAS A HANDLER OF ITS OWN, and the two are one element apiece, so no walk can
@@ -49,6 +87,7 @@ test.beforeAll(async ({}, testInfo) => {
     const files: Record<string, string> = {
         'armed/index.abide': pageOver('getValue'),
         'slow/index.abide': pageOver('getSlow'),
+        ...MODULE_VALUE,
     }
     for (const [name, text] of Object.entries(HANDLERS))
         files[`data/${name}.handler.ts`] = text
@@ -119,5 +158,20 @@ test('a value painted in flight is in flight where the page adopts — 41.27', a
     await page.click('#act')
     await expect.poll(() => page.textContent('#pressed')).toBe('buy')
     expect(await page.getAttribute('#act', 'class')).toBe('buy')
+    expect(warned).toEqual([])
+})
+
+// 41.34 — ONE ANSWER FOR A MODULE'S VALUE ACROSS THE PAGE, so the browser, which built it at import,
+// adopts every region that reads it. THE REVERT: drop the `buildFiledLoads()` line from
+// `composePage`. The server paints the inline region `view` and the deferred child `edit`, and
+// hydration rebuilds the region that disagrees with the browser's answer: 1 warning, against 0.
+test("a module's value whose build makes a call hydrates with no region rebuilt — 41.34", async ({
+    page,
+}) => {
+    const warned = hydrateWarnings(page)
+    await page.goto(`${base}/owner`)
+    await expect(page.locator('#inline b')).toHaveText('edit')
+    await expect(page.locator('#deferred b')).toHaveText('edit')
+    await page.waitForLoadState('networkidle')
     expect(warned).toEqual([])
 })
