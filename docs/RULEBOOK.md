@@ -832,6 +832,9 @@ the `store`'s `get` before it is reached.
 11.72 A `Keyed` MUST NOT hold an entry for an `Args` its `args` gate refuses, and the gate MUST run
 once per entry.
 
+11.73 A body's first run in a scope that reads the `reactive` it is building MUST fail with a
+`ReferenceError`.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
@@ -3659,6 +3662,9 @@ MUST hold every chunk of that run, its run closed, as hydration adopts the page.
 41.34 A `render` MUST build the instance 11.67 builds in its request of every `reactive` a module
 declared outside every request whose build there left a load in flight, before it sets up a page
 or a layout.
+
+41.35 A `render` MUST NOT build under 41.34 a `reactive` built in a component's setup or in another
+`render`, nor one nothing reaches.
 
 # 42. The app object
 

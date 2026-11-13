@@ -51,9 +51,17 @@ class Filed {
      * it with the scope.
      */
     unbuilt: Tracked
+    /**
+     * 11.73 — the scope whose instance `make` is building now, or the `Filed` itself for the home,
+     * and `undefined` where nothing is. A body reaching the value it is the first run of reaches
+     * this, where `instances` is still empty and a read built another instance, whose body reached
+     * it again — until the stack ran out.
+     */
+    building: object | undefined
 
     constructor(make: () => unknown, lazy: boolean, global: boolean) {
         this.make = make
+        this.building = undefined
         // OUTSIDE EVERY SCOPE even where an `ambient` is first built inside a request (`principal`'s
         // members): built there, the home read that request's instances for the life of the process.
         this.home = lazy ? UNBUILT : runInScope(undefined, make, undefined)
@@ -76,16 +84,20 @@ function instanceOf(filed: Filed): Record<PropertyKey, unknown> {
     const scope = filed.global ? undefined : currentScope()
     if (scope === undefined) {
         if (filed.home === UNBUILT) {
-            filed.home = filed.declaredOwned
-                ? runInScope(undefined, filed.make, undefined)
-                : unowned(() => runInScope(undefined, filed.make, undefined))
+            filed.home = built(filed, filed, () =>
+                filed.declaredOwned
+                    ? runInScope(undefined, filed.make, undefined)
+                    : unowned(() =>
+                          runInScope(undefined, filed.make, undefined),
+                      ),
+            )
             signalMoved(filed.unbuilt)
         }
         return filed.home as Record<PropertyKey, unknown>
     }
     let instance = scope.instances.get(filed)
     if (instance === undefined) {
-        instance = filed.make()
+        instance = built(filed, scope, filed.make)
         scope.instances.set(filed, instance)
         const asked = scope.instances.get(filed.unbuilt) as Tracked | undefined
         if (asked !== undefined) {
@@ -94,6 +106,24 @@ function instanceOf(filed: Filed): Record<PropertyKey, unknown> {
         }
     }
     return instance as Record<PropertyKey, unknown>
+}
+
+/**
+ * 11.73 — what `make` builds for `building`, refusing a read that reaches it again before it has —
+ * a body reading the value it is the first run of, which a browser refuses as the binding's TDZ.
+ */
+function built(filed: Filed, building: object, make: () => unknown): unknown {
+    if (filed.building === building)
+        throw new ReferenceError(
+            'abide: a reactive read itself in its first run, before it was built. RULEBOOK 11.73.',
+        )
+    const outer = filed.building
+    filed.building = building
+    try {
+        return make()
+    } finally {
+        filed.building = outer
+    }
 }
 
 // EVERY MEMBER, FORWARDED — and the cell too, as a getter, because the core reaches a value's

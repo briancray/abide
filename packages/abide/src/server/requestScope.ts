@@ -16,6 +16,7 @@ import type { Framed } from '#shared/framing.ts'
 import type { Params } from '#shared/matchRoute.ts'
 import type { Principal } from '#shared/principal.ts'
 import { type Scope, SCOPING } from '#shared/reactive/scoping.ts'
+import { settingUp } from '#shared/reactive/watch.ts'
 
 import { fileIfLoading } from './filedLoads.ts'
 import type { Followers } from './Followers.ts'
@@ -142,10 +143,12 @@ SCOPING.provider = {
     serverStops: currentStops,
     run: (scope, body, given) =>
         STORAGE.run(scope as RequestScope | undefined, body, given),
-    // A component's own value in a render outside every request is filed too, and is no declaration
-    // to build again in every render after it.
+    // 41.35 — A MODULE'S DECLARATION, which a component's own value is not: one built in a render
+    // outside every request, or in a setup — a browser half mounted in a test process the server's
+    // modules are loaded in — is no declaration to build again in every render after it.
     filed: (forwarder) => {
-        if (currentStops() === undefined) fileIfLoading(forwarder)
+        if (currentStops() === undefined && !settingUp())
+            fileIfLoading(forwarder)
     },
 }
 

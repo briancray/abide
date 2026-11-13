@@ -12,21 +12,42 @@
 // that is already in flight. EVERY ONE THE PROCESS'S MODULES DECLARED, not the page's module graph
 // alone: the runtime holds no graph to walk, and the bundle an executable holds (38.10) keeps no
 // module's path to key a value by.
+//
+// 41.35 — HELD WEAKLY, so a value built outside every request that is no declaration — one a
+// callback or a timer builds — is dropped once nothing reaches it, where a list holding it grew by
+// one per build and built every one of them in every render after. A declaration is held by its
+// module for the life of the process.
 
 import { heldGenerationOf } from '#shared/reactive/producer.ts'
 import { buildHere } from '#shared/reactive/scoped.ts'
 
-const LOADING: unknown[] = []
+const LOADING: WeakRef<object>[] = []
+/** The length past which `fileIfLoading` drops what was collected before it files another. */
+let pruneAt = 64
+
+/** Drops every value collected since it was filed, keeping the rest in the order they were filed. */
+function prune(): void {
+    let kept = 0
+    for (const held of LOADING)
+        if (held.deref() !== undefined) LOADING[kept++] = held
+    LOADING.length = kept
+}
 
 /**
  * Keeps `forwarder` where its home has a load in flight — `undefined` as the generation it stands at.
  * Told outside every request, where a forwarder answers with its home.
  */
 export function fileIfLoading(forwarder: unknown): void {
-    if (heldGenerationOf(forwarder) === undefined) LOADING.push(forwarder)
+    if (heldGenerationOf(forwarder) !== undefined) return
+    if (LOADING.length >= pruneAt) {
+        prune()
+        pruneAt = Math.max(64, LOADING.length * 2)
+    }
+    LOADING.push(new WeakRef(forwarder as object))
 }
 
 /** Builds the current scope's instance of every value `fileIfLoading` kept, starting its load. */
 export function buildFiledLoads(): void {
-    for (const forwarder of LOADING) buildHere(forwarder)
+    prune()
+    for (const held of LOADING) buildHere(held.deref())
 }
