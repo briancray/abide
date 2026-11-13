@@ -24,7 +24,8 @@ function text(value: string): Uint8Array {
 
 /**
  * Shows `headline` in bold over `body`, with `icon` where it is an image macOS reads, and `buttons`
- * right to left — the first is pressed by Return. Answers the index of the button pressed.
+ * right to left — the last is the default, blue and pressed by Return, and the first is pressed by
+ * Escape. Answers the index of the button pressed.
  */
 export function macAlert(
     headline: string,
@@ -128,8 +129,15 @@ export function macAlert(
             // An icon macOS cannot read leaves the alert its own.
             if (image !== null && image !== 0) send(alert, 'setIcon:', image)
         }
-        for (const button of buttons)
-            send(alert, 'addButtonWithTitle:', string(button))
+        // AppKit makes the first button added the default; the keys are moved to the ends instead.
+        let first: Id = null
+        let last: Id = null
+        for (const button of buttons) {
+            last = send(alert, 'addButtonWithTitle:', string(button))
+            first ??= last
+        }
+        send(first, 'setKeyEquivalent:', string('\u001b'))
+        send(last, 'setKeyEquivalent:', string('\r'))
         const pressed = sendTyped(alert, 'runModal', [], FFIType.i64) as
             number | bigint
         return Number(pressed) - FIRST_BUTTON

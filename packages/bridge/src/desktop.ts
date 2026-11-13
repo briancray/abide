@@ -1,7 +1,7 @@
 // WHAT THE LINK HANDLER SHOWS THE VISITOR, on each desktop it installs on: the question before a pairing
 // (44.42) and a notification for each line the bridge says. The question is each desktop's own —
 // macOS's `NSAlert` (`macAlert.ts`), a Windows Forms dialog, zenity or kdialog on Linux — by the asking
-// app's name and icon (44.90), with Don't Allow pressed by Return. Everything shown is passed as an
+// app's name and icon (44.90), with Allow pressed by Return and Don't Allow by Escape. Everything shown is passed as an
 // argument, a variable or a file, never written into a script, so nothing a site names is read as code.
 //
 // 44.64 — A QUESTION THAT CANNOT BE SHOWN IS A NO: a Linux desktop with neither `zenity` nor `kdialog`
@@ -35,7 +35,7 @@ const ALLOW = 'Allow'
 const SITE_TOOLS = 'Only Site Tools'
 
 // A Windows Forms dialog: the icon at the left, the headline in bold over the body, and the buttons in
-// `ABIDE_BRIDGE_BUTTONS` laid right to left, the first pressed by Enter and by Escape. It prints the
+// `ABIDE_BRIDGE_BUTTONS` laid right to left, the last pressed by Enter and the first by Escape. It prints the
 // index of the button pressed; closing it is the first.
 const WINDOWS_DIALOG = `
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
@@ -96,7 +96,7 @@ for ($at = 0; $at -lt $labels.Length; $at++) {
     $button.Add_Click({ param($clicked) $script:pressed = $clicked.Tag; $form.Close() })
     $row.Controls.Add($button)
 }
-$form.AcceptButton = $row.Controls[0]
+$form.AcceptButton = $row.Controls[$row.Controls.Count - 1]
 $form.CancelButton = $row.Controls[0]
 $form.Add_Shown({ $form.Activate() })
 [void]$form.ShowDialog()
@@ -144,7 +144,8 @@ async function iconFile(
 
 /**
  * The buttons a question is answered with, right to left as macOS and Windows lay them: Don't Allow
- * last on the right, where Return presses it, the site's own tools beside it, and Allow first.
+ * last on the right, where Escape presses it, the site's own tools beside it, and Allow first, the
+ * default Return presses.
  */
 export function buttonsOf(offerSiteTools: boolean): string[] {
     return offerSiteTools ? [DENY, SITE_TOOLS, ALLOW] : [DENY, ALLOW]
