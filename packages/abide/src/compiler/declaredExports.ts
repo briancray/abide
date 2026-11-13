@@ -161,17 +161,21 @@ async function exportsIn(
                             handlerType === undefined
                                 ? undefined
                                 : await valueOfRpc(checker, handlerType)
-                        if (handlerType !== undefined && abide.reactive) {
-                            const at = await nestedReactiveIn(
+                        if (handlerType !== undefined) {
+                            const found = await unwiredIn(
                                 checker,
                                 abide.reactive,
                                 value,
                                 '',
                                 { seen: new Set(), depth: 0 },
                             )
-                            if (at !== undefined)
+                            if (found?.reactive === true)
                                 throw new Error(
-                                    `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (RULEBOOK 11.12). RULEBOOK 16.39.`,
+                                    `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${found.at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (RULEBOOK 11.12). RULEBOOK 16.39.`,
+                                )
+                            if (found !== undefined)
+                                throw new Error(
+                                    `abide: ${path} — \`${exported.name}\` returns an item that may be \`undefined\` at \`${found.at}\`, which the wire carries as \`null\`, so a browser would read what a server call never does. Write \`null\` there, or leave the item out. RULEBOOK 16.105.`,
                                 )
                         }
                         return {
@@ -679,29 +683,26 @@ async function valueOfRpc(
 }
 
 /**
- * 16.39 — the path to the first `Reactive` nested in a handler's value, or `undefined`.
+ * The path to the first thing in a handler's value the wire would not carry as it is, or `undefined`:
+ * a `Reactive` nested below its top level (16.39), or an array or tuple item that may be `undefined`
+ * (16.105).
  *
  * `.name` for a member, `[]` for an array's items and `[n]` for a tuple's. A callable that is not
  * a `Reactive` is not walked — it cannot be JSON, and a lib type's methods are most of what it is —
- * and nor is anything deeper than `argsSchemaOf`'s depth, for its reason.
+ * and nor is anything deeper than `argsSchemaOf`'s depth, for its reason. `reactive` is `undefined`
+ * where the app reaches no `Reactive`, and none is looked for.
  */
-async function nestedReactiveIn(
+async function unwiredIn(
     checker: Checker,
-    reactive: CheckedSymbol,
+    reactive: CheckedSymbol | undefined,
     type: Type | undefined,
     path: string,
     walk: Walk<Set<number>>,
-): Promise<string | undefined> {
+): Promise<{ at: string; reactive: boolean } | undefined> {
     if (type === undefined || walk.depth >= DEEPEST) return undefined
     if (type.flags & TypeFlags.Union) {
         for (const member of await unionMembers(type)) {
-            const found = await nestedReactiveIn(
-                checker,
-                reactive,
-                member,
-                path,
-                walk,
-            )
+            const found = await unwiredIn(checker, reactive, member, path, walk)
             if (found !== undefined) return found
         }
         return undefined
@@ -710,9 +711,10 @@ async function nestedReactiveIn(
         return undefined
     if (
         walk.depth > 0 &&
+        reactive !== undefined &&
         (await isReactiveMember(checker, reactive, type, false))
     )
-        return path
+        return { at: path, reactive: true }
     if (walk.seen.has(type.id)) return undefined
     walk.seen.add(type.id)
     const inner: Walk<Set<number>> = { seen: walk.seen, depth: walk.depth + 1 }
@@ -724,11 +726,17 @@ async function nestedReactiveIn(
     if (array || tuple) {
         const items = await checker.getTypeArguments(type as TypeReference)
         for (let at = 0; at < items.length; at += 1) {
-            const found = await nestedReactiveIn(
+            const item = items[at] as Type
+            const itemPath = `${path}${array ? '[]' : `[${at}]`}`
+            // 16.105 — JSON writes an `undefined` item as `null`.
+            for (const member of await unionMembers(item))
+                if (member.flags & (TypeFlags.Undefined | TypeFlags.Void))
+                    return { at: itemPath, reactive: false }
+            const found = await unwiredIn(
                 checker,
                 reactive,
-                items[at],
-                `${path}${array ? '[]' : `[${at}]`}`,
+                item,
+                itemPath,
                 inner,
             )
             if (found !== undefined) return found
@@ -739,7 +747,7 @@ async function nestedReactiveIn(
     const members = await checker.getPropertiesOfType(type)
     const types = await checker.getTypeOfSymbol(members)
     for (let at = 0; at < members.length; at += 1) {
-        const found = await nestedReactiveIn(
+        const found = await unwiredIn(
             checker,
             reactive,
             types[at],

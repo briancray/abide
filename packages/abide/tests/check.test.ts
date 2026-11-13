@@ -1343,7 +1343,7 @@ test('a check reports a stray file in an address directory at the file — 38.33
 
 // 16.39 —A `Reactive` NESTED IN WHAT A HANDLER RETURNS is refused, by the handler and the path to
 // it; one returned whole is adopted (11.12) and is not — `getUser` is listed first, so a refusal
-// of it would be the one read. THE REVERT: skip `nestedReactiveIn` in `declaredExports`; the check reads
+// of it would be the one read. THE REVERT: skip `unwiredIn` in `declaredExports`; the check reads
 // 0 refusals where 1 is due, in each app.
 test('a handler returning a Reactive nested in its value is refused by path — 16.39', async () => {
     const refusals = async (name: string, handler: string) => {
@@ -1392,7 +1392,7 @@ export default ${handler}
     )
     expect(await refusals('', '')).toEqual([])
     // As deep as `argsSchemaOf` walks and no deeper: seven members down is read, eight is past
-    // `DEEPEST`. THE REVERT: `walk.depth > DEEPEST` in `nestedReactiveIn` refuses the eighth, 1
+    // `DEEPEST`. THE REVERT: `walk.depth > DEEPEST` in `unwiredIn` refuses the eighth, 1
     // where 0 is due.
     const deepest = await refusals(
         'getDeep',
@@ -1405,6 +1405,39 @@ export default ${handler}
         'GET(() => ({ a: { b: { c: { d: { e: { f: { g: { h: user } } } } } } } }))',
     )
     expect(past).toEqual([])
+}, 60_000)
+
+// 16.105 — AN ARRAY OR TUPLE ITEM THAT MAY BE `undefined` IS REFUSED, by the handler and the path to
+// it: the wire writes it `null`, so a server render calling in process painted `undefined` where the
+// browser's copy hydrates `null`. A member that may be `undefined` is left out by the wire and reads
+// back `undefined`, so it is not refused, and nor is `null` written for the item. THE REVERT: drop the
+// `undefined` test from the item loop in `unwiredIn`; the check reads 0 refusals where 2 are due.
+test('a handler answering an array item that may be undefined is refused by path — 16.105', async () => {
+    const app = appFixture({
+        'index.abide': '<p>hello</p>',
+        'charts/getPoints.handler.ts': `import { GET } from '@abide/abide/server'
+
+export default GET(() => ({ points: [1, undefined, 3] }))
+`,
+        'charts/getPair.handler.ts': `import { POST } from '@abide/abide/server'
+
+export default POST(({ at }: { at: number }): { pair: [number, string | undefined] } => ({ pair: [at, undefined] }))
+`,
+        'charts/getKept.handler.ts': `import { GET } from '@abide/abide/server'
+
+export default GET(() => ({ points: [1, null, 3], note: undefined as string | undefined }))
+`,
+    })
+    const said: string[] = []
+    for (const diagnosis of await checkApp(app))
+        if (diagnosis.message.includes('16.105'))
+            said.push(
+                `${relative(realpathSync(app), diagnosis.path)} ${/at `([^`]*)`/.exec(diagnosis.message)?.[1]}`,
+            )
+    expect(said.sort()).toEqual([
+        'charts/getPair.handler.ts .pair[1]',
+        'charts/getPoints.handler.ts .points[]',
+    ])
 }, 60_000)
 
 // 32.6 — A `bind:` WITH NOTHING BOUND IS NO PROP, to the checker as to the build: both key a tag's
