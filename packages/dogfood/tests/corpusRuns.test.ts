@@ -3,7 +3,7 @@
 // which is a weak bar: a module that compiles can still walk to a node that is not there or throw
 // on its first read. This one runs them.
 //
-// The chapter apps are written as an app author writes, against the surface the rulebook decided,
+// The CRM is written as an app author writes, against the surface the rulebook decided,
 // so they exercise what a fixture written beside the implementation does not.
 
 import { expect, test } from 'bun:test'
@@ -45,12 +45,12 @@ import {
 import { allCards } from './docsPages.ts'
 
 const APP = new URL('../', import.meta.url).pathname
-// EVERY CHAPTER APP'S `src`, from the docs app's root: every card renders a component from one (40.32).
-const CHAPTER_APPS: string[] = []
+// THE EXAMPLE APP'S `src`, from the docs app's root: every card renders a component from it (40.32).
+const EXAMPLE_APPS: string[] = []
 for (const manifest of new Bun.Glob('examples/*/package.json').scanSync({
     cwd: APP,
 }))
-    CHAPTER_APPS.push(`${manifest.slice(0, -'package.json'.length)}src`)
+    EXAMPLE_APPS.push(`${manifest.slice(0, -'package.json'.length)}src`)
 const TSCONFIG = `${APP}tsconfig.json`
 
 // A file that is an app's page rather than a component a card renders.
@@ -62,7 +62,7 @@ function isRoute(path: string): boolean {
 // handler table keeps of the bindings the server module hands out (16.70).
 const HANDLER = /^const (\w+) = (?:GET|POST|PUT|PATCH|DELETE)\(/gm
 
-// EVERY CHAPTER APP, COMPILED WHOLE: its `package.json`, every `.ts` and `.abide` under its `src`,
+// THE EXAMPLE APP, COMPILED WHOLE: its `package.json`, every `.ts` and `.abide` under its `src`,
 // and every component compiled to the pair it becomes, served at its own path as a build serves it
 // (`abideModules`). The pages are left out: what is under test is what each card invokes.
 async function appTree(session: TypeSession): Promise<{
@@ -71,7 +71,7 @@ async function appTree(session: TypeSession): Promise<{
 }> {
     const tree: Record<string, string> = {}
     const files: { path: string; file: AbideFile; belowRoot: string }[] = []
-    for (const root of CHAPTER_APPS) {
+    for (const root of EXAMPLE_APPS) {
         const manifest = `${root.slice(0, -'src'.length)}package.json`
         tree[manifest] = await Bun.file(`${APP}${manifest}`).text()
         for (const path of new Bun.Glob('**/*.ts').scanSync({
@@ -217,7 +217,7 @@ test('every example renders on the server and mounts on the client', async () =>
         // 16.9 — A HANDLER HAS ITS ADDRESS FROM BOOT, so a card reading `rpc.url` or `rpc.raw` has
         // one before anything is called; the copy is given the address `mountHandlers` would give:
         // a private handler's below `/__abide/handlers` (16.70), a handler file's at its path.
-        for (const root of CHAPTER_APPS) {
+        for (const root of EXAMPLE_APPS) {
             for (const path of new Bun.Glob('**/*.abide').scanSync({
                 cwd: `${APP}${root}`,
             })) {

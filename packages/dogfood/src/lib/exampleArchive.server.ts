@@ -1,4 +1,4 @@
-// A CHAPTER APP AS A TARBALL a reader unpacks and runs: every file the app is made of under `<app>/`,
+// THE EXAMPLE APP AS A TARBALL a reader unpacks and runs: every file the app is made of under `<app>/`,
 // with the workspace's own dependencies rewritten to the published versions they stand for, so
 // `bun install` outside this repo resolves them.
 

@@ -54,27 +54,32 @@ goes.
 
 ## Documentation
 
-THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/dogfood` is served by
-`abide dev`, built by `abide build`, and the one generated part of its source tree — the reference —
-is gated against the registry it is generated from.
+THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/dogfood` (the
+`abide-docs` package) is served by `abide dev` and built by `abide build`.
 
     bun run dev           abide dev, on PORT or :3000
     bun run build         abide build
+    bun run --filter abide-docs bundle    the docs as a native app (macOS)
 
-- The docs are ONE STORY: ten chapters at `/guide/<chapter>` that build one CRM. Each is a
-  hand-written `index.abide` wrapped in `<Doc>`, with its headings as `<Section>`s, its code as
-  `<Code>` and `<Snippet>`, and its live examples as `<Example>` cards — the docs app's own
-  components, in `src/lib/`.
-- Each chapter ends with a CHAPTER APP, `packages/dogfood/examples/crm-NN`: a real abide app holding
-  everything the CRM has by then, which `/examples/crm-NN.tar.gz` serves as a download (40.41). A
-  card renders a component from that app's `lib/` and shows its files, its tests and its bench; a
-  test or bench tab renders what that file last reported (40.39), kept by
-  `bun run examples:results`. The docs app mounts each chapter's feature directory at the address
-  the app serves it at, so a card's requests reach the app's own handlers (40.37).
-- `src/lib/SITE.ts` is the guide's site map: every chapter in reading order, with its title, nav
-  label, intent, opening paragraph and the REGISTRY names it `covers`. The REFERENCE is generated —
-  one page per export, read from `docs/REGISTRY.md` (`bun packages/dogfood/scripts/referencePages.ts`,
-  40.42).
+- The docs are a REFERENCE: one page per primitive, at `/<group>/<primitive>`, grouped by what it is
+  for. `src/lib/SITE.ts` is the site map: every group, and every page's title, nav label, one-line
+  description and the REGISTRY section whose rows it carries (40.11, 40.42). The home page lists
+  every group with each page's description.
+- Each page is a hand-written `index.abide` wrapped in `<Doc>`, with its headings as `<Section>`s,
+  its code as `<Code>` and `<Snippet>`, its live examples as `<Example>` cards, and its REGISTRY
+  rows last, read from `docs/REGISTRY.md` as it renders (`<Registry />`, 40.30, 40.47).
+- Every card is drawn from ONE EXAMPLE APP, a CRM at `packages/dogfood/examples/crm`, which
+  `/examples/crm.tar.gz` serves as a download (40.41). A card renders a component from the CRM's
+  `lib/` and shows its files, its tests and its bench; a test or bench tab renders what that file
+  last reported (40.39), kept by `bun run examples:results`. The docs app mounts each of the CRM's
+  feature directories at the address the CRM serves it at, so a card's requests reach the CRM's own
+  handlers (40.37).
+- THE PROMPT AT THE TOP asks the visitor's own Claude Code, paired through `@abide/bridge` (and
+  paired already in the native app), with the docs as its only tools — `src/ask/tools/*` search the
+  pages, REGISTRY and RULEBOOK, read a page, a clause or a CRM file, and list the cards (40.44). Its
+  answer streams through `src/ask/answer.handler.ts`, which renders the markdown block by block, and
+  a `<show …/>` line in it renders live: a running example card, a CRM file, a signature, a clause,
+  measured results, a link to a page, or the page under the answer opened (40.46, 40.48).
 - Every page is also served as markdown at its address with `.md` on the end, and `/abide.md` is
   every page in reading order — derived from the rendered page by `src/lib/serveDownloads.ts`,
   so the words have one home (40.33).
@@ -92,7 +97,7 @@ reading `SITE.ts`, each `index.abide`, and the pages and markdown the built app 
     bun run format        abide format over every .abide, then bun fmt over the rest
     bun run format:check  the same, writing nothing — fails where a file would change
     bun run e2e           playwright: abide's and the harness's browser specs in chromium and
-                          webkit, the last chapter app's own spec against the docs' mount of
+                          webkit, the CRM's own specs against the docs' mount of
                           it, and the docs app at the root and under a sub-path
     bun run knip          exports and files nothing resolves through
     bun run verify        typecheck, format:check, test

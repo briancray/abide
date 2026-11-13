@@ -80,7 +80,7 @@ claims to fit everything is read as fitting nothing.
 
 # Load-bearing claims
 
-Every claim below runs in the published `@abide/abide`, and a card in the guide reruns most of them —
+Every claim below runs in the published `@abide/abide`, and a card in the docs reruns most of them —
 see Status. The right-hand
 column is the CLAUSE each claim rests on, which makes it a design commitment rather than copy: if
 the rule changes, the claim goes with it. `docs/RULEBOOK.md` is the source and this column cites
@@ -114,16 +114,16 @@ lets the claims above be short. Breaking it once makes every other claim a guess
 | "Deletes", "kills", "no more X" | Never as the HEADLINE. Offer first and contrast second — "Call a server function from a page. No route, no fetch, no client." An absence is evidence for something already offered, never the offer itself |
 
 **Today the honest frame is an EARLY PRODUCT.** Everything the claims above describe runs, in a
-package anyone can install, and the guide's cards rerun it. What is not there yet is anybody's
+package anyone can install, and the docs' cards rerun it. What is not there yet is anybody's
 production — so the rows above that wait on one still wait. Say so; being early in public is only
 a liability if the copy pretends otherwise.
 
 # The app an example is drawn from
 
-An example is a tiny product, and a product needs a world. The docs have ONE: a CRM, built across
-the guide's ten chapters, so a card is a piece of an app the reader has watched grow rather than a
-situation invented at the moment of writing. Each chapter ends with that CRM as a chapter app the
-reader can download and run, and every card is a file from it.
+An example is a tiny product, and a product needs a world. The docs have ONE: a CRM, the example
+app every card is drawn from, so a card is a piece of an app the reader can open whole rather than a
+situation invented at the moment of writing. The reader can download it and run it, and every card is
+a file from it.
 
 A CRM is the ordinary case, and that is the point: records loaded per id, forms over them, saves
 that can fail, fields not everyone may see. What a CRM does not obviously have, it grows a feature
@@ -134,7 +134,7 @@ is its surface for machines.
 gets reloaded under you" is a pattern. "A write to a derived value stands until the next recompute" is the
 clause it lands on, and the clause is the page's title rather than the card's.
 
-| Chapter feature | Patterns it has | Where they land |
+| CRM feature | Patterns it has | Where they land |
 | --- | --- | --- |
 | Contacts and their profile | Reopening a contact you already opened · a phone stored raw and shown formatted · your unsaved edit wiped by a reload · a save button that has to know in-flight from first-load | a keyed `reactive`, `transform`, a write to a derived value, `busy` against `ready` |
 | Deals and the pipeline | A list that must not refetch because you sorted it · a total that follows its filter · a figure three tiles want and one load answers · a search that fires per keystroke | an unkeyed and a keyed `reactive` body, `global`, `debounce`, `patch` |
@@ -142,8 +142,8 @@ clause it lands on, and the clause is the page's title rather than the card's.
 | Companies, accounts and operations | A page per company · a field only some users see · a server an operator has to watch | routes and layouts, `principal`, `log`, `health` |
 
 **Why one app.** Cards drawn from several worlds make the reader enter a new world per card while
-the thing being taught is the same one throughout, and a story only reads as one when every chapter
-adds to the same thing.
+the thing being taught is the same one throughout, and cards from one app read as one app however
+the reader moves between pages.
 
 **Why 40.22 seats a control with its value.** Held apart from it a button has to name its own
 subject — "add one" of what — and that name is longer and vaguer than the arrow it replaced. This
@@ -167,31 +167,33 @@ situation needs, and a count kept only to prove a point is code the proof did no
 
 # Documentation structure
 
-Two parts, and a reader uses them differently.
+One part, looked up rather than read in order: a page per primitive, grouped by what it is for, and
+a prompt above every page that answers from them.
 
 | | |
 | --- | --- |
-| The guide | one story, read in order: ten chapters building one CRM, each ending with that CRM as an app to download |
-| The reference | one page per export, looked up rather than read, generated from REGISTRY |
+| A primitive's page | what the primitive is for, its cards from the CRM, and every row REGISTRY gives it, last |
+| A group | the primitives that answer one kind of problem, listed on the home page with each page's description |
+| The prompt | the visitor's own Claude Code, answering from the pages, rendering the cards it names live in the answer |
 
-The home page shows each chapter's opening, through `<Lead of="…"/>` reading it from `SITE`; the
-constraint on a lead is 40.29's and the map section is 40.30's. SOME OF WHAT IS BELOW IS GATED as well, in
+The home page lists every group and every page's description from `SITE`; the constraint on a
+description is 40.29's. SOME OF WHAT IS BELOW IS GATED as well, in
 `packages/dogfood/tests/coverage.test.ts` and `voice.test.ts` — the tests are the list, an
 enumeration here being a second copy of them that nothing reruns. A rule here that turns out to be
 checkable belongs in a test rather than in prose; what stays is what only a reader can decide.
 
-* **A chapter adds to the app; it does not survey a topic.** A chapter is the next thing the CRM
-  needs, and its sections are the behaviors that thing takes. A name that matters to the CRM gets a
-  card; a name that does not gets a row in a table, and its reference page carries the rest.
-* **A page's LEAD is what the home page says about it.** 40.29 is the constraint and also
-  the test: the lead is about the whole page rather than about whatever the first heading happens
-  to be, and an opening that describes the first card advertises the page as that one card.
-* **Where a page's subject is a NAME, the first section is the map 40.30 asks for.** A reader
-  arriving to compare two spellings gets them in the first screen instead of assembling them from
-  six sections; one who came to learn scrolls past a table costing four lines. It fits a page whose
-  subject is one name with variants, which is most of the primitives, and it does not fit a page
-  about a technique — a schema page has no two forms to lay out, and a map of one thing is
-  furniture.
+* **A page is one primitive; it does not survey a topic.** Its sections are the behaviors that
+  primitive takes, each where the CRM would reach for it. A behavior that matters to the CRM gets a
+  card; one that does not gets a row in a table, and the REGISTRY rows at the foot carry the rest.
+* **A page's DESCRIPTION is what the home page says about it.** 40.29 is the constraint and also
+  the test: the description is about the whole primitive rather than about whatever the first
+  heading happens to be, and one that describes the first card advertises the page as that card.
+* **A page reads on its own.** A reader arrives from the index, a search or an answer, so nothing on
+  a page leans on another page having been read first: a term another page defines is linked, and
+  "above", "earlier" and "next" name nothing.
+* **An answer is the docs, not a second voice.** The prompt answers from the pages and renders what
+  they already hold — a card, a file, a row, a clause — rather than describing it again, so what a
+  reader is shown in an answer is what a page shows and its tests rerun.
 
 * **A nav label and a title are two registers.** The label is what a reader scans a sidebar
   for — one or two words, and words they ALREADY OWN rather than ours or another framework's.
@@ -246,7 +248,7 @@ three pages later.
   A reader who can check a claim in two seconds holds it; one who is asked to follow an
   argument is still deciding. This is the strongest form of "claim, then evidence" and the
   default — reach for prose evidence only where no example fits. Every example is a real `.abide` or
-  `.ts` file of the chapter app, running on the page that teaches it, and 40.3 asks it to show the
+  `.ts` file of the example app, running on the page that teaches it, and 40.3 asks it to show the
   test its app reruns, which is what keeps it evidence rather than illustration.
 * **Four layers reach a card, and each says a thing the others cannot.** The HEADING is the
   claim, in the reader's words, and 40.23 is what binds the card to it. The card's TITLE is the
@@ -323,9 +325,9 @@ three pages later.
 * **Name the cost.** Every real trade gets said out loud — the seams are all-or-nothing, a
   `GET` that writes is reachable cross-origin, `config()` cannot be imported in a browser. Naming costs is
   what makes the claims believable.
-* **Stack concepts, never stack prerequisites.** A page introduces one new concept and depends
-  only on concepts already introduced. `covers:` in the frontmatter is where a page declares
-  which ones, so the order is checkable rather than remembered.
+* **One concept, never stacked prerequisites.** A page introduces its one primitive and links every
+  other it depends on, so it reads from any entry point. `registry` in its `SITE` entry is the one
+  REGISTRY section it carries, so what it owns is checkable rather than remembered.
 * **No exclamation marks. No "simply", "just" or "easy" in front of an instruction** — "just
   add", "simply call" is the construction that makes a reader feel stupid when it does not
   work. "It just works" is a claim about the RESULT and is allowed with an example under it.
@@ -401,6 +403,6 @@ page still carries until its example exists; they are a stage, not a second spel
 
 | | |
 | --- | --- |
-| Real today | `@abide/abide` on npm — the compiler, the rendering runtime, the server, the transports and the `abide` CLI — beside `@abide/harness` and `@abide/bridge`; `docs/REGISTRY.md`, `docs/RULEBOOK.md`; and the documentation site, whose ten chapter apps each pass their own tests |
+| Real today | `@abide/abide` on npm — the compiler, the rendering runtime, the server, the transports and the `abide` CLI — beside `@abide/harness` and `@abide/bridge`; `docs/REGISTRY.md`, `docs/RULEBOOK.md`; and the documentation site, whose example app passes its own tests |
 | Not yet | Anybody's production, and a comparison to a named framework run on the same input in the same engine |
 | Therefore | A claim above is phrased as something a reader can run, and the card under it is the proof. The rows of What we do not say that wait on production or on a comparison still wait |

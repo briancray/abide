@@ -395,7 +395,7 @@
     }
 }
 
-/* A CHAPTER APP'S PAGE is that app, which the site bar is not drawn over (40.37): with no
+/* A PAGE OF THE CRM is that app, which the site bar is not drawn over (40.37): with no
    bar, the body is that page's column rather than the site's grid. Unlayered, so it beats `grid`. */
 body:not(:has(> .site)) {
     display: flex;

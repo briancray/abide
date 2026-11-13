@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 // SEVEN PROJECTS. The dogfood app is served at the root and again under a sub-path — the
 // sub-path arm is what catches a URL the framework built by assuming '/' — and `cards` drives
-// each chapter app's own browser specs against it. The abide pair is the framework's own browser
+// the CRM's own browser specs against it. The abide pair is the framework's own browser
 // specs and benches, and the harness pair is the measure lane's both-substrates gate; both need
 // a browser and no app, and run in each of the two engines a reader actually brings.
 //
@@ -49,8 +49,8 @@ export default defineConfig({
             testDir: './packages/harness/e2e',
             use: { ...devices['Desktop Safari'] },
         },
-        // EVERY CHAPTER APP'S OWN BROWSER SPECS, under its root `e2e`, which its bunfig's test root
-        // keeps `bun test` out of and `forwardChapters.ts` never copies into a later app. They drive
+        // THE CRM'S OWN BROWSER SPECS, under its root `e2e`, which its bunfig's test root
+        // keeps `bun test` out of. They drive
         // the app where the docs serve it (40.15), and their addresses are relative so the same spec
         // runs against the app served on its own. Chromium: the engine lane is CDP.
         {

@@ -127,7 +127,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | matcher | What a param file declares, and what a segment naming it matches by. |
 | private handler | A handler a `<script server>` declares. |
 | menu bar extra | The item `menuBarExtra` puts in the platform's menu bar. |
-| chapter app | The app the documentation's story has built by the end of one chapter, kept whole so a reader can download it and run it. |
+| example app | The app every `<Example>` is drawn from, kept whole so a reader can download it and run it. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
 **SHOULD**, **SHOULD NOT**, **MAY**.
@@ -3568,8 +3568,7 @@ leaves, and MUST NOT keep the rest of the head from being reconciled.
 
 40.2 Every name REGISTRY carries MUST be documented against real `.abide` and `.ts` files.
 
-40.3 Every `<Example>` MUST show a test file of its chapter app that exercises the component it
-renders.
+40.3 Every `<Example>` MUST show a test file of the example app that exercises the component it renders.
 
 40.4 A file an `<Example>` names that is not part of the problem its summary names MUST NOT be
 one of its files.
@@ -3590,10 +3589,9 @@ order, with the gap marked rather than closed.
 
 40.10 A `<Snippet>` anchor matching none or matching two MUST fail the page it is on as it renders.
 
-40.11 A page MUST declare in its `SITE` entry's `covers` which REGISTRY names it covers, and an
-overview or a reference page MUST declare none.
+40.11 A page MUST name in its `SITE` entry's `registry` the REGISTRY section whose rows it carries.
 
-40.12 Every name `covers` may claim MUST be claimed by exactly one page.
+40.12 Every REGISTRY section MUST be named by exactly one page's `registry`.
 
 40.13 The voice, the vocabulary and the register of a title against a nav label MUST be
 `docs/BRAND.md`'s, and MUST NOT be stated here.
@@ -3611,11 +3609,11 @@ exempts.
 
 40.18 An `<Example>` MUST demonstrate exactly one behavior.
 
-40.19 An `<Example>` MUST be embedded by exactly one page declaring `covers`.
+40.19 An `<Example>` MUST be embedded by exactly one page.
 
 40.20 An `<Example>` MUST model a pattern from the app `docs/BRAND.md` names.
 
-40.21 Every `<Example>` a chapter embeds MUST name that chapter's own chapter app.
+40.21 Every `<Example>` MUST name the example app.
 
 40.22 A control an `<Example>` renders MUST sit with the value it changes.
 
@@ -3635,18 +3633,16 @@ heading.
 40.28 A comment in an `<Example>`'s own source MUST fit on one line, and a reason longer than
 that MUST go in the copy after the card.
 
-40.29 A page's lead MUST read standalone, being what the home page shows for that page, and MUST
+40.29 A page's description MUST read standalone, being what the home page's index lists under it, and MUST
 NOT carry a relative link.
 
-40.30 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
-forms, the options they share, and a link to its reference page.
+40.30 A page MUST render the rows its `registry` names after everything else it writes.
 
-40.31 A documentation page other than a reference page MUST be an `index.abide` written by hand at
-its route, and its title, nav label, intent, lead and `covers` MUST be its `SITE` entry's alone.
+40.31 A documentation page MUST be an `index.abide` written by hand at its route, and its title, nav
+label, description and `registry` MUST be its `SITE` entry's alone.
 
-40.32 An `<Example>` MUST render a component in a `lib` directory of the chapter app it names, and
-that component's handlers, hooks and data MUST be in its own file, save a file the example is
-about.
+40.32 An `<Example>` MUST render a component in a `lib` directory of the example app, and that
+component's handlers, hooks and data MUST be in its own file, save a file the example is about.
 
 40.33 A page's `.md` twin MUST be derived from what the page renders.
 
@@ -3656,38 +3652,46 @@ site builds, with each clause and each group anchored by its own number.
 40.35 A page, or a section of one, whose every behavior is performed by a command, or decided by the
 deployment an app is served from, MAY embed no `<Example>`.
 
-40.36 A page embedding no `<Example>` at all under 40.35 MUST name which of the two in its `SITE`
-entry's `cardless`.
+40.36 A page embedding no `<Example>` MUST be on the documentation gates' list of such pages, and that
+list MUST NOT gain a page.
 
-40.37 The documentation site MUST serve each chapter's feature directory at the address the chapter
-app serves it at, with none of the site's chrome around its pages.
+40.37 The documentation site MUST serve each feature directory of the example app at the address the
+example app serves it at, with none of the site's chrome around its pages.
 
-40.38 A chapter app MUST be a package directly under the documentation site's `examples`, and MUST
-pass its own tests and its own `abide check` run from its own directory.
+40.38 The example app MUST be a package directly under the documentation site's `examples`, and MUST pass
+its own tests and its own `abide check` run from its own directory.
 
-40.39 An `<Example>` naming a chapter app MUST render, above the source of each test or bench file
-it shows, what that file last reported in the results the site keeps for the app.
+40.39 An `<Example>` MUST render, above the source of each test or bench file it shows, what that file
+last reported in the results the site keeps for the example app.
 
-40.40 An `<Example>` naming a chapter app whose results were never kept MUST say so where the
-results would render.
+40.40 An `<Example>` whose results were never kept MUST say so where the results would render.
 
-40.41 The documentation site MUST serve each chapter app as a gzipped tarball at
+40.41 The documentation site MUST serve the example app as a gzipped tarball at
 `/examples/<app>.tar.gz`, holding every file of the app save its `node_modules` and `.abide`, with
 each workspace dependency naming the published version it stands for.
 
-40.42 The documentation site MUST give every name a public entry point exports and REGISTRY names a
-reference page of its own, generated from REGISTRY and the entry points' exports.
+40.42 The documentation site MUST give every REGISTRY `##` section, and the rows a `#` group holds
+outside one, a page of its own, listed under that `#` group.
 
-40.43 Every row of `docs/REGISTRY.md` MUST be on exactly one reference page.
+40.43 Every row of `docs/REGISTRY.md` MUST be on exactly one page.
 
-40.44 A REGISTRY table no export's reference page holds MUST be on the reference page of the `#`
-group it is in, one page per group.
+40.44 The documentation site MUST put above every page a prompt that asks the visitor's Claude Code
+through `provider.claudeCode`, with the site's own documentation tools as its only tools.
 
-40.45 A reference page MUST link each clause its rows cite to that clause's anchor on `/rulebook`.
+40.45 A page MUST link each clause its rows cite to that clause's anchor on `/rulebook`.
 
-40.46 A reference page MUST link to every guide whose `covers` claims one of its rows.
+40.46 A `<show/>` line in an answer MUST render from the documentation tool that answers the model the
+same thing.
 
-40.47 A reference page's rows MUST be read from REGISTRY as the page renders.
+40.47 A page's rows MUST be read from REGISTRY as the page renders.
+
+40.48 A `<show example/>` in an answer MUST run the card at the page that embeds it, shown alone.
+
+40.49 An answer MUST render the markup the model writes outside a `<show/>` line as text, and MUST NOT link to an address
+other than a page of the site, an anchor, a web address or a mail address.
+
+40.50 The documentation site's native app MUST file every page in its menu bar through `onMenu`,
+grouped as the sidebar groups them.
 
 # 41. Rendering and hydration
 
