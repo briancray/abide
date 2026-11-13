@@ -16,7 +16,5 @@ onLauncher(() => ({
     menuBarExtra: true,
     panelWidth: 440,
     panelHeight: 600,
-    // The feed `abide bundle` writes beside the app, which the site serves at `/native` (38.146).
-    update: 'https://abide.dev/native',
 }))
 </script>
