@@ -1,4 +1,4 @@
-// 38.71-38.75 — WHAT THE DESKTOP WINDOW SHOWS, apart from the window: the app booted here, one
+// 38.71-38.75 — WHAT THE NATIVE WINDOW SHOWS, apart from the window: the app booted here, one
 // connected to elsewhere, or neither — and what the launcher did last, kept across launches.
 
 import { isFailed } from '#shared/Failed.ts'
@@ -27,11 +27,11 @@ const CONNECT_TIMEOUT_MILLISECONDS = 5000
 
 /**
  * The launcher's state machine: start an app here, connect to one elsewhere, disconnect, and
- * remember which in `desktop.json` under `directory`.
+ * remember which in `native.json` under `directory`.
  *
  * `boot` boots the app a start serves — `bootEntered` in the executable, anything an `App` in a test.
  */
-export class DesktopSession {
+export class NativeSession {
     private readonly stateFile: string
     private readonly boot: () => Promise<App>
     readonly remembered: Remembered
@@ -45,29 +45,29 @@ export class DesktopSession {
         boot: () => Promise<App>,
         remembered: Remembered,
     ) {
-        this.stateFile = `${directory}/desktop.json`
+        this.stateFile = `${directory}/native.json`
         this.boot = boot
         this.remembered = remembered
         this.current = undefined
         this.failure = undefined
     }
 
-    /** The session `directory`'s `desktop.json` remembers, or a fresh one where there is none. */
+    /** The session `directory`'s `native.json` remembers, or a fresh one where there is none. */
     static async open(
         directory: string,
         boot: () => Promise<App>,
-    ): Promise<DesktopSession> {
+    ): Promise<NativeSession> {
         const remembered: Remembered = {
             last: null,
             values: {},
             url: '',
             port: 0,
             background: null,
-            ...(await Bun.file(`${directory}/desktop.json`)
+            ...(await Bun.file(`${directory}/native.json`)
                 .json()
                 .catch(() => ({}))),
         }
-        return new DesktopSession(directory, boot, remembered)
+        return new NativeSession(directory, boot, remembered)
     }
 
     /** The address the window shows, `undefined` where it shows the launcher. */

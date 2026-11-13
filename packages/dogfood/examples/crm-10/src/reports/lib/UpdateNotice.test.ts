@@ -5,7 +5,7 @@ import { mount } from '@abide/harness/abide'
 
 import UpdateNotice from './UpdateNotice.abide'
 
-// What the desktop app's window does once it has staged an update.
+// What the native app's window does once it has staged an update.
 const staged = (detail: unknown): void => {
     window.dispatchEvent(new CustomEvent('abide:update', { detail }))
     flushSync()

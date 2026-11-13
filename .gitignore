@@ -22,7 +22,7 @@ blob-report
 # `bun run compile` in the docs app: the executable, named after the app (RULEBOOK 38.47).
 packages/dogfood/dogfood
 
-# `abide bundle` in the docs app: the desktop app, written where it was run (RULEBOOK 38.79).
+# `abide bundle` in the docs app: the native app, written where it was run (RULEBOOK 38.79).
 packages/dogfood/dogfood.app/
 
 # What `@abide/abide` ships for a reader with only node_modules, copied at pack time (scripts/packDocs.ts).

@@ -1,4 +1,4 @@
-// 38.88 — A ROUTE'S MENUS, TOLD TO THE WINDOW IT IS SHOWN IN. Loaded only inside a desktop app, where
+// 38.88 — A ROUTE'S MENUS, TOLD TO THE WINDOW IT IS SHOWN IN. Loaded only inside a native app, where
 // the window has opened `abideMenu` to the page; anywhere else `onMenu` never imports it.
 
 import { menuBridge } from './menuBridge.ts'

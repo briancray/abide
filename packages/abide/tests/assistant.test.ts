@@ -1200,13 +1200,13 @@ console.log(JSON.stringify({ status: answer.status, text: await answer.text() })
     expect(printed.text).toContain('"text":"saw \\"ada\\""')
 }, 30_000)
 
-// 44.77, 44.78, 44.79 — THE DESKTOP APP'S OWN BRIDGE: a request carrying the window's credential is
+// 44.77, 44.78, 44.79 — THE NATIVE APP'S OWN BRIDGE: a request carrying the window's credential is
 // paired with no code spent and no bridge running, its turn is given every tool it asks for, and its
 // status lacks only an MCP tool whose server the user scope does not hold; the same request without
 // the credential, or with another, is not paired at all. THE REVERTS: read `local` as `false` in
-// `fromDesktopWindow`, and the window's status is unpaired and its turn refused 409; pass `trusted:
+// `fromNativeWindow`, and the window's status is unpaired and its turn refused 409; pass `trusted:
 // false` to the local core, and `--tools` reads empty.
-test('the desktop app’s window is paired with this machine’s Claude Code — 44.77, 44.78, 44.79', async () => {
+test('the native app’s window is paired with this machine’s Claude Code — 44.77, 44.78, 44.79', async () => {
     const configured = await scratch({
         '.claude.json': {
             mcpServers: {
@@ -1218,7 +1218,7 @@ test('the desktop app’s window is paired with this machine’s Claude Code —
     await Bun.write(shim, `#!/bin/sh\nexec bun ${FAKE_CLAUDE} "$@"\n`)
     await spawned(['chmod', '+x', shim])
     await Bun.write(
-        `${app}/desktop.ts`,
+        `${app}/native.ts`,
         `import { servedBuild } from '${SERVER}/appBuild.ts'
 import { serveLocally } from '${SERVER}/bridgeRelay.ts'
 import { bootApp } from '${SERVER}/createApp.ts'
@@ -1240,9 +1240,9 @@ const ask = async (credential: string) => {
     return { status: answer.status, text: await answer.text() }
 }
 // The tools asked for are ABIDE_BRIDGE_TOOLS', which this app is started with.
-const window = await status('; abide-desktop=window-secret')
-const stranger = await status('; abide-desktop=guessed')
-const asked = await ask('; abide-desktop=window-secret')
+const window = await status('; abide-native-credential=window-secret')
+const stranger = await status('; abide-native-credential=guessed')
+const asked = await ask('; abide-native-credential=window-secret')
 const refused = await ask('')
 await app.stop()
 console.log(JSON.stringify({ window, stranger, asked, refused }))
@@ -1254,7 +1254,7 @@ process.exit(0)
         stranger: { paired: boolean }
         asked: { status: number; text: string }
         refused: { status: number }
-    }>(['bun', `${app}/desktop.ts`], {
+    }>(['bun', `${app}/native.ts`], {
         cwd: app,
         env: {
             ...environment,

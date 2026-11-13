@@ -1,4 +1,4 @@
-// THE DESKTOP APP'S MENU BAR AS DATA (38.88): the default, with the menus the standing layouts and
+// THE NATIVE APP'S MENU BAR AS DATA (38.88): the default, with the menus the standing layouts and
 // page file with `onMenu` — apart from `installMenu.ts`, which builds it as an `NSMenu`, so what the
 // bar holds is read without AppKit.
 

@@ -1,4 +1,4 @@
-// 38.143, 38.146, 38.147 — THE FEED A DESKTOP APP UPDATES FROM: `abide bundle` writes it beside the
+// 38.143, 38.146, 38.147 — THE FEED A NATIVE APP UPDATES FROM: `abide bundle` writes it beside the
 // `.app`, signed, and the app reads it back through the public key the bundle built into it.
 //
 // SIGNED, AND NOT ONLY HASHED: the digest rides in the feed, so a host that can rewrite the zip can

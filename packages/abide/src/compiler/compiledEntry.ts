@@ -14,9 +14,9 @@ const RUNNERS = {
         name: 'runCompiled',
         path: `${ABIDE_DIRECTORY}src/server/runCompiled.ts`,
     },
-    desktop: {
-        name: 'runDesktop',
-        path: `${ABIDE_DIRECTORY}src/server/runDesktop.ts`,
+    native: {
+        name: 'runNative',
+        path: `${ABIDE_DIRECTORY}src/server/runNative.ts`,
     },
 }
 
@@ -63,7 +63,7 @@ export function compiledEntry(app: {
      * 38.70 — what `abide bundle` read of the launcher's files: `launch` the path of its
      * `launcher.abide` where that file has markup of its own; `undefined` for `abide compile`.
      */
-    desktop:
+    native:
         | {
               launch: string | undefined
               document: string
@@ -83,7 +83,7 @@ export function compiledEntry(app: {
     /** Every file under the build's `public/`, by name to the file. */
     published: Map<string, string>
 }): string {
-    const runner = RUNNERS[app.desktop === undefined ? 'compiled' : 'desktop']
+    const runner = RUNNERS[app.native === undefined ? 'compiled' : 'native']
     let imports = `import { ${runner.name} } from ${JSON.stringify(runner.path)}
 import { installSourceMaps } from ${JSON.stringify(INSTALL_SOURCE_MAPS)}
 import * as table from ${JSON.stringify(tablePath(app.root, SERVER_TABLE))}
@@ -103,16 +103,16 @@ import * as table from ${JSON.stringify(tablePath(app.root, SERVER_TABLE))}
     let specifiers = ''
     for (const [specifier, path] of abideEntries())
         specifiers += `\n    ${JSON.stringify(specifier)}: () => import(${JSON.stringify(path)}),`
-    const desktop =
-        app.desktop === undefined
+    const native =
+        app.native === undefined
             ? ''
             : `
     {
-        launch: ${app.desktop.launch === undefined ? 'undefined' : `() => import(${JSON.stringify(app.desktop.launch)})`},
-        document: ${JSON.stringify(app.desktop.document)},
-        icon: ${JSON.stringify(app.desktop.icon)},
-        accent: ${JSON.stringify(app.desktop.accent)},
-        publicKey: ${JSON.stringify(app.desktop.publicKey)},
+        launch: ${app.native.launch === undefined ? 'undefined' : `() => import(${JSON.stringify(app.native.launch)})`},
+        document: ${JSON.stringify(app.native.document)},
+        icon: ${JSON.stringify(app.native.icon)},
+        accent: ${JSON.stringify(app.native.accent)},
+        publicKey: ${JSON.stringify(app.native.publicKey)},
     },`
     return `// Written by \`abide compile\`. The whole app, as what one executable holds.
 ${imports}
@@ -140,7 +140,7 @@ await ${runner.name}(
     },
     {${specifiers}
         ...declared,
-    },${desktop}
+    },${native}
 )
 `
 }

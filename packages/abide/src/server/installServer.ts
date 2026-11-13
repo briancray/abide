@@ -8,10 +8,10 @@
 
 import { COOKIES } from '#shared/cookies.ts'
 import { CSP } from '#shared/csp.ts'
-import { REQUEST_AGENT } from '#shared/desktop.ts'
 import { HEALTH } from '#shared/health.ts'
 import { APP_NAME, TRACE } from '#shared/log.ts'
 import { MOUNT } from '#shared/mount.ts'
+import { REQUEST_AGENT } from '#shared/native.ts'
 import { PRINCIPAL } from '#shared/principal.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
@@ -41,7 +41,7 @@ export function installServer(): void {
     CSP.rung = cspRung
     CSP.nonce = nonce
     Object.assign(PRINCIPAL, SERVER_PRINCIPAL)
-    // 38.141 — the user agent `desktop` reads its window off.
+    // 38.141 — the user agent `native` reads its window off.
     REQUEST_AGENT.current = requestAgent
     // 16.11 — the request a handler's rung is handed.
     RPC_SERVER.request = request

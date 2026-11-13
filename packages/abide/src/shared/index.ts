@@ -25,9 +25,9 @@ export type {
 export type { Attributes } from './Attributes.ts'
 export { type Cookies, cookies } from './cookies.ts'
 export { csp } from './csp.ts'
-// 38.141 — which desktop window the work running is for.
-export { desktop } from './desktop.ts'
-// 38.148 — the update the desktop app's window has staged.
+// 38.141 — which native window the work running is for.
+export { native } from './native.ts'
+// 38.148 — the update the native app's window has staged.
 export { pendingUpdate, type StagedUpdate } from './pendingUpdate.ts'
 export { type Failed, isFailed } from './Failed.ts'
 // 25 — the account of the app.
@@ -41,7 +41,7 @@ export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log } from './log.ts'
 export type { Middleware } from './Middleware.ts'
 export type { Params } from './matchRoute.ts'
-// 38.88 — a desktop app's menu items, and the hook a route's layouts and page file them with.
+// 38.88 — a native app's menu items, and the hook a route's layouts and page file them with.
 export {
     type MenuEntry,
     type MenuItem,

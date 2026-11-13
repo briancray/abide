@@ -1,4 +1,4 @@
-// 38.142-38.147 — A DESKTOP APP UPDATING ITSELF, apart from the window: what `abide bundle`
+// 38.142-38.147 — A NATIVE APP UPDATING ITSELF, apart from the window: what `abide bundle`
 // publishes, served as a host would, read back by the updater an installed copy runs. A fake `.app`
 // is a directory with an `Info.plist` — what the updater moves is the directory, not what runs.
 
@@ -6,9 +6,9 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises' // bun exposes no temporary directory or removal of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
 
-import { appOf, type Checked, DesktopUpdater } from '#server/DesktopUpdater.ts'
 import { launcherOf } from '#server/launcherOptions.ts'
 import { menuBar } from '#server/menuBar.ts'
+import { appOf, type Checked, NativeUpdater } from '#server/NativeUpdater.ts'
 import {
     newUpdateKey,
     publicKeyOf,
@@ -88,7 +88,7 @@ async function installed(version: string, update: string, privateKey: string) {
     const app = `${directory}/Applications/CRM.app`
     await fakeApp(app, version)
     const told: string[] = []
-    const updater = new DesktopUpdater(
+    const updater = new NativeUpdater(
         update,
         await publicKeyOf(privateKey),
         app,

@@ -1,4 +1,4 @@
-// 38.80 — WHAT THE `onLauncher` A `src/native/launcher.abide` CALLS ANSWERS: the window the desktop app opens
+// 38.80 — WHAT THE `onLauncher` A `src/native/launcher.abide` CALLS ANSWERS: the window the native app opens
 // and the forms its launcher offers, read as the app launches.
 
 import { isRecord } from '#shared/isRecord.ts'

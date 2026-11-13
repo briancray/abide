@@ -1,5 +1,5 @@
 <script>
-import { desktop, menuItem, onMenu, watch } from '@abide/abide'
+import { menuItem, native, onMenu, watch } from '@abide/abide'
 
 import ClosedTiles from './lib/ClosedTiles.abide'
 import DealsExport from './lib/DealsExport.abide'
@@ -31,7 +31,7 @@ watch(() => printReport.on(() => print()))
 <main>
     <UpdateNotice />
     <h1>Reports</h1>
-    {#if !desktop()}
+    {#if !native()}
         <button onclick={() => print()}>Print report</button>
     {/if}
     <PipelineSummary />

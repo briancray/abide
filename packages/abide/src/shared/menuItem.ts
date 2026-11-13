@@ -1,8 +1,8 @@
-// 38.88 — THE DESKTOP APP'S MENU BAR IS THE ROUTE'S: a layout or a page calls `onMenu` in its
+// 38.88 — THE NATIVE APP'S MENU BAR IS THE ROUTE'S: a layout or a page calls `onMenu` in its
 // `<script>`, and the window shows the menus filed while it stands. An item made by
 // `menuItem` is one a page answers; the rest are an address or a role, which need no page.
 
-/** What a menu item does natively, where an address or a page's own answer could not. 38.89. */
+/** What the platform performs for a menu item, where an address or a page's own answer could not. 38.89. */
 export type MenuRole =
     | 'about'
     | 'hide'
@@ -25,7 +25,7 @@ export type MenuRole =
     | 'front'
     | 'update'
 
-/** One entry in the desktop app's menu bar, or in a menu under it. */
+/** One entry in the native app's menu bar, or in a menu under it. */
 export type MenuItem =
     | 'separator'
     | {

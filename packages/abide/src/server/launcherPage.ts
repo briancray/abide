@@ -1,4 +1,4 @@
-// 38.71 — THE DESKTOP LAUNCHER'S OWN PAGE: start the app here, under the configuration the form
+// 38.71 — THE NATIVE LAUNCHER'S OWN PAGE: start the app here, under the configuration the form
 // holds, or connect to one running elsewhere. The app's own screen and not abide's, so it speaks
 // the platform's look rather than the docs site's — and the app's color, read off its icon (38.101).
 //

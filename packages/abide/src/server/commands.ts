@@ -214,7 +214,7 @@ function commandsOf(host: Host): Row[] {
         ),
         fromSource(
             'bundle [--required] [--notes <file>]',
-            'the build, as a desktop app for this platform, and its update',
+            'the build, as a native app for this platform, and its update',
             'bundle',
         ),
         fromSource('lsp', 'the .abide language server, over stdio', 'lsp'),

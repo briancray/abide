@@ -3139,7 +3139,7 @@ its output only a file it did not produce that was written before it began.
 38.69 `abide watch` MUST follow a `GET` per 18.20, and print its value and its value after each
 `s.patch`.
 
-## The desktop app
+## The native app
 
 38.70 The executable `abide bundle` writes, started on macOS with no command, MUST open a window on
 the app rather than 38.53's shell, and given a command MUST answer it as 38.50 does.
@@ -3170,11 +3170,11 @@ as 38.46 names the executable.
 38.79 `abide bundle` MUST give the `.app` the icon the public file answered at `/icon.icns` holds,
 or one drawn at every size from the one at `/icon.png` where there is no `.icns`.
 
-38.80 The desktop app MUST read what the `onLauncher` `src/native/launcher.abide` calls answers as it
+38.80 The native app MUST read what the `onLauncher` `src/native/launcher.abide` calls answers as it
 launches, and MUST refuse to launch on a key it does not take, or a value of a type the key does not
 take.
 
-38.81 `LauncherOptions` MUST NOT admit turning off both `start` and `connect`, and the desktop app
+38.81 `LauncherOptions` MUST NOT admit turning off both `start` and `connect`, and the native app
 MUST refuse to launch on an `onLauncher` answer that does.
 
 38.82 Where the app's `src/native/launcher.abide` has markup of its own, the launcher MUST render it
@@ -3197,7 +3197,7 @@ before it left a size, and MUST NOT be resized below its `minWidth` and `minHeig
 38.87 The app's package name, as 38.46 names the executable, MUST name the app in its bundle, its
 menu bar and its `Launch`.
 
-38.88 The desktop app's menu bar MUST be the application, File, Edit, View and Window menus, with
+38.88 The native app's menu bar MUST be the application, File, Edit, View and Window menus, with
 the items every `onMenu` filed by the layouts and the page the window shows answers, outermost
 first: a menu whose `label` names one already standing appends its
 items to that one, and any other stands before Window.
@@ -3382,26 +3382,26 @@ arm declares.
 prints it and fail the command, and MUST NOT be printed as a stack.
 
 38.140 The window `abide bundle`'s executable opens, and the menu bar extra's panel, MUST append
-`abide-desktop/` and the version of the app it was bundled from to the user agent of every request
+`abide-native/` and the version of the app it was bundled from to the user agent of every request
 each makes.
 
-38.141 `desktop` MUST answer the version 38.140 names in the user agent of the request being served,
+38.141 `native` MUST answer the version 38.140 names in the user agent of the request being served,
 and in a browser the version named in its own, and MUST answer `undefined` where the user agent names
 none or no request is being served.
 
-38.142 The desktop app given an `update` by `onLauncher` MUST read the feed under that address as
+38.142 The native app given an `update` by `onLauncher` MUST read the feed under that address as
 it launches, every hour while it runs, and when the `update` role is picked, and MUST stage only a
 version `Bun.semver.order` places after the version it was bundled from.
 
-38.143 The desktop app MUST NOT stage an update whose feed the key `abide bundle` built into it did
+38.143 The native app MUST NOT stage an update whose feed the key `abide bundle` built into it did
 not sign, or whose zip's digest is not the one the feed names, and MUST report one it refuses
 through `onError`.
 
-38.144 The desktop app MUST put a staged update in its own place as it quits, only after `App.stop`
+38.144 The native app MUST put a staged update in its own place as it quits, only after `App.stop`
 has returned (38.76), and MUST leave itself in place where that fails.
 
 38.145 Picking the `update` role with an update staged, or calling `StagedUpdate.install`, MUST quit
-the desktop app (38.144) and open the update.
+the native app (38.144) and open the update.
 
 38.146 `abide bundle` MUST write an `updates` directory beside the `.app`, holding the `.app` zipped
 after it is signed and a feed naming the zip, its digest, its version, whether `--required` was given
@@ -3411,7 +3411,7 @@ and the text of the file `--notes` names.
 made for the app on its first bundle and reads on every bundle after, and MUST print where it made
 one.
 
-38.148 `pendingUpdate` MUST hold the update the desktop app has staged in the page its window or the
+38.148 `pendingUpdate` MUST hold the update the native app has staged in the page its window or the
 menu bar extra's panel shows, and MUST be `undefined` on a server and in a page neither shows.
 
 38.149 The `update` role MUST stand in the application menu where `onLauncher` answers an `update`,
@@ -3419,7 +3419,7 @@ and MUST NOT stand there otherwise.
 
 38.150 The window MUST NOT be resized above the `maxWidth` and `maxHeight` `onLauncher` answers.
 
-38.151 The desktop app MUST refuse to launch on an `onLauncher` answer whose `maxWidth` or
+38.151 The native app MUST refuse to launch on an `onLauncher` answer whose `maxWidth` or
 `maxHeight` is below its `minWidth` or `minHeight`.
 
 38.152 Where `onLauncher` answers a `titlebar` of `hidden` or `inset`, the page MUST fill the window
@@ -3443,7 +3443,7 @@ opaque background of the page's root element, or of its body where the root's is
 each load and each change of `prefers-color-scheme`, and MUST open on the last one taken at the next
 launch.
 
-38.157 The desktop app MUST draw in the `appearance` `onLauncher` answers, and `system` MUST follow
+38.157 The native app MUST draw in the `appearance` `onLauncher` answers, and `system` MUST follow
 the platform's.
 
 38.158 The window MUST NOT be resizable where `onLauncher` answers `resizable: false`.
@@ -3463,10 +3463,10 @@ the platform's.
 38.164 The launcher's own page MUST carry a `data-abide-titlebar` element across its top as tall as
 `--abide-titlebar-height`.
 
-38.165 Where `onLauncher` answers `dock: false`, the desktop app MUST show neither a Dock icon nor a
+38.165 Where `onLauncher` answers `dock: false`, the native app MUST show neither a Dock icon nor a
 menu bar.
 
-38.166 Where `onLauncher` answers `menuBarExtra: true`, the desktop app MUST put an item in the
+38.166 Where `onLauncher` answers `menuBarExtra: true`, the native app MUST put an item in the
 platform's menu bar, drawn from the public file at `/icon-menubar.png` as a template image, else from
 the one at `/icon.png`, else as the app's name.
 
@@ -3998,7 +3998,7 @@ is `max_turns`, and MUST NOT run that call.
 44.12 `provider.claudeApi` MUST send the results of one turn's tool calls back in one message.
 
 44.13 `provider.claudeCode` MUST run a turn on the Claude Code of the bridge paired with the asking
-browser, or of the desktop app's own bridge where 44.77 pairs it, and MUST refuse 409 where neither
+browser, or of the native app's own bridge where 44.77 pairs it, and MUST refuse 409 where neither
 is paired.
 
 44.14 A code `provider.claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that
@@ -4217,20 +4217,20 @@ behind the command's `--tools`, the arguments every `onPairing` answers in the a
 scope, each quoted where a shell would split or expand it, and the link MUST carry none of them.
 
 44.77 A request from the window `abide bundle`'s executable opens onto the app it started, by the
-credential 44.79 hands it, MUST read as paired with the desktop app's own bridge — this machine's
+credential 44.79 hands it, MUST read as paired with the native app's own bridge — this machine's
 Claude Code, run in the app's process — whatever browser and sign-in it carries, with no code spent
 and no question asked, wherever `claude` is on the `PATH` it runs with; a bridge paired by a code
 MUST run the turn where both are.
 
-44.78 The desktop app's own bridge MUST make available, without asking, every tool a turn's `tools`
+44.78 The native app's own bridge MUST make available, without asking, every tool a turn's `tools`
 names that is built-in or of an MCP server 44.58 finds in the user scope, and a `BridgeStatus` it
 pairs MUST carry as `missing` each tool it names of a server 44.58 does not find.
 
-44.79 The desktop app MUST hand its window a credential minted at each launch, in a cookie `HttpOnly`
+44.79 The native app MUST hand its window a credential minted at each launch, in a cookie `HttpOnly`
 and `SameSite=Strict`, and MUST NOT read a request as from its window by anything else — its user
 agent (38.141) included.
 
-44.80 The desktop app MUST run with the `PATH` the visitor's login shell sets, where that shell says
+44.80 The native app MUST run with the `PATH` the visitor's login shell sets, where that shell says
 one within 3 seconds.
 
 # 45. Offline

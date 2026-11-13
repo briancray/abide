@@ -498,7 +498,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                     title: 'Test, measure and ship',
                     nav: 'Test, measure, ship',
                     intent: 'Test the CRM, measure the work it does, and ship it.',
-                    lead: 'The CRM gets a reports page, and each report gets a test: what a click rewrote, what a change costs as the pipeline grows, and where a slow click spends its time. Then the CRM ships, as a server, a single binary or a desktop app, and keeps its pages readable offline.',
+                    lead: 'The CRM gets a reports page, and each report gets a test: what a click rewrote, what a change costs as the pipeline grows, and where a slow click spends its time. Then the CRM ships, as a server, a single binary or a native app, and keeps its pages readable offline.',
                     covers: [
                         '`createApp`',
                         '`App`',
@@ -533,7 +533,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`menuItem`',
                         '`MenuEntry`',
                         '`MenuEntry.on`',
-                        '`desktop`',
+                        '`native`',
                         '`pendingUpdate`',
                         '`StagedUpdate`',
                         '`StagedUpdate.install`',

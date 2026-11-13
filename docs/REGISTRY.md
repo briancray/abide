@@ -738,7 +738,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4 |
 | `APP_VERSION` | `string` | The version beside that name. | 27.3 |
 | `APP_DATA_DIR` | `string` | The platform's per-user data directory. | 27.3, 36.4 |
-| `ABIDE_UPDATE_KEY` | `string \| null` | The key `abide bundle` signs the desktop app's updates with. | 38.147 |
+| `ABIDE_UPDATE_KEY` | `string \| null` | The key `abide bundle` signs the native app's updates with. | 38.147 |
 | `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.11, 36.5, 38.120 |
 | `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.15, 26.16 |
 | `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
@@ -770,15 +770,15 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `**/public/**` | The files answered as authored, at their path below that directory. | 23.15, 23.16, 23.18, 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.18, 38.19 |
 | `src/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
 | `src/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
-| `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the desktop app's icon. | 36.11, 38.79, 45.15 |
+| `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the native app's icon. | 36.11, 38.79, 45.15 |
 | `src/**/` | A directory of the app's, a segment of the route of every file directly in it. | 23.14, 23.17, 23.22 |
 | `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18, 35.19 |
 | `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21, 35.19 |
 | `**/<NAME>.param.ts` | A param file: the matcher a segment naming `NAME` matches by. | 23.22, 23.24, 23.25, 23.26 |
 | `**/<name>.handler.ts` | A handler file: the handler its default export declares, at its directory's route and then `<name>`. | 16.2, 16.28, 16.73, 16.74, 19.1, 23.14, 23.22 |
 | `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
-| `src/native/` | The desktop app's own pages, which are no routes of the app's. | 23.15, 23.33 |
-| `src/native/launcher.abide` | The desktop launcher: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
+| `src/native/` | The native app's own pages, which are no routes of the app's. | 23.15, 23.33 |
+| `src/native/launcher.abide` | The native launcher: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
 | `src/native/menubar.abide` | The page the menu bar extra's panel shows. | 38.167, 38.168, 38.169, 38.171 |
 | `src/public/icon-menubar.png` | The file answered at `/icon-menubar.png`, and the menu bar extra's icon. | 36.11, 38.166 |
 | `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
@@ -802,23 +802,23 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2, 37.7, 37.13 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7, 37.13 |
 | `onPairing` | `(args: () => readonly string[]) => () => void` | The Claude Code arguments every pairing's command and install carry after `--`, for the person asking. | 37.7, 37.13, 44.76 |
-| `onLauncher` | `(options: () => LauncherOptions) => () => void` | The window the desktop app opens and the forms its launcher offers. | 38.80, 38.81, 38.83, 38.86, 38.102, 38.107, 38.156 |
+| `onLauncher` | `(options: () => LauncherOptions) => () => void` | The window the native app opens and the forms its launcher offers. | 38.80, 38.81, 38.83, 38.86, 38.102, 38.107, 38.156 |
 
-## The desktop app
+## The native app
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `LauncherOptions` | `{ width?: number; height?: number; minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number; titlebar?: 'standard' \| 'hidden' \| 'inset'; vibrancy?: 'titlebar' \| 'selection' \| 'menu' \| 'popover' \| 'sidebar' \| 'headerView' \| 'sheet' \| 'windowBackground' \| 'hudWindow' \| 'fullScreenUI' \| 'toolTip' \| 'contentBackground' \| 'underWindowBackground' \| 'underPageBackground'; appearance?: 'system' \| 'light' \| 'dark'; resizable?: boolean; fullScreen?: boolean; alwaysOnTop?: boolean; shadow?: boolean; rememberFrame?: boolean; inspector?: boolean; dock?: boolean; menuBarExtra?: boolean; panelWidth?: number; panelHeight?: number; update?: string } & ({ start?: true; connect?: boolean } \| { start: false; connect?: true })` | What an `onLauncher` may answer. | 38.80, 38.81, 38.142, 38.143, 38.144, 38.150, 38.151, 38.152, 38.154, 38.157, 38.158, 38.159, 38.160, 38.161, 38.162, 38.163, 38.165, 38.166, 38.168, 38.172, 38.173 |
-| `data-abide-titlebar` | `attribute` | The element a press drags the desktop app's window by. | 38.155, 38.164 |
-| `--abide-titlebar-height` | `<length>` | The height of the titlebar the desktop app's page is drawn under. | 38.153 |
-| `--abide-titlebar-inset` | `<length>` | The width the desktop app's window controls take from the page's start edge. | 38.153 |
-| `desktop` | `() => { version: string } \| undefined` | The version of the desktop app whose window the work running is for, a hint any client can claim. | 38.140, 38.141 |
-| `pendingUpdate` | `Reactive<StagedUpdate \| undefined>` | The update the desktop app's window has staged, waiting for it to restart. | 38.142, 38.148 |
+| `data-abide-titlebar` | `attribute` | The element a press drags the native app's window by. | 38.155, 38.164 |
+| `--abide-titlebar-height` | `<length>` | The height of the titlebar the native app's page is drawn under. | 38.153 |
+| `--abide-titlebar-inset` | `<length>` | The width the native app's window controls take from the page's start edge. | 38.153 |
+| `native` | `() => { version: string } \| undefined` | The version of the native app whose window the work running is for, a hint any client can claim. | 38.140, 38.141 |
+| `pendingUpdate` | `Reactive<StagedUpdate \| undefined>` | The update the native app's window has staged, waiting for it to restart. | 38.142, 38.148 |
 | `StagedUpdate` | `class StagedUpdate { version: string; required: boolean; notes: string \| undefined }` | What `pendingUpdate` holds. | 38.146, 38.148 |
-| `StagedUpdate.install` | `() => void` | Restarts the desktop app into the update. | 38.144, 38.145 |
-| `onMenu` | `(read: () => readonly MenuItem[]) => () => void` | The menus a layout or a page adds to the desktop app's menu bar while it stands. | 38.88, 38.92, 38.170 |
+| `StagedUpdate.install` | `() => void` | Restarts the native app into the update. | 38.144, 38.145 |
+| `onMenu` | `(read: () => readonly MenuItem[]) => () => void` | The menus a layout or a page adds to the native app's menu bar while it stands. | 38.88, 38.92, 38.170 |
 | `MenuItem` | `'separator' \| MenuEntry \| { label: string; key?: string; role?: MenuRole; href?: string; items?: MenuItem[] }` | One entry in the menu bar or in a menu under it. | 38.89, 38.90 |
-| `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front' \| 'update'` | What a menu item does natively. | 38.74, 38.89, 38.145, 38.149 |
+| `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front' \| 'update'` | What the platform performs for a menu item. | 38.74, 38.89, 38.145, 38.149 |
 | `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item the page that files it answers. | 38.91 |
 | `MenuEntry` | `class MenuEntry { label: string; key: string \| undefined; href: string \| undefined }` | What `menuItem` makes. | 38.91 |
 | `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.91 |
@@ -969,7 +969,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.13, 38.25, 38.110, 38.123 |
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.69 |
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136 |
-| `abide bundle [--out] [--required] [--notes <file>]` | A desktop app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 44.77, 44.80 |
+| `abide bundle [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |

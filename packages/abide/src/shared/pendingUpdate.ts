@@ -1,4 +1,4 @@
-// 38.148 — THE UPDATE THE DESKTOP APP'S WINDOW HAS STAGED, read by name: what a page shows an
+// 38.148 — THE UPDATE THE NATIVE APP'S WINDOW HAS STAGED, read by name: what a page shows an
 // update ready with, and what a required one is installed through. The window tells the page over
 // the channel it opens for it, `abideUpdate`, once the page asks and again whenever one is staged.
 //
@@ -14,7 +14,7 @@ import type { Reactive } from './reactive/Reactive.ts'
 
 type UpdateBridge = { postMessage(message: 'ask' | 'install'): void }
 
-/** The channel a desktop app's window opens to the page for its updates, or `undefined`. */
+/** The channel a native app's window opens to the page for its updates, or `undefined`. */
 function updateBridge(): UpdateBridge | undefined {
     return (
         globalThis as {
@@ -47,7 +47,7 @@ export class StagedUpdate {
     }
 }
 
-/** The update the desktop app's window has staged, as a `Reactive`; `undefined` where none is. */
+/** The update the native app's window has staged, as a `Reactive`; `undefined` where none is. */
 export const pendingUpdate: Reactive<StagedUpdate | undefined> =
     /* @__PURE__ */ (() => {
         if (typeof window === 'undefined')

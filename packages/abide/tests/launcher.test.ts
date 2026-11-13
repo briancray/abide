@@ -1,4 +1,4 @@
-// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165 — the desktop launcher's session, options, accent
+// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165 — the native launcher's session, options, accent
 // and own page, apart from the window: none of the four needs one to be checked.
 //
 // THE REVERT, for the accent: average every opaque pixel instead of binning by hue, and dogfood's
@@ -10,11 +10,11 @@ import { tmpdir } from 'node:os' // bun exposes no temporary directory of its ow
 
 import { buildDirectory, servedBuild } from '#server/appBuild.ts'
 import type { App } from '#server/createApp.ts'
-import { DesktopSession } from '#server/DesktopSession.ts'
 import { HOOKS } from '#server/hooks.ts'
 import { iconAccent, inkOn } from '#server/iconAccent.ts'
 import { type Launcher, launcherOf } from '#server/launcherOptions.ts'
 import { type Launch, launcherPage } from '#server/launcherPage.ts'
+import { NativeSession } from '#server/NativeSession.ts'
 import { LISTENING } from '#server/requestScope.ts'
 import { windowBridge } from '#server/windowBridge.ts'
 import { LAUNCHER_PAGE } from '#shared/NATIVE_FILES.ts'
@@ -140,7 +140,7 @@ test('a press on the titlebar drags and a double press zooms, and a control in i
 })
 
 // 38.80 — THE `onLauncher` `native/launcher.abide`'s SERVER BLOCK CALLS IS WHAT THE LAUNCH READS: the file is
-// imported out of the build as `runDesktop` imports it, and the last one filed is the answer read.
+// imported out of the build as `runNative` imports it, and the last one filed is the answer read.
 // THE REVERT: have `onLauncher` file nothing (`return () => {}` in `hooks.ts`); importing the file
 // files 0 where 1 is due, and the launch would read the default width, 1100, where 1200 is due.
 test('the launch reads what launcher.abide files with onLauncher — 38.80', async () => {
@@ -252,7 +252,7 @@ test('the Connect… menu item opens the connect dialog — 38.102', () => {
     )
 })
 
-/** An app as `DesktopSession` boots one: a real server on `listen`, counted on `stop`. */
+/** An app as `NativeSession` boots one: a real server on `listen`, counted on `stop`. */
 function fakeApp(stopped: string[], name: string): App {
     let server: Bun.Server<unknown> | undefined
     return {
@@ -278,10 +278,10 @@ const BOTH = launcherOf({}) as Launcher
 
 // 38.71-38.75 — THE WINDOW'S STATE, WITH NO WINDOW: a start serves the app booted here, a connect
 // stops it and shows the address instead, and the next launch does again what this one did last.
-// THE REVERT: drop `await this.disconnect()` from `DesktopSession.connect`; the started app is left
+// THE REVERT: drop `await this.disconnect()` from `NativeSession.connect`; the started app is left
 // serving behind the connected one, and `stopped` reads [] where ['first'] is due.
 test('a session switches between the app it started and one it connected to — 38.71, 38.73, 38.74', async () => {
-    const directory = `${tmpdir()}/abide-desktop-${crypto.randomUUID()}`
+    const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`
     const stopped: string[] = []
     const elsewhere = Bun.serve({
         hostname: '127.0.0.1',
@@ -293,16 +293,16 @@ test('a session switches between the app it started and one it connected to — 
     const boot = async () =>
         fakeApp(stopped, boots++ === 0 ? 'first' : 'second')
     try {
-        const session = await DesktopSession.open(directory, boot)
+        const session = await NativeSession.open(directory, boot)
         expect(session.shown).toBeUndefined()
 
         expect(
-            await session.start({ DESKTOP_TEST_NAME: 'ledger' }),
+            await session.start({ NATIVE_TEST_NAME: 'ledger' }),
         ).toBeUndefined()
         const served = session.shown as string
         expect(await (await fetch(served)).text()).toBe('first')
         expect(session.remembered.last).toEqual({
-            start: { DESKTOP_TEST_NAME: 'ledger' },
+            start: { NATIVE_TEST_NAME: 'ledger' },
         })
 
         // A connect that fails leaves the app standing, and its refusal is shown once.
@@ -318,7 +318,7 @@ test('a session switches between the app it started and one it connected to — 
         expect(session.shown).toBe(remote)
 
         // 38.73 — the next launch reads what this one did last, and does it again.
-        const relaunched = await DesktopSession.open(directory, boot)
+        const relaunched = await NativeSession.open(directory, boot)
         expect(relaunched.remembered.last).toEqual({ connect: remote })
         await relaunched.resume(BOTH)
         expect(relaunched.shown).toBe(remote)
@@ -326,11 +326,11 @@ test('a session switches between the app it started and one it connected to — 
         // 38.74 — a disconnect forgets it, so the launch after shows the launcher.
         await relaunched.forget()
         expect(relaunched.shown).toBeUndefined()
-        const forgotten = await DesktopSession.open(directory, boot)
+        const forgotten = await NativeSession.open(directory, boot)
         await forgotten.resume(BOTH)
         expect(forgotten.shown).toBeUndefined()
     } finally {
-        delete process.env.DESKTOP_TEST_NAME
+        delete process.env.NATIVE_TEST_NAME
         LISTENING.server = undefined
         await elsewhere.stop(true)
         await rm(directory, { recursive: true, force: true })
@@ -339,9 +339,9 @@ test('a session switches between the app it started and one it connected to — 
 
 // 38.72 — A START THE APP REFUSES IS THE START FORM'S: nothing is shown, and the refusal names it.
 test('a start whose boot throws is refused on the start form — 38.72', async () => {
-    const directory = `${tmpdir()}/abide-desktop-${crypto.randomUUID()}`
+    const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`
     try {
-        const session = await DesktopSession.open(directory, async () => {
+        const session = await NativeSession.open(directory, async () => {
             throw new Error('PORT is not a number')
         })
         expect(await session.start({})).toEqual({

@@ -1,4 +1,4 @@
-// 38.72 — THE FIELDS THE DESKTOP LAUNCHER'S START FORM ASKS FOR: the members of the `onConfig`
+// 38.72 — THE FIELDS THE NATIVE LAUNCHER'S START FORM ASKS FOR: the members of the `onConfig`
 // schema's JSON Schema, probed as 20.11 probes a handler's, and the fields `onConfig`'s defaults
 // return where the schema has no document to read.
 

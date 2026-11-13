@@ -1,6 +1,6 @@
 // WHAT A BRIDGE DOES WITH WHAT A SITE SENDS IT, apart from how it is sent: each turn run with this
 // machine's Claude Code, each MCP request it makes reported for the site to answer, and each reply
-// handed back to it. `bridge.ts` carries it over a server-sent stream and posts; the desktop app's own
+// handed back to it. `bridge.ts` carries it over a server-sent stream and posts; the native app's own
 // bridge (44.77) carries it in its own process — one core, so a frame either learns is one both learn.
 
 import type { ProviderEvent } from '@abide/abide/server'
@@ -60,7 +60,7 @@ function unanswered(method: string, message: string): Record<string, unknown> {
 /**
  * Serves the turns `site` sends, reporting each through `report`.
  *
- * `trusted` grants every tool a turn asks for, as the visitor running the desktop app has (44.78);
+ * `trusted` grants every tool a turn asks for, as the visitor running the native app has (44.78);
  * otherwise the visitor's `--tools` in `claudeArgs` narrows them (44.29). `beforeTurn` runs ahead of
  * each turn.
  */

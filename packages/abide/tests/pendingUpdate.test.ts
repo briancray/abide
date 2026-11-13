@@ -1,4 +1,4 @@
-// 38.145, 38.148 — THE UPDATE A DESKTOP APP'S WINDOW STAGED, AS A PAGE READS IT. The window is
+// 38.145, 38.148 — THE UPDATE A NATIVE APP'S WINDOW STAGED, AS A PAGE READS IT. The window is
 // played by what it does to a page: an `abide:update` event in, and a message out on `abideUpdate`.
 
 import { expect, test } from 'bun:test'

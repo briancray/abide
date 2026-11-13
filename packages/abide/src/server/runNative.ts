@@ -2,17 +2,15 @@
 // it is the executable `abide compile` writes (`runCompiled`), so a terminal still reaches every one.
 //
 // ONE PROCESS. The app, the launcher's own page and the window share it, and the app is served on
-// loopback for the window alone. What the window shows is the `DesktopSession`'s; the window itself
-// is `openDesktopWindow`'s.
+// loopback for the window alone. What the window shows is the `NativeSession`'s; the window itself
+// is `openNativeWindow`'s.
 
 import { ICON_ADDRESSES, MENU_BAR_ICON_ADDRESS } from '#shared/NATIVE_FILES.ts'
 
-import { DESKTOP_COOKIE, serveLocally } from './bridgeRelay.ts'
+import { NATIVE_COOKIE, serveLocally } from './bridgeRelay.ts'
 import { dataDirectory, derived as appDerived } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type AppOrigin, bootEntered, enterApp } from './createApp.ts'
-import { DesktopSession } from './DesktopSession.ts'
-import { appOf, DesktopUpdater } from './DesktopUpdater.ts'
 import { executableName } from './executableName.ts'
 import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
 import { launcherOf } from './launcherOptions.ts'
@@ -20,7 +18,9 @@ import { type Launch, launcherPage } from './launcherPage.ts'
 import { loginShellPath } from './loginShellPath.ts'
 import { LOOPBACK } from './LOOPBACK.ts'
 import type { MenuBarIcon } from './menuBarExtra.ts'
-import { openDesktopWindow } from './openDesktopWindow.ts'
+import { NativeSession } from './NativeSession.ts'
+import { appOf, NativeUpdater } from './NativeUpdater.ts'
+import { openNativeWindow } from './openNativeWindow.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { randomToken } from './randomToken.ts'
 import { type Component, renderDocument } from './render.ts'
@@ -28,7 +28,7 @@ import { runCompiled } from './runCompiled.ts'
 import { type BuildParts, builtSources } from './servedApp.ts'
 
 /** What `abide bundle` read of the launcher's files, carried in the executable. */
-export type Desktop = {
+export type NativeBuild = {
     /** 38.82 — `src/native/launcher.abide`'s page, where the app has one that paints. */
     launch:
         (() => Promise<{ default: (props: Launch) => Component }>) | undefined
@@ -41,18 +41,18 @@ export type Desktop = {
     publicKey: string
 }
 
-export async function runDesktop(
+export async function runNative(
     origin: AppOrigin,
     parts: BuildParts,
     specifiers: Record<string, () => Promise<Record<string, unknown>>>,
-    desktop: Desktop,
+    native: NativeBuild,
 ): Promise<void> {
     if (Bun.argv.length > 2 || process.platform !== 'darwin')
         return runCompiled(origin, parts, specifiers)
     await launch(
         origin,
         () => builtSources(parts),
-        desktop,
+        native,
         await menuBarIcon(parts.published),
     )
 }
@@ -78,7 +78,7 @@ async function menuBarIcon(
 async function launch(
     origin: AppOrigin,
     load: () => ReturnType<typeof builtSources>,
-    { launch: launchModule, document, icon, accent, publicKey }: Desktop,
+    { launch: launchModule, document, icon, accent, publicKey }: NativeBuild,
     extraIcon: MenuBarIcon | undefined,
 ): Promise<void> {
     // 44.80 — what a terminal would find, for the app and for the Claude Code its own bridge runs.
@@ -100,16 +100,14 @@ async function launch(
         throw new Error(`abide: ${options}. RULEBOOK 38.81.`)
     const appName = executableName(origin.package.name)
     const directory = dataDirectory(origin.package.name ?? 'app')
-    const session = await DesktopSession.open(directory, () =>
-        bootEntered(load),
-    )
+    const session = await NativeSession.open(directory, () => bootEntered(load))
     const token = randomToken(16, 'hex')
     // 44.77, 44.79 — THE WINDOW'S CREDENTIAL, held in a cookie the launcher sets on every page it
     // answers: a cookie is the host's and not the port's, so the app on loopback reads it too, and
     // `SameSite=Strict` keeps a page of any other site from sending it there.
     const secret = randomToken(16, 'hex')
     void serveLocally(secret)
-    const credential = `${DESKTOP_COOKIE}=${secret}; Path=/; HttpOnly; SameSite=Strict`
+    const credential = `${NATIVE_COOKIE}=${secret}; Path=/; HttpOnly; SameSite=Strict`
     // 27.3 — the same derived layer `resolve` starts from, under what was given.
     const derived = (): Record<string, string | undefined> => ({
         ...appDerived(),
@@ -211,14 +209,14 @@ async function launch(
     const updater =
         options.update === undefined || bundled === undefined
             ? undefined
-            : new DesktopUpdater(
+            : new NativeUpdater(
                   options.update,
                   publicKey,
                   bundled,
                   version,
                   () => {},
               )
-    const navigate = openDesktopWindow(
+    const navigate = openNativeWindow(
         appName,
         version,
         options,

@@ -1,5 +1,5 @@
 // 38.70 — THE WINDOW `abide bundle`'S EXECUTABLE OPENS, over AppKit through `bun:ffi`: a WKWebView, the
-// page's menu bar and an event drain. What it shows is the `DesktopSession`'s to decide.
+// page's menu bar and an event drain. What it shows is the `NativeSession`'s to decide.
 //
 // AppKit's events are drained on a timer rather than by `[NSApp run]`, which would never hand the
 // thread back to bun. A menu held open or a window being resized runs AppKit's own loop inside one
@@ -23,14 +23,14 @@ import {
     sendTyped,
     stringOf,
 } from './appKit.ts'
-import type { DesktopSession } from './DesktopSession.ts'
-import type { DesktopUpdater } from './DesktopUpdater.ts'
-import { desktopUserAgent } from './desktopUserAgent.ts'
 import { reportUnexpected } from './hooks.ts'
 import { installMenu } from './installMenu.ts'
 import { type Launcher, VIBRANCY_MATERIALS } from './launcherOptions.ts'
 import { menuBar } from './menuBar.ts'
 import { type MenuBarIcon, openMenuBarExtra } from './menuBarExtra.ts'
+import type { NativeSession } from './NativeSession.ts'
+import type { NativeUpdater } from './NativeUpdater.ts'
+import { nativeUserAgent } from './nativeUserAgent.ts'
 import { windowBridge } from './windowBridge.ts'
 
 const DRAIN_MILLISECONDS = 8
@@ -57,13 +57,13 @@ const ZOOM_BUTTON = 2
  * the session's app before the process ends (38.76), and then installs what `updater` staged
  * (38.144).
  */
-export function openDesktopWindow(
+export function openNativeWindow(
     appName: string,
     version: string,
     options: Launcher,
     base: string,
-    session: DesktopSession,
-    updater: DesktopUpdater | undefined,
+    session: NativeSession,
+    updater: NativeUpdater | undefined,
     menuBarIcon: MenuBarIcon | undefined,
 ): (address: string) => void {
     const application = send(objcClass('NSApplication'), 'sharedApplication')
@@ -137,7 +137,7 @@ export function openDesktopWindow(
     )
     for (const signal of ['SIGTERM', 'SIGINT'] as const)
         process.on(signal, quit)
-    // A desktop app outlives a fault in it: it is reported, and the window stays.
+    // A native app outlives a fault in it: it is reported, and the window stays.
     process.on('unhandledRejection', reportUnexpected)
     process.on('uncaughtException', reportUnexpected)
 
@@ -300,7 +300,7 @@ export function openDesktopWindow(
     const uiDelegate = send(uiDelegateClass(), 'new')
     send(view, 'setUIDelegate:', uiDelegate)
     send(view, 'setNavigationDelegate:', uiDelegate)
-    send(view, 'setCustomUserAgent:', nsString(desktopUserAgent(version)))
+    send(view, 'setCustomUserAgent:', nsString(nativeUserAgent(version)))
     if (options.vibrancy === undefined) send(window, 'setContentView:', view)
     else {
         // 38.154 — the material is the content view, and the page is drawn over it with no ground.

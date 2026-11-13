@@ -203,9 +203,9 @@ async function compile(
 }
 
 /**
- * `abide bundle`: builds the app, then a desktop app for this platform around its executable.
+ * `abide bundle`: builds the app, then a native app for this platform around its executable.
  *
- * 38.10, 38.70 — `compile`'s executable, started from `runDesktop`, inside a `.app` named after the
+ * 38.10, 38.70 — `compile`'s executable, started from `runNative`, inside a `.app` named after the
  * app where the command was run, or at `--out`.
  */
 async function bundle(
@@ -215,7 +215,7 @@ async function bundle(
     // 38.77.
     if (process.platform !== 'darwin') {
         console.error(
-            `abide bundle: a desktop app is built for macOS, and this is ${process.platform}. \`abide compile\` builds an executable for any platform.`,
+            `abide bundle: a native app is built for macOS, and this is ${process.platform}. \`abide compile\` builds an executable for any platform.`,
         )
         return 1
     }
@@ -310,14 +310,14 @@ async function bundle(
 /**
  * Builds the app and writes the entry an executable starts from; `undefined` where there is no app.
  *
- * `desktop` is `bundle`'s, read once the build it reads from exists.
+ * `native` is `bundle`'s, read once the build it reads from exists.
  */
 async function writtenEntry(
     root: string,
-    desktop:
+    native:
         | ((
               app: CompiledApp,
-          ) => Promise<Parameters<typeof compiledEntry>[0]['desktop']>)
+          ) => Promise<Parameters<typeof compiledEntry>[0]['native']>)
         | undefined,
 ): Promise<{ entry: string; compilation: Compilation } | undefined> {
     const out = buildDirectory(root)
@@ -327,7 +327,7 @@ async function writtenEntry(
     await Bun.write(
         entry,
         compiledEntry({
-            desktop: await desktop?.(app),
+            native: await native?.(app),
             root,
             sourceMaps: serverMapsOf(app, root),
             package: packageUnder(root),

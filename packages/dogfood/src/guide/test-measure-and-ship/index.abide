@@ -424,7 +424,7 @@ docker run -p 3000:3000 -e ABIDE_PRINCIPAL_SECRET crm`} />
             sets the principal secret and every other setting itself.</p>
     </Section>
 
-    <Section title="Ship the CRM as a desktop app">
+    <Section title="Ship the CRM as a native app">
         <Code code={`abide bundle
 abide bundle --out ~/Applications/CRM.app`} />
 
@@ -466,17 +466,17 @@ abide bundle --out ~/Applications/CRM.app`} />
             shows and hides the window. A right click lists the page's menus and Quit, and
             closing the window keeps the CRM running up there.</p>
 
-        <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['{#if !desktop()}']} />
+        <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['{#if !native()}']} />
 
         <p>A browser has no menu bar, so there the page offers the same print as a button.
-            <code>desktop</code> answers the version of the <code>.app</code> whose window the page
+            <code>native</code> answers the version of the <code>.app</code> whose window the page
             is in, and <code>undefined</code> in a browser. The window names that version in the user
             agent of every request it makes, so the server rendering the page reads the same answer
             the page does, and the button is never drawn in the window and taken away. Any client
             can send that user agent, so it decides what a page shows, never who may do what.</p>
     </Section>
 
-    <Section title="Keep the desktop app current">
+    <Section title="Keep the native app current">
         <Snippet source={launcherSource} path="src/native/launcher.abide" from={['update:']} />
 
         <p>Each person runs their own copy of the CRM, so a new version has to reach every copy.

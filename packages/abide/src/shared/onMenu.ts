@@ -1,6 +1,6 @@
-// 38.88, 38.92 — THE MENUS A LAYOUT OR A PAGE ADDS TO A DESKTOP APP'S MENU BAR, filed while it
+// 38.88, 38.92 — THE MENUS A LAYOUT OR A PAGE ADDS TO A NATIVE APP'S MENU BAR, filed while it
 // stands. Called in its `<script>`, so the menus are a function of its state: what `read` reads moving
-// tells the window again, and the component going takes them with it. Outside a desktop app's window
+// tells the window again, and the component going takes them with it. Outside a native app's window
 // there is no menu bar, and nothing is filed.
 
 import { menuBridge } from './menuBridge.ts'

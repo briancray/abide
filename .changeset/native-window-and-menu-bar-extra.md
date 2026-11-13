@@ -2,9 +2,9 @@
 '@abide/abide': minor
 ---
 
-The desktop launcher moves from `src/launcher.abide` to `src/native/launcher.abide`. The root's `native` directory is now a fence (RULEBOOK 23.33). A `native` directory deeper in the app is still an ordinary route directory. A root `launcher.abide` that still calls `onLauncher` fails the build and names where it goes (RULEBOOK 38.107).
+The native launcher moves from `src/launcher.abide` to `src/native/launcher.abide`. The root's `native` directory is now a fence (RULEBOOK 23.33). A `native` directory deeper in the app is still an ordinary route directory. A root `launcher.abide` that still calls `onLauncher` fails the build and names where it goes (RULEBOOK 38.107).
 
-`onLauncher` takes new options for the desktop app's window:
+`onLauncher` takes new options for the native app's window:
 
 - `maxWidth` and `maxHeight` cap the window's size (RULEBOOK 38.150, 38.151).
 - `titlebar: 'hidden' | 'inset'` draws the page under the window's controls, which stay where macOS puts them. The page reads `--abide-titlebar-height` and `--abide-titlebar-inset` to keep clear of them, and is dragged by any element marked `data-abide-titlebar` (RULEBOOK 38.152, 38.153, 38.155).

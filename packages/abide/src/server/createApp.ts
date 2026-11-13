@@ -219,7 +219,7 @@ export type BootedApp = App & { openMux(): Mux }
 /**
  * Enters the app as this process's server — every slot `#shared` leaves for one filled, the app's
  * identity set, every server block imported — and re-resolves the configuration: the one preamble
- * `bootApp`, a script `run` and the desktop launcher each start with.
+ * `bootApp`, a script `run` and the native launcher each start with.
  *
  * 37.1 — EVERY SERVER BLOCK, imported for what it CALLS: every hook it runs is filed by the time the
  * import settles, which is before `onStart` is composed around a boot. 38.57 — RE-RESOLVED: a module
@@ -242,7 +242,7 @@ export async function bootApp(
 }
 
 /**
- * `bootApp` in a process `enterApp` already entered the app in: the desktop launcher's, which enters
+ * `bootApp` in a process `enterApp` already entered the app in: the native launcher's, which enters
  * once for the hooks its own page reads and boots again on every start.
  */
 export async function bootEntered(

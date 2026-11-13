@@ -1,4 +1,4 @@
-// THE DESKTOP APP'S MENU BAR (38.88), built as an `NSMenu` from what `menuBar.ts` answers.
+// THE NATIVE APP'S MENU BAR (38.88), built as an `NSMenu` from what `menuBar.ts` answers.
 
 import { FFIType } from 'bun:ffi'
 

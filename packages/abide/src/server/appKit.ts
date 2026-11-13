@@ -1,4 +1,4 @@
-// THE OBJECTIVE-C RUNTIME, over `bun:ffi` — what the desktop window (`openDesktopWindow`) drives AppKit
+// THE OBJECTIVE-C RUNTIME, over `bun:ffi` — what the native window (`openNativeWindow`) drives AppKit
 // and WebKit with. Bun's own `WebView` is headless, so a window and a menu bar are this module's.
 //
 // NO STRUCT IS PASSED BY VALUE. A `CGRect` is four doubles in registers on arm64 and a block on the

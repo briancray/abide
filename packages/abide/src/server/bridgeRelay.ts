@@ -19,7 +19,7 @@
 // Every frame on that stream is written here; what the rest of the server sees is a turn run, a
 // pairing's status as it changes, and a pairing code.
 //
-// 44.77 — THE DESKTOP APP'S OWN BRIDGE is one more `Bridge`, filed under no pairing: its frames are
+// 44.77 — THE NATIVE APP'S OWN BRIDGE is one more `Bridge`, filed under no pairing: its frames are
 // read in this process by the same core a bridge runs (`@abide/bridge/serveTurns`), and its reports
 // land here as a post's would. It stands in for any pairing a request from the window asks after.
 
@@ -93,10 +93,10 @@ const FOLLOWERS = new Map<
     Set<(caller: string, signedIn: string) => void>
 >()
 
-/** The cookie the desktop app's window carries its credential in. 44.79. */
-export const DESKTOP_COOKIE = 'abide-desktop'
+/** The cookie the native app's window carries its credential in. 44.79. */
+export const NATIVE_COOKIE = 'abide-native-credential'
 
-// 44.77 — the desktop app's own bridge: the credential its window holds, the bridge once a turn has
+// 44.77 — the native app's own bridge: the credential its window holds, the bridge once a turn has
 // started it, and the MCP servers 44.58 last found in the user scope.
 const LOCAL: {
     secret: string
@@ -105,8 +105,8 @@ const LOCAL: {
 } = { secret: '', bridge: undefined, servers: new Set() }
 
 /**
- * Lends this machine's Claude Code to every request carrying `secret` in `DESKTOP_COOKIE` — the
- * desktop app's window onto the app it started. 44.77, 44.79. Settles once the user scope's MCP
+ * Lends this machine's Claude Code to every request carrying `secret` in `NATIVE_COOKIE` — the
+ * native app's window onto the app it started. 44.77, 44.79. Settles once the user scope's MCP
  * servers are read (44.58); a page watching before then is told when they are.
  */
 export function serveLocally(secret: string): Promise<void> {
@@ -114,22 +114,22 @@ export function serveLocally(secret: string): Promise<void> {
     return refreshLocalServers()
 }
 
-/** Whether the request being answered is from the desktop app's window, by its credential. 44.79. */
-export function fromDesktopWindow(): boolean {
+/** Whether the request being answered is from the native app's window, by its credential. 44.79. */
+export function fromNativeWindow(): boolean {
     if (LOCAL.secret === '') return false
     const cookie = request().headers.get('cookie')
     return (
         cookie !== null &&
-        new Bun.CookieMap(cookie).get(DESKTOP_COOKIE) === LOCAL.secret
+        new Bun.CookieMap(cookie).get(NATIVE_COOKIE) === LOCAL.secret
     )
 }
 
-/** Whether the desktop app's own bridge stands for a request `local` says is from its window: Claude Code is found. */
+/** Whether the native app's own bridge stands for a request `local` says is from its window: Claude Code is found. */
 function localStands(local: boolean): boolean {
     return local && Bun.which('claude') !== null
 }
 
-/** Whether a pairing is paired: by a code, or by the desktop app's own bridge. */
+/** Whether a pairing is paired: by a code, or by the native app's own bridge. */
 function pairedFor(key: string, local: boolean): boolean {
     return BY_KEY.has(key) || localStands(local)
 }
@@ -171,7 +171,7 @@ async function refreshLocalServers(): Promise<void> {
     for (const wakes of WATCHERS.values()) for (const wake of wakes) wake()
 }
 
-/** The desktop app's own bridge, started on its first turn. */
+/** The native app's own bridge, started on its first turn. */
 async function localBridge(): Promise<Bridge> {
     if (LOCAL.bridge !== undefined) return LOCAL.bridge
     const { serveTurns } = await import('@abide/bridge/serveTurns')
@@ -267,7 +267,7 @@ export async function* runTurn({
 }: {
     caller: string
     signedIn: string
-    /** Whether the request is from the desktop app's window (`fromDesktopWindow`). */
+    /** Whether the request is from the native app's window (`fromNativeWindow`). */
     local: boolean
     prompt: unknown[]
     config: unknown

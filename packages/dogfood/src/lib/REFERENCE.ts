@@ -881,8 +881,8 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: true,
     },
     {
-        route: '/reference/desktop',
-        names: ['desktop'],
+        route: '/reference/native',
+        names: ['native'],
         entry: '@abide/abide',
         group: 'Configuration',
         typeOnly: false,

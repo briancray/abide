@@ -123,7 +123,7 @@ async function launchFlags(
 ): Promise<{ flags: string[]; grant: Grant }> {
     const { tools: asked, ...options } = config
     // 44.15 — the visitor's servers reach a turn only as the tools it was given are of them; 44.78 —
-    // the desktop app's own bridge is given every one the turn asks for.
+    // the native app's own bridge is given every one the turn asks for.
     const { grant, args } = await grantFor(
         asked ?? [],
         trusted ? ['--tools', (asked ?? []).join(','), ...visitor] : visitor,
@@ -178,7 +178,7 @@ export async function claudeTurn(
     options: {
         claude: string
         claudeArgs: string[]
-        /** Every tool the turn asks for is granted, as by the desktop app's own bridge. 44.78. */
+        /** Every tool the turn asks for is granted, as by the native app's own bridge. 44.78. */
         trusted: boolean
         mcpUrl: string
         signal: AbortSignal

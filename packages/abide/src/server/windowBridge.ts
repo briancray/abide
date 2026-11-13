@@ -1,7 +1,7 @@
-// 38.155, 38.156 — WHAT THE DESKTOP WINDOW INSTALLS IN EVERY PAGE IT LOADS: a titlebar a press
+// 38.155, 38.156 — WHAT THE NATIVE WINDOW INSTALLS IN EVERY PAGE IT LOADS: a titlebar a press
 // on `data-abide-titlebar` drags, and the page's background reported to the window behind it.
 //
-// SERIALIZED, not imported: `openDesktopWindow` hands its source to a `WKUserScript`, so the
+// SERIALIZED, not imported: `openNativeWindow` hands its source to a `WKUserScript`, so the
 // function closes over nothing and every name it reads is the page's own.
 
 /** Posts `drag`, `zoom` and `background <r> <g> <b>` to the window's `abideWindow` handler. */

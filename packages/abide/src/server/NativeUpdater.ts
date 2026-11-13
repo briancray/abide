@@ -1,4 +1,4 @@
-// 38.142-38.145 — A DESKTOP APP KEEPING ITSELF CURRENT: the feed `onLauncher`'s `update` names is
+// 38.142-38.145 — A NATIVE APP KEEPING ITSELF CURRENT: the feed `onLauncher`'s `update` names is
 // read, a newer `.app` it signs is unzipped beside this one, and the two change places as the app
 // quits — after `App.stop` (38.76), so nothing is running out of the bundle being replaced.
 //
@@ -30,7 +30,7 @@ export function appOf(executable: string): string | undefined {
     return /^(.+\.app)\/Contents\/MacOS\/[^/]+$/.exec(executable)?.[1]
 }
 
-export class DesktopUpdater {
+export class NativeUpdater {
     feed: URL
     publicKey: string
     /** The `.app` this process runs from, which an update replaces. */
