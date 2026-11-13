@@ -37,9 +37,11 @@ const asked = question(
     [],
     {
         name: flags.get('--name') ?? 'abide-docs',
+        // `--note ""` shows the question with none.
         note:
-            flags.get('--note') ??
-            'So the assistant can build what you ask for, not just answer from the docs.',
+            (flags.get('--note') ??
+                'So the assistant can build what you ask for, not just answer from the docs.') ||
+            undefined,
     },
 )
 console.log(`${asked.headline}\n\n${asked.body}\n`)
