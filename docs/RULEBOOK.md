@@ -3377,6 +3377,13 @@ arm declares.
 38.139 A refusal that stops `abide build`, or the build 38.100 makes, MUST be printed as `abide check`
 prints it and fail the command, and MUST NOT be printed as a stack.
 
+38.140 The window `abide bundle`'s executable opens MUST append `abide-desktop/` and the version of
+the app it was bundled from to the user agent of every request it makes.
+
+38.141 `desktop` MUST answer the version 38.140 names in the user agent of the request being served,
+and in a browser the version named in its own, and MUST answer `undefined` where the user agent names
+none or no request is being served.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

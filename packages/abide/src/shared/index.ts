@@ -25,6 +25,8 @@ export type {
 export type { Attributes } from './Attributes.ts'
 export { type Cookies, cookies } from './cookies.ts'
 export { csp } from './csp.ts'
+// 38.141 — which desktop window the work running is for.
+export { desktop } from './desktop.ts'
 export { type Failed, isFailed } from './Failed.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'

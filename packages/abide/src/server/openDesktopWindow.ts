@@ -23,6 +23,7 @@ import {
     stringOf,
 } from './appKit.ts'
 import type { DesktopSession } from './DesktopSession.ts'
+import { desktopUserAgent } from './desktopUserAgent.ts'
 import { reportUnexpected } from './hooks.ts'
 import type { Launcher } from './launcherOptions.ts'
 import { installMenu, menuBar } from './nativeMenu.ts'
@@ -32,11 +33,13 @@ const DRAIN_MILLISECONDS = 8
 /**
  * Opens the app's window on a blank page and answers how to point it at an address.
  *
- * `base` is the launcher's own page, which the Connect… and Disconnect menu items lead back to.
- * Quitting stops the session's app before the process ends (38.76).
+ * `base` is the launcher's own page, which the Connect… and Disconnect menu items lead back to,
+ * and `version` the `.app`'s, which every request the window makes names (38.140). Quitting stops
+ * the session's app before the process ends (38.76).
  */
 export function openDesktopWindow(
     appName: string,
+    version: string,
     options: Launcher,
     base: string,
     session: DesktopSession,
@@ -142,6 +145,7 @@ export function openDesktopWindow(
     )
         sendTyped(view, 'setInspectable:', [FFIType.bool], FFIType.void, true)
     send(view, 'setUIDelegate:', send(uiDelegateClass(), 'new'))
+    send(view, 'setCustomUserAgent:', nsString(desktopUserAgent(version)))
     send(window, 'setContentView:', view)
     send(
         view,

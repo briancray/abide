@@ -8,6 +8,7 @@
 
 import { COOKIES } from '#shared/cookies.ts'
 import { CSP } from '#shared/csp.ts'
+import { REQUEST_AGENT } from '#shared/desktop.ts'
 import { HEALTH } from '#shared/health.ts'
 import { APP_NAME, TRACE } from '#shared/log.ts'
 import { MOUNT } from '#shared/mount.ts'
@@ -21,7 +22,12 @@ import { handOnError } from './hooks.ts'
 import { recordInRender } from './PageRender.ts'
 import { SERVER_PRINCIPAL } from './principal.ts'
 import { reportHealth } from './reportHealth.ts'
-import { handlerTook, request, requestCookies } from './requestScope.ts'
+import {
+    handlerTook,
+    request,
+    requestAgent,
+    requestCookies,
+} from './requestScope.ts'
 import { trace } from './trace.ts'
 
 export function installServer(): void {
@@ -35,6 +41,8 @@ export function installServer(): void {
     CSP.rung = cspRung
     CSP.nonce = nonce
     Object.assign(PRINCIPAL, SERVER_PRINCIPAL)
+    // 38.141 — the user agent `desktop` reads its window off.
+    REQUEST_AGENT.current = requestAgent
     // 16.11 — the request a handler's rung is handed.
     RPC_SERVER.request = request
     // 16.58 — the environment's `timeout`, for every call a handler that names none makes.

@@ -449,6 +449,15 @@ abide bundle --out ~/Applications/CRM.app`} />
             <code>menuItem</code>. <code>MenuEntry.on</code> files what runs when it is picked, and
             hands back what stops it, which is what <code>watch</code> takes. In a browser nothing
             picks an item, and the page runs unchanged.</p>
+
+        <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['{#if !desktop()}']} />
+
+        <p>A browser has no menu bar, so there the page offers the same print as a button.
+            <code>desktop</code> answers the version of the <code>.app</code> whose window the page
+            is in, and <code>undefined</code> in a browser. The window names that version in the user
+            agent of every request it makes, so the server rendering the page reads the same answer
+            the page does, and the button is never drawn in the window and taken away. Any client
+            can send that user agent, so it decides what a page shows, never who may do what.</p>
     </Section>
 
     <Section title="Keep the CRM readable offline">

@@ -155,7 +155,13 @@ async function launch(
         return new Response(launcherPage(props), { headers })
     }
 
-    const navigate = openDesktopWindow(appName, options, base, session)
+    const navigate = openDesktopWindow(
+        appName,
+        origin.package.version ?? '0.0.0',
+        options,
+        base,
+        session,
+    )
     await session.resume(options)
     navigate(session.shown ?? base)
 }

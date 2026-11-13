@@ -533,6 +533,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`menuItem`',
                         '`MenuEntry`',
                         '`MenuEntry.on`',
+                        '`desktop`',
                         '`src/public/icon.png` · `src/public/icon.icns`',
                         '`src/launcher.abide`',
                         '`onLauncher`',

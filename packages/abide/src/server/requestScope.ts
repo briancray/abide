@@ -503,6 +503,17 @@ function ip(): ReceivedFrom | 'in-process' {
         : 'in-process'
 }
 
+/**
+ * The user agent of the request being served, or '' outside one — 38.141's, which answers
+ * `undefined` there rather than throwing as `request()` does. A socket mux frame answers its
+ * upgrade's, as `ip` does.
+ */
+export function requestAgent(): string {
+    const scope = STORAGE.getStore()
+    const asked = scope?.received ?? scope?.request
+    return asked?.headers.get('user-agent') ?? ''
+}
+
 /** The request being served. 22.1. */
 function requestBeingServed(): Request {
     return within('request').request as Request
