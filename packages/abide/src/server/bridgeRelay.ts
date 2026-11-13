@@ -8,8 +8,9 @@
 //                                 (44.63): what a bridge always allowing a site checks a link against.
 //   GET  /__abide/bridge          the same stream, resumed by the token after it dropped (44.26).
 //   POST /__abide/bridge          what the bridge reports, one frame per line: a turn's events, the
-//                                 MCP requests its Claude Code made, the turn's end or failure, and
-//                                 the tools the pairing asked for that it cannot give (44.61).
+//                                 MCP requests and permission prompts its Claude Code made, the turn's
+//                                 end or failure, and the tools the pairing asked for that it cannot
+//                                 give (44.61).
 //
 // A PAIRING IS TO A BROWSER — the `abide-caller` its page carries (26.5) — and to whoever was signed
 // in there when its code was minted (44.33), for as long as the bridge's stream is open, or
@@ -41,11 +42,12 @@ import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
 import { onSignInChanged } from './signInChanged.ts'
 
 /**
- * What a turn hears from the bridge, in the order the bridge posted it: an event, an MCP request, the
- * end, or a failure. ONE SHAPE for all four, every field set, since one is built per streamed chunk.
+ * What a turn hears from the bridge, in the order the bridge posted it: an event, an MCP request, a
+ * permission prompt — the tool it asks for as `method`, its input as `params` — the end, or a failure.
+ * ONE SHAPE for all five, every field set, since one is built per streamed chunk.
  */
 type TurnItem = {
-    kind: 'event' | 'mcp' | 'end' | 'fail'
+    kind: 'event' | 'mcp' | 'permission' | 'end' | 'fail'
     event: unknown
     id: number
     method: string
@@ -60,6 +62,8 @@ type Bridge = {
     token: string
     frames: Inbox<unknown>
     turns: Map<string, Inbox<TurnItem>>
+    // 44.83 — each permission prompt the page has yet to answer, by the id its event carries.
+    prompts: Map<string, { turn: string; id: number }>
     // Whether a page has watched this pairing: only a watched bridge is sent away when it goes idle.
     watched: boolean
     idle: ReturnType<typeof setTimeout> | undefined
@@ -181,6 +185,7 @@ async function localBridge(): Promise<Bridge> {
         token: '',
         frames: new Inbox(),
         turns: new Map(),
+        prompts: new Map(),
         watched: false,
         idle: undefined,
         held: undefined,
@@ -192,7 +197,7 @@ async function localBridge(): Promise<Bridge> {
         site: 'this app',
         claude: 'claude',
         claudeArgs: [],
-        trusted: true,
+        full: true,
         report: (report) => delivered(bridge, report),
         say: (line) => RELAY_LOG.debug(line),
         beforeTurn: refreshLocalServers,
@@ -308,14 +313,64 @@ export async function* runTurn({
                         reply,
                     })
                 })
-            else if (item.kind === 'end') return
+            else if (item.kind === 'permission') {
+                // 44.81 — a prompt is the page's to answer, by `permit`.
+                const id = `${turn}.${item.id}`
+                bridge.prompts.set(id, { turn, id: item.id })
+                yield {
+                    type: 'permission',
+                    id,
+                    name: item.method,
+                    input: item.params,
+                }
+            } else if (item.kind === 'end') return
             else throw refuse(502, `Claude Code failed: ${item.message}`)
         }
     } finally {
         signal.removeEventListener('abort', cancel)
         bridge.turns.delete(turn)
+        // The bridge answers what is left as the run ends.
+        for (const [id, prompt] of bridge.prompts)
+            if (prompt.turn === turn) bridge.prompts.delete(id)
         if (!WATCHERS.has(bridge.key)) armIdle(bridge.key)
     }
+}
+
+/**
+ * Answers the permission prompt `id` of a turn on the bridge paired to `caller` signed in as
+ * `signedIn` — `local` as `runTurn` reads it — allowing the call or not. 44.83.
+ *
+ * Throws 404 where that bridge has no such prompt waiting.
+ */
+export function permit({
+    caller,
+    signedIn,
+    local,
+    id,
+    allow,
+}: {
+    caller: string
+    signedIn: string
+    local: boolean
+    id: string
+    allow: boolean
+}): void {
+    const bridge =
+        BY_KEY.get(pairingKey(caller, signedIn)) ??
+        (localStands(local) ? LOCAL.bridge : undefined)
+    const prompt = bridge?.prompts.get(id)
+    if (bridge === undefined || prompt === undefined)
+        throw refuse(
+            404,
+            'No permission prompt of that id is waiting on the Claude Code paired with this browser.',
+        )
+    bridge.prompts.delete(id)
+    bridge.frames.push({
+        type: 'permit',
+        turn: prompt.turn,
+        id: prompt.id,
+        allow,
+    })
 }
 
 /**
@@ -549,6 +604,7 @@ function pair(request: Request): Response {
         token: randomToken(24, 'base64url'),
         frames: new Inbox(),
         turns: new Map(),
+        prompts: new Map(),
         watched: WATCHERS.has(pairing.key),
         idle: undefined,
         held: undefined,
@@ -624,9 +680,11 @@ function attach(bridge: Bridge, request: Request): Response {
 }
 
 type BridgeReport = {
-    type: 'event' | 'mcp' | 'end' | 'fail' | 'missing'
+    type: 'event' | 'mcp' | 'permission' | 'end' | 'fail' | 'missing'
     turn: string
     tools?: string[]
+    name?: string
+    input?: unknown
     event?: unknown
     id?: number
     method?: string
@@ -673,7 +731,14 @@ function delivered(bridge: Bridge, report: BridgeReport): void {
         wakeWatchers(bridge.key)
         return
     }
-    bridge.turns
-        .get(report.turn)
-        ?.push(item(report.type as TurnItem['kind'], report))
+    const kind = report.type as TurnItem['kind']
+    bridge.turns.get(report.turn)?.push(
+        kind === 'permission'
+            ? item(kind, {
+                  id: report.id ?? 0,
+                  method: report.name ?? '',
+                  params: report.input,
+              })
+            : item(kind, report),
+    )
 }

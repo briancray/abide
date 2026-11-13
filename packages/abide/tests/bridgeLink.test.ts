@@ -53,6 +53,7 @@ const SETTINGS = {
     claude: '/opt/claude/claude',
     path: '/opt/node/bin:/opt/bun/bin:/usr/bin',
     claudeArgs: [],
+    full: false,
     env: {},
 }
 
@@ -159,6 +160,24 @@ test('a link runs with the options install kept, ahead of its tools — 44.44', 
         '--mcp-config',
         '/Users/me/sources.mcp.json',
     ])
+})
+
+// 44.82 — AN INSTALL RUN `--full` RUNS EVERY LINK'S BRIDGE `--full`, and the question says so in
+// place of the tools the link asks for. THE REVERT: drop the `--full` `bridgeArguments` adds, and the
+// arguments read as the plain link's.
+test('an install run --full runs every link full, and asks saying so — 44.42, 44.82', () => {
+    const full = { ...SETTINGS, full: true }
+    expect(bridgeArguments(PAIRING, full).slice(5)).toEqual([
+        '--claude',
+        '/opt/claude/claude',
+        '--full',
+        '--',
+        '--tools',
+        'WebSearch,WebFetch',
+    ])
+    const asked = question(PAIRING, full)
+    expect(asked).toContain('everything your Claude Code can do')
+    expect(asked).not.toContain('WebSearch, WebFetch')
 })
 
 // 44.29 — AN MCP TOOL IS A TOOL TOO: a link asks for one by Claude Code's name for it, or for all of a

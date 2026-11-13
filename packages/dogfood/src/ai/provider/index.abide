@@ -82,6 +82,21 @@ import Section from '#src/lib/Section.abide'
             used at the next question, and a turn gets only the servers of the tools it was
             given.</p>
 
+        <p>Claude Code runs in its auto mode, so a granted tool is not approved just because it was
+            granted. Auto mode approves what it judges safe, and anything it would ask the visitor
+            about arrives on the page as a <code>permission</code> event, naming the tool and its
+            input. The page answers with <code>provider.claudeCode.permit(id, allow)</code> from a
+            handler of its own. Only the browser the bridge is paired with can answer, and a prompt
+            nobody answers is denied after two minutes. The site's own tools are never asked
+            about.</p>
+
+        <p>A visitor who wants the site to have everything their Claude Code has runs the bridge
+            with <code>--full</code>: every built-in tool, every MCP server and every setting it
+            would read on its own, still in an empty directory and still in auto mode. The native
+            app's own bridge always runs this way.</p>
+
+        <Code code={`bunx @abide/bridge <site> <code> --full`} />
+
         <p><code>bunx @abide/bridge</code> runs <code>abide-bridge &lt;site&gt; &lt;code&gt;</code>.
             <code>--claude &lt;path&gt;</code> names the Claude Code to run where
             <code>claude</code> is not on the <code>PATH</code>, and each
@@ -143,11 +158,12 @@ import Section from '#src/lib/Section.abide'
         <p>That registers a handler for the scheme under the visitor's own home: a small app in
             Application Support on macOS, a desktop entry on Linux, the visitor's own registry
             classes on Windows. <code>abide-bridge install</code> takes the same
-            <code>--claude</code>, <code>--env</code> and options after <code>--</code> as the
-            command, and keeps them: every link it opens runs Claude Code with them, and no link can
-            set either. Opening a link asks first, naming the site, the tools and the bridge release
-            it asks for, any tool whose server they lack, and the options and variable names install
-            kept, and then runs that release, as the command would. A Linux desktop with neither
+            <code>--full</code>, <code>--claude</code>, <code>--env</code> and options after
+            <code>--</code> as the command, and keeps them: every link it opens runs Claude Code with
+            them, and no link can set any of them. Opening a link asks first. The question names the
+            site, the tools and the bridge release it asks for, any tool whose server they lack, and
+            the options and variable names install kept, or says the site gets everything where
+            install was run <code>--full</code>. Then it runs that release, as the command would. A Linux desktop with neither
             <code>zenity</code> nor <code>kdialog</code> cannot ask, so it pairs nothing from a
             link.</p>
 
@@ -177,6 +193,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>onPairing</code></td><td>The options every pairing's command and install command carry after <code>--</code>, for the person asking.</td></tr>
                 <tr><td><code>provider.claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
+                <tr><td><code>provider.claudeCode.permit</code></td><td>Answers a <code>permission</code> event the paired bridge is waiting on, allowing the call or not.</td></tr>
                 <tr><td><code>provider.claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>
                 <tr><td><code>/__abide/bridge</code></td><td>Where the visitor's bridge connects. It opens the first time a command is minted.</td></tr>
             </tbody>

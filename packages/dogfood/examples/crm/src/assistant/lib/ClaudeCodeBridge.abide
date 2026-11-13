@@ -2,6 +2,7 @@
 import { pairing, reactive } from '@abide/abide'
 
 import askClaudeCode from '../askClaudeCode.handler.ts'
+import permitClaudeCode from '../permitClaudeCode.handler.ts'
 
 const QUESTION = 'Which company is Grace at?'
 
@@ -19,6 +20,22 @@ const answer = reactive(() => {
     for (const event of events) if (event.type === 'text') text += event.text
     return text
 })
+
+// A tool auto mode would not approve on its own waits on you.
+let answered = reactive<string[]>([])
+const prompt = reactive(() => {
+    for (const event of events)
+        if (event.type === 'permission' && !answered.includes(event.id))
+            return event
+    return undefined
+})
+
+async function permit(allow: boolean) {
+    const asked = prompt
+    if (asked === undefined) return
+    answered = [...answered, asked.id]
+    await permitClaudeCode({ id: asked.id, allow })
+}
 </script>
 
 {#if status.error()}
@@ -56,6 +73,14 @@ const answer = reactive(() => {
         <li><span>claude code</span><p>{answer}</p></li>
     {/if}
 </ul>
+
+{#if prompt}
+    <div class="row">
+        <span class="status">claude code asks to run {prompt.name}</span>
+        <button onclick={() => permit(true)}>Allow</button>
+        <button onclick={() => permit(false)}>Deny</button>
+    </div>
+{/if}
 
 <div class="row">
     <button onclick={() => {

@@ -47,6 +47,7 @@ const SETTINGS_KEPT_NONE = {
     claude: 'claude',
     path: '',
     claudeArgs: [],
+    full: false,
     env: {},
 }
 
@@ -113,6 +114,8 @@ export const command = GET(() => provider.claudeCode.bridgeCommand(), HIDDEN)
 export const granting = GET(() => provider.claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
 
 export const asking = GET(() => provider.claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
+
+export const permit = POST(({ id, allow }: { id: string; allow: boolean }) => provider.claudeCode.permit(id, allow), HIDDEN)
 
 export const ask = POST(
     async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code' | 'own'; maxTurns?: number; config?: Record<string, unknown> }) {
@@ -230,7 +233,12 @@ async function pairBridge(
     code?: string,
     claudeArgs: string[] = [],
     env: Record<string, string> = {},
-): Promise<{ running: Bun.Subprocess; saysNext: () => Promise<string> }> {
+    bridgeArgs: string[] = [],
+): Promise<{
+    running: Bun.Subprocess
+    said: string
+    saysNext: () => Promise<string>
+}> {
     const running = Bun.spawn(
         [
             'bun',
@@ -239,6 +247,7 @@ async function pairBridge(
             code ?? (await pairingCode(caller)),
             '--claude',
             FAKE_CLAUDE,
+            ...bridgeArgs,
             ...(claudeArgs.length === 0 ? [] : ['--', ...claudeArgs]),
         ],
         { stderr: 'pipe', env: { ...environment, ...env } },
@@ -252,7 +261,7 @@ async function pairBridge(
     const said = await saysNext()
     if (!said.startsWith('Connected'))
         throw new Error(`the bridge did not connect: ${said}`)
-    return { running, saysNext }
+    return { running, said, saysNext }
 }
 
 function ask(
@@ -655,11 +664,12 @@ test('a code minted where the sign-in is made pairs the sign-in its cookie carri
     expect(asked.at(-1)).toMatchObject({ type: 'done' })
 }, 30_000)
 
-// 44.5, 44.15, 44.16 — CLAUDE CODE RUNS ALONE on the visitor's machine where they gave it nothing: its own
-// tools off, no settings read, only the bridge's MCP server, in a directory of its own that is gone once
-// the run is, and with what the site may set; the transcript reaches it as ONE message. THE REVERTS: send the last turn
-// alone, and the prompt holds no `earlier answer`; drop the `rm`, and the config outlives the run.
-test('Claude Code runs alone, over the whole transcript as one message — 44.5, 44.15, 44.16', async () => {
+// 44.5, 44.15, 44.16, 44.81 — CLAUDE CODE RUNS ALONE on the visitor's machine where they gave it nothing:
+// its own tools off, no settings read, only the bridge's MCP servers, in a directory of its own that is
+// gone once the run is, in auto mode with its prompts asked of the bridge's own server, and with what
+// the site may set; the transcript reaches it as ONE message. THE REVERTS: send the last turn alone,
+// and the prompt holds no `earlier answer`; drop the `rm`, and the config outlives the run.
+test('Claude Code runs alone, over the whole transcript as one message — 44.5, 44.15, 44.16, 44.81', async () => {
     await pairBridge('four')
     await events(await ask('four', 'code', 'who am I?'))
     const record = (await Bun.file(RECORD).json()) as {
@@ -681,15 +691,22 @@ test('Claude Code runs alone, over the whole transcript as one message — 44.5,
     expect(record.args).toContain('--strict-mcp-config')
     expect(after('--model')).toBe('sonnet')
     expect(after('--append-system-prompt')).toBe('Be brief.')
+    expect(after('--permission-mode')).toBe('auto')
+    expect(after('--permission-prompt-tool')).toBe('mcp__abide_bridge__ask')
+    expect(Object.keys(record.config.mcpServers).sort()).toEqual([
+        'abide_bridge',
+        'app',
+    ])
     expect(record.config.mcpServers.app.url).toStartWith('http://127.0.0.1:')
     expect(await Bun.file(record.configPath).exists()).toBe(false)
 }, 30_000)
 
 // 44.15, 44.29 — THE SITE ASKS, THE VISITOR GRANTS: a built-in tool is the turn's only where both named
-// it, approved as granted, and the bridge says once what it was asked for and not given; an option the
-// visitor set outranks the site's. THE REVERTS: lay the site's `tools` on unfiltered, and `--tools`
-// reads `WebSearch,WebFetch`; lay the visitor's options before the site's, and the last `--model` is
-// `sonnet`.
+// it, left to auto mode to approve rather than approved as granted, and the bridge says once what it
+// was asked for and not given; an option the visitor set outranks the site's. THE REVERTS: lay the
+// site's `tools` on unfiltered, and `--tools` reads `WebSearch,WebFetch`; lay the visitor's options
+// before the site's, and the last `--model` is `sonnet`; approve what was granted, and `WebSearch`
+// follows `mcp__app`.
 test('a built-in tool runs only where the site asked and the visitor granted — 44.15, 44.29', async () => {
     const { saysNext } = await pairBridge('six', undefined, [
         '--tools',
@@ -704,7 +721,7 @@ test('a built-in tool runs only where the site asked and the visitor granted —
     const allowed = args.indexOf('--allowedTools')
     expect(args.slice(allowed + 1, allowed + 3)).toEqual([
         'mcp__app',
-        'WebSearch',
+        '--tools',
     ])
     expect(args[args.lastIndexOf('--model') + 1]).toBe('opus')
     expect(await saysNext()).toContain('asked for WebFetch')
@@ -859,7 +876,8 @@ function pairingIn(status: { link: string }): Pairing {
 
 // 44.15, 44.29, 44.58 — THE VISITOR'S OWN MCP SERVERS, AS THE TOOLS GIVEN NAME THEM: the visitor passed
 // two servers and granted one tool of one and all of the other; the site asked for the one tool. The
-// turn gets that server alone, its tool approved, and the `--mcp-config` is never Claude Code's own.
+// turn gets that server alone, its tool left to auto mode, and the `--mcp-config` is never Claude
+// Code's own.
 // THE REVERT: hand `grant.servers` every configured server, and `mail` is in the turn's config.
 test('a turn gets the MCP servers of the tools it was given, and no other — 44.15, 44.29, 44.58', async () => {
     const directory = await scratch({
@@ -885,15 +903,124 @@ test('a turn gets the MCP servers of the tools it was given, and no other — 44
         args: string[]
         config: { mcpServers: Record<string, unknown> }
     }
-    expect(Object.keys(config.mcpServers).sort()).toEqual(['app', 'calendar'])
+    expect(Object.keys(config.mcpServers).sort()).toEqual([
+        'abide_bridge',
+        'app',
+        'calendar',
+    ])
     expect(config.mcpServers.calendar).toEqual({ command: 'calendar-server' })
     const allowed = args.indexOf('--allowedTools')
     expect(args.slice(allowed + 1, allowed + 3)).toEqual([
         'mcp__app',
-        'mcp__calendar__meetings',
+        '--tools',
     ])
     expect(args[args.indexOf('--tools') + 1]).toBe('')
     expect(args).not.toContain(`${directory}/sources.json`)
+}, 30_000)
+
+/** `caller`'s answer to the permission prompt `id`, through the app's `permit` handler. */
+function permitAs(
+    caller: string,
+    id: string,
+    allow: boolean,
+): Promise<Response> {
+    return Bun.fetch(`${base}/permit`, {
+        method: 'POST',
+        headers: { ...asPage(caller), 'content-type': 'application/json' },
+        body: JSON.stringify({ id, allow }),
+    })
+}
+
+/**
+ * The events of a conversation of `caller`'s that holds a permission prompt, the prompt answered
+ * `allow` by `caller` the moment it arrives — and what another browser, and a second answer, were
+ * answered.
+ */
+async function answeringPrompt(
+    caller: string,
+    allow: boolean,
+): Promise<{ events: AssistantEvent[]; stranger: number; again: number }> {
+    const answer = await ask(caller, 'code', 'permission, who am I?')
+    expect(answer.status).toBe(200)
+    const found: AssistantEvent[] = []
+    let stranger = 0
+    let again = 0
+    for await (const line of readLines(
+        answer.body as ReadableStream<Uint8Array>,
+    )) {
+        if (line === '') continue
+        const event = JSON.parse(line) as AssistantEvent
+        found.push(event)
+        if (event.type !== 'permission') continue
+        stranger = (await permitAs('stranger', event.id, true)).status
+        expect((await permitAs(caller, event.id, allow)).status).toBe(204)
+        again = (await permitAs(caller, event.id, allow)).status
+    }
+    return { events: found, stranger, again }
+}
+
+// 44.81, 44.83 — A PERMISSION PROMPT IS THE PAGE'S TO ANSWER: Claude Code asks whether `Bash` may run,
+// the conversation yields it as a `permission` event, and the paired browser's answer is what Claude
+// Code is told — the call's input handed back where it is allowed. Another browser cannot answer it,
+// and an answered prompt is not waiting any more. THE REVERTS: drop the `permit` frame `permit` pushes,
+// and the turn waits out the deadline instead; look the bridge up by any pairing, and the stranger is
+// answered 204.
+test('a permission prompt is answered by the paired page alone — 44.81, 44.83', async () => {
+    await pairBridge('prompted')
+    const allowed = await answeringPrompt('prompted', true)
+    const prompt = allowed.events.find((event) => event.type === 'permission')
+    expect(prompt).toMatchObject({
+        type: 'permission',
+        name: 'Bash',
+        input: { command: 'ls' },
+    })
+    expect(allowed.stranger).toBe(404)
+    expect(allowed.again).toBe(404)
+    const said = (events: AssistantEvent[]): string => {
+        let text = ''
+        for (const event of events)
+            if (event.type === 'text') text += event.text
+        return text
+    }
+    expect(said(allowed.events)).toContain(
+        'permission {"behavior":"allow","updatedInput":{"command":"ls"}}',
+    )
+    expect(allowed.events.at(-1)).toMatchObject({ type: 'done' })
+    const denied = await answeringPrompt('prompted', false)
+    expect(said(denied.events)).toContain('permission {"behavior":"deny"')
+}, 30_000)
+
+// 44.82 — A BRIDGE RUN `--full` GIVES A TURN EVERYTHING `claude` HAS: no `--tools`, no setting source
+// and no MCP server taken away, the visitor's own options passed as they gave them, whatever the site
+// asked for — and it says so as it connects. THE REVERT: pass `full: false` from the CLI, and it
+// connects saying nothing of it.
+test('a bridge run --full gives a turn everything claude has — 44.82', async () => {
+    const { said } = await pairBridge(
+        'full',
+        undefined,
+        ['--mcp-config', '/visitor/servers.json'],
+        {},
+        ['--full'],
+    )
+    expect(said).toContain('everything your Claude Code can')
+    await events(
+        await ask('full', 'code', 'who am I?', undefined, {
+            tools: ['WebSearch'],
+        }),
+    )
+    const { args, config } = (await Bun.file(RECORD).json()) as {
+        args: string[]
+        config: { mcpServers: Record<string, unknown> }
+    }
+    expect(args).not.toContain('--tools')
+    expect(args).not.toContain('--setting-sources')
+    expect(args).not.toContain('--strict-mcp-config')
+    expect(args).toContain('/visitor/servers.json')
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('auto')
+    expect(Object.keys(config.mcpServers).sort()).toEqual([
+        'abide_bridge',
+        'app',
+    ])
 }, 30_000)
 
 // 44.58, 44.60, 44.61 — WHAT THE PAIRING ASKED FOR AND CANNOT BE GIVEN REACHES THE PAGE, and a server added
@@ -1201,10 +1328,10 @@ console.log(JSON.stringify({ status: answer.status, text: await answer.text() })
 }, 30_000)
 
 // 44.77, 44.78, 44.79 — THE NATIVE APP'S OWN BRIDGE: a request carrying the window's credential is
-// paired with no code spent and no bridge running, its turn is given every tool it asks for, and its
-// status lacks only an MCP tool whose server the user scope does not hold; the same request without
-// the credential, or with another, is not paired at all. THE REVERTS: read `local` as `false` in
-// `fromNativeWindow`, and the window's status is unpaired and its turn refused 409; pass `trusted:
+// paired with no code spent and no bridge running, its turn is given everything `claude` has (44.82),
+// and its status lacks only an MCP tool whose server the user scope does not hold; the same request
+// without the credential, or with another, is not paired at all. THE REVERTS: read `local` as `false`
+// in `fromNativeWindow`, and the window's status is unpaired and its turn refused 409; pass `full:
 // false` to the local core, and `--tools` reads empty.
 test('the native app’s window is paired with this machine’s Claude Code — 44.77, 44.78, 44.79', async () => {
     const configured = await scratch({
@@ -1276,10 +1403,11 @@ process.exit(0)
         args: string[]
         config: { mcpServers: Record<string, unknown> }
     }
-    expect(record.args[record.args.indexOf('--tools') + 1]).toBe('WebSearch')
+    expect(record.args).not.toContain('--tools')
+    expect(record.args).not.toContain('--strict-mcp-config')
     expect(Object.keys(record.config.mcpServers).sort()).toEqual([
+        'abide_bridge',
         'app',
-        'calendar',
     ])
 }, 30_000)
 
@@ -1307,7 +1435,14 @@ test('the bridge opens the scheme the site writes its links in', () => {
 
 /** What a bridge run to its end against a `fakeBridgeSite` misbehaving as `how` said, and the site saw. */
 async function againstFakeSite(
-    how: 'drop' | 'lose' | 'mute' | 'refuse' | 'silent' | 'vanish',
+    how:
+        | 'drop'
+        | 'lose'
+        | 'mute'
+        | 'refuse'
+        | 'silent'
+        | 'unpermitted'
+        | 'vanish',
     replyMilliseconds: number,
     silenceMilliseconds?: number,
 ): Promise<{ exitCode: number; stderr: string; saw: string[] }> {
@@ -1399,6 +1534,24 @@ test('a tool call the site never replies to fails at the deadline — 44.24', as
             ],
             isError: true,
         },
+    })
+}, 30_000)
+
+// 44.84 — A PROMPT THE PAGE NEVER ANSWERS IS DENIED once the deadline passes, by the bridge's own server,
+// which lists the one tool it is asked through. THE REVERT: answer an unanswered prompt as a failed
+// call, and the reply carries `isError` and no `deny`.
+test('a permission prompt the site never answers is denied at the deadline — 44.81, 44.84', async () => {
+    const { exitCode } = await againstFakeSite('unpermitted', 300)
+    expect(exitCode).toBe(0)
+    const { listed, reply } = (await Bun.file(RECORD).json()) as {
+        listed: { result: { tools: { name: string }[] } }
+        reply: { result: { content: { text: string }[]; isError?: boolean } }
+    }
+    expect(listed.result.tools.map((tool) => tool.name)).toEqual(['ask'])
+    expect(reply.result.isError).toBeUndefined()
+    expect(JSON.parse(reply.result.content[0]?.text as string)).toEqual({
+        behavior: 'deny',
+        message: expect.stringContaining('no reply within 300 ms'),
     })
 }, 30_000)
 

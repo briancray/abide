@@ -4008,9 +4008,10 @@ is paired.
 44.14 A code `provider.claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that
 asked for it, once, and MUST NOT pair once it has expired.
 
-44.15 A bridge MUST run Claude Code with no MCP server but the bridge's own and the visitor's servers
-of the MCP tools 44.29 makes available to the turn, in an empty directory removed when the run ends,
-and with no built-in tool and no setting source the visitor did not pass it after `--`.
+44.15 A bridge MUST run Claude Code in an empty directory removed when the run ends, and, save where
+44.82 runs it full, with no MCP server but the bridge's own and the visitor's servers of the MCP tools
+44.29 makes available to the turn, and with no built-in tool and no setting source the visitor did not
+pass it after `--`.
 
 44.16 A bridge MUST lay each option a site sets but `tools` (44.29) on as Claude Code's flag of that
 name, MUST fail a turn whose config sets any option `ClaudeCodeConfig` does not name, and MUST lay
@@ -4053,9 +4054,10 @@ and its `input` event, with the same `id`, once the call is written.
 
 44.29 A tool of the visitor's machine — built-in by its name, or an MCP tool as `mcp__<server>__<tool>`
 — MUST be available to a turn only where the site's `tools` names it and the visitor's `--tools`
-names it or, for an MCP tool, `mcp__<server>`, and an MCP tool only where 44.58 finds its server; it
-MUST be approved without asking unless the visitor passed `--allowedTools`, and the bridge MUST say
-once each tool the site asked for that it cannot make available.
+names it or, for an MCP tool, `mcp__<server>`, and an MCP tool only where 44.58 finds its server, save
+where 44.82 runs the bridge full; it MUST NOT be approved without asking unless the visitor's
+`--allowedTools` names it, and the bridge MUST say once each tool the site asked for that it cannot make
+available.
 
 44.30 A bridge stopped by `SIGTERM`, `SIGINT` or `SIGHUP` MUST end every Claude Code run it started
 before it exits.
@@ -4103,8 +4105,9 @@ release and tools.
 whose release is a version alone, and MUST run the release it names.
 
 44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, save where 44.62
-pairs it unasked, naming the site, the tools and the bridge release the link asks for, and the
-options and the names of the variables `abide-bridge install` kept (44.44), and MUST offer to always
+pairs it unasked, naming the site, the tools and the bridge release the link asks for — or, where
+`abide-bridge install` was run `--full`, that it gives everything 44.82 does — and the options and the
+names of the variables `abide-bridge install` kept (44.44), and MUST offer to always
 allow the site only where `/__abide/bridge` named a holder for the link's code (44.63).
 
 44.43 `abide-bridge install` MUST write what opens links under the visitor's own home — Application
@@ -4112,9 +4115,10 @@ Support on macOS, `XDG_DATA_HOME` on Linux, `LOCALAPPDATA` on Windows — and re
 desktop for the visitor alone, and `abide-bridge uninstall` MUST unregister it and remove all install
 wrote.
 
-44.44 `abide-bridge install` MUST keep the Claude Code options after its `--` and each `--env
-NAME=VALUE` it is given, and a bridge opening an `abide-bridge` link MUST run Claude Code with those
-options ahead of the link's tools and with those variables set, and a link MUST NOT set either.
+44.44 `abide-bridge install` MUST keep the Claude Code options after its `--`, each `--env
+NAME=VALUE` and the `--full` it is given, and a bridge opening an `abide-bridge` link MUST run Claude
+Code with those options ahead of the link's tools and with those variables set, and run `--full` where
+install was, and a link MUST NOT set any of them.
 
 44.45 A bridge MUST say that `/__abide/bridge` did not take a report once, and not again until a
 report is taken, and MUST NOT say it while it redials per 44.25.
@@ -4226,9 +4230,9 @@ Claude Code, run in the app's process — whatever browser and sign-in it carrie
 and no question asked, wherever `claude` is on the `PATH` it runs with; a bridge paired by a code
 MUST run the turn where both are.
 
-44.78 The native app's own bridge MUST make available, without asking, every tool a turn's `tools`
-names that is built-in or of an MCP server 44.58 finds in the user scope, and a `BridgeStatus` it
-pairs MUST carry as `missing` each tool it names of a server 44.58 does not find.
+44.78 The native app's own bridge MUST run every turn as 44.82 runs a bridge `--full`, and a
+`BridgeStatus` it pairs MUST carry as `missing` each tool its `tools` names of an MCP server 44.58 does
+not find in the user scope.
 
 44.79 The native app MUST hand its window a credential minted at each launch, in a cookie `HttpOnly`
 and `SameSite=Strict`, and MUST NOT read a request as from its window by anything else — its user
@@ -4236,6 +4240,22 @@ agent (38.141) included.
 
 44.80 The native app MUST run with the `PATH` the visitor's login shell sets, where that shell says
 one within 3 seconds.
+
+44.81 A bridge MUST run Claude Code in its `auto` permission mode, save where the visitor's options
+after `--` set another, with each permission prompt asked of an MCP server the bridge answers itself,
+and `provider.claudeCode` MUST yield each prompt as a `permission` `AssistantEvent` naming the tool and
+the input it asks to run; the tools of the bridge's own relayed server MUST be approved without asking.
+
+44.82 A bridge run `--full` MUST run Claude Code with every built-in tool, setting source and MCP server
+that `claude` run in the directory 44.15 names would read, and with the visitor's options after `--` as
+they gave them, whatever `tools` the turn names.
+
+44.83 `provider.claudeCode.permit` MUST answer a `permission` event only for a request from the
+browser and sign-in its turn's bridge is paired to (44.33), only while it waits, and once, and MUST
+refuse 404 otherwise; a prompt it allows MUST run with the input the event named.
+
+44.84 A bridge MUST deny a permission prompt `/__abide/bridge` sent no answer to within 120 seconds,
+or whose turn ended first.
 
 # 45. Offline
 

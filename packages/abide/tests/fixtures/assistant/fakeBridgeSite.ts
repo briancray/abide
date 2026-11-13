@@ -9,9 +9,10 @@
 //   refuse      a turn is sent, and every report is refused 500.
 //   lose        as refuse, and the turn is one Claude Code never ends on its own.
 //   silent      a turn is sent, every report is taken, and no reply is ever sent.
+//   unpermitted as silent, and the turn's Claude Code asks a permission prompt first (44.84).
 //   vanish      a turn is sent, and the first report ends the pairing stream before it is refused 500,
 //               as every report after it is; a redial is refused 410.
-// A refuse, lose or silent site says `bye` once a turn's `end` or `fail` is reported.
+// A refuse, lose, silent or unpermitted site says `bye` once a turn's `end` or `fail` is reported.
 
 const how = process.argv[2]
 const ENCODER = new TextEncoder()
@@ -49,7 +50,12 @@ const server = Bun.serve({
                             prompt: [
                                 {
                                     type: 'text',
-                                    text: how === 'lose' ? 'hang' : 'record',
+                                    text:
+                                        how === 'lose'
+                                            ? 'hang'
+                                            : how === 'unpermitted'
+                                              ? 'permission record'
+                                              : 'record',
                                 },
                             ],
                             config: {},
