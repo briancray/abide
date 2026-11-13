@@ -20,7 +20,8 @@
     },
     "exports": {
         "./serveTurns": "./src/serveTurns.ts",
-        "./grant": "./src/grant.ts"
+        "./grant": "./src/grant.ts",
+        "./package.json": "./package.json"
     },
     "bin": {
         "abide-bridge": "./bin/abideBridge.ts"

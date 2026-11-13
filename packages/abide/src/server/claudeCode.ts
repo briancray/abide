@@ -11,6 +11,10 @@
 
 export type { BridgeStatus } from '#shared/BridgeStatus.ts'
 
+// The bridge a pairing command names is the one installed beside this abide: the release whose
+// relay this server speaks, and the one a desktop app runs in process.
+import bridgePackage from '@abide/bridge/package.json' with { type: 'json' }
+
 import { PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
 import type {
     AssistantContent,
@@ -23,7 +27,6 @@ import { refuse } from '#shared/refuse.ts'
 import { declare } from '#shared/rpc.ts'
 
 import { blocksOf, forwardOf, type Provider } from './assistant.ts'
-import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import {
     fromDesktopWindow,
     mintCode,
@@ -151,7 +154,11 @@ function commandFor(
 ): { command: string; link: string; install: string } {
     const site = `${ownOrigin(request().url)}${mounted('')}`
     const granted = tools?.length ? tools.join(',') : undefined
-    const query = new URLSearchParams({ site, code, version: BRIDGE_VERSION })
+    const query = new URLSearchParams({
+        site,
+        code,
+        version: bridgePackage.version,
+    })
     if (granted !== undefined) query.set('tools', granted)
     // 44.76 — the site's own arguments after the tools, in the command and the install alike; the
     // link carries none (44.44), so an install is how a link opened later runs with them.
@@ -159,9 +166,9 @@ function commandFor(
     const options =
         granted === undefined ? added : ['--tools', granted, ...added]
     return {
-        command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}${afterDashes(options)}`,
+        command: `bunx @abide/bridge@${bridgePackage.version} ${site} ${code}${afterDashes(options)}`,
         link: `${BRIDGE_SCHEME}://pair?${query}`,
-        install: `bunx @abide/bridge@${BRIDGE_VERSION} install${afterDashes(added)}`,
+        install: `bunx @abide/bridge@${bridgePackage.version} install${afterDashes(added)}`,
     }
 }
 

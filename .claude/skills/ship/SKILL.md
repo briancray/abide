@@ -61,18 +61,10 @@ re-prompting, but report the per-package version bumps before merging as a sanit
    ```
    Then `gh pr diff <n>` — confirm the `## x.y.z` bump for **each** package it versions and that
    every changelog entry is present once. Report the new version(s) to the user.
-   - **If `@abide/bridge` is bumped**, the PR does not touch
-     `packages/abide/src/server/BRIDGE_VERSION.ts`, and `assistant.test.ts` gates it equal to the
-     bridge's `package.json` — so it cannot be bumped on `main` beforehand (the gate there would be
-     red). Push the bump onto the PR branch from a worktree, then merge:
-     ```
-     br=$(gh pr view <n> --json headRefName -q .headRefName)
-     git fetch origin "$br" && git worktree add /tmp/ship-wt "origin/$br"
-     # edit BRIDGE_VERSION in /tmp/ship-wt to the PR's bridge version
-     git -C /tmp/ship-wt commit -m "chore: the pairing command names @abide/bridge x.y.z" -- packages/abide/src/server/BRIDGE_VERSION.ts
-     git -C /tmp/ship-wt push origin "HEAD:$br" && git worktree remove /tmp/ship-wt
-     ```
-     The release run's verify job gates the result before anything publishes.
+   - **If `@abide/bridge` is bumped**, confirm the PR also moves `@abide/abide`'s exact pin on it
+     (`packages/abide/package.json`) to the same version — `changeset version` does this, and
+     `assistant.test.ts` gates the two equal. The pairing command reads the installed bridge's own
+     `package.json`, so nothing else names the version.
 
 7. **Merge** — `gh pr merge <n> --squash`. This push publishes to npm and cuts the GitHub Release.
 

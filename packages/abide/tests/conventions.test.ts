@@ -388,3 +388,36 @@ test('a module that writes outside itself at load is listed in sideEffects, and 
         if (!pattern.includes('*') && !found.has(pattern)) stale.push(pattern)
     expect(stale).toEqual([])
 })
+
+// A PUBLISHED PACKAGE NAMES ITS WORKSPACE DEPENDENCIES BY VERSION. The release is `changeset publish`,
+// which hands each package to `npm publish`, and npm copies `workspace:*` into the tarball as written —
+// so the published package names a protocol no registry install can resolve. `bun pm pack`, which the
+// scaffold smoke packs with, rewrites it, so that check passes against an artifact the release never
+// makes. A dev dependency is exempt: nothing installing the package reads one. Bun links an exact
+// version to the workspace's own package exactly as it links `workspace:*`.
+// THE REVERT: `@abide/abide`'s `@abide/bridge` back to `workspace:*` — the package and the name are
+// listed.
+test('a published package depends on no workspace: protocol at run time', async () => {
+    const unresolvable: string[] = []
+    for (const directory of ['abide', 'bridge', 'harness', 'dogfood']) {
+        const manifest = (await Bun.file(
+            new URL(`${directory}/package.json`, PACKAGES),
+        ).json()) as {
+            name: string
+            private?: boolean
+            dependencies?: Record<string, string>
+            peerDependencies?: Record<string, string>
+            optionalDependencies?: Record<string, string>
+        }
+        if (manifest.private === true) continue
+        for (const field of [
+            manifest.dependencies,
+            manifest.peerDependencies,
+            manifest.optionalDependencies,
+        ])
+            for (const [name, range] of Object.entries(field ?? {}))
+                if (range.startsWith('workspace:'))
+                    unresolvable.push(`${manifest.name}: ${name} ${range}`)
+    }
+    expect(unresolvable).toEqual([])
+})

@@ -42,11 +42,17 @@ jobs:
       - name: Pack @abide/harness
         run: cd packages/harness && bun pm pack --destination "$RUNNER_TEMP"
 
+      # @abide/abide depends on @abide/bridge at the exact version beside it, which a Version
+      # Packages PR raises before that version is on the registry — so the bridge is installed from
+      # its tarball too, through an override, wherever the packed framework is installed.
+      - name: Pack @abide/bridge
+        run: cd packages/bridge && bun pm pack --destination "$RUNNER_TEMP"
+
       - name: Scaffold an app from the packed artifact
         run: |
           mkdir "$RUNNER_TEMP/consumer"
           cd "$RUNNER_TEMP/consumer"
-          echo '{"name":"consumer","private":true}' > package.json
+          echo "{\"name\":\"consumer\",\"private\":true,\"overrides\":{\"@abide/bridge\":\"file:$(echo "$RUNNER_TEMP"/abide-bridge-*.tgz)\"}}" > package.json
           bun add "$(echo "$RUNNER_TEMP"/abide-abide-*.tgz)"
           ./node_modules/.bin/abide scaffold my-app
           # Written by the scaffold rather than packed: a packer drops both.
@@ -69,7 +75,8 @@ jobs:
           cd "$RUNNER_TEMP/consumer/my-app"
           ABIDE_TARBALL="$(echo "$RUNNER_TEMP"/abide-abide-*.tgz)" \
           HARNESS_TARBALL="$(echo "$RUNNER_TEMP"/abide-harness-*.tgz)" \
-            bun -e 'const p = await Bun.file("package.json").json(); p.dependencies["@abide/abide"] = "file:" + process.env.ABIDE_TARBALL; p.devDependencies["@abide/harness"] = "file:" + process.env.HARNESS_TARBALL; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
+          BRIDGE_TARBALL="$(echo "$RUNNER_TEMP"/abide-bridge-*.tgz)" \
+            bun -e 'const p = await Bun.file("package.json").json(); p.dependencies["@abide/abide"] = "file:" + process.env.ABIDE_TARBALL; p.devDependencies["@abide/harness"] = "file:" + process.env.HARNESS_TARBALL; p.overrides = { "@abide/bridge": "file:" + process.env.BRIDGE_TARBALL }; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
           bun install
           bun run build
           # 38.112 — the starter's own test, against the packed preload.

@@ -10,6 +10,7 @@ import { spawned } from '@abide/harness/gate'
 
 import { POST } from '#server'
 
+import bridgePackage from '../../bridge/package.json' with { type: 'json' }
 import { SILENCE_MILLISECONDS } from '../../bridge/src/bridge.ts'
 import { BRIDGE_PATH } from '../../bridge/src/BRIDGE_PATH.ts'
 import type { Answer } from '../../bridge/src/desktop.ts'
@@ -19,7 +20,6 @@ import { PAIRING_SCHEME } from '../../bridge/src/PAIRING_SCHEME.ts'
 import { type Pairing, pairingOf } from '../../bridge/src/pairingLink.ts'
 import { readLines } from '../../bridge/src/readLines.ts'
 import { RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS } from '../../bridge/src/RESUME_MILLISECONDS.ts'
-import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
 import { mintCode } from '../src/server/bridgeRelay.ts'
 import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'
 import { HEARTBEAT_MILLISECONDS } from '../src/server/HEARTBEAT_MILLISECONDS.ts'
@@ -36,6 +36,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 const FIXTURES = new URL('./fixtures/assistant/', import.meta.url).pathname
 const FAKE_CLAUDE = `${FIXTURES}fakeClaudeCode.ts`
 const BRIDGE = new URL('../../bridge/', import.meta.url).pathname
+const BRIDGE_VERSION = bridgePackage.version
 const RECORD = `${Bun.env.TMPDIR ?? '/tmp'}/abide-assistant-${process.pid}.json`
 const SERVER = new URL('../src/server', import.meta.url).pathname
 // The directories `scratch` made, removed once the file is done.
@@ -1282,12 +1283,15 @@ process.exit(0)
     ])
 }, 30_000)
 
-// The command a site shows names the bridge release that speaks this relay.
-test('the pairing command names the bridge package’s own version', async () => {
-    const own = (await Bun.file(`${BRIDGE}package.json`).json()) as {
-        version: string
-    }
-    expect(BRIDGE_VERSION).toBe(own.version)
+// THE PIN IS THE ONE PLACE THE BRIDGE'S VERSION IS WRITTEN: abide names the bridge it is published
+// beside, and the pairing command reads that one's own `package.json`. A pin that drifts from the
+// workspace's bridge stops linking it, and the install fetches some other release from the registry.
+// THE REVERT: pin `0.6.1`; this reads it where the bridge is 0.6.2.
+test('abide depends on the bridge in this workspace, at its exact version', async () => {
+    const abide = (await Bun.file(
+        new URL('../package.json', import.meta.url),
+    ).json()) as { dependencies: Record<string, string> }
+    expect(abide.dependencies['@abide/bridge']).toBe(BRIDGE_VERSION)
 })
 
 // The bridge spells the relay's address out rather than importing it, so this is what holds the two
