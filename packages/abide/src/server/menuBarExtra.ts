@@ -55,6 +55,7 @@ export function openMenuBarExtra(
     window: Id,
     uiDelegate: Id,
     shown: () => string | undefined,
+    connectUpdates: (view: Id) => void,
 ): { setMenu(menu: Id): void; closePanel(): void } {
     const application = send(objcClass('NSApplication'), 'sharedApplication')
     const item = sendTyped(
@@ -131,9 +132,15 @@ export function openMenuBarExtra(
             return
         }
         if (Date.now() - resignedAt < RESIGNED_MILLISECONDS) return
-        panel ??= openPanel(options, version, uiDelegate, () => {
-            resignedAt = Date.now()
-        })
+        panel ??= openPanel(
+            options,
+            version,
+            uiDelegate,
+            connectUpdates,
+            () => {
+                resignedAt = Date.now()
+            },
+        )
         if (panel.address !== address) {
             panel.address = address
             send(
@@ -241,6 +248,7 @@ function openPanel(
     options: Launcher,
     version: string,
     uiDelegate: Id,
+    connectUpdates: (view: Id) => void,
     resigned: () => void,
 ): Panel {
     const window = created('NSPanel')
@@ -316,6 +324,8 @@ function openPanel(
     send(view, 'setNavigationDelegate:', uiDelegate)
     // 38.140 — the panel's page is the desktop app's as much as the window's is.
     send(view, 'setCustomUserAgent:', nsString(desktopUserAgent(version)))
+    // 38.148 — before it loads, so its `pendingUpdate` asks a channel that is there.
+    connectUpdates(view)
     send(window, 'setContentView:', view)
     // 38.171.
     send(

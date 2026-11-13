@@ -480,6 +480,38 @@ export function openDesktopWindow(
     )
     // 38.88 — THE MENU BAR IS THE PAGE'S: the defaults until the page the window loads tells it
     // what its route exports, and again after every navigation it makes.
+    // 38.148 — EVERY PAGE THE APP SHOWS HEARS OF AN UPDATE: the window's, and the menu bar extra's
+    // panel's once it is built. Each asks on load and is told again when one is staged.
+    const updateViews: Id[] = []
+    let updateBridge: Id = null
+    const connectUpdates = (target: Id): void => {
+        updateViews.push(target)
+        updateBridge ??= send(
+            definedClass('AbideUpdateBridge', {
+                'userContentController:didReceiveScriptMessage:': {
+                    types: 'v@:@@',
+                    args: [FFIType.ptr, FFIType.ptr],
+                    returns: FFIType.void,
+                    run: (_controller: Id, message: Id) => {
+                        const asked = stringOf(send(message, 'body'))
+                        if (asked === 'ask') tellPage()
+                        else if (
+                            asked === 'install' &&
+                            updater?.staged !== undefined
+                        )
+                            restart()
+                    },
+                },
+            }),
+            'new',
+        )
+        send(
+            send(send(target, 'configuration'), 'userContentController'),
+            'addScriptMessageHandler:name:',
+            updateBridge,
+            nsString('abideUpdate'),
+        )
+    }
     // 38.166.
     const extra = options.menuBarExtra
         ? openMenuBarExtra(
@@ -490,6 +522,7 @@ export function openDesktopWindow(
               window,
               uiDelegate,
               () => session.shown,
+              connectUpdates,
           )
         : undefined
     let shownMenu: NativeMenuItem[] = []
@@ -544,14 +577,15 @@ export function openDesktopWindow(
                       required: staged.required,
                       notes: staged.notes,
                   }
-        send(
-            view,
-            'evaluateJavaScript:completionHandler:',
-            nsString(
-                `dispatchEvent(new CustomEvent('abide:update', { detail: ${JSON.stringify(detail)} }))`,
-            ),
-            null,
-        )
+        for (const told of updateViews)
+            send(
+                told,
+                'evaluateJavaScript:completionHandler:',
+                nsString(
+                    `dispatchEvent(new CustomEvent('abide:update', { detail: ${JSON.stringify(detail)} }))`,
+                ),
+                null,
+            )
     }
     // 38.145 — a staged update is installed by restarting; with none, the feed is read now and
     // the person told what it found.
@@ -595,30 +629,7 @@ export function openDesktopWindow(
             showMenu(shownMenu)
             tellPage()
         }
-    send(
-        send(send(view, 'configuration'), 'userContentController'),
-        'addScriptMessageHandler:name:',
-        send(
-            definedClass('AbideUpdateBridge', {
-                'userContentController:didReceiveScriptMessage:': {
-                    types: 'v@:@@',
-                    args: [FFIType.ptr, FFIType.ptr],
-                    returns: FFIType.void,
-                    run: (_controller: Id, message: Id) => {
-                        const asked = stringOf(send(message, 'body'))
-                        if (asked === 'ask') tellPage()
-                        else if (
-                            asked === 'install' &&
-                            updater?.staged !== undefined
-                        )
-                            restart()
-                    },
-                },
-            }),
-            'new',
-        ),
-        nsString('abideUpdate'),
-    )
+    connectUpdates(view)
     send(
         send(send(view, 'configuration'), 'userContentController'),
         'addScriptMessageHandler:name:',

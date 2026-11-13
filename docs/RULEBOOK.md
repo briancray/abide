@@ -3411,8 +3411,8 @@ and the text of the file `--notes` names.
 made for the app on its first bundle and reads on every bundle after, and MUST print where it made
 one.
 
-38.148 `pendingUpdate` MUST hold the update the desktop app's window it is in has staged, and MUST
-be `undefined` on a server and in a page no such window holds.
+38.148 `pendingUpdate` MUST hold the update the desktop app has staged in the page its window or the
+menu bar extra's panel shows, and MUST be `undefined` on a server and in a page neither shows.
 
 38.149 The `update` role MUST stand in the application menu where `onLauncher` answers an `update`,
 and MUST NOT stand there otherwise.
