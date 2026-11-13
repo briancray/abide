@@ -4180,7 +4180,8 @@ those allowed.
 
 44.63 `/__abide/bridge` MUST name, for a code minted and unspent, a holder without spending the code —
 the same for every code minted to one sign-in, or signed out to one browser, and different for any
-other — and the app's name, and MUST refuse 403 any other code.
+other — and the app's name, and the note the code was minted with where it was minted with one, and MUST
+refuse 403 any other code.
 
 44.64 A bridge opening an `abide-bridge` link on a desktop it cannot ask on MUST NOT pair.
 
@@ -4193,7 +4194,7 @@ none.
 44.67 `/__abide/pairing` MUST answer the asking browser's `BridgeStatus` as it stands, with the code
 it answered last while that is unspent and unexpired, granting the tools `ABIDE_BRIDGE_TOOLS` names
 separated by commas, and none where it names none, and minted as 44.85 mints one with `full` where
-`ABIDE_BRIDGE_FULL` is on.
+`ABIDE_BRIDGE_FULL` is on, and with the note `ABIDE_BRIDGE_NOTE` holds where it holds one.
 
 44.68 `/__abide/pairing` MUST NOT be listed by `/__abide/mcp` or `/__abide/openapi.json`.
 
@@ -4279,6 +4280,10 @@ bridge, whatever release the link names.
 
 44.90 A bridge asking per 44.42 MUST show the icon the site publishes at `/icon.png` where it is a
 PNG of at most 1 MB answered within 3 seconds, and the desktop's own otherwise.
+
+44.91 A bridge asking per 44.42 MUST show the note `/__abide/bridge` names for the link's code (44.63)
+under the headline, quoted after the app's name or the site and said to be its own, as one line of at
+most 200 characters, and MUST NOT show it in the headline.
 
 # 45. Offline
 

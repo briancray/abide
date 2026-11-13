@@ -136,13 +136,32 @@ test('the question names the site and every tool it asks for — 44.42', () => {
 // served from, never in its place, and titles itself by it. THE REVERT: show the name alone, and an app
 // calling itself anything reads as that.
 test('the question names the app beside its site, and is titled by it — 44.42', () => {
-    const asked = question({ ...PAIRING, full: true }, SETTINGS, [], 'CRM')
+    const asked = question({ ...PAIRING, full: true }, SETTINGS, [], {
+        name: 'CRM',
+    })
     expect(asked.title).toBe('CRM')
     expect(asked.headline).toBe(
         'CRM (crm.example/app) is requesting full access to your local Claude Code.',
     )
     expect(asked.body).toContain('Or allow only CRM’s own tools')
     expect(question(PAIRING, SETTINGS).title).toBe('crm.example/app')
+})
+
+// 44.91 — THE APP'S NOTE IS SHOWN AS ITS OWN WORDS: quoted and said by the app, first under the headline,
+// and never in the headline the bridge writes. THE REVERT: drop the note from `question`, and it is not
+// shown at all.
+test('the question shows the app’s note as its own words — 44.91', () => {
+    const asked = question({ ...PAIRING, full: true }, SETTINGS, [], {
+        name: 'CRM',
+        note: 'So it can file your deals.',
+    })
+    expect(asked.headline).not.toContain('file your deals')
+    expect(asked.body.split('\n\n')[0]).toBe(
+        'CRM says: “So it can file your deals.”',
+    )
+    expect(
+        question(PAIRING, SETTINGS, [], { note: 'Why.' }).body.split('\n\n')[0],
+    ).toBe('crm.example/app says: “Why.”')
 })
 
 // 44.90 — THE ICON IS THE SITE'S OWN `/icon.png`, and only where it is a PNG no larger than an app

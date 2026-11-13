@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, jest, spyOn, test } from 'bun:test'
 import { GET, onPairing } from '#server'
 import { config } from '#server/config.ts'
 import { flushSync } from '#shared'
-import { PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
+import { BRIDGE_ADDRESS, PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { BridgeStatus } from '#shared/BridgeStatus.ts'
 import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
 import { pairing } from '#shared/pairing.ts'
@@ -456,6 +456,34 @@ test('onPairing’s arguments follow -- in the command and the install, per prin
         unfile()
         if (declared === undefined) delete process.env.ABIDE_BRIDGE_TOOLS
         else process.env.ABIDE_BRIDGE_TOOLS = declared
+        config.invalidate()
+    }
+})
+
+// 44.67, 44.91 — `ABIDE_BRIDGE_NOTE` IS THE NOTE `/__abide/pairing`'s code is minted with, read back by
+// the bridge beside the code's holder. THE REVERT: mint the code without it, and the holder answer
+// carries no note.
+test('/__abide/pairing mints its code with ABIDE_BRIDGE_NOTE — 44.67, 44.91', async () => {
+    const declared = process.env.ABIDE_BRIDGE_NOTE
+    process.env.ABIDE_BRIDGE_NOTE = 'So it can build what you ask for.'
+    config.invalidate()
+    try {
+        await using app = await inMemoryApp({})
+        const answered = await app.fetch(
+            new Request(`http://site${PAIRING_ADDRESS}`),
+            { caller: 'noted-browser' },
+        )
+        const { link } = (await answered.json()) as BridgeStatus
+        const code = new URL(link).searchParams.get('code') ?? ''
+        const held = await app.fetch(
+            new Request(`http://site${BRIDGE_ADDRESS}?holder=${code}`),
+        )
+        expect(((await held.json()) as { note?: string }).note).toBe(
+            'So it can build what you ask for.',
+        )
+    } finally {
+        if (declared === undefined) delete process.env.ABIDE_BRIDGE_NOTE
+        else process.env.ABIDE_BRIDGE_NOTE = declared
         config.invalidate()
     }
 })

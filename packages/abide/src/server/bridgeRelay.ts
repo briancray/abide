@@ -4,7 +4,7 @@
 //
 //   GET  /__abide/bridge?code=…   the pairing, answered by a server-sent stream of what the bridge is
 //                                 to do: the token it posts with, each turn, each tool reply, a cancel.
-//   GET  /__abide/bridge?holder=… who a code was minted for, as an opaque string, without spending it, and the app's name
+//   GET  /__abide/bridge?holder=… who a code was minted for, as an opaque string, without spending it, the app's name and the note it was minted with
 //                                 (44.63): what a bridge always allowing a site checks a link against.
 //   GET  /__abide/bridge          the same stream, resumed by the token after it dropped (44.26).
 //   POST /__abide/bridge          what the bridge reports, one frame per line: a turn's events, the
@@ -84,10 +84,17 @@ const CODE_LIFETIME = 10 * 60_000
 // How long a bridge outlives the last page watching it, so a reload does not end it.
 const IDLE_GRACE = 30_000
 
-// Each code minted and unspent: the pairing it is for, who it was minted for, and what it asks.
+// Each code minted and unspent: the pairing it is for, who it was minted for, what it asks, and the
+// app's note on why (44.91).
 const CODES = new Map<
     string,
-    { key: string; expires: number; holder: string; tools: string[] }
+    {
+        key: string
+        expires: number
+        holder: string
+        tools: string[]
+        note: string | undefined
+    }
 >()
 const BY_KEY = new Map<string, Bridge>()
 const BY_TOKEN = new Map<string, Bridge>()
@@ -239,6 +246,7 @@ export function mintCode(
     caller: string,
     signedIn: string,
     tools: readonly string[] = [],
+    note?: string,
 ): { code: string; expires: number } {
     const now = Date.now()
     for (const [code, pairing] of CODES)
@@ -250,6 +258,7 @@ export function mintCode(
         expires,
         holder: holderOf(caller, signedIn),
         tools: [...tools],
+        note,
     })
     minted = true
     return { code, expires }
@@ -386,6 +395,7 @@ export async function* pairingStatus(
     caller: string,
     signedIn: string,
     tools: readonly string[],
+    note: string | undefined,
     signal: AbortSignal,
     local: boolean,
 ): AsyncGenerator<PairingState> {
@@ -422,7 +432,7 @@ export async function* pairingStatus(
                 pairing.expires <= Date.now() ||
                 !CODES.has(pairing.code)
             )
-                pairing = mintCode(caller, signedIn, tools)
+                pairing = mintCode(caller, signedIn, tools, note)
             const state: PairingState = {
                 paired: pairedFor(key, local),
                 code: pairing.code,
@@ -463,10 +473,11 @@ export function pairingNow(
     caller: string,
     signedIn: string,
     tools: readonly string[],
+    note: string | undefined,
     local: boolean,
 ): PairingState {
     const key = pairingKey(caller, signedIn)
-    const at = `${key}\n${tools.join(',')}`
+    const at = `${key}\n${tools.join(',')}\n${note ?? ''}`
     let standing = STANDING.get(at)
     if (
         standing === undefined ||
@@ -474,7 +485,7 @@ export function pairingNow(
         !CODES.has(standing.code)
     ) {
         if (standing !== undefined) clearTimeout(standing.expiry)
-        const { code, expires } = mintCode(caller, signedIn, tools)
+        const { code, expires } = mintCode(caller, signedIn, tools, note)
         const expiry = setTimeout(() => {
             if (STANDING.get(at)?.code === code) STANDING.delete(at)
             wakeWatchers(key)
@@ -624,11 +635,16 @@ function pair(request: Request): Response {
 
 // 44.63 — WHO A CODE WAS MINTED FOR, read without spending it: a code minted for someone else names
 // someone else, which is what a bridge always allowing a site refuses to pair unasked. Beside it, the
-// app's name, which the bridge's question shows with the site (44.42).
+// app's name, which the bridge's question shows with the site (44.42), and the note the code was minted
+// with, which it shows as the app's own words (44.91).
 function holderAnswer(code: string): Response {
     const pairing = standingCode(code)
     if (pairing === undefined) return unknownCode()
-    return Response.json({ holder: pairing.holder, name: appName() })
+    return Response.json({
+        holder: pairing.holder,
+        name: appName(),
+        ...(pairing.note === undefined ? {} : { note: pairing.note }),
+    })
 }
 
 /** What `code` was minted with, while it is unspent and unexpired. */

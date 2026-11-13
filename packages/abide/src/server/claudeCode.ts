@@ -62,10 +62,14 @@ export type ClaudeCodeConfig = {
 }
 
 /**
- * The tools a pairing command grants, as the visitor would after its `--` (44.32), and whether it asks
- * for everything the visitor's Claude Code has, as their `--full` (44.85).
+ * The tools a pairing command grants, as the visitor would after its `--` (44.32), whether it asks for
+ * everything the visitor's Claude Code has, as their `--full` (44.85), and the app's note on why, which
+ * the question a link asks shows as its own words (44.91).
  */
-type PairingOptions = Pick<ClaudeCodeConfig, 'tools'> & { full?: boolean }
+type PairingOptions = Pick<ClaudeCodeConfig, 'tools'> & {
+    full?: boolean
+    note?: string
+}
 
 /** The visitor's own Claude Code, reached through the bridge paired to their browser. */
 function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
@@ -133,8 +137,8 @@ function askingCaller(): string {
 /**
  * The command and the link that pair a bridge with this browser, and when their code stops standing.
  * 44.14. The `tools` it is given are written after the command's `--` and in the link, so the visitor
- * running either grants them (44.29, 44.32, 44.40), and `full` is the command's `--full` and the
- * link's ask for it (44.85).
+ * running either grants them (44.29, 44.32, 44.40), `full` is the command's `--full` and the link's
+ * ask for it (44.85), and `note` is kept with the code, for the question its link asks (44.91).
  */
 function bridgeCommand(options: PairingOptions = {}): {
     command: string
@@ -146,6 +150,7 @@ function bridgeCommand(options: PairingOptions = {}): {
         askingCaller(),
         signedInAs(),
         options.tools,
+        options.note,
     )
     return { ...commandFor(code, options), expires }
 }
@@ -209,6 +214,7 @@ async function* bridge(
         askingCaller(),
         signedInAs(),
         options.tools ?? [],
+        options.note,
         request().signal,
         fromNativeWindow(),
     ))
@@ -240,7 +246,7 @@ export const claudeCode: typeof claudeCodeProvider & {
 
 // 44.67 — THE PAIRING A BROWSER'S `pairing` READS, as a handler abide mounts rather than one each app
 // writes: the asking browser's pairing as it stands, granting the tools `ABIDE_BRIDGE_TOOLS` names,
-// and asking for full access where `ABIDE_BRIDGE_FULL` is on (44.85).
+// asking for full access where `ABIDE_BRIDGE_FULL` is on (44.85), and with `ABIDE_BRIDGE_NOTE` (44.91).
 // 44.74 — THE SERVER DECIDES THEM: the parameter is declared only so the value is keyed and the call
 // runs it (1.7, as `health`'s is), and whatever a request names in it is never read. 44.68 — on no
 // generated surface.
@@ -254,10 +260,12 @@ const pairingHandler = declare('GET')(
             typeof configured === 'string' && configured !== ''
                 ? configured.split(',')
                 : []
+        const noted = config.peek()?.ABIDE_BRIDGE_NOTE
         const { paired, code, missing } = pairingNow(
             askingCaller(),
             signedInAs(),
             tools,
+            typeof noted === 'string' && noted !== '' ? noted : undefined,
             fromNativeWindow(),
         )
         return {

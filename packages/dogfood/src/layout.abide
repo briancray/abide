@@ -11,6 +11,8 @@ const PRINCIPAL_SECRET = crypto.randomUUID()
 onConfig(() => ({
     ABIDE_PRINCIPAL_SECRET: PRINCIPAL_SECRET,
     ABIDE_BRIDGE_FULL: true,
+    ABIDE_BRIDGE_NOTE:
+        'So the assistant can build what you ask for, not just answer from the docs.',
 }))
 
 middleware(serveDownloads)

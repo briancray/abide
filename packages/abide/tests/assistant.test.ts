@@ -112,7 +112,8 @@ export const bridge = GET(() => provider.claudeCode.bridge(), { ...HIDDEN, timeo
 export const command = GET(() => provider.claudeCode.bridgeCommand(), HIDDEN)
 
 export const granting = GET(() => provider.claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
-export const askingFull = GET(() => provider.claudeCode.bridgeCommand({ full: true }), HIDDEN)
+export const noting = GET(() => provider.claudeCode.bridgeCommand({ note: 'one\\ntwo ' + 'a'.repeat(300) }), HIDDEN)
+export const askingFull = GET(() => provider.claudeCode.bridgeCommand({ full: true, note: 'So it can build what you ask for.' }), HIDDEN)
 
 export const asking = GET(() => provider.claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
 
@@ -805,6 +806,36 @@ test('a pairing minted with full asks for it in its command and its link — 44.
     expect(pairingOf(full?.link ?? '')?.full).toBe(true)
     expect(plain?.command).not.toContain('--full')
     expect(pairingOf(plain?.link ?? '')?.full).toBe(false)
+}, 30_000)
+
+// 44.91 — THE APP'S NOTE TRAVELS WITH ITS CODE, never in the link, and reaches the question as one line:
+// a control character a space, and anything past 200 characters cut. THE REVERT: drop the note from
+// `holderAnswer`, and the bridge reads none.
+test('a code carries the note it was minted with to the question — 44.91', async () => {
+    const answer = await Bun.fetch(`${base}/askingFull`, {
+        headers: asPage('noted'),
+    })
+    const { link } = (await answer.json()) as { link: string }
+    expect(link).not.toContain('note')
+    const code = pairingOf(link)?.code ?? ''
+    expect((await askerOf({ site: base, code })).note).toBe(
+        'So it can build what you ask for.',
+    )
+    const codeAt = async (route: string): Promise<string> => {
+        const minted = await Bun.fetch(`${base}/${route}`, {
+            headers: asPage('noted'),
+        })
+        return pairingOf(((await minted.json()) as { link: string }).link)
+            ?.code as string
+    }
+    const read =
+        (await askerOf({ site: base, code: await codeAt('noting') })).note ?? ''
+    expect(read.startsWith('one two a')).toBe(true)
+    expect(read.length).toBe(200)
+    expect(read.endsWith('…')).toBe(true)
+    expect(
+        (await askerOf({ site: base, code: await codeAt('command') })).note,
+    ).toBeUndefined()
 }, 30_000)
 
 // 44.16 — AN OPTION THAT REACHES THE VISITOR'S MACHINE IS NOT THE SITE'S TO SET: the turn fails naming

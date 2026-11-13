@@ -58,8 +58,8 @@ function inAutoMode(claudeArgs: readonly string[]): boolean {
 }
 
 /**
- * What the visitor is asked before `pairing` runs (44.42), by the app `name`d beside its site where the
- * site names one: a site asking for full access is named as asking for it, and none of its tools
+ * What the visitor is asked before `pairing` runs (44.42), by the app `asker` names beside its site
+ * where the site names one, with its `note` as its own words (44.91): a site asking for full access is named as asking for it, and none of its tools
  * (44.85); else each tool it asks for, and each MCP tool of a server their Claude Code is not
  * configured with, `unserved` (44.65). Its icon is the caller's to lay on.
  */
@@ -67,7 +67,10 @@ export function question(
     pairing: Pairing,
     settings: HandlerSettings,
     unserved: readonly string[] = [],
-    name?: string,
+    {
+        name,
+        note,
+    }: { name?: string | undefined; note?: string | undefined } = {},
 ): Question {
     const site = shownSite(pairing.site)
     // The name is the site's to choose, so the site it is served from is always beside it.
@@ -98,6 +101,8 @@ export function question(
                 `Your Claude Code has no ${serversNamed(unserved)} MCP server, so it can’t use ${unserved.join(', ')}. Add it with \`claude mcp add --scope user\` first.`,
             )
     }
+    // 44.91 — the app's own words, quoted and said to be its own, ahead of what the bridge says.
+    if (note !== undefined) said.unshift(`${owner} says: “${note}”`)
     // A variable's value is only named, never shown: it is as likely a token as a host.
     const kept = [...settings.claudeArgs, ...Object.keys(settings.env)]
     if (kept.length > 0)
@@ -169,14 +174,37 @@ function directoryOf(file: string): string {
 
 /** The longest app name the question shows; a longer one is cut, so it cannot push the site out of view. */
 const LONGEST_NAME = 60
+/** The longest note the question shows: a sentence on why, never a page that buries the question. 44.91. */
+const LONGEST_NOTE = 200
 
 /**
- * Who `pairing`'s code was minted for, as `/__abide/bridge` names them (44.63), and the app's name, or
- * `undefined` for either where the site names none — a release before it did, or a code it did not mint.
+ * What a site wrote, as one line a reader sees: each control character a space, each run of spaces one,
+ * and cut at `longest` with an ellipsis where it ran past — or `undefined` where nothing is left.
+ */
+function oneLine(written: unknown, longest: number): string | undefined {
+    if (typeof written !== 'string') return undefined
+    const line = written
+        .replace(/\p{Cc}/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    if (line === '') return undefined
+    return line.length > longest ? `${line.slice(0, longest - 1)}…` : line
+}
+
+const NO_ASKER = { holder: undefined, name: undefined, note: undefined }
+
+/**
+ * Who `pairing`'s code was minted for, as `/__abide/bridge` names them (44.63), the app's name and the
+ * note the code was minted with (44.91), or `undefined` for each the site names none of — a release
+ * before it did, or a code it did not mint.
  */
 export async function askerOf(
     pairing: Pick<Pairing, 'site' | 'code'>,
-): Promise<{ holder: string | undefined; name: string | undefined }> {
+): Promise<{
+    holder: string | undefined
+    name: string | undefined
+    note: string | undefined
+}> {
     try {
         const answer = await fetch(
             `${pairing.site}${BRIDGE_PATH}?holder=${encodeURIComponent(pairing.code)}`,
@@ -184,29 +212,23 @@ export async function askerOf(
         )
         if (!answer.ok) {
             await answer.body?.cancel()
-            return { holder: undefined, name: undefined }
+            return NO_ASKER
         }
-        const { holder, name } = (await answer.json()) as {
+        const { holder, name, note } = (await answer.json()) as {
             holder?: unknown
             name?: unknown
+            note?: unknown
         }
-        // A name is one line of what a reader sees: no control character, nothing past the cut.
-        const shown =
-            typeof name === 'string'
-                ? name
-                      .replace(/\p{Cc}/gu, ' ')
-                      .trim()
-                      .slice(0, LONGEST_NAME)
-                : ''
         return {
             holder:
                 typeof holder === 'string' && holder !== ''
                     ? holder
                     : undefined,
-            name: shown === '' ? undefined : shown,
+            name: oneLine(name, LONGEST_NAME),
+            note: oneLine(note, LONGEST_NOTE),
         }
     } catch {
-        return { holder: undefined, name: undefined }
+        return NO_ASKER
     }
 }
 
@@ -277,7 +299,7 @@ export async function consented(
     say: (line: string) => void,
 ): Promise<Pairing | undefined> {
     // None waits on another, and the asker and the icon are each a round trip to the site.
-    const [{ holder, name }, icon, allowed, unserved] = await Promise.all([
+    const [asker, icon, allowed, unserved] = await Promise.all([
         askerOf(pairing),
         iconOf(pairing.site),
         allowedSites(allowedFile),
@@ -285,6 +307,7 @@ export async function consented(
     ])
     // An install run `--full` gives full access to every link, so a link's ask for it is moot.
     const asksFull = pairing.full && settings.full !== true
+    const { holder } = asker
     const before =
         holder === undefined
             ? undefined
@@ -294,7 +317,7 @@ export async function consented(
               })
     if (before !== undefined) {
         say(
-            `Pairing with ${name ?? shownSite(pairing.site)}, which you always allow.`,
+            `Pairing with ${asker.name ?? shownSite(pairing.site)}, which you always allow.`,
         )
         return asksFull && before.full === false
             ? siteToolsOnly(pairing)
@@ -302,7 +325,7 @@ export async function consented(
     }
     const answer = await askVisitor(
         {
-            ...question(pairing, settings, unserved, name),
+            ...question(pairing, settings, unserved, asker),
             icon,
         },
         asksFull,

@@ -107,6 +107,14 @@ import Section from '#src/lib/Section.abide'
 
         <Code code={`onConfig(() => ({ ABIDE_BRIDGE_FULL: true }))`} />
 
+        <p>The question can say why, in the app's own words. Pass <code>note</code> beside
+            <code>tools</code> or <code>full</code>, or set <code>ABIDE_BRIDGE_NOTE</code> for
+            <code>pairing()</code>. The note travels with the pairing's code, never in its link, and
+            the question shows it under its headline as one quoted line said by the app, cut at 200
+            characters. Everything else in the question is the bridge's own.</p>
+
+        <Code code={`onConfig(() => ({ ABIDE_BRIDGE_NOTE: 'So it can file your deals.' }))`} />
+
         <p><code>bunx @abide/bridge</code> runs <code>abide-bridge &lt;site&gt; &lt;code&gt;</code>.
             <code>--claude &lt;path&gt;</code> names the Claude Code to run where
             <code>claude</code> is not on the <code>PATH</code>, and each
@@ -204,6 +212,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>/__abide/pairing</code></td><td>Where <code>pairing</code> reads this browser's status, followed over the socket. On no generated surface.</td></tr>
                 <tr><td><code>ABIDE_BRIDGE_TOOLS</code></td><td>The tools <code>/__abide/pairing</code> grants, separated by commas. Unset, none.</td></tr>
                 <tr><td><code>ABIDE_BRIDGE_FULL</code></td><td>Whether <code>/__abide/pairing</code> asks for full access. Unset, it does not.</td></tr>
+                <tr><td><code>ABIDE_BRIDGE_NOTE</code></td><td>The app's note on why it asks, shown in the question a pairing link asks. Unset, none.</td></tr>
                 <tr><td><code>onPairing</code></td><td>The options every pairing's command and install command carry after <code>--</code>, for the person asking.</td></tr>
                 <tr><td><code>provider.claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
