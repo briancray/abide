@@ -30,6 +30,7 @@
         "bench:shared": "bun packages/abide/bench/benchShared.ts",
         "bench:share": "bun packages/abide/bench/nameTheShare.ts",
         "examples:results": "bun packages/dogfood/scripts/exampleResults.ts",
+        "bridge:preview": "bun --watch packages/bridge/scripts/previewQuestion.ts",
         "clauses:uncited": "bun packages/dogfood/scripts/uncitedClauses.ts",
         "bench:reorder": "bun packages/abide/bench/reorderShare.ts",
         "bench:rect": "bun packages/abide/bench/rectScrollShare.ts",
