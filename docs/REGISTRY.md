@@ -984,6 +984,6 @@ site's `provider.claudeCode`.
 | Command | Meaning | Rules |
 | --- | --- | --- |
 | `abide-bridge <site> <code> [--full] [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | This machine's Claude Code, paired with the browser a site minted the code for. | 44.15, 44.16, 44.24, 44.25, 44.27, 44.29, 44.30, 44.44, 44.45, 44.46, 44.47, 44.58, 44.61, 44.81, 44.82, 44.84 |
-| `abide-bridge install [--full] [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | What opens a site's `abide-bridge` links on this machine, registered. | 44.41, 44.42, 44.43, 44.44, 44.62, 44.64, 44.65, 44.86, 44.87, 44.88 |
+| `abide-bridge install [--full] [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | What opens a site's `abide-bridge` links on this machine, registered. | 44.41, 44.42, 44.43, 44.44, 44.62, 44.64, 44.65, 44.86, 44.87, 44.88, 44.89 |
 | `abide-bridge uninstall` | `abide-bridge install`, undone. | 44.43 |
 | `abide-bridge forget [<site>]` | The sites a link pairs with unasked, made to ask again. | 44.62, 44.66 |

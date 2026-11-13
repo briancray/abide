@@ -1,6 +1,7 @@
 // `abide-bridge install`: WHAT OPENS PAIRING LINKS ON THIS COMPUTER, built here rather than downloaded,
 // with the handler it starts (`opened.ts`, bundled into one file so nothing it imports can be left
-// behind) and what install found beside it. Each desktop registers a scheme its own way (44.43):
+// behind) and what install found beside it. 44.89 — run from a checkout, the handler is instead one
+// line starting the checkout's own, so an edit there is what the next link opens. Each desktop registers a scheme its own way (44.43):
 //
 // MACOS hands a URL to an app as an Apple Event, never as an argument, so the app is an AppleScript
 // applet (`osacompile`, on every Mac) whose `open location` starts the handler with the link. Built
@@ -32,6 +33,25 @@ export function handlerIn(directory: string): string {
 /** The directory the handler and what it keeps — its settings, the sites it always allows — are in. */
 export function handlerDirectory(directory: string): string {
     return `${directory}/handler`
+}
+
+/**
+ * The bridge package `directory` — one directly inside it, as `bin` — belongs to, where it is a
+ * checkout rather than a release: outside any `node_modules`, where `bun x` and every package manager
+ * put one.
+ */
+export function checkoutOf(directory: string): string | undefined {
+    const separated = directory.replaceAll('\\', '/')
+    if (separated.includes('/node_modules/')) return undefined
+    return separated.slice(0, separated.lastIndexOf('/'))
+}
+
+/** The handler of an install from `checkout`: the checkout's own, with this directory's settings. */
+export function checkoutHandler(checkout: string): string {
+    return `import { open } from ${JSON.stringify(`${checkout}/src/opened.ts`)}
+
+process.exit(await open(process.argv[2] ?? '', import.meta.dir))
+`
 }
 
 /** Where `XDG_DATA_HOME` points, or its default under the visitor's home. */
@@ -243,15 +263,22 @@ export async function install(
     supported()
     const directory = options.directory ?? installDirectory()
     const register = options.register !== false
-    const bundled = await Bun.build({
-        entrypoints: [`${import.meta.dir}/opened.ts`],
-        outdir: handlerDirectory(directory),
-        target: 'bun',
-    })
-    if (!bundled.success)
-        throw new Error(
-            `the link handler did not bundle: ${bundled.logs.join('\n')}`,
+    if (settings.checkout !== undefined)
+        await Bun.write(
+            handlerIn(directory),
+            checkoutHandler(settings.checkout),
         )
+    else {
+        const bundled = await Bun.build({
+            entrypoints: [`${import.meta.dir}/opened.ts`],
+            outdir: handlerDirectory(directory),
+            target: 'bun',
+        })
+        if (!bundled.success)
+            throw new Error(
+                `the link handler did not bundle: ${bundled.logs.join('\n')}`,
+            )
+    }
     await Bun.write(
         `${handlerDirectory(directory)}/settings.json`,
         JSON.stringify(settings, null, 4),

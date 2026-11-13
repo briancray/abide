@@ -10,10 +10,13 @@
 // what opens the pairing link a site shows beside its command, so a click pairs instead of a terminal —
 // every link it opens runs with the `--env` and the `--` options given here (44.44); `abide-bridge
 // uninstall` takes it away. `abide-bridge forget [<site>]` stops always allowing a site, or every site.
+// Run from a checkout — `bun packages/bridge/bin/abideBridge.ts install` — every link opens with the
+// checkout's handler and runs its bridge, whatever release the link names (44.89).
 
 import { allowedIn, forget } from '../src/allowedSites.ts'
 import { bridge } from '../src/bridge.ts'
 import {
+    checkoutOf,
     handlerDirectory,
     install,
     installDirectory,
@@ -82,6 +85,7 @@ try {
                     : `--claude ${claude} is no executable here. Name the path to Claude Code, and run this again.`,
             )
         if (site === 'install') {
+            const checkout = checkoutOf(import.meta.dir)
             const app = await install({
                 bun: process.execPath,
                 claude: found,
@@ -89,10 +93,15 @@ try {
                 claudeArgs,
                 full,
                 env,
+                ...(checkout === undefined ? {} : { checkout }),
             })
             console.error(
                 `Installed ${app}. A site's pairing link now opens here, and asks you before it pairs. \`abide-bridge uninstall\` removes it.`,
             )
+            if (checkout !== undefined)
+                console.error(
+                    `Every link runs the bridge in ${checkout}, whatever release it names, and your edits there are what the next link runs. Run install from a release to stop.`,
+                )
         } else {
             // Claude Code is started with this process's environment.
             Object.assign(process.env, env)

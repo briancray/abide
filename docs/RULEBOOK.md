@@ -4102,7 +4102,7 @@ carry, beside its command, a link in the `abide-bridge` scheme naming the same s
 release and tools, and whether it asks for full access (44.85).
 
 44.41 A bridge MUST open only a link of the `abide-bridge` scheme whose site is https or loopback and
-whose release is a version alone, and MUST run the release it names.
+whose release is a version alone, and MUST run the release it names, save as 44.89 runs a checkout.
 
 44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, save where 44.62
 pairs it unasked, naming the site and the tools the link asks for — or, where it asks for full access,
@@ -4271,6 +4271,10 @@ run `--full`, or the link asks for full access and the visitor allowed it, now o
 44.88 A bridge the visitor allowed to pair from a link MUST keep its site allowed for the holder
 `/__abide/bridge` names for the link's code (44.63), with the tools the link asked for and the answer
 to its ask for full access, and MUST keep nothing where `/__abide/bridge` named no holder.
+
+44.89 `abide-bridge install` run from a copy of the bridge outside any `node_modules` MUST open every
+`abide-bridge` link with that copy's handler as it stands when the link opens, and run that copy's
+bridge, whatever release the link names.
 
 # 45. Offline
 

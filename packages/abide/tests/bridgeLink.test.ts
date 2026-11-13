@@ -17,6 +17,8 @@ import { linuxQuestion } from '../../bridge/src/desktop.ts'
 import { grantOf, visitorServers } from '../../bridge/src/grant.ts'
 import {
     appIn,
+    checkoutHandler,
+    checkoutOf,
     desktopEntry,
     handlerIn,
     IDENTIFIER,
@@ -218,6 +220,42 @@ test('a link whose ask for full access was allowed runs full — 44.87', () => {
             5,
         ),
     ).toEqual(['--claude', '/opt/claude/claude', '--full'])
+})
+
+// 44.89 — A CHECKOUT RUNS ITSELF: an install from a copy outside any `node_modules` opens links with that
+// copy's handler, read where it stands, and runs that copy's bridge in place of the release the link
+// names. THE REVERT: drop the `checkout` branch of `bridgeArguments`, and the link's npm release runs.
+test('an install from a checkout runs the checkout, whatever release a link names — 44.89', async () => {
+    expect(checkoutOf('/Users/me/abide/packages/bridge/bin')).toBe(
+        '/Users/me/abide/packages/bridge',
+    )
+    expect(
+        checkoutOf(
+            '/Users/me/.bun/install/cache/.bunx-501/@abide/bridge@0.6.2/node_modules/@abide/bridge/bin',
+        ),
+    ).toBeUndefined()
+    expect(checkoutOf('C:\\work\\abide\\packages\\bridge\\bin')).toBe(
+        'C:/work/abide/packages/bridge',
+    )
+    const checkout = `${import.meta.dir}/../../bridge`
+    expect(
+        bridgeArguments(PAIRING, { ...SETTINGS, checkout }).slice(0, 4),
+    ).toEqual([
+        '/opt/bun/bin/bun',
+        `${checkout}/bin/abideBridge.ts`,
+        PAIRING.site,
+        PAIRING.code,
+    ])
+    // The handler is the checkout's own `open`, handed the directory its settings are kept in.
+    const handler = checkoutHandler(checkout)
+    const imported = new Bun.Transpiler({ loader: 'ts' }).scanImports(handler)
+    expect(imported.map((each) => each.path)).toEqual([
+        `${checkout}/src/opened.ts`,
+    ])
+    expect(typeof (await import(`${checkout}/src/opened.ts`)).open).toBe(
+        'function',
+    )
+    expect(handler).toContain('import.meta.dir')
 })
 
 // 44.29 — AN MCP TOOL IS A TOOL TOO: a link asks for one by Claude Code's name for it, or for all of a

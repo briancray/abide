@@ -1,5 +1,6 @@
 // WHAT RUNS WHEN A PAIRING LINK IS OPENED: the handler `abide-bridge install` bundles beside the app it
-// registers, started with the link. It asks the visitor first (44.42) — unless they always allow the
+// registers, started with the link — or, installed from a checkout (44.89), the checkout's own, which
+// then runs the checkout's bridge whatever release the link names. It asks the visitor first (44.42) — unless they always allow the
 // site for whoever the link's code was minted for (44.62) — then runs the release of the bridge the
 // link names, as the command a site shows would — so a site is answered by the bridge that speaks its
 // relay, while what asks is the one the visitor installed.
@@ -35,6 +36,8 @@ export type HandlerSettings = {
     claudeArgs: string[]
     /** `abide-bridge install --full`: every link's bridge is run `--full` (44.82). An older install's settings hold none. */
     full: boolean
+    /** The bridge package install was run from, where it is a checkout rather than a release (44.89). */
+    checkout?: string
     env: Record<string, string>
 }
 
@@ -115,8 +118,9 @@ export function bridgeArguments(
     const claudeArgs = claudeArgsOf(pairing, settings)
     return [
         settings.bun,
-        'x',
-        `@abide/bridge@${pairing.version}`,
+        ...(settings.checkout === undefined
+            ? ['x', `@abide/bridge@${pairing.version}`]
+            : [`${settings.checkout}/bin/abideBridge.ts`]),
         pairing.site,
         pairing.code,
         '--claude',
@@ -282,10 +286,13 @@ function notifier(): { show(line: string): void; settled(): Promise<void> } {
     }
 }
 
-/** Opens `link`: asks the visitor, then runs the bridge until it ends. Answers the exit code. */
-async function open(link: string): Promise<number> {
+/**
+ * Opens `link` with the settings and the allowed sites kept in `directory`: asks the visitor, then runs
+ * the bridge until it ends. Answers the exit code.
+ */
+export async function open(link: string, directory: string): Promise<number> {
     const notifications = notifier()
-    const log = `${import.meta.dir}/../bridge.log`
+    const log = `${directory}/../bridge.log`
     let logged = Promise.resolve()
     /** Writes `line` to the log alone. */
     function record(line: string): void {
@@ -306,7 +313,7 @@ async function open(link: string): Promise<number> {
         return code
     }
     try {
-        return settled(await pairWith(link, say, record))
+        return settled(await pairWith(link, directory, say, record))
     } catch (thrown) {
         // The applet discards this process's output, so a throw is only seen if it is said.
         say(
@@ -318,6 +325,7 @@ async function open(link: string): Promise<number> {
 
 async function pairWith(
     link: string,
+    directory: string,
     say: (line: string) => void,
     record: (line: string) => void,
 ): Promise<number> {
@@ -327,13 +335,13 @@ async function pairWith(
         return 1
     }
     const settings = (await Bun.file(
-        `${import.meta.dir}/settings.json`,
+        `${directory}/settings.json`,
     ).json()) as HandlerSettings
     record(`${pairing.site} asks for @abide/bridge ${pairing.version}.`)
     const allowed = await consented(
         pairing,
         settings,
-        allowedIn(import.meta.dir),
+        allowedIn(directory),
         ask,
         say,
     )
@@ -353,4 +361,5 @@ async function pairWith(
     return running.exited
 }
 
-if (import.meta.main) process.exit(await open(process.argv[2] ?? ''))
+if (import.meta.main)
+    process.exit(await open(process.argv[2] ?? '', import.meta.dir))
