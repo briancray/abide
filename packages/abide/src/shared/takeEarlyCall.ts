@@ -34,12 +34,20 @@ export function startedEarly(key: string): boolean {
     return startedCalls()?.[key] !== undefined
 }
 
+/**
+ * 41.25 — the calls painted settled a reader took before they answered, which hydration still
+ * waits for: taken at a module's import, a call left the page's record before the wait was read.
+ */
+const TAKEN_IN_FLIGHT: EarlyCall[] = []
+
 /** The call the page started under `key`, taken so no later reader is answered from it. */
 export function takeEarlyCall(key: string): EarlyCall | undefined {
     const started = startedCalls()
     const early = started?.[key]
-    if (early !== undefined)
-        (started as Record<string, EarlyCall | undefined>)[key] = undefined
+    if (early === undefined) return undefined
+    ;(started as Record<string, EarlyCall | undefined>)[key] = undefined
+    if (early.painted === 1 && early.response === undefined)
+        TAKEN_IN_FLIGHT.push(early)
     return early
 }
 
@@ -58,19 +66,42 @@ export function takeLandedCall(key: string): EarlyCall | undefined {
  * is still on its way.
  *
  * 41.25 — WHAT HYDRATION WAITS FOR, so a call the page was painted from is settled when setup
- * reads it rather than in flight. The early-call script's promise settles on an answer and on a
- * failed request alike, so a call that fails ends the wait as one that answers does. A call painted
- * loading, and one already answered, are not waited on.
+ * reads it rather than in flight — one a reader has taken already among them. The early-call
+ * script's promise settles on an answer and on a failed request alike, so a call that fails ends
+ * the wait as one that answers does. A call painted loading, and one already answered, are not
+ * waited on.
+ *
+ * AND THE TASK AFTER THE LAST ONE LANDS: a taken call reaches its value through a chain of
+ * reactions — `answerOf`'s, the body's, the core's, an adopting value's — and the wait's own
+ * reaction on the same promise runs ahead of all but the first, so setup read the value in flight.
+ * A task begins once every microtask queued before it has run, however long the chain.
  */
 export function paintedCallsLanded(): Promise<unknown> | undefined {
+    const waiting: Promise<unknown>[] = []
+    for (const early of TAKEN_IN_FLIGHT.splice(0))
+        if (early.response === undefined) waiting.push(early.promise)
     const started = startedCalls()
-    if (started === undefined) return undefined
-    let waiting: Promise<unknown>[] | undefined
     for (const key in started) {
         const early = started[key]
         if (early?.painted !== 1 || early.response !== undefined) continue
-        if (waiting === undefined) waiting = []
         waiting.push(early.promise)
     }
-    return waiting === undefined ? undefined : Promise.all(waiting)
+    return waiting.length === 0
+        ? undefined
+        : Promise.all(waiting).then(nextTask)
+}
+
+/**
+ * Settles in the next task: a `MessageChannel` post, which a background tab does not throttle as it
+ * does a `setTimeout`.
+ */
+function nextTask(): Promise<void> {
+    return new Promise((done) => {
+        const channel = new MessageChannel()
+        channel.port1.onmessage = () => {
+            channel.port1.close()
+            done()
+        }
+        channel.port2.postMessage(null)
+    })
 }

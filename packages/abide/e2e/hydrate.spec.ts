@@ -79,6 +79,32 @@ const pressed = reactive('')
 
 <main>{#if value.busy()}<button id="act" class="cancel" onclick={() => pressed.set('cancel')}>cancel</button>{:else}<button id="act" class="buy" onclick={() => pressed.set('buy')}>buy {value().word}</button>{/if}<p id="pressed">{pressed()}</p></main>`
 
+// 41.25, 41.27 — A MODULE'S VALUE WHOSE CALL IS ON ITS WAY WHEN THE PAGE'S MODULES IMPORT IT: one
+// the server painted settled (41.34 built it in setup, and `getValue` answers inside the turn), one
+// it painted in flight (`getSlow` does not).
+const MODULE_CALL = {
+    'lib/early.ts': `import { reactive } from '@abide/abide'
+import getValue from '#src/data/getValue.handler.ts'
+
+export const early = reactive(() => getValue({ id: 'module' }))
+`,
+    'lib/late.ts': `import { reactive } from '@abide/abide'
+import getSlow from '#src/data/getSlow.handler.ts'
+
+export const late = reactive(() => getSlow({ id: 'module' }))
+`,
+    'early/index.abide': `<script>
+import { early } from '../lib/early.ts'
+</script>
+
+<main>{#if early.ready()}<p id="word">{early().word}</p>{:else}<p id="word">loading</p>{/if}</main>`,
+    'late/index.abide': `<script>
+import { late } from '../lib/late.ts'
+</script>
+
+<main>{#if late.ready()}<p id="word">{late().word}</p>{:else}<p id="word">loading</p>{/if}</main>`,
+}
+
 let server: Subprocess | undefined
 let base = ''
 
@@ -88,6 +114,7 @@ test.beforeAll(async ({}, testInfo) => {
         'armed/index.abide': pageOver('getValue'),
         'slow/index.abide': pageOver('getSlow'),
         ...MODULE_VALUE,
+        ...MODULE_CALL,
     }
     for (const [name, text] of Object.entries(HANDLERS))
         files[`data/${name}.handler.ts`] = text
@@ -172,6 +199,54 @@ test("a module's value whose build makes a call hydrates with no region rebuilt 
     await page.goto(`${base}/owner`)
     await expect(page.locator('#inline b')).toHaveText('edit')
     await expect(page.locator('#deferred b')).toHaveText('edit')
+    await page.waitForLoadState('networkidle')
+    expect(warned).toEqual([])
+})
+
+// 41.25 — A MODULE'S VALUE PAINTED SETTLED IS SETTLED WHERE THE PAGE ADOPTS, though the page's
+// modules took its call before it answered. Its answer is held 400 ms, so the page module imports
+// it in flight; hydration waits for it and setup reads it landed.
+//
+// THE REVERTS: hold a call painted settled behind `hydrated` in `answerOf`, as 41.27 holds one
+// painted in flight. The page adopts `loading` over the painted `settled`, and 41.24 rebuilds the
+// region: 1 warning, against 0, in both engines. Drop the `nextTask` `paintedCallsLanded` ends in,
+// and setup runs a reaction ahead of the answer: the same 1 warning, on 5 runs of 6.
+test("a module's value painted settled is settled where the page adopts, however late its call answers — 41.25", async ({
+    page,
+}) => {
+    const warned = hydrateWarnings(page)
+    await page.route('**/data/getValue**', async (route) => {
+        await new Promise((done) => setTimeout(done, 400))
+        await route.continue()
+    })
+    const served = await (await page.request.get(`${base}/early`)).text()
+    expect(served).toContain('<p id="word">settled</p>')
+    await page.goto(`${base}/early`)
+    await page.waitForLoadState('networkidle')
+    await expect(page.locator('#word')).toHaveText('settled')
+    expect(warned).toEqual([])
+})
+
+// 41.27 — A MODULE'S VALUE PAINTED IN FLIGHT IS IN FLIGHT WHERE THE PAGE ADOPTS, though its call
+// answered before the page's modules imported it: the bundle is held 400 ms. The page adopts the
+// painted `loading`, and the answer swaps it as any answer does.
+//
+// THE REVERT: drop `.then(hydrated)` from `answerOf` for a call painted in flight too. The page
+// adopts `settled` over the painted `loading`: 1 warning, against 0 — in webkit. Chromium holds the
+// early `fetch` back as a delayable request behind the bundle, so its answer never beats the import
+// and the race this asserts is not run there.
+test("a module's value painted in flight is in flight where the page adopts, however early its call answers — 41.27", async ({
+    page,
+}) => {
+    const warned = hydrateWarnings(page)
+    await page.route('**/__abide/client/**', async (route) => {
+        await new Promise((done) => setTimeout(done, 400))
+        await route.continue()
+    })
+    const served = await (await page.request.get(`${base}/late`)).text()
+    expect(served).toContain('<p id="word">loading</p>')
+    await page.goto(`${base}/late`)
+    await expect(page.locator('#word')).toHaveText('settled')
     await page.waitForLoadState('networkidle')
     expect(warned).toEqual([])
 })

@@ -75,10 +75,16 @@ export function answerOf(
         answeredAtOnce()
         return answerFrom(early.response, early.bytes, streams)
     }
-    // 41.27 — AND HOWEVER EARLY THE CALL WAS MADE: a value built at a module's import calls before
-    // the page is set up, and its answer landing while the page loads had the page adopt an arm the
-    // server never painted. Held until the page has hydrated, where one is.
-    return early.promise.then(hydrated).then(() =>
+    // 41.25 — ONE PAINTED SETTLED IS ANSWERED AS IT LANDS, whoever took it: hydration waits for it
+    // (`paintedCallsLanded`), so setup reads it settled, as the markup was built from it. Held
+    // behind 41.27's wait too, a value a module built at import was in flight at adopt.
+    //
+    // 41.27 — ONE PAINTED IN FLIGHT IS HELD UNTIL THE PAGE HAS HYDRATED, however early the call was
+    // made: a value built at a module's import calls before the page is set up, and its answer
+    // landing while the page loads had the page adopt an arm the server never painted.
+    const landed =
+        early.painted === 1 ? early.promise : early.promise.then(hydrated)
+    return landed.then(() =>
         // An early call whose request failed is made again.
         early.response === undefined
             ? fetched(request, streams, signal)

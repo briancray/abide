@@ -636,6 +636,64 @@ test('a call painted in flight stays in flight until the page has hydrated, howe
     }
 })
 
+// 41.25 — A CALL PAINTED SETTLED IS SETTLED WHERE THE PAGE ADOPTS, HOWEVER EARLY A READER TOOK IT.
+// A value a module builds at import takes its call before it has answered: once before hydration
+// reads its wait (`a`, an import of the entry's), once after (`b`, the page's own modules). Both
+// must hold the wait open and be settled when it ends, while the page still hydrates. THE REVERTS:
+// hold a painted call behind `hydrated` in `answerOf` as 41.27 holds an unmarked one, and both read
+// `ready()` false where the wait ends; drop `TAKEN_IN_FLIGHT` from `paintedCallsLanded`, and there is
+// no wait for `a` at all (`undefined`); drop the `nextTask` the wait ends in, and `b` — whose wait
+// was on its promise before its reader was — reads `ready()` false.
+test('a call painted settled that a reader took in flight holds the wait, and is settled where it ends — 41.25', async () => {
+    const window = globalThis as unknown as Record<string, unknown>
+    const json = () =>
+        new Response('', { headers: { 'content-type': 'application/json' } })
+    const inFlight = (id: string) => {
+        let land = (): void => {}
+        const early = {
+            promise: new Promise<void>((done) => {
+                land = done
+            }),
+            painted: 1,
+            response: undefined as Response | undefined,
+            bytes: undefined as ArrayBuffer | undefined,
+        }
+        return {
+            early,
+            land: () => {
+                early.response = json()
+                early.bytes = new TextEncoder().encode(`{"id":"${id}"}`).buffer
+                land()
+            },
+        }
+    }
+    const a = inFlight('a')
+    const b = inFlight('b')
+    const calls: Record<string, unknown> = { 'GET /rpc/slow?id=a ': a.early }
+    window.__abideCalls = calls
+    const slow = wire('GET', '/rpc/slow') as (args: {
+        id: string
+    }) => (() => unknown) & { ready(): boolean }
+    try {
+        const early = slow({ id: 'a' })
+        beginHydration()
+        const waitingEarly = paintedCallsLanded()
+        expect(waitingEarly).toBeDefined()
+        a.land()
+        await waitingEarly
+        calls['GET /rpc/slow?id=b '] = b.early
+        const waitingLate = paintedCallsLanded()
+        const late = slow({ id: 'b' })
+        b.land()
+        await waitingLate
+        expect([early.ready(), late.ready()]).toEqual([true, true])
+        expect([early(), late()]).toEqual([{ id: 'a' }, { id: 'b' }])
+    } finally {
+        endHydration()
+        window.__abideCalls = undefined
+    }
+})
+
 // 16.80 — A COPY'S FIRST LOAD MAY BE ANSWERED BY A KEPT COPY, every load after it asks past every
 // cache: what it asks once it holds an answer is asked because it was refreshed, invalidated or went
 // stale, and a cache below would hand back what it was dropping. A first load that got no answer
