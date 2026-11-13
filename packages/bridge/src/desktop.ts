@@ -32,7 +32,6 @@ export type Question = {
 const TITLE = 'abide bridge'
 const DENY = 'Don’t Allow'
 const ALLOW = 'Allow'
-const ALLOW_FULL = 'Allow Full Access'
 const SITE_TOOLS = 'Only Site Tools'
 
 // A Windows Forms dialog: the icon at the left, the headline in bold over the body, and the buttons in
@@ -148,14 +147,14 @@ async function iconFile(
  * last on the right, where Return presses it, the site's own tools beside it, and Allow first.
  */
 export function buttonsOf(offerSiteTools: boolean): string[] {
-    return offerSiteTools ? [DENY, SITE_TOOLS, ALLOW_FULL] : [DENY, ALLOW]
+    return offerSiteTools ? [DENY, SITE_TOOLS, ALLOW] : [DENY, ALLOW]
 }
 
 /** The answer the button at `index` of `buttonsOf(offerSiteTools)` gives; any other is a no. */
 export function answerAt(index: number, offerSiteTools: boolean): Answer {
     const pressed = buttonsOf(offerSiteTools)[index]
     if (pressed === SITE_TOOLS) return 'siteTools'
-    return pressed === ALLOW || pressed === ALLOW_FULL ? 'allow' : 'deny'
+    return pressed === ALLOW ? 'allow' : 'deny'
 }
 
 /**
@@ -169,7 +168,6 @@ export function linuxQuestion(
     has: (tool: string) => boolean,
     icon?: string,
 ): string[] | undefined {
-    const allow = offerSiteTools ? ALLOW_FULL : ALLOW
     if (has('zenity'))
         return [
             'zenity',
@@ -181,7 +179,7 @@ export function linuxQuestion(
             // Pango markup, so all a site names is escaped.
             `<b>${Bun.escapeHTML(question.headline)}</b>\n\n${Bun.escapeHTML(question.body)}`,
             '--ok-label',
-            allow,
+            ALLOW,
             '--cancel-label',
             DENY,
             ...(offerSiteTools ? ['--extra-button', SITE_TOOLS] : []),
@@ -195,7 +193,7 @@ export function linuxQuestion(
             offerSiteTools ? '--yesnocancel' : '--yesno',
             `${question.headline}\n\n${question.body}`,
             '--yes-label',
-            allow,
+            ALLOW,
             ...(offerSiteTools
                 ? ['--no-label', SITE_TOOLS, '--cancel-label', DENY]
                 : ['--no-label', DENY]),

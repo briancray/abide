@@ -554,14 +554,14 @@ test('a Linux desktop asks with zenity or kdialog, or not at all — 44.64, 44.8
 
 // 44.86 — EACH BUTTON ANSWERS WHAT IT SAYS, whatever order they are laid in: Allow first, Only Site
 // Tools beside it, and Don't Allow last, where Return presses it. THE REVERT: answer by position as the
-// order was before, and Allow Full Access answers only the site's tools.
+// order was before, and Allow answers only the site's tools.
 test('each button answers what it says, Don’t Allow last — 44.86', () => {
     const answered = (offer: boolean): string[] =>
         buttonsOf(offer)
             .map((label, index) => `${label}: ${answerAt(index, offer)}`)
             .reverse()
     expect(answered(true)).toEqual([
-        'Allow Full Access: allow',
+        'Allow: allow',
         'Only Site Tools: siteTools',
         'Don’t Allow: deny',
     ])

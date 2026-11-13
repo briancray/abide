@@ -102,7 +102,7 @@ import Section from '#src/lib/Section.abide'
             or turn on <code>ABIDE_BRIDGE_FULL</code> for <code>pairing()</code>, and the command
             carries <code>--full</code> and the link asks for full access. Opening that link names no
             tool: it says the site is requesting full access to the visitor's Claude Code, and offers
-            Allow Full Access, Only Site Tools and Don't Allow. Only Site Tools pairs with the site's
+            Allow, Only Site Tools and Don't Allow. Only Site Tools pairs with the site's
             own tools and none of the machine's.</p>
 
         <Code code={`onConfig(() => ({ ABIDE_BRIDGE_FULL: true }))`} />
