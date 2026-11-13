@@ -23,6 +23,7 @@ export type MenuRole =
     | 'minimize'
     | 'zoom'
     | 'front'
+    | 'update'
 
 /** One entry in the desktop app's menu bar, or in a menu under it. */
 export type MenuItem =

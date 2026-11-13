@@ -7,6 +7,7 @@ import Forecast from './lib/Forecast.abide'
 import PipelineSummary from './lib/PipelineSummary.abide'
 import StageTiles from './lib/StageTiles.abide'
 import TopDeals from './lib/TopDeals.abide'
+import UpdateNotice from './lib/UpdateNotice.abide'
 import WonDeals from './lib/WonDeals.abide'
 
 const printReport = menuItem({ label: 'Print Report…', key: 'cmd+p' })
@@ -28,6 +29,7 @@ watch(() => printReport.on(() => print()))
 <head><title>Reports — CRM</title></head>
 
 <main>
+    <UpdateNotice />
     <h1>Reports</h1>
     {#if !desktop()}
         <button onclick={() => print()}>Print report</button>

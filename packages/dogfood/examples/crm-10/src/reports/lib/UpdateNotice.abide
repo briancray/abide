@@ -1,0 +1,16 @@
+<script>
+import { pendingUpdate } from '@abide/abide'
+</script>
+
+{#if pendingUpdate?.required}
+    <dialog open oncancel={(event) => event.preventDefault()}>
+        <p>CRM {pendingUpdate.version} has to be installed to go on.</p>
+        <p>{pendingUpdate.notes}</p>
+        <button onclick={() => pendingUpdate?.install()}>Restart now</button>
+    </dialog>
+{:else if pendingUpdate}
+    <p class="status">
+        CRM {pendingUpdate.version} installs when you quit.
+        <button onclick={() => pendingUpdate?.install()}>Restart now</button>
+    </p>
+{/if}

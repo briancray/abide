@@ -31,6 +31,9 @@ import summarizeStageSource from 'crm-10/src/reports/lib/summarizeStage.ts' with
 import TopDeals from 'crm-10/src/reports/lib/TopDeals.abide'
 import topDealsSource from 'crm-10/src/reports/lib/TopDeals.abide' with { type: 'text' }
 import topFiveSource from 'crm-10/src/reports/lib/topFive.ts' with { type: 'text' }
+import UpdateNotice from 'crm-10/src/reports/lib/UpdateNotice.abide'
+import updateNoticeSource from 'crm-10/src/reports/lib/UpdateNotice.abide' with { type: 'text' }
+import updateNoticeTestSource from 'crm-10/src/reports/lib/UpdateNotice.test.ts' with { type: 'text' }
 import WonDeals from 'crm-10/src/reports/lib/WonDeals.abide'
 import wonDealsSource from 'crm-10/src/reports/lib/WonDeals.abide' with { type: 'text' }
 import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { type: 'text' }
@@ -458,6 +461,55 @@ abide bundle --out ~/Applications/CRM.app`} />
             agent of every request it makes, so the server rendering the page reads the same answer
             the page does, and the button is never drawn in the window and taken away. Any client
             can send that user agent, so it decides what a page shows, never who may do what.</p>
+    </Section>
+
+    <Section title="Keep the desktop app current">
+        <Snippet source={launcherSource} path="src/launcher.abide" from={['update:']} />
+
+        <p>Each person runs their own copy of the CRM, so a new version has to reach every copy.
+            <code>update</code> in what <code>onLauncher</code> answers is the address the copies
+            look for one at: as they launch, every hour after, and when Check for Updates… is
+            picked from the app menu. A newer version is downloaded beside the app and installed
+            when it quits, and Check for Updates… becomes Restart to Install.</p>
+
+        <Code code={`abide bundle --notes CHANGES.md
+abide bundle --required --notes CHANGES.md`} />
+
+        <p>Every <code>abide bundle</code> also writes an <code>updates</code> directory beside
+            the <code>.app</code>: the app zipped, and <code>latest.json</code> naming it. Upload
+            the directory to the <code>update</code> address, and every copy older than it updates
+            itself. A copy never installs a version older than its own, so taking an upload back
+            stops new installs of it without undoing the ones that happened. Raise the version in
+            <code>package.json</code> to publish the fix.</p>
+
+        <p>The feed is signed. The first bundle makes the key, prints where it put it, and every
+            bundle after reuses it. Each copy installs only what that key signed, so a host that
+            serves something else installs nothing. Keep a copy of the key: a copy of the app
+            trusts it and no other. To bundle on another machine, set
+            <code>ABIDE_UPDATE_KEY</code> to what the file holds.</p>
+    </Section>
+
+    <Section title="Tell people an update is waiting">
+        <Example
+            id="crm-10-update-notice"
+            app="crm-10"
+            title="`pendingUpdate` — an update waiting for a restart"
+            summary="A browser stages no update, so this card stays empty here. Its test plays the window, telling the page of an update and then of a required one."
+            files={{
+                'src/reports/lib/UpdateNotice.abide': updateNoticeSource,
+                'src/reports/lib/UpdateNotice.test.ts': updateNoticeTestSource,
+            }}
+        >
+            <UpdateNotice />
+        </Example>
+
+        <p><code>pendingUpdate</code> holds the update the window has staged as a
+            <code>StagedUpdate</code>: its <code>version</code>, its <code>notes</code>, and
+            whether <code>--required</code> marked it. <code>StagedUpdate.install</code> restarts
+            into it now. A required one opens a dialog that Escape cannot close, and quitting
+            installs it too, so no copy goes on without it. The reports page shows the notice; an
+            app with updates people must not put off renders it from its root layout, so it stands
+            over every page.</p>
     </Section>
 
     <Section title="Keep the CRM readable offline">

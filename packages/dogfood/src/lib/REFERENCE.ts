@@ -881,6 +881,20 @@ export const REFERENCE: readonly ReferencePage[] = [
         typeOnly: false,
     },
     {
+        route: '/reference/pendingUpdate',
+        names: ['pendingUpdate'],
+        entry: '@abide/abide',
+        group: 'Configuration',
+        typeOnly: false,
+    },
+    {
+        route: '/reference/types/StagedUpdate',
+        names: ['StagedUpdate'],
+        entry: '@abide/abide',
+        group: 'Configuration',
+        typeOnly: true,
+    },
+    {
         route: '/reference/onMenu',
         names: ['onMenu'],
         entry: '@abide/abide',

@@ -9,6 +9,7 @@ import { dataDirectory, derived as appDerived } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type AppOrigin, bootEntered, enterApp } from './createApp.ts'
 import { DesktopSession } from './DesktopSession.ts'
+import { appOf, DesktopUpdater } from './DesktopUpdater.ts'
 import { executableName } from './executableName.ts'
 import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
 import { launcherOf } from './launcherOptions.ts'
@@ -31,6 +32,8 @@ export type Desktop = {
     /** 38.101 — the app's icon as a data URL, and the accent taken from it. */
     icon: string | undefined
     accent: string | undefined
+    /** 38.143 — the public half of the key `abide bundle` signed this build's updates with. */
+    publicKey: string
 }
 
 export async function runDesktop(
@@ -47,7 +50,7 @@ export async function runDesktop(
 async function launch(
     origin: AppOrigin,
     load: () => ReturnType<typeof builtSources>,
-    { launch: launchModule, document, icon, accent }: Desktop,
+    { launch: launchModule, document, icon, accent, publicKey }: Desktop,
 ): Promise<void> {
     // 37.1 — ENTERED ONCE, before the window: the start form reads `onConfig` and the launcher's
     // `onLauncher` is filed. Every start after it boots in what this entered (`bootEntered`).
@@ -155,13 +158,41 @@ async function launch(
         return new Response(launcherPage(props), { headers })
     }
 
+    const version = origin.package.version ?? '0.0.0'
+    // 38.142 — an app outside a `.app` has nothing to replace, and checks for nothing.
+    const bundled = appOf(process.execPath)
+    const updater =
+        options.update === undefined || bundled === undefined
+            ? undefined
+            : new DesktopUpdater(
+                  options.update,
+                  publicKey,
+                  bundled,
+                  version,
+                  () => {},
+              )
     const navigate = openDesktopWindow(
         appName,
-        origin.package.version ?? '0.0.0',
+        version,
         options,
         base,
         session,
+        updater,
     )
     await session.resume(options)
     navigate(session.shown ?? base)
+    if (updater === undefined) return
+    // 38.142 — as it launches and hourly after; a feed that cannot be reached is tried again at
+    // the next, and only a refusal is reported (38.143).
+    const checkQuietly = (): void =>
+        void updater.check().then((checked) => {
+            if (checked.outcome === 'refused')
+                reportUnexpected(
+                    new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
+                )
+        })
+    checkQuietly()
+    setInterval(checkQuietly, UPDATE_INTERVAL)
 }
+
+const UPDATE_INTERVAL = 60 * 60 * 1000

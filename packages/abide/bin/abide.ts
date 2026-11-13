@@ -49,6 +49,7 @@ import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { serveDev } from '#server/serveDev.ts'
+import { publicKeyOf, publishUpdate, updateKey } from '#server/updateFeed.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
 
@@ -227,6 +228,21 @@ async function bundle(
         )
         return 1
     }
+    // 38.146 — read before the build, so a mistyped path costs nothing.
+    let notes: string | null = null
+    if (values.notes !== undefined) {
+        const file = Bun.file(resolve(values.notes))
+        if (!(await file.exists())) {
+            console.error(
+                `abide bundle: --notes names ${resolve(values.notes)}, and there is no such file.`,
+            )
+            return 1
+        }
+        notes = (await file.text()).trim()
+    }
+    // 38.147 — the key is the build's: its public half is built into the executable.
+    const key = await updateKey(name)
+    const publicKey = await publicKeyOf(key.privateKey)
     const entry = await writtenEntry(root, async (app) => {
         const launcherPath = `${root}/${LAUNCHER_PAGE}`
         const hasLauncher = app.files[LAUNCHER_PAGE] !== undefined
@@ -242,6 +258,7 @@ async function bundle(
             document: launchDocument(app),
             icon: art?.icon,
             accent: art?.accent,
+            publicKey,
         }
     })
     if (entry === undefined) {
@@ -263,7 +280,30 @@ async function bundle(
     // signed executable that is not itself signed is one Gatekeeper reads as damaged.
     if ((await spawnedTool('codesign', ['--force', '--sign', '-', out])) !== 0)
         return 1
+    // 38.146 — zipped AFTER signing, so the update is the build this command just wrote.
+    const updates = `${dirname(out)}/updates`
+    const feed = await publishUpdate(
+        out,
+        updates,
+        {
+            version: identity.version ?? '0.0.0',
+            required: values.required === true,
+            notes,
+        },
+        key.privateKey,
+    )
     console.log(`abide bundle: ${out}`)
+    console.log(
+        `abide bundle: ${updates} — ${feed.file} and latest.json, for the address onLauncher's update names`,
+    )
+    if (identity.version === undefined)
+        console.warn(
+            `abide bundle: package.json names no version, so the update reads 0.0.0, and no copy of the app installs it over its own. Set one, and raise it for each update.`,
+        )
+    if (key.made !== undefined)
+        console.log(
+            `abide bundle: made the key this app's updates are signed with, at ${key.made}. Keep a copy: every copy of the app installed trusts it and no other. To bundle the app anywhere else, set ABIDE_UPDATE_KEY to what it holds.`,
+        )
     return 0
 }
 

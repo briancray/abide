@@ -27,6 +27,8 @@ export { type Cookies, cookies } from './cookies.ts'
 export { csp } from './csp.ts'
 // 38.141 — which desktop window the work running is for.
 export { desktop } from './desktop.ts'
+// 38.148 — the update the desktop app's window has staged.
+export { pendingUpdate, type StagedUpdate } from './pendingUpdate.ts'
 export { type Failed, isFailed } from './Failed.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'

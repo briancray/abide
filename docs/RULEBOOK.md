@@ -3384,6 +3384,34 @@ the app it was bundled from to the user agent of every request it makes.
 and in a browser the version named in its own, and MUST answer `undefined` where the user agent names
 none or no request is being served.
 
+38.142 The desktop app given an `update` by `onLauncher` MUST read the feed under that address as
+it launches, every hour while it runs, and when the `update` role is picked, and MUST stage only a
+version `Bun.semver.order` places after the version it was bundled from.
+
+38.143 The desktop app MUST NOT stage an update whose feed the key `abide bundle` built into it did
+not sign, or whose zip's digest is not the one the feed names, and MUST report one it refuses
+through `onError`.
+
+38.144 The desktop app MUST put a staged update in its own place as it quits, only after `App.stop`
+has returned (38.76), and MUST leave itself in place where that fails.
+
+38.145 Picking the `update` role with an update staged, or calling `StagedUpdate.install`, MUST quit
+the desktop app (38.144) and open the update.
+
+38.146 `abide bundle` MUST write an `updates` directory beside the `.app`, holding the `.app` zipped
+after it is signed and a feed naming the zip, its digest, its version, whether `--required` was given
+and the text of the file `--notes` names.
+
+38.147 `abide bundle` MUST sign the feed with the key `ABIDE_UPDATE_KEY` holds, or else with one it
+made for the app on its first bundle and reads on every bundle after, and MUST print where it made
+one.
+
+38.148 `pendingUpdate` MUST hold the update the desktop app's window it is in has staged, and MUST
+be `undefined` on a server and in a page no such window holds.
+
+38.149 The `update` role MUST stand in the application menu where `onLauncher` answers an `update`,
+and MUST NOT stand there otherwise.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

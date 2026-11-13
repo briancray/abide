@@ -213,8 +213,8 @@ function commandsOf(host: Host): Row[] {
             'compile',
         ),
         fromSource(
-            'bundle',
-            'the build, as a desktop app for this platform',
+            'bundle [--required] [--notes <file>]',
+            'the build, as a desktop app for this platform, and its update',
             'bundle',
         ),
         fromSource('lsp', 'the .abide language server, over stdio', 'lsp'),
@@ -261,6 +261,8 @@ function usage(host: Host, commands: Row[]): string {
   --url        the running app the shell, call, watch, openapi and mcp talk to
   --target     the platform compile builds for — linux-x64, darwin-arm64, windows-x64…
   --platforms  several of them, comma-separated, one executable each
+  --required   marks the update bundle writes as one to install now
+  --notes      a file whose text bundle's update carries, for the page to show
   --method     the method call sends, where the handler answers more than one
   --version    the version of abide
 `
@@ -298,6 +300,9 @@ function parseFlags(argv: string[]) {
             url: { type: 'string' },
             method: { type: 'string' },
             target: { type: 'string' },
+            // 38.146 — what the update `abide bundle` writes says of itself.
+            required: { type: 'boolean' },
+            notes: { type: 'string' },
             platforms: { type: 'string' },
             json: { type: 'boolean' },
             check: { type: 'boolean' },

@@ -69,6 +69,7 @@ export function compiledEntry(app: {
               document: string
               icon: string | undefined
               accent: string | undefined
+              publicKey: string
           }
         | undefined
     /** The app's root, below which the server's table is served (`abideModules`). */
@@ -111,6 +112,7 @@ import * as table from ${JSON.stringify(tablePath(app.root, SERVER_TABLE))}
         document: ${JSON.stringify(app.desktop.document)},
         icon: ${JSON.stringify(app.desktop.icon)},
         accent: ${JSON.stringify(app.desktop.accent)},
+        publicKey: ${JSON.stringify(app.desktop.publicKey)},
     },`
     return `// Written by \`abide compile\`. The whole app, as what one executable holds.
 ${imports}

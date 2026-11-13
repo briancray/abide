@@ -23,10 +23,12 @@ import {
     stringOf,
 } from './appKit.ts'
 import type { DesktopSession } from './DesktopSession.ts'
+import type { DesktopUpdater } from './DesktopUpdater.ts'
 import { desktopUserAgent } from './desktopUserAgent.ts'
 import { reportUnexpected } from './hooks.ts'
+import { installMenu } from './installMenu.ts'
 import type { Launcher } from './launcherOptions.ts'
-import { installMenu, menuBar } from './nativeMenu.ts'
+import { menuBar } from './menuBar.ts'
 
 const DRAIN_MILLISECONDS = 8
 
@@ -35,7 +37,8 @@ const DRAIN_MILLISECONDS = 8
  *
  * `base` is the launcher's own page, which the Connect… and Disconnect menu items lead back to,
  * and `version` the `.app`'s, which every request the window makes names (38.140). Quitting stops
- * the session's app before the process ends (38.76).
+ * the session's app before the process ends (38.76), and then installs what `updater` staged
+ * (38.144).
  */
 export function openDesktopWindow(
     appName: string,
@@ -43,6 +46,7 @@ export function openDesktopWindow(
     options: Launcher,
     base: string,
     session: DesktopSession,
+    updater: DesktopUpdater | undefined,
 ): (address: string) => void {
     const application = send(objcClass('NSApplication'), 'sharedApplication')
     // Regular: a Dock icon and a menu bar, which a process outside a `.app` does not get by default.
@@ -54,10 +58,26 @@ export function openDesktopWindow(
         0,
     )
     let quitting = false
+    // 38.145 — set by a restart the person asked for, so the update installed is opened.
+    let reopen = false
     const quit = (): void => {
         if (quitting) return
         quitting = true
-        session.disconnect().finally(() => process.exit(0))
+        session
+            .disconnect()
+            .then(async () => {
+                if (updater === undefined || !(await updater.install())) return
+                if (reopen)
+                    Bun.spawn(['open', '-n', updater.app], {
+                        stdio: ['ignore', 'ignore', 'ignore'],
+                    }).unref()
+            })
+            .catch(reportUnexpected)
+            .finally(() => process.exit(0))
+    }
+    const restart = (): void => {
+        reopen = true
+        quit()
     }
     send(
         application,
@@ -157,25 +177,124 @@ export function openDesktopWindow(
     )
     // 38.88 — THE MENU BAR IS THE PAGE'S: the defaults until the page the window loads tells it
     // what its route exports, and again after every navigation it makes.
-    const showMenu = (told: NativeMenuItem[]): void =>
-        installMenu(menuBar(appName, options.connect, told), (item) => {
-            if (item.role === 'connect')
-                return navigate(`${base}?focus=connect`)
-            // 38.74.
-            if (item.role === 'disconnect')
-                return void session.forget().then(() => navigate(base))
-            if (item.role === 'reload') return void send(view, 'reload')
-            // 38.90, 38.91 — the page that numbered the item does what it means.
-            if (item.id !== undefined)
-                send(
-                    view,
-                    'evaluateJavaScript:completionHandler:',
-                    nsString(
-                        `dispatchEvent(new CustomEvent('abide:menu', { detail: ${item.id} }))`,
-                    ),
-                    null,
+    let shownMenu: NativeMenuItem[] = []
+    const showMenu = (told: NativeMenuItem[]): void => {
+        shownMenu = told
+        installMenu(
+            menuBar(appName, options.connect, told, updateLabel()),
+            (item) => {
+                if (item.role === 'update') return checkForUpdates()
+                if (item.role === 'connect')
+                    return navigate(`${base}?focus=connect`)
+                // 38.74.
+                if (item.role === 'disconnect')
+                    return void session.forget().then(() => navigate(base))
+                if (item.role === 'reload') return void send(view, 'reload')
+                // 38.90, 38.91 — the page that numbered the item does what it means.
+                if (item.id !== undefined)
+                    send(
+                        view,
+                        'evaluateJavaScript:completionHandler:',
+                        nsString(
+                            `dispatchEvent(new CustomEvent('abide:menu', { detail: ${item.id} }))`,
+                        ),
+                        null,
+                    )
+            },
+        )
+    }
+    const updateLabel = (): string | undefined =>
+        updater === undefined
+            ? undefined
+            : updater.staged === undefined
+              ? 'Check for Updates…'
+              : `Restart to Install ${updater.staged.version}`
+    // 38.148 — what the page's `pendingUpdate` holds: the staged update, or nothing.
+    const tellPage = (): void => {
+        const staged = updater?.staged
+        const detail =
+            staged === undefined
+                ? null
+                : {
+                      version: staged.version,
+                      required: staged.required,
+                      notes: staged.notes,
+                  }
+        send(
+            view,
+            'evaluateJavaScript:completionHandler:',
+            nsString(
+                `dispatchEvent(new CustomEvent('abide:update', { detail: ${JSON.stringify(detail)} }))`,
+            ),
+            null,
+        )
+    }
+    // 38.145 — a staged update is installed by restarting; with none, the feed is read now and
+    // the person told what it found.
+    const checkForUpdates = (): void => {
+        if (updater === undefined) return
+        if (updater.staged !== undefined) return restart()
+        void updater.check().then((checked) => {
+            if (checked.outcome === 'current')
+                alert(
+                    nsString(`${appName} ${version} is the latest version.`),
+                    false,
                 )
+            else if (checked.outcome === 'unreachable')
+                alert(
+                    nsString(
+                        `Updates could not be checked. ${checked.reason}.`,
+                    ),
+                    false,
+                )
+            else if (checked.outcome === 'refused') {
+                reportUnexpected(
+                    new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
+                )
+                alert(
+                    nsString(`The update was refused: ${checked.reason}.`),
+                    false,
+                )
+            } else if (
+                alert(
+                    nsString(
+                        `${appName} ${checked.staged.version} is ready. Restart to install it now?`,
+                    ),
+                    true,
+                )
+            )
+                restart()
         })
+    }
+    if (updater !== undefined)
+        updater.onStaged = () => {
+            showMenu(shownMenu)
+            tellPage()
+        }
+    send(
+        send(send(view, 'configuration'), 'userContentController'),
+        'addScriptMessageHandler:name:',
+        send(
+            definedClass('AbideUpdateBridge', {
+                'userContentController:didReceiveScriptMessage:': {
+                    types: 'v@:@@',
+                    args: [FFIType.ptr, FFIType.ptr],
+                    returns: FFIType.void,
+                    run: (_controller: Id, message: Id) => {
+                        const asked = stringOf(send(message, 'body'))
+                        if (asked === 'ask') tellPage()
+                        else if (
+                            asked === 'install' &&
+                            updater?.staged !== undefined
+                        )
+                            restart()
+                    },
+                },
+            }),
+            'new',
+        ),
+        nsString('abideUpdate'),
+    )
     send(
         send(send(view, 'configuration'), 'userContentController'),
         'addScriptMessageHandler:name:',

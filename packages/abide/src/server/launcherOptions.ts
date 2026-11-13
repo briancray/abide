@@ -12,6 +12,8 @@ export type LauncherOptions = {
     height?: number
     minWidth?: number
     minHeight?: number
+    /** 38.142 — the address `abide bundle`'s `updates` directory is served at. */
+    update?: string
 } & ({ start?: true; connect?: boolean } | { start: false; connect?: true })
 
 /** The options with each default filled in. */
@@ -22,6 +24,7 @@ export type Launcher = {
     minHeight: number
     start: boolean
     connect: boolean
+    update: string | undefined
 }
 
 const SIZES = ['width', 'height', 'minWidth', 'minHeight'] as const
@@ -39,6 +42,7 @@ export function launcherOf(answered: unknown): Launcher | string {
         minHeight: 360,
         start: true,
         connect: true,
+        update: undefined,
     }
     if (answered === undefined) return launcher
     if (!isRecord(answered)) return '`onLauncher` answers an object'
@@ -54,6 +58,12 @@ export function launcherOf(answered: unknown): Launcher | string {
             typeof value === 'boolean'
         )
             launcher[key as (typeof FORMS)[number]] = value
+        else if (
+            key === 'update' &&
+            typeof value === 'string' &&
+            URL.canParse(value)
+        )
+            launcher.update = value
         else
             return `\`${key}\` is not a launcher option, or ${JSON.stringify(value)} is not a value it takes`
     }
