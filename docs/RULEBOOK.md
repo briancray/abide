@@ -491,6 +491,15 @@ opening that 7.34 puts a first run off for.
 7.39 The signal `stopSignal` answers MUST stay aborted from 7.38's abort until `App.stop` resolves,
 `onStop` included, and MUST be one not aborted from then on.
 
+7.40 From `App.stop` until `App.listen` or `abide dev` opens an app again, a bare `refresh`, and
+`refresh` over a set of `tags`, MUST invalidate, and MUST NOT reload, a value 7.29 holds back.
+
+7.41 From `App.stop` until `App.listen` or `abide dev` opens an app again, a run a read makes of a
+value 7.29 holds back MUST NOT start its `poll`.
+
+7.42 `App.stop` MUST NOT run a value 7.29 holds back that a read has not run since 7.40 invalidated
+it.
+
 # 8. Stores
 
 8.1 A `Store` MUST provide both `get` and `set`.

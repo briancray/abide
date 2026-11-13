@@ -44,6 +44,7 @@ import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
 import {
     firstRunStarted,
     isPolled,
+    jobStopped,
     markPolled,
     ownedPoll,
     type Poll,
@@ -3729,8 +3730,9 @@ export function refreshCallerHeld(): void {
 }
 
 function refreshIn(cell: Cell, tags: string[] | null): void {
-    // 13.16 — a mutation's reload is its write sent again, so a sweep marks it instead.
-    if (cell.mutation) invalidateIn(cell, tags)
+    // 13.16 — a mutation's reload is its write sent again, so a sweep marks it instead; 7.40 — and a
+    // job `App.stop` stopped is left to the next opening or a read, a stream one included.
+    if (cell.mutation || jobStopped(cell)) invalidateIn(cell, tags)
     else if (
         readByAny(cell.readers) ||
         readByAny(cell.probeReaders) ||

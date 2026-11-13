@@ -13,6 +13,7 @@
 // reason.
 
 import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
+import type { Cell } from './cellShape.ts'
 import type { Reactive } from './Reactive.ts'
 import { unrefTimer } from './unrefTimer.ts'
 import { owned, owning } from './watch.ts'
@@ -42,26 +43,32 @@ class Clock {
     turn = 0
     /** 7.29 — the value whose first run is still to come, or `null` once it has run. */
     first: Polled | null
+    /** 7.40 — a job's record, filed as stopped by `App.stop`; `null` on a clock that is no job. */
+    readonly record: Cell | null
     /** 7.34 — the wait before that first run, armed by an opening. */
     delayTimer: ReturnType<typeof setTimeout> | undefined = undefined
     constructor(
         poll: Poll,
         values: () => Iterable<Polled>,
-        first: Polled | null,
+        held: { record: Cell; value: Polled } | null,
     ) {
         const spelled = typeof poll === 'number' ? { every: poll } : poll
         this.every = spelled.every
         this.settle = spelled.after === 'settle'
         this.delay = spelled.delay
         this.values = values
-        this.first = first
+        this.first = held === null ? null : held.value
+        this.record = held === null ? null : held.record
     }
 }
 
 const UNOWNED = new Set<Clock>()
 
 /** 7.29 — each record whose first run is held back, to its clock. */
-const HELD = new WeakMap<object, Clock>()
+const HELD = new WeakMap<Cell, Clock>()
+
+/** 7.40 — the record of every job `App.stop` stopped, until an app opens again. */
+const STOPPED_JOBS = new WeakSet<Cell>()
 
 /**
  * The records of every value declaring `poll` — a keyed one's entries included — for 7.28.
@@ -131,9 +138,9 @@ export function isPolled(record: object): boolean {
 export function ownedPoll(
     poll: Poll,
     values: () => Iterable<Polled>,
-    held: { record: object; value: Polled } | null,
+    held: { record: Cell; value: Polled } | null,
 ): void {
-    const clock = new Clock(poll, values, held === null ? null : held.value)
+    const clock = new Clock(poll, values, held)
     if (owning()) {
         clock.first = null
         start(clock)
@@ -146,14 +153,20 @@ export function ownedPoll(
 }
 
 /** 7.29 — `record`'s first run has started: its clock starts with it. */
-export function firstRunStarted(record: object): void {
+export function firstRunStarted(record: Cell): void {
     const clock = HELD.get(record)
     if (clock === undefined) return
     HELD.delete(record)
     clock.first = null
     clearTimeout(clock.delayTimer)
     clock.delayTimer = undefined
-    start(clock)
+    // 7.41 — a first run made while the app is stopped leaves the clock to the next opening.
+    if (!STOPPED_JOBS.has(record)) start(clock)
+}
+
+/** 7.40 — whether `record` is a job `App.stop` stopped that no app has opened since. */
+export function jobStopped(record: Cell): boolean {
+    return STOPPED_JOBS.has(record)
 }
 
 /**
@@ -162,6 +175,8 @@ export function firstRunStarted(record: object): void {
  */
 export function startUnownedPolls(): void {
     for (const clock of UNOWNED) {
+        // Ahead of the first run below, which starts the clock only for a job not filed stopped.
+        if (clock.record !== null) STOPPED_JOBS.delete(clock.record)
         const first = clock.first
         if (first === null) start(clock)
         else if (clock.delayTimer === undefined) {
@@ -189,13 +204,16 @@ export function startUnownedPolls(): void {
  * the requests have drained, so one a request started is waited on too.
  *
  * THE VALUES STAY FILED. 42.12 has a second `App` in the process share them, and a run a later
- * trigger starts — a bare `refresh` (13.10) — is that app's stop to wait on too. A value that has
- * not had its first run is not asked: a probe would start it (3.2, 7.31).
+ * read starts is that app's stop to wait on too. A value that has not had its first run is not
+ * asked: a probe would start it (3.2, 7.31) — and A JOB IS ASKED BY ITS RECORD rather than by
+ * `busy`, for the same reason: a bare `refresh` marks a job stopped here (7.40), and `busy`, a
+ * probe, would run the reload the mark owes (7.42).
  */
 export function stopUnownedPolls(): () => Promise<void> {
     STOPPING.abort()
     for (const clock of UNOWNED) {
         halt(clock)
+        if (clock.record !== null) STOPPED_JOBS.add(clock.record)
         clearTimeout(clock.delayTimer)
         clock.delayTimer = undefined
     }
@@ -203,8 +221,10 @@ export function stopUnownedPolls(): () => Promise<void> {
         const inFlight: Promise<unknown>[] = []
         for (const clock of UNOWNED) {
             if (clock.first !== null) continue
+            const record = clock.record
             for (const value of clock.values())
-                if (value.busy()) inFlight.push(settledEitherWay(value))
+                if (record === null ? value.busy() : record.loading)
+                    inFlight.push(settledEitherWay(value))
         }
         await Promise.all(inFlight)
     }

@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import type { App, BootedApp } from '#server/createApp.ts'
-import { log, reactive, stopSignal } from '#shared'
+import { log, reactive, refresh, stopSignal } from '#shared'
 import { collectWatches } from '#shared/reactive/watch.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -482,3 +482,52 @@ for (const [arm, start] of Object.entries(SPACED_ARMS))
             'runs after the stop: 0',
         )
     }, 15_000)
+
+// 7.40, 7.41, 7.42 — A STOPPED JOB STAYS STOPPED. A bare `refresh` after `App.stop` reached a stream
+// job, which 13.7 reloads whether or not anything reads it, so it ran with no app open and the next
+// app's stop waited on it; and a read making a held job's first run after a stop started its clock.
+//
+// THE REVERTS: drop the `jobStopped` arm from `refreshIn`, and `runs after the refresh and a stop:
+// 1`; ask `value.busy()` of every clock in `stopUnownedPolls` again, and the same `1` — the stop's
+// own probe runs the reload the refresh marked; drop the `STOPPED_JOBS` arm from `firstRunStarted`,
+// and `runs after the read: 4` where 1 is due — the clock the read started, ticking with no app.
+test('a refresh after the app stops runs no job, nor does the next stop, and a read after it starts no clock — 7.40, 7.41, 7.42', async () => {
+    let runs = 0
+    const streamed = reactive(
+        async function* () {
+            runs += 1
+            await Bun.sleep(5)
+            yield runs
+        },
+        { global: true, poll: 10 },
+    )
+    const app = await inMemoryApp({})
+    serving(app)
+    await until(() => runs >= 2)
+    await app.stop()
+    const atStop = runs
+    refresh()
+    const next = await inMemoryApp({})
+    await next.stop()
+    await Bun.sleep(40)
+    expect(`runs after the refresh and a stop: ${runs - atStop}`).toBe(
+        'runs after the refresh and a stop: 0',
+    )
+    // The mark is owed to a read, which runs it once.
+    await streamed
+    expect(`runs after a read: ${runs - atStop}`).toBe('runs after a read: 1')
+
+    let held = 0
+    const job = reactive(
+        async () => {
+            held += 1
+            return held
+        },
+        { global: true, poll: 10 },
+    )
+    const second = await inMemoryApp({})
+    await second.stop()
+    expect(await job).toBe(1)
+    await Bun.sleep(40)
+    expect(`runs after the read: ${held}`).toBe('runs after the read: 1')
+})
