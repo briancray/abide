@@ -36,6 +36,7 @@ import {
 } from '../../bridge/src/opened.ts'
 import { PAIRING_SCHEME } from '../../bridge/src/PAIRING_SCHEME.ts'
 import { type Pairing, pairingOf } from '../../bridge/src/pairingLink.ts'
+import { requestedLines } from '../../bridge/src/requestedLines.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAIRING: Pairing = {
@@ -119,7 +120,7 @@ test('the question names the site and every tool it asks for — 44.42', () => {
         'crm.example/app is requesting access to Claude Code.',
     )
     expect(asked.body.split('\n\n')[0]).toBe(
-        'Requested tools from this computer: WebSearch, WebFetch.',
+        'Requested from this computer:\n• Search the web\n• Open web pages',
     )
     expect(asked.body).toContain('auto mode')
     expect(asked.body).toContain('Only Site Tools is the safest option')
@@ -127,7 +128,7 @@ test('the question names the site and every tool it asks for — 44.42', () => {
     expect(said(asked)).not.toContain(PAIRING.version)
     // 44.86 — asking for nothing of this machine's, there is nothing to narrow, and no auto mode to say.
     expect(question({ ...PAIRING, tools: [] }, SETTINGS).body).toBe(
-        'Requested tools from this computer: none.',
+        'Requested from this computer: nothing. It uses only its own tools.',
     )
     // Options that leave auto mode are not called auto mode.
     expect(
@@ -206,7 +207,7 @@ test('a link asking for full access is asked naming no tool — 44.42, 44.86', (
         'crm.example/app is requesting access to Claude Code.',
     )
     expect(asked.body.split('\n\n')[0]).toBe(
-        'Requested tools from this computer: full access.',
+        'Requested from this computer: full access to everything Claude Code can do.',
     )
     expect(said(asked)).not.toContain('WebSearch')
     expect(asked.body).toContain(
@@ -280,7 +281,7 @@ test('an install run --full runs every link full, and asks saying so — 44.42, 
     ])
     const asked = said(question(PAIRING, full))
     expect(asked).toContain(
-        'Requested tools from this computer: all, as you installed the bridge to give every site.',
+        'Requested from this computer: full access, which you gave every site when you installed the bridge.',
     )
     expect(asked).not.toContain('WebSearch, WebFetch')
     expect(asked).not.toContain('Only Site Tools')
@@ -331,6 +332,36 @@ test('an install from a checkout runs the checkout, whatever release a link name
         'function',
     )
     expect(handler).toContain('import.meta.dir')
+})
+
+// 44.92 — WHAT IS ASKED IS READ AS WHAT IT LETS THE SITE DO: built-in tools by capability, several to a
+// line, furthest-reaching first; every MCP tool on one line, counted per server, so a site asking for
+// many tools one by one is still a few lines. THE REVERT: a line per tool, and twelve tools are twelve.
+test('the tools a link asks for are read as what they let it do — 44.92', () => {
+    const asked = [
+        'Read',
+        'Grep',
+        'Edit',
+        'Bash',
+        'WebSearch',
+        'TodoWrite',
+        'SlashCommand',
+        'mcp__github__create_issue',
+        'mcp__github__list_pulls',
+        'mcp__github__merge_pull',
+        'mcp__linear__create_issue',
+        'mcp__mail',
+        'mcp__calendar__meetings',
+    ]
+    expect(requestedLines(asked)).toEqual([
+        'Run commands',
+        'Change your files',
+        'Read and search your files',
+        'Search the web',
+        'Use SlashCommand',
+        'MCP servers: github (3 tools), linear (1 tool), mail (all tools), calendar (1 tool)',
+    ])
+    expect(requestedLines(['TodoWrite'])).toEqual([])
 })
 
 // 44.29 — AN MCP TOOL IS A TOOL TOO: a link asks for one by Claude Code's name for it, or for all of a
@@ -404,7 +435,7 @@ test('the visitor’s MCP servers are read from what they passed — 44.58', asy
 
 // 44.65 — THE QUESTION NAMES WHAT CANNOT BE GIVEN: an MCP tool the link asks for whose server the visitor's
 // Claude Code is not configured with, and how to add it.
-test('the question names each MCP tool whose server the visitor lacks — 44.65', async () => {
+test('the question names the server of each MCP tool the visitor lacks — 44.65', async () => {
     const pairing = {
         ...PAIRING,
         tools: ['WebSearch', 'mcp__calendar__meetings', 'mcp__mail'],
@@ -416,9 +447,9 @@ test('the question names each MCP tool whose server the visitor lacks — 44.65'
     })
     expect(unserved).toEqual(['mcp__calendar__meetings'])
     const asked = said(question(pairing, SETTINGS, unserved))
-    expect(asked).toContain('no calendar MCP server')
+    expect(asked).toContain('don’t have a calendar MCP server')
     expect(asked).toContain('claude mcp add --scope user')
-    expect(said(question(pairing, SETTINGS))).not.toContain('MCP server')
+    expect(said(question(pairing, SETTINGS))).not.toContain('don’t have')
 })
 
 // 44.62, 44.66, 44.88 — WHAT IS ALLOWED IS KEPT PER SITE AND HOLDER, grows by the tools allowed since,

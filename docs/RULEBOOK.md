@@ -4106,7 +4106,7 @@ whose release is a version alone, and MUST run the release it names, save as 44.
 
 44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, save where 44.62
 pairs it unasked, naming the site, with the app's name `/__abide/bridge` gives (44.63) beside it and
-never in its place, and the tools the link asks for — or, where it asks for full access, that it does
+never in its place, and what the tools the link asks for let it do (44.92) — or, where it asks for full access, that it does
 and no tool; or, where `abide-bridge install` was run `--full`, that it gives everything
 44.82 does — and the options and the names of the variables `abide-bridge install` kept (44.44).
 
@@ -4185,8 +4185,8 @@ refuse 403 any other code.
 
 44.64 A bridge opening an `abide-bridge` link on a desktop it cannot ask on MUST NOT pair.
 
-44.65 A bridge opening an `abide-bridge` link MUST name, in the question 44.42 asks, each MCP tool the
-link asks for whose server 44.58 does not find.
+44.65 A bridge opening an `abide-bridge` link MUST name, in the question 44.42 asks, the server of each
+MCP tool the link asks for whose server 44.58 does not find.
 
 44.66 `abide-bridge forget` MUST stop always allowing the site it names, or every site where it names
 none.
@@ -4286,6 +4286,10 @@ PNG of at most 1 MB answered within 3 seconds, and the desktop's own otherwise.
 44.91 A bridge asking per 44.42 MUST show the note `/__abide/bridge` names for the link's code (44.63)
 under the headline, after `From` and the app's name or the site, as one line of at most 200
 characters, and MUST NOT show it in the headline.
+
+44.92 A bridge opening an `abide-bridge` link MUST name, in the question 44.42 asks, the built-in tools
+the link asks for by what they let the site do, one line per capability, and every MCP tool it asks for
+on one line naming each server with how many of its tools are asked for, or all of them.
 
 # 45. Offline
 

@@ -23,6 +23,7 @@ import { type Answer, ask, notify, type Question } from './desktop.ts'
 import { grantFor, serversNamed } from './grant.ts'
 import { type Pairing, pairingOf } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
+import { requestedLines } from './requestedLines.ts'
 import { siteTls } from './siteTls.ts'
 
 /**
@@ -92,21 +93,22 @@ export function question(
         : ''
     // One headline at every level, and what is asked for read in the body, each level alike.
     const headline = `${asker} is requesting access to Claude Code.`
-    const asked =
+    // 44.92 — what it asks of this machine, as what that lets it do, never a list of tool names.
+    const said = [
         settings.full === true
-            ? 'all, as you installed the bridge to give every site'
+            ? 'Requested from this computer: full access, which you gave every site when you installed the bridge.'
             : pairing.full
-              ? 'full access'
+              ? 'Requested from this computer: full access to everything Claude Code can do.'
               : pairing.tools.length === 0
-                ? 'none'
-                : pairing.tools.join(', ')
-    const said = [`Requested tools from this computer: ${asked}.`]
+                ? 'Requested from this computer: nothing. It uses only its own tools.'
+                : `Requested from this computer:\n• ${requestedLines(pairing.tools).join('\n• ')}`,
+    ]
     // The site's own tools are approved without asking (44.81), so auto mode is said only of this machine's.
     if (settings.full === true || pairing.full || pairing.tools.length > 0)
         said.push(auto)
     if (unserved.length > 0 && !pairing.full && settings.full !== true)
         said.push(
-            `Your Claude Code has no ${serversNamed(unserved)} MCP server, so it can’t use ${unserved.join(', ')}. Add it with \`claude mcp add --scope user\` first.`,
+            `You don’t have a ${serversNamed(unserved)} MCP server, so its tools won’t work. Add it with \`claude mcp add --scope user\` first.`,
         )
     if (offersSiteTools(pairing, settings))
         said.push(
