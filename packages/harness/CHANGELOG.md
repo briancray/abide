@@ -1,5 +1,34 @@
 # @abide/harness
 
+## 0.4.2
+
+### Patch Changes
+
+- d7a96bd: The test DOM opens and closes a popover: `showPopover`, `hidePopover` and `togglePopover` stand in for the methods happy-dom lacks, fire `toggle`, and `matches(':popover-open')` reads the open state — 43.36.
+- Updated dependencies [eca6610]
+- Updated dependencies [986bbcc]
+- Updated dependencies [c1b702e]
+- Updated dependencies [89d1e1c]
+- Updated dependencies [f124040]
+- Updated dependencies [e115489]
+- Updated dependencies [7c23504]
+- Updated dependencies [f145429]
+- Updated dependencies [052d479]
+- Updated dependencies [9d2dbe0]
+- Updated dependencies [d58e7e7]
+- Updated dependencies [8ec6774]
+- Updated dependencies [084b78a]
+- Updated dependencies [75c673f]
+- Updated dependencies [9b3807a]
+- Updated dependencies [09cd591]
+- Updated dependencies [3f5fb1b]
+- Updated dependencies [777a074]
+- Updated dependencies [6b08f1a]
+- Updated dependencies [761f7fe]
+- Updated dependencies [56b1ce6]
+- Updated dependencies [344ba20]
+  - @abide/abide@0.130.0
+
 ## 0.4.1
 
 ### Patch Changes
