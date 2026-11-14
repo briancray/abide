@@ -218,3 +218,72 @@ export function withheldNotices(grant: Grant): string[] {
         )
     return notices
 }
+
+/** Whether `values` of a tools flag name `tool` of `server`, the server's every tool, or the server. */
+function namesTool(
+    values: readonly string[] | undefined,
+    tool: string,
+    server: string,
+): boolean {
+    const named = grantedOf(values)
+    return (
+        named.has(tool) ||
+        named.has(`mcp__${server}`) ||
+        named.has(`mcp__${server}__*`)
+    )
+}
+
+/**
+ * How a call of `tool` reaches this machine for a visitor who passed `claudeArgs` — the server it is
+ * of, that server's configuration and the tool's name on it — or why it is refused: it is not an MCP
+ * tool, a turn whose `tools` named it alone would not be given it (44.29), the visitor's
+ * `--allowedTools` does not approve it, or their `--disallowedTools` names it. 44.94.
+ *
+ * Throws where an `--mcp-config` they named cannot be read.
+ */
+export async function callGrant(
+    tool: string,
+    claudeArgs: readonly string[],
+    full: boolean,
+): Promise<
+    | {
+          server: string
+          configuration: unknown
+          name: string
+          refused: undefined
+      }
+    | { refused: string }
+> {
+    const server = serverOf(tool)
+    const prefix = `mcp__${server}__`
+    if (
+        server === undefined ||
+        !tool.startsWith(prefix) ||
+        tool.length === prefix.length
+    )
+        return {
+            refused: `A call is of one MCP tool, named mcp__<server>__<tool>, and ${tool} is not one.`,
+        }
+    const { grant, args } = await grantFor([tool], claudeArgs, full)
+    if (grant.mcp.length === 0)
+        return { refused: withheldNotices(grant).join(' ') }
+    // 44.82 — a full bridge's options as the visitor gave them.
+    const given = full ? [...claudeArgs] : args
+    const allowed = takeFlag(given, ['--allowedTools', '--allowed-tools'])
+    const denied = takeFlag(given, ['--disallowedTools', '--disallowed-tools'])
+    if (namesTool(denied, tool, server))
+        return {
+            refused: `The site called ${tool}, which this bridge’s --disallowedTools names.`,
+        }
+    // A turn asks what auto mode would not approve; a call has no model to judge it, so it asks nothing.
+    if (!namesTool(allowed, tool, server))
+        return {
+            refused: `The site called ${tool} directly, which this bridge does only for a tool you approved. Add \`-- --allowedTools ${tool}\` to allow it.`,
+        }
+    return {
+        server,
+        configuration: grant.servers[server],
+        name: tool.slice(prefix.length),
+        refused: undefined,
+    }
+}

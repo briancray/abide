@@ -375,7 +375,7 @@ type Reached = { readonly [REACHED]: true }
 | `Provider` | `{ run(messages: (AssistantMessage & { content: AssistantContent[] })[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<ProviderEvent> }` | What runs a conversation. | 44.2, 44.28, 44.39, 44.50, 44.57 |
 | `ProviderEvent` | `Exclude<AssistantEvent, { type: 'tool' \| 'result' }> \| { type: 'tool'; id: string; name: string } \| { type: 'result'; id: string; text: string; failed: boolean }` | An `AssistantEvent` as a provider yields it, before `assistant` reads the handler and the value off the app's surface. | 44.28, 44.35, 44.50 |
 | `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<ToolAnswer> }` | The app's MCP tools, called as the asker. | 44.6, 44.7, 44.35 |
-| `ToolAnswer` | `{ content: AssistantContent[]; failed: boolean }` | What a tool call answered: its pieces, and whether it failed. | 20.21, 20.22, 44.35 |
+| `ToolAnswer` | `{ content: AssistantContent[]; failed: boolean }` | What a tool call answered: its pieces, and whether it failed. | 20.21, 20.22, 44.35, 44.93 |
 | `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 20.19, 44.6 |
 | `resultsOf` | `<Value>(events: readonly AssistantEvent[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { method: string; address: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 44.51 |
 | `imagePiece` | `(image: Blob) => Promise<{ type: 'image'; data: string; mimeType: string }>` | An image as a turn's image piece, drawn down to what a model looks at and redrawn where it is a photo. | 44.52, 44.53, 44.54 |
@@ -391,9 +391,10 @@ type Reached = { readonly [REACHED]: true }
 | `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the tools of the visitor's machine it asks for. | 44.15, 44.16, 44.29, 44.58 |
 | `provider.claudeCode.bridgeCommand` | `(options?: { tools?: string[]; full?: boolean; note?: string }) => { command: string; link: string; install: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the tools it is given or asking for full access, with a note on why, and the command that installs what opens the link. | 44.14, 44.32, 44.33, 44.40, 44.56, 44.76, 44.85, 44.91 |
 | `provider.claudeCode.bridge` | `(options?: { tools?: string[]; full?: boolean; note?: string }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40, 44.59, 44.60, 44.76, 44.85, 44.91 |
+| `provider.claudeCode.callTool` | `(tool: string, input: unknown) => Promise<ToolAnswer>` | What one MCP tool of the visitor's machine answered, called through the bridge paired with their browser with no model. | 44.93, 44.94, 44.95, 44.96, 44.97, 44.98 |
 | `provider.claudeCode.permit` | `(id: string, allow: boolean) => void` | The asking browser's answer to a `permission` event its bridge's turn is waiting on. | 44.83 |
 | `BridgeStatus` | `{ paired: boolean; missing: string[]; command: string; link: string; install: string }` | Whether a bridge is paired, the tools it cannot make available, and the command and the link that pair one, with the command that installs what opens the link. | 44.20, 44.40, 44.56, 44.59, 44.60, 44.78 |
-| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 16.57, 16.78 |
+| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns and calls. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 44.96, 44.97, 16.57, 16.78 |
 | `/__abide/pairing` | `GET` | This browser's pairing, as it changes, for `pairing` to read. | 44.67, 44.68, 44.74, 44.75, 44.76, 18.36 |
 
 ## `pairing`
@@ -984,7 +985,7 @@ site's `provider.claudeCode`.
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide-bridge <site> <code> [--full] [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | This machine's Claude Code, paired with the browser a site minted the code for. | 44.15, 44.16, 44.24, 44.25, 44.27, 44.29, 44.30, 44.44, 44.45, 44.46, 44.47, 44.58, 44.61, 44.81, 44.82, 44.84 |
+| `abide-bridge <site> <code> [--full] [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | This machine's Claude Code, paired with the browser a site minted the code for. | 44.15, 44.16, 44.24, 44.25, 44.27, 44.29, 44.30, 44.44, 44.45, 44.46, 44.47, 44.58, 44.61, 44.81, 44.82, 44.84, 44.94, 44.95, 44.96, 44.97 |
 | `abide-bridge install [--full] [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | What opens a site's `abide-bridge` links on this machine, registered. | 44.41, 44.42, 44.43, 44.44, 44.62, 44.64, 44.65, 44.86, 44.87, 44.88, 44.89, 44.90, 44.91, 44.92 |
 | `abide-bridge uninstall` | `abide-bridge install`, undone. | 44.43 |
 | `abide-bridge forget [<site>]` | The sites a link pairs with unasked, made to ask again. | 44.62, 44.66 |

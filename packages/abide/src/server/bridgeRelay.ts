@@ -3,14 +3,15 @@
 // asks a local-network permission of every site — so the bridge dials OUT, to this address:
 //
 //   GET  /__abide/bridge?code=…   the pairing, answered by a server-sent stream of what the bridge is
-//                                 to do: the token it posts with, each turn, each tool reply, a cancel.
+//                                 to do: the token it posts with, each turn, each call, each tool
+//                                 reply, a cancel. `&calls=1` says the bridge makes calls (44.96).
 //   GET  /__abide/bridge?holder=… who a code was minted for, as an opaque string, without spending it, the app's name and the note it was minted with
 //                                 (44.63): what a bridge always allowing a site checks a link against.
 //   GET  /__abide/bridge          the same stream, resumed by the token after it dropped (44.26).
 //   POST /__abide/bridge          what the bridge reports, one frame per line: a turn's events, the
 //                                 MCP requests and permission prompts its Claude Code made, the turn's
-//                                 end or failure, and the tools the pairing asked for that it cannot
-//                                 give (44.61).
+//                                 end or failure, a call's answer or refusal, and the tools the
+//                                 pairing asked for that it cannot give (44.61).
 //
 // A PAIRING IS TO A BROWSER — the `abide-caller` its page carries (26.5) — and to whoever was signed
 // in there when its code was minted (44.33), for as long as the bridge's stream is open, or
@@ -31,7 +32,7 @@ import { refuse } from '#shared/refuse.ts'
 import { answered } from './answerFailure.ts'
 import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
-import type { ProviderEvent } from './assistant.ts'
+import type { ProviderEvent, ToolAnswer } from './assistant.ts'
 import { callerOf } from './callerOf.ts'
 import { fileIn } from './fileIn.ts'
 import { HOOKS, inOrder } from './hooks.ts'
@@ -44,11 +45,12 @@ import { onSignInChanged } from './signInChanged.ts'
 
 /**
  * What a turn hears from the bridge, in the order the bridge posted it: an event, an MCP request, a
- * permission prompt — the tool it asks for as `method`, its input as `params` — the end, or a failure.
- * ONE SHAPE for all five, every field set, since one is built per streamed chunk.
+ * permission prompt — the tool it asks for as `method`, its input as `params` — the end, or a failure;
+ * and what a call hears: its answer, as `event`, or its refusal. ONE SHAPE for all seven, every field
+ * set, since one is built per streamed chunk.
  */
 type TurnItem = {
-    kind: 'event' | 'mcp' | 'permission' | 'end' | 'fail'
+    kind: 'event' | 'mcp' | 'permission' | 'end' | 'fail' | 'answer' | 'refused'
     event: unknown
     id: number
     method: string
@@ -73,6 +75,8 @@ type Bridge = {
     // What its code asked for of the visitor's machine, and of that what it reported it cannot give.
     asked: string[]
     missing: string[]
+    // 44.96 — whether it said, as it paired, that it makes calls.
+    calls: boolean
 }
 
 /** A pairing as a status stream says it: whether a bridge is paired, the code that pairs one, and what it cannot give. */
@@ -269,6 +273,7 @@ async function localBridge(): Promise<Bridge> {
         held: undefined,
         asked: [],
         missing: [],
+        calls: true,
     }
     LOCAL.bridge = bridge
     const core = serveTurns({
@@ -362,20 +367,8 @@ export async function* runTurn({
     answer: (method: string, params: unknown) => Promise<unknown>
     signal: AbortSignal
 }): AsyncGenerator<ProviderEvent> {
-    const key = pairingKey(caller, signedIn)
-    const bridge =
-        BY_KEY.get(key) ??
-        (localStands(local) ? await localBridge() : undefined)
-    // 44.13, 44.33 — nothing paired by this sign-in is the page's cue to show the command.
-    if (bridge === undefined)
-        throw refuse(
-            409,
-            'No Claude Code is paired with this browser as the one signed in. provider.claudeCode.bridgeCommand() is the command that pairs one.',
-        )
-    const turn = randomToken(9, 'base64url')
-    const inbox = new Inbox<TurnItem>()
-    bridge.turns.set(turn, inbox)
-    if (bridge === LOCAL.bridge) LOCAL.args.set(turn, pairingArgs())
+    const bridge = await pairedBridge(caller, signedIn, local)
+    const { turn, inbox } = opened(bridge)
     // `bridge.frames` is read at each push: a resumed stream (44.26) replaces it.
     bridge.frames.push({ type: 'turn', id: turn, prompt, config, maxTurns })
     // 44.18 — a caller hanging up ends the run on the bridge.
@@ -410,12 +403,103 @@ export async function* runTurn({
         }
     } finally {
         signal.removeEventListener('abort', cancel)
-        bridge.turns.delete(turn)
-        LOCAL.args.delete(turn)
+        closed(bridge, turn)
         // The bridge answers what is left as the run ends.
         for (const [id, prompt] of bridge.prompts)
             if (prompt.turn === turn) bridge.prompts.delete(id)
-        if (!WATCHERS.has(bridge.key)) armIdle(bridge.key)
+    }
+}
+
+/**
+ * The bridge paired to `caller` signed in as `signedIn`, or the native app's own where `local` stands
+ * for it. 44.13.
+ *
+ * Throws 409 where neither is.
+ */
+async function pairedBridge(
+    caller: string,
+    signedIn: string,
+    local: boolean,
+): Promise<Bridge> {
+    const bridge =
+        BY_KEY.get(pairingKey(caller, signedIn)) ??
+        (localStands(local) ? await localBridge() : undefined)
+    // 44.13, 44.33 — nothing paired by this sign-in is the page's cue to show the command.
+    if (bridge === undefined)
+        throw refuse(
+            409,
+            'No Claude Code is paired with this browser as the one signed in. provider.claudeCode.bridgeCommand() is the command that pairs one.',
+        )
+    return bridge
+}
+
+/** A fresh turn or call on `bridge`: its id, and the inbox what the bridge reports of it lands in. */
+function opened(bridge: Bridge): { turn: string; inbox: Inbox<TurnItem> } {
+    const turn = randomToken(9, 'base64url')
+    const inbox = new Inbox<TurnItem>()
+    bridge.turns.set(turn, inbox)
+    // 44.78 — what the asking request answers, held from when it was sent.
+    if (bridge === LOCAL.bridge) LOCAL.args.set(turn, pairingArgs())
+    return { turn, inbox }
+}
+
+/** Forgets the turn or call `turn` of `bridge`, and lets the bridge go idle where nothing else holds it. */
+function closed(bridge: Bridge, turn: string): void {
+    bridge.turns.delete(turn)
+    LOCAL.args.delete(turn)
+    if (!WATCHERS.has(bridge.key)) armIdle(bridge.key)
+}
+
+/**
+ * One call of the MCP tool `name` with `input` on the bridge paired to `caller` signed in as
+ * `signedIn` — `local` as `runTurn` reads it — with no model: what the tool answered. 44.93.
+ *
+ * Throws 409 where nothing is paired, or the paired bridge makes no calls; 403 where the bridge
+ * refused it (44.94); 502 where it failed (44.95); and ends the call where `signal` aborts.
+ */
+export async function runCall({
+    caller,
+    signedIn,
+    local,
+    name,
+    input,
+    signal,
+}: {
+    caller: string
+    signedIn: string
+    local: boolean
+    name: string
+    input: unknown
+    signal: AbortSignal
+}): Promise<ToolAnswer> {
+    const bridge = await pairedBridge(caller, signedIn, local)
+    // 44.96 — a bridge that never said it makes calls would leave one waiting forever.
+    if (!bridge.calls)
+        throw refuse(
+            409,
+            'The Claude Code bridge paired with this browser is a release that makes no call of a tool. Pair again with provider.claudeCode.bridgeCommand(), which runs the release this site needs.',
+        )
+    const { turn, inbox } = opened(bridge)
+    bridge.frames.push({ type: 'call', id: turn, name, input })
+    // 44.98 — a caller hanging up ends the call on the bridge.
+    const cancel = (): void => {
+        bridge.frames.push({ type: 'cancel', turn })
+    }
+    signal.addEventListener('abort', cancel)
+    try {
+        for await (const item of inbox) {
+            if (item.kind === 'answer') return item.event as ToolAnswer
+            if (item.kind === 'refused') throw refuse(403, item.message)
+            if (item.kind === 'fail')
+                throw refuse(502, `The call failed: ${item.message}`)
+        }
+        throw refuse(
+            502,
+            'The call failed: the Claude Code bridge disconnected',
+        )
+    } finally {
+        signal.removeEventListener('abort', cancel)
+        closed(bridge, turn)
     }
 }
 
@@ -695,6 +779,7 @@ function pair(request: Request): Response {
         held: undefined,
         asked: pairing.tools,
         missing: [],
+        calls: query.get('calls') === '1',
     }
     BY_KEY.set(bridge.key, bridge)
     BY_TOKEN.set(bridge.token, bridge)
@@ -771,8 +856,9 @@ function attach(bridge: Bridge, request: Request): Response {
 }
 
 type BridgeReport = {
-    type: 'event' | 'mcp' | 'permission' | 'end' | 'fail' | 'missing'
+    type: TurnItem['kind'] | 'missing'
     turn: string
+    answer?: unknown
     tools?: string[]
     name?: string
     input?: unknown
@@ -830,6 +916,8 @@ function delivered(bridge: Bridge, report: BridgeReport): void {
                   method: report.name ?? '',
                   params: report.input,
               })
-            : item(kind, report),
+            : kind === 'answer'
+              ? item(kind, { event: report.answer })
+              : item(kind, report),
     )
 }

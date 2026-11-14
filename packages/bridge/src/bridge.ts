@@ -54,8 +54,9 @@ export async function bridge(options: {
         options.silenceMilliseconds ?? SILENCE_MILLISECONDS
     // What cuts the stream being read, where it went silent.
     let dialed = new AbortController()
+    // 44.96 — `calls` says, as it pairs, that this bridge makes a call of one tool with no model.
     let stream = await fetch(
-        `${site}${BRIDGE_PATH}?code=${encodeURIComponent(options.code)}`,
+        `${site}${BRIDGE_PATH}?code=${encodeURIComponent(options.code)}&calls=1`,
         {
             headers: { accept: 'text/event-stream' },
             signal: dialed.signal,
