@@ -38,8 +38,9 @@ export default POST(
         })) {
             if (event.type === 'tool') {
                 // The text either side of a call is two turns of the model's: never one paragraph.
-                for (const part of writer.write('\n\n').parts)
-                    yield { type: 'part', part }
+                const { parts, tail } = writer.write('\n\n')
+                for (const part of parts) yield { type: 'part', part }
+                yield { type: 'tail', part: tail }
                 yield {
                     type: 'tool',
                     name: event.name.replace(/^.*_ask_tools_/, ''),
