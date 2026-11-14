@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.131.1
+
+### Patch Changes
+
+- Updated dependencies [eb51ccb]
+  - @abide/bridge@0.7.1
+
 ## 0.131.0
 
 ### Minor Changes
