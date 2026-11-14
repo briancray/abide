@@ -3145,15 +3145,17 @@ its output only a file it did not produce that was written before it began.
 the app rather than 38.53's shell, and given a command MUST answer it as 38.50 does.
 
 38.71 The window `abide native`'s executable opens MUST show the launcher page where nothing is
-remembered, offering to start the app in the process and to connect to one running at a URL.
+remembered and 38.181 starts nothing, offering to start the app in the process and to connect to
+one running at a URL.
 
 38.72 The launcher's start form MUST ask for each field the `onConfig` schema's JSON Schema
 declares, or each field `onConfig`'s defaults return where the schema has none, and MUST boot the
 app with its values as the environment, showing a refusal by field.
 
 38.73 The launcher MUST remember a connect's URL, or of a start's values each that differs from the
-value its form offered, under `APP_DATA_DIR`, and MUST start or connect the same way at the next
-launch, with each value it did not remember as the app then offers it.
+value its form offers as that start is made, the start a launch makes included, under
+`APP_DATA_DIR`, and MUST start or connect the same way at the next launch, with each value it did
+not remember as the app then offers it.
 
 38.74 The `disconnect` role MUST stop the app the launcher serves, forget what 38.73 remembered, and
 show the launcher page.
@@ -3520,6 +3522,9 @@ the window MUST NOT wake while nothing reaches it.
 `process.exit` MUST end the executable with the code it was given, and a `SIGTERM` or `SIGINT` the
 executable is sent MUST stop it through `App.stop` (38.76) and MUST NOT reach a handler the app
 registered with `process.on`.
+
+38.181 Where `onLauncher` turns `connect` off and the start form asks for nothing, the launcher MUST
+start the app at a launch where 38.73 does nothing, rather than show its page.
 
 # 39. Head and view transitions
 

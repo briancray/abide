@@ -21,7 +21,9 @@ import Snippet from '#src/lib/Snippet.abide'
         <p><code>abide native [--out]</code> wraps the compiled executable in a macOS
             <code>.app</code> that opens the CRM in a window of its own. Its icon is
             <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. The first launch
-            offers Start, which runs the app here, and Connect…, which opens one running at a URL.</p>
+            offers Start, which runs the app here, and Connect…, which opens one running at a URL.
+            Each launch after it does again what the last one did. With <code>connect: false</code>
+            and nothing for the start form to ask, the first launch starts the CRM at once.</p>
 
         <Snippet source={launcherSource} path="src/native/launcher.abide" />
 

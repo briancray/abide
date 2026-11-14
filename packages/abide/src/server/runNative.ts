@@ -259,6 +259,14 @@ async function launch(
     const credential = `${NATIVE_COOKIE}=${secret}; Path=/; HttpOnly; SameSite=Strict`
     // 38.73 — the environment as launched: a start writes its values into `process.env`.
     const launched = { ...process.env }
+    // 38.73 — what the start form offers with nothing remembered, by field: a start, the one at
+    // launch included, keeps only what it sent that differs from it.
+    const offered = (): Record<string, string> => {
+        const values: Record<string, string> = {}
+        for (const field of configFields({ ...appDerived(), ...launched }))
+            values[field.name] = field.value
+        return values
+    }
     // 27.3 — the same derived layer `resolve` starts from, under what was given.
     const derived = (): Record<string, string | undefined> => ({
         ...appDerived(),
@@ -290,21 +298,13 @@ async function launch(
     ): Promise<Response> => {
         if (options.start && request.method === 'POST' && action === 'start') {
             const form = await request.formData()
+            const offering = offered()
             const values: Record<string, string> = {}
-            // 38.73 — what the form offers with nothing remembered: the next launch keeps the rest.
-            const offered: Record<string, string> = {}
-            for (const field of configFields({
-                ...appDerived(),
-                ...launched,
-            })) {
+            for (const name of Object.keys(offering))
                 // THE LAST VALUE OF A NAME: a checkbox follows the hidden `false` it stands in for
                 // when unchecked, so `get` — the first — would read every checked box as `false`.
-                values[field.name] = String(
-                    form.getAll(field.name).at(-1) ?? '',
-                )
-                offered[field.name] = field.value
-            }
-            const started = await session.start(values, offered)
+                values[name] = String(form.getAll(name).at(-1) ?? '')
+            const started = await session.start(values, offering)
             return started === undefined ? onwards() : page('start')
         }
         if (
@@ -428,7 +428,7 @@ async function launch(
         background: session.remembered.background,
         updates: updater !== undefined,
     })
-    await session.resume(options)
+    await session.resume(options, offered())
     tellShown()
     tell({ kind: 'navigate', address: `${base}open` })
     if (updater === undefined) return

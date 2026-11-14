@@ -1,4 +1,4 @@
-// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165 — the native launcher's session, options, accent
+// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165, 38.181 — the native launcher's session, options, accent
 // and own page, apart from the window: none of the four needs one to be checked.
 //
 // THE REVERT, for the accent: average every opaque pixel instead of binning by hue, and dogfood's
@@ -352,14 +352,14 @@ test('a session switches between the app it started and one it connected to — 
         // 38.73 — the next launch reads what this one did last, and does it again.
         const relaunched = await NativeSession.open(directory, boot)
         expect(relaunched.remembered.last).toEqual({ connect: remote })
-        await relaunched.resume(BOTH)
+        await relaunched.resume(BOTH, {})
         expect(relaunched.shown).toBe(remote)
 
         // 38.74 — a disconnect forgets it, so the launch after shows the launcher.
         await relaunched.forget()
         expect(relaunched.shown).toBeUndefined()
         const forgotten = await NativeSession.open(directory, boot)
-        await forgotten.resume(BOTH)
+        await forgotten.resume(BOTH, {})
         expect(forgotten.shown).toBeUndefined()
     } finally {
         delete process.env.NATIVE_TEST_NAME
@@ -400,7 +400,10 @@ test('a start remembers only the values changed from what its form offered — 3
         delete process.env.NATIVE_TEST_NAME
         delete process.env.NATIVE_TEST_REGION
         const relaunched = await NativeSession.open(directory, boot)
-        await relaunched.resume(BOTH)
+        await relaunched.resume(BOTH, {
+            NATIVE_TEST_NAME: '',
+            NATIVE_TEST_REGION: 'us',
+        })
         expect(seen).toEqual(['eu', undefined])
         expect(relaunched.remembered.last).toEqual({
             start: { NATIVE_TEST_NAME: 'ledger' },
@@ -409,6 +412,71 @@ test('a start remembers only the values changed from what its form offered — 3
     } finally {
         delete process.env.NATIVE_TEST_NAME
         delete process.env.NATIVE_TEST_REGION
+        LISTENING.server = undefined
+        await rm(directory, { recursive: true, force: true })
+    }
+})
+
+// 38.73 — THE START AT LAUNCH FORGETS AS ANY START DOES: a remembered value the app has since come to
+// offer is no longer the person's, so the release after that moves it reaches the copy. THE REVERT:
+// `this.start(last.start)` in `resume`, with no `offered`; `us` stays remembered, and the third
+// launch boots with NATIVE_TEST_REGION pinned to it rather than at the `ap` its release offers.
+test('a start at launch forgets a remembered value the app now offers — 38.73', async () => {
+    const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`
+    const seen: (string | undefined)[] = []
+    const boot = async () => {
+        seen.push(process.env.NATIVE_TEST_REGION)
+        return fakeApp([], 'app')
+    }
+    const relaunch = async (offered: Record<string, string>) => {
+        delete process.env.NATIVE_TEST_REGION
+        const session = await NativeSession.open(directory, boot)
+        await session.resume(BOTH, offered)
+        await session.disconnect()
+        return session
+    }
+    try {
+        const session = await NativeSession.open(directory, boot)
+        await session.start(
+            { NATIVE_TEST_REGION: 'us' },
+            { NATIVE_TEST_REGION: 'eu' },
+        )
+        await session.disconnect()
+        // A release makes `us` the default, and the next one moves it on to `ap`.
+        const adopted = await relaunch({ NATIVE_TEST_REGION: 'us' })
+        expect(adopted.remembered.last).toEqual({ start: {} })
+        await relaunch({ NATIVE_TEST_REGION: 'ap' })
+        expect(seen).toEqual(['us', 'us', undefined])
+    } finally {
+        delete process.env.NATIVE_TEST_REGION
+        LISTENING.server = undefined
+        await rm(directory, { recursive: true, force: true })
+    }
+})
+
+// 38.181 — A LAUNCHER WITH ONE FORM AND NOTHING TO ASK starts at once, so the window opens on the app
+// rather than on a lone button. A form with a field, or a second form, still waits for the person.
+// THE REVERT: drop the last arm of `NativeSession.resume`; the first launch shows nothing.
+test('a launcher whose one form asks for nothing starts at launch — 38.181', async () => {
+    const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`
+    const startOnly = launcherOf({ connect: false }) as Launcher
+    try {
+        const asks = await NativeSession.open(directory, async () =>
+            fakeApp([], 'app'),
+        )
+        await asks.resume(startOnly, { NATIVE_TEST_REGION: 'eu' })
+        expect(asks.shown).toBeUndefined()
+        await asks.resume(BOTH, {})
+        expect(asks.shown).toBeUndefined()
+
+        const session = await NativeSession.open(directory, async () =>
+            fakeApp([], 'app'),
+        )
+        await session.resume(startOnly, {})
+        expect(session.shown).toBeDefined()
+        expect(session.remembered.last).toEqual({ start: {} })
+        await session.disconnect()
+    } finally {
         LISTENING.server = undefined
         await rm(directory, { recursive: true, force: true })
     }
