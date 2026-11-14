@@ -149,7 +149,9 @@ export function fromNativeWindow(): boolean {
 
 /** Whether the native app's own bridge stands for a request `local` says is from its window: Claude Code is found. */
 function localStands(local: boolean): boolean {
-    return local && Bun.which('claude') !== null
+    // `PATH` passed, since `Bun.which` searches the one the process started with and 44.80 assigns
+    // the login shell's after.
+    return local && Bun.which('claude', { PATH: Bun.env.PATH ?? '' }) !== null
 }
 
 /** Whether a pairing is paired: by a code, or by the native app's own bridge. */
