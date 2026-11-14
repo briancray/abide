@@ -215,8 +215,8 @@ async function launch(
         parent.postMessage(message)
         if (wakePort !== 0) wakeWindow(wakePort)
     }
-    // A worker's `process.exit` ends the worker alone: the process ends with it, however it came —
-    // the app's own, or the quit below.
+    // 38.180 — a worker's `process.exit` ends the worker alone: the process ends with it, however it
+    // came — the app's own, or the quit below.
     process.on('exit', (code) => tell({ kind: 'ended', code }))
     // 44.80 — what a terminal would find, for the app and for the Claude Code its own bridge runs.
     const path = loginShellPath()

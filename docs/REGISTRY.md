@@ -798,7 +798,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `middleware` | `(...rungs: ((next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request; lane: Lane }) => Response \| Failed<string, unknown> \| Promise<Response \| Failed<string, unknown>>)[]) => () => void` | The per-request lane at the calling file's route. | 18.26, 37.2, 37.3, 37.13, 37.14, 37.15, 37.19, 37.20 |
 | `Lane` | `'page' \| 'handler' \| 'file' \| 'openapi' \| 'mcp' \| 'bridge' \| 'socket' \| 'abide'` | What answers a request a `middleware` rung is handed. | 37.19 |
 | `onStart` | `(fn: (start: () => Promise<void>) => void \| Promise<void>) => () => void` | Wraps the boot. | 37.4, 37.6, 37.13 |
-| `onStop` | `(fn: (stop: () => Promise<void>) => void \| Promise<void>) => () => void` | Mirrors it for teardown. | 37.4, 37.6, 37.13 |
+| `onStop` | `(fn: (stop: () => Promise<void>) => void \| Promise<void>) => () => void` | Mirrors it for teardown. | 37.4, 37.6, 37.13, 38.180 |
 | `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route, or in the browser below the calling component. | 37.5, 37.8, 37.13, 37.16, 37.17, 37.18, 37.21, 37.28, 12.6 |
 | `onRefusal` | `(fn: (refusal: Failed<string, unknown>, call: { method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string }) => unknown) => () => void` | What the browser hands each refusal a call over http is answered with, below the calling component. | 37.13, 37.22, 37.23, 37.24, 37.25, 37.26, 37.27 |
 | `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's config defaults. | 27.6, 37.7, 37.13 |
@@ -972,7 +972,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.13, 38.25, 38.110, 38.123 |
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.69 |
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136 |
-| `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 44.77, 44.80 |
+| `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |

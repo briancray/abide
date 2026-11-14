@@ -152,6 +152,8 @@ affected code saying what it did, and tell the user.
 - A file past a few hundred lines is a component or a module waiting to be split out; split it
   before adding to it.
 - Use Bun's APIs (`Bun.file`, `Bun.write`, `Bun.$`, `bun:sqlite`) before `node:` ones.
+- Put shutdown work in `onStop`, never in `process.on('SIGTERM')`: in the native app the app runs
+  on a thread of its own, which no signal reaches (RULEBOOK 38.180).
 - Style with tailwind classes. `style=` is for a value computed at runtime. Tailwind is wired
   already (RULEBOOK 38.131): `src/lib/app.css`, imported by the root `layout.abide`, is where a theme
   or a plugin goes.

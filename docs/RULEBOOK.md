@@ -3516,6 +3516,11 @@ finds as one on the window, brought to the front.
 answering while the window is resized, a menu of it is held open or a sheet of 38.178 is shown, and
 the window MUST NOT wake while nothing reaches it.
 
+38.180 The app `abide native`'s executable starts MUST run on a thread apart from the window's. Its
+`process.exit` MUST end the executable with the code it was given, and a `SIGTERM` or `SIGINT` the
+executable is sent MUST stop it through `App.stop` (38.76) and MUST NOT reach a handler the app
+registered with `process.on`.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
