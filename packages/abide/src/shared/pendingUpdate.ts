@@ -26,9 +26,9 @@ function updateBridge(): UpdateBridge | undefined {
 /** An update the window has read, checked and unpacked, waiting for the app to restart. */
 export class StagedUpdate {
     version: string
-    /** Whether the feed `abide bundle --required` wrote marks it as one to install now. */
+    /** Whether the feed `abide native --required` wrote marks it as one to install now. */
     required: boolean
-    /** The text of the file `abide bundle --notes` named, or `undefined`. */
+    /** The text of the file `abide native --notes` named, or `undefined`. */
     notes: string | undefined
 
     constructor(update: {

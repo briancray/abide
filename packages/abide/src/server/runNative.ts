@@ -1,4 +1,4 @@
-// 38.70 — WHAT `abide bundle` WRITES, STARTED WITH NO COMMAND: a window on the app. Given a command
+// 38.70 — WHAT `abide native` WRITES, STARTED WITH NO COMMAND: a window on the app. Given a command
 // it is the executable `abide compile` writes (`runCompiled`), so a terminal still reaches every one.
 //
 // ONE PROCESS. The app, the launcher's own page and the window share it, and the app is served on
@@ -27,7 +27,7 @@ import { type Component, renderDocument } from './render.ts'
 import { runCompiled } from './runCompiled.ts'
 import { type BuildParts, builtSources } from './servedApp.ts'
 
-/** What `abide bundle` read of the launcher's files, carried in the executable. */
+/** What `abide native` read of the launcher's files, carried in the executable. */
 export type NativeBuild = {
     /** 38.82 — `src/native/launcher.abide`'s page, where the app has one that paints. */
     launch:
@@ -37,7 +37,7 @@ export type NativeBuild = {
     /** 38.101 — the app's icon as a data URL, and the accent taken from it. */
     icon: string | undefined
     accent: string | undefined
-    /** 38.143 — the public half of the key `abide bundle` signed this build's updates with. */
+    /** 38.143 — the public half of the key `abide native` signed this build's updates with. */
     publicKey: string
 }
 

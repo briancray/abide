@@ -30,7 +30,7 @@ export type LauncherOptions = {
     height?: number
     minWidth?: number
     minHeight?: number
-    /** 38.142 — the address `abide bundle`'s `updates` directory is served at. */
+    /** 38.142 — the address `abide native`'s `updates` directory is served at. */
     update?: string
     maxWidth?: number
     maxHeight?: number

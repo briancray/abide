@@ -6,7 +6,7 @@
 // MACOS hands a URL to an app as an Apple Event, never as an argument, so the app is an AppleScript
 // applet (`osacompile`, on every Mac) whose `open location` starts the handler with the link. Built
 // here, it carries no quarantine and Gatekeeper never reads it; ad-hoc signed whole after its
-// `Info.plist` is changed, as `abide bundle` signs its own, since an edited bundle whose signature no
+// `Info.plist` is changed, as `abide native` signs its own, since an edited bundle whose signature no
 // longer matches is one macOS reads as damaged. In Application Support, not an Applications folder: it
 // is nothing to open by hand, and Launch Services finds a handler there only once it is registered.
 //

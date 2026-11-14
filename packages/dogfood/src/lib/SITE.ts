@@ -449,7 +449,7 @@ export const SITE: readonly SiteGroup[] = [
                 title: 'The native app',
                 nav: 'Native app',
                 description:
-                    'The window, the menu bar and the updates of the app `abide bundle` writes.',
+                    'The window, the menu bar and the updates of the app `abide native` writes.',
                 registry: 'The native app',
             },
         ],

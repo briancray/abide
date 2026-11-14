@@ -15,10 +15,10 @@ import Snippet from '#src/lib/Snippet.abide'
 
 <Doc>
     <Section title="Ship the CRM as a native app">
-        <Code code={`abide bundle
-    abide bundle --out ~/Applications/CRM.app`} />
+        <Code code={`abide native
+    abide native --out ~/Applications/CRM.app`} />
 
-        <p><code>abide bundle [--out]</code> wraps the compiled executable in a macOS
+        <p><code>abide native [--out]</code> wraps the compiled executable in a macOS
             <code>.app</code> that opens the CRM in a window of its own. Its icon is
             <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. The first launch
             offers Start, which runs the app here, and Connect…, which opens one running at a URL.</p>
@@ -75,10 +75,10 @@ import Snippet from '#src/lib/Snippet.abide'
             picked from the app menu. A newer version is downloaded beside the app and installed
             when it quits, and Check for Updates… becomes Restart to Install.</p>
 
-        <Code code={`abide bundle --notes CHANGES.md
-    abide bundle --required --notes CHANGES.md`} />
+        <Code code={`abide native --notes CHANGES.md
+    abide native --required --notes CHANGES.md`} />
 
-        <p>Every <code>abide bundle</code> also writes an <code>updates</code> directory beside
+        <p>Every <code>abide native</code> also writes an <code>updates</code> directory beside
             the <code>.app</code>: the app zipped, and <code>latest.json</code> naming it. Upload
             the directory to the <code>update</code> address, and every copy older than it updates
             itself. A copy never installs a version older than its own, so taking an upload back

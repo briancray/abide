@@ -1,6 +1,6 @@
 // 38.101 — THE LAUNCHER'S ACCENT, TAKEN FROM THE APP'S ICON. The icon is the one thing every native
 // app already has that says what it looks like, so the launcher reads its color off it rather than
-// asking for a theme. Read once by `abide bundle`, from the icon drawn small, and carried in the
+// asking for a theme. Read once by `abide native`, from the icon drawn small, and carried in the
 // executable as a color.
 //
 // THE MOST SATURATED HUE, NOT THE AVERAGE: an icon is usually a mark on a ground, and the mean of a

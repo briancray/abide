@@ -2974,7 +2974,7 @@ no failure.
 38.9 `abide openapi` and `abide mcp` MUST derive from the same route table the served surfaces do,
 per 20.1.
 
-38.10 `abide compile` and `abide bundle` MUST produce a standalone artifact.
+38.10 `abide compile` and `abide native` MUST produce a standalone artifact.
 
 38.11 `abide lsp` MUST speak over stdio.
 
@@ -3141,10 +3141,10 @@ its output only a file it did not produce that was written before it began.
 
 ## The native app
 
-38.70 The executable `abide bundle` writes, started on macOS with no command, MUST open a window on
+38.70 The executable `abide native` writes, started on macOS with no command, MUST open a window on
 the app rather than 38.53's shell, and given a command MUST answer it as 38.50 does.
 
-38.71 The window `abide bundle`'s executable opens MUST show the launcher page where nothing is
+38.71 The window `abide native`'s executable opens MUST show the launcher page where nothing is
 remembered, offering to start the app in the process and to connect to one running at a URL.
 
 38.72 The launcher's start form MUST ask for each field the `onConfig` schema's JSON Schema
@@ -3157,17 +3157,17 @@ start or connect the same way at the next launch.
 38.74 The `disconnect` role MUST stop the app the launcher serves, forget what 38.73 remembered, and
 show the launcher page.
 
-38.75 The app `abide bundle`'s launcher serves MUST listen on loopback alone, on the port the last
+38.75 The app `abide native`'s launcher serves MUST listen on loopback alone, on the port the last
 launch served it on where that port is free.
 
 38.76 Quitting the launcher MUST stop the app it serves through `App.stop` before the process exits.
 
-38.77 `abide bundle` MUST refuse on a platform other than macOS, naming `abide compile`.
+38.77 `abide native` MUST refuse on a platform other than macOS, naming `abide compile`.
 
-38.78 `abide bundle` given no `--out` MUST write the `.app` into the directory it was run from, named
+38.78 `abide native` given no `--out` MUST write the `.app` into the directory it was run from, named
 as 38.46 names the executable.
 
-38.79 `abide bundle` MUST give the `.app` the icon the public file answered at `/icon.icns` holds,
+38.79 `abide native` MUST give the `.app` the icon the public file answered at `/icon.icns` holds,
 or one drawn at every size from the one at `/icon.png` where there is no `.icns`.
 
 38.80 The native app MUST read what the `onLauncher` `src/native/launcher.abide` calls answers as it
@@ -3242,7 +3242,7 @@ last checked holds there, as 38.39 answers a hover.
 38.100 `abide start` and `createApp` MUST build the app first where its output holds no build.
 
 38.101 The launcher's accent MUST be the most saturated hue of the app's icon (38.79), taken when
-`abide bundle` runs, and the platform's own accent where the icon gives none; `Launch` MUST carry
+`abide native` runs, and the platform's own accent where the icon gives none; `Launch` MUST carry
 the accent and the icon to `src/native/launcher.abide`.
 
 38.102 The launcher's own page MUST show the app's icon, its name and a button for each form
@@ -3381,8 +3381,8 @@ arm declares.
 38.139 A refusal that stops `abide build`, or the build 38.100 makes, MUST be printed as `abide check`
 prints it and fail the command, and MUST NOT be printed as a stack.
 
-38.140 The window `abide bundle`'s executable opens, and the menu bar extra's panel, MUST append
-`abide-native/` and the version of the app it was bundled from to the user agent of every request
+38.140 The window `abide native`'s executable opens, and the menu bar extra's panel, MUST append
+`abide-native/` and the version of the app it was built from to the user agent of every request
 each makes.
 
 38.141 `native` MUST answer the version 38.140 names in the user agent of the request being served,
@@ -3391,9 +3391,9 @@ none or no request is being served.
 
 38.142 The native app given an `update` by `onLauncher` MUST read the feed under that address as
 it launches, every hour while it runs, and when the `update` role is picked, and MUST stage only a
-version `Bun.semver.order` places after the version it was bundled from.
+version `Bun.semver.order` places after the version it was built from.
 
-38.143 The native app MUST NOT stage an update whose feed the key `abide bundle` built into it did
+38.143 The native app MUST NOT stage an update whose feed the key `abide native` built into it did
 not sign, or whose zip's digest is not the one the feed names, and MUST report one it refuses
 through `onError`.
 
@@ -3403,12 +3403,12 @@ has returned (38.76), and MUST leave itself in place where that fails.
 38.145 Picking the `update` role with an update staged, or calling `StagedUpdate.install`, MUST quit
 the native app (38.144) and open the update.
 
-38.146 `abide bundle` MUST write an `updates` directory beside the `.app`, holding the `.app` zipped
+38.146 `abide native` MUST write an `updates` directory beside the `.app`, holding the `.app` zipped
 after it is signed and a feed naming the zip, its digest, its version, whether `--required` was given
 and the text of the file `--notes` names.
 
-38.147 `abide bundle` MUST sign the feed with the key `ABIDE_UPDATE_KEY` holds, or else with one it
-made for the app on its first bundle and reads on every bundle after, and MUST print where it made
+38.147 `abide native` MUST sign the feed with the key `ABIDE_UPDATE_KEY` holds, or else with one it
+made the first time it built the app and reads every time after, and MUST print where it made
 one.
 
 38.148 `pendingUpdate` MUST hold the update the native app has staged in the page its window or the
@@ -3489,10 +3489,10 @@ them where there are any.
 38.172 Where `onLauncher` answers `menuBarExtra: true`, closing the window MUST hide it rather than
 quit the app.
 
-38.173 Activating the app `abide bundle` writes from the Dock MUST bring its window to the front
+38.173 Activating the app `abide native` writes from the Dock MUST bring its window to the front
 where it is hidden.
 
-38.174 The window `abide bundle`'s executable opens, and its menu bar extra's panel, MUST hand a
+38.174 The window `abide native`'s executable opens, and its menu bar extra's panel, MUST hand a
 navigation to a scheme other than `http`, `https`, `about`, `blob`, `data` and `file` to the system
 to open, and MUST NOT load it.
 
@@ -4227,7 +4227,7 @@ pairing changes, and where the code it was last answered with expires or pairs.
 behind the command's `--tools`, the arguments every `onPairing` answers in the asking request's
 scope, each quoted where a shell would split or expand it, and the link MUST carry none of them.
 
-44.77 A request from the window `abide bundle`'s executable opens onto the app it started, by the
+44.77 A request from the window `abide native`'s executable opens onto the app it started, by the
 credential 44.79 hands it, MUST read as paired with the native app's own bridge — this machine's
 Claude Code, run in the app's process — whatever browser and sign-in it carries, with no code spent
 and no question asked, wherever `claude` is on the `PATH` it runs with; a bridge paired by a code

@@ -1,4 +1,4 @@
-// 38.142-38.147 — A NATIVE APP UPDATING ITSELF, apart from the window: what `abide bundle`
+// 38.142-38.147 — A NATIVE APP UPDATING ITSELF, apart from the window: what `abide native`
 // publishes, served as a host would, read back by the updater an installed copy runs. A fake `.app`
 // is a directory with an `Info.plist` — what the updater moves is the directory, not what runs.
 

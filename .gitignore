@@ -22,7 +22,7 @@ blob-report
 # `bun run compile` in the docs app: the executable, named after the app (RULEBOOK 38.47).
 packages/dogfood/abide-docs
 
-# `abide bundle` in the docs app: the native app, written where it was run (RULEBOOK 38.79).
+# `abide native` in the docs app: the native app, written where it was run (RULEBOOK 38.79).
 packages/dogfood/abide-docs.app/
 packages/dogfood/updates/
 

@@ -6,7 +6,7 @@ import { SERVER_TABLE } from '#server/TABLES.ts'
 
 import abidePackage from '../../package.json' with { type: 'json' }
 
-// What the executable starts from: `abide compile`'s, and `abide bundle`'s window over it (38.70).
+// What the executable starts from: `abide compile`'s, and `abide native`'s window over it (38.70).
 const INSTALL_SOURCE_MAPS = `${ABIDE_DIRECTORY}src/server/installSourceMaps.ts`
 
 const RUNNERS = {
@@ -60,7 +60,7 @@ function abideEntries(): Map<string, string> {
  */
 export function compiledEntry(app: {
     /**
-     * 38.70 — what `abide bundle` read of the launcher's files: `launch` the path of its
+     * 38.70 — what `abide native` read of the launcher's files: `launch` the path of its
      * `launcher.abide` where that file has markup of its own; `undefined` for `abide compile`.
      */
     native:

@@ -37,7 +37,7 @@ type SourceCommands = Record<
     | 'format'
     | 'routes'
     | 'compile'
-    | 'bundle'
+    | 'native'
     | 'lsp',
     Command
 >
@@ -213,9 +213,9 @@ function commandsOf(host: Host): Row[] {
             'compile',
         ),
         fromSource(
-            'bundle [--required] [--notes <file>]',
+            'native [--required] [--notes <file>]',
             'the build, as a native app for this platform, and its update',
-            'bundle',
+            'native',
         ),
         fromSource('lsp', 'the .abide language server, over stdio', 'lsp'),
     ]
@@ -300,7 +300,7 @@ function parseFlags(argv: string[]) {
             url: { type: 'string' },
             method: { type: 'string' },
             target: { type: 'string' },
-            // 38.146 — what the update `abide bundle` writes says of itself.
+            // 38.146 — what the update `abide native` writes says of itself.
             required: { type: 'boolean' },
             notes: { type: 'string' },
             platforms: { type: 'string' },

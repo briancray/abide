@@ -1,4 +1,4 @@
-// 38.70 — THE WINDOW `abide bundle`'S EXECUTABLE OPENS, over AppKit through `bun:ffi`: a WKWebView, the
+// 38.70 — THE WINDOW `abide native`'S EXECUTABLE OPENS, over AppKit through `bun:ffi`: a WKWebView, the
 // page's menu bar and an event drain. What it shows is the `NativeSession`'s to decide.
 //
 // AppKit's events are drained on a timer rather than by `[NSApp run]`, which would never hand the

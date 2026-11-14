@@ -16,7 +16,7 @@
         "start": "abide start --port 3131",
         "dev": "abide dev",
         "typecheck": "bun check",
-        "bundle": "abide bundle"
+        "bundle": "abide native"
     },
     "dependencies": {
         "@abide/abide": "workspace:*",

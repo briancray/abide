@@ -93,7 +93,7 @@ const DISK: Host = {
                 : inApp(({ root }) => format([root], given))(given),
         routes: inApp(routes),
         compile: inApp(compile),
-        bundle: inApp(bundle),
+        native: inApp(nativeApp),
         lsp,
     },
 }
@@ -203,19 +203,19 @@ async function compile(
 }
 
 /**
- * `abide bundle`: builds the app, then a native app for this platform around its executable.
+ * `abide native`: builds the app, then a native app for this platform around its executable.
  *
  * 38.10, 38.70 — `compile`'s executable, started from `runNative`, inside a `.app` named after the
  * app where the command was run, or at `--out`.
  */
-async function bundle(
+async function nativeApp(
     { root }: AppDirectories,
     { values }: Given,
 ): Promise<number> {
     // 38.77.
     if (process.platform !== 'darwin') {
         console.error(
-            `abide bundle: a native app is built for macOS, and this is ${process.platform}. \`abide compile\` builds an executable for any platform.`,
+            `abide native: a native app is built for macOS, and this is ${process.platform}. \`abide compile\` builds an executable for any platform.`,
         )
         return 1
     }
@@ -224,7 +224,7 @@ async function bundle(
     const out = resolve(values.out ?? `${name}.app`)
     if (!out.endsWith('.app')) {
         console.error(
-            `abide bundle: --out names the .app to write, and ${out} is not one.`,
+            `abide native: --out names the .app to write, and ${out} is not one.`,
         )
         return 1
     }
@@ -234,7 +234,7 @@ async function bundle(
         const file = Bun.file(resolve(values.notes))
         if (!(await file.exists())) {
             console.error(
-                `abide bundle: --notes names ${resolve(values.notes)}, and there is no such file.`,
+                `abide native: --notes names ${resolve(values.notes)}, and there is no such file.`,
             )
             return 1
         }
@@ -262,7 +262,7 @@ async function bundle(
         }
     })
     if (entry === undefined) {
-        console.error(`abide bundle: nothing under ${root} to bundle.`)
+        console.error(`abide native: nothing under ${root} to build.`)
         return 1
     }
     await compileExecutable(
@@ -292,17 +292,17 @@ async function bundle(
         },
         key.privateKey,
     )
-    console.log(`abide bundle: ${out}`)
+    console.log(`abide native: ${out}`)
     console.log(
-        `abide bundle: ${updates} — ${feed.file} and latest.json, for the address onLauncher's update names`,
+        `abide native: ${updates} — ${feed.file} and latest.json, for the address onLauncher's update names`,
     )
     if (identity.version === undefined)
         console.warn(
-            `abide bundle: package.json names no version, so the update reads 0.0.0, and no copy of the app installs it over its own. Set one, and raise it for each update.`,
+            `abide native: package.json names no version, so the update reads 0.0.0, and no copy of the app installs it over its own. Set one, and raise it for each update.`,
         )
     if (key.made !== undefined)
         console.log(
-            `abide bundle: made the key this app's updates are signed with, at ${key.made}. Keep a copy: every copy of the app installed trusts it and no other. To bundle the app anywhere else, set ABIDE_UPDATE_KEY to what it holds.`,
+            `abide native: made the key this app's updates are signed with, at ${key.made}. Keep a copy: every copy of the app installed trusts it and no other. To build the native app anywhere else, set ABIDE_UPDATE_KEY to what it holds.`,
         )
     return 0
 }
@@ -310,7 +310,7 @@ async function bundle(
 /**
  * Builds the app and writes the entry an executable starts from; `undefined` where there is no app.
  *
- * `native` is `bundle`'s, read once the build it reads from exists.
+ * `native` is `abide native`'s, read once the build it reads from exists.
  */
 async function writtenEntry(
     root: string,
@@ -492,7 +492,7 @@ async function spawnedTool(tool: string, args: string[]): Promise<number> {
         new Response(child.stderr).text(),
     ])
     if (code !== 0)
-        console.warn(`abide bundle: ${tool} failed — ${said.trim()}`)
+        console.warn(`abide native: ${tool} failed — ${said.trim()}`)
     return code
 }
 

@@ -14,7 +14,7 @@ import { pngSize } from './pngSize.ts'
  * `undefined` where it is not a PNG.
  *
  * DECLARED AT ITS OWN SIZE, read off the PNG's header: nothing on a server draws it at another
- * (`abide bundle` has `sips`, and a Linux host does not).
+ * (`abide native` has `sips`, and a Linux host does not).
  */
 export async function appManifest(
     iconPath: string,

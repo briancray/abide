@@ -198,7 +198,7 @@ test('the executable prints usage of what it runs, and refuses a command it does
         'compile',
         'lsp',
         'scaffold',
-        'bundle',
+        'native',
     ])
         expect(usage).not.toContain(`  ${command}`)
     for (const flag of ['--root', '--target', '--platforms'])

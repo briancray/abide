@@ -1,4 +1,4 @@
-// 38.143, 38.146, 38.147 — THE FEED A NATIVE APP UPDATES FROM: `abide bundle` writes it beside the
+// 38.143, 38.146, 38.147 — THE FEED A NATIVE APP UPDATES FROM: `abide native` writes it beside the
 // `.app`, signed, and the app reads it back through the public key the bundle built into it.
 //
 // SIGNED, AND NOT ONLY HASHED: the digest rides in the feed, so a host that can rewrite the zip can
@@ -68,7 +68,7 @@ export async function publicKeyOf(privateKey: string): Promise<string> {
 
 /**
  * 38.147 — the key an app's updates are signed with: `ABIDE_UPDATE_KEY`, or the file the first
- * bundle made for the app under `keys`, which `made` names where this call made it.
+ * `abide native` made for the app under `keys`, which `made` names where this call made it.
  */
 export async function updateKey(
     appName: string,
@@ -155,7 +155,7 @@ export async function verifiedFeed(
         (answered.notes !== null && typeof answered.notes !== 'string') ||
         typeof answered.signature !== 'string'
     )
-        return 'the update feed is not one `abide bundle` writes'
+        return 'the update feed is not one `abide native` writes'
     const feed = answered as UpdateFeed
     const key = await crypto.subtle.importKey(
         'raw',
