@@ -1,5 +1,20 @@
 # @abide/abide
 
+## 0.135.0
+
+### Minor Changes
+
+- 0d00892: `provider.claudeCode.callTool(tool, input)` calls one MCP tool of the visitor's machine through the paired bridge with no model — no turn, no tokens, as long as the tool takes — and answers a `ToolAnswer`. A call is held to the grant a turn naming that tool alone would have, and runs only where the visitor's `--allowedTools` approves it; anything else is refused 403, and a bridge from before calls is refused 409 (RULEBOOK 44.93-44.98)
+- c9b22c5: `abide native` names the app by its `APP_NAME` where an `onConfig` default or the environment it runs in sets one — the bundle's name and display name, the `.app`, the menu bar, the window and `Launch.name` — and keeps the `package.json` name for the executable and the bundle identifier, so the app's remembered state and settings stay where they were (RULEBOOK 38.78, 38.87). The name is read when `abide native` runs, before any `onConfig` schema, which may require what only the start form supplies
+- ecde642: `onLauncher` takes `dock: 'window'` beside `menuBarExtra: true`: the Dock icon and the menu bar come and go with the window, and Quit in the application menu closes the window and leaves the app in the menu bar, where the menu bar extra's own Quit still stops it through `App.stop` (RULEBOOK 38.183-38.185). An `onLauncher` refusal names the clause it breaks rather than always 38.81
+- 375b2c9: a native launcher with `connect: false` whose start form asks for nothing starts the app at launch rather than showing a lone Start button (RULEBOOK 38.182), and the start a launch makes forgets a remembered value the app has since come to offer, as any start does (38.73) — so a copy that remembered a value before its app made it the default follows the default from then on
+
+### Patch Changes
+
+- 319a1ae: `abide check` refuses a property an imported or local reactive's `set` does not take in an object literal written to it by name (`question = { text, stale: 1 }`), as TypeScript does for an assignment — RULEBOOK 31.18. A whole value of the wrong type written by name is now reported as TS1360 at the value rather than TS2345.
+- Updated dependencies [0d00892]
+  - @abide/bridge@0.8.0
+
 ## 0.134.1
 
 ### Patch Changes
