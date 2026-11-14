@@ -1,5 +1,11 @@
 # @abide/abide
 
+## 0.133.1
+
+### Patch Changes
+
+- 2631bc8: the cursor is the arrow again when a live resize of the window ends — the web view only sets one when the page's cursor changes, so the edge's resize arrows outlasted the drag ([`9312d59`](https://github.com/briancray/abide/commit/9312d596e4fd4a95bfb2823cc71bed95bd6847f2))
+
 ## 0.133.0
 
 ### Minor Changes
