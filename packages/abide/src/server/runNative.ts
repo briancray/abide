@@ -232,9 +232,9 @@ async function launch(
     })
     // 38.80 — what its `onLauncher` answers.
     const options = launcherOf(inOrder(HOOKS.launcher).at(-1)?.())
-    // 38.81 — an `onLauncher` answer the checker would have refused, written where nothing checked it.
-    if (typeof options === 'string')
-        throw new Error(`abide: ${options}. RULEBOOK 38.81.`)
+    // 38.80 — an `onLauncher` answer the checker would have refused, written where nothing checked it,
+    // refused naming the clause it breaks.
+    if (typeof options === 'string') throw new Error(`abide: ${options}.`)
     const appName = executableName(origin.package.name)
     const directory = dataDirectory(origin.package.name ?? 'app')
     const session = await NativeSession.open(directory, () => bootEntered(load))

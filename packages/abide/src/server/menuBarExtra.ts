@@ -108,14 +108,15 @@ export function openMenuBarExtra(
     // Whether the app at an address answers `MENU_BAR_ADDRESS`, asked once per address.
     const answers = new Map<string, Promise<boolean>>()
 
-    // 38.169.
+    // 38.169 — CLOSED rather than ordered out, as its close button closes it (38.172), so the window's
+    // delegate hears every way it goes (38.182).
     const toggleWindow = (): void => {
         if (
             isTrue(window, 'isVisible') &&
             isTrue(window, 'isKeyWindow') &&
             isTrue(application, 'isActive')
         )
-            send(window, 'orderOut:', null)
+            send(window, 'close')
         else front()
     }
     // 38.168.

@@ -63,7 +63,10 @@ import Snippet from '#src/lib/Snippet.abide'
             <code>src/native/menubar.abide</code> in a panel under it, a page outside every
             layout, <code>panelWidth</code> by <code>panelHeight</code>. Without that file a click
             shows and hides the window. A right click lists Open, the page's menus and Quit, and
-            closing the window keeps the CRM running up there. A link in the panel with
+            closing the window keeps the CRM running up there. Add <code>dock: 'window'</code> and
+            the Dock icon and the menu bar come and go with the window, so Quit in the app menu
+            closes the window and leaves the CRM in the menu bar, where Quit in the right-click
+            menu stops it. A link in the panel with
             <code>target="_blank"</code> opens its page in the window, and an item with
             <code>role: 'window'</code> brings the window forward from any menu.</p>
 

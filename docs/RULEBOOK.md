@@ -3526,6 +3526,16 @@ registered with `process.on`.
 38.181 Where `onLauncher` turns `connect` off and the start form asks for nothing, the launcher MUST
 start the app at a launch where 38.73 does nothing, rather than show its page.
 
+38.182 Where `onLauncher` answers `dock: 'window'`, the native app MUST show a Dock icon and a menu
+bar from each time its window is brought to the front until the window is next closed, and neither
+while it stays closed.
+
+38.183 Where `onLauncher` answers `dock: 'window'`, the application menu's Quit item MUST close the
+window (38.172) rather than quit the app.
+
+38.184 `LauncherOptions` MUST NOT admit `dock: 'window'` without `menuBarExtra: true`, and the native
+app MUST refuse to launch on an `onLauncher` answer that does.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

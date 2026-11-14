@@ -281,7 +281,7 @@ test('the first bundle makes the key, and every one after it reuses it — 38.14
 // Check for Updates… too.
 test("the update role stands under the app's name only where onLauncher names a feed — 38.149", () => {
     const roles = (update: string | undefined): string => {
-        const [application] = menuBar('CRM', true, [], update)
+        const [application] = menuBar('CRM', true, [], update, false)
         if (application === undefined || application === 'separator') return ''
         return (application.items ?? [])
             .map((item) => (item === 'separator' ? '—' : (item.role ?? '')))

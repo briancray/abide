@@ -1,4 +1,4 @@
-// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165, 38.181 — the native launcher's session, options, accent
+// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165, 38.181-38.184 — the native launcher's session, options, accent
 // and own page, apart from the window: none of the four needs one to be checked.
 //
 // THE REVERT, for the accent: average every opaque pixel instead of binning by hue, and dogfood's
@@ -12,9 +12,13 @@ import { buildDirectory, servedBuild } from '#server/appBuild.ts'
 import type { App } from '#server/createApp.ts'
 import { HOOKS } from '#server/hooks.ts'
 import { iconAccent, inkOn } from '#server/iconAccent.ts'
-import { type Launcher, launcherOf } from '#server/launcherOptions.ts'
+import {
+    type Launcher,
+    launcherOf,
+    type LauncherOptions,
+} from '#server/launcherOptions.ts'
 import { type Launch, launcherPage } from '#server/launcherPage.ts'
-import { menuBarExtraMenu, opensInWindow } from '#server/menuBar.ts'
+import { menuBar, menuBarExtraMenu, opensInWindow } from '#server/menuBar.ts'
 import { NativeSession } from '#server/NativeSession.ts'
 import { LISTENING } from '#server/requestScope.ts'
 import { windowBridge } from '#server/windowBridge.ts'
@@ -95,6 +99,51 @@ test('the window options take their own values and default to a standard window 
     expect(launcherOf({ vibrancy: 'toString' })).toContain('`vibrancy`')
     expect(launcherOf({ resizable: 'no' })).toContain('`resizable`')
     expect(launcherOf({ dock: false })).toMatchObject({ dock: false })
+})
+
+// 38.182-38.184 — A DOCK THAT FOLLOWS THE WINDOW needs the menu bar extra to bring the window back,
+// and its application menu's Quit closes the window where the extra's menu still quits. THE REVERT,
+// for 38.183: `role: 'quit'` whatever `dockFollowsWindow` says; Cmd-Q stops the app it was to keep.
+test('a Dock that follows the window stays in the menu bar on Quit — 38.182, 38.183, 38.184', () => {
+    const resident: LauncherOptions = { dock: 'window', menuBarExtra: true }
+    expect(launcherOf(resident)).toMatchObject({
+        dock: 'window',
+        menuBarExtra: true,
+    })
+    // @ts-expect-error — 38.184: nothing would bring a closed window back.
+    const stranded: LauncherOptions = { dock: 'window' }
+    expect(launcherOf(stranded)).toContain("`dock: 'window'`")
+    expect(launcherOf({ dock: 'tray', menuBarExtra: true })).toContain(
+        '`dock` is not a launcher option, or "tray"',
+    )
+
+    const quitOf = (dockFollowsWindow: boolean) => {
+        const [application] = menuBar(
+            'Faster',
+            true,
+            [],
+            undefined,
+            dockFollowsWindow,
+        )
+        if (application === undefined || application === 'separator')
+            return undefined
+        return application.items?.at(-1)
+    }
+    expect(quitOf(false)).toEqual({
+        label: 'Quit Faster',
+        role: 'quit',
+        key: 'cmd+q',
+    })
+    expect(quitOf(true)).toEqual({
+        label: 'Quit Faster',
+        role: 'closeWindow',
+        key: 'cmd+q',
+    })
+    expect(menuBarExtraMenu('Faster', []).at(-1)).toEqual({
+        label: 'Quit Faster',
+        role: 'quit',
+        key: 'cmd+q',
+    })
 })
 
 test('a maximum below the minimum is refused — 38.151', () => {

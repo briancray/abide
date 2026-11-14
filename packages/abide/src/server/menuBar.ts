@@ -10,15 +10,16 @@ import type { NativeMenuItem } from '#shared/menuItem.ts'
  * 38.88 — AN ADDED MENU NAMED AS A DEFAULT ONE GROWS IT, and any other stands before Window, where
  * the platform puts an app's own. 38.83 — no Connect… where what `onLauncher` answers turns connecting off.
  * 38.149 — the `update` role under the app's name where `onLauncher` answers an `update`, labelled
- * `update`.
+ * `update`. 38.183 — where the Dock follows the window, its Quit closes the window instead.
  */
 export function menuBar(
     appName: string,
     connect: boolean,
     added: NativeMenuItem[],
     update: string | undefined,
+    dockFollowsWindow: boolean,
 ): NativeMenuItem[] {
-    const bar = defaultMenu(appName, connect, update)
+    const bar = defaultMenu(appName, connect, update, dockFollowsWindow)
     const window = bar.pop() as NativeMenuItem
     for (const menu of added) {
         const named =
@@ -74,6 +75,7 @@ function defaultMenu(
     appName: string,
     connect: boolean,
     update: string | undefined,
+    dockFollowsWindow: boolean,
 ): NativeMenuItem[] {
     return [
         {
@@ -90,7 +92,11 @@ function defaultMenu(
                 { label: 'Hide Others', role: 'hideOthers', key: 'cmd+alt+h' },
                 { label: 'Show All', role: 'showAll' },
                 'separator',
-                { label: `Quit ${appName}`, role: 'quit', key: 'cmd+q' },
+                {
+                    label: `Quit ${appName}`,
+                    role: dockFollowsWindow ? 'closeWindow' : 'quit',
+                    key: 'cmd+q',
+                },
             ],
         },
         {

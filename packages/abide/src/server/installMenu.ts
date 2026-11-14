@@ -2,7 +2,7 @@
 
 import { FFIType } from 'bun:ffi'
 
-import type { MenuRole, NativeMenuItem } from '#shared/menuItem.ts'
+import type { NativeMenuItem } from '#shared/menuItem.ts'
 
 import {
     definedClass,
@@ -16,7 +16,7 @@ import {
 
 // 38.89 — A ROLE AppKit ALREADY ANSWERS is sent down the responder chain, so `copy` copies whatever
 // holds the selection and is grayed where nothing does. The rest are the launcher's own.
-const RESPONDER_ROLES: Partial<Record<MenuRole, string>> = {
+const RESPONDER_ROLES: Partial<Record<NonNullable<Choice['role']>, string>> = {
     about: 'orderFrontStandardAboutPanel:',
     hide: 'hide:',
     hideOthers: 'hideOtherApplications:',
