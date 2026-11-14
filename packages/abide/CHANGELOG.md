@@ -1,5 +1,11 @@
 # @abide/abide
 
+## 0.133.0
+
+### Minor Changes
+
+- 43a9bd0: the menu bar extra opens the window — Open <app> leads its menu, the window role brings the window forward, and a new window onto the app opens in the window ([`0117431`](https://github.com/briancray/abide/commit/01174314904ba9fc4635312eed9504cce65bb5a8))
+
 ## 0.132.0
 
 ### Minor Changes
