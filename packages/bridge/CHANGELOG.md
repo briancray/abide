@@ -1,5 +1,26 @@
 # @abide/bridge
 
+## 0.7.0
+
+### Minor Changes
+
+- f929fa5: one headline at every level — "<app> (<site>) is requesting access to Claude Code." — with what it asks for first in the body — 44.42 ([`3b6b3f5`](https://github.com/briancray/abide/commit/3b6b3f54ae9e6cb47eedc877c662461606e89727))
+- f929fa5: the question's buttons are laid out as each desktop lays its own — Allow the default, Don't Allow on Escape ([`498200a`](https://github.com/briancray/abide/commit/498200a9d30faa9c1fc57a3b96bfb2d4621edf64))
+- f929fa5: the question names what a link asks of this machine by what it lets the site do, and every MCP tool on one line counted per server — 44.65, 44.92 ([`73be13a`](https://github.com/briancray/abide/commit/73be13ab61845b0026946cdf2cb0c409be004fd7))
+- f929fa5: every level of the question says what it requests the same way, offers Only Site Tools wherever it asks for anything of this machine, and remembers which was granted — 44.62, 44.86, 44.88 ([`7803bbe`](https://github.com/briancray/abide/commit/7803bbe849dc7450d9e11e95a9707c2cf7b9c2ae))
+- f929fa5: Allow first, Only Site Tools beside it, Don't Allow last; each button answers by what it says — 44.86 ([`b92e292`](https://github.com/briancray/abide/commit/b92e292e8e9d0245768caad361c41b94099a3728))
+- f929fa5: Allow is the question's default — blue, pressed by Return — and Escape is Don't Allow ([`cc2d66a`](https://github.com/briancray/abide/commit/cc2d66a38499b779f90daa5a42798a2b8cdb49e3))
+- 7e887bb: The bridge runs Claude Code in auto mode, and asks the page about anything auto mode would ask you: `provider.claudeCode` yields each prompt as a `permission` event, and `provider.claudeCode.permit(id, allow)` answers it. A granted tool is no longer approved just for being granted. `abide-bridge --full` (and `abide-bridge install --full`) gives a site everything your Claude Code has, and the native app's own bridge always runs that way.
+- fac557b: `abide-bridge install` run from a checkout of the bridge — `bun packages/bridge/bin/abideBridge.ts install` — makes every pairing link open with that checkout's handler and run its bridge, whatever release the link names, so an edit there is what the next link runs.
+- af74604: A site can ask a visitor's Claude Code for full access: `provider.claudeCode.bridgeCommand({ full: true })` and `provider.claudeCode.bridge({ full: true })` carry `--full` in the command and ask for it in the link, and `ABIDE_BRIDGE_FULL` does the same for `pairing()`. Opening such a link names no tool: it says the site is requesting full access, and offers Allow, Only Site Tools or Don't Allow. Allow is now kept for the site and the person its code was minted for, with no separate Always Allow, and an ask for full access is kept as it was answered; `abide-bridge forget` undoes it. The question is a macOS alert with a bold headline, and no longer names the bridge release, which the handler's log keeps.
+- 8d12435: A native app built with `abide bundle` now pairs its window with Claude Code on the same machine. Nothing needs to be installed, no link needs clicking and no code is spent (RULEBOOK 44.77). `provider.claudeCode` runs turns there, inside the app's process, and pages see an ordinary paired `BridgeStatus`. The window's turns get every tool the site asks for, both built-in tools and MCP tools whose server is in the visitor's Claude Code user scope. `missing` lists only MCP tools whose server it doesn't find (RULEBOOK 44.78). Only the window counts as local. It proves this with a cookie minted at each launch, never by its user agent (RULEBOOK 44.79).
+  
+  The native app runs with the `PATH` the visitor's login shell sets, so it finds `claude` even when opened from the Finder (RULEBOOK 44.80). The window and the menu bar extra's panel now hand links of other schemes, such as `abide-bridge:` and `mailto:`, to macOS instead of failing them (RULEBOOK 38.174).
+  
+  `@abide/abide` now depends on `@abide/bridge`. The bridge's turn handling is now one module, `@abide/bridge/serveTurns`, shared by `abide-bridge` and the native app.
+- 9d74469: The question a pairing link asks is each desktop's own, by the asking app: on macOS a native `NSAlert` the bridge shows itself, in front, with the site's `/icon.png` as its icon; on Windows a dialog with a bold headline, the icon and labelled buttons in place of Yes/No/Cancel; on Linux zenity or kdialog titled by the app, with its icon. The headline names the app beside its site — `CRM (crm.example)` — which `/__abide/bridge`'s holder answer now carries as `name`.
+- 6531d98: An app can say why it asks to pair: `provider.claudeCode.bridgeCommand({ note })` and `provider.claudeCode.bridge({ note })`, or `ABIDE_BRIDGE_NOTE` for `pairing()`, keep a note with the pairing's code, and the question a pairing link asks shows it under its headline as the app's own words — `From CRM: …`, one line of at most 200 characters. The rest of the question stays the bridge's.
+
 ## 0.6.2
 
 ### Patch Changes

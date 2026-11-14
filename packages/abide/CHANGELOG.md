@@ -1,5 +1,54 @@
 # @abide/abide
 
+## 0.131.0
+
+### Minor Changes
+
+- f929fa5: a page per primitive, grouped; Claude Code at the top, rendering live examples in its answers; the docs as a native app ([`7c75644`](https://github.com/briancray/abide/commit/7c75644c947277540139dbcdf039d15732d0d6c0))
+- f929fa5: a bundled app updates itself from a signed feed — 38.142-38.149 ([`807b9ad`](https://github.com/briancray/abide/commit/807b9ade085e62a595645b74ab284319a2c56b52))
+- 8d12435: `native()` answers the version of the native app whose window a request came from, and `undefined` in a browser, on the CLI and outside a request. The window, and the menu bar extra's panel, append `abide-native/<version>` to the user agent of every request they make, so a server render and its hydration read the same answer (RULEBOOK 38.140, 38.141). It decides what a page shows and never who may do what: any client can send that user agent.
+- 7e887bb: The bridge runs Claude Code in auto mode, and asks the page about anything auto mode would ask you: `provider.claudeCode` yields each prompt as a `permission` event, and `provider.claudeCode.permit(id, allow)` answers it. A granted tool is no longer approved just for being granted. `abide-bridge --full` (and `abide-bridge install --full`) gives a site everything your Claude Code has, and the native app's own bridge always runs that way.
+- af74604: A site can ask a visitor's Claude Code for full access: `provider.claudeCode.bridgeCommand({ full: true })` and `provider.claudeCode.bridge({ full: true })` carry `--full` in the command and ask for it in the link, and `ABIDE_BRIDGE_FULL` does the same for `pairing()`. Opening such a link names no tool: it says the site is requesting full access, and offers Allow, Only Site Tools or Don't Allow. Allow is now kept for the site and the person its code was minted for, with no separate Always Allow, and an ask for full access is kept as it was answered; `abide-bridge forget` undoes it. The question is a macOS alert with a bold headline, and no longer names the bridge release, which the handler's log keeps.
+- 8d12435: A native app built with `abide bundle` now pairs its window with Claude Code on the same machine. Nothing needs to be installed, no link needs clicking and no code is spent (RULEBOOK 44.77). `provider.claudeCode` runs turns there, inside the app's process, and pages see an ordinary paired `BridgeStatus`. The window's turns get every tool the site asks for, both built-in tools and MCP tools whose server is in the visitor's Claude Code user scope. `missing` lists only MCP tools whose server it doesn't find (RULEBOOK 44.78). Only the window counts as local. It proves this with a cookie minted at each launch, never by its user agent (RULEBOOK 44.79).
+  
+  The native app runs with the `PATH` the visitor's login shell sets, so it finds `claude` even when opened from the Finder (RULEBOOK 44.80). The window and the menu bar extra's panel now hand links of other schemes, such as `abide-bridge:` and `mailto:`, to macOS instead of failing them (RULEBOOK 38.174).
+  
+  `@abide/abide` now depends on `@abide/bridge`. The bridge's turn handling is now one module, `@abide/bridge/serveTurns`, shared by `abide-bridge` and the native app.
+- 9d74469: The question a pairing link asks is each desktop's own, by the asking app: on macOS a native `NSAlert` the bridge shows itself, in front, with the site's `/icon.png` as its icon; on Windows a dialog with a bold headline, the icon and labelled buttons in place of Yes/No/Cancel; on Linux zenity or kdialog titled by the app, with its icon. The headline names the app beside its site — `CRM (crm.example)` — which `/__abide/bridge`'s holder answer now carries as `name`.
+- 94592fa: The native launcher moves from `src/launcher.abide` to `src/native/launcher.abide`. The root's `native` directory is now a fence (RULEBOOK 23.33). A `native` directory deeper in the app is still an ordinary route directory. A root `launcher.abide` that still calls `onLauncher` fails the build and names where it goes (RULEBOOK 38.107).
+  
+  `onLauncher` takes new options for the native app's window:
+  
+  - `maxWidth` and `maxHeight` cap the window's size (RULEBOOK 38.150, 38.151).
+  - `titlebar: 'hidden' | 'inset'` draws the page under the window's controls, which stay where macOS puts them. The page reads `--abide-titlebar-height` and `--abide-titlebar-inset` to keep clear of them, and is dragged by any element marked `data-abide-titlebar` (RULEBOOK 38.152, 38.153, 38.155).
+  - `vibrancy` draws a macOS material behind the page (RULEBOOK 38.154).
+  - `appearance`, `resizable`, `fullScreen`, `alwaysOnTop`, `shadow`, `rememberFrame`, `inspector` and `dock` each set one thing about the window (RULEBOOK 38.157-38.163, 38.165).
+  
+  The window now takes its background from the page's own background, and opens on the last one at the next launch, so it no longer flashes a default color (RULEBOOK 38.156).
+  
+  `menuBarExtra: true` puts the app in the macOS menu bar, drawn from `/icon-menubar.png` as a template image, else from `/icon.png` (RULEBOOK 38.166). A click opens `src/native/menubar.abide` in a panel under the icon, `panelWidth` by `panelHeight`. That page is answered at `/__abide/menubar`, outside every layout (RULEBOOK 38.167, 38.168, 38.171). Without that page, or with no app running, a click shows and hides the window (RULEBOOK 38.169). A right click lists the page's `onMenu` menus and Quit (RULEBOOK 38.170). Closing the window keeps the app running in the menu bar (RULEBOOK 38.172).
+- 6531d98: An app can say why it asks to pair: `provider.claudeCode.bridgeCommand({ note })` and `provider.claudeCode.bridge({ note })`, or `ABIDE_BRIDGE_NOTE` for `pairing()`, keep a note with the pairing's code, and the question a pairing link asks shows it under its headline as the app's own words — `From CRM: …`, one line of at most 200 characters. The rest of the question stays the bridge's.
+
+### Patch Changes
+
+- f929fa5: the menu bar extra's panel hears of a staged update as the window does — 38.148 ([`7a4ef4d`](https://github.com/briancray/abide/commit/7a4ef4de33b9ddb26b8b4a42b82be7fc38c188fe))
+- f929fa5: @abide/abide pins @abide/bridge at its exact version, and the pairing command reads it from the installed bridge ([`b8ac5ea`](https://github.com/briancray/abide/commit/b8ac5ea67278fc432149b19b34ede6f27273d493))
+- 0747b5b: `MenuItem` admits a `MenuEntry`, as REGISTRY writes it, so an item `menuItem` makes can stand in a typed menu list.
+- 9a804d6: A `Toolbox` a provider narrows before handing it to `provider.claudeCode` is the turn's toolbox: Claude Code is listed and answered its tools alone, rather than the request failing.
+- Updated dependencies [f929fa5]
+- Updated dependencies [f929fa5]
+- Updated dependencies [f929fa5]
+- Updated dependencies [f929fa5]
+- Updated dependencies [f929fa5]
+- Updated dependencies [f929fa5]
+- Updated dependencies [7e887bb]
+- Updated dependencies [fac557b]
+- Updated dependencies [af74604]
+- Updated dependencies [8d12435]
+- Updated dependencies [9d74469]
+- Updated dependencies [6531d98]
+  - @abide/bridge@0.7.0
+
 ## 0.130.1
 
 ### Patch Changes
