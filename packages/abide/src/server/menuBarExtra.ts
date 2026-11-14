@@ -45,7 +45,8 @@ const RESIGNED_MILLISECONDS = 300
  * Puts the item in the menu bar and answers what the window drives it with: the menu its secondary
  * click opens, and the panel to close where the window navigates away from the app it shows.
  *
- * `shown` is the address of the app the window shows, `undefined` while it shows the launcher.
+ * `shown` is the address of the app the window shows, `undefined` while it shows the launcher, and
+ * `front` brings the window forward.
  */
 export function openMenuBarExtra(
     appName: string,
@@ -56,6 +57,7 @@ export function openMenuBarExtra(
     uiDelegate: Id,
     shown: () => string | undefined,
     connectUpdates: (view: Id) => void,
+    front: () => void,
 ): { setMenu(menu: Id): void; closePanel(): void } {
     const application = send(objcClass('NSApplication'), 'sharedApplication')
     const item = sendTyped(
@@ -105,16 +107,6 @@ export function openMenuBarExtra(
     // Whether the app at an address answers `MENU_BAR_ADDRESS`, asked once per address.
     const hasPage = new Map<string, Promise<boolean>>()
 
-    const showWindow = (): void => {
-        sendTyped(
-            application,
-            'activateIgnoringOtherApps:',
-            [FFIType.bool],
-            FFIType.void,
-            true,
-        )
-        send(window, 'makeKeyAndOrderFront:', null)
-    }
     // 38.169.
     const toggleWindow = (): void => {
         if (
@@ -123,7 +115,7 @@ export function openMenuBarExtra(
             isTrue(application, 'isActive')
         )
             send(window, 'orderOut:', null)
-        else showWindow()
+        else front()
     }
     // 38.168.
     const togglePanel = (address: string): void => {

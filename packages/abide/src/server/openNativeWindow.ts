@@ -26,7 +26,7 @@ import {
 import { reportUnexpected } from './hooks.ts'
 import { installMenu } from './installMenu.ts'
 import { type Launcher, VIBRANCY_MATERIALS } from './launcherOptions.ts'
-import { menuBar } from './menuBar.ts'
+import { menuBar, menuBarExtraMenu, opensInWindow } from './menuBar.ts'
 import { type MenuBarIcon, openMenuBarExtra } from './menuBarExtra.ts'
 import type { NativeSession } from './NativeSession.ts'
 import type { NativeUpdater } from './NativeUpdater.ts'
@@ -512,6 +512,17 @@ export function openNativeWindow(
             nsString('abideUpdate'),
         )
     }
+    // Shows the window where it is hidden, in front of every other app's.
+    const front = (): void => {
+        sendTyped(
+            application,
+            'activateIgnoringOtherApps:',
+            [FFIType.bool],
+            FFIType.void,
+            true,
+        )
+        send(window, 'makeKeyAndOrderFront:', null)
+    }
     // 38.166.
     const extra = options.menuBarExtra
         ? openMenuBarExtra(
@@ -523,6 +534,7 @@ export function openNativeWindow(
               uiDelegate,
               () => session.shown,
               connectUpdates,
+              front,
           )
         : undefined
     let shownMenu: NativeMenuItem[] = []
@@ -532,13 +544,7 @@ export function openNativeWindow(
             menuBar(appName, options.connect, told, updateLabel()),
             choose,
             // 38.170.
-            extra === undefined
-                ? undefined
-                : [
-                      ...told,
-                      ...(told.length === 0 ? [] : (['separator'] as const)),
-                      { label: `Quit ${appName}`, role: 'quit', key: 'cmd+q' },
-                  ],
+            extra === undefined ? undefined : menuBarExtraMenu(appName, told),
         )
         extra?.setMenu(built)
     }
@@ -549,6 +555,7 @@ export function openNativeWindow(
         if (item.role === 'disconnect')
             return void session.forget().then(() => navigate(base))
         if (item.role === 'reload') return void send(view, 'reload')
+        if (item.role === 'window') return front()
         // 38.90, 38.91 — the page that numbered the item does what it means.
         if (item.id !== undefined)
             send(
@@ -672,15 +679,15 @@ export function openNativeWindow(
         )
     }
     showMenu([])
+    // 38.176 — a new window asked for onto the app the window shows is the window, brought forward.
+    showInWindow = (address) => {
+        if (!opensInWindow(address, session.shown)) return false
+        navigate(address)
+        front()
+        return true
+    }
 
-    send(window, 'makeKeyAndOrderFront:', null)
-    sendTyped(
-        application,
-        'activateIgnoringOtherApps:',
-        [FFIType.bool],
-        FFIType.void,
-        true,
-    )
+    front()
     send(application, 'finishLaunching')
 
     const distantPast = send(objcClass('NSDate'), 'distantPast')
@@ -718,6 +725,9 @@ export function openNativeWindow(
 // The window's and the panel's web views take one of these as their UI delegate and their
 // navigation delegate alike.
 let uiDelegate: Id = null
+// What the window does with an address a page asks to open in a new window: shows it, and answers
+// `true`, where it is the app the window shows. 38.176.
+let showInWindow: (address: string) => boolean = () => false
 function uiDelegateClass(): Id {
     uiDelegate ??= definedClass('AbideUIDelegate', {
         // 38.174 — WebKit fails a navigation to a scheme it has no loader for, where a browser hands it
@@ -747,7 +757,10 @@ function uiDelegateClass(): Id {
                 returns: FFIType.ptr,
                 run: (_view: Id, _configuration: Id, action: Id) => {
                     const url = send(send(action, 'request'), 'URL')
-                    if (url !== null)
+                    if (
+                        url !== null &&
+                        !showInWindow(stringOf(send(url, 'absoluteString')))
+                    )
                         send(
                             send(objcClass('NSWorkspace'), 'sharedWorkspace'),
                             'openURL:',

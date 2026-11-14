@@ -782,7 +782,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
 | `src/native/` | The native app's own pages, which are no routes of the app's. | 23.15, 23.33 |
 | `src/native/launcher.abide` | The native launcher: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
-| `src/native/menubar.abide` | The page the menu bar extra's panel shows. | 38.167, 38.168, 38.169, 38.171 |
+| `src/native/menubar.abide` | The page the menu bar extra's panel shows. | 38.167, 38.168, 38.169, 38.171, 38.176 |
 | `src/public/icon-menubar.png` | The file answered at `/icon-menubar.png`, and the menu bar extra's icon. | 36.11, 38.166 |
 | `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
 | `**/error.abide` | The page a refusal renders in. | 35.2, 35.3, 35.14, 35.18 |
@@ -821,7 +821,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `StagedUpdate.install` | `() => void` | Restarts the native app into the update. | 38.144, 38.145 |
 | `onMenu` | `(read: () => readonly MenuItem[]) => () => void` | The menus a layout or a page adds to the native app's menu bar while it stands. | 38.88, 38.92, 38.170 |
 | `MenuItem` | `'separator' \| MenuEntry \| { label: string; key?: string; role?: MenuRole; href?: string; items?: MenuItem[] }` | One entry in the menu bar or in a menu under it. | 38.89, 38.90 |
-| `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front' \| 'update'` | What the platform performs for a menu item. | 38.74, 38.89, 38.145, 38.149 |
+| `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front' \| 'window' \| 'update'` | What the platform performs for a menu item. | 38.74, 38.89, 38.145, 38.149, 38.170, 38.177 |
 | `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item the page that files it answers. | 38.91 |
 | `MenuEntry` | `class MenuEntry { label: string; key: string \| undefined; href: string \| undefined }` | What `menuItem` makes. | 38.91 |
 | `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.91 |
@@ -972,7 +972,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.13, 38.25, 38.110, 38.123 |
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.69 |
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136 |
-| `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 44.77, 44.80 |
+| `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |

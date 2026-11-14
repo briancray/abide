@@ -3481,9 +3481,9 @@ and MUST close the panel where it is open.
 38.169 A primary click on the menu bar extra, where the window shows no app or one that does not
 answer 38.167's page, MUST bring the window to the front, and MUST hide it where it is in front.
 
-38.170 A secondary click on the menu bar extra MUST open a menu of the menus the page the window
-shows filed with `onMenu`, outermost first, then an item that quits the app, a separator between
-them where there are any.
+38.170 A secondary click on the menu bar extra MUST open a menu of an item of the `window` role named
+for the app, then the menus the page the window shows filed with `onMenu`, outermost first, then an
+item that quits the app, a separator between them where there are any.
 
 38.171 The menu bar extra's panel MUST close when it stops being the key window.
 
@@ -3500,6 +3500,12 @@ to open, and MUST NOT load it.
 38.175 An app the launcher of `abide native`'s executable starts that declares no
 `ABIDE_PRINCIPAL_SECRET` MUST seal and verify the principal cookie with a secret the launcher minted
 once and keeps under `APP_DATA_DIR` beside what 38.73 remembers, and that 38.74 does not forget.
+
+38.176 A page in the window `abide native`'s executable opens, or in its menu bar extra's panel, asking
+for a new window onto an address under the app the window shows MUST have that address shown in the
+window, bring the window to the front and close the panel, rather than hand it to the system.
+
+38.177 Picking the `window` role MUST bring the window to the front, showing it where it is hidden.
 
 # 39. Head and view transitions
 

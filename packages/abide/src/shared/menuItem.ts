@@ -23,6 +23,7 @@ export type MenuRole =
     | 'minimize'
     | 'zoom'
     | 'front'
+    | 'window'
     | 'update'
 
 /** One entry in the native app's menu bar, or in a menu under it. */

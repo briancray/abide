@@ -14,6 +14,7 @@ import { HOOKS } from '#server/hooks.ts'
 import { iconAccent, inkOn } from '#server/iconAccent.ts'
 import { type Launcher, launcherOf } from '#server/launcherOptions.ts'
 import { type Launch, launcherPage } from '#server/launcherPage.ts'
+import { menuBarExtraMenu, opensInWindow } from '#server/menuBar.ts'
 import { NativeSession } from '#server/NativeSession.ts'
 import { LISTENING } from '#server/requestScope.ts'
 import { windowBridge } from '#server/windowBridge.ts'
@@ -249,6 +250,37 @@ test('the Connect… menu item opens the connect dialog — 38.102', () => {
     // A start with nothing to ask has no dialog, so there is nothing to open.
     expect(launcherPage({ ...PAGE, focus: 'start' })).not.toContain(
         "open('start-dialog')",
+    )
+})
+
+// 38.170, 38.177 — THE MENU BAR EXTRA'S MENU OPENS THE WINDOW FIRST, whatever the page filed, since
+// a primary click on an extra with a panel never reaches it. THE REVERT: drop the `window` item from
+// `menuBarExtraMenu`; the menu leads with the page's own and nothing in it shows the window.
+test('the menu bar extra’s menu opens the window, then the page’s menus, then Quit — 38.170, 38.177', () => {
+    expect(menuBarExtraMenu('Faster', [])).toEqual([
+        { label: 'Open Faster', role: 'window' },
+        'separator',
+        { label: 'Quit Faster', role: 'quit', key: 'cmd+q' },
+    ])
+    expect(menuBarExtraMenu('Faster', [{ label: 'Refresh', id: 0 }])).toEqual([
+        { label: 'Open Faster', role: 'window' },
+        'separator',
+        { label: 'Refresh', id: 0 },
+        'separator',
+        { label: 'Quit Faster', role: 'quit', key: 'cmd+q' },
+    ])
+})
+
+// 38.176 — A NEW WINDOW ONTO THE APP IS THE WINDOW; anything else, or anything while the launcher
+// shows, is the system's to open. THE REVERT: answer `shown !== undefined`; another site's page
+// opens in the window.
+test('a new window onto the app the window shows opens in the window — 38.176', () => {
+    const shown = 'http://127.0.0.1:4100/crm/'
+    expect(opensInWindow('http://127.0.0.1:4100/crm/deals/7', shown)).toBe(true)
+    expect(opensInWindow('http://127.0.0.1:4100/other/', shown)).toBe(false)
+    expect(opensInWindow('https://example.com/', shown)).toBe(false)
+    expect(opensInWindow('http://127.0.0.1:4100/crm/deals/7', undefined)).toBe(
+        false,
     )
 })
 

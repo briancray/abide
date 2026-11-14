@@ -41,6 +41,35 @@ export function menuBar(
     return bar
 }
 
+/**
+ * The menu the menu bar extra's secondary click opens: the item that brings the window forward,
+ * `added` — the menus the page filed — and Quit. 38.170.
+ */
+export function menuBarExtraMenu(
+    appName: string,
+    added: NativeMenuItem[],
+): NativeMenuItem[] {
+    const menu: NativeMenuItem[] = [
+        { label: `Open ${appName}`, role: 'window' },
+        'separator',
+    ]
+    for (const item of added) menu.push(item)
+    if (added.length !== 0) menu.push('separator')
+    menu.push({ label: `Quit ${appName}`, role: 'quit', key: 'cmd+q' })
+    return menu
+}
+
+/**
+ * Whether a page asking for a new window onto `address` is asking for the app the window shows at
+ * `shown` — `undefined` while it shows the launcher. 38.176.
+ */
+export function opensInWindow(
+    address: string,
+    shown: string | undefined,
+): boolean {
+    return shown !== undefined && address.startsWith(shown)
+}
+
 function defaultMenu(
     appName: string,
     connect: boolean,
