@@ -16,6 +16,8 @@ const FIRST_BUTTON = 1000
 const ACCESSORY = 1
 // NSApplicationActivationPolicyProhibited: no app at all, once the question is answered.
 const PROHIBITED = 2
+// How long the run loop turns once the alert is answered: enough for the window server to take it away.
+const SETTLE_SECONDS = 0.1
 // The icon of an app with none of its own, in place of the folder a bare executable is drawn as.
 const GENERIC_ICON =
     '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns'
@@ -152,6 +154,19 @@ export function macAlert(
         // This process runs on, minding the bridge, and pumps no events from here: as an app in front
         // it would read as not responding, so it closes the alert and is no app at all.
         send(send(alert, 'window'), 'orderOut:', null)
+        // A window is taken off the screen only when the run loop next turns, and nothing turns it
+        // from here: one short turn, so the alert leaves rather than staying drawn and unanswered.
+        send(
+            send(classNamed('NSRunLoop'), 'currentRunLoop'),
+            'runUntilDate:',
+            sendTyped(
+                classNamed('NSDate'),
+                'dateWithTimeIntervalSinceNow:',
+                [FFIType.f64],
+                FFIType.ptr,
+                SETTLE_SECONDS,
+            ) as Id,
+        )
         sendTyped(
             application,
             'setActivationPolicy:',
