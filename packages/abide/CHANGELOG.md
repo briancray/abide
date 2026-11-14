@@ -1,5 +1,17 @@
 # @abide/abide
 
+## 0.132.0
+
+### Minor Changes
+
+- 68ae50f: `abide bundle` is now `abide native`, the name the rest of the native app already goes by — `src/native/`, `native()`, the docs' native page. there is no `bundle` alias: a script running `abide bundle` now runs `abide native`.
+
+### Patch Changes
+
+- 7f82a5a: a start keeps only what was changed, the launcher seals a sign-in with its own secret, and the native bridge runs onPairing's arguments ([`3f67aa1`](https://github.com/briancray/abide/commit/3f67aa16c3f230a5fa321f5880d9720842cc3648))
+- Updated dependencies [7f82a5a]
+  - @abide/bridge@0.7.3
+
 ## 0.131.2
 
 ### Patch Changes
