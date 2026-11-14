@@ -227,25 +227,11 @@ test('a call of a tool the visitor did not give is refused 403 — 44.94', async
         ),
     ).toBe(403)
     expect(
-        await refused(
-            'unserved',
-            ['--tools', 'mcp__mail'],
-            'mcp__mail__send',
-        ),
+        await refused('unserved', ['--tools', 'mcp__mail'], 'mcp__mail__send'),
     ).toBe(403)
+    expect(await refused('built-in', ['--tools', 'Bash'], 'Bash')).toBe(403)
     expect(
-        await refused(
-            'built-in',
-            ['--tools', 'Bash'],
-            'Bash',
-        ),
-    ).toBe(403)
-    expect(
-        await refused(
-            'whole',
-            ['--tools', 'mcp__calendar'],
-            'mcp__calendar',
-        ),
+        await refused('whole', ['--tools', 'mcp__calendar'], 'mcp__calendar'),
     ).toBe(403)
     expect(await readdir(`${directory}/started`)).toEqual([])
 }, 60_000)
