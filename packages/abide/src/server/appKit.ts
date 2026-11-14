@@ -267,7 +267,8 @@ const GLOBAL_BLOCK = (
  * A block for AppKit to call once, later, with arguments of the types `args` names.
  *
  * Global, so AppKit's copy of it is the block itself and nothing it captures is copied; its memory
- * and its function are let go in the turn after it is called, once AppKit has released it.
+ * and its function are let go at the main thread's next yield to bun (`appKitLoop`), once AppKit
+ * has released it — not on a timer, which that thread runs only when something wakes it.
  */
 export function blockOnce(
     args: FFIType[],
@@ -277,10 +278,10 @@ export function blockOnce(
     const implementation = new JSCallback(
         (_block: Id, ...values: never[]) => {
             run(...values)
-            setTimeout(() => {
+            setImmediate(() => {
                 implementation.close()
                 SYSTEM.symbols.free(memory as never)
-            }, 0)
+            })
         },
         { args: [FFIType.ptr, ...args], returns: FFIType.void },
     )

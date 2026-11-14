@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 const SLEEPER = `${import.meta.dir}/fixtures/appKitLoop/sleeper.ts`
+const SOURCE = `${import.meta.dir}/../src/`
 const ON_MAC = process.platform === 'darwin'
 // A second to settle, a second idle, and the late wake three after: longer than a test's default.
 const TIMEOUT_MILLISECONDS = 15000
@@ -38,3 +39,49 @@ test.skipIf(!ON_MAC)(
     },
     TIMEOUT_MILLISECONDS,
 )
+
+// What waits on bun's own loop — a timer, the network, the disk, a child, a signal handler — waits on
+// the main thread until something else wakes it, which in an idle window is never. `setImmediate`
+// is not among them: the thread yields to bun after every turn of AppKit's wait.
+const WAITS_ON_BUN =
+    /\b(?:setTimeout|setInterval|fetch)\(|\bBun\.(?:file|write|spawn|spawnSync|sleep|serve|\$)\b|process\.on\(\s*'SIG|from 'node:/
+
+// THE WINDOW'S MODULES ARE FOUND BY WHAT THEY IMPORT, from the two the main thread starts in, so a
+// module added under them is read without anyone listing it. A type import loads nothing.
+// `windowBridge` is exempt by what it IS: its function is handed to the page as source, and runs
+// in WebKit rather than here.
+// THE REVERT: `blockOnce` freeing its block in a `setTimeout`, as it did, is named here.
+test("nothing on the native window's main thread waits on bun's own loop", async () => {
+    const PAGE_SIDE = 'server/windowBridge.ts'
+    const read = new Map<string, string>()
+    const pending = ['server/openNativeWindow.ts', 'server/appKitLoop.ts']
+    while (pending.length > 0) {
+        const path = pending.pop() as string
+        if (read.has(path)) continue
+        const text = await Bun.file(`${SOURCE}${path}`).text()
+        read.set(path, text)
+        for (const [, type, specifier] of text.matchAll(
+            /^import (type )?[^;]*?from '((?:\.\/|#server\/|#shared\/)[^']+)'/gm,
+        )) {
+            if (type !== undefined || specifier === undefined) continue
+            pending.push(
+                specifier.startsWith('#')
+                    ? specifier.slice(1)
+                    : `server/${specifier.slice(2)}`,
+            )
+        }
+    }
+    expect(read.get('server/openNativeWindow.ts')).toContain(
+        'windowBridge.toString()',
+    )
+    const waiting: string[] = []
+    for (const [path, text] of read) {
+        if (path === PAGE_SIDE) continue
+        const lines = text.split('\n')
+        for (let at = 0; at < lines.length; at += 1)
+            if (WAITS_ON_BUN.test(lines[at] as string))
+                waiting.push(`${path}:${at + 1}`)
+    }
+    expect(read.size).toBeGreaterThan(5)
+    expect(waiting).toEqual([])
+})
