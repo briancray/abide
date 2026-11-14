@@ -166,8 +166,6 @@ test('a call answers what the tool answered, with no Claude Code run — 44.93, 
         config,
         '--tools',
         'mcp__calendar__meetings',
-        '--allowedTools',
-        'mcp__calendar__meetings',
     ])
     const answered = await meetingsAnswer(
         await call('called', 'mcp__calendar__meetings', { day: 'monday' }),
@@ -191,14 +189,13 @@ test('a call with nothing paired is refused 409 — 44.93', async () => {
     await answer.text()
 })
 
-// 44.94 — A CALL IS BOUNDED BY THE GRANT A TURN NAMING ITS TOOL ALONE WOULD HAVE, AND THEN BY THE
-// VISITOR'S OWN APPROVAL. Granted but not approved, approved but not granted, approved and then
-// disallowed, a tool of a server the visitor has none of, a built-in tool granted and approved, and a
-// name that is a whole server: each refused 403, and no server is ever started.
+// 44.94 — A CALL IS BOUNDED BY THE GRANT A TURN NAMING ITS TOOL ALONE WOULD HAVE, AND BY THE
+// VISITOR'S `--disallowedTools`. Approved by `--allowedTools` but not granted, granted and then
+// disallowed, a tool of a server the visitor has none of, a built-in tool granted, and a name that is
+// a whole server: each refused 403, and no server is ever started.
 //
-// THE REVERTS: drop the `--allowedTools` check from `callGrant`, and the first answers 200; call
-// `grantFor` as if the bridge ran full, and the second answers 200.
-test('a call of a tool the visitor did not give or approve is refused 403 — 44.94', async () => {
+// THE REVERT: call `grantFor` as if the bridge ran full, and the first answers 200.
+test('a call of a tool the visitor did not give is refused 403 — 44.94', async () => {
     const { directory, config } = await visitorServers()
     const refused = async (
         caller: string,
@@ -212,13 +209,6 @@ test('a call of a tool the visitor did not give or approve is refused 403 — 44
     }
     expect(
         await refused(
-            'unapproved',
-            ['--tools', 'mcp__calendar__meetings'],
-            'mcp__calendar__meetings',
-        ),
-    ).toBe(403)
-    expect(
-        await refused(
             'ungranted',
             ['--allowedTools', 'mcp__calendar__meetings'],
             'mcp__calendar__meetings',
@@ -230,8 +220,6 @@ test('a call of a tool the visitor did not give or approve is refused 403 — 44
             [
                 '--tools',
                 'mcp__calendar',
-                '--allowedTools',
-                'mcp__calendar',
                 '--disallowedTools',
                 'mcp__calendar__meetings',
             ],
@@ -241,37 +229,38 @@ test('a call of a tool the visitor did not give or approve is refused 403 — 44
     expect(
         await refused(
             'unserved',
-            ['--tools', 'mcp__mail', '--allowedTools', 'mcp__mail'],
+            ['--tools', 'mcp__mail'],
             'mcp__mail__send',
         ),
     ).toBe(403)
     expect(
         await refused(
             'built-in',
-            ['--tools', 'Bash', '--allowedTools', 'Bash'],
+            ['--tools', 'Bash'],
             'Bash',
         ),
     ).toBe(403)
     expect(
         await refused(
             'whole',
-            ['--tools', 'mcp__calendar', '--allowedTools', 'mcp__calendar'],
+            ['--tools', 'mcp__calendar'],
             'mcp__calendar',
         ),
     ).toBe(403)
     expect(await readdir(`${directory}/started`)).toEqual([])
 }, 60_000)
 
-// 44.94 — a server's every tool, granted and approved by `mcp__<server>` and `mcp__<server>__*`.
-test('a call of a tool whose server the visitor gave and approved is made — 44.94', async () => {
+// 44.94 — THE GRANT ALONE MAKES A CALL: a server's every tool, given by `mcp__<server>`, with no
+// `--allowedTools`, since a turn's prompt is the site's to answer (44.83) and a call asks nothing
+// past the grant. THE REVERT: refuse a call whose tool `--allowedTools` does not name, and this
+// answers 403 where 200 is due.
+test('a call of a tool whose server the visitor gave is made — 44.94', async () => {
     const { config } = await visitorServers()
     await pairBridge('server', [
         '--mcp-config',
         config,
         '--tools',
         'mcp__calendar',
-        '--allowedTools',
-        'mcp__calendar__*',
     ])
     expect(
         (
@@ -291,8 +280,6 @@ test('a bridge makes each call as it is sent — 44.97', async () => {
         '--mcp-config',
         config,
         '--tools',
-        'mcp__calendar__meetings',
-        '--allowedTools',
         'mcp__calendar__meetings',
     ])
     const both = await Promise.all([
@@ -315,8 +302,6 @@ test('a caller hanging up ends the call — 44.98', async () => {
         '--mcp-config',
         config,
         '--tools',
-        'mcp__calendar__meetings',
-        '--allowedTools',
         'mcp__calendar__meetings',
     ])
     const hangUp = new AbortController()
@@ -414,8 +399,6 @@ test('a call reaches an http server with its own headers alone — 44.95', async
             '--mcp-config',
             config,
             '--tools',
-            'mcp__board,mcp__locked',
-            '--allowedTools',
             'mcp__board,mcp__locked',
         ])
         const answer = await call('http', 'mcp__board__cards', { lane: 2 })

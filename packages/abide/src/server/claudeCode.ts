@@ -11,9 +11,8 @@
 // page answers through `permit` (44.81, 44.83).
 //
 // 44.93 — ONE TOOL OF THE VISITOR'S MACHINE CAN BE CALLED WITH NO MODEL, through `callTool`: the bridge
-// speaks MCP to the server itself, under the grant a turn naming that tool alone would have — and
-// since no model or auto mode stands between the site and the tool, only where the visitor approved
-// it without asking (44.94).
+// speaks MCP to the server itself, under the grant a turn naming that tool alone would have, and
+// asks nothing past it (44.94).
 
 export type { BridgeStatus } from '#shared/BridgeStatus.ts'
 

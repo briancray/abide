@@ -236,8 +236,8 @@ function namesTool(
 /**
  * How a call of `tool` reaches this machine for a visitor who passed `claudeArgs` — the server it is
  * of, that server's configuration and the tool's name on it — or why it is refused: it is not an MCP
- * tool, a turn whose `tools` named it alone would not be given it (44.29), the visitor's
- * `--allowedTools` does not approve it, or their `--disallowedTools` names it. 44.94.
+ * tool, a turn whose `tools` named it alone would not be given it (44.29), or the visitor's
+ * `--disallowedTools` names it. 44.94.
  *
  * Throws where an `--mcp-config` they named cannot be read.
  */
@@ -269,17 +269,13 @@ export async function callGrant(
         return { refused: withheldNotices(grant).join(' ') }
     // 44.82 — a full bridge's options as the visitor gave them.
     const given = full ? [...claudeArgs] : args
-    const allowed = takeFlag(given, ['--allowedTools', '--allowed-tools'])
     const denied = takeFlag(given, ['--disallowedTools', '--disallowed-tools'])
     if (namesTool(denied, tool, server))
         return {
             refused: `The site called ${tool}, which this bridge’s --disallowedTools names.`,
         }
-    // A turn asks what auto mode would not approve; a call has no model to judge it, so it asks nothing.
-    if (!namesTool(allowed, tool, server))
-        return {
-            refused: `The site called ${tool} directly, which this bridge does only for a tool you approved. Add \`-- --allowedTools ${tool}\` to allow it.`,
-        }
+    // 44.94 — the grant is the visitor's consent, and nothing past it asks: a turn's prompt is the
+    // site's to answer (44.83), and a call is already the site's own choice of tool and input.
     return {
         server,
         configuration: grant.servers[server],

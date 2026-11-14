@@ -4347,8 +4347,8 @@ MUST answer what the tool answered as a `Toolbox` call answers it (44.35), refus
 is paired.
 
 44.94 A bridge MUST make a call only of an MCP tool 44.29 makes available to a turn whose `tools`
-names that tool alone, and only where the visitor's `--allowedTools` names the tool, `mcp__<server>`
-or `mcp__<server>__*` and their `--disallowedTools` names none of them, and
+names that tool alone, and only where the visitor's `--disallowedTools` names none of the tool,
+`mcp__<server>` or `mcp__<server>__*`, MUST NOT ask anything past that grant, and
 `provider.claudeCode.callTool` MUST refuse 403 any other call, with what the bridge said of it.
 
 44.95 A bridge MUST make a call on the server 44.58 finds for its tool, started for that call alone —
