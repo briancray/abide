@@ -474,6 +474,17 @@ export function openNativeWindow(
                     returns: FFIType.void,
                     run: fullScreenChanged(false),
                 },
+                // The web view sets the cursor only when the page's cursor changes, so the edge's
+                // resize arrows outlast a resize until the pointer crosses an element that has one.
+                'windowDidEndLiveResize:': {
+                    types: 'v@:@',
+                    args: [FFIType.ptr],
+                    returns: FFIType.void,
+                    run: () => {
+                        send(send(objcClass('NSCursor'), 'arrowCursor'), 'set')
+                        send(window, 'invalidateCursorRectsForView:', view)
+                    },
+                },
             }),
             'new',
         ),
