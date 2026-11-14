@@ -338,6 +338,23 @@ function fill() {
 <button onclick={bump}>bump</button>
 <button onclick={fill}>fill</button>`
 
+// 31.18 — A WHOLE-NAME WRITE IS HELD AS AN ASSIGNMENT IS: an object literal written to a name read
+// by name — imported or declared here, in the setup or a listener, plain or logical — is refused a
+// property its `set` does not take, where the property is written. The explicit `set` with it.
+const EXCESS = `<script>
+import { reactive } from '@abide/abide'
+import { question } from '#src/lib/question.ts'
+
+let draft = reactive<{ text: string } | undefined>(undefined)
+question = { text: 'a', stale: 1 }
+question = { text: 'kept' }
+draft = { text: 'b', stale: 2 }
+draft ??= { text: 'c', stale: 3 }
+question.set({ text: 'd', stale: 4 })
+</script>
+
+<button onclick={() => { question = { text: 'e', stale: 5 } }}>ask</button>`
+
 // 27.13 — what `onConfig`'s defaults return is what `config()` hands back, in the file that files
 // them and in one that only reads. `middleware` is declared beside `onConfig` and declares nothing.
 const CONFIGURED = `<script server>
@@ -374,6 +391,9 @@ beforeAll(async () => {
         'queried/index.abide': QUERIED,
         'member-written/index.abide': MEMBER_WRITTEN,
         'destructured/index.abide': DESTRUCTURED,
+        'excess/index.abide': EXCESS,
+        'lib/question.ts':
+            "import { reactive } from '@abide/abide'\n\nexport const question = reactive<{ text: string }>({ text: '' })\n",
         'public/fonts/face.woff2': 'a face',
         'configured/index.abide': CONFIGURED,
         'configured/elsewhere/index.abide': `<script server>
@@ -489,8 +509,8 @@ test('an error in a script, a slot or a write lands on its own line — 38.3', (
             .map(({ line, column }) => ({ line, column }))
     expect(at(2322)).toEqual([place(BROKEN, 'label: string')])
     expect(at(2339)).toEqual([place(BROKEN, 'toUpperCase')])
-    // The value of a write, where it was written — not the start of the write.
-    expect(at(2345)).toEqual([place(BROKEN, "'many'")])
+    // The value of a write, where it was written — not the start of the write, nor the end (31.18).
+    expect(at(1360)).toEqual([place(BROKEN, "'many'")])
 })
 
 // A PIECE IS PLACED WHERE IT WAS SLICED, not where its text is next found. THE REVERT: place each
@@ -589,7 +609,26 @@ test('a name a pattern binds to a Reactive is read and written by name — 31.17
         })),
     ).toEqual([
         { ...place(DESTRUCTURED, 'wrong'), code: 2322 },
-        { ...place(DESTRUCTURED, "'nope'"), code: 2345 },
+        { ...place(DESTRUCTURED, "'nope'"), code: 1360 },
+    ])
+})
+
+// 31.18 — THE REVERT, run: drop the `satisfies` from `checkedWriteParts` and hold the value by
+// `__written`'s constraint again, as before; a literal inferred into a type parameter is never
+// checked for excess properties, and 1 finding lands where 5 are due — the explicit `set` alone.
+test('a write by name is refused a property its set does not take — 31.18', () => {
+    expect(
+        inFile('excess/index.abide').map(({ line, column, code }) => ({
+            line,
+            column,
+            code,
+        })),
+    ).toEqual([
+        { ...place(EXCESS, 'stale: 1'), code: 2353 },
+        { ...place(EXCESS, 'stale: 2'), code: 2353 },
+        { ...place(EXCESS, 'stale: 3'), code: 2353 },
+        { ...place(EXCESS, 'stale: 4'), code: 2353 },
+        { ...place(EXCESS, 'stale: 5'), code: 2353 },
     ])
 })
 

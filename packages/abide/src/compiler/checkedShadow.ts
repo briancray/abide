@@ -154,7 +154,7 @@ export function checkedShadow(
                 : `ReturnType<typeof ${name}>`
         }\n`
     text += `declare const ${CHECKED_VALUES}: {\n${values}}\n`
-    text += `declare function ${CHECKED_WRITE}<Cell extends { (): unknown; set(value: never): unknown }, Value extends Parameters<Cell['set']>[0]>(cell: Cell, value: Value): Value extends ReturnType<Cell> ? Value : ReturnType<Cell>\n`
+    text += `declare function ${CHECKED_WRITE}<Cell extends { (): unknown; set(value: never): unknown }, Value>(cell: Cell, value: Value): Value extends ReturnType<Cell> ? Value : ReturnType<Cell>\n`
     text += configDeclarations(lowering)
     return {
         ...pointAtCheckedModules(text, origins, scriptsEnd),

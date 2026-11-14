@@ -2270,6 +2270,10 @@ or an update, at any depth and through a computed key — to the type of the mem
 renamed, defaulted or nested, under `const`, `let` or `var` — MUST be read and written as a name a
 declaration binds to it is, per 31.1 to 31.7, save a name a `props` pattern binds (33.4).
 
+31.18 `abide check` MUST hold a write to such a name — an assignment, a compound assignment or a
+logical assignment — to the type its `Reactive`'s `set` takes, an object literal written as the
+value refused a property that type does not declare, on the `.abide` line.
+
 # 32. Templating
 
 32.1 `{expr}` MUST render reactive text, escaped.

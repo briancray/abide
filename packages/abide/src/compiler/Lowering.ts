@@ -649,16 +649,22 @@ export class Lowering {
                         current.operator,
                         current.discarded,
                     )
+                const value = current.value as Span
                 copy(current.from)
                 pin(current.from)
                 out += open
                 out += this.lower(
-                    current.value as Span,
+                    value,
                     false,
                     origins,
                     base + out.length,
                 ).trim()
-                pin(current.to)
+                // 31.18 — what closes it holds the value to what `set` takes, so a value refused
+                // whole is refused where it was written.
+                pin(
+                    value.start +
+                        leadingSpace(source.slice(value.start, value.end)),
+                )
                 out += close
                 at = current.to
                 continue
@@ -912,23 +918,32 @@ export class Lowering {
      * `if (x === null) { x = 3; x.toFixed() }` reads `x` as still `null`. Assigned, it narrows as
      * JavaScript's own `x = 3` does — and the value still goes through `CHECKED_WRITE`, held to
      * what `set` takes.
+     *
+     * 31.18 — THE VALUE IS HELD BY `satisfies`, NOT BY `CHECKED_WRITE`'s CONSTRAINT: a literal
+     * inferred into a type parameter is held to its constraint without TypeScript's excess
+     * property check. `satisfies` holds the literal fresh against what `set` takes, and leaves its
+     * type for the assignment to narrow by.
      */
     private checkedWriteParts(read: Read): [string, string] | undefined {
         const spelled = this.projection.text.slice(read.start, read.end)
         const record = this.recordOf(spelled, read)
         if (record === undefined) return undefined
         const held = `${record}.${spelled}`
-        const written = `${CHECKED_WRITE}(${this.nameOf(read)}, `
+        const written = `${CHECKED_WRITE}(${this.nameOf(read)}, (`
+        const cell = read.through
+            ? `ReturnType<typeof ${spelled}>`
+            : `typeof ${spelled}`
+        const takes = `) satisfies Parameters<${cell}['set']>[0])`
         const op = read.operator
         // A WRITE THAT IS A WHOLE STATEMENT MUST NOT OPEN ON `(`: after a line with no semicolon,
         // JavaScript reads it as a call on that line — `await f()` then `x = 1` checked as
         // `f()(...)`. `void` cannot continue a line, and unlike a leading `;` it stays one
         // statement under a braceless `if`.
         const open = read.discarded ? 'void (' : '('
-        if (op === '') return [`${open}${held} = ${written}`, '))']
+        if (op === '') return [`${open}${held} = ${written}`, `${takes})`]
         if (SHORT_CIRCUIT.has(op))
-            return [`${open}${held} ${op}= ${written}`, '))']
-        return [`${open}${held} = ${written}${held} ${op} (`, ')))']
+            return [`${open}${held} ${op}= ${written}`, `${takes})`]
+        return [`${open}${held} = ${written}${held} ${op} (`, `)${takes})`]
     }
 
     /** A read of the value: `name()`, or `__values.name` where the checker is asked. */
@@ -1070,7 +1085,8 @@ export const CHECKED_CONFIG = '__config'
 export const CHECKED_CONFIG_OF = '__configOf'
 
 /**
- * The checked lowering's write guard: holds a written value to what `set` takes.
+ * The checked lowering's write: the cell written, and the value already held to what its `set`
+ * takes (`checkedWriteParts`).
  *
  * Hands the value back as its own type — or the value's, where `set` takes what a read never hands
  * back — for the assignment to narrow by.
