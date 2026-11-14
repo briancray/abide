@@ -265,6 +265,30 @@ console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(
     })
 })
 
+// 38.181 — THE EXECUTABLE TRUSTS THIS MACHINE'S AUTHORITIES, as the browser does, however it was
+// started: a host an organization's authority signed is reached with no `NODE_EXTRA_CA_CERTS`. The
+// flag is read as well as the roots, since a machine whose own roots are all bun's cannot tell the
+// two apart. THE REVERT: drop `execArgv` from `compileExecutable`; `execArgv` reads `[]`, and on a
+// machine with a root of its own, `default` lacks it.
+test("the executable trusts this machine's authorities as well as bun's — 38.181", async () => {
+    await Bun.write(
+        `${where}/authorities.ts`,
+        `import { getCACertificates } from 'node:tls'
+const trusted = getCACertificates('default')
+console.log(JSON.stringify({ execArgv: process.execArgv, system: getCACertificates('system').every((root) => trusted.includes(root)) }))
+`,
+    )
+    const { NODE_EXTRA_CA_CERTS, NODE_USE_SYSTEM_CA, ...finder } = process.env
+    const ran = await spawned([`${where}/ledger`, 'run', 'authorities.ts'], {
+        cwd: where,
+        env: finder,
+    })
+    expect(JSON.parse(ran.stdout.trim())).toEqual({
+        execArgv: ['--use-system-ca'],
+        system: true,
+    })
+})
+
 // 38.93 — BYTECODE KEEPS THE SOURCE LINE: the executable carries its code compiled, and an error
 // thrown in a handler still names the handler file it was written in, at its line. THE REVERT:
 // `sourcemap: 'none'` in `compileExecutable`, and the frame reads `/$bunfs/root/ledger:10603`.

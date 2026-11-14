@@ -367,6 +367,9 @@ async function compileExecutable(
             // wherever it is started must not change what it runs. `.env` is still read, as
             // `abide start` reads it — configuration is the environment's (27.8).
             autoloadBunfig: false,
+            // 38.181 — bun's fetch trusts only its own roots unless started with this, and an app
+            // opened from the Finder has no `NODE_EXTRA_CA_CERTS` to stand in for it.
+            execArgv: ['--use-system-ca'],
         },
     })
     if (!compiled.success)

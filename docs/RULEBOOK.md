@@ -3521,6 +3521,9 @@ the window MUST NOT wake while nothing reaches it.
 executable is sent MUST stop it through `App.stop` (38.76) and MUST NOT reach a handler the app
 registered with `process.on`.
 
+38.181 The executable `abide compile` or `abide native` writes MUST reach a host over a certificate
+that either bun's own authorities or the authorities its machine trusts sign, however it was started.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
