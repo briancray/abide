@@ -43,7 +43,8 @@ import Snippet from '#src/lib/Snippet.abide'
             while the window is resized or a menu is open. Quitting stops it through
             <code>App.stop</code>, so put shutdown work in <code>onStop</code>: a
             <code>process.on('SIGTERM')</code> in the app never runs. <code>process.exit</code>
-            ends the whole app, with its code.</p>
+            ends the whole app, with its code. There, <code>Bun.isMainThread</code> and
+            <code>import.meta.main</code> are <code>false</code>.</p>
 
         <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['const printReport', 'onMenu(', 'watch(']} />
 
