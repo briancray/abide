@@ -169,7 +169,7 @@ import Section from '#src/lib/Section.abide'
             <code>onPairing</code> answers the Claude Code options for the request asking, so it can
             read <code>principal</code>, and they follow the <code>--</code> of the command and of
             the install command, quoted for a shell. The link carries none, and a request names
-            none.</p>
+            none. In the native app, its own Claude Code runs every turn with them.</p>
 
         <Code code={`onPairing(() => ['--mcp-config', \`/configs/\${principal.resolved().id}.json\`])`} />
 

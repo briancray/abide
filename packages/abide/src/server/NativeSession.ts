@@ -9,16 +9,20 @@ import { reportUnexpected } from './hooks.ts'
 import type { Launcher } from './launcherOptions.ts'
 import type { Launch } from './launcherPage.ts'
 import { LOOPBACK } from './LOOPBACK.ts'
+import { randomToken } from './randomToken.ts'
 import { LISTENING } from './requestScope.ts'
 
 /** What the launcher did last, and what its forms held, kept across launches. 38.73. */
 type Remembered = {
     last: { start: Record<string, string> } | { connect: string } | null
+    /** The start form's values the person changed from what it offered — 38.73 keeps no other. */
     values: Record<string, string>
     url: string
     port: number
     /** 38.156 — the page's background as sRGB bytes, `null` before a page has reported one. */
     background: [number, number, number] | null
+    /** 38.175 — what seals the principal cookie where the app declares no secret, minted once. */
+    principalSecret: string
 }
 
 type Failure = NonNullable<Launch['failure']>
@@ -63,6 +67,7 @@ export class NativeSession {
             url: '',
             port: 0,
             background: null,
+            principalSecret: randomToken(32, 'hex'),
             ...(await Bun.file(`${directory}/native.json`)
                 .json()
                 .catch(() => ({}))),
@@ -83,10 +88,18 @@ export class NativeSession {
     }
 
     // 38.72 — the form's values are the environment the app is booted under, so 27.8 coerces them
-    // and 27.7's schema refuses them as it would any other.
-    async start(values: Record<string, string>): Promise<Failure | undefined> {
+    // and 27.7's schema refuses them as it would any other. 38.73 — THE NEXT LAUNCH KEEPS ONLY WHAT
+    // DIFFERS FROM `offered`, what the form held before anyone typed: the rest follow what the app
+    // offers then, so a default a release changed reaches a copy started before it.
+    async start(
+        values: Record<string, string>,
+        offered: Record<string, string> = {},
+    ): Promise<Failure | undefined> {
         await this.disconnect()
-        this.remembered.values = values
+        const kept: Record<string, string> = {}
+        for (const [name, value] of Object.entries(values))
+            if (value !== offered[name]) kept[name] = value
+        this.remembered.values = kept
         for (const [name, value] of Object.entries(values))
             if (value === '') delete process.env[name]
             else process.env[name] = value
@@ -109,7 +122,7 @@ export class NativeSession {
         }
         const server = LISTENING.server as Bun.Server<unknown>
         this.remembered.port = server.port ?? 0
-        this.remembered.last = { start: values }
+        this.remembered.last = { start: kept }
         this.current = {
             url: `${server.url.origin}${configuredMount()}/`,
             app,

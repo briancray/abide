@@ -48,7 +48,8 @@ import Section from '#src/lib/Section.abide'
             keeps a development secret in its <code>.env</code>, so set your own wherever the app is
             deployed. A comma-separated list rotates a secret in: the first signs, and every one
             verifies. Under <code>bun test</code> an app that sets no secret is given one, so a test
-            signs in from a fresh clone.</p>
+            signs in from a fresh clone, and so is an app the native app starts, kept with its
+            data so a sign-in outlives a relaunch.</p>
 
         <table>
             <thead><tr><th>Read</th><th>What it is</th></tr></thead>

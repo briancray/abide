@@ -337,6 +337,79 @@ test('a session switches between the app it started and one it connected to — 
     }
 })
 
+// 38.73 — A VALUE NOBODY CHANGED IS NOT REMEMBERED, so the next launch takes what the app offers
+// then: a default a release moved reaches a copy started before it. THE REVERT: remember `values`
+// rather than `kept` in `NativeSession.start`; the relaunch boots with NATIVE_TEST_REGION pinned to
+// `eu`, the default the release moved away from.
+test('a start remembers only the values changed from what its form offered — 38.73', async () => {
+    const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`
+    const stopped: string[] = []
+    const seen: (string | undefined)[] = []
+    const boot = async () => {
+        seen.push(process.env.NATIVE_TEST_REGION)
+        return fakeApp(stopped, 'app')
+    }
+    try {
+        const session = await NativeSession.open(directory, boot)
+        await session.start(
+            { NATIVE_TEST_NAME: 'ledger', NATIVE_TEST_REGION: 'eu' },
+            { NATIVE_TEST_NAME: '', NATIVE_TEST_REGION: 'eu' },
+        )
+        expect(seen).toEqual(['eu'])
+        expect(session.remembered.last).toEqual({
+            start: { NATIVE_TEST_NAME: 'ledger' },
+        })
+        expect(session.remembered.values).toEqual({
+            NATIVE_TEST_NAME: 'ledger',
+        })
+        await session.disconnect()
+
+        // The next launch is a fresh process: nothing the last one started under is in its env.
+        delete process.env.NATIVE_TEST_NAME
+        delete process.env.NATIVE_TEST_REGION
+        const relaunched = await NativeSession.open(directory, boot)
+        await relaunched.resume(BOTH)
+        expect(seen).toEqual(['eu', undefined])
+        expect(relaunched.remembered.last).toEqual({
+            start: { NATIVE_TEST_NAME: 'ledger' },
+        })
+        await relaunched.disconnect()
+    } finally {
+        delete process.env.NATIVE_TEST_NAME
+        delete process.env.NATIVE_TEST_REGION
+        LISTENING.server = undefined
+        await rm(directory, { recursive: true, force: true })
+    }
+})
+
+// 38.175 — THE LAUNCHER'S OWN PRINCIPAL SECRET is minted once and kept beside what it remembers, so a
+// sign-in sealed under it still opens after a relaunch, and a disconnect does not forget it. THE
+// REVERT: mint it in `open` without reading `native.json` over it; the relaunch reads another.
+test('the launcher mints a principal secret once and keeps it across launches — 38.175', async () => {
+    const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`
+    try {
+        const session = await NativeSession.open(directory, async () =>
+            fakeApp([], 'app'),
+        )
+        const secret = session.remembered.principalSecret
+        expect(secret).toMatch(/^[0-9a-f]{64}$/)
+        await session.start({})
+        await session.forget()
+        const relaunched = await NativeSession.open(directory, async () =>
+            fakeApp([], 'app'),
+        )
+        expect(relaunched.remembered.principalSecret).toBe(secret)
+        const elsewhere = await NativeSession.open(
+            `${directory}-other`,
+            async () => fakeApp([], 'app'),
+        )
+        expect(elsewhere.remembered.principalSecret).not.toBe(secret)
+    } finally {
+        LISTENING.server = undefined
+        await rm(directory, { recursive: true, force: true })
+    }
+})
+
 // 38.72 — A START THE APP REFUSES IS THE START FORM'S: nothing is shown, and the refusal names it.
 test('a start whose boot throws is refused on the start form — 38.72', async () => {
     const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`

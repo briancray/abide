@@ -159,7 +159,7 @@ export async function bridge(options: {
     const core = serveTurns({
         site,
         claude: options.claude ?? 'claude',
-        claudeArgs: options.claudeArgs ?? [],
+        claudeArgs: () => options.claudeArgs ?? [],
         full,
         report,
         say: sayOnce,

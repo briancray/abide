@@ -8,7 +8,7 @@
 import { ICON_ADDRESSES, MENU_BAR_ICON_ADDRESS } from '#shared/NATIVE_FILES.ts'
 
 import { NATIVE_COOKIE, serveLocally } from './bridgeRelay.ts'
-import { dataDirectory, derived as appDerived } from './config.ts'
+import { addDerived, dataDirectory, derived as appDerived } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type AppOrigin, bootEntered, enterApp } from './createApp.ts'
 import { executableName } from './executableName.ts'
@@ -101,6 +101,11 @@ async function launch(
     const appName = executableName(origin.package.name)
     const directory = dataDirectory(origin.package.name ?? 'app')
     const session = await NativeSession.open(directory, () => bootEntered(load))
+    // 38.175 — a sign-in seals where the app declares no secret, and still opens after a relaunch:
+    // derived, so the app's `onConfig` default and the env both still win (27.2).
+    addDerived({
+        ABIDE_PRINCIPAL_SECRET: session.remembered.principalSecret,
+    })
     const token = randomToken(16, 'hex')
     // 44.77, 44.79 — THE WINDOW'S CREDENTIAL, held in a cookie the launcher sets on every page it
     // answers: a cookie is the host's and not the port's, so the app on loopback reads it too, and
@@ -108,6 +113,8 @@ async function launch(
     const secret = randomToken(16, 'hex')
     void serveLocally(secret)
     const credential = `${NATIVE_COOKIE}=${secret}; Path=/; HttpOnly; SameSite=Strict`
+    // 38.73 — the environment as launched: a start writes its values into `process.env`.
+    const launched = { ...process.env }
     // 27.3 — the same derived layer `resolve` starts from, under what was given.
     const derived = (): Record<string, string | undefined> => ({
         ...appDerived(),
@@ -139,13 +146,20 @@ async function launch(
         if (options.start && request.method === 'POST' && action === 'start') {
             const form = await request.formData()
             const values: Record<string, string> = {}
-            // THE LAST VALUE OF A NAME: a checkbox follows the hidden `false` it stands in for
-            // when unchecked, so `get` — the first — would read every checked box as `false`.
-            for (const field of configFields(derived()))
+            // 38.73 — what the form offers with nothing remembered: the next launch keeps the rest.
+            const offered: Record<string, string> = {}
+            for (const field of configFields({
+                ...appDerived(),
+                ...launched,
+            })) {
+                // THE LAST VALUE OF A NAME: a checkbox follows the hidden `false` it stands in for
+                // when unchecked, so `get` — the first — would read every checked box as `false`.
                 values[field.name] = String(
                     form.getAll(field.name).at(-1) ?? '',
                 )
-            const started = await session.start(values)
+                offered[field.name] = field.value
+            }
+            const started = await session.start(values, offered)
             return started === undefined ? onwards() : page('start')
         }
         if (

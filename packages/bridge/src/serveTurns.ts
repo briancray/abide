@@ -117,6 +117,8 @@ function permissionServer(method: string, params: unknown): unknown {
 /**
  * Serves the turns `site` sends, reporting each through `report`.
  *
+ * `claudeArgs` answers what each turn runs `claude` with after the protocol's own flags — the visitor's,
+ * or for the native app's own bridge, the app's `onPairing` arguments in the turn's request (44.78).
  * `full` gives a turn everything `claude` has, as the visitor running the native app has (44.78,
  * 44.82); otherwise the visitor's `--tools` in `claudeArgs` narrows what a turn asks for (44.29).
  * `beforeTurn` runs ahead of each turn.
@@ -124,7 +126,7 @@ function permissionServer(method: string, params: unknown): unknown {
 export function serveTurns(options: {
     site: string
     claude: string
-    claudeArgs: string[]
+    claudeArgs: (turn: TurnRequest) => readonly string[]
     full: boolean
     report: (report: TurnReport) => void
     say: (line: string) => void
@@ -259,7 +261,7 @@ export function serveTurns(options: {
         try {
             await claudeTurn(turn, {
                 claude: options.claude,
-                claudeArgs: options.claudeArgs,
+                claudeArgs: [...options.claudeArgs(turn)],
                 full: options.full,
                 mcpUrl: `http://127.0.0.1:${shim.port}/${secret}/${turn.id}`,
                 signal: controller.signal,

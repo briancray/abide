@@ -1409,10 +1409,12 @@ console.log(JSON.stringify({ status: answer.status, text: await answer.text() })
 
 // 44.77, 44.78, 44.79 — THE NATIVE APP'S OWN BRIDGE: a request carrying the window's credential is
 // paired with no code spent and no bridge running, its turn is given everything `claude` has (44.82),
-// and its status lacks only an MCP tool whose server the user scope does not hold; the same request
-// without the credential, or with another, is not paired at all. THE REVERTS: read `local` as `false`
-// in `fromNativeWindow`, and the window's status is unpaired and its turn refused 409; pass `full:
-// false` to the local core, and `--tools` reads empty.
+// and its status lacks only an MCP tool whose server neither the user scope nor the `--mcp-config`
+// its `onPairing` names holds; the same request without the credential, or with another, is not
+// paired at all. THE REVERTS: read `local` as `false` in `fromNativeWindow`, and the window's status
+// is unpaired and its turn refused 409; pass `full: false` to the local core, and `--tools` reads
+// empty; pass `claudeArgs: () => []` to the local core, and the turn runs without the `--mcp-config`
+// (44.78); answer `outside` from `missingFor` without `unsourced`, and `mcp__radar__search` reads missing.
 test('the native app’s window is paired with this machine’s Claude Code — 44.77, 44.78, 44.79', async () => {
     const configured = await scratch({
         '.claude.json': {
@@ -1420,7 +1422,12 @@ test('the native app’s window is paired with this machine’s Claude Code — 
                 calendar: { type: 'http', url: 'http://calendar.test' },
             },
         },
+        // An MCP server the app's own `onPairing` hands Claude Code, outside the user scope.
+        'radar.json': {
+            mcpServers: { radar: { type: 'http', url: 'http://radar.test' } },
+        },
     })
+    const RADAR = `${configured}/radar.json`
     const shim = `${configured}/bin/claude`
     await Bun.write(shim, `#!/bin/sh\nexec bun ${FAKE_CLAUDE} "$@"\n`)
     await spawned(['chmod', '+x', shim])
@@ -1429,9 +1436,11 @@ test('the native app’s window is paired with this machine’s Claude Code — 
         `import { servedBuild } from '${SERVER}/appBuild.ts'
 import { serveLocally } from '${SERVER}/bridgeRelay.ts'
 import { bootApp } from '${SERVER}/createApp.ts'
+import { onPairing } from '${SERVER}/hooks.ts'
 
 const served = await servedBuild('${app}', '${app}/.abide', undefined)
 const app = await bootApp(served.origin, served.load)
+onPairing(() => ['--mcp-config', '${RADAR}'])
 await serveLocally('window-secret')
 const page = (credential: string) => ({ cookie: 'who=ada; abide-caller=desk' + credential })
 const status = async (credential: string) => {
@@ -1442,7 +1451,7 @@ const ask = async (credential: string) => {
     const answer = await app.fetch(new Request('http://app.test/ask', {
         method: 'POST',
         headers: { ...page(credential), 'content-type': 'application/json', accept: 'application/jsonl' },
-        body: JSON.stringify({ via: 'code', config: { tools: ['WebSearch', 'mcp__calendar__meetings', 'mcp__nowhere__x'] }, messages: [{ role: 'user', content: 'who am I?' }] }),
+        body: JSON.stringify({ via: 'code', config: { tools: ['WebSearch', 'mcp__calendar__meetings', 'mcp__radar__search', 'mcp__nowhere__x'] }, messages: [{ role: 'user', content: 'who am I?' }] }),
     }))
     return { status: answer.status, text: await answer.text() }
 }
@@ -1468,7 +1477,7 @@ process.exit(0)
             PATH: `${configured}/bin:${environment.PATH}`,
             CLAUDE_CONFIG_DIR: configured,
             ABIDE_BRIDGE_TOOLS:
-                'WebSearch,mcp__calendar__meetings,mcp__nowhere__x',
+                'WebSearch,mcp__calendar__meetings,mcp__radar__search,mcp__nowhere__x',
         },
     })
     expect(printed.window).toMatchObject({
@@ -1485,6 +1494,9 @@ process.exit(0)
     }
     expect(record.args).not.toContain('--tools')
     expect(record.args).not.toContain('--strict-mcp-config')
+    expect(record.args.indexOf(RADAR)).toBe(
+        record.args.indexOf('--mcp-config') + 1,
+    )
     expect(Object.keys(record.config.mcpServers).sort()).toEqual([
         'abide_bridge',
         'app',

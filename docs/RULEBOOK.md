@@ -3151,8 +3151,9 @@ remembered, offering to start the app in the process and to connect to one runni
 declares, or each field `onConfig`'s defaults return where the schema has none, and MUST boot the
 app with its values as the environment, showing a refusal by field.
 
-38.73 The launcher MUST remember a start's values or a connect's URL under `APP_DATA_DIR`, and MUST
-start or connect the same way at the next launch.
+38.73 The launcher MUST remember a connect's URL, or of a start's values each that differs from the
+value its form offered, under `APP_DATA_DIR`, and MUST start or connect the same way at the next
+launch, with each value it did not remember as the app then offers it.
 
 38.74 The `disconnect` role MUST stop the app the launcher serves, forget what 38.73 remembered, and
 show the launcher page.
@@ -3495,6 +3496,10 @@ where it is hidden.
 38.174 The window `abide native`'s executable opens, and its menu bar extra's panel, MUST hand a
 navigation to a scheme other than `http`, `https`, `about`, `blob`, `data` and `file` to the system
 to open, and MUST NOT load it.
+
+38.175 An app the launcher of `abide native`'s executable starts that declares no
+`ABIDE_PRINCIPAL_SECRET` MUST seal and verify the principal cookie with a secret the launcher minted
+once and keeps under `APP_DATA_DIR` beside what 38.73 remembers, and that 38.74 does not forget.
 
 # 39. Head and view transitions
 
@@ -4233,9 +4238,10 @@ Claude Code, run in the app's process — whatever browser and sign-in it carrie
 and no question asked, wherever `claude` is on the `PATH` it runs with; a bridge paired by a code
 MUST run the turn where both are.
 
-44.78 The native app's own bridge MUST run every turn as 44.82 runs a bridge `--full`, and a
-`BridgeStatus` it pairs MUST carry as `missing` each tool its `tools` names of an MCP server 44.58 does
-not find in the user scope.
+44.78 The native app's own bridge MUST run every turn as 44.82 runs a bridge `--full`, with the
+arguments every `onPairing` answers in the turn's request's scope as the visitor's options after
+`--`, and a `BridgeStatus` it pairs MUST carry as `missing` each tool its `tools` names of an MCP
+server 44.58 finds neither in the user scope nor in an `--mcp-config` those arguments name.
 
 44.79 The native app MUST hand its window a credential minted at each launch, in a cookie `HttpOnly`
 and `SameSite=Strict`, and MUST NOT read a request as from its window by anything else — its user

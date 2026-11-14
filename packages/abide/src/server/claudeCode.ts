@@ -31,6 +31,7 @@ import { blocksOf, forwardOf, type Provider } from './assistant.ts'
 import {
     fromNativeWindow,
     mintCode,
+    pairingArgs,
     pairingNow,
     pairingStatus,
     permit as permitPrompt,
@@ -40,7 +41,6 @@ import {
 import { callerOf } from './callerOf.ts'
 import { config, ownOrigin, settingOn } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
-import { HOOKS, inOrder } from './hooks.ts'
 import { followedOwn, mountedOwn } from './mountHandlers.ts'
 import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
@@ -184,13 +184,6 @@ function commandFor(
     }
 }
 
-/** Every `onPairing`'s arguments, in 37.7's order, asked in the request's scope. 44.76. */
-function pairingArgs(): string[] {
-    const args: string[] = []
-    for (const answer of inOrder(HOOKS.pairing)) args.push(...answer())
-    return args
-}
-
 /** ` -- ` and `words`, each quoted where a shell would split or expand it, or nothing for none. */
 function afterDashes(words: readonly string[]): string {
     if (words.length === 0) return ''
@@ -254,7 +247,7 @@ export const claudeCode: typeof claudeCodeProvider & {
 // 44.75, 18.36 — NOT A STREAM: a page follows it over the mux it already holds, and is sent a refresh
 // whenever the pairing changes or its code expires, so no http connection is held while it watches.
 const pairingHandler = declare('GET')(
-    (_none: undefined): BridgeStatus => {
+    (_none: undefined): BridgeStatus | Promise<BridgeStatus> => {
         const configured = config.peek()?.ABIDE_BRIDGE_TOOLS
         const tools =
             typeof configured === 'string' && configured !== ''
@@ -268,14 +261,16 @@ const pairingHandler = declare('GET')(
             typeof noted === 'string' && noted !== '' ? noted : undefined,
             fromNativeWindow(),
         )
-        return {
+        const command = commandFor(code, {
+            ...(tools.length === 0 ? {} : { tools }),
+            full: settingOn('ABIDE_BRIDGE_FULL'),
+        })
+        const status = (found: string[]): BridgeStatus => ({
             paired,
-            missing,
-            ...commandFor(code, {
-                ...(tools.length === 0 ? {} : { tools }),
-                full: settingOn('ABIDE_BRIDGE_FULL'),
-            }),
-        }
+            missing: found,
+            ...command,
+        })
+        return Array.isArray(missing) ? status(missing) : missing.then(status)
     },
     { clients: { ui: false, mcp: false, cli: false, openapi: false } },
 )

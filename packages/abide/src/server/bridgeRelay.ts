@@ -34,6 +34,7 @@ import { framed } from './answerValue.ts'
 import type { ProviderEvent } from './assistant.ts'
 import { callerOf } from './callerOf.ts'
 import { fileIn } from './fileIn.ts'
+import { HOOKS, inOrder } from './hooks.ts'
 import { Inbox } from './Inbox.ts'
 import { holderOf, signedInAs } from './principal.ts'
 import { randomToken } from './randomToken.ts'
@@ -108,12 +109,23 @@ const FOLLOWERS = new Map<
 export const NATIVE_COOKIE = 'abide-native-credential'
 
 // 44.77 — the native app's own bridge: the credential its window holds, the bridge once a turn has
-// started it, and the MCP servers 44.58 last found in the user scope.
+// started it, the MCP servers 44.58 last found in the user scope and in each `--mcp-config` an
+// `onPairing` named (44.78), and the arguments each of its turns runs with, until it ends.
 const LOCAL: {
     secret: string
     bridge: Bridge | undefined
     servers: ReadonlySet<string>
-} = { secret: '', bridge: undefined, servers: new Set() }
+    sourced: Map<string, ReadonlySet<string>>
+    args: Map<string, readonly string[]>
+    grant: typeof import('@abide/bridge/grant') | undefined
+} = {
+    secret: '',
+    bridge: undefined,
+    servers: new Set(),
+    sourced: new Map(),
+    args: new Map(),
+    grant: undefined,
+}
 
 /**
  * Lends this machine's Claude Code to every request carrying `secret` in `NATIVE_COOKIE` — the
@@ -145,23 +157,63 @@ function pairedFor(key: string, local: boolean): boolean {
     return BY_KEY.has(key) || localStands(local)
 }
 
-/** What of `tools` the bridge a pairing reaches cannot make available. 44.60. */
+/**
+ * What of `tools` the bridge a pairing reaches cannot make available. 44.60.
+ *
+ * A promise only where the native app's own bridge has an `--mcp-config` to read first, and the
+ * request's `onPairing` arguments read before anything is awaited: one reading `principal` throws
+ * there until it has landed, and only a throw before the handler's first await is retried.
+ */
 function missingFor(
     key: string,
     local: boolean,
     tools: readonly string[],
-): string[] {
+): string[] | Promise<string[]> {
     const bridge = BY_KEY.get(key)
     if (bridge !== undefined) return missingOf(tools, bridge.missing)
-    const missing: string[] = []
-    if (!localStands(local)) return missing
-    // 44.78 — given every tool asked for, it lacks only an MCP tool whose server 44.58 does not find.
+    const outside: string[] = []
+    if (!localStands(local)) return outside
+    // 44.78 — given every tool asked for, it lacks only an MCP tool whose server is neither in the
+    // user scope nor in an `--mcp-config` the request's `onPairing` arguments name.
     for (const tool of tools) {
         const server = serverOfTool(tool)
         if (server !== undefined && !LOCAL.servers.has(server))
-            missing.push(tool)
+            outside.push(tool)
+    }
+    if (outside.length === 0) return outside
+    return unsourced(outside, pairingArgs())
+}
+
+/** Of `tools`, each whose server no `--mcp-config` in `args` holds, each read where it has not been. */
+async function unsourced(
+    tools: readonly string[],
+    args: string[],
+): Promise<string[]> {
+    const grant = (LOCAL.grant ??= await import('@abide/bridge/grant'))
+    const sources = grant.takeFlag(args, ['--mcp-config']) ?? []
+    for (const source of sources)
+        if (!LOCAL.sourced.has(source))
+            LOCAL.sourced.set(source, await serversOf(grant, source))
+    const missing: string[] = []
+    for (const tool of tools) {
+        let found = false
+        for (const source of sources)
+            if (LOCAL.sourced.get(source)?.has(serverOfTool(tool) as string))
+                found = true
+        if (!found) missing.push(tool)
     }
     return missing
+}
+
+/** The names of the MCP servers `source` holds — none where it cannot be read, as Claude Code will say at the turn. */
+async function serversOf(
+    grant: typeof import('@abide/bridge/grant'),
+    source: string,
+): Promise<ReadonlySet<string>> {
+    const servers = await grant
+        .visitorServers([source])
+        .catch(() => new Map<string, unknown>())
+    return new Set(servers.keys())
 }
 
 /** The MCP server `tool` is of, as 44.29 names it, or `undefined` for a built-in. */
@@ -172,14 +224,33 @@ function serverOfTool(tool: string): string | undefined {
     return end === -1 ? rest : rest.slice(0, end)
 }
 
-/** Reads the user scope's MCP servers again, and tells every page watching where they changed. 44.58, 44.61. */
+/**
+ * Reads the MCP servers of the user scope and of each `--mcp-config` an `onPairing` named again, and
+ * tells every page watching where they changed. 44.58, 44.61, 44.78.
+ */
 async function refreshLocalServers(): Promise<void> {
-    const { visitorServers } = await import('@abide/bridge/grant')
-    const found = new Set((await visitorServers(undefined)).keys())
-    const before = [...LOCAL.servers].join(',')
-    LOCAL.servers = found
-    if ([...found].join(',') === before) return
+    const grant = (LOCAL.grant ??= await import('@abide/bridge/grant'))
+    const before = serversSaid()
+    LOCAL.servers = new Set((await grant.visitorServers(undefined)).keys())
+    for (const source of LOCAL.sourced.keys())
+        LOCAL.sourced.set(source, await serversOf(grant, source))
+    if (serversSaid() === before) return
     for (const wakes of WATCHERS.values()) for (const wake of wakes) wake()
+}
+
+/** The servers `refreshLocalServers` last found, as one string to tell a change by. */
+function serversSaid(): string {
+    let said = [...LOCAL.servers].join(',')
+    for (const [source, servers] of LOCAL.sourced)
+        said += `\n${source}:${[...servers].join(',')}`
+    return said
+}
+
+/** Every `onPairing`'s arguments, in 37.7's order, asked in the request's scope. 44.76, 44.78. */
+export function pairingArgs(): string[] {
+    const args: string[] = []
+    for (const answer of inOrder(HOOKS.pairing)) args.push(...answer())
+    return args
 }
 
 /** The native app's own bridge, started on its first turn. */
@@ -203,7 +274,8 @@ async function localBridge(): Promise<Bridge> {
     const core = serveTurns({
         site: 'this app',
         claude: 'claude',
-        claudeArgs: [],
+        // 44.78 — what the turn's own request answered, held from when it was sent.
+        claudeArgs: (turn) => LOCAL.args.get(turn.id) ?? [],
         full: true,
         report: (report) => delivered(bridge, report),
         say: (line) => RELAY_LOG.debug(line),
@@ -303,6 +375,7 @@ export async function* runTurn({
     const turn = randomToken(9, 'base64url')
     const inbox = new Inbox<TurnItem>()
     bridge.turns.set(turn, inbox)
+    if (bridge === LOCAL.bridge) LOCAL.args.set(turn, pairingArgs())
     // `bridge.frames` is read at each push: a resumed stream (44.26) replaces it.
     bridge.frames.push({ type: 'turn', id: turn, prompt, config, maxTurns })
     // 44.18 — a caller hanging up ends the run on the bridge.
@@ -338,6 +411,7 @@ export async function* runTurn({
     } finally {
         signal.removeEventListener('abort', cancel)
         bridge.turns.delete(turn)
+        LOCAL.args.delete(turn)
         // The bridge answers what is left as the run ends.
         for (const [id, prompt] of bridge.prompts)
             if (prompt.turn === turn) bridge.prompts.delete(id)
@@ -437,7 +511,7 @@ export async function* pairingStatus(
                 paired: pairedFor(key, local),
                 code: pairing.code,
                 // 44.60 — of what this stream's code asks for: two on one page may ask for different tools.
-                missing: missingFor(key, local, tools),
+                missing: await missingFor(key, local, tools),
             }
             const saying = `${state.paired} ${state.code} ${state.missing.join(',')}`
             if (saying !== said) {
@@ -475,7 +549,7 @@ export function pairingNow(
     tools: readonly string[],
     note: string | undefined,
     local: boolean,
-): PairingState {
+): Omit<PairingState, 'missing'> & { missing: string[] | Promise<string[]> } {
     const key = pairingKey(caller, signedIn)
     const at = `${key}\n${tools.join(',')}\n${note ?? ''}`
     let standing = STANDING.get(at)
