@@ -3485,7 +3485,8 @@ answer 38.167's page, MUST bring the window to the front, and MUST hide it where
 for the app, then the menus the page the window shows filed with `onMenu`, outermost first, then an
 item that quits the app, a separator between them where there are any.
 
-38.171 The menu bar extra's panel MUST close when it stops being the key window.
+38.171 The menu bar extra's panel MUST close when it stops being the key window, save to a sheet of
+its own (38.178).
 
 38.172 Where `onLauncher` answers `menuBarExtra: true`, closing the window MUST hide it rather than
 quit the app.
@@ -3506,6 +3507,11 @@ for a new window onto an address under the app the window shows MUST have that a
 window, bring the window to the front and close the panel, rather than hand it to the system.
 
 38.177 Picking the `window` role MUST bring the window to the front, showing it where it is hidden.
+
+38.178 A page's `alert` and `confirm` in the window `abide native`'s executable opens, or in its menu
+bar extra's panel, MUST show as a sheet on that window or panel, and what checking for an update
+finds as one on the window, brought to the front. The executable MUST go on answering requests and
+timers while one is open.
 
 # 39. Head and view transitions
 

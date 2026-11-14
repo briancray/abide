@@ -2,18 +2,22 @@
 // page's menu bar and an event drain. What it shows is the `NativeSession`'s to decide.
 //
 // AppKit's events are drained on a timer rather than by `[NSApp run]`, which would never hand the
-// thread back to bun. A menu held open or a window being resized runs AppKit's own loop inside one
-// drain, and the app answers nothing until it ends.
+// thread back to bun, so what `run` does around each event — an autorelease pool — the drain does
+// too. A menu held open or a window being resized runs AppKit's own loop inside one drain, and the
+// app answers nothing until it ends; a dialog is a sheet (38.178) so that it does not.
 
 import { FFIType } from 'bun:ffi'
 
 import type { NativeMenuItem } from '#shared/menuItem.ts'
 
 import {
+    blockOnce,
     callBlock,
+    callBlockLater,
     created,
     definedClass,
     type Id,
+    inAutoreleasePool,
     nsBoolean,
     nsString,
     objcClass,
@@ -301,6 +305,32 @@ export function openNativeWindow(
     send(view, 'setUIDelegate:', uiDelegate)
     send(view, 'setNavigationDelegate:', uiDelegate)
     send(view, 'setCustomUserAgent:', nsString(nativeUserAgent(version)))
+    // The window is titled by the page it shows, told by the web view as its title changes.
+    sendTyped(
+        view,
+        'addObserver:forKeyPath:options:context:',
+        [FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr],
+        FFIType.void,
+        send(
+            definedClass('AbideTitleObserver', {
+                'observeValueForKeyPath:ofObject:change:context:': {
+                    types: 'v@:@@@^v',
+                    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+                    returns: FFIType.void,
+                    run: () =>
+                        send(
+                            window,
+                            'setTitle:',
+                            nsString(stringOf(send(view, 'title')) || appName),
+                        ),
+                },
+            }),
+            'new',
+        ),
+        nsString('title'),
+        0,
+        null,
+    )
     if (options.vibrancy === undefined) send(window, 'setContentView:', view)
     else {
         // 38.154 — the material is the content view, and the page is drawn over it with no ground.
@@ -611,13 +641,17 @@ export function openNativeWindow(
         if (updater === undefined) return
         if (updater.staged !== undefined) return restart()
         void updater.check().then((checked) => {
+            // 38.178 — told on the window, brought forward to be read.
+            front()
             if (checked.outcome === 'current')
-                alert(
+                ask(
+                    window,
                     nsString(`${appName} ${version} is the latest version.`),
                     false,
                 )
             else if (checked.outcome === 'unreachable')
-                alert(
+                ask(
+                    window,
                     nsString(
                         `Updates could not be checked. ${checked.reason}.`,
                     ),
@@ -627,19 +661,22 @@ export function openNativeWindow(
                 reportUnexpected(
                     new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
                 )
-                alert(
+                ask(
+                    window,
                     nsString(`The update was refused: ${checked.reason}.`),
                     false,
                 )
-            } else if (
-                alert(
+            } else
+                ask(
+                    window,
                     nsString(
                         `${appName} ${checked.staged.version} is ready. Restart to install it now?`,
                     ),
                     true,
+                    (accepted) => {
+                        if (accepted) restart()
+                    },
                 )
-            )
-                restart()
         })
     }
     if (updater !== undefined)
@@ -703,36 +740,31 @@ export function openNativeWindow(
 
     const distantPast = send(objcClass('NSDate'), 'distantPast')
     const defaultMode = nsString('kCFRunLoopDefaultMode')
-    let shownTitle = appName
-    let drains = 0
-    setInterval(() => {
-        for (;;) {
-            const event = sendTyped(
-                application,
-                'nextEventMatchingMask:untilDate:inMode:dequeue:',
-                [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.bool],
-                FFIType.ptr,
-                0xffffffffffffffffn,
-                distantPast,
-                defaultMode,
-                true,
-            ) as Id
-            if (event === null) break
-            send(application, 'sendEvent:', event)
-        }
-        // The window is titled by the page it shows.
-        drains += 1
-        if (drains % 32 !== 0) return
-        const title = stringOf(send(view, 'title')) || appName
-        if (title === shownTitle) return
-        shownTitle = title
-        send(window, 'setTitle:', nsString(title))
-    }, DRAIN_MILLISECONDS)
+    setInterval(
+        () =>
+            inAutoreleasePool(() => {
+                for (;;) {
+                    const event = sendTyped(
+                        application,
+                        'nextEventMatchingMask:untilDate:inMode:dequeue:',
+                        [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.bool],
+                        FFIType.ptr,
+                        0xffffffffffffffffn,
+                        distantPast,
+                        defaultMode,
+                        true,
+                    ) as Id
+                    if (event === null) break
+                    send(application, 'sendEvent:', event)
+                }
+            }),
+        DRAIN_MILLISECONDS,
+    )
     return navigate
 }
 
 // What a page asks of its window: a link out opens in the browser, one of a scheme the web view
-// cannot load opens in the app that takes it, and `alert` and `confirm` are sheets the page waits on.
+// cannot load opens in the app that takes it, and `alert` and `confirm` are sheets the page waits on (38.178).
 // The window's and the panel's web views take one of these as their UI delegate and their
 // navigation delegate alike.
 let uiDelegate: Id = null
@@ -785,9 +817,9 @@ function uiDelegateClass(): Id {
                 types: 'v@:@@@@?',
                 args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
                 returns: FFIType.void,
-                run: (_view: Id, message: Id, _frame: Id, done: Id) => {
-                    alert(message, false)
-                    callBlock(done, [])
+                run: (view: Id, message: Id, _frame: Id, done: Id) => {
+                    const answer = callBlockLater(done)
+                    ask(send(view, 'window'), message, false, () => answer([]))
                 },
             },
         'webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:':
@@ -795,8 +827,11 @@ function uiDelegateClass(): Id {
                 types: 'v@:@@@@?',
                 args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
                 returns: FFIType.void,
-                run: (_view: Id, message: Id, _frame: Id, done: Id) => {
-                    callBlock(done, [FFIType.bool], alert(message, true))
+                run: (view: Id, message: Id, _frame: Id, done: Id) => {
+                    const answer = callBlockLater(done)
+                    ask(send(view, 'window'), message, true, (accepted) =>
+                        answer([FFIType.bool], accepted),
+                    )
                 },
             },
     })
@@ -847,14 +882,24 @@ function titlebarDoubleClick(window: Id): void {
     )
 }
 
-// An `NSAlert` with the page's message; answers whether it was accepted.
-function alert(message: Id, cancellable: boolean): boolean {
+// 38.178 — an `NSAlert` with `message`, a sheet on `window`; `answered` hears whether it was accepted.
+function ask(
+    window: Id,
+    message: Id,
+    cancellable: boolean,
+    answered: (accepted: boolean) => void = () => {},
+): void {
     const panel = created('NSAlert')
     send(panel, 'setMessageText:', message)
     send(panel, 'addButtonWithTitle:', nsString('OK'))
     if (cancellable) send(panel, 'addButtonWithTitle:', nsString('Cancel'))
-    // NSAlertFirstButtonReturn.
-    return (
-        Number(sendTyped(panel, 'runModal', [], FFIType.i64) as bigint) === 1000
+    send(
+        panel,
+        'beginSheetModalForWindow:completionHandler:',
+        window,
+        // NSAlertFirstButtonReturn.
+        blockOnce([FFIType.i64], (response: bigint) =>
+            answered(Number(response) === 1000),
+        ),
     )
 }

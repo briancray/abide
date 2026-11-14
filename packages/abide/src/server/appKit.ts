@@ -6,7 +6,15 @@
 // pointers, and a frame is set through `setContentSize:` — two doubles, the same in both ABIs — and
 // read through key-value coding, which boxes it in an `NSValue` that copies it into memory of ours.
 
-import { CFunction, CString, dlopen, FFIType, JSCallback, read } from 'bun:ffi'
+import {
+    CFunction,
+    CString,
+    dlopen,
+    FFIType,
+    JSCallback,
+    read,
+    toArrayBuffer,
+} from 'bun:ffi'
 
 export type Id = number | null
 
@@ -24,6 +32,16 @@ const RUNTIME = dlopen('/usr/lib/libobjc.A.dylib', {
     },
     // Called through `CFunction` at each signature it is sent with; this one is never called.
     objc_msgSend: { args: [], returns: FFIType.void },
+    objc_autoreleasePoolPush: { args: [], returns: FFIType.ptr },
+    objc_autoreleasePoolPop: { args: [FFIType.ptr], returns: FFIType.void },
+})
+const SYSTEM = dlopen('/usr/lib/libSystem.B.dylib', {
+    malloc: { args: [FFIType.u64], returns: FFIType.ptr },
+    free: { args: [FFIType.ptr], returns: FFIType.void },
+    _Block_copy: { args: [FFIType.ptr], returns: FFIType.ptr },
+    _Block_release: { args: [FFIType.ptr], returns: FFIType.void },
+    // A class, not a function: only its address is read, as a block's `isa`.
+    _NSConcreteGlobalBlock: { args: [], returns: FFIType.void },
 })
 // Loaded for the classes they register, which `objc_getClass` finds by name once they are.
 dlopen('/System/Library/Frameworks/AppKit.framework/AppKit', {
@@ -220,4 +238,72 @@ export function callBlock(
     })
     invoke(block, ...values)
     invoke.close()
+}
+
+/**
+ * Holds a block AppKit or WebKit handed over past the call that handed it, answering what calls it
+ * once and then lets it go.
+ */
+export function callBlockLater(
+    block: Id,
+): (args: FFIType[], ...values: Argument[]) => void {
+    const held = SYSTEM.symbols._Block_copy(block as never) as Id
+    return (args, ...values) => {
+        callBlock(held, args, ...values)
+        SYSTEM.symbols._Block_release(held as never)
+    }
+}
+
+// A block's layout: `isa`, flags, a reserved word, its function, its descriptor — and here the
+// descriptor after it, a reserved word and the block's size.
+const BLOCK_BYTES = 48
+const BLOCK_SIZE = 32
+const BLOCK_IS_GLOBAL = 1 << 28
+const GLOBAL_BLOCK = (
+    SYSTEM.symbols._NSConcreteGlobalBlock as unknown as { ptr: number }
+).ptr
+
+/**
+ * A block for AppKit to call once, later, with arguments of the types `args` names.
+ *
+ * Global, so AppKit's copy of it is the block itself and nothing it captures is copied; its memory
+ * and its function are let go in the turn after it is called, once AppKit has released it.
+ */
+export function blockOnce(
+    args: FFIType[],
+    run: (...values: never[]) => void,
+): Id {
+    const memory = SYSTEM.symbols.malloc(BLOCK_BYTES) as number
+    const implementation = new JSCallback(
+        (_block: Id, ...values: never[]) => {
+            run(...values)
+            setTimeout(() => {
+                implementation.close()
+                SYSTEM.symbols.free(memory as never)
+            }, 0)
+        },
+        { args: [FFIType.ptr, ...args], returns: FFIType.void },
+    )
+    const fields = new DataView(toArrayBuffer(memory as never, 0, BLOCK_BYTES))
+    fields.setBigUint64(0, BigInt(GLOBAL_BLOCK), true)
+    fields.setUint32(8, BLOCK_IS_GLOBAL, true)
+    fields.setUint32(12, 0, true)
+    fields.setBigUint64(16, BigInt(implementation.ptr as number), true)
+    fields.setBigUint64(24, BigInt(memory + BLOCK_SIZE), true)
+    fields.setBigUint64(32, 0n, true)
+    fields.setBigUint64(40, BigInt(BLOCK_SIZE), true)
+    return memory
+}
+
+/**
+ * Runs `run` inside an autorelease pool, letting go of what AppKit autoreleased during it — which
+ * `[NSApp run]` does for each event, and a drain on a timer has to do for itself.
+ */
+export function inAutoreleasePool(run: () => void): void {
+    const pool = RUNTIME.symbols.objc_autoreleasePoolPush()
+    try {
+        run()
+    } finally {
+        RUNTIME.symbols.objc_autoreleasePoolPop(pool)
+    }
 }

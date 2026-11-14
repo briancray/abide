@@ -330,6 +330,8 @@ function openPanel(
                     args: [FFIType.ptr],
                     returns: FFIType.void,
                     run: () => {
+                        // 38.171 — the key a page's `alert` takes from it as a sheet (38.178).
+                        if (send(window, 'attachedSheet') !== null) return
                         resigned()
                         send(window, 'orderOut:', null)
                     },
