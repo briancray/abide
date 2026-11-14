@@ -71,7 +71,7 @@ type ToWindow =
     | { kind: 'shown'; address: string | undefined }
     | { kind: 'staged'; staged: Staged }
     | { kind: 'answer'; call: number; value: unknown }
-    | { kind: 'ended' }
+    | { kind: 'ended'; code: number }
 
 /** What the window tells the launcher's thread; the first is where to wake it. */
 type ToLauncher =
@@ -163,7 +163,7 @@ async function openWindow(
             } else if (data.kind === 'answer') {
                 answers.get(data.call)?.(data.value)
                 answers.delete(data.call)
-            } else if (data.kind === 'ended') process.exit(0)
+            } else if (data.kind === 'ended') process.exit(data.code)
         }
     })
 }
@@ -215,6 +215,9 @@ async function launch(
         parent.postMessage(message)
         if (wakePort !== 0) wakeWindow(wakePort)
     }
+    // A worker's `process.exit` ends the worker alone: the process ends with it, however it came —
+    // the app's own, or the quit below.
+    process.on('exit', (code) => tell({ kind: 'ended', code }))
     // 44.80 — what a terminal would find, for the app and for the Claude Code its own bridge runs.
     const path = loginShellPath()
     // 37.1 — ENTERED ONCE, before the window: the start form reads `onConfig` and the launcher's
@@ -415,7 +418,7 @@ async function launch(
                         }).unref()
                 })
                 .catch(reportUnexpected)
-                .finally(() => tell({ kind: 'ended' }))
+                .finally(() => process.exit(0))
     }
     for (const message of heard.splice(0)) hear(message)
     tell({
