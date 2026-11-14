@@ -105,111 +105,135 @@ const outcome = (checked: Checked): string =>
           ? 'current'
           : `${checked.outcome}: ${checked.reason}`
 
+// The feed's zip is `ditto`'s, which macOS alone has — as it alone has the bundle an update replaces.
+const ON_MAC = process.platform === 'darwin'
+
 // THE REVERT is `install` not moving the staged `.app`: no app is left to read after it.
-test('a newer build is staged, and installed in place of the app — 38.142, 38.144', async () => {
-    const key = await newUpdateKey()
-    const host = await published('1.1.0', key, {
-        required: true,
-        notes: 'Fixes export.',
-    })
-    using _ = host.server
-    const { app, updater, told } = await installed('1.0.0', host.update, key)
-    const checked = await updater.check()
-    expect(outcome(checked)).toBe('staged 1.1.0')
-    expect(told).toEqual(['1.1.0'])
-    expect(updater.staged?.required).toBe(true)
-    expect(updater.staged?.notes).toBe('Fixes export.')
-    expect(`before install ${await versionAt(app)}`).toBe(
-        'before install 1.0.0',
-    )
-    expect(await updater.install()).toBe(true)
-    expect(`after install ${await versionAt(app)}`).toBe('after install 1.1.0')
-    expect(await Bun.file(`${app}.update`).exists()).toBe(false)
-})
+test.skipIf(!ON_MAC)(
+    'a newer build is staged, and installed in place of the app — 38.142, 38.144',
+    async () => {
+        const key = await newUpdateKey()
+        const host = await published('1.1.0', key, {
+            required: true,
+            notes: 'Fixes export.',
+        })
+        using _ = host.server
+        const { app, updater, told } = await installed(
+            '1.0.0',
+            host.update,
+            key,
+        )
+        const checked = await updater.check()
+        expect(outcome(checked)).toBe('staged 1.1.0')
+        expect(told).toEqual(['1.1.0'])
+        expect(updater.staged?.required).toBe(true)
+        expect(updater.staged?.notes).toBe('Fixes export.')
+        expect(`before install ${await versionAt(app)}`).toBe(
+            'before install 1.0.0',
+        )
+        expect(await updater.install()).toBe(true)
+        expect(`after install ${await versionAt(app)}`).toBe(
+            'after install 1.1.0',
+        )
+        expect(await Bun.file(`${app}.update`).exists()).toBe(false)
+    },
+)
 
 // THE REVERT is `order(...) <= 0` read as `=== 0`: a feed rolled back to 0.9.0 stages a downgrade,
 // and the zip is read.
-test('a feed naming the same or an older version stages nothing — 38.142', async () => {
-    const key = await newUpdateKey()
-    for (const version of ['1.0.0', '0.9.0']) {
-        const host = await published(version, key)
-        using _ = host.server
-        const { app, updater } = await installed('1.0.0', host.update, key)
-        expect(`${version}: ${outcome(await updater.check())}`).toBe(
-            `${version}: current`,
-        )
-        expect(host.reads).toEqual(['/updates/latest.json'])
-        expect(await updater.install()).toBe(false)
-        expect(await versionAt(app)).toBe('1.0.0')
-    }
-})
+test.skipIf(!ON_MAC)(
+    'a feed naming the same or an older version stages nothing — 38.142',
+    async () => {
+        const key = await newUpdateKey()
+        for (const version of ['1.0.0', '0.9.0']) {
+            const host = await published(version, key)
+            using _ = host.server
+            const { app, updater } = await installed('1.0.0', host.update, key)
+            expect(`${version}: ${outcome(await updater.check())}`).toBe(
+                `${version}: current`,
+            )
+            expect(host.reads).toEqual(['/updates/latest.json'])
+            expect(await updater.install()).toBe(false)
+            expect(await versionAt(app)).toBe('1.0.0')
+        }
+    },
+)
 
 // THE REVERT is `verifiedFeed` answering the feed without verifying it: the rewritten notes, and
 // then the other key's build, are staged.
-test('a feed changed after signing, or signed by another key, is refused — 38.143', async () => {
-    const key = await newUpdateKey()
-    const host = await published('1.1.0', key, { notes: 'Fixes export.' })
-    using _ = host.server
-    const feed = `${host.directory}/updates/latest.json`
-    const signed = await Bun.file(feed).json()
-    await Bun.write(feed, JSON.stringify({ ...signed, required: true }))
-    const { app, updater } = await installed('1.0.0', host.update, key)
-    expect(outcome(await updater.check())).toBe(
-        'refused: the update feed is not signed by the key this app was bundled with',
-    )
-    const stranger = await published('1.1.0', await newUpdateKey())
-    using __ = stranger.server
-    const trusting = await installed('1.0.0', stranger.update, key)
-    expect(outcome(await trusting.updater.check())).toBe(
-        'refused: the update feed is not signed by the key this app was bundled with',
-    )
-    expect(`${updater.staged}, ${trusting.updater.staged}`).toBe(
-        'undefined, undefined',
-    )
-    expect(await versionAt(app)).toBe('1.0.0')
-})
+test.skipIf(!ON_MAC)(
+    'a feed changed after signing, or signed by another key, is refused — 38.143',
+    async () => {
+        const key = await newUpdateKey()
+        const host = await published('1.1.0', key, { notes: 'Fixes export.' })
+        using _ = host.server
+        const feed = `${host.directory}/updates/latest.json`
+        const signed = await Bun.file(feed).json()
+        await Bun.write(feed, JSON.stringify({ ...signed, required: true }))
+        const { app, updater } = await installed('1.0.0', host.update, key)
+        expect(outcome(await updater.check())).toBe(
+            'refused: the update feed is not signed by the key this app was bundled with',
+        )
+        const stranger = await published('1.1.0', await newUpdateKey())
+        using __ = stranger.server
+        const trusting = await installed('1.0.0', stranger.update, key)
+        expect(outcome(await trusting.updater.check())).toBe(
+            'refused: the update feed is not signed by the key this app was bundled with',
+        )
+        expect(`${updater.staged}, ${trusting.updater.staged}`).toBe(
+            'undefined, undefined',
+        )
+        expect(await versionAt(app)).toBe('1.0.0')
+    },
+)
 
 // THE REVERT is the digest check dropped: another build zipped under the signed feed's name is
 // staged, and installs as 6.6.6.
-test('a zip that is not the one the feed signed is refused — 38.143', async () => {
-    const key = await newUpdateKey()
-    const host = await published('1.1.0', key)
-    using _ = host.server
-    const { file } = await Bun.file(
-        `${host.directory}/updates/latest.json`,
-    ).json()
-    const other = `${host.directory}/other/CRM.app`
-    await fakeApp(other, '6.6.6')
-    await rm(`${host.directory}/updates/${file}`)
-    await ran([
-        'ditto',
-        '-c',
-        '-k',
-        '--keepParent',
-        other,
-        `${host.directory}/updates/${file}`,
-    ])
-    const { app, updater } = await installed('1.0.0', host.update, key)
-    expect(outcome(await updater.check())).toBe(
-        `refused: ${file} is not the file the update feed signed`,
-    )
-    await updater.install()
-    expect(await versionAt(app)).toBe('1.0.0')
-})
+test.skipIf(!ON_MAC)(
+    'a zip that is not the one the feed signed is refused — 38.143',
+    async () => {
+        const key = await newUpdateKey()
+        const host = await published('1.1.0', key)
+        using _ = host.server
+        const { file } = await Bun.file(
+            `${host.directory}/updates/latest.json`,
+        ).json()
+        const other = `${host.directory}/other/CRM.app`
+        await fakeApp(other, '6.6.6')
+        await rm(`${host.directory}/updates/${file}`)
+        await ran([
+            'ditto',
+            '-c',
+            '-k',
+            '--keepParent',
+            other,
+            `${host.directory}/updates/${file}`,
+        ])
+        const { app, updater } = await installed('1.0.0', host.update, key)
+        expect(outcome(await updater.check())).toBe(
+            `refused: ${file} is not the file the update feed signed`,
+        )
+        await updater.install()
+        expect(await versionAt(app)).toBe('1.0.0')
+    },
+)
 
 // THE REVERT is `install` without its undo: the second rename fails, and no app is left where the
 // one that ran was.
-test('a replacement that fails leaves the app that ran in place — 38.144', async () => {
-    const key = await newUpdateKey()
-    const host = await published('1.1.0', key)
-    using _ = host.server
-    const { app, updater } = await installed('1.0.0', host.update, key)
-    await updater.check()
-    await rm(`${app}.update`, { recursive: true })
-    expect(updater.install()).rejects.toThrow()
-    await updater.install().catch(() => undefined)
-    expect(await versionAt(app)).toBe('1.0.0')
-})
+test.skipIf(!ON_MAC)(
+    'a replacement that fails leaves the app that ran in place — 38.144',
+    async () => {
+        const key = await newUpdateKey()
+        const host = await published('1.1.0', key)
+        using _ = host.server
+        const { app, updater } = await installed('1.0.0', host.update, key)
+        await updater.check()
+        await rm(`${app}.update`, { recursive: true })
+        expect(updater.install()).rejects.toThrow()
+        await updater.install().catch(() => undefined)
+        expect(await versionAt(app)).toBe('1.0.0')
+    },
+)
 
 test('a feed that cannot be reached stages nothing and is not a refusal — 38.142', async () => {
     const key = await newUpdateKey()
