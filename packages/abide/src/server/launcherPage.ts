@@ -20,7 +20,7 @@ const SYSTEM_ACCENT = '#0a84ff'
  * 38.83 — a form the launcher does not offer has no address to post to.
  */
 export type Launch = {
-    /** The app's name, as its package gives it. */
+    /** 38.87 — the app's `APP_NAME`, else its package's name. */
     name: string
     /** Where the start form posts, or `undefined` where what `onLauncher` answers turns starting off. */
     start: string | undefined

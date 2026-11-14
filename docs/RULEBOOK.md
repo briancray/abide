@@ -3168,7 +3168,7 @@ launch served it on where that port is free.
 38.77 `abide native` MUST refuse on a platform other than macOS, naming `abide compile`.
 
 38.78 `abide native` given no `--out` MUST write the `.app` into the directory it was run from, named
-as 38.46 names the executable.
+as 38.87 names the app.
 
 38.79 `abide native` MUST give the `.app` the icon the public file answered at `/icon.icns` holds,
 or one drawn at every size from the one at `/icon.png` where there is no `.icns`.
@@ -3197,8 +3197,10 @@ show its own page in its place.
 38.86 The window MUST open at the `width` and `height` `onLauncher` answers where no launch
 before it left a size, and MUST NOT be resized below its `minWidth` and `minHeight`.
 
-38.87 The app's package name, as 38.46 names the executable, MUST name the app in its bundle, its
-menu bar and its `Launch`.
+38.87 The app's `APP_NAME`, as the defaults of every `onConfig` and the environment `abide native`
+runs in give it before any schema, or else its package name as 38.46 names the executable, MUST name
+the app in its bundle's name and display name, its menu bar, its window and its `Launch`; the
+package name, as 38.46 names it, MUST name the bundle's executable and identifier.
 
 38.88 The native app's menu bar MUST be the application, File, Edit, View and Window menus, with
 the items every `onMenu` filed by the layouts and the page the window shows answers, outermost

@@ -65,6 +65,8 @@ export function compiledEntry(app: {
      */
     native:
         | {
+              /** 38.87 — the name the app shows, read as `abide native` built it. */
+              name: string
               launch: string | undefined
               document: string
               icon: string | undefined
@@ -108,6 +110,7 @@ import * as table from ${JSON.stringify(tablePath(app.root, SERVER_TABLE))}
             ? ''
             : `
     {
+        name: ${JSON.stringify(app.native.name)},
         launch: ${app.native.launch === undefined ? 'undefined' : `() => import(${JSON.stringify(app.native.launch)})`},
         document: ${JSON.stringify(app.native.document)},
         icon: ${JSON.stringify(app.native.icon)},
