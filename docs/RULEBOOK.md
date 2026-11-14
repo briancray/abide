@@ -3149,7 +3149,7 @@ its output only a file it did not produce that was written before it began.
 the app rather than 38.53's shell, and given a command MUST answer it as 38.50 does.
 
 38.71 The window `abide native`'s executable opens MUST show the launcher page where nothing is
-remembered and 38.181 starts nothing, offering to start the app in the process and to connect to
+remembered and 38.182 starts nothing, offering to start the app in the process and to connect to
 one running at a URL.
 
 38.72 The launcher's start form MUST ask for each field the `onConfig` schema's JSON Schema
@@ -3529,17 +3529,20 @@ the window MUST NOT wake while nothing reaches it.
 executable is sent MUST stop it through `App.stop` (38.76) and MUST NOT reach a handler the app
 registered with `process.on`.
 
-38.181 Where `onLauncher` turns `connect` off and the start form asks for nothing, the launcher MUST
+38.181 The executable `abide compile` or `abide native` writes MUST reach a host over a certificate
+that either bun's own authorities or the authorities its machine trusts sign, however it was started.
+
+38.182 Where `onLauncher` turns `connect` off and the start form asks for nothing, the launcher MUST
 start the app at a launch where 38.73 does nothing, rather than show its page.
 
-38.182 Where `onLauncher` answers `dock: 'window'`, the native app MUST show a Dock icon and a menu
+38.183 Where `onLauncher` answers `dock: 'window'`, the native app MUST show a Dock icon and a menu
 bar from each time its window is brought to the front until the window is next closed, and neither
 while it stays closed.
 
-38.183 Where `onLauncher` answers `dock: 'window'`, the application menu's Quit item MUST close the
+38.184 Where `onLauncher` answers `dock: 'window'`, the application menu's Quit item MUST close the
 window (38.172) rather than quit the app.
 
-38.184 `LauncherOptions` MUST NOT admit `dock: 'window'` without `menuBarExtra: true`, and the native
+38.185 `LauncherOptions` MUST NOT admit `dock: 'window'` without `menuBarExtra: true`, and the native
 app MUST refuse to launch on an `onLauncher` answer that does.
 
 # 39. Head and view transitions

@@ -1,4 +1,4 @@
-// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165, 38.181-38.184 — the native launcher's session, options, accent
+// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165, 38.182-38.185 — the native launcher's session, options, accent
 // and own page, apart from the window: none of the four needs one to be checked.
 //
 // THE REVERT, for the accent: average every opaque pixel instead of binning by hue, and dogfood's
@@ -101,16 +101,16 @@ test('the window options take their own values and default to a standard window 
     expect(launcherOf({ dock: false })).toMatchObject({ dock: false })
 })
 
-// 38.182-38.184 — A DOCK THAT FOLLOWS THE WINDOW needs the menu bar extra to bring the window back,
+// 38.183-38.185 — A DOCK THAT FOLLOWS THE WINDOW needs the menu bar extra to bring the window back,
 // and its application menu's Quit closes the window where the extra's menu still quits. THE REVERT,
-// for 38.183: `role: 'quit'` whatever `dockFollowsWindow` says; Cmd-Q stops the app it was to keep.
-test('a Dock that follows the window stays in the menu bar on Quit — 38.182, 38.183, 38.184', () => {
+// for 38.184: `role: 'quit'` whatever `dockFollowsWindow` says; Cmd-Q stops the app it was to keep.
+test('a Dock that follows the window stays in the menu bar on Quit — 38.183, 38.184, 38.185', () => {
     const resident: LauncherOptions = { dock: 'window', menuBarExtra: true }
     expect(launcherOf(resident)).toMatchObject({
         dock: 'window',
         menuBarExtra: true,
     })
-    // @ts-expect-error — 38.184: nothing would bring a closed window back.
+    // @ts-expect-error — 38.185: nothing would bring a closed window back.
     const stranded: LauncherOptions = { dock: 'window' }
     expect(launcherOf(stranded)).toContain("`dock: 'window'`")
     expect(launcherOf({ dock: 'tray', menuBarExtra: true })).toContain(
@@ -503,10 +503,10 @@ test('a start at launch forgets a remembered value the app now offers — 38.73'
     }
 })
 
-// 38.181 — A LAUNCHER WITH ONE FORM AND NOTHING TO ASK starts at once, so the window opens on the app
+// 38.182 — A LAUNCHER WITH ONE FORM AND NOTHING TO ASK starts at once, so the window opens on the app
 // rather than on a lone button. A form with a field, or a second form, still waits for the person.
 // THE REVERT: drop the last arm of `NativeSession.resume`; the first launch shows nothing.
-test('a launcher whose one form asks for nothing starts at launch — 38.181', async () => {
+test('a launcher whose one form asks for nothing starts at launch — 38.182', async () => {
     const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`
     const startOnly = launcherOf({ connect: false }) as Launcher
     try {

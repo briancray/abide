@@ -109,7 +109,7 @@ export function openMenuBarExtra(
     const answers = new Map<string, Promise<boolean>>()
 
     // 38.169 — CLOSED rather than ordered out, as its close button closes it (38.172), so the window's
-    // delegate hears every way it goes (38.182).
+    // delegate hears every way it goes (38.183).
     const toggleWindow = (): void => {
         if (
             isTrue(window, 'isVisible') &&

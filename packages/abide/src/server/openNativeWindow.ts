@@ -103,7 +103,7 @@ export function openNativeWindow(
             shown ? 0 : 1,
         )
     }
-    // 38.182 — the window opens shown, and its Dock icon with it.
+    // 38.183 — the window opens shown, and its Dock icon with it.
     showDock(options.dock !== false)
     let quitting = false
     // 38.145 — `reopen` for a restart the person asked for, so the update installed is opened.
@@ -512,8 +512,8 @@ export function openNativeWindow(
                 },
                 // The web view sets the cursor only when the page's cursor changes, so the edge's
                 // resize arrows outlast a resize until the pointer crosses an element that has one.
-                // 38.182 — every way the window goes — its close button, Close Window, Quit
-                // (38.183), the menu bar extra (38.169) — closes it, and its Dock icon goes with it.
+                // 38.183 — every way the window goes — its close button, Close Window, Quit
+                // (38.184), the menu bar extra (38.169) — closes it, and its Dock icon goes with it.
                 'windowWillClose:': {
                     types: 'v@:@',
                     args: [FFIType.ptr],
@@ -571,7 +571,7 @@ export function openNativeWindow(
     }
     // Shows the window where it is hidden, in front of every other app's.
     const front = (): void => {
-        // 38.182 — before activating, so the app comes forward with its menu bar.
+        // 38.183 — before activating, so the app comes forward with its menu bar.
         if (options.dock === 'window') showDock(true)
         sendTyped(
             application,
@@ -623,7 +623,7 @@ export function openNativeWindow(
             return void launcher.forget().then(() => navigate(base))
         if (item.role === 'reload') return void send(view, 'reload')
         if (item.role === 'window') return front()
-        // 38.183.
+        // 38.184.
         if (item.role === 'closeWindow') return void send(window, 'close')
         // 38.90, 38.91 — the page that numbered the item does what it means.
         if (item.id !== undefined)

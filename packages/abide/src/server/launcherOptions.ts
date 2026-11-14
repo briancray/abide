@@ -22,7 +22,7 @@ export const VIBRANCY_MATERIALS = {
 } as const
 
 /**
- * What `onLauncher` may answer. 38.81 — turning off both forms is not one of them, and 38.184 — a
+ * What `onLauncher` may answer. 38.81 — turning off both forms is not one of them, and 38.185 — a
  * Dock that follows the window with no menu bar extra to bring it back is not either, so the checker
  * refuses each where the answer is typed.
  */
@@ -104,7 +104,7 @@ const CHOICES: Record<string, readonly string[]> = {
     titlebar: ['standard', 'hidden', 'inset'],
     vibrancy: Object.keys(VIBRANCY_MATERIALS),
     appearance: ['system', 'light', 'dark'],
-    // 38.182 — beside the booleans `SWITCHES` takes.
+    // 38.183 — beside the booleans `SWITCHES` takes.
     dock: ['window'],
 }
 
@@ -170,9 +170,9 @@ export function launcherOf(answered: unknown): Launcher | string {
     // 38.81.
     if (!launcher.start && !launcher.connect)
         return '`onLauncher` turns off both start and connect, which leaves the launcher nothing to do. RULEBOOK 38.81'
-    // 38.184.
+    // 38.185.
     if (launcher.dock === 'window' && !launcher.menuBarExtra)
-        return "`onLauncher` answers `dock: 'window'` with no `menuBarExtra: true`, which leaves nothing to bring a closed window back. RULEBOOK 38.184"
+        return "`onLauncher` answers `dock: 'window'` with no `menuBarExtra: true`, which leaves nothing to bring a closed window back. RULEBOOK 38.185"
     // 38.151.
     if (
         launcher.maxWidth < launcher.minWidth ||

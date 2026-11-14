@@ -183,7 +183,7 @@ export class NativeSession {
     /**
      * 38.73 — WHAT IT DID LAST, done again, where the launcher still offers it. `offered` is what the
      * start form offers at this launch, so a remembered value the app now offers is forgotten as a
-     * start's own would be. 38.181 — a launcher whose one form asks for nothing starts at once.
+     * start's own would be. 38.182 — a launcher whose one form asks for nothing starts at once.
      */
     async resume(
         options: Launcher,

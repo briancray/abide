@@ -240,6 +240,9 @@ export async function claudeTurn(
             String(turn.maxTurns),
         ],
         cwd: directory,
+        // The environment as it is NOW: without one, bun finds `claude` on the `PATH` the process
+        // started with and hands the child that, where a native app assigns the login shell's after.
+        env: { ...Bun.env },
         stdin: 'pipe',
         stdout: 'pipe',
         stderr: 'pipe',

@@ -10,7 +10,7 @@ import type { NativeMenuItem } from '#shared/menuItem.ts'
  * 38.88 — AN ADDED MENU NAMED AS A DEFAULT ONE GROWS IT, and any other stands before Window, where
  * the platform puts an app's own. 38.83 — no Connect… where what `onLauncher` answers turns connecting off.
  * 38.149 — the `update` role under the app's name where `onLauncher` answers an `update`, labelled
- * `update`. 38.183 — where the Dock follows the window, its Quit closes the window instead.
+ * `update`. 38.184 — where the Dock follows the window, its Quit closes the window instead.
  */
 export function menuBar(
     appName: string,

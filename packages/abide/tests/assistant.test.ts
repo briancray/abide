@@ -1415,6 +1415,10 @@ console.log(JSON.stringify({ status: answer.status, text: await answer.text() })
 // is unpaired and its turn refused 409; pass `full: false` to the local core, and `--tools` reads
 // empty; pass `claudeArgs: () => []` to the local core, and the turn runs without the `--mcp-config`
 // (44.78); answer `outside` from `missingFor` without `unsourced`, and `mcp__radar__search` reads missing.
+// `claude` is on the `PATH` ASSIGNED after start, as 44.80 assigns the login shell's, never the one
+// the process started with — bun's `which` and `spawn` read that one unless handed the current: drop
+// `{ PATH: Bun.env.PATH ?? '' }` from `localStands` and the window reads unpaired; drop `env` from
+// `claudeTurn`'s spawn and the turn finds no `claude`.
 test('the native app’s window is paired with this machine’s Claude Code — 44.77, 44.78, 44.79', async () => {
     const configured = await scratch({
         '.claude.json': {
@@ -1431,6 +1435,10 @@ test('the native app’s window is paired with this machine’s Claude Code — 
     const shim = `${configured}/bin/claude`
     await Bun.write(shim, `#!/bin/sh\nexec bun ${FAKE_CLAUDE} "$@"\n`)
     await spawned(['chmod', '+x', shim])
+    // Started as from the Finder: a `PATH` holding `bun` and no `claude` of this machine's.
+    await spawned(['mkdir', '-p', `${configured}/launchd`])
+    await spawned(['ln', '-s', process.execPath, `${configured}/launchd/bun`])
+    const launchd = `${configured}/launchd:/usr/bin:/bin`
     await Bun.write(
         `${app}/native.ts`,
         `import { servedBuild } from '${SERVER}/appBuild.ts'
@@ -1441,6 +1449,7 @@ import { onPairing } from '${SERVER}/hooks.ts'
 const served = await servedBuild('${app}', '${app}/.abide', undefined)
 const app = await bootApp(served.origin, served.load)
 onPairing(() => ['--mcp-config', '${RADAR}'])
+process.env.PATH = '${configured}/bin:' + process.env.PATH
 await serveLocally('window-secret')
 const page = (credential: string) => ({ cookie: 'who=ada; abide-caller=desk' + credential })
 const status = async (credential: string) => {
@@ -1474,7 +1483,7 @@ process.exit(0)
         cwd: app,
         env: {
             ...environment,
-            PATH: `${configured}/bin:${environment.PATH}`,
+            PATH: launchd,
             CLAUDE_CONFIG_DIR: configured,
             ABIDE_BRIDGE_TOOLS:
                 'WebSearch,mcp__calendar__meetings,mcp__radar__search,mcp__nowhere__x',
