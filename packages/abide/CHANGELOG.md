@@ -1,5 +1,18 @@
 # @abide/abide
 
+## 0.134.0
+
+### Minor Changes
+
+- 4921bc9: the app goes on answering while the window is resized, a menu is held open or a sheet is shown, and the window no longer wakes while nothing reaches it — the main thread sleeps in AppKit's own wait instead of polling it every 8 ms, and the app, the launcher, the session and the updater run on a worker that wakes it by Mach message ([`60784f6`](https://github.com/briancray/abide/commit/60784f678d77e216fd00f3cc6e1f7d582862396f))
+- 4921bc9: alert, confirm and the update check are sheets, so the app goes on answering while one is open — the event drain lets go of what AppKit autoreleased each pass instead of leaking it, and the window title follows the page's by observation rather than by polling ([`7c3d788`](https://github.com/briancray/abide/commit/7c3d788a7eeed7ec0aef4566bb5caef7fdfb88d9))
+
+### Patch Changes
+
+- 4921bc9: nothing on the window's main thread waits on bun's own loop — a sheet's block is freed at the thread's next yield rather than on a timer it runs only when woken, and a test walks the window's modules from where the thread starts and names any timer, fetch, file, child or signal handler in them ([`1a03e70`](https://github.com/briancray/abide/commit/1a03e706b939b62588b9799874dd401361a75866))
+- 4921bc9: the app runs on a thread of its own — RULEBOOK 38.180, cited from abide native and onStop, a line in ABIDE.md and a paragraph on the native page: shutdown work goes in onStop, since no signal reaches a process.on handler, and process.exit ends the whole app ([`87bd698`](https://github.com/briancray/abide/commit/87bd69862edbe1318852e4cd93bbf3c36f010977))
+- 4921bc9: the app's own process.exit ends the native app — on the launcher's thread it ended only the worker, leaving the window open over nothing and Quit waiting on an answer that never came ([`dff2a07`](https://github.com/briancray/abide/commit/dff2a07aba18eb7a7ba8f149449e4569c931a300))
+
 ## 0.133.1
 
 ### Patch Changes
