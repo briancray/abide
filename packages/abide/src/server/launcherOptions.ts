@@ -22,8 +22,9 @@ export const VIBRANCY_MATERIALS = {
 } as const
 
 /**
- * What `onLauncher` may answer. 38.81 — turning off both forms is not one of them, so the checker
- * refuses it where the answer is typed.
+ * What `onLauncher` may answer. 38.81 — turning off both forms is not one of them, and 38.184 — a
+ * Dock that follows the window with no menu bar extra to bring it back is not either, so the checker
+ * refuses each where the answer is typed.
  */
 export type LauncherOptions = {
     width?: number
@@ -43,11 +44,13 @@ export type LauncherOptions = {
     shadow?: boolean
     rememberFrame?: boolean
     inspector?: boolean
-    dock?: boolean
-    menuBarExtra?: boolean
     panelWidth?: number
     panelHeight?: number
-} & ({ start?: true; connect?: boolean } | { start: false; connect?: true })
+} & ({ start?: true; connect?: boolean } | { start: false; connect?: true }) &
+    (
+        | { dock?: boolean; menuBarExtra?: boolean }
+        | { dock: 'window'; menuBarExtra: true }
+    )
 
 /** The options with each default filled in. */
 export type Launcher = {
@@ -66,7 +69,7 @@ export type Launcher = {
     shadow: boolean
     rememberFrame: boolean
     inspector: boolean
-    dock: boolean
+    dock: boolean | 'window'
     menuBarExtra: boolean
     panelWidth: number
     panelHeight: number
@@ -101,6 +104,8 @@ const CHOICES: Record<string, readonly string[]> = {
     titlebar: ['standard', 'hidden', 'inset'],
     vibrancy: Object.keys(VIBRANCY_MATERIALS),
     appearance: ['system', 'light', 'dark'],
+    // 38.182 — beside the booleans `SWITCHES` takes.
+    dock: ['window'],
 }
 
 /**
@@ -133,7 +138,8 @@ export function launcherOf(answered: unknown): Launcher | string {
         update: undefined,
     }
     if (answered === undefined) return launcher
-    if (!isRecord(answered)) return '`onLauncher` answers an object'
+    if (!isRecord(answered))
+        return '`onLauncher` answers an object. RULEBOOK 38.80'
     const set = launcher as Record<string, unknown>
     for (const [key, value] of Object.entries(answered)) {
         if (
@@ -159,16 +165,19 @@ export function launcherOf(answered: unknown): Launcher | string {
         )
             set[key] = value
         else
-            return `\`${key}\` is not a launcher option, or ${JSON.stringify(value)} is not a value it takes`
+            return `\`${key}\` is not a launcher option, or ${JSON.stringify(value)} is not a value it takes. RULEBOOK 38.80`
     }
     // 38.81.
     if (!launcher.start && !launcher.connect)
-        return '`onLauncher` turns off both start and connect, which leaves the launcher nothing to do'
+        return '`onLauncher` turns off both start and connect, which leaves the launcher nothing to do. RULEBOOK 38.81'
+    // 38.184.
+    if (launcher.dock === 'window' && !launcher.menuBarExtra)
+        return "`onLauncher` answers `dock: 'window'` with no `menuBarExtra: true`, which leaves nothing to bring a closed window back. RULEBOOK 38.184"
     // 38.151.
     if (
         launcher.maxWidth < launcher.minWidth ||
         launcher.maxHeight < launcher.minHeight
     )
-        return '`onLauncher` answers a maximum size below its minimum size'
+        return '`onLauncher` answers a maximum size below its minimum size. RULEBOOK 38.151'
     return launcher
 }

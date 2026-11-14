@@ -3149,15 +3149,17 @@ its output only a file it did not produce that was written before it began.
 the app rather than 38.53's shell, and given a command MUST answer it as 38.50 does.
 
 38.71 The window `abide native`'s executable opens MUST show the launcher page where nothing is
-remembered, offering to start the app in the process and to connect to one running at a URL.
+remembered and 38.181 starts nothing, offering to start the app in the process and to connect to
+one running at a URL.
 
 38.72 The launcher's start form MUST ask for each field the `onConfig` schema's JSON Schema
 declares, or each field `onConfig`'s defaults return where the schema has none, and MUST boot the
 app with its values as the environment, showing a refusal by field.
 
 38.73 The launcher MUST remember a connect's URL, or of a start's values each that differs from the
-value its form offered, under `APP_DATA_DIR`, and MUST start or connect the same way at the next
-launch, with each value it did not remember as the app then offers it.
+value its form offers as that start is made, the start a launch makes included, under
+`APP_DATA_DIR`, and MUST start or connect the same way at the next launch, with each value it did
+not remember as the app then offers it.
 
 38.74 The `disconnect` role MUST stop the app the launcher serves, forget what 38.73 remembered, and
 show the launcher page.
@@ -3170,7 +3172,7 @@ launch served it on where that port is free.
 38.77 `abide native` MUST refuse on a platform other than macOS, naming `abide compile`.
 
 38.78 `abide native` given no `--out` MUST write the `.app` into the directory it was run from, named
-as 38.46 names the executable.
+as 38.87 names the app.
 
 38.79 `abide native` MUST give the `.app` the icon the public file answered at `/icon.icns` holds,
 or one drawn at every size from the one at `/icon.png` where there is no `.icns`.
@@ -3199,8 +3201,10 @@ show its own page in its place.
 38.86 The window MUST open at the `width` and `height` `onLauncher` answers where no launch
 before it left a size, and MUST NOT be resized below its `minWidth` and `minHeight`.
 
-38.87 The app's package name, as 38.46 names the executable, MUST name the app in its bundle, its
-menu bar and its `Launch`.
+38.87 The app's `APP_NAME`, as the defaults of every `onConfig` and the environment `abide native`
+runs in give it before any schema, or else its package name as 38.46 names the executable, MUST name
+the app in its bundle's name and display name, its menu bar, its window and its `Launch`; the
+package name, as 38.46 names it, MUST name the bundle's executable and identifier.
 
 38.88 The native app's menu bar MUST be the application, File, Edit, View and Window menus, with
 the items every `onMenu` filed by the layouts and the page the window shows answers, outermost
@@ -3524,6 +3528,19 @@ the window MUST NOT wake while nothing reaches it.
 `process.exit` MUST end the executable with the code it was given, and a `SIGTERM` or `SIGINT` the
 executable is sent MUST stop it through `App.stop` (38.76) and MUST NOT reach a handler the app
 registered with `process.on`.
+
+38.181 Where `onLauncher` turns `connect` off and the start form asks for nothing, the launcher MUST
+start the app at a launch where 38.73 does nothing, rather than show its page.
+
+38.182 Where `onLauncher` answers `dock: 'window'`, the native app MUST show a Dock icon and a menu
+bar from each time its window is brought to the front until the window is next closed, and neither
+while it stays closed.
+
+38.183 Where `onLauncher` answers `dock: 'window'`, the application menu's Quit item MUST close the
+window (38.172) rather than quit the app.
+
+38.184 `LauncherOptions` MUST NOT admit `dock: 'window'` without `menuBarExtra: true`, and the native
+app MUST refuse to launch on an `onLauncher` answer that does.
 
 # 39. Head and view transitions
 

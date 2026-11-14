@@ -94,13 +94,17 @@ export function openNativeWindow(
     const application = send(objcClass('NSApplication'), 'sharedApplication')
     // Regular: a Dock icon and a menu bar, which a process outside a `.app` does not get by default.
     // 38.165 — accessory: neither.
-    sendTyped(
-        application,
-        'setActivationPolicy:',
-        [FFIType.i64],
-        FFIType.void,
-        options.dock ? 0 : 1,
-    )
+    const showDock = (shown: boolean): void => {
+        sendTyped(
+            application,
+            'setActivationPolicy:',
+            [FFIType.i64],
+            FFIType.void,
+            shown ? 0 : 1,
+        )
+    }
+    // 38.182 — the window opens shown, and its Dock icon with it.
+    showDock(options.dock !== false)
     let quitting = false
     // 38.145 — `reopen` for a restart the person asked for, so the update installed is opened.
     const quit = (reopen = false): void => {
@@ -137,8 +141,7 @@ export function openNativeWindow(
                     args: [FFIType.ptr, FFIType.bool],
                     returns: FFIType.bool,
                     run: (_application: Id, visible: boolean) => {
-                        if (!visible)
-                            send(window, 'makeKeyAndOrderFront:', null)
+                        if (!visible) front()
                         return true
                     },
                 },
@@ -509,6 +512,16 @@ export function openNativeWindow(
                 },
                 // The web view sets the cursor only when the page's cursor changes, so the edge's
                 // resize arrows outlast a resize until the pointer crosses an element that has one.
+                // 38.182 — every way the window goes — its close button, Close Window, Quit
+                // (38.183), the menu bar extra (38.169) — closes it, and its Dock icon goes with it.
+                'windowWillClose:': {
+                    types: 'v@:@',
+                    args: [FFIType.ptr],
+                    returns: FFIType.void,
+                    run: () => {
+                        if (options.dock === 'window') showDock(false)
+                    },
+                },
                 'windowDidEndLiveResize:': {
                     types: 'v@:@',
                     args: [FFIType.ptr],
@@ -558,6 +571,8 @@ export function openNativeWindow(
     }
     // Shows the window where it is hidden, in front of every other app's.
     const front = (): void => {
+        // 38.182 — before activating, so the app comes forward with its menu bar.
+        if (options.dock === 'window') showDock(true)
         sendTyped(
             application,
             'activateIgnoringOtherApps:',
@@ -587,7 +602,13 @@ export function openNativeWindow(
     const showMenu = (told: NativeMenuItem[]): void => {
         shownMenu = told
         const built = installMenu(
-            menuBar(appName, options.connect, told, updateLabel()),
+            menuBar(
+                appName,
+                options.connect,
+                told,
+                updateLabel(),
+                options.dock === 'window',
+            ),
             choose,
             // 38.170.
             extra === undefined ? undefined : menuBarExtraMenu(appName, told),
@@ -602,6 +623,8 @@ export function openNativeWindow(
             return void launcher.forget().then(() => navigate(base))
         if (item.role === 'reload') return void send(view, 'reload')
         if (item.role === 'window') return front()
+        // 38.183.
+        if (item.role === 'closeWindow') return void send(window, 'close')
         // 38.90, 38.91 — the page that numbered the item does what it means.
         if (item.id !== undefined)
             send(

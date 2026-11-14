@@ -20,8 +20,14 @@ import Snippet from '#src/lib/Snippet.abide'
 
         <p><code>abide native [--out]</code> wraps the compiled executable in a macOS
             <code>.app</code> that opens the CRM in a window of its own. Its icon is
-            <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. The first launch
-            offers Start, which runs the app here, and Connect…, which opens one running at a URL.</p>
+            <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. Its name in the
+            Dock, the menu bar and the window is the CRM's <code>APP_NAME</code> where an
+            <code>onConfig</code> default sets one, read when <code>abide native</code> runs, and
+            the <code>package.json</code> name otherwise. That name always names the executable
+            inside, and the identifier macOS keeps the app's settings under. The first launch
+            offers Start, which runs the app here, and Connect…, which opens one running at a URL.
+            Each launch after it does again what the last one did. With <code>connect: false</code>
+            and nothing for the start form to ask, the first launch starts the CRM at once.</p>
 
         <Snippet source={launcherSource} path="src/native/launcher.abide" />
 
@@ -61,7 +67,10 @@ import Snippet from '#src/lib/Snippet.abide'
             <code>src/native/menubar.abide</code> in a panel under it, a page outside every
             layout, <code>panelWidth</code> by <code>panelHeight</code>. Without that file a click
             shows and hides the window. A right click lists Open, the page's menus and Quit, and
-            closing the window keeps the CRM running up there. A link in the panel with
+            closing the window keeps the CRM running up there. Add <code>dock: 'window'</code> and
+            the Dock icon and the menu bar come and go with the window, so Quit in the app menu
+            closes the window and leaves the CRM in the menu bar, where Quit in the right-click
+            menu stops it. A link in the panel with
             <code>target="_blank"</code> opens its page in the window, and an item with
             <code>role: 'window'</code> brings the window forward from any menu.</p>
 

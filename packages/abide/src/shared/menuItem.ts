@@ -42,14 +42,16 @@ export type MenuItem =
 
 /**
  * A menu item as the window builds it — what a page tells it (`reportMenu`) and the defaults it
- * stands beside. An item the page answers carries the `id` it is told by.
+ * stands beside. An item the page answers carries the `id` it is told by. `closeWindow` is no
+ * `MenuRole` a page can name: it is the application menu's Quit where the Dock follows the window
+ * (38.183), and only the default menu bar carries it.
  */
 export type NativeMenuItem =
     | 'separator'
     | {
           label: string
           key?: string | undefined
-          role?: MenuRole | undefined
+          role?: MenuRole | 'closeWindow' | undefined
           id?: number | undefined
           items?: NativeMenuItem[] | undefined
       }

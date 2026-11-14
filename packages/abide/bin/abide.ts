@@ -32,6 +32,7 @@ import {
     buildFiles,
     builtFiles,
     markBuild,
+    servedBuild,
     unmarkedBuild,
     writeWhole,
 } from '#server/appBuild.ts'
@@ -39,8 +40,8 @@ import { banner } from '#server/banner.ts'
 import { ENCODING_SUFFIX } from '#server/CLIENT_BUILD.ts'
 import { type ClientBundle, clientBundle } from '#server/clientBundle.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
-import { type AppPackage, packageUnder } from '#server/config.ts'
-import { appOnDisk, appRoot, noAppHere } from '#server/createApp.ts'
+import { type AppPackage, packageUnder, shownName } from '#server/config.ts'
+import { appOnDisk, appRoot, enterApp, noAppHere } from '#server/createApp.ts'
 import { executableName } from '#server/executableName.ts'
 import { iconAccent } from '#server/iconAccent.ts'
 import { namesUnder } from '#server/namesUnder.ts'
@@ -220,11 +221,10 @@ async function nativeApp(
         return 1
     }
     const identity = packageUnder(root)
-    const name = executableName(identity.name)
-    const out = resolve(values.out ?? `${name}.app`)
-    if (!out.endsWith('.app')) {
+    const executable = executableName(identity.name)
+    if (values.out !== undefined && !values.out.endsWith('.app')) {
         console.error(
-            `abide native: --out names the .app to write, and ${out} is not one.`,
+            `abide native: --out names the .app to write, and ${resolve(values.out)} is not one.`,
         )
         return 1
     }
@@ -241,13 +241,16 @@ async function nativeApp(
         notes = (await file.text()).trim()
     }
     // 38.147 — the key is the build's: its public half is built into the executable.
-    const key = await updateKey(name)
+    const key = await updateKey(executable)
     const publicKey = await publicKeyOf(key.privateKey)
+    let name = executable
     const entry = await writtenEntry(root, async (app) => {
         const launcherPath = `${root}/${LAUNCHER_PAGE}`
         const hasLauncher = app.files[LAUNCHER_PAGE] !== undefined
         const art = await launcherIcon(root)
+        name = await nativeName(root)
         return {
+            name,
             // 38.82 — the page, where it paints: a `launcher.abide` of its script blocks alone keeps
             // the built-in page, and what its `onLauncher` answers is filed by the boot (37.1).
             launch:
@@ -265,16 +268,18 @@ async function nativeApp(
         console.error(`abide native: nothing under ${root} to build.`)
         return 1
     }
+    // 38.78 — named as the app shows itself, with the one character a file name cannot hold.
+    const out = resolve(values.out ?? `${name.replaceAll('/', '-')}.app`)
     await compileExecutable(
         root,
         entry,
         undefined,
-        `${out}/Contents/MacOS/${name}`,
+        `${out}/Contents/MacOS/${executable}`,
     )
     const icon = await writeIcon(root, `${out}/Contents/Resources`)
     await Bun.write(
         `${out}/Contents/Info.plist`,
-        infoPlist(name, identity, icon),
+        infoPlist(executable, name, identity, icon),
     )
     // AD-HOC SIGNED, WHOLE: the executable bun wrote is signed on its own, and a bundle around a
     // signed executable that is not itself signed is one Gatekeeper reads as damaged.
@@ -305,6 +310,17 @@ async function nativeApp(
             `abide native: made the key this app's updates are signed with, at ${key.made}. Keep a copy: every copy of the app installed trusts it and no other. To build the native app anywhere else, set ABIDE_UPDATE_KEY to what it holds.`,
         )
     return 0
+}
+
+/**
+ * 38.87 — the name the native app shows, read from the configuration the app's own server blocks
+ * file, as the launcher would read it at launch: the build is entered once here, as `abide openapi`
+ * enters it, since the bundle's name is fixed before the app ever runs.
+ */
+async function nativeName(root: string): Promise<string> {
+    const served = await servedBuild(root, buildDirectory(root), undefined)
+    if (served !== undefined) await enterApp(served.origin)
+    return shownName()
 }
 
 /**
@@ -496,8 +512,18 @@ async function spawnedTool(tool: string, args: string[]): Promise<number> {
     return code
 }
 
-/** The `Info.plist` a bundle names its executable, its identity and its icon in. */
-function infoPlist(name: string, identity: AppPackage, icon: boolean): string {
+/**
+ * The `Info.plist` a bundle names its executable, its identity and its icon in.
+ *
+ * 38.87 — `executable` names the file and the identifier, which the platform keys what it keeps
+ * for the app by, and `name` what the person sees.
+ */
+function infoPlist(
+    executable: string,
+    name: string,
+    identity: AppPackage,
+    icon: boolean,
+): string {
     const entries: [string, string][] = [
         ...(icon
             ? ([['CFBundleIconFile', '<string>icon</string>']] as [
@@ -505,10 +531,10 @@ function infoPlist(name: string, identity: AppPackage, icon: boolean): string {
                   string,
               ][])
             : []),
-        ['CFBundleExecutable', `<string>${name}</string>`],
+        ['CFBundleExecutable', `<string>${escapeText(executable)}</string>`],
         [
             'CFBundleIdentifier',
-            `<string>abide.app.${name.replace(/[^A-Za-z0-9.-]/g, '-')}</string>`,
+            `<string>abide.app.${executable.replace(/[^A-Za-z0-9.-]/g, '-')}</string>`,
         ],
         ['CFBundleName', `<string>${escapeText(name)}</string>`],
         ['CFBundleDisplayName', `<string>${escapeText(name)}</string>`],

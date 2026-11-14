@@ -1,10 +1,13 @@
 // 38.142-38.147 — A NATIVE APP UPDATING ITSELF, apart from the window: what `abide native`
 // publishes, served as a host would, read back by the updater an installed copy runs. A fake `.app`
-// is a directory with an `Info.plist` — what the updater moves is the directory, not what runs.
+// is a directory with an `Info.plist` — what the updater moves is the directory, not what runs. And
+// 38.78, 38.87 — the one real `.app` below, and the names `abide native` gives it.
 
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises' // bun exposes no temporary directory or removal of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
+
+import { spawned } from '@abide/harness/gate'
 
 import { launcherOf } from '#server/launcherOptions.ts'
 import { menuBar } from '#server/menuBar.ts'
@@ -17,10 +20,14 @@ import {
     updateKey,
 } from '#server/updateFeed.ts'
 
+import { BIN } from './builtApp.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+
 const made: string[] = []
 afterAll(async () => {
     for (const directory of made)
         await rm(directory, { recursive: true, force: true })
+    removeTemporaryModules()
 })
 
 async function workspace(): Promise<string> {
@@ -281,7 +288,7 @@ test('the first bundle makes the key, and every one after it reuses it — 38.14
 // Check for Updates… too.
 test("the update role stands under the app's name only where onLauncher names a feed — 38.149", () => {
     const roles = (update: string | undefined): string => {
-        const [application] = menuBar('CRM', true, [], update)
+        const [application] = menuBar('CRM', true, [], update, false)
         if (application === undefined || application === 'separator') return ''
         return (application.items ?? [])
             .map((item) => (item === 'separator' ? '—' : (item.role ?? '')))
@@ -306,3 +313,69 @@ test('onLauncher takes an update address, and refuses one that is not a URL — 
         '`update` is not a launcher option, or "crm updates" is not a value it takes',
     )
 })
+
+// 38.78, 38.87 — THE APP IS SHOWN BY ITS `APP_NAME` and kept by its package's name: the bundle's
+// name, its display name and the `.app` are `Faster`, read from the `onConfig` its root layout files
+// as `abide native` runs — past a schema that requires what only the start form supplies — and the
+// executable and the identifier the platform keeps the app's state under stay `faster-app`. THE
+// REVERT: name `infoPlist` and `out` by `executableName(identity.name)`, as before; the bundle is
+// `faster-app.app` and its name `faster-app`.
+test.skipIf(process.platform !== 'darwin')(
+    'abide native names the bundle by APP_NAME and keeps its executable and identifier — 38.78, 38.87',
+    async () => {
+        const app = temporaryModule({
+            'package.json': JSON.stringify({
+                name: '@acme/faster-app',
+                version: '1.2.3',
+                type: 'module',
+            }),
+            'src/index.abide': '<main>board</main>',
+            'src/layout.abide': `<script server>
+import { onConfig } from '@abide/abide/server'
+
+onConfig(() => ({ APP_NAME: 'Faster' }), {
+    schema: {
+        '~standard': {
+            version: 1,
+            vendor: 'test',
+            validate: (value) =>
+                value.API_KEY === undefined
+                    ? { issues: [{ message: 'API_KEY is required' }] }
+                    : { value },
+        },
+    },
+})
+</script>
+
+<slot />
+`,
+        })
+        const into = await workspace()
+        const built = await spawned(
+            ['bun', BIN, 'native', '--root', `${app}/src`],
+            {
+                cwd: into,
+                env: { ...process.env, ABIDE_UPDATE_KEY: await newUpdateKey() },
+            },
+        )
+        expect(built.stderr).not.toContain('error')
+        expect(built.exitCode).toBe(0)
+        const plist = await Bun.file(
+            `${into}/Faster.app/Contents/Info.plist`,
+        ).text()
+        const entry = (key: string): string | undefined =>
+            new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`).exec(
+                plist,
+            )?.[1]
+        expect(entry('CFBundleName')).toBe('Faster')
+        expect(entry('CFBundleDisplayName')).toBe('Faster')
+        expect(entry('CFBundleExecutable')).toBe('faster-app')
+        expect(entry('CFBundleIdentifier')).toBe('abide.app.faster-app')
+        expect(
+            await Bun.file(
+                `${into}/Faster.app/Contents/MacOS/faster-app`,
+            ).exists(),
+        ).toBe(true)
+    },
+    120_000,
+)

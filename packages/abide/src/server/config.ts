@@ -12,6 +12,7 @@ import { reactive } from '#shared/reactive/index.ts'
 import { refuse } from '#shared/refuse.ts'
 import { runSchema } from '#shared/Schema.ts'
 
+import { executableName } from './executableName.ts'
 import { type Env, HOOKS, inOrder } from './hooks.ts'
 import { packageDirectory } from './packageDirectory.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
@@ -64,14 +65,28 @@ export function addDerived(values: Record<string, string>): void {
 export const config = reactive(resolve, { global: true })
 
 function resolve(): Config {
+    const document = unchecked()
+    // 27.7 — LAST, each over the whole document, and what each accepts merged back over it.
+    for (const { options } of inOrder(HOOKS.config)) {
+        const schema = options?.schema
+        if (schema === undefined) continue
+        const checked = runSchema(schema, document)
+        if (checked.issues !== null)
+            return refuse.validation(checked.issues as never) as never
+        if (isRecord(checked.value)) Object.assign(document, checked.value)
+    }
+    return document as Config
+}
+
+/** The document before any `onConfig` schema has checked it: 27.2's three layers, merged. */
+function unchecked(): Record<string, unknown> {
     const env: Env = { ...process.env }
-    const hooked = inOrder(HOOKS.config)
     // 27.11 — handed what 27.3 derives under the environment, so a default can be built on
     // `APP_DATA_DIR` without deriving it a second time.
     const derivedValues = derived()
     const document: Record<string, unknown> = { ...derivedValues }
     // 27.6, 37.7 — EVERY `onConfig`'S DEFAULTS, merged over the ones before it.
-    for (const { defaults } of hooked) {
+    for (const { defaults } of inOrder(HOOKS.config)) {
         const given = defaults?.({ ...derivedValues, ...env }) ?? {}
         // 27.4 — SYNCHRONOUS BY CONTRACT; a promise handed back is a contract broken, not a value.
         if (given instanceof Promise)
@@ -87,16 +102,26 @@ function resolve(): Config {
         const coerced = coerce(text, document[name])
         if (coerced !== undefined) document[name] = coerced
     }
-    // 27.7 — LAST, each over the whole document, and what each accepts merged back over it.
-    for (const { options } of hooked) {
-        const schema = options?.schema
-        if (schema === undefined) continue
-        const checked = runSchema(schema, document)
-        if (checked.issues !== null)
-            return refuse.validation(checked.issues as never) as never
-        if (isRecord(checked.value)) Object.assign(document, checked.value)
+    return document
+}
+
+/**
+ * 38.87 — the name the native app shows: `APP_NAME` where `onConfig`'s defaults or the environment
+ * carry one, else the package name as 38.46 names the executable. Read before any schema, which may
+ * require what only the launcher's start form supplies.
+ */
+export function shownName(): string {
+    let named: unknown
+    try {
+        named = unchecked().APP_NAME
+    } catch {
+        // 27.1 — what `onConfig` threw is the boot's to report; the bundle is named all the same.
     }
-    return document as Config
+    return typeof named === 'string' &&
+        named !== '' &&
+        named !== derived().APP_NAME
+        ? named
+        : executableName(APP_PACKAGE.current.name)
 }
 
 function coerce(text: string, standing: unknown): unknown {
