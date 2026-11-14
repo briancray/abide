@@ -14,6 +14,11 @@ type Id = number | null
 const FIRST_BUTTON = 1000
 // NSApplicationActivationPolicyAccessory: in front of the browser, with no Dock icon of its own.
 const ACCESSORY = 1
+// NSApplicationActivationPolicyProhibited: no app at all, once the question is answered.
+const PROHIBITED = 2
+// The icon of an app with none of its own, in place of the folder a bare executable is drawn as.
+const GENERIC_ICON =
+    '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns'
 // NSAlertStyleWarning: the alert's own icon, with nothing laid over it.
 const WARNING = 0
 
@@ -112,6 +117,7 @@ export function macAlert(
         sendTyped(alert, 'setAlertStyle:', [FFIType.u64], FFIType.void, WARNING)
         send(alert, 'setMessageText:', string(headline))
         send(alert, 'setInformativeText:', string(body))
+        let image: Id = null
         if (icon !== undefined && icon.length > 0) {
             const data = sendTyped(
                 classNamed('NSData'),
@@ -121,14 +127,20 @@ export function macAlert(
                 icon,
                 icon.length,
             ) as Id
-            const image = send(
+            image = send(
                 send(classNamed('NSImage'), 'alloc'),
                 'initWithData:',
                 data,
             )
-            // An icon macOS cannot read leaves the alert its own.
-            if (image !== null && image !== 0) send(alert, 'setIcon:', image)
         }
+        // A site with no icon, or one macOS cannot read, is drawn as an app rather than a folder.
+        if (image === null || image === 0)
+            image = send(
+                send(classNamed('NSImage'), 'alloc'),
+                'initWithContentsOfFile:',
+                string(GENERIC_ICON),
+            )
+        if (image !== null && image !== 0) send(alert, 'setIcon:', image)
         // Laid out as AppKit lays any alert: the first button added is the default, and where each
         // goes is AppKit's. Escape, which it gives only a button titled Cancel, is the last's.
         let last: Id = null
@@ -137,6 +149,16 @@ export function macAlert(
         send(last, 'setKeyEquivalent:', string('\u001b'))
         const pressed = sendTyped(alert, 'runModal', [], FFIType.i64) as
             number | bigint
+        // This process runs on, minding the bridge, and pumps no events from here: as an app in front
+        // it would read as not responding, so it closes the alert and is no app at all.
+        send(send(alert, 'window'), 'orderOut:', null)
+        sendTyped(
+            application,
+            'setActivationPolicy:',
+            [FFIType.i64],
+            FFIType.bool,
+            PROHIBITED,
+        )
         return Number(pressed) - FIRST_BUTTON
     } finally {
         runtime.close()

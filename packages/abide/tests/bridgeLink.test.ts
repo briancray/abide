@@ -362,6 +362,8 @@ test('the tools a link asks for are read as what they let it do — 44.92', () =
         'MCP servers: github (3 tools), linear (1 tool), mail (all tools), calendar (1 tool)',
     ])
     expect(requestedLines(['TodoWrite'])).toEqual([])
+    // Claude Code's helper agents, by the name it gives them now and the one it gave them before.
+    expect(requestedLines(['Agent', 'Task'])).toEqual(['Start helper agents'])
 })
 
 // 44.29 — AN MCP TOOL IS A TOOL TOO: a link asks for one by Claude Code's name for it, or for all of a

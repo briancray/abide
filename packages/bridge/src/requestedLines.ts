@@ -19,7 +19,7 @@ const CAPABILITIES: readonly { line: string; tools: readonly string[] }[] = [
     },
     { line: 'Search the web', tools: ['WebSearch'] },
     { line: 'Open web pages', tools: ['WebFetch'] },
-    { line: 'Start helper agents', tools: ['Task'] },
+    { line: 'Start helper agents', tools: ['Agent', 'Task'] },
 ]
 const UNSHOWN = new Set(['TodoWrite', 'ExitPlanMode'])
 
