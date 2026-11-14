@@ -90,6 +90,31 @@ import Section from '#src/lib/Section.abide'
             nobody answers is denied after two minutes. The site's own tools are never asked
             about.</p>
 
+        <p>When the server already knows the exact call, it can skip the model.
+            <code>provider.claudeCode.callTool(tool, input)</code> calls one MCP tool of the
+            visitor's machine directly: no turn and no tokens, and it takes as long as the tool does.
+            It answers a <code>ToolAnswer</code>, the tool's pieces and whether it failed, like a tool
+            call in a conversation. Several calls at once run side by side. The bridge talks to the
+            visitor's server itself, starting it for that one call in an empty directory, or
+            reaching its http address with only the headers its configuration names. So a server
+            that signs in through Claude Code cannot be called this way.</p>
+
+        <Code code={`const { content } = await provider.claudeCode.callTool(
+    'mcp__calendar__meetings',
+    { day: 'today' },
+)`} />
+
+        <p>With no model in between, nothing is left to ask the visitor. So a call runs only where
+            a turn naming that tool alone would get it, and the visitor approved it in advance with
+            <code>--allowedTools</code>: the tool, or <code>mcp__calendar</code> for all of that
+            server's tools. Anything else is refused 403, saying what to add, and a bridge from
+            before calls existed is refused 409. An <code>onPairing</code> that answers the flag puts
+            it in the command the visitor runs.</p>
+
+        <Code code={`bunx @abide/bridge <site> <code> -- \\
+    --tools mcp__calendar__meetings \\
+    --allowedTools mcp__calendar__meetings`} />
+
         <p>A visitor who wants the site to have everything their Claude Code has runs the bridge
             with <code>--full</code>: every built-in tool, every MCP server and every setting it
             would read on its own, still in an empty directory and still in auto mode. The native
@@ -216,6 +241,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>onPairing</code></td><td>The options every pairing's command and install command carry after <code>--</code>, for the person asking.</td></tr>
                 <tr><td><code>provider.claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
+                <tr><td><code>provider.claudeCode.callTool</code></td><td>Calls one MCP tool of the visitor's machine with no model, answering what the tool answered.</td></tr>
                 <tr><td><code>provider.claudeCode.permit</code></td><td>Answers a <code>permission</code> event the paired bridge is waiting on, allowing the call or not.</td></tr>
                 <tr><td><code>provider.claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>
                 <tr><td><code>/__abide/bridge</code></td><td>Where the visitor's bridge connects. It opens the first time a command is minted.</td></tr>

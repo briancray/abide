@@ -4317,6 +4317,29 @@ characters, and MUST NOT show it in the headline.
 the link asks for by what they let the site do, one line per capability, and every MCP tool it asks for
 on one line naming each server with how many of its tools are asked for, or all of them.
 
+44.93 `provider.claudeCode.callTool` MUST call the MCP tool it names on the bridge paired with the
+asking browser, or on the native app's own bridge where 44.77 pairs it, with no Claude Code run, and
+MUST answer what the tool answered as a `Toolbox` call answers it (44.35), refusing 409 where neither
+is paired.
+
+44.94 A bridge MUST make a call only of an MCP tool 44.29 makes available to a turn whose `tools`
+names that tool alone, and only where the visitor's `--allowedTools` names the tool, `mcp__<server>`
+or `mcp__<server>__*` and their `--disallowedTools` names none of them, and
+`provider.claudeCode.callTool` MUST refuse 403 any other call, with what the bridge said of it.
+
+44.95 A bridge MUST make a call on the server 44.58 finds for its tool, started for that call alone —
+its command run in an empty directory removed when the call ends, or its http address sent the
+headers its configuration names and no other credential — and ended with the call, and
+`provider.claudeCode.callTool` MUST refuse 502 a call the bridge could not make.
+
+44.96 A bridge MUST say, as it pairs with `/__abide/bridge`, that it makes calls, and
+`provider.claudeCode.callTool` MUST refuse 409 a call where the paired bridge did not.
+
+44.97 A bridge MUST make each call as `/__abide/bridge` sends it, without waiting on any other call or
+turn.
+
+44.98 `provider.claudeCode.callTool` MUST end its call on the bridge when the caller hangs up.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker

@@ -9,6 +9,11 @@
 // the visitor's own MCP servers, are a request the visitor grants or does not: the bridge decides
 // (44.15, 44.16, 44.29, 44.82). What auto mode would ask the visitor is a `permission` event, which the
 // page answers through `permit` (44.81, 44.83).
+//
+// 44.93 — ONE TOOL OF THE VISITOR'S MACHINE CAN BE CALLED WITH NO MODEL, through `callTool`: the bridge
+// speaks MCP to the server itself, under the grant a turn naming that tool alone would have — and
+// since no model or auto mode stands between the site and the tool, only where the visitor approved
+// it without asking (44.94).
 
 export type { BridgeStatus } from '#shared/BridgeStatus.ts'
 
@@ -27,7 +32,12 @@ import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
 import { declare } from '#shared/rpc.ts'
 
-import { blocksOf, forwardOf, type Provider } from './assistant.ts'
+import {
+    blocksOf,
+    forwardOf,
+    type Provider,
+    type ToolAnswer,
+} from './assistant.ts'
 import {
     fromNativeWindow,
     mintCode,
@@ -35,6 +45,7 @@ import {
     pairingNow,
     pairingStatus,
     permit as permitPrompt,
+    runCall,
     runTurn,
     watchFollowedPairing,
 } from './bridgeRelay.ts'
@@ -230,12 +241,36 @@ function permit(id: string, allow: boolean): void {
     })
 }
 
+/**
+ * What the MCP tool `tool` of the visitor's machine, named `mcp__<server>__<tool>`, answered `input`,
+ * called through this browser's bridge with no model. 44.93. Ended where the request is.
+ *
+ * Throws 409 where no bridge that makes calls is paired, 403 where the visitor did not give the site
+ * the tool to call (44.94), and 502 where the call failed (44.95).
+ */
+function callTool(tool: string, input: unknown): Promise<ToolAnswer> {
+    return runCall({
+        caller: askingCaller(),
+        signedIn: signedInAs(),
+        local: fromNativeWindow(),
+        name: tool,
+        input,
+        signal: request().signal,
+    })
+}
+
 /** The visitor's own Claude Code as a provider, with the pairing that reaches it. */
 export const claudeCode: typeof claudeCodeProvider & {
     bridge: typeof bridge
     bridgeCommand: typeof bridgeCommand
+    callTool: typeof callTool
     permit: typeof permit
-} = Object.assign(claudeCodeProvider, { bridge, bridgeCommand, permit })
+} = Object.assign(claudeCodeProvider, {
+    bridge,
+    bridgeCommand,
+    callTool,
+    permit,
+})
 
 // 44.67 — THE PAIRING A BROWSER'S `pairing` READS, as a handler abide mounts rather than one each app
 // writes: the asking browser's pairing as it stands, granting the tools `ABIDE_BRIDGE_TOOLS` names,
