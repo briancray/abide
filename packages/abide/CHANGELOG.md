@@ -1,5 +1,14 @@
 # @abide/abide
 
+## 0.134.1
+
+### Patch Changes
+
+- e24354b: the native app finds claude on the login shell's PATH when opened from the Finder — Bun.which and Bun.spawn read the PATH the process started with, so localStands passes the current PATH and a turn's spawn hands the child the current env; the 44.77 test now starts with no claude on PATH and assigns it after, as runNative does ([`26a24cb`](https://github.com/briancray/abide/commit/26a24cbd98ebc248dce33a17fb0f5a28521247d4))
+- af5a883: the executable abide compile and abide native write trusts this machine's certificate authorities as well as bun's — started with --use-system-ca, so a native app opened from the Finder reaches an update feed an organization's authority signed (RULEBOOK 38.181) ([`9bcbafc`](https://github.com/briancray/abide/commit/9bcbafc7cec86377c0928658d0c83e9e0b44b326))
+- Updated dependencies [e24354b]
+  - @abide/bridge@0.7.4
+
 ## 0.134.0
 
 ### Minor Changes
