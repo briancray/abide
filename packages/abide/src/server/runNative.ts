@@ -1,31 +1,36 @@
 // 38.70 — WHAT `abide native` WRITES, STARTED WITH NO COMMAND: a window on the app. Given a command
 // it is the executable `abide compile` writes (`runCompiled`), so a terminal still reaches every one.
 //
-// ONE PROCESS. The app, the launcher's own page and the window share it, and the app is served on
-// loopback for the window alone. What the window shows is the `NativeSession`'s; the window itself
-// is `openNativeWindow`'s.
+// ONE PROCESS, TWO THREADS, ONE ENTRY. The main thread holds the window (`openNativeWindow`) and
+// sleeps in AppKit's wait (`appKitLoop`); the launcher's thread — a worker the main thread starts on
+// the same entry — holds the app, the launcher's own page, the session and the updater, so the app
+// goes on answering while AppKit holds the main thread through a resize or a menu (38.179). The app
+// is served on loopback for the window alone. The two threads talk in `ToWindow` and `ToLauncher`,
+// and each message to the window is followed by a wake, since the main thread hears nothing until one.
 
 import { ICON_ADDRESSES, MENU_BAR_ICON_ADDRESS } from '#shared/NATIVE_FILES.ts'
 
+import { openWakePort } from './appKitLoop.ts'
 import { NATIVE_COOKIE, serveLocally } from './bridgeRelay.ts'
 import { addDerived, dataDirectory, derived as appDerived } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type AppOrigin, bootEntered, enterApp } from './createApp.ts'
 import { executableName } from './executableName.ts'
 import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
-import { launcherOf } from './launcherOptions.ts'
+import { type Launcher, launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
 import { loginShellPath } from './loginShellPath.ts'
 import { LOOPBACK } from './LOOPBACK.ts'
 import type { MenuBarIcon } from './menuBarExtra.ts'
 import { NativeSession } from './NativeSession.ts'
-import { appOf, NativeUpdater } from './NativeUpdater.ts'
-import { openNativeWindow } from './openNativeWindow.ts'
+import { appOf, NativeUpdater, type Staged } from './NativeUpdater.ts'
+import { type LauncherThread, openNativeWindow } from './openNativeWindow.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { randomToken } from './randomToken.ts'
 import { type Component, renderDocument } from './render.ts'
 import { runCompiled } from './runCompiled.ts'
 import { type BuildParts, builtSources } from './servedApp.ts'
+import { wakeWindow } from './wakeWindow.ts'
 
 /** What `abide native` read of the launcher's files, carried in the executable. */
 export type NativeBuild = {
@@ -49,12 +54,118 @@ export async function runNative(
 ): Promise<void> {
     if (Bun.argv.length > 2 || process.platform !== 'darwin')
         return runCompiled(origin, parts, specifiers)
-    await launch(
-        origin,
-        () => builtSources(parts),
-        native,
-        await menuBarIcon(parts.published),
-    )
+    if (Bun.isMainThread) return openWindow(origin, parts.published)
+    await launch(origin, () => builtSources(parts), native)
+}
+
+/** What the launcher's thread tells the window. */
+type ToWindow =
+    | {
+          kind: 'open'
+          options: Launcher
+          base: string
+          background: [number, number, number] | null
+          updates: boolean
+      }
+    | { kind: 'navigate'; address: string }
+    | { kind: 'shown'; address: string | undefined }
+    | { kind: 'staged'; staged: Staged }
+    | { kind: 'answer'; call: number; value: unknown }
+    | { kind: 'ended' }
+
+/** What the window tells the launcher's thread; the first is where to wake it. */
+type ToLauncher =
+    | { kind: 'wake'; port: number }
+    | {
+          kind: 'call'
+          call: number
+          name: 'check' | 'forget' | 'hasPage'
+          address: string
+      }
+    | { kind: 'background'; color: [number, number, number] }
+    | { kind: 'report'; error: unknown }
+    | { kind: 'quit'; reopen: boolean }
+
+/**
+ * The main thread: starts the launcher's thread on this same entry, opens the window on what it
+ * answers, and from then on is AppKit's.
+ */
+async function openWindow(
+    origin: AppOrigin,
+    published: Map<string, string>,
+): Promise<void> {
+    const appName = executableName(origin.package.name)
+    const version = origin.package.version ?? '0.0.0'
+    const icon = await menuBarIcon(published)
+    const thread = new Worker(Bun.main)
+    const tell = (message: ToLauncher): void => thread.postMessage(message)
+    tell({ kind: 'wake', port: openWakePort() })
+    // Each call's answer, by the number it was posted with.
+    const answers = new Map<number, (value: unknown) => void>()
+    let calls = 0
+    const call = <Answer>(
+        name: 'check' | 'forget' | 'hasPage',
+        address = '',
+    ): Promise<Answer> =>
+        new Promise((answered) => {
+            calls += 1
+            answers.set(calls, answered as (value: unknown) => void)
+            tell({ kind: 'call', call: calls, name, address })
+        })
+    let navigate: ((address: string) => void) | undefined
+    let shown: string | undefined
+    let updates: LauncherThread['updates']
+    const launcher: LauncherThread = {
+        get shown() {
+            return shown
+        },
+        get updates() {
+            return updates
+        },
+        forget: () => call('forget'),
+        hasPage: (address) => call('hasPage', address),
+        rememberBackground: (color) => tell({ kind: 'background', color }),
+        quit: (reopen) => tell({ kind: 'quit', reopen }),
+        report: (error) =>
+            tell({
+                kind: 'report',
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+            }),
+    }
+    await new Promise<void>((resolve, reject) => {
+        // A launcher's thread that fails before the window opens ends the process with its error.
+        thread.onerror = (event) =>
+            reject(event.error ?? new Error(event.message))
+        thread.onmessage = ({ data }: MessageEvent<ToWindow>) => {
+            if (data.kind === 'open') {
+                if (data.updates)
+                    updates = {
+                        staged: undefined,
+                        check: () => call('check'),
+                        onStaged: () => {},
+                    }
+                navigate = openNativeWindow(
+                    appName,
+                    version,
+                    data.options,
+                    data.base,
+                    data.background,
+                    launcher,
+                    icon,
+                )
+                resolve()
+            } else if (data.kind === 'navigate') navigate?.(data.address)
+            else if (data.kind === 'shown') shown = data.address
+            else if (data.kind === 'staged' && updates !== undefined) {
+                updates.staged = data.staged
+                updates.onStaged()
+            } else if (data.kind === 'answer') {
+                answers.get(data.call)?.(data.value)
+                answers.delete(data.call)
+            } else if (data.kind === 'ended') process.exit(0)
+        }
+    })
 }
 
 /**
@@ -75,12 +186,35 @@ async function menuBarIcon(
     return undefined
 }
 
+/**
+ * The launcher's thread: the app, the launcher's page, the session and the updater, and what the
+ * window asks of them.
+ */
 async function launch(
     origin: AppOrigin,
     load: () => ReturnType<typeof builtSources>,
     { launch: launchModule, document, icon, accent, publicKey }: NativeBuild,
-    extraIcon: MenuBarIcon | undefined,
 ): Promise<void> {
+    // A native app outlives a fault in it: it is reported, and the window stays.
+    process.on('unhandledRejection', reportUnexpected)
+    process.on('uncaughtException', reportUnexpected)
+    const parent = globalThis as unknown as {
+        postMessage(message: ToWindow): void
+        onmessage: ((event: MessageEvent<ToLauncher>) => void) | null
+    }
+    // What the window asks before this thread can answer, heard once it can.
+    const heard: Exclude<ToLauncher, { kind: 'wake' }>[] = []
+    let hear = (message: (typeof heard)[number]): void =>
+        void heard.push(message)
+    let wakePort = 0
+    parent.onmessage = ({ data }) => {
+        if (data.kind === 'wake') wakePort = data.port
+        else hear(data)
+    }
+    const tell = (message: ToWindow): void => {
+        parent.postMessage(message)
+        if (wakePort !== 0) wakeWindow(wakePort)
+    }
     // 44.80 — what a terminal would find, for the app and for the Claude Code its own bridge runs.
     const path = loginShellPath()
     // 37.1 — ENTERED ONCE, before the window: the start form reads `onConfig` and the launcher's
@@ -101,6 +235,13 @@ async function launch(
     const appName = executableName(origin.package.name)
     const directory = dataDirectory(origin.package.name ?? 'app')
     const session = await NativeSession.open(directory, () => bootEntered(load))
+    // What the window holds of `session.shown`, told again whenever it moves.
+    let toldShown: string | undefined
+    const tellShown = (): void => {
+        if (session.shown === toldShown) return
+        toldShown = session.shown
+        tell({ kind: 'shown', address: toldShown })
+    }
     // 38.175 — a sign-in seals where the app declares no secret, and still opens after a relaunch:
     // derived, so the app's `onConfig` default and the env both still win (27.2).
     addDerived({
@@ -134,6 +275,7 @@ async function launch(
                 url,
                 url.pathname.slice(token.length + 2),
             )
+            tellShown()
             answer.headers.append('set-cookie', credential)
             return answer
         },
@@ -228,19 +370,64 @@ async function launch(
                   publicKey,
                   bundled,
                   version,
-                  () => {},
+                  (staged) => tell({ kind: 'staged', staged }),
               )
-    const navigate = openNativeWindow(
-        appName,
-        version,
+    const answer = async (
+        message: Extract<ToLauncher, { kind: 'call' }>,
+    ): Promise<unknown> => {
+        if (message.name === 'forget') {
+            await session.forget()
+            return tellShown()
+        }
+        if (message.name === 'hasPage')
+            return fetch(message.address, { method: 'HEAD' }).then(
+                (answered) => answered.ok,
+                () => false,
+            )
+        const checked = await updater?.check()
+        if (checked?.outcome === 'refused')
+            reportUnexpected(
+                new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
+            )
+        return checked
+    }
+    hear = (message) => {
+        if (message.kind === 'call')
+            answer(message)
+                .catch((thrown: unknown) => reportUnexpected(thrown))
+                .then((value) =>
+                    tell({ kind: 'answer', call: message.call, value }),
+                )
+        else if (message.kind === 'background')
+            session.rememberBackground(message.color).catch(reportUnexpected)
+        else if (message.kind === 'report') reportUnexpected(message.error)
+        else if (message.kind === 'quit')
+            // 38.76 — the app is stopped first, and the process ends after.
+            session
+                .disconnect()
+                .then(async () => {
+                    if (updater === undefined || !(await updater.install()))
+                        return
+                    // 38.145.
+                    if (message.reopen)
+                        Bun.spawn(['open', '-n', updater.app], {
+                            stdio: ['ignore', 'ignore', 'ignore'],
+                        }).unref()
+                })
+                .catch(reportUnexpected)
+                .finally(() => tell({ kind: 'ended' }))
+    }
+    for (const message of heard.splice(0)) hear(message)
+    tell({
+        kind: 'open',
         options,
         base,
-        session,
-        updater,
-        extraIcon,
-    )
+        background: session.remembered.background,
+        updates: updater !== undefined,
+    })
     await session.resume(options)
-    navigate(`${base}open`)
+    tellShown()
+    tell({ kind: 'navigate', address: `${base}open` })
     if (updater === undefined) return
     // 38.142 — as it launches and hourly after; a feed that cannot be reached is tried again at
     // the next, and only a refusal is reported (38.143).

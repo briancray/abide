@@ -1,10 +1,7 @@
-// 38.70 — THE WINDOW `abide native`'S EXECUTABLE OPENS, over AppKit through `bun:ffi`: a WKWebView, the
-// page's menu bar and an event drain. What it shows is the `NativeSession`'s to decide.
-//
-// AppKit's events are drained on a timer rather than by `[NSApp run]`, which would never hand the
-// thread back to bun, so what `run` does around each event — an autorelease pool — the drain does
-// too. A menu held open or a window being resized runs AppKit's own loop inside one drain, and the
-// app answers nothing until it ends; a dialog is a sheet (38.178) so that it does not.
+// 38.70 — THE WINDOW `abide native`'S EXECUTABLE OPENS, over AppKit through `bun:ffi`: a WKWebView and
+// the page's menu bar, on the main thread, which sleeps in AppKit's wait (`appKitLoop`). What it
+// shows is the launcher's thread's to decide, and everything that needs bun's own loop — the
+// session, the updater, a fetch — is asked of that thread rather than done here.
 
 import { FFIType } from 'bun:ffi'
 
@@ -17,7 +14,6 @@ import {
     created,
     definedClass,
     type Id,
-    inAutoreleasePool,
     nsBoolean,
     nsString,
     objcClass,
@@ -27,18 +23,17 @@ import {
     sendTyped,
     stringOf,
 } from './appKit.ts'
-import { reportUnexpected } from './hooks.ts'
+import { onSignal, sleepInAppKit } from './appKitLoop.ts'
 import { installMenu } from './installMenu.ts'
 import { type Launcher, VIBRANCY_MATERIALS } from './launcherOptions.ts'
 import { menuBar, menuBarExtraMenu, opensInWindow } from './menuBar.ts'
 import { type MenuBarIcon, openMenuBarExtra } from './menuBarExtra.ts'
-import type { NativeSession } from './NativeSession.ts'
-import type { NativeUpdater } from './NativeUpdater.ts'
+import type { Checked, Staged } from './NativeUpdater.ts'
 import { nativeUserAgent } from './nativeUserAgent.ts'
 import { windowBridge } from './windowBridge.ts'
 
-const DRAIN_MILLISECONDS = 8
-
+const SIGINT = 2
+const SIGTERM = 15
 // NSWindowStyleMask.
 const TITLED = 1
 const CLOSABLE = 2
@@ -53,21 +48,47 @@ const UNIFIED_TOOLBAR_STYLE = 3
 const CLOSE_BUTTON = 0
 const ZOOM_BUTTON = 2
 
+/** What the window reaches of the launcher's thread, which holds the session and the updater. */
+export type LauncherThread = {
+    /** The address of the app the window shows, `undefined` while it shows the launcher. */
+    readonly shown: string | undefined
+    /** 38.142 — `undefined` where nothing is checked for; `onStaged` is the window's to set. */
+    readonly updates:
+        | {
+              staged: Staged | undefined
+              check(): Promise<Checked>
+              onStaged: () => void
+          }
+        | undefined
+    /** 38.74. */
+    forget(): Promise<void>
+    /** Whether the app at `address` answers it. */
+    hasPage(address: string): Promise<boolean>
+    /** 38.156. */
+    rememberBackground(color: [number, number, number]): void
+    /**
+     * 38.76 — stops the app, installs what was staged (38.144), opens it where `reopen` (38.145),
+     * and then ends the process.
+     */
+    quit(reopen: boolean): void
+    report(error: unknown): void
+}
+
 /**
- * Opens the app's window on a blank page and answers how to point it at an address.
+ * Opens the app's window on a blank page, hands the main thread to AppKit, and answers how to
+ * point the window at an address.
  *
  * `base` is the launcher's own page, which the Connect… and Disconnect menu items lead back to,
- * and `version` the `.app`'s, which every request the window makes names (38.140). Quitting stops
- * the session's app before the process ends (38.76), and then installs what `updater` staged
- * (38.144).
+ * and `version` the `.app`'s, which every request the window makes names (38.140). `background`
+ * is the one the last page reported (38.156).
  */
 export function openNativeWindow(
     appName: string,
     version: string,
     options: Launcher,
     base: string,
-    session: NativeSession,
-    updater: NativeUpdater | undefined,
+    background: [number, number, number] | null,
+    launcher: LauncherThread,
     menuBarIcon: MenuBarIcon | undefined,
 ): (address: string) => void {
     const application = send(objcClass('NSApplication'), 'sharedApplication')
@@ -81,27 +102,13 @@ export function openNativeWindow(
         options.dock ? 0 : 1,
     )
     let quitting = false
-    // 38.145 — set by a restart the person asked for, so the update installed is opened.
-    let reopen = false
-    const quit = (): void => {
+    // 38.145 — `reopen` for a restart the person asked for, so the update installed is opened.
+    const quit = (reopen = false): void => {
         if (quitting) return
         quitting = true
-        session
-            .disconnect()
-            .then(async () => {
-                if (updater === undefined || !(await updater.install())) return
-                if (reopen)
-                    Bun.spawn(['open', '-n', updater.app], {
-                        stdio: ['ignore', 'ignore', 'ignore'],
-                    }).unref()
-            })
-            .catch(reportUnexpected)
-            .finally(() => process.exit(0))
+        launcher.quit(reopen)
     }
-    const restart = (): void => {
-        reopen = true
-        quit()
-    }
+    const restart = (): void => quit(true)
     send(
         application,
         'setDelegate:',
@@ -139,11 +146,10 @@ export function openNativeWindow(
             'new',
         ),
     )
-    for (const signal of ['SIGTERM', 'SIGINT'] as const)
-        process.on(signal, quit)
+    for (const signal of [SIGTERM, SIGINT]) onSignal(signal, () => quit())
     // A native app outlives a fault in it: it is reported, and the window stays.
-    process.on('unhandledRejection', reportUnexpected)
-    process.on('uncaughtException', reportUnexpected)
+    process.on('unhandledRejection', launcher.report)
+    process.on('uncaughtException', launcher.report)
 
     // 38.157.
     if (options.appearance !== 'system')
@@ -270,7 +276,6 @@ export function openNativeWindow(
             nsString(`${appName} window`),
         )
     // 38.156 — the background the last page reported, so the window opens on it rather than a flash.
-    const background = session.remembered.background
     if (background !== null && options.vibrancy === undefined)
         send(window, 'setBackgroundColor:', colorOf(background))
     send(window, 'setTitle:', nsString(appName))
@@ -472,9 +477,7 @@ export function openNativeWindow(
                                 number,
                             ]
                             send(window, 'setBackgroundColor:', colorOf(color))
-                            session
-                                .rememberBackground(color)
-                                .catch(reportUnexpected)
+                            launcher.rememberBackground(color)
                         }
                     },
                 },
@@ -538,7 +541,7 @@ export function openNativeWindow(
                         if (asked === 'ask') tellPage()
                         else if (
                             asked === 'install' &&
-                            updater?.staged !== undefined
+                            updates?.staged !== undefined
                         )
                             restart()
                     },
@@ -564,6 +567,7 @@ export function openNativeWindow(
         )
         send(window, 'makeKeyAndOrderFront:', null)
     }
+    const updates = launcher.updates
     // 38.166.
     const extra = options.menuBarExtra
         ? openMenuBarExtra(
@@ -573,7 +577,8 @@ export function openNativeWindow(
               options,
               window,
               uiDelegate,
-              () => session.shown,
+              () => launcher.shown,
+              launcher.hasPage,
               connectUpdates,
               front,
           )
@@ -594,7 +599,7 @@ export function openNativeWindow(
         if (item.role === 'connect') return navigate(`${base}?focus=connect`)
         // 38.74.
         if (item.role === 'disconnect')
-            return void session.forget().then(() => navigate(base))
+            return void launcher.forget().then(() => navigate(base))
         if (item.role === 'reload') return void send(view, 'reload')
         if (item.role === 'window') return front()
         // 38.90, 38.91 — the page that numbered the item does what it means.
@@ -609,14 +614,14 @@ export function openNativeWindow(
             )
     }
     const updateLabel = (): string | undefined =>
-        updater === undefined
+        updates === undefined
             ? undefined
-            : updater.staged === undefined
+            : updates.staged === undefined
               ? 'Check for Updates…'
-              : `Restart to Install ${updater.staged.version}`
+              : `Restart to Install ${updates.staged.version}`
     // 38.148 — what the page's `pendingUpdate` holds: the staged update, or nothing.
     const tellPage = (): void => {
-        const staged = updater?.staged
+        const staged = updates?.staged
         const detail =
             staged === undefined
                 ? null
@@ -638,9 +643,9 @@ export function openNativeWindow(
     // 38.145 — a staged update is installed by restarting; with none, the feed is read now and
     // the person told what it found.
     const checkForUpdates = (): void => {
-        if (updater === undefined) return
-        if (updater.staged !== undefined) return restart()
-        void updater.check().then((checked) => {
+        if (updates === undefined) return
+        if (updates.staged !== undefined) return restart()
+        void updates.check().then((checked) => {
             // 38.178 — told on the window, brought forward to be read.
             front()
             if (checked.outcome === 'current')
@@ -657,16 +662,14 @@ export function openNativeWindow(
                     ),
                     false,
                 )
-            else if (checked.outcome === 'refused') {
-                reportUnexpected(
-                    new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
-                )
+            // 38.143 — reported by the launcher's thread, which read it.
+            else if (checked.outcome === 'refused')
                 ask(
                     window,
                     nsString(`The update was refused: ${checked.reason}.`),
                     false,
                 )
-            } else
+            else
                 ask(
                     window,
                     nsString(
@@ -679,8 +682,8 @@ export function openNativeWindow(
                 )
         })
     }
-    if (updater !== undefined)
-        updater.onStaged = () => {
+    if (updates !== undefined)
+        updates.onStaged = () => {
             showMenu(shownMenu)
             tellPage()
         }
@@ -702,7 +705,7 @@ export function openNativeWindow(
                                 ) as NativeMenuItem[],
                             )
                         } catch (thrown) {
-                            reportUnexpected(thrown)
+                            launcher.report(thrown)
                         }
                     },
                 },
@@ -729,7 +732,7 @@ export function openNativeWindow(
     showMenu([])
     // 38.176 — a new window asked for onto the app the window shows is the window, brought forward.
     showInWindow = (address) => {
-        if (!opensInWindow(address, session.shown)) return false
+        if (!opensInWindow(address, launcher.shown)) return false
         navigate(address)
         front()
         return true
@@ -738,28 +741,7 @@ export function openNativeWindow(
     front()
     send(application, 'finishLaunching')
 
-    const distantPast = send(objcClass('NSDate'), 'distantPast')
-    const defaultMode = nsString('kCFRunLoopDefaultMode')
-    setInterval(
-        () =>
-            inAutoreleasePool(() => {
-                for (;;) {
-                    const event = sendTyped(
-                        application,
-                        'nextEventMatchingMask:untilDate:inMode:dequeue:',
-                        [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.bool],
-                        FFIType.ptr,
-                        0xffffffffffffffffn,
-                        distantPast,
-                        defaultMode,
-                        true,
-                    ) as Id
-                    if (event === null) break
-                    send(application, 'sendEvent:', event)
-                }
-            }),
-        DRAIN_MILLISECONDS,
-    )
+    sleepInAppKit(application)
     return navigate
 }
 

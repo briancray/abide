@@ -3510,8 +3510,11 @@ window, bring the window to the front and close the panel, rather than hand it t
 
 38.178 A page's `alert` and `confirm` in the window `abide native`'s executable opens, or in its menu
 bar extra's panel, MUST show as a sheet on that window or panel, and what checking for an update
-finds as one on the window, brought to the front. The executable MUST go on answering requests and
-timers while one is open.
+finds as one on the window, brought to the front.
+
+38.179 The app `abide native`'s executable starts, its launcher's page and its timers MUST go on
+answering while the window is resized, a menu of it is held open or a sheet of 38.178 is shown, and
+the window MUST NOT wake while nothing reaches it.
 
 # 39. Head and view transitions
 

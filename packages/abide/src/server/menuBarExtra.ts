@@ -45,8 +45,8 @@ const RESIGNED_MILLISECONDS = 300
  * Puts the item in the menu bar and answers what the window drives it with: the menu its secondary
  * click opens, and the panel to close where the window navigates away from the app it shows.
  *
- * `shown` is the address of the app the window shows, `undefined` while it shows the launcher, and
- * `front` brings the window forward.
+ * `shown` is the address of the app the window shows, `undefined` while it shows the launcher,
+ * `hasPage` whether the app at an address answers it, and `front` brings the window forward.
  */
 export function openMenuBarExtra(
     appName: string,
@@ -56,6 +56,7 @@ export function openMenuBarExtra(
     window: Id,
     uiDelegate: Id,
     shown: () => string | undefined,
+    hasPage: (address: string) => Promise<boolean>,
     connectUpdates: (view: Id) => void,
     front: () => void,
 ): { setMenu(menu: Id): void; closePanel(): void } {
@@ -105,7 +106,7 @@ export function openMenuBarExtra(
     let panel: Panel | undefined
     let resignedAt = 0
     // Whether the app at an address answers `MENU_BAR_ADDRESS`, asked once per address.
-    const hasPage = new Map<string, Promise<boolean>>()
+    const answers = new Map<string, Promise<boolean>>()
 
     // 38.169.
     const toggleWindow = (): void => {
@@ -163,13 +164,10 @@ export function openMenuBarExtra(
         const app = shown()
         if (app === undefined) return toggleWindow()
         const address = `${app}${MENU_BAR_ADDRESS.slice(1)}`
-        let asked = hasPage.get(address)
+        let asked = answers.get(address)
         if (asked === undefined) {
-            asked = fetch(address, { method: 'HEAD' }).then(
-                (answer) => answer.ok,
-                () => false,
-            )
-            hasPage.set(address, asked)
+            asked = hasPage(address)
+            answers.set(address, asked)
         }
         if (await asked) togglePanel(address)
         else toggleWindow()
