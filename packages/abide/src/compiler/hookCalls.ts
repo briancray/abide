@@ -1,5 +1,6 @@
 import { SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
+import { IDENTIFIER_PART } from './isNamedAlone.ts'
 import { importStatements } from './splitImports.ts'
 import { type Token, tokenize } from './tokenize.ts'
 
@@ -144,7 +145,10 @@ function opensStatement(
     )
 }
 
-const ENDS_EXPRESSION = /^(?:[\w$]+|[)\]]|['"`].*)$/s
+const ENDS_EXPRESSION = new RegExp(
+    `^(?:${IDENTIFIER_PART.source}+|[)\\]]|['"\`].*)$`,
+    'us',
+)
 
 /** `@abide/abide` or one of its subpaths. */
 export function isAbideSpecifier(specifier: string): boolean {

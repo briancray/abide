@@ -1,7 +1,7 @@
 import { afterAll, expect, spyOn, test } from 'bun:test'
 
 import { emitClient, parseAbide } from '#compiler'
-import { HOOK_NAMES } from '#compiler/hookCalls.ts'
+import { HOOK_NAMES, hookCalls } from '#compiler/hookCalls.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
 import { renderDocument } from '#server/render.ts'
@@ -233,6 +233,17 @@ test('hookCalls reads every hook the server exports — 38.108', async () => {
         if (/^(?:on[A-Z]|middleware$)/.test(name)) exported.push(name)
     expect([...HOOK_NAMES].sort()).toEqual(exported.sort())
 })
+// A HOOK CALL ON A LINE OF ITS OWN STANDS AT THE TOP LEVEL after a line ending in a name, however
+// that name is spelled. THE REVERT: test the line's last token against `[\w$]+`; the call after
+// `const label = café` reads as not standing at the top level, the one after `cafe` as standing.
+test('a hook call after a line ending in a non-ASCII name stands at the top level', () => {
+    const after = (name: string) =>
+        hookCalls(
+            `import { onConfig } from '@abide/abide/server'\nconst label = ${name}\nonConfig(() => {})\n`,
+        )[0]?.topLevel
+    expect([after('cafe'), after('café')]).toEqual([true, true])
+})
+
 afterAll(removeTemporaryModules)
 
 test('a compiled page renders as bytes into a shell', async () => {
