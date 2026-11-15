@@ -7,7 +7,8 @@
 
 import { readdir, rename, rm } from 'node:fs/promises' // bun exposes no directory listing, rename or removal of its own
 
-import { FEED_FILE, ran, verifiedFeed } from './updateFeed.ts'
+import { ran } from './ran.ts'
+import { FEED_FILE, verifiedFeed } from './updateFeed.ts'
 
 /** An update read, checked and unzipped, waiting for the app to quit. */
 export type Staged = {

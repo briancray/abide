@@ -11,6 +11,7 @@ import { basename, dirname } from 'node:path' // bun has no path utilities of it
 import { isRecord } from '#shared/isRecord.ts'
 
 import { dataDirectory } from './config.ts'
+import { ran } from './ran.ts'
 
 /** What a feed says, signed. */
 export type UpdateFeed = {
@@ -175,17 +176,4 @@ export async function verifiedFeed(
     return signed
         ? feed
         : 'the update feed is not signed by the key this app was bundled with'
-}
-
-/** Runs `command`, throwing with what it said where it fails. */
-export async function ran(command: string[]): Promise<void> {
-    const child = Bun.spawn(command, { stdout: 'ignore', stderr: 'pipe' })
-    const [code, said] = await Promise.all([
-        child.exited,
-        new Response(child.stderr).text(),
-    ])
-    if (code !== 0)
-        throw new Error(
-            `${command[0]} failed: ${said.trim() || `exit ${code}`}`,
-        )
 }

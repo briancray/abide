@@ -46,16 +46,12 @@ import { executableName } from '#server/executableName.ts'
 import { iconAccent } from '#server/iconAccent.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { skipped } from '#server/placement.ts'
+import { ran } from '#server/ran.ts'
 import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { serveDev } from '#server/serveDev.ts'
-import {
-    publicKeyOf,
-    publishUpdate,
-    ran,
-    updateKey,
-} from '#server/updateFeed.ts'
+import { publicKeyOf, publishUpdate, updateKey } from '#server/updateFeed.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/NATIVE_FILES.ts'
 
@@ -288,7 +284,7 @@ async function nativeApp(
     )
     // AD-HOC SIGNED, WHOLE: the executable bun wrote is signed on its own, and a bundle around a
     // signed executable that is not itself signed is one Gatekeeper reads as damaged.
-    if ((await spawnedTool('codesign', ['--force', '--sign', '-', out])) !== 0)
+    if (!(await spawnedTool('codesign', ['--force', '--sign', '-', out])))
         return 1
     // 38.146 — zipped AFTER signing, so the update is the build this command just wrote.
     const updates = `${dirname(out)}/updates`
@@ -432,7 +428,7 @@ async function launcherIcon(
     if (source === undefined) return undefined
     const drawn = async (size: number): Promise<Uint8Array | undefined> => {
         const path = `${buildDirectory(root)}/icon-${size}.png`
-        const code = await spawnedTool('sips', [
+        const wasDrawn = await spawnedTool('sips', [
             '-s',
             'format',
             'png',
@@ -443,7 +439,7 @@ async function launcherIcon(
             '--out',
             path,
         ])
-        return code === 0 ? await Bun.file(path).bytes() : undefined
+        return wasDrawn ? await Bun.file(path).bytes() : undefined
     }
     const [shown, sampled] = await Promise.all([drawn(256), drawn(64)])
     if (shown === undefined) return undefined
@@ -470,7 +466,7 @@ async function writeIcon(root: string, resources: string): Promise<boolean> {
     await rm(iconset, { recursive: true, force: true })
     await mkdir(iconset, { recursive: true })
     await mkdir(resources, { recursive: true })
-    const drawn: Promise<number>[] = []
+    const drawn: Promise<boolean>[] = []
     for (const size of [16, 32, 128, 256, 512])
         for (const scale of [1, 2])
             drawn.push(
@@ -483,16 +479,14 @@ async function writeIcon(root: string, resources: string): Promise<boolean> {
                     `${iconset}/icon_${size}x${size}${scale === 2 ? '@2x' : ''}.png`,
                 ]),
             )
-    if ((await Promise.all(drawn)).some((code) => code !== 0)) return false
-    return (
-        (await spawnedTool('iconutil', [
-            '-c',
-            'icns',
-            iconset,
-            '-o',
-            `${resources}/icon.icns`,
-        ])) === 0
-    )
+    if (!(await Promise.all(drawn)).every(Boolean)) return false
+    return await spawnedTool('iconutil', [
+        '-c',
+        'icns',
+        iconset,
+        '-o',
+        `${resources}/icon.icns`,
+    ])
 }
 
 /** 38.79 — the public file the app's icon is drawn from: `/icon.icns`, else `/icon.png`. */
@@ -504,13 +498,13 @@ async function publishedIcon(root: string): Promise<string | undefined> {
     return undefined
 }
 
-/** Runs one of macOS's own tools, warning with what it wrote where it fails; answers its exit code. */
-async function spawnedTool(tool: string, args: string[]): Promise<number> {
+/** Runs one of macOS's own tools, warning with what it wrote where it fails; answers whether it ran. */
+async function spawnedTool(tool: string, args: string[]): Promise<boolean> {
     return ran([tool, ...args]).then(
-        () => 0,
+        () => true,
         (thrown: Error) => {
             console.warn(`abide native: ${thrown.message}`)
-            return 1
+            return false
         },
     )
 }

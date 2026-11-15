@@ -24,6 +24,7 @@ import {
     sendNumber,
     sendTyped,
     stringOf,
+    windowButton,
 } from './appKit.ts'
 import { onSignal, sleepInAppKit } from './appKitLoop.ts'
 import { installMenu } from './installMenu.ts'
@@ -168,11 +169,9 @@ export function openNativeWindow(
 
     const window = created('NSWindow')
     const drawnUnder = options.titlebar !== 'standard'
-    sendTyped(
+    sendNumber(
         window,
         'setStyleMask:',
-        [FFIType.u64],
-        FFIType.void,
         TITLED |
             CLOSABLE |
             MINIATURIZABLE |
@@ -180,6 +179,7 @@ export function openNativeWindow(
             (options.resizable ? RESIZABLE : 0) |
             // 38.152.
             (drawnUnder ? FULL_SIZE_CONTENT_VIEW : 0),
+        FFIType.u64,
     )
     if (drawnUnder) {
         sendFlag(window, 'setTitlebarAppearsTransparent:', true)
@@ -317,15 +317,13 @@ export function openNativeWindow(
             'leadingAnchor',
             'trailingAnchor',
         ])
-            sendTyped(
+            sendFlag(
                 send(
                     send(view, edge),
                     'constraintEqualToAnchor:',
                     send(material, edge),
                 ),
                 'setActive:',
-                [FFIType.bool],
-                FFIType.void,
                 true,
             )
         send(
@@ -789,16 +787,6 @@ function uiDelegateClass(): Id {
 
 // What the web view loads itself; any other scheme is the system's to open.
 const WEB_SCHEMES = new Set(['http', 'https', 'about', 'blob', 'data', 'file'])
-
-function windowButton(window: Id, button: number): Id {
-    return sendTyped(
-        window,
-        'standardWindowButton:',
-        [FFIType.u64],
-        FFIType.ptr,
-        button,
-    ) as Id
-}
 
 /** An opaque `NSColor` of sRGB bytes. */
 function colorOf([red, green, blue]: [number, number, number]): Id {

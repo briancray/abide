@@ -130,6 +130,17 @@ export function sendNumber(
     sendTyped(receiver, name, [type], FFIType.void, value)
 }
 
+/** The window's standard button `button` — close 0, miniaturize 1, zoom 2 (`NSWindowButton`). */
+export function windowButton(window: Id, button: number): Id {
+    return sendTyped(
+        window,
+        'standardWindowButton:',
+        [FFIType.u64],
+        FFIType.ptr,
+        button,
+    ) as Id
+}
+
 /** Sends `name` to `receiver`, every argument an object, answering an object. */
 export function send(receiver: Id, name: string, ...values: Id[]): Id {
     const args: FFIType[] = []

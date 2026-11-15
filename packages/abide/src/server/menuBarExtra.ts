@@ -19,6 +19,7 @@ import {
     sendFlag,
     sendNumber,
     sendTyped,
+    windowButton,
 } from './appKit.ts'
 import type { Launcher } from './launcherOptions.ts'
 import { nativeUserAgent } from './nativeUserAgent.ts'
@@ -204,13 +205,7 @@ export function openMenuBarExtra(
             'new',
         ),
     )
-    sendTyped(
-        button,
-        'setAction:',
-        [FFIType.ptr],
-        FFIType.void,
-        selector('clicked:'),
-    )
+    send(button, 'setAction:', selector('clicked:'))
     sendTyped(button, 'sendActionOn:', [FFIType.u64], FFIType.i64, CLICKS)
     return {
         setMenu: (built) => {
@@ -242,19 +237,7 @@ function openPanel(
     sendFlag(window, 'setTitlebarAppearsTransparent:', true)
     sendNumber(window, 'setTitleVisibility:', 1)
     for (let button = 0; button < 3; button += 1)
-        sendTyped(
-            sendTyped(
-                window,
-                'standardWindowButton:',
-                [FFIType.u64],
-                FFIType.ptr,
-                button,
-            ) as Id,
-            'setHidden:',
-            [FFIType.bool],
-            FFIType.void,
-            true,
-        )
+        sendFlag(windowButton(window, button), 'setHidden:', true)
     sendFlag(window, 'setMovable:', false)
     sendFlag(window, 'setReleasedWhenClosed:', false)
     sendNumber(window, 'setLevel:', STATUS_WINDOW_LEVEL)

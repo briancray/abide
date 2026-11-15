@@ -22,6 +22,7 @@ import { isRunning } from './isRunning.ts'
 import type { Manifest } from './manifestOf.ts'
 import { namesUnder } from './namesUnder.ts'
 import { packageDirectory } from './packageDirectory.ts'
+import { ran } from './ran.ts'
 import { builtSources, serveApp, type ServedApp } from './servedApp.ts'
 
 /** What builds the app under `root` into `out` where nobody has: spawned, or the CLI's own. */
@@ -148,18 +149,19 @@ export async function servedBuild(
 
 /** `abide build` of the app under `root` into `out`, run as the CLI. */
 export async function spawnedBuild(root: string, out: string): Promise<void> {
-    const child = Bun.spawn(
-        [process.execPath, ABIDE_BIN, 'build', '--root', root, '--out', out],
-        { stdout: 'ignore', stderr: 'pipe' },
-    )
-    const [exitCode, said] = await Promise.all([
-        child.exited,
-        new Response(child.stderr).text(),
-    ])
-    if (exitCode !== 0)
+    await ran([
+        process.execPath,
+        ABIDE_BIN,
+        'build',
+        '--root',
+        root,
+        '--out',
+        out,
+    ]).catch((thrown: Error) => {
         throw new Error(
-            `abide: could not build the app under ${root}.\n${said}`,
+            `abide: could not build the app under ${root}.\n${thrown.message}`,
         )
+    })
 }
 
 /**

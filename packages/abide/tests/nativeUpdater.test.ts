@@ -12,11 +12,11 @@ import { spawned } from '@abide/harness/gate'
 import { launcherOf } from '#server/launcherOptions.ts'
 import { menuBar } from '#server/menuBar.ts'
 import { appOf, type Checked, NativeUpdater } from '#server/NativeUpdater.ts'
+import { ran } from '#server/ran.ts'
 import {
     newUpdateKey,
     publicKeyOf,
     publishUpdate,
-    ran,
     updateKey,
 } from '#server/updateFeed.ts'
 

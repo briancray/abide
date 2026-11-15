@@ -143,22 +143,10 @@ function menuItem(item: NativeMenuItem): Id {
         return built
     }
     if (responder !== undefined) {
-        sendTyped(
-            built,
-            'setAction:',
-            [FFIType.ptr],
-            FFIType.void,
-            selector(responder),
-        )
+        send(built, 'setAction:', selector(responder))
         return built
     }
-    sendTyped(
-        built,
-        'setAction:',
-        [FFIType.ptr],
-        FFIType.void,
-        selector('choose:'),
-    )
+    send(built, 'setAction:', selector('choose:'))
     send(built, 'setTarget:', target)
     sendNumber(built, 'setTag:', chosen.length)
     chosen.push(item)
