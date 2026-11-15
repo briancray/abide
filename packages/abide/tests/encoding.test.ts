@@ -3,17 +3,26 @@
 // header a browser or a proxy really sends, and a server arm can only send the one header
 // `Bun.fetch` was given.
 
-import { expect, test } from 'bun:test'
-import {
-    brotliCompressSync,
-    brotliDecompressSync,
-    constants,
-    gzipSync,
-} from 'node:zlib' // bun has no brotli, and the lane under test compresses gzip with zlib's
+import { expect, mock, spyOn, test } from 'bun:test'
+import * as zlib from 'node:zlib' // bun has no brotli, and the lane under test compresses gzip with zlib's
 
 import { compressAnswer } from '#server/compressAnswer.ts'
 import { ENCODINGS, negotiateEncoding } from '#server/negotiateEncoding.ts'
 import { prefers } from '#server/prefers.ts'
+
+const { brotliDecompressSync, constants, gzipSync } = zlib
+const brotliCompressSync = zlib.brotliCompressSync
+
+// 38.95 — COMPRESSION ON THE LOOP, COUNTED: every sync brotli the lane makes passes through here, and
+// its sync gzip is `Bun.gzipSync`, spied where it is asked. This file's own worker alone sees it.
+let brotliOnLoop = 0
+mock.module('node:zlib', () => ({
+    ...zlib,
+    brotliCompressSync: (...args: Parameters<typeof brotliCompressSync>) => {
+        brotliOnLoop++
+        return brotliCompressSync(...args)
+    },
+}))
 
 test('no header, or only identity, is the bytes as they are — 38.29', () => {
     expect(negotiateEncoding(null, ENCODINGS)).toBeUndefined()
@@ -138,29 +147,29 @@ test('a JSON answer varies on accept-encoding, says its length and is compressed
 })
 
 // 38.95 — FROM 64 KB AN ANSWER IS COMPRESSED OFF THE EVENT LOOP, to the bytes the loop would have
-// made, and under it with no await at all. A turn of the loop queued before the answer runs before
-// the answer lands only when the compression left the loop. THE REVERT: compress every answer on
-// the loop; the 620 KB answer lands with the turn not yet run, in either encoding.
+// made, and under it with no await at all — counted as the sync compressions the call made, which no
+// load can move, where a turn of the loop queued before it can lose to a compression that finished
+// first. THE REVERT: compress every answer on the loop; the 620 KB answer makes 1 sync compression
+// where 0 are due, in either encoding.
 test('a large answer is compressed off the loop to the same bytes, and a small one with no await — 38.95', async () => {
     const text = JSON.stringify(
         Array.from({ length: 7000 }, (_, id) => ({ id, name: `row ${id}` })),
     ).repeat(3)
     expect(text.length).toBeGreaterThan(64 * 1024)
+    const gzipOnLoop = spyOn(Bun, 'gzipSync')
     for (const [encoding, decode] of [
         ['br', brotliDecompressSync],
         ['gzip', Bun.gunzipSync],
     ] as const) {
-        let turned = false
-        setImmediate(() => {
-            turned = true
-        })
+        brotliOnLoop = 0
+        gzipOnLoop.mockClear()
         const answer = await compressAnswer(
             text,
             asking(encoding),
             new Headers(),
             200,
         )
-        expect(turned).toBe(true)
+        expect(brotliOnLoop + gzipOnLoop.mock.calls.length).toBe(0)
         const sent = new Uint8Array(await answer.arrayBuffer())
         expect(answer.headers.get('content-encoding')).toBe(encoding)
         expect(answer.headers.get('content-length')).toBe(
@@ -178,6 +187,8 @@ test('a large answer is compressed off the loop to the same bytes, and a small o
             ),
         )
     }
+    gzipOnLoop.mockRestore()
+    brotliOnLoop = 0
     const under = compressAnswer(
         text.slice(0, 64 * 1024 - 1),
         asking('br'),
@@ -185,6 +196,7 @@ test('a large answer is compressed off the loop to the same bytes, and a small o
         200,
     )
     expect(under instanceof Response).toBe(true)
+    expect(brotliOnLoop).toBe(1)
 })
 
 /**
