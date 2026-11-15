@@ -111,17 +111,34 @@ function unchecked(): Record<string, unknown> {
  * require what only the launcher's start form supplies.
  */
 export function shownName(): string {
-    let named: unknown
-    try {
-        named = unchecked().APP_NAME
-    } catch {
-        // 27.1 — what `onConfig` threw is the boot's to report; the bundle is named all the same.
-    }
+    const named = beforeSchema('APP_NAME')
     return typeof named === 'string' &&
         named !== '' &&
         named !== derived().APP_NAME
         ? named
         : executableName(APP_PACKAGE.current.name)
+}
+
+/**
+ * 38.73 — where the native launcher remembers what it did: `APP_DATA_DIR` as the environment and
+ * `onConfig`'s defaults set it, else the derived one — read before any schema, for `shownName`'s
+ * reason, and before any start, since what a start sends is among what it remembers.
+ */
+export function launcherDataDirectory(): string {
+    const directory = beforeSchema('APP_DATA_DIR')
+    return typeof directory === 'string' && directory !== ''
+        ? directory
+        : dataDirectory(APP_PACKAGE.current.name ?? 'app')
+}
+
+/** One value of the document before any schema, or `undefined` where `onConfig`'s defaults threw. */
+function beforeSchema(name: string): unknown {
+    try {
+        return unchecked()[name]
+    } catch {
+        // 27.1 — what `onConfig` threw is the boot's to report.
+        return undefined
+    }
 }
 
 function coerce(text: string, standing: unknown): unknown {

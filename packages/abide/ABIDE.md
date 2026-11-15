@@ -54,6 +54,11 @@ affected code saying what it did, and tell the user.
   your changes are done.
 - `bun run dev` — serves the app on a local port and rebuilds when a file changes.
 - `bun run build` then `bun run start` — the production build, and the app served from it.
+- The native app `abide native` writes, opened from the Finder, prints to
+  `~/Library/Logs/<package name>/<package name>.log`, the folder named after `APP_DATA_DIR`'s last
+  folder where the app sets one (RULEBOOK 38.186). Its first lines say how the
+  rest read; the launch before and anything past 5 MB are in `.1.log` to `.4.log` beside it, newest
+  first. `grep` or `tail` it rather than reading it whole.
 - `docker build .` — the scaffold's `Dockerfile` runs `abide compile` and ships the one executable it
   writes on a distroless image, and nothing else of the app (RULEBOOK 38.132).
 

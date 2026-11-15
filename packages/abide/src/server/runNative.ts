@@ -12,10 +12,16 @@ import { ICON_ADDRESSES, MENU_BAR_ICON_ADDRESS } from '#shared/NATIVE_FILES.ts'
 
 import { openWakePort } from './appKitLoop.ts'
 import { NATIVE_COOKIE, serveLocally } from './bridgeRelay.ts'
-import { addDerived, dataDirectory, derived as appDerived } from './config.ts'
+import {
+    addDerived,
+    derived as appDerived,
+    launcherDataDirectory,
+} from './config.ts'
 import { configFields } from './configFields.ts'
 import { type AppOrigin, bootEntered, enterApp } from './createApp.ts'
+import { executableName } from './executableName.ts'
 import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
+import { keepLogFile } from './keepLogFile.ts'
 import { type Launcher, launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
 import { loginShellPath } from './loginShellPath.ts'
@@ -231,7 +237,19 @@ async function launch(
     const path = loginShellPath()
     // 37.1 — ENTERED ONCE, before the window: the start form reads `onConfig` and the launcher's
     // `onLauncher` is filed. Every start after it boots in what this entered (`bootEntered`).
-    await enterApp(origin)
+    const failedToEnter = await enterApp(origin).then(
+        () => undefined,
+        (thrown: unknown) => ({ thrown }),
+    )
+    // 38.186 — once `onConfig` is filed, so the log's folder is `APP_DATA_DIR`'s as `native.json`'s
+    // is, and before what failed to enter is thrown, so the file holds it.
+    const dataDirectory = launcherDataDirectory()
+    keepLogFile(
+        dataDirectory,
+        executableName(origin.package.name),
+        origin.package.version ?? '0.0.0',
+    )
+    if (failedToEnter !== undefined) throw failedToEnter.thrown
     const found = await path
     if (found !== undefined) process.env.PATH = found
     // 38.85 — a launcher page that fails to load leaves the built-in page, with its defaults.
@@ -244,8 +262,9 @@ async function launch(
     // 38.80 — an `onLauncher` answer the checker would have refused, written where nothing checked it,
     // refused naming the clause it breaks.
     if (typeof options === 'string') throw new Error(`abide: ${options}.`)
-    const directory = dataDirectory(origin.package.name ?? 'app')
-    const session = await NativeSession.open(directory, () => bootEntered(load))
+    const session = await NativeSession.open(dataDirectory, () =>
+        bootEntered(load),
+    )
     // What the window holds of `session.shown`, told again whenever it moves.
     let toldShown: string | undefined
     const tellShown = (): void => {
