@@ -11,7 +11,7 @@
 
 import { expect, test } from '@playwright/test'
 
-import { buildInjectable } from '../scripts/buildInjectable.ts'
+import { buildInjectable, openInjected } from '../scripts/buildInjectable.ts'
 import { CASES } from './CASES.ts'
 
 /** The patch set and per-case counts under bun, read off `bunSideCounts.ts`. */
@@ -23,13 +23,7 @@ const underBun: {
 const built = await buildInjectable()
 
 test.beforeEach(async ({ page }) => {
-    await page.addInitScript({ content: built })
-    // A `setContent` on a page still sitting on its initial `about:blank` does not
-    // rerun init scripts — nothing navigated — so every counter reads undefined and
-    // the gate fails on the instrument rather than on the claim. The navigation is
-    // what arms the injection.
-    await page.goto('about:blank')
-    await page.setContent('<!doctype html><html><body></body></html>')
+    await openInjected(page, built)
 })
 
 // Asserted on the LIST, not on a count, because a count is what goes quietly to

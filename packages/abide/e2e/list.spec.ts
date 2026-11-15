@@ -20,7 +20,8 @@
 
 import { expect, test } from '@playwright/test'
 
-import { buildBench, openInjected } from '../bench/buildBench.ts'
+import { openInjected } from '../../harness/scripts/buildInjectable.ts'
+import { buildBench } from '../bench/buildBench.ts'
 import type { Row } from '../bench/listCases.ts'
 
 const built = await buildBench('list')

@@ -6,12 +6,10 @@ import { props } from '@abide/abide'
 
 import type { ExampleResults } from './ExampleResults.ts'
 
-type Bench = ExampleResults['benches'][string]
-
 const { reported } = props<{
     reported:
         | { kind: 'test'; cases: ExampleResults['tests'][string]['cases'] }
-        | ({ kind: 'bench' } & Bench)
+        | ({ kind: 'bench' } & ExampleResults['benches'][string])
 }>()
 
 const nanoseconds = (value: number) => `${value.toFixed(1)} ns`

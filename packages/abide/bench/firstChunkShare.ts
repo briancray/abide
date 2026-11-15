@@ -7,9 +7,11 @@
 //
 // `bun packages/abide/bench/firstChunkShare.ts <repo> [runs] [first chunk delay ms] [latency ms]`
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdir/rm of its own
+import { rmSync } from 'node:fs' // bun has no sync rm of its own
 
 import { chromium } from '@playwright/test'
+
+import { writeFixture } from '../e2e/servedFixture.ts'
 
 const REPO = process.argv[2] as string
 const RUNS = Number(process.argv[3] ?? 15)
@@ -40,18 +42,15 @@ const a = reactive(() => ticks({ n: 'a' }))
 
 const app = `${REPO}/.test-modules/first-chunk`
 rmSync(app, { recursive: true, force: true })
-mkdirSync(`${app}/data`, { recursive: true })
-mkdirSync(`${app}/streams`, { recursive: true })
-writeFileSync(
-    `${app}/package.json`,
-    JSON.stringify({
+writeFixture(app, {
+    'package.json': JSON.stringify({
         name: 'first-chunk',
         type: 'module',
         imports: { '#src/*': './*' },
     }),
-)
-writeFileSync(`${app}/data/ticks.handler.ts`, TICKS)
-writeFileSync(`${app}/streams/index.abide`, PAGE)
+    'data/ticks.handler.ts': TICKS,
+    'streams/index.abide': PAGE,
+})
 const CLI = `${REPO}/packages/abide/bin/abide.ts`
 await Bun.$`${process.execPath} ${CLI} build --root ${app} --out ${app}/.abide`
     .cwd(REPO)
