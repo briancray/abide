@@ -45,6 +45,7 @@ import {
 
 import { highlight, sideOf } from './highlight.ts'
 import { inline } from './inline.ts'
+import ResultsList from './ResultsList.abide'
 
 const {
     id,
@@ -103,8 +104,6 @@ const results = reactive(() =>
         ? resultsOf({ app })
         : null,
 )
-
-const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
 </script>
 
 <figure class="example" id={id} data-embedded={embedded ? 'true' : 'false'} bind:element={reportHeight}>
@@ -132,27 +131,14 @@ const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
     {#for path, index of paths}
         {#if open === index && kindOf(path) === 'test'}
             {#if results?.tests[path]}
-                <ul class="ex-results">
-                    {#for one of results.tests[path].cases}
-                        <li data-passed={String(one.failure === null)}>
-                            <span>{one.failure === null ? 'pass' : 'fail'}</span>
-                            {one.name}
-                            <small>{one.milliseconds.toFixed(0)} ms</small>
-                        </li>
-                    {/for}
-                </ul>
+                <ResultsList reported={{ kind: 'test', cases: results.tests[path].cases }} />
             {:else}
                 <p class="ex-results">Not run in this build. Run <code>bun test</code> in the app.</p>
             {/if}
         {/if}
         {#if open === index && kindOf(path) === 'bench'}
             {#if results?.benches[path]}
-                <ul class="ex-results" data-kind="bench">
-                    {#for arm of Object.keys(results.benches[path].arms)}
-                        <li><span>{arm}</span>{nanoseconds(results.benches[path].arms[arm] ?? 0)} per op</li>
-                    {/for}
-                    <li><small>{results.benches[path].claim} · {results.benches[path].n} ops a sample</small></li>
-                </ul>
+                <ResultsList reported={{ kind: 'bench', ...results.benches[path] }} />
             {:else}
                 <p class="ex-results">Not run in this build. Run <code>bun run examples:results</code>.</p>
             {/if}

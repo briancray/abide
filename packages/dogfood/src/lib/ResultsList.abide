@@ -1,0 +1,37 @@
+<script>
+// What a CRM test or bench file last reported, as a list: each case passed or failed, or each
+// arm's nanoseconds per op and the ratio claimed. The card's test and bench tabs and the answer's
+// `<show results>` both render it, so the two read one file's report the same way.
+import { props } from '@abide/abide'
+
+import type { ExampleResults } from './ExampleResults.ts'
+
+type Bench = ExampleResults['benches'][string]
+
+const { reported } = props<{
+    reported:
+        | { kind: 'test'; cases: ExampleResults['tests'][string]['cases'] }
+        | ({ kind: 'bench' } & Bench)
+}>()
+
+const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
+</script>
+
+{#if reported.kind === 'bench'}
+    <ul class="ex-results" data-kind="bench">
+        {#for arm of Object.keys(reported.arms)}
+            <li><span>{arm}</span>{nanoseconds(reported.arms[arm] ?? 0)} per op</li>
+        {/for}
+        <li><small>{reported.claim} · {reported.n} ops a sample</small></li>
+    </ul>
+{:else}
+    <ul class="ex-results">
+        {#for one of reported.cases}
+            <li data-passed={String(one.failure === null)}>
+                <span>{one.failure === null ? 'pass' : 'fail'}</span>
+                {one.name}
+                <small>{one.milliseconds.toFixed(0)} ms</small>
+            </li>
+        {/for}
+    </ul>
+{/if}

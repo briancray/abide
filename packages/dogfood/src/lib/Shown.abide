@@ -17,6 +17,7 @@ import source from '#src/ask/tools/source.handler.ts'
 import Code from './Code.abide'
 import { languageOf } from './highlight.ts'
 import { inline } from './inline.ts'
+import ResultsList from './ResultsList.abide'
 import { isSitePage, pageAt } from './sitePages.ts'
 import { slice } from './slice.ts'
 
@@ -69,7 +70,6 @@ function excerpt(text: string, from: string | undefined): string {
         return text.trimEnd()
     }
 }
-const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
 </script>
 
 {#if show.kind === 'example'}
@@ -119,28 +119,10 @@ const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
         </blockquote>
     {/if}
 {:else if show.kind === 'results'}
-    {#if reported?.kind === 'bench'}
+    {#if reported}
         <figure class="shown-results">
             <figcaption>{show.value}</figcaption>
-            <ul class="ex-results" data-kind="bench">
-                {#for arm of Object.keys(reported.arms)}
-                    <li><span>{arm}</span>{nanoseconds(reported.arms[arm] ?? 0)} per op</li>
-                {/for}
-                <li><small>{reported.claim} · {reported.n} ops a sample</small></li>
-            </ul>
-        </figure>
-    {:else if reported?.kind === 'test'}
-        <figure class="shown-results">
-            <figcaption>{show.value}</figcaption>
-            <ul class="ex-results">
-                {#for one of reported.cases}
-                    <li data-passed={String(one.failure === null)}>
-                        <span>{one.failure === null ? 'pass' : 'fail'}</span>
-                        {one.name}
-                        <small>{one.milliseconds.toFixed(0)} ms</small>
-                    </li>
-                {/for}
-            </ul>
+            <ResultsList reported={reported} />
         </figure>
     {:else if reported.ready()}
         <p class="shown-missing">No results kept for <code>{show.value}</code>. Run <code>bun run examples:results</code>.</p>

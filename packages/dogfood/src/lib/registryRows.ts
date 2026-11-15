@@ -6,6 +6,8 @@ import { cellsOf } from './cellsOf.ts'
 
 /** One REGISTRY table row, with the headings it sits under. */
 export type RegistryRow = {
+    /** Its line in REGISTRY, from 1. */
+    line: number
     /** The row's cells, `\|` unescaped. */
     cells: string[]
     /** The header cells of its table. */
@@ -30,7 +32,9 @@ export function registryRows(registry: string): RegistryRow[] {
     let header: string[] | undefined
     let table = -1
     let fenced = false
-    for (const line of registry.split('\n')) {
+    const lines = registry.split('\n')
+    for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index] as string
         if (line.startsWith('```')) fenced = !fenced
         if (fenced) continue
         if (line.startsWith('# ')) {
@@ -63,6 +67,7 @@ export function registryRows(registry: string): RegistryRow[] {
             continue
         }
         rows.push({
+            line: index + 1,
             cells: cellsOf(line),
             header,
             table,

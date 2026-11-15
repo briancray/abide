@@ -3,7 +3,6 @@ import { expect, test } from 'bun:test'
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { tokenize } from '../../abide/src/compiler/tokenize.ts'
-import { cellsOf } from '../src/lib/cellsOf.ts'
 import { registryRows } from '../src/lib/registryRows.ts'
 import { rulebookClauses } from '../src/rulebook/lib/rulebookClauses.ts'
 
@@ -25,22 +24,6 @@ const rulebook = await Bun.file(new URL('RULEBOOK.md', DOCS)).text()
 function body(source: string): string {
     const start = source.indexOf('\n# ')
     return start === -1 ? '' : source.slice(start)
-}
-
-// A table row, minus its code spans: a name, a signature and a clause list are all legitimately
-// full of the punctuation these checks look for.
-function rows(source: string): { line: number; cells: string[] }[] {
-    const out: { line: number; cells: string[] }[] = []
-    const lines = body(source).split('\n')
-    for (let index = 0; index < lines.length; index += 1) {
-        const line = lines[index] ?? ''
-        if (!line.startsWith('|') || /^\|\s*-/.test(line)) continue
-        const cells = cellsOf(line)
-        // A header row, whatever its first column is called — `Name` here, `Context` in Tracking.
-        if (cells[cells.length - 1] === 'Rules') continue
-        out.push({ line: index + 1, cells })
-    }
-    return out
 }
 
 function clauses(): { id: string; text: string }[] {
@@ -83,7 +66,7 @@ const RATIONALE = /\b(because|so that|in order to|which is why)\b/
 // exists for: it reads as documentation and it is a second home for a rule that has a number.
 test('no registry row states a requirement', async () => {
     const offenders: string[] = []
-    for (const { line, cells } of rows(registry)) {
+    for (const { line, cells } of registryRows(registry)) {
         const meaning = cells[cells.length - 2] ?? ''
         if (REQUIREMENT.test(meaning))
             offenders.push(`REGISTRY.md:${line}: ${cells[0]}`)
@@ -96,7 +79,7 @@ test('no registry row states a requirement', async () => {
 // are blanked first, a signature carrying a `.` in every member otherwise reading as ten sentences.
 test('a registry meaning is one sentence', async () => {
     const offenders: string[] = []
-    for (const { line, cells } of rows(registry)) {
+    for (const { line, cells } of registryRows(registry)) {
         const meaning = (cells[cells.length - 2] ?? '').replace(
             /`[^`]*`/g,
             'CODE',
@@ -230,7 +213,7 @@ test('no clause number is used twice', async () => {
 test('every rule a registry row cites exists', async () => {
     const ids = new Set(clauses().map((clause) => clause.id))
     const dangling: string[] = []
-    for (const { line, cells } of rows(registry)) {
+    for (const { line, cells } of registryRows(registry)) {
         const cited = cells[cells.length - 1] ?? ''
         if (cited === '—' || !cited) continue
         for (const id of cited.split(',')) {
@@ -260,7 +243,7 @@ function freeStanding(): Set<string> {
 
 test('every clause is cited by a registry row', async () => {
     const cited = new Set<string>()
-    for (const { cells } of rows(registry)) {
+    for (const { cells } of registryRows(registry)) {
         for (const id of (cells[cells.length - 1] ?? '').split(','))
             cited.add(id.trim())
     }
