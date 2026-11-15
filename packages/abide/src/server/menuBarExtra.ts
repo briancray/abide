@@ -10,6 +10,7 @@ import {
     created,
     definedClass,
     type Id,
+    nsBoolean,
     nsString,
     objcClass,
     rectOf,
@@ -21,7 +22,7 @@ import {
     windowButton,
 } from './appKit.ts'
 import type { Launcher } from './launcherOptions.ts'
-import { webViewFor } from './webViewFor.ts'
+import { nativeUserAgent } from './nativeUserAgent.ts'
 
 /** The picture the item is drawn from, and whether the platform tints it as a template. */
 export type MenuBarIcon = { bytes: Uint8Array; template: boolean }
@@ -249,8 +250,19 @@ function openPanel(
         options.panelWidth,
         options.panelHeight,
     )
+    const view = created('WKWebView')
+    // 38.163.
+    if (options.inspector)
+        send(
+            send(send(view, 'configuration'), 'preferences'),
+            'setValue:forKey:',
+            nsBoolean(true),
+            nsString('developerExtrasEnabled'),
+        )
+    send(view, 'setUIDelegate:', uiDelegate)
+    send(view, 'setNavigationDelegate:', uiDelegate)
     // 38.140 — the panel's page is the native app's as much as the window's is.
-    const view = webViewFor(options.inspector, version, uiDelegate)
+    send(view, 'setCustomUserAgent:', nsString(nativeUserAgent(version)))
     // 38.148 — before it loads, so its `pendingUpdate` asks a channel that is there.
     connectUpdates(view)
     send(window, 'setContentView:', view)
