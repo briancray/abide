@@ -5,6 +5,11 @@
  */
 export const IDENTIFIER_PART = /[\p{ID_Continue}$\u200c\u200d]/u
 
+const NAMED_ALONE = new RegExp(
+    `^[\\p{ID_Start}$_]${IDENTIFIER_PART.source}*$`,
+    'u',
+)
+
 /**
  * Whether `subject` is one identifier and nothing else.
  *
@@ -12,5 +17,5 @@ export const IDENTIFIER_PART = /[\p{ID_Continue}$\u200c\u200d]/u
  * (`projectShadow`).
  */
 export function isNamedAlone(subject: string): boolean {
-    return /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u.test(subject)
+    return NAMED_ALONE.test(subject)
 }

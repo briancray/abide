@@ -163,12 +163,11 @@ function anchor(
     return undefined
 }
 
-const NAME = /[\p{ID_Continue}$\u200c\u200d.]/u
-
 // Not the middle of a longer name, or a member of one: `count()` inside `__count()` is not it.
 function standsAlone(output: string, start: number, end: number): boolean {
     return (
-        !NAME.test(output[start - 1] ?? ' ') &&
+        !IDENTIFIER_PART.test(output[start - 1] ?? ' ') &&
+        output[start - 1] !== '.' &&
         !IDENTIFIER_PART.test(output[end] ?? ' ')
     )
 }

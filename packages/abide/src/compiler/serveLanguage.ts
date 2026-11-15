@@ -8,7 +8,7 @@ import { citedClauses } from './citedClauses.ts'
 import { type Diagnosis, formatDiagnosis } from './Diagnostics.ts'
 import { DOCS_SITE } from './DOCS_SITE.ts'
 import { formatAbide } from './formatAbide.ts'
-import { isNamedAlone } from './isNamedAlone.ts'
+import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
 import { KeptChecker } from './KeptChecker.ts'
 import { lineOf, offsetOf } from './lineOf.ts'
 import {
@@ -580,14 +580,14 @@ function appRootOf(path: string): string | undefined {
     return existsSync(`${at}/src`) ? `${at}/src` : at
 }
 
+const WORD = new RegExp(`^${IDENTIFIER_PART.source}+`, 'u')
+
 /**
  * How much of a line the finding at `character` underlines: the word that starts there, or one
  * character where none does.
  */
 function wordLength(line: string, character: number): number {
-    const word = /^[\p{ID_Continue}$\u200c\u200d]+/u.exec(
-        line.slice(character),
-    )?.[0]
+    const word = WORD.exec(line.slice(character))?.[0]
     return word === undefined ? 1 : word.length
 }
 

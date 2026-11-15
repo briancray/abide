@@ -2,7 +2,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
-import { holdsSlot } from './classifyTemplate.ts'
+import { isSlot } from './classifyTemplate.ts'
 import type { Finding } from './Diagnostics.ts'
 import { abideBindings } from './hookCalls.ts'
 import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
@@ -13,7 +13,12 @@ import {
     projectShadow,
     type Span,
 } from './projectShadow.ts'
-import type { InlineComponent, Setup, TemplateNode } from './TemplateNode.ts'
+import {
+    holdsNode,
+    type InlineComponent,
+    type Setup,
+    type TemplateNode,
+} from './TemplateNode.ts'
 import { nesting, type Token, tokenize } from './tokenize.ts'
 
 // 31.1 and 31.4 — inside a `.abide` a name bound to a `Reactive` is READ where it stands and
@@ -70,7 +75,9 @@ export class Lowering {
     readonly used = new Set<string>()
     readonly answer: CheckerAnswer
     /**
-     * 32.18 — whether the template holds a `<slot/>`, walked ONCE here.
+     * 32.18 — whether the template holds a `<slot/>`, walked ONCE here: what says its emitted
+     * function takes the props record, since the caller's children arrive on it and a component
+     * whose only prop is its own body never calls `props` (33.2).
      *
      * Both emitters ask `takesProps()` about the same file, and the walk was a recursion over the
      * whole template per lane per file — twice the work for an answer fixed when the file was
@@ -139,7 +146,7 @@ export class Lowering {
     ) {
         this.projection = projectShadow(file)
         this.answer = answer
-        this.holdsSlot = holdsSlot(file.template)
+        this.holdsSlot = holdsNode(file.template, isSlot)
         this.checking = checking
         this.importsRaw = abideBindings(scriptBodies(file)).has('raw')
         this.chunks = chunks

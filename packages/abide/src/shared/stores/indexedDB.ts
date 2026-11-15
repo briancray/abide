@@ -120,24 +120,20 @@ function opened(
     version: number | undefined,
     table: string,
 ): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-        const request =
-            version === undefined
-                ? globalThis.indexedDB.open(DATABASE_NAME)
-                : globalThis.indexedDB.open(DATABASE_NAME, version)
-        request.onupgradeneeded = () => {
-            if (!request.result.objectStoreNames.contains(table))
-                request.result.createObjectStore(table)
+    const request =
+        version === undefined
+            ? globalThis.indexedDB.open(DATABASE_NAME)
+            : globalThis.indexedDB.open(DATABASE_NAME, version)
+    request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(table))
+            request.result.createObjectStore(table)
+    }
+    return requested(request).then((db) => {
+        // Another document's upgrade waits on this connection: let it go, and reopen on next ask.
+        db.onversionchange = () => {
+            db.close()
+            database = undefined
         }
-        request.onsuccess = () => {
-            const db = request.result
-            // Another document's upgrade waits on this connection: let it go, and reopen on next ask.
-            db.onversionchange = () => {
-                db.close()
-                database = undefined
-            }
-            resolve(db)
-        }
-        request.onerror = () => reject(request.error)
+        return db
     })
 }

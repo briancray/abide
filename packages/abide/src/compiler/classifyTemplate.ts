@@ -400,7 +400,7 @@ function refuseBinds(node: ElementNode): void {
     }
 }
 
-/** Whether an `<option>` with a `selected` attribute stands anywhere among `nodes`, blocks included. */
+/** Whether `node` is an `<option>` with a `selected` attribute. */
 function isSelectedOption(node: TemplateNode): boolean {
     return (
         node.kind === 'element' &&
@@ -441,18 +441,6 @@ export function isComponentTag(tag: string): boolean {
  */
 export function isSlot(node: TemplateNode): boolean {
     return node.kind === 'element' && node.lowerTag === 'slot'
-}
-
-/**
- * Whether a template has a `<slot/>` anywhere in it.
- *
- * 32.18 — which is what says its emitted function takes the props record: the caller's children
- * arrive on it, and a component whose only prop is its own body never calls `props` (33.2) and
- * would otherwise be handed nothing to read them from. One walk answering for both lanes is why it
- * is here.
- */
-export function holdsSlot(nodes: TemplateNode[]): boolean {
-    return holdsNode(nodes, isSlot)
 }
 
 /**
