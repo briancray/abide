@@ -181,8 +181,8 @@ test('the compiler is not reachable from the server seam', async () => {
     // 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the hooks are 37's — `onError` among the
     // shared seam's, the server's own exported over the browser's (37.16), and `store` the same way,
     // the server's carrying `sqlite` (8.25) and `redis` (8.31) beside the shared three — `trace` is
-    // 24's and `config` is 27's; `reachable` is 23's, `assistant` and `provider` are 44's and
-    // `database` 47's. What only emitted code calls is on `server/runtime.ts`, not here.
+    // 24's and `config` is 27's; `reachable` is 23's, `assistant` and `provider` are 44's,
+    // `database` 47's and `onReport` 48's. What only emitted code calls is on `server/runtime.ts`, not here.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -202,6 +202,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'onLauncher',
             'onPairing',
             'onPrincipal',
+            'onReport',
             'onStart',
             'onStop',
             'provider',
