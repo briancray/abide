@@ -58,6 +58,14 @@ export type Logger = ((...args: unknown[]) => void) & {
  */
 export const TRACE: { current: () => string } = { current: () => '' }
 
+/**
+ * Where each line goes beside the console and `log.records`, filled by the server's OTLP exporter
+ * while it exports (36.19) — a slot, so the exporter stays out of a browser bundle.
+ */
+export const EXPORT: { record: ((record: LogRecord) => void) | undefined } = {
+    record: undefined,
+}
+
 const DEFAULT_BUFFER = 1000
 
 let records: Reactive<LogRecord[]> | undefined
@@ -256,6 +264,7 @@ function write(
     else if (level === 'warning') console.warn(line)
     else console.log(line)
     recordsValue().patch((list) => keep(list, record))
+    EXPORT.record?.(record)
 }
 
 /** A logger under `namespace`, which 28.4 builds from the app's name and 28.8 from `abide:`. */
@@ -326,6 +335,27 @@ export function writeSpan(
     level: Level = 'info',
 ): void {
     write(namespace, level, [message], startedAt, span)
+}
+
+/**
+ * Hands `span` to the exporter alone, written nowhere: a request's span, exported while `abide:request`
+ * is closed (24.10, 36.19).
+ */
+export function exportSpan(
+    startedAt: string,
+    message: string,
+    span: Span,
+    namespace: string,
+    level: Level,
+): void {
+    EXPORT.record?.({
+        time: startedAt,
+        level,
+        namespace,
+        message,
+        trace: TRACE.current(),
+        span,
+    })
 }
 
 /**

@@ -57,6 +57,7 @@ import {
     muxSocketOptions,
     upgraded,
 } from './muxUpgrade.ts'
+import { exporting, startExporting, stopExporting } from './otlpExport.ts'
 import { packageDirectory } from './packageDirectory.ts'
 import { takeParked } from './parkedAnswers.ts'
 import { plainAnswer } from './plainAnswer.ts'
@@ -260,6 +261,8 @@ export async function bootEntered(
         await config
         sources = await load()
     })(undefined)
+    // 36.19 — once the configuration names the app, which every export is sent under.
+    startExporting()
     if (sources === undefined)
         throw new Error(
             'abide: an onStart hook returned without calling start(), so the app never booted. RULEBOOK 37.4.',
@@ -329,7 +332,8 @@ export async function bootEntered(
         if (parked !== undefined) return parked
         inFlight += 1
         // 24.10 — the request's span is stamped with its start, read only where one is written.
-        const startedAt = REQUEST_LOG.enabled() ? new Date().toISOString() : ''
+        const written = REQUEST_LOG.enabled()
+        const startedAt = written || exporting() ? new Date().toISOString() : ''
         const started = performance.now()
         try {
             // 42.6 — `run`, with dispatch over it — and the headers every answer carries stamped
@@ -359,6 +363,7 @@ export async function bootEntered(
                             startedAt,
                             performance.now() - started,
                             REQUEST_NAMESPACE,
+                            written,
                         )
                     return stamped
                 },
@@ -459,6 +464,8 @@ export async function bootEntered(
             await compose(inOrder(HOOKS.stops), async () => {})(undefined)
         } finally {
             renewStopSignal()
+            // 36.19 — what the stop itself wrote is sent before the app is gone.
+            await stopExporting()
         }
     }
 

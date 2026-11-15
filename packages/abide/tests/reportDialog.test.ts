@@ -129,6 +129,10 @@ test('a refused send leaves the dialog open on its draft, saying why, and Cancel
         (dialog.querySelector('button[type="submit"]') as HTMLButtonElement)
             .disabled,
     ).toBe(false)
-    dialog.remove()
+    ;(
+        dialog.querySelector('button[type="button"]') as HTMLButtonElement
+    ).click()
+    expect(await opened).toBe(false)
+    expect(dialog.isConnected).toBe(false)
     sendStatus = 200
 })

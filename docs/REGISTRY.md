@@ -553,7 +553,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string; span: Span \| undefined }` | One line, as a value. | 24.3, 24.9 |
 | `Span` | `{ id: string; parent: string; name: string; kind: 'server' \| 'internal'; duration: number; status: 'ok' \| 'error'; attributes: Record<string, string \| number> }` | A line's place in its trace, and how the work it timed went. | 24.4, 24.9, 24.10 |
 | `log.records` | `Reactive<LogRecord[]>` | The lines kept, appended to as each is written. | 28.1 |
-| `abide:request` | `debug` | One line per request. | 24.10, 28.8 |
+| `abide:request` | `debug` | One line per request. | 24.10, 28.8, 36.19 |
 | `abide:socket` | `debug` | One line per frame on the socket mux. | 28.8 |
 | `abide:lifecycle` | `debug` `error` | A lifecycle that ran. | 28.8 |
 | `abide:principal` | `debug` `warning` | A principal set or cleared. | 28.8 |
@@ -766,6 +766,12 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |
 | `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. | 36.8 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `string \| null` | Where the app's lines and spans are sent as OTLP. | 36.19, 36.20, 36.21, 36.23 |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `string \| null` | Where the app's lines are sent, in place of the endpoint's. | 36.19, 36.20 |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `string \| null` | Where the app's spans are sent, in place of the endpoint's. | 36.19, 36.20 |
+| `OTEL_EXPORTER_OTLP_HEADERS` | `string \| null` | The headers every export carries, as `name=value` pairs separated by commas. | 36.20 |
+| `OTEL_SERVICE_NAME` | `string \| null` | The service every export is sent under. | 36.22 |
+| `OTEL_SDK_DISABLED` | `'true' \| null` | Turns every export off. | 36.19 |
 | `DEBUG` | `string \| null` | Log-namespace gating. | 28.6, 28.9, 28.10, 28.11 |
 | `NO_COLOR` | `string \| null` | Refuses ansi anywhere. | 36.9 |
 | `FORCE_COLOR` | `string \| null` | Asks for the readable form off a pipe. | 36.9 |

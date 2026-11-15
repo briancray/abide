@@ -58,5 +58,22 @@ import Section from '#src/lib/Section.abide'
             what was kept, and a new build replaces it. <code>abide dev</code> keeps nothing.</p>
     </Section>
 
+    <Section title="Send the CRM's lines and spans to an OpenTelemetry backend">
+        <Code code={`OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io \\
+OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=$KEY abide start`} />
+
+        <p>Set an OTLP endpoint and every line the CRM logs is sent as a log record, and every
+            span as a span, as OTLP over HTTP with JSON. Each request is the root span of its trace,
+            under the id <code>traceresponse</code> names, so a refused call, a problem report and
+            the backend's trace view all meet on one id. Honeycomb, Grafana, Datadog, Jaeger and an
+            OpenTelemetry collector all take it, and nothing else is installed.</p>
+
+        <p>Lines are sent each second in batches, never on the way to an answer, and a stopping
+            app sends what is left first. A backend that cannot be reached is said once on stderr
+            until it can. Unset, nothing is sent, and <code>OTEL_SDK_DISABLED=true</code> turns a
+            set endpoint off. The service is <code>OTEL_SERVICE_NAME</code>, or else the app's
+            name.</p>
+    </Section>
+
     <Registry />
 </Doc>

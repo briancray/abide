@@ -8,7 +8,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
 
-import { writeSpan } from '#shared/log.ts'
+import { exportSpan, writeSpan } from '#shared/log.ts'
 import { isReactive } from '#shared/reactive/isReactive.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
 
@@ -171,7 +171,8 @@ export const trace = Object.assign(
 
 /**
  * Writes the request's own span, answered at `status` after `duration` milliseconds, under `namespace`
- * as a `debug` line: its id is the one `traceresponse` names, and its parent the caller's (24.10).
+ * as a `debug` line — or hands it to the exporter alone where it is not `written` — its id the one
+ * `traceresponse` names, and its parent the caller's (24.10).
  */
 export function writeRequestSpan(
     request: Request,
@@ -179,6 +180,7 @@ export function writeRequestSpan(
     startedAt: string,
     duration: number,
     namespace: string,
+    written: boolean,
 ): void {
     const scope = currentRequestScope()
     if (scope === undefined) return
@@ -194,7 +196,8 @@ export function writeRequestSpan(
         'http.response.status_code': status,
     }
     if (route !== undefined) attributes['http.route'] = route
-    writeSpan(
+    // 36.19 — exported alone where `abide:request` is closed, so an export prints nothing of its own.
+    ;(written ? writeSpan : exportSpan)(
         startedAt,
         `${request.method} ${path} ${status} ${duration.toFixed(1)}ms`,
         {

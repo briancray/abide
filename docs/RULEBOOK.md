@@ -2866,6 +2866,28 @@ its extension's type names none.
 the chunk type's default framing, MUST stop holding it, and the `Rpc` call it was for MUST be
 answered per 41.12.
 
+36.19 Where `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` or
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is set and `OTEL_SDK_DISABLED` is not `true`, the server MUST
+send every `LogRecord` it writes with no `span` as an OTLP log record, and every one with a `span`, a
+request's 24.10 names whether or not `abide:request` is enabled, as an OTLP span, as OTLP/HTTP JSON,
+and MUST send nothing where none is set; a request's span exported while `abide:request` is closed
+MUST NOT be written.
+
+36.20 36.19's sends MUST go to the signal's own endpoint where one is set, and otherwise to
+`/v1/logs` or `/v1/traces` under `OTEL_EXPORTER_OTLP_ENDPOINT`, carrying the headers
+`OTEL_EXPORTER_OTLP_HEADERS` names.
+
+36.21 An exported `LogRecord` MUST carry its trace as its `traceId`, its level as OTLP's severity, and
+an exported span its id, its parent, its kind and its attributes, with an `error` status as OTLP's
+error and any other left unset.
+
+36.22 Every export MUST name the app as `service.name` — `OTEL_SERVICE_NAME`, or else `APP_NAME` —
+and `APP_VERSION` as `service.version`.
+
+36.23 An export MUST NOT hold back an answer or a stop past sending what is queued, MUST keep no more
+than 4096 records waiting, dropping the oldest, and MUST report a failed send on stderr once until a
+send succeeds, and never through `log`.
+
 # 37. Lifecycle hooks
 
 37.1 A lifecycle hook MUST be filed at the route of the `.abide` or the handler file that called it,
