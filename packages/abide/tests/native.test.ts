@@ -26,7 +26,7 @@ test('native() answers per request, and nothing outside one — 38.141', async (
             )
             .then((answer) => answer.json())
     const [window, browser] = await Promise.all([
-        asked(nativeUserAgent('1.4.0')),
+        asked(nativeUserAgent('1.4.0', 'Faster')),
         asked('Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Safari/605.1.15'),
     ])
     const outside = await app.run(() => native()?.version ?? 'none')
@@ -42,10 +42,10 @@ test('a page reads the user agent of the window it is in — 38.141', () => {
     try {
         expect(native()).toBeUndefined()
         Object.defineProperty(navigator, 'userAgent', {
-            value: nativeUserAgent('2.0.1'),
+            value: nativeUserAgent('2.0.1', 'Faster (beta) \\'),
             configurable: true,
         })
-        expect(native()).toEqual({ version: '2.0.1' })
+        expect(native()).toEqual({ version: '2.0.1', name: 'Faster (beta) \\' })
     } finally {
         if (agent === undefined)
             delete (navigator as { userAgent?: string }).userAgent

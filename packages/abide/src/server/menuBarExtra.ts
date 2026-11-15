@@ -124,7 +124,7 @@ export function openMenuBarExtra(
         if (Date.now() - resignedAt < RESIGNED_MILLISECONDS) return
         panel ??= openPanel(
             options,
-            version,
+            nativeUserAgent(version, appName),
             uiDelegate,
             connectUpdates,
             () => {
@@ -221,7 +221,7 @@ type Panel = { window: Id; view: Id; address: string }
 /** The panel, built hidden: no controls, no titlebar of its own, and closed when it loses the key. */
 function openPanel(
     options: Launcher,
-    version: string,
+    userAgent: string,
     uiDelegate: Id,
     connectUpdates: (view: Id) => void,
     resigned: () => void,
@@ -256,7 +256,7 @@ function openPanel(
     send(view, 'setUIDelegate:', uiDelegate)
     send(view, 'setNavigationDelegate:', uiDelegate)
     // 38.140 — the panel's page is the native app's as much as the window's is.
-    send(view, 'setCustomUserAgent:', nsString(nativeUserAgent(version)))
+    send(view, 'setCustomUserAgent:', nsString(userAgent))
     // 38.148 — before it loads, so its `pendingUpdate` asks a channel that is there.
     connectUpdates(view)
     send(window, 'setContentView:', view)

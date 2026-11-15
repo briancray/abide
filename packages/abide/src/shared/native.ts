@@ -8,7 +8,10 @@
 import { isServer } from './isServer.ts'
 import { NATIVE_AGENT } from './NATIVE_AGENT.ts'
 
-const TAGGED = new RegExp(`(?:^|\\s)${NATIVE_AGENT}/(\\S+)`)
+// The version, then the name in a comment, its parentheses and backslashes quoted (RFC 9110 5.6.5).
+const TAGGED = new RegExp(
+    `(?:^|\\s)${NATIVE_AGENT}/(\\S+) \\(((?:\\\\.|[^\\\\)])*)\\)`,
+)
 
 /**
  * The user agent of the request being served, or '' outside one.
@@ -17,13 +20,20 @@ const TAGGED = new RegExp(`(?:^|\\s)${NATIVE_AGENT}/(\\S+)`)
  */
 export const REQUEST_AGENT: { current: () => string } = { current: () => '' }
 
-/** The version of the native app whose window the work is for, or `undefined` where none is. */
-export function native(): { version: string } | undefined {
+/**
+ * The version of the native app whose window the work is for, and the name its menu bar shows, or
+ * `undefined` where none is.
+ */
+export function native(): { version: string; name: string } | undefined {
     const agent = isServer()
         ? REQUEST_AGENT.current()
         : typeof navigator === 'undefined'
           ? ''
           : navigator.userAgent
-    const version = TAGGED.exec(agent)?.[1]
-    return version === undefined ? undefined : { version }
+    const tagged = TAGGED.exec(agent)
+    if (tagged === null) return undefined
+    return {
+        version: tagged[1] as string,
+        name: (tagged[2] as string).replace(/\\(.)/g, '$1'),
+    }
 }

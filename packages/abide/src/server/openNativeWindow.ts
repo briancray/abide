@@ -270,7 +270,11 @@ export function openNativeWindow(
     const uiDelegate = send(uiDelegateClass(), 'new')
     send(view, 'setUIDelegate:', uiDelegate)
     send(view, 'setNavigationDelegate:', uiDelegate)
-    send(view, 'setCustomUserAgent:', nsString(nativeUserAgent(version)))
+    send(
+        view,
+        'setCustomUserAgent:',
+        nsString(nativeUserAgent(version, appName)),
+    )
     // The window is titled by the page it shows, told by the web view as its title changes.
     sendTyped(
         view,
