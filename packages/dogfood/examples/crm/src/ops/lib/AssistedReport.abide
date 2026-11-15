@@ -1,0 +1,44 @@
+<script>
+import {
+    onRefusal,
+    reactive,
+    report,
+    type ReportDraft,
+    resultsOf,
+} from '@abide/abide'
+
+import askReport from '../askReport.handler.ts'
+import draftReport from '../draftReport.handler.ts'
+import sendStatement from '../sendStatement.handler.ts'
+
+let draft = reactive<ReportDraft | undefined>(undefined)
+let asked = reactive(false)
+
+onRefusal((_refusal, call) => {
+    draft = report({ trace: call.trace })
+})
+
+// The assistant reads the draft as the person sees it, and nothing more.
+async function ask(current: ReportDraft) {
+    asked = true
+    const events = await askReport({ draft: current.markdown() })
+    for (const written of resultsOf(events, draftReport)) {
+        current.summary.set(written.summary)
+        current.description.set(written.description)
+    }
+}
+</script>
+
+<div class="row">
+    <button onclick={() => sendStatement({ id: 'c2' })}>
+        Email Grace her statement</button>
+    <button disabled={draft === undefined || asked}
+        onclick={() => draft && ask(draft)}>Ask the assistant</button>
+    <button disabled={draft === undefined} onclick={() => draft?.open()}>
+        Review and send</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>summary</span>
+        <strong>{draft?.summary() || '—'}</strong></li>
+</ul>

@@ -7,7 +7,7 @@ test('a failed call is reported from its trace, and the report is what was shown
     await page.goto('ops')
     const section = page
         .locator('main')
-        .locator('.row', { hasText: 'Email Grace her statement' })
+        .locator('.row', { hasText: 'Report this' })
     const fields = section.locator('xpath=following-sibling::ul[1]')
     await section
         .getByRole('button', { name: 'Email Grace her statement' })

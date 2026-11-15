@@ -15,6 +15,7 @@ onConfig(null, {
 <script>
 import { online, refresh, watch } from '@abide/abide'
 
+import AssistedReport from './lib/AssistedReport.abide'
 import CallLog from './lib/CallLog.abide'
 import Console from './lib/Console.abide'
 import DealScores from './lib/DealScores.abide'
@@ -55,4 +56,5 @@ watch(() => {
     <Console />
     <h2>Problem reports</h2>
     <ReportProblem />
+    <AssistedReport />
 </main>

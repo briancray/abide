@@ -1,4 +1,9 @@
 <script>
+import askReportSource from 'crm/src/ops/askReport.handler.ts' with { type: 'text' }
+import draftReportSource from 'crm/src/ops/draftReport.handler.ts' with { type: 'text' }
+import AssistedReport from 'crm/src/ops/lib/AssistedReport.abide'
+import assistedReportSource from 'crm/src/ops/lib/AssistedReport.abide' with { type: 'text' }
+import assistedReportTestSource from 'crm/src/ops/lib/AssistedReport.test.ts' with { type: 'text' }
 import ReportProblem from 'crm/src/ops/lib/ReportProblem.abide'
 import reportProblemSource from 'crm/src/ops/lib/ReportProblem.abide' with { type: 'text' }
 import reportProblemTestSource from 'crm/src/ops/lib/ReportProblem.test.ts' with { type: 'text' }
@@ -56,6 +61,35 @@ import Snippet from '#src/lib/Snippet.abide'
             <code>password</code> field of the config are taken out of every line before it leaves
             the server, and out of every report before <code>onReport</code> sees it. With no
             <code>onReport</code> filed, a send is refused.</p>
+    </Section>
+
+    <Section title="An assistant fills in a draft that only the person sends">
+        <Example
+            id="report-assistant"
+            app="crm"
+            title="`resultsOf` — what the assistant wrote, put in the draft"
+            summary="Emailing a statement fails, and the page drafts a report on it. Ask the assistant: it reads the draft and fills in the summary and description. Review and send opens it, written, with nothing sent yet."
+            files={{
+                'src/ops/lib/AssistedReport.abide': assistedReportSource,
+                'src/ops/draftReport.handler.ts': draftReportSource,
+                'src/ops/askReport.handler.ts': askReportSource,
+                'src/ops/lib/AssistedReport.test.ts': assistedReportTestSource,
+            }}
+        >
+            <AssistedReport />
+        </Example>
+
+        <p>The assistant is handed the draft's <code>markdown</code>: what the person will read
+            before sending, secrets already taken out, and nothing more. In the native app's window
+            that holds the server's lines for the trace too, which is what it reads to say what went
+            wrong. Its one tool is <code>draftReport</code>, a handler that hands back what it was
+            given, and the page puts each answer in the draft:</p>
+
+        <Snippet source={assistedReportSource} path="src/ops/lib/AssistedReport.abide" from={['async function ask(']} />
+
+        <p>No tool sends a report, so the person always does. The CRM's model is recorded, so the
+            card answers the same way every time; <code>provider.claudeCode()</code> in its place is
+            the visitor's own Claude Code.</p>
     </Section>
 
     <Registry />
