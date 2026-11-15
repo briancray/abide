@@ -1,5 +1,17 @@
 # @abide/abide
 
+## 0.136.0
+
+### Minor Changes
+
+- 5d423e0: callTool makes a call the bridge could not by a turn — an older bridge, or a server it cannot start or reach, such as one signed in through Claude Code: Haiku, granted that tool alone, its prompt for the tool allowed, the tool's own answer returned and the run ended the moment it answers — RULEBOOK 44.99 ([`8ad99bd`](https://github.com/briancray/abide/commit/8ad99bdae1936ce2907cfa250deec64a063c02b7))
+
+### Patch Changes
+
+- e5b48ef: a call of one MCP tool is made under the grant alone — no --allowedTools past it, since a turn's prompt is the site's to answer (44.83) and a call is already the site's own choice of tool and input; --disallowedTools still refuses — RULEBOOK 44.94 ([`ac0c77c`](https://github.com/briancray/abide/commit/ac0c77ceae8789bb726ba3aa41de8c2971cc19db))
+- Updated dependencies [e5b48ef]
+  - @abide/bridge@0.8.1
+
 ## 0.135.0
 
 ### Minor Changes
