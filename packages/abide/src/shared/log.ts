@@ -259,16 +259,16 @@ function loggerOver(namespaceOf: () => string): Logger {
     const logger = ((...args: unknown[]): void => {
         write(namespaceOf(), 'info', args)
     }) as Logger
-    logger.info = (...args) => {
-        if (!anyEnabled()) return
-        const namespace = namespaceOf()
-        if (isEnabled(namespace)) write(namespace, 'info', args)
-    }
-    logger.debug = (...args) => {
-        if (!anyEnabled()) return
-        const namespace = namespaceOf()
-        if (isEnabled(namespace)) write(namespace, 'debug', args)
-    }
+    // 28.9 — info and debug write where `DEBUG` opens the namespace: one gate for both.
+    const gated =
+        (level: 'info' | 'debug') =>
+        (...args: unknown[]): void => {
+            if (!anyEnabled()) return
+            const namespace = namespaceOf()
+            if (isEnabled(namespace)) write(namespace, level, args)
+        }
+    logger.info = gated('info')
+    logger.debug = gated('debug')
     logger.warning = (...args) => write(namespaceOf(), 'warning', args)
     logger.error = (...args) => write(namespaceOf(), 'error', args)
     // 28.4 — another segment, below this one. 28.12 — asked per line too, so a logger named at module

@@ -11,17 +11,7 @@ import { hydrated, isHydrating } from './hydrating.ts'
 import { isServer } from './isServer.ts'
 import { ambient } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
-
-type UpdateBridge = { postMessage(message: 'ask' | 'install'): void }
-
-/** The channel a native app's window opens to the page for its updates, or `undefined`. */
-function updateBridge(): UpdateBridge | undefined {
-    return (
-        globalThis as {
-            webkit?: { messageHandlers?: { abideUpdate?: UpdateBridge } }
-        }
-    ).webkit?.messageHandlers?.abideUpdate
-}
+import { windowHandler } from './windowHandler.ts'
 
 /** An update the window has read, checked and unpacked, waiting for the app to restart. */
 export class StagedUpdate {
@@ -43,7 +33,7 @@ export class StagedUpdate {
 
     /** Quits the app, puts this update in its place and opens it. 38.145. */
     install(): void {
-        updateBridge()?.postMessage('install')
+        windowHandler('abideUpdate')?.postMessage('install')
     }
 }
 
@@ -65,6 +55,6 @@ export const pendingUpdate: Reactive<StagedUpdate | undefined> =
             if (landed === undefined) value.set(told)
             else void landed.then(() => value.set(told))
         })
-        updateBridge()?.postMessage('ask')
+        windowHandler('abideUpdate')?.postMessage('ask')
         return value
     })()

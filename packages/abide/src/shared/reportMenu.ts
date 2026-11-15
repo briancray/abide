@@ -1,9 +1,9 @@
 // 38.88 — A ROUTE'S MENUS, TOLD TO THE WINDOW IT IS SHOWN IN. Loaded only inside a native app, where
 // the window has opened `abideMenu` to the page; anywhere else `onMenu` never imports it.
 
-import { menuBridge } from './menuBridge.ts'
 import { MenuEntry, type MenuItem, type NativeMenuItem } from './menuItem.ts'
 import { navigate } from './navigate.ts'
+import { windowHandler } from './windowHandler.ts'
 
 // The items the last report numbered, by their `id`.
 let numbered: Exclude<MenuItem, 'separator'>[] = []
@@ -11,7 +11,7 @@ let listening = false
 
 /** Tells the window `menus`, the layouts' outermost first and the page's last. */
 export function reportMenu(menus: readonly MenuItem[]): void {
-    const bridge = menuBridge()
+    const bridge = windowHandler('abideMenu')
     if (bridge === undefined) return
     numbered = []
     const told: NativeMenuItem[] = []

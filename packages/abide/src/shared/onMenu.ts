@@ -3,9 +3,9 @@
 // tells the window again, and the component going takes them with it. Outside a native app's window
 // there is no menu bar, and nothing is filed.
 
-import { menuBridge } from './menuBridge.ts'
 import type { MenuItem } from './menuItem.ts'
 import { watch } from './reactive/index.ts'
+import { windowHandler } from './windowHandler.ts'
 
 /** One `onMenu`'s menus, as it last answered, and whether its component has gone. */
 type Filed = { menus: MenuItem[]; gone: boolean }
@@ -16,7 +16,7 @@ let telling = false
 
 /** Files the menus `read` answers for as long as the calling component stands; returns what unfiles them. */
 export function onMenu(read: () => readonly MenuItem[]): () => void {
-    if (menuBridge() === undefined) return () => {}
+    if (windowHandler('abideMenu') === undefined) return () => {}
     const entry: Filed = { menus: [], gone: false }
     filed.push(entry)
     const stop = watch(() => {
