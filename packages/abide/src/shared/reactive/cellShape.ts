@@ -658,7 +658,7 @@ export function refuseBothCaps(
         )
 }
 
-export function capFor(
+function capFor(
     label: string,
     throttle: number | undefined,
     debounce: number | undefined,
@@ -703,7 +703,7 @@ export function capFor(
  * passed, so it is not one an engine can speculate through. The saving is the indirection
  * rather than the comparison — `Object.is` is itself the fastest spelling of it.
  */
-export function comparatorFor(
+function comparatorFor(
     identity: Identity<unknown> | undefined,
 ): ((next: unknown, previous: unknown) => boolean) | null {
     if (identity === undefined) return null

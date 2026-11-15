@@ -14,10 +14,9 @@
 // for all of them by the first.
 
 import { contractOf, type Gated } from './argsContract.ts'
-import { CELL } from './CELL.ts'
-import type { Callable, Cell } from './cellShape.ts'
+import type { Callable } from './cellShape.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
-import { brandedPrototype, MEMBER_KEYS, signalMoved } from './Reactive.ts'
+import { forwardingPrototype, signalMoved } from './Reactive.ts'
 import { currentScope, runInScope, SCOPING } from './scoping.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
 import { newTracked, type Tracked, TRACKING, trackProbe } from './tracking.ts'
@@ -126,28 +125,10 @@ function built(filed: Filed, building: object, make: () => unknown): unknown {
     }
 }
 
-// EVERY MEMBER, FORWARDED — and the cell too, as a getter, because the core reaches a value's
-// record through `[CELL]` wherever one value is handed to another (an adoption, a `set` of a
-// `Reactive`, a `watch` over named sources). Under `Function.prototype` for `MEMBER_PROTOTYPE`'s
-// reason: the forwarder is called as a read.
-const forwarders: Record<PropertyKey, unknown> = {}
-for (const key of MEMBER_KEYS)
-    forwarders[key] = function forward(
-        this: Forwarder,
-        ...given: unknown[]
-    ): unknown {
-        const instance = instanceOf(this[FILED])
-        return (instance[key] as (...given: unknown[]) => unknown).apply(
-            instance,
-            given,
-        )
-    }
-const FORWARDING_PROTOTYPE = brandedPrototype(forwarders)
-Object.defineProperty(FORWARDING_PROTOTYPE, CELL, {
-    get(this: Forwarder): Cell {
-        return (instanceOf(this[FILED]) as unknown as Callable)[CELL]
-    },
-})
+// Under `Function.prototype` for `MEMBER_PROTOTYPE`'s reason: the forwarder is called as a read.
+const FORWARDING_PROTOTYPE = forwardingPrototype<Forwarder>(
+    (forwarder) => instanceOf(forwarder[FILED]) as unknown as Callable,
+)
 
 /**
  * Whether a value built here has to be a forwarder.

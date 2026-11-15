@@ -4073,29 +4073,40 @@ export function brandedPrototype(
 
 const MEMBER_PROTOTYPE = brandedPrototype()
 
-// EVERY MEMBER FORWARDED TO THE VALUE BUILT ON REACH, and the cell as a getter — `scoped.ts`'s
-// forwarder, for its reason: the core reaches a value's record through `[CELL]`.
-const followUpMembers: Record<PropertyKey, unknown> = {}
-for (const key of MEMBER_KEYS)
-    followUpMembers[key] = function forwardFollowUp(
-        this: FollowUp,
-        ...given: unknown[]
-    ): unknown {
-        const value = followedValue(this) as unknown as Record<
-            PropertyKey,
-            (...given: unknown[]) => unknown
-        >
-        return (value[key] as (...given: unknown[]) => unknown).apply(
-            value,
-            given,
-        )
-    }
-const FOLLOW_UP_PROTOTYPE = brandedPrototype(followUpMembers)
-Object.defineProperty(FOLLOW_UP_PROTOTYPE, CELL, {
-    get(this: FollowUp): Cell {
-        return followedValue(this)[CELL]
-    },
-})
+/**
+ * A branded prototype forwarding EVERY MEMBER to the value `resolve` reaches from the receiver —
+ * and the cell too, as a getter, because the core reaches a value's record through `[CELL]`
+ * wherever one value is handed to another (an adoption, a `set` of a `Reactive`, a `watch` over
+ * named sources). A follow-up's and a server's forwarder (`scoped.ts`) are both one.
+ */
+export function forwardingPrototype<Self>(
+    resolve: (self: Self) => Callable,
+): Record<PropertyKey, unknown> {
+    const members: Record<PropertyKey, unknown> = {}
+    for (const key of MEMBER_KEYS)
+        members[key] = function forward(
+            this: Self,
+            ...given: unknown[]
+        ): unknown {
+            const value = resolve(this) as unknown as Record<
+                PropertyKey,
+                (...given: unknown[]) => unknown
+            >
+            return (value[key] as (...given: unknown[]) => unknown).apply(
+                value,
+                given,
+            )
+        }
+    const prototype = brandedPrototype(members)
+    Object.defineProperty(prototype, CELL, {
+        get(this: Self): Cell {
+            return resolve(this)[CELL]
+        },
+    })
+    return prototype
+}
+
+const FOLLOW_UP_PROTOTYPE = forwardingPrototype<FollowUp>(followedValue)
 
 /**
  * The member prototype of a streaming value, whose writes stand over the stream.
