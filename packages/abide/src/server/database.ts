@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path' // bun exposes no path resolution o
 
 import { config, derived } from './config.ts'
 import { onStop } from './hooks.ts'
+import { isRunning } from './isRunning.ts'
 
 /** 47.2, 47.3 — a name, opened as `<name>.sqlite`. A string neither a name nor a path is refused. */
 const NAME = /^[\w-]+$/
@@ -214,7 +215,7 @@ function scratchDirectory(): string {
         if (scratchDirectories.size === 0)
             for (const name of readdirSync(temporary)) {
                 const pid = SCRATCH.exec(name)?.[1]
-                if (pid !== undefined && !running(Number(pid)))
+                if (pid !== undefined && !isRunning(Number(pid)))
                     rmSync(`${temporary}/${name}`, {
                         recursive: true,
                         force: true,
@@ -224,14 +225,4 @@ function scratchDirectory(): string {
         scratchDirectories.set(Bun.main, directory)
     }
     return directory
-}
-
-function running(pid: number): boolean {
-    try {
-        process.kill(pid, 0)
-        return true
-    } catch (error) {
-        // EPERM is a process that runs as another user.
-        return (error as { code?: string }).code !== 'ESRCH'
-    }
 }

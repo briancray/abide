@@ -222,7 +222,12 @@ async function serversOf(
     return new Set(servers.keys())
 }
 
-/** The MCP server `tool` is of, as 44.29 names it, or `undefined` for a built-in. */
+/**
+ * The MCP server `tool` is of, as 44.29 names it, or `undefined` for a built-in.
+ *
+ * `@abide/bridge/grant`'s `serverOf`, copied: `missingFor` answers synchronously, before the grant
+ * module this file loads lazily has been loaded.
+ */
 function serverOfTool(tool: string): string | undefined {
     if (!tool.startsWith('mcp__')) return undefined
     const rest = tool.slice('mcp__'.length)

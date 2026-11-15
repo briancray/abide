@@ -115,6 +115,21 @@ export function sendTyped(
     return sender(args, returns)(receiver, selector(name), ...values)
 }
 
+/** Sends `name` to `receiver` with one `BOOL`, answering nothing — a flag's setter. */
+export function sendFlag(receiver: Id, name: string, value: boolean): void {
+    sendTyped(receiver, name, [FFIType.bool], FFIType.void, value)
+}
+
+/** Sends `name` to `receiver` with one number of `type` (an `NSInteger` by default), answering nothing. */
+export function sendNumber(
+    receiver: Id,
+    name: string,
+    value: number,
+    type: FFIType = FFIType.i64,
+): void {
+    sendTyped(receiver, name, [type], FFIType.void, value)
+}
+
 /** Sends `name` to `receiver`, every argument an object, answering an object. */
 export function send(receiver: Id, name: string, ...values: Id[]): Id {
     const args: FFIType[] = []

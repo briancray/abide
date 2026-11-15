@@ -20,6 +20,8 @@ import {
     rectOf,
     selector,
     send,
+    sendFlag,
+    sendNumber,
     sendTyped,
     stringOf,
 } from './appKit.ts'
@@ -95,13 +97,7 @@ export function openNativeWindow(
     // Regular: a Dock icon and a menu bar, which a process outside a `.app` does not get by default.
     // 38.165 — accessory: neither.
     const showDock = (shown: boolean): void => {
-        sendTyped(
-            application,
-            'setActivationPolicy:',
-            [FFIType.i64],
-            FFIType.void,
-            shown ? 0 : 1,
-        )
+        sendNumber(application, 'setActivationPolicy:', shown ? 0 : 1)
     }
     // 38.183 — the window opens shown, and its Dock icon with it.
     showDock(options.dock !== false)
@@ -186,62 +182,30 @@ export function openNativeWindow(
             (drawnUnder ? FULL_SIZE_CONTENT_VIEW : 0),
     )
     if (drawnUnder) {
-        sendTyped(
-            window,
-            'setTitlebarAppearsTransparent:',
-            [FFIType.bool],
-            FFIType.void,
-            true,
-        )
+        sendFlag(window, 'setTitlebarAppearsTransparent:', true)
         // NSWindowTitleHidden.
-        sendTyped(window, 'setTitleVisibility:', [FFIType.i64], FFIType.void, 1)
+        sendNumber(window, 'setTitleVisibility:', 1)
     }
     // 38.152 — `inset` is the titlebar a unified toolbar makes, with nothing in the toolbar.
     if (options.titlebar === 'inset') {
         const toolbar = created('NSToolbar')
-        sendTyped(
-            toolbar,
-            'setShowsBaselineSeparator:',
-            [FFIType.bool],
-            FFIType.void,
-            false,
-        )
+        sendFlag(toolbar, 'setShowsBaselineSeparator:', false)
         send(window, 'setToolbar:', toolbar)
-        sendTyped(
-            window,
-            'setToolbarStyle:',
-            [FFIType.i64],
-            FFIType.void,
-            UNIFIED_TOOLBAR_STYLE,
-        )
+        sendNumber(window, 'setToolbarStyle:', UNIFIED_TOOLBAR_STYLE)
     }
     // 38.159.
-    sendTyped(
+    sendNumber(
         window,
         'setCollectionBehavior:',
-        [FFIType.u64],
-        FFIType.void,
         options.fullScreen ? FULL_SCREEN_PRIMARY : FULL_SCREEN_NONE,
+        FFIType.u64,
     )
     // 38.160.
     if (options.alwaysOnTop)
-        sendTyped(
-            window,
-            'setLevel:',
-            [FFIType.i64],
-            FFIType.void,
-            FLOATING_WINDOW_LEVEL,
-        )
+        sendNumber(window, 'setLevel:', FLOATING_WINDOW_LEVEL)
     // 38.161.
-    if (!options.shadow)
-        sendTyped(window, 'setHasShadow:', [FFIType.bool], FFIType.void, false)
-    sendTyped(
-        window,
-        'setReleasedWhenClosed:',
-        [FFIType.bool],
-        FFIType.void,
-        false,
-    )
+    if (!options.shadow) sendFlag(window, 'setHasShadow:', false)
+    sendFlag(window, 'setReleasedWhenClosed:', false)
     sendTyped(
         window,
         'setContentSize:',
@@ -301,13 +265,7 @@ export function openNativeWindow(
                 selector('setInspectable:'),
             )
         )
-            sendTyped(
-                view,
-                'setInspectable:',
-                [FFIType.bool],
-                FFIType.void,
-                true,
-            )
+            sendFlag(view, 'setInspectable:', true)
     }
     const uiDelegate = send(uiDelegateClass(), 'new')
     send(view, 'setUIDelegate:', uiDelegate)
@@ -343,24 +301,16 @@ export function openNativeWindow(
     else {
         // 38.154 — the material is the content view, and the page is drawn over it with no ground.
         const material = created('NSVisualEffectView')
-        sendTyped(
+        sendNumber(
             material,
             'setMaterial:',
-            [FFIType.i64],
-            FFIType.void,
             VIBRANCY_MATERIALS[options.vibrancy],
         )
         // NSVisualEffectBlendingModeBehindWindow.
-        sendTyped(material, 'setBlendingMode:', [FFIType.i64], FFIType.void, 0)
+        sendNumber(material, 'setBlendingMode:', 0)
         send(window, 'setContentView:', material)
         send(material, 'addSubview:', view)
-        sendTyped(
-            view,
-            'setTranslatesAutoresizingMaskIntoConstraints:',
-            [FFIType.bool],
-            FFIType.void,
-            false,
-        )
+        sendFlag(view, 'setTranslatesAutoresizingMaskIntoConstraints:', false)
         for (const edge of [
             'topAnchor',
             'bottomAnchor',
@@ -573,13 +523,7 @@ export function openNativeWindow(
     const front = (): void => {
         // 38.183 — before activating, so the app comes forward with its menu bar.
         if (options.dock === 'window') showDock(true)
-        sendTyped(
-            application,
-            'activateIgnoringOtherApps:',
-            [FFIType.bool],
-            FFIType.void,
-            true,
-        )
+        sendFlag(application, 'activateIgnoringOtherApps:', true)
         send(window, 'makeKeyAndOrderFront:', null)
     }
     const updates = launcher.updates

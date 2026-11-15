@@ -50,7 +50,12 @@ import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { serveDev } from '#server/serveDev.ts'
-import { publicKeyOf, publishUpdate, updateKey } from '#server/updateFeed.ts'
+import {
+    publicKeyOf,
+    publishUpdate,
+    ran,
+    updateKey,
+} from '#server/updateFeed.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/NATIVE_FILES.ts'
 
@@ -501,18 +506,13 @@ async function publishedIcon(root: string): Promise<string | undefined> {
 
 /** Runs one of macOS's own tools, warning with what it wrote where it fails; answers its exit code. */
 async function spawnedTool(tool: string, args: string[]): Promise<number> {
-    const child = Bun.spawn([tool, ...args], {
-        stdout: 'ignore',
-        stderr: 'pipe',
-    })
-    // Drained beside the exit, so a tool that fills the pipe is not left waiting on a reader.
-    const [code, said] = await Promise.all([
-        child.exited,
-        new Response(child.stderr).text(),
-    ])
-    if (code !== 0)
-        console.warn(`abide native: ${tool} failed — ${said.trim()}`)
-    return code
+    return ran([tool, ...args]).then(
+        () => 0,
+        (thrown: Error) => {
+            console.warn(`abide native: ${thrown.message}`)
+            return 1
+        },
+    )
 }
 
 /**

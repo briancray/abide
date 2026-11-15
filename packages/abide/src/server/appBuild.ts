@@ -18,6 +18,7 @@ import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { ABIDE_DIRECTORY } from './ABIDE_DIRECTORY.ts'
 import type { Compilation } from './abideModules.ts'
 import type { AppSources } from './answerRequest.ts'
+import { isRunning } from './isRunning.ts'
 import type { Manifest } from './manifestOf.ts'
 import { namesUnder } from './namesUnder.ts'
 import { packageDirectory } from './packageDirectory.ts'
@@ -361,14 +362,4 @@ async function isDirectory(path: string): Promise<boolean> {
                 .catch(() => undefined)
         )?.isDirectory() === true
     )
-}
-
-function isRunning(pid: number): boolean {
-    try {
-        process.kill(pid, 0)
-        return true
-    } catch (thrown) {
-        // EPERM is a process that exists and is someone else's.
-        return (thrown as { code?: string }).code === 'EPERM'
-    }
 }

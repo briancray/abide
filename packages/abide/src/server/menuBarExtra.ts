@@ -16,6 +16,8 @@ import {
     rectOf,
     selector,
     send,
+    sendFlag,
+    sendNumber,
     sendTyped,
 } from './appKit.ts'
 import type { Launcher } from './launcherOptions.ts'
@@ -92,13 +94,7 @@ export function openMenuBarExtra(
             ICON_POINTS,
             ICON_POINTS,
         )
-        sendTyped(
-            image,
-            'setTemplate:',
-            [FFIType.bool],
-            FFIType.void,
-            icon.template,
-        )
+        sendFlag(image, 'setTemplate:', icon.template)
         send(button, 'setImage:', image)
     }
 
@@ -152,13 +148,7 @@ export function openMenuBarExtra(
             )
         }
         placeUnder(panel.window, button, options.panelWidth)
-        sendTyped(
-            application,
-            'activateIgnoringOtherApps:',
-            [FFIType.bool],
-            FFIType.void,
-            true,
-        )
+        sendFlag(application, 'activateIgnoringOtherApps:', true)
         send(panel.window, 'makeKeyAndOrderFront:', null)
     }
     const primary = async (): Promise<void> => {
@@ -243,21 +233,14 @@ function openPanel(
     resigned: () => void,
 ): Panel {
     const window = created('NSPanel')
-    sendTyped(
+    sendNumber(
         window,
         'setStyleMask:',
-        [FFIType.u64],
-        FFIType.void,
         TITLED | FULL_SIZE_CONTENT_VIEW,
+        FFIType.u64,
     )
-    sendTyped(
-        window,
-        'setTitlebarAppearsTransparent:',
-        [FFIType.bool],
-        FFIType.void,
-        true,
-    )
-    sendTyped(window, 'setTitleVisibility:', [FFIType.i64], FFIType.void, 1)
+    sendFlag(window, 'setTitlebarAppearsTransparent:', true)
+    sendNumber(window, 'setTitleVisibility:', 1)
     for (let button = 0; button < 3; button += 1)
         sendTyped(
             sendTyped(
@@ -272,28 +255,10 @@ function openPanel(
             FFIType.void,
             true,
         )
-    sendTyped(window, 'setMovable:', [FFIType.bool], FFIType.void, false)
-    sendTyped(
-        window,
-        'setReleasedWhenClosed:',
-        [FFIType.bool],
-        FFIType.void,
-        false,
-    )
-    sendTyped(
-        window,
-        'setLevel:',
-        [FFIType.i64],
-        FFIType.void,
-        STATUS_WINDOW_LEVEL,
-    )
-    sendTyped(
-        window,
-        'setCollectionBehavior:',
-        [FFIType.u64],
-        FFIType.void,
-        PANEL_BEHAVIOR,
-    )
+    sendFlag(window, 'setMovable:', false)
+    sendFlag(window, 'setReleasedWhenClosed:', false)
+    sendNumber(window, 'setLevel:', STATUS_WINDOW_LEVEL)
+    sendNumber(window, 'setCollectionBehavior:', PANEL_BEHAVIOR, FFIType.u64)
     sendTyped(
         window,
         'setContentSize:',

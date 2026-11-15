@@ -11,6 +11,7 @@ import {
     objcClass,
     selector,
     send,
+    sendNumber,
     sendTyped,
 } from './appKit.ts'
 
@@ -129,13 +130,7 @@ function menuItem(item: NativeMenuItem): Id {
         null,
         nsString(keyEquivalent),
     )
-    sendTyped(
-        built,
-        'setKeyEquivalentModifierMask:',
-        [FFIType.u64],
-        FFIType.void,
-        modifiers,
-    )
+    sendNumber(built, 'setKeyEquivalentModifierMask:', modifiers, FFIType.u64)
     if (item.items !== undefined) {
         const submenu = send(
             send(objcClass('NSMenu'), 'alloc'),
@@ -165,7 +160,7 @@ function menuItem(item: NativeMenuItem): Id {
         selector('choose:'),
     )
     send(built, 'setTarget:', target)
-    sendTyped(built, 'setTag:', [FFIType.i64], FFIType.void, chosen.length)
+    sendNumber(built, 'setTag:', chosen.length)
     chosen.push(item)
     return built
 }
