@@ -18,7 +18,6 @@ import {
     nsString,
     objcClass,
     rectOf,
-    selector,
     send,
     sendFlag,
     sendNumber,
@@ -32,7 +31,7 @@ import { type Launcher, VIBRANCY_MATERIALS } from './launcherOptions.ts'
 import { menuBar, menuBarExtraMenu, opensInWindow } from './menuBar.ts'
 import { type MenuBarIcon, openMenuBarExtra } from './menuBarExtra.ts'
 import type { Checked, Staged } from './NativeUpdater.ts'
-import { nativeUserAgent } from './nativeUserAgent.ts'
+import { webViewFor } from './webViewFor.ts'
 import { windowBridge } from './windowBridge.ts'
 
 const SIGINT = 2
@@ -247,30 +246,8 @@ export function openNativeWindow(
         send(window, 'setBackgroundColor:', colorOf(background))
     send(window, 'setTitle:', nsString(appName))
 
-    const view = created('WKWebView')
-    // 38.163.
-    if (options.inspector) {
-        send(
-            send(send(view, 'configuration'), 'preferences'),
-            'setValue:forKey:',
-            nsBoolean(true),
-            nsString('developerExtrasEnabled'),
-        )
-        if (
-            sendTyped(
-                view,
-                'respondsToSelector:',
-                [FFIType.ptr],
-                FFIType.bool,
-                selector('setInspectable:'),
-            )
-        )
-            sendFlag(view, 'setInspectable:', true)
-    }
     const uiDelegate = send(uiDelegateClass(), 'new')
-    send(view, 'setUIDelegate:', uiDelegate)
-    send(view, 'setNavigationDelegate:', uiDelegate)
-    send(view, 'setCustomUserAgent:', nsString(nativeUserAgent(version)))
+    const view = webViewFor(options.inspector, version, uiDelegate)
     // The window is titled by the page it shows, told by the web view as its title changes.
     sendTyped(
         view,
