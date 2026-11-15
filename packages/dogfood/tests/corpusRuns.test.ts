@@ -42,9 +42,8 @@ import {
     removeTemporaryModules,
     temporaryModule,
 } from '../../abide/tests/temporaryModule.ts'
-import { allCards } from './docsPages.ts'
+import { allCards, DOGFOOD as APP } from './docsPages.ts'
 
-const APP = new URL('../', import.meta.url).pathname
 // THE EXAMPLE APP'S `src`, from the docs app's root: every card renders a component from it (40.32).
 const EXAMPLE_APPS: string[] = []
 for (const manifest of new Bun.Glob('examples/*/package.json').scanSync({

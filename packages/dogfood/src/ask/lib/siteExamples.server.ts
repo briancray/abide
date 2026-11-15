@@ -9,9 +9,23 @@ export type SiteExample = {
     files: string[]
 }
 
-const CARD = /<Example\b([\s\S]*?)>/g
-const ATTRIBUTE = (name: string) => new RegExp(`\\b${name}="([^"]*)"`)
+// The opening tag ends where the component the card shows begins: a title is free to hold a `>`.
+const CARD = /<Example\b([\s\S]*?)>\s*<[A-Z]/g
 const FILE_KEY = /'(src\/[^']+)':/g
+const SERVER_FILES = /serverFiles=\{\[([\s\S]*?)\]\}/
+
+/**
+ * An attribute's text, written `name="…"` or as a string expression — `{'…'}`, `{"…"}` or
+ * `{`…`}`, which a title holding a quote or a brace needs.
+ */
+function attributeOf(opening: string, name: string): string | undefined {
+    const found = new RegExp(
+        `\\b${name}=(?:"([^"]*)"|\\{'((?:[^'\\\\]|\\\\.)*)'\\}|\\{"((?:[^"\\\\]|\\\\.)*)"\\}|\\{\`([^\`]*)\`\\})`,
+    ).exec(opening)
+    if (found === null) return undefined
+    const text = found[1] ?? found[2] ?? found[3] ?? found[4] ?? ''
+    return found[1] === undefined ? text.replace(/\\(.)/g, '$1') : text
+}
 
 let read: Promise<SiteExample[]> | undefined
 
@@ -34,16 +48,19 @@ async function readExamples(): Promise<SiteExample[]> {
         const route = `/${file.slice(0, -'/index.abide'.length)}`
         for (const card of source.matchAll(CARD)) {
             const opening = card[1] ?? ''
-            const id = ATTRIBUTE('id').exec(opening)?.[1]
+            const id = attributeOf(opening, 'id')
             if (id === undefined) continue
             const files: string[] = []
             for (const key of opening.matchAll(FILE_KEY))
                 files.push(key[1] ?? '')
+            const server = SERVER_FILES.exec(opening)?.[1] ?? ''
+            for (const shown of server.matchAll(/'([^']+)'/g))
+                files.push(shown[1] ?? '')
             examples.push({
                 id,
                 route,
-                title: ATTRIBUTE('title').exec(opening)?.[1] ?? '',
-                summary: ATTRIBUTE('summary').exec(opening)?.[1] ?? '',
+                title: attributeOf(opening, 'title') ?? '',
+                summary: attributeOf(opening, 'summary') ?? '',
                 files,
             })
         }

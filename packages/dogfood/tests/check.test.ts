@@ -2,8 +2,8 @@ import { expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
-const APP = new URL('..', import.meta.url).pathname
-const BIN = new URL('../../abide/bin/abide.ts', import.meta.url).pathname
+import { BIN } from '../../abide/tests/builtApp.ts'
+import { DOGFOOD as APP } from './docsPages.ts'
 
 // THE DOCS APP IS THE FRAMEWORK'S SHOWCASE, so every card a reader copies has to compile as written:
 // `abide check` over the whole app, exactly as an author runs it, and not one error. Warnings are
