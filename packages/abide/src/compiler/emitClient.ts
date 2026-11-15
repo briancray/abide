@@ -18,6 +18,7 @@ import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import {
     type ClassifiedAttribute,
     classifyAttributes,
+    hasSpread,
     isBound,
     isSingleRooted,
     isSlot,
@@ -33,7 +34,11 @@ import {
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { moduleImports } from './emitComponent.ts'
 import { IN_SETUP, setupRethrow } from './guardedSetup.ts'
-import { inlineDefinitions, invocationProps } from './invocationProps.ts'
+import {
+    componentPrelude,
+    inlineDefinitions,
+    invocationProps,
+} from './invocationProps.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import {
     type ItemUses,
@@ -448,10 +453,7 @@ function clientComponent(
     const lowering = parent.lowering
     const sink = placed(component.children, component.components, true)
     const { defs, chain, helpers, lines } = emitRegion(sink, parent.nested())
-    const head =
-        component.pattern === '' ? '' : `${lowering.setup(component)}\n`
-    const setup =
-        component.setup === null ? '' : `${lowering.setup(component.setup)}\n`
+    const { head, setup } = componentPrelude(component, lowering)
     const owning = scopedSetup(setup, lowering)
     const fill = sink.positions.length === 0 ? '' : filledEmpty(sink, lowering)
     const captured = capturedShare(sink, lowering)
@@ -1288,7 +1290,7 @@ function emitInvocation(
     // 32.11, 32.23 — A SPREAD'S KEYS ARE READ WHEN THE RECORD IS MADE, and where its value has not
     // landed the invocation waits for it rather than aborting the mount around it (`invokeLanded`).
     // The region is found first, while the walk stands at it.
-    const spread = node.attributes.some((attribute) => attribute.name === '...')
+    const spread = hasSpread(node)
     const found = `${lowering.use('regionFound')}(${at.name})`
     const handed = spread ? SPREAD_RECORD : record
     let invocation: string

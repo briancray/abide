@@ -156,6 +156,19 @@ export function bodiesOf(node: TemplateNode): readonly Body[] {
     return node.branches
 }
 
+/** Whether any node among `nodes`, or in a body under one, passes `test` — an early-exit search. */
+export function holdsNode(
+    nodes: readonly TemplateNode[],
+    test: (node: TemplateNode) => boolean,
+): boolean {
+    for (const node of nodes) {
+        if (test(node)) return true
+        for (const body of bodiesOf(node))
+            if (holdsNode(body.children, test)) return true
+    }
+    return false
+}
+
 /** An attribute, its name folded once. */
 export function attribute(
     name: string,

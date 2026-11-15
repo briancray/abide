@@ -9,6 +9,7 @@ import {
     attributeOf,
     type ClassifiedAttribute,
     classifyAttributes,
+    hasSpread,
     holdsSetup,
     isComponentTag,
     isSingleRooted,
@@ -17,7 +18,11 @@ import {
 } from './classifyTemplate.ts'
 import { type Cursor, placed, type PlacedNode } from './Cursor.ts'
 import { guardedSetup } from './guardedSetup.ts'
-import { inlineDefinitions, invocationProps } from './invocationProps.ts'
+import {
+    componentPrelude,
+    inlineDefinitions,
+    invocationProps,
+} from './invocationProps.ts'
 import { type Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { shareScope } from './shareScope.ts'
@@ -443,8 +448,7 @@ function invocationMarkup(
     // record it is read into aborts as a slot does, and the invocation writes its pair alone for the
     // browser to fill when the value lands (`invokeLanded`).
     let record = `{ ${props.join(', ')} }`
-    if (node.attributes.some((attribute) => attribute.name === '...'))
-        record = slotValueOf(lowering, `(${record})`)
+    if (hasSpread(node)) record = slotValueOf(lowering, `(${record})`)
     return `${lowering.use('renderComponent')}(${lowering.chosenTag(node) ?? node.tag}, ${record}, ${HEADS})`
 }
 
@@ -553,10 +557,7 @@ function serverComponent(
     lowering: Lowering,
 ): string {
     const sink = placed(component.children, component.components)
-    const head =
-        component.pattern === '' ? '' : `${lowering.setup(component)}\n`
-    const setup =
-        component.setup === null ? '' : `${lowering.setup(component.setup)}\n`
+    const { head, setup } = componentPrelude(component, lowering)
     // 10.5, 32.46 — AN INSTANCE OPENS ITS OWN SHARE SCOPE, as a file component's does: two of it
     // standing side by side are two instances, each creating what no ancestor holds (10.6).
     const { opened, closed } = shareScope(lowering, '')

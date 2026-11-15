@@ -84,3 +84,20 @@ export function inlineDefinitions(
                 out.push(`const ${passedName(passed)} = ${define(passed)}`)
     return out
 }
+
+/**
+ * An inline component's prelude, as both lanes open it: `head` binds its pattern from the props
+ * record (32.40), and `setup` is its own `<script>` (32.46). Each is a line, or empty.
+ */
+export function componentPrelude(
+    component: InlineComponent,
+    lowering: Lowering,
+): { head: string; setup: string } {
+    return {
+        head: component.pattern === '' ? '' : `${lowering.setup(component)}\n`,
+        setup:
+            component.setup === null
+                ? ''
+                : `${lowering.setup(component.setup)}\n`,
+    }
+}

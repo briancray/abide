@@ -6,10 +6,10 @@ import { isNamedAlone } from './isNamedAlone.ts'
 import { Lowering } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
-    bodiesOf,
     type Body,
     fileBody,
     type ForBlock,
+    holdsNode,
     type TemplateNode,
     visitBodies,
 } from './TemplateNode.ts'
@@ -53,7 +53,7 @@ export function templateWarnings(
                 node.kind === 'block' &&
                 node.block === 'for' &&
                 node.key === '' &&
-                holdsState(node.children) &&
+                holdsNode(node.children, holdsState) &&
                 canChange(node, lowering) &&
                 !keyedByValue(node, lowering)
             )
@@ -73,17 +73,11 @@ export function templateWarnings(
     return warnings
 }
 
-function holdsState(nodes: TemplateNode[]): boolean {
-    for (const node of nodes) {
-        if (node.kind === 'element') {
-            if (isComponentTag(node.tag) || STATEFUL.has(node.lowerTag))
-                return true
-            for (const attribute of node.attributes)
-                if (attribute.lowerName.startsWith('bind:')) return true
-        }
-        for (const body of bodiesOf(node))
-            if (holdsState(body.children)) return true
-    }
+function holdsState(node: TemplateNode): boolean {
+    if (node.kind !== 'element') return false
+    if (isComponentTag(node.tag) || STATEFUL.has(node.lowerTag)) return true
+    for (const attribute of node.attributes)
+        if (attribute.lowerName.startsWith('bind:')) return true
     return false
 }
 

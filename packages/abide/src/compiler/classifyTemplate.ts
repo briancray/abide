@@ -9,6 +9,7 @@ import {
     type Attribute,
     bodiesOf,
     type ElementNode,
+    holdsNode,
     type TemplateNode,
 } from './TemplateNode.ts'
 
@@ -389,7 +390,10 @@ function refuseBinds(node: ElementNode): void {
             throw new Error(
                 `abide: <${node.tag} ${attribute.name}> has text of its own — one value, two owners. The bind writes the text; drop what stands between the tags. RULEBOOK 32.72.`,
             )
-        if (node.lowerTag === 'select' && holdsSelectedOption(node.children))
+        if (
+            node.lowerTag === 'select' &&
+            holdsNode(node.children, isSelectedOption)
+        )
             throw new Error(
                 `abide: <${node.tag} ${attribute.name}> has an <option selected> — one value, two owners. The bind selects the option its value holds; drop selected. RULEBOOK 32.72.`,
             )
@@ -397,18 +401,12 @@ function refuseBinds(node: ElementNode): void {
 }
 
 /** Whether an `<option>` with a `selected` attribute stands anywhere among `nodes`, blocks included. */
-function holdsSelectedOption(nodes: readonly TemplateNode[]): boolean {
-    for (const node of nodes) {
-        if (
-            node.kind === 'element' &&
-            node.lowerTag === 'option' &&
-            attributeOf(node, 'selected') !== undefined
-        )
-            return true
-        for (const body of bodiesOf(node))
-            if (holdsSelectedOption(body.children)) return true
-    }
-    return false
+function isSelectedOption(node: TemplateNode): boolean {
+    return (
+        node.kind === 'element' &&
+        node.lowerTag === 'option' &&
+        attributeOf(node, 'selected') !== undefined
+    )
 }
 
 /** An element's attribute by its folded name, or `undefined`. */
@@ -454,11 +452,18 @@ export function isSlot(node: TemplateNode): boolean {
  * is here.
  */
 export function holdsSlot(nodes: TemplateNode[]): boolean {
-    for (const node of nodes) {
-        if (isSlot(node)) return true
-        for (const body of bodiesOf(node))
-            if (holdsSlot(body.children)) return true
-    }
+    return holdsNode(nodes, isSlot)
+}
+
+/**
+ * Whether an invocation passes a spread (`{...value}`).
+ *
+ * 32.11, 32.23 — here because both lanes decide on it: the server aborts the record a spread is
+ * read into, and the client waits for the spread's value to land.
+ */
+export function hasSpread(node: ElementNode): boolean {
+    for (const attribute of node.attributes)
+        if (attribute.name === '...') return true
     return false
 }
 
