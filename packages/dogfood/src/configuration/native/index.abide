@@ -27,7 +27,9 @@ import Snippet from '#src/lib/Snippet.abide'
             inside, and the identifier macOS keeps the app's settings under. The first launch
             offers Start, which runs the app here, and Connect…, which opens one running at a URL.
             Each launch after it does again what the last one did. With <code>connect: false</code>
-            and nothing for the start form to ask, the first launch starts the CRM at once.</p>
+            and nothing for the start form to ask, the first launch starts the CRM at once, and
+            <code>start: 'immediately'</code> does the same with the defaults whatever the form
+            asks.</p>
 
         <Snippet source={launcherSource} path="src/native/launcher.abide" />
 
@@ -52,6 +54,13 @@ import Snippet from '#src/lib/Snippet.abide'
             ends the whole app, with its code. There, <code>Bun.isMainThread</code> and
             <code>import.meta.main</code> are <code>false</code>.</p>
 
+        <p>Opened from the Finder, the CRM has no terminal, so what it prints goes to
+            <code>~/Library/Logs/crm/crm.log</code>, which opens with a few lines saying how
+            to read it. A new file starts at each launch and every 5 MB, and the four before it
+            are kept as <code>crm.1.log</code> to <code>crm.4.log</code>, newest first. Give a
+            build an <code>APP_DATA_DIR</code> of its own and its log folder is named after that
+            folder instead, as what the launcher remembers moves there too.</p>
+
         <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['const printReport', 'onMenu(', 'watch(']} />
 
         <p>The reports page adds a Reports menu while it is showing. <code>onMenu</code> is read
@@ -59,15 +68,19 @@ import Snippet from '#src/lib/Snippet.abide'
             <code>MenuItem</code>: <code>'separator'</code>, an item with an <code>href</code>, one
             with a <code>MenuRole</code> the platform performs, or a <code>MenuEntry</code> made by
             <code>menuItem</code>. <code>MenuEntry.on</code> files what runs when it is picked, and
-            hands back what stops it, which is what <code>watch</code> takes. In a browser nothing
+            hands back what stops it, which is what <code>watch</code> takes. A menu labelled
+            like one already in the bar adds to it, and one labelled
+            <code>native()?.name</code> adds a group under About, where Settings… goes. In a
+            browser nothing
             picks an item, and the page runs unchanged.</p>
 
         <p>With <code>menuBarExtra: true</code> the CRM also sits in the menu bar, drawn from
             <code>src/public/icon-menubar.png</code>. A click opens
             <code>src/native/menubar.abide</code> in a panel under it, a page outside every
             layout, <code>panelWidth</code> by <code>panelHeight</code>. Without that file a click
-            shows and hides the window. A right click lists Open, the page's menus and Quit, and
-            closing the window keeps the CRM running up there. Add <code>dock: 'window'</code> and
+            shows and hides the window. A right click lists Open, the page's menus and Quit, a
+            menu labelled with the app's name listing its items directly. Closing the window
+            keeps the CRM running up there. Add <code>dock: 'window'</code> and
             the Dock icon and the menu bar come and go with the window, so Quit in the app menu
             closes the window and leaves the CRM in the menu bar, where Quit in the right-click
             menu stops it. A link in the panel with
@@ -78,7 +91,8 @@ import Snippet from '#src/lib/Snippet.abide'
 
         <p>A browser has no menu bar, so there the page offers the same print as a button.
             <code>native</code> answers the version of the <code>.app</code> whose window the page
-            is in, and <code>undefined</code> in a browser. The window names that version in the user
+            is in and the name its menu bar shows, and <code>undefined</code> in a browser. The
+            window names both in the user
             agent of every request it makes, so the server rendering the page reads the same answer
             the page does, and the button is never drawn in the window and taken away. Any client
             can send that user agent, so it decides what a page shows, never who may do what.</p>

@@ -3209,7 +3209,8 @@ package name, as 38.46 names it, MUST name the bundle's executable and identifie
 38.88 The native app's menu bar MUST be the application, File, Edit, View and Window menus, with
 the items every `onMenu` filed by the layouts and the page the window shows answers, outermost
 first: a menu whose `label` names one already standing appends its
-items to that one, and any other stands before Window.
+items to that one — to the application menu as a group of their own below About and the `update`
+item, after any grown before them — and any other stands before Window.
 
 38.89 A `MenuItem` whose `MenuRole` AppKit answers MUST be sent down the responder chain, and MUST
 be disabled where nothing in the chain answers it.
@@ -3391,11 +3392,11 @@ arm declares.
 prints it and fail the command, and MUST NOT be printed as a stack.
 
 38.140 The window `abide native`'s executable opens, and the menu bar extra's panel, MUST append
-`abide-native/` and the version of the app it was built from to the user agent of every request
-each makes.
+`abide-native/` and the version of the app it was built from, then a comment holding the name 38.87
+gives it, to the user agent of every request each makes.
 
-38.141 `native` MUST answer the version 38.140 names in the user agent of the request being served,
-and in a browser the version named in its own, and MUST answer `undefined` where the user agent names
+38.141 `native` MUST answer the version and the name 38.140 names in the user agent of the request
+being served, and in a browser those named in its own, and MUST answer `undefined` where the user agent names
 none or no request is being served.
 
 38.142 The native app given an `update` by `onLauncher` MUST read the feed under that address as
@@ -3492,8 +3493,9 @@ and MUST close the panel where it is open.
 answer 38.167's page, MUST bring the window to the front, and MUST hide it where it is in front.
 
 38.170 A secondary click on the menu bar extra MUST open a menu of an item of the `window` role named
-for the app, then the menus the page the window shows filed with `onMenu`, outermost first, then an
-item that quits the app, a separator between them where there are any.
+for the app, then the menus the page the window shows filed with `onMenu`, outermost first, a menu
+whose `label` is that name listing its items in its place, then an item that quits the app, a
+separator between them where there are any.
 
 38.171 The menu bar extra's panel MUST close when it stops being the key window, save to a sheet of
 its own (38.178).
@@ -3546,6 +3548,17 @@ window (38.172) rather than quit the app.
 
 38.185 `LauncherOptions` MUST NOT admit `dock: 'window'` without `menuBarExtra: true`, and the native
 app MUST refuse to launch on an `onLauncher` answer that does.
+
+38.186 The executable `abide native` writes, started on macOS with no command and with neither its
+stdout nor its stderr on a terminal, MUST write both to `<name>.log` under `~/Library/Logs/<folder>`
+from the moment the app's `onConfig` is filed, a failure to file it included, `<name>` the package
+name 38.46 names the executable with and `<folder>` the last folder of the directory 38.73 remembers
+under. The file MUST open with lines naming the app, its version, the time and the process, and how
+a `log` line in it reads, and MUST be set aside as `<name>.1.log` at each launch and once it passes
+5 MB, the files set aside before it each moved one older and none kept past `<name>.4.log`.
+
+38.187 Where `onLauncher` answers `start: 'immediately'`, the launcher MUST start the app with the
+values its start form offers at a launch where 38.73 does nothing, rather than show its page.
 
 # 39. Head and view transitions
 
