@@ -1,5 +1,11 @@
 # @abide/bridge
 
+## 0.8.2
+
+### Patch Changes
+
+- d8fef91: one withoutScheme; SITE_OPTIONS keyed by ClaudeCodeConfig; bridge() drops options nothing passes ([`4725199`](https://github.com/briancray/abide/commit/4725199666442d61d52758aec21615491d6a37c1))
+
 ## 0.8.1
 
 ### Patch Changes

@@ -1,5 +1,23 @@
 # @abide/abide
 
+## 0.136.1
+
+### Patch Changes
+
+- d8fef91: one windowHandler(name) for the native window's channels; log's info and debug share one gate ([`4afdea2`](https://github.com/briancray/abide/commit/4afdea24229222cb76e5f062ccf28343ae8674ab))
+- d8fef91: one forwardingPrototype for a follow-up and a server's forwarder ([`70d1800`](https://github.com/briancray/abide/commit/70d180019343846261b4cbd79dd19c42d884245f))
+- d8fef91: seedBuffer holds its scope through holdScope; one receivedAsUpgrade; Bun.concatArrayBuffers for a handoff's leftover ([`83eef91`](https://github.com/briancray/abide/commit/83eef91cf77e2c51675ac8b26a51f27e9db4b53b))
+- d8fef91: one IndexedDB promisifier; MuxStream.fail goes; wire's entry cast written once; escapeless is a barrel re-export ([`9f50e50`](https://github.com/briancray/abide/commit/9f50e5032e26f4eebfd350d81cb77a37a75ee6fc))
+- d8fef91: sendFlag/sendNumber for a one-scalar send; one isRunning; spawnedTool through updateFeed's ran ([`dceff54`](https://github.com/briancray/abide/commit/dceff54a4c90a25287642b6e071e13168bf925d5))
+- d8fef91: every identifier test is built from IDENTIFIER_PART; holdsSlot's pass-through goes; indexedDB opens through requested ([`e60f532`](https://github.com/briancray/abide/commit/e60f5321a4b33ef5588aed9f02052dbfb02159e0))
+- d8fef91: the last one-scalar sends through sendFlag/sendNumber; windowButton in appKit; ran in its own file ([`e9e6611`](https://github.com/briancray/abide/commit/e9e66118aacebfff8b0c97a95802fbd5498b49b4))
+- d8fef91: one early-exit tree search, one spread test, one inline-component prelude ([`f00effe`](https://github.com/briancray/abide/commit/f00effed6a6c680b474cc600f0ac244eaaa32752))
+- b78c6c7: The menu bar extra's panel is never open to Web Inspector: the inspector took the key the panel closes on losing, and the two flickered in a loop. Its page is inspected in the window — RULEBOOK 38.163
+- 68c4298: A top-level `onConfig(…)` on the line after one ending in a name spelled outside ASCII is read as the top-level call it is — RULEBOOK 38.108
+- 647585f: A `bind:` path whose step is an identifier spelled outside ASCII (`bind:{contact.ñame}`) writes the path, rather than reading as a plain value; a list row's name and the language server's underline read such a name whole — RULEBOOK 32.5
+- Updated dependencies [d8fef91]
+  - @abide/bridge@0.8.2
+
 ## 0.136.0
 
 ### Minor Changes
