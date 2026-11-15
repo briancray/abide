@@ -53,6 +53,11 @@ export default POST(
                 yield { type: 'tail', part: tail }
                 continue
             }
+            // 44.81 — a prompt from a full-access turn is the panel's to answer (`permit`).
+            if (event.type === 'permission') {
+                yield event
+                continue
+            }
             if (event.type === 'done') {
                 for (const part of writer.end()) yield { type: 'part', part }
                 yield { type: 'tail', part: undefined }
