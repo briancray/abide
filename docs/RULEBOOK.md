@@ -3494,7 +3494,7 @@ for the app, then the menus the page the window shows filed with `onMenu`, outer
 item that quits the app, a separator between them where there are any.
 
 38.171 The menu bar extra's panel MUST close when it stops being the key window, save to a sheet of
-its own (38.178) and save while its own Web Inspector is open (38.163).
+its own (38.178).
 
 38.172 Where `onLauncher` answers `menuBarExtra: true`, closing the window MUST hide it rather than
 quit the app.
