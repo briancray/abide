@@ -140,7 +140,7 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     ['Document', 'write', 'refused'],
 ]
 
-/** A fresh `Work` with every counted row at 0 and the three published rows at `null`. */
+/** A fresh `Work` with every counted row at 0 and nothing published. */
 export function blankWork(): Work {
     // Fixed shape at construction — every field initialized, `undefined` included —
     // because this object is read on every counted call.

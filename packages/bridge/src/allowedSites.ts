@@ -3,7 +3,7 @@
 // holder `/__abide/bridge` named when the visitor allowed it — a code an attacker minted is minted for
 // the attacker, and is asked about. A visitor who allowed a site full access, or only its own tools
 // (44.86), is not asked again: it runs as they allowed it, whatever it asks for.
-import { siteOf } from './pairingLink.ts'
+import { siteOf, withoutScheme } from './pairingLink.ts'
 
 /**
  * A site paired unasked, for one holder, while a link asks for none but `tools` — or whatever it asks
@@ -96,8 +96,4 @@ export async function forget(file: string, site?: string): Promise<number> {
     if (kept.length !== sites.length)
         await Bun.write(file, JSON.stringify(kept, null, 4))
     return sites.length - kept.length
-}
-
-function withoutScheme(site: string): string {
-    return site.slice(site.indexOf('://') + 3)
 }

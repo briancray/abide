@@ -78,3 +78,8 @@ export function pairingOf(link: string): Pairing | undefined {
 export function siteOf(url: URL): string {
     return `${url.origin}${url.pathname}`.replace(/\/+$/, '')
 }
+
+/** A site as a person reads it: `siteOf`'s, with no scheme. */
+export function withoutScheme(site: string): string {
+    return site.slice(site.indexOf('://') + 3)
+}

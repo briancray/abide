@@ -21,7 +21,7 @@ import {
 import { BRIDGE_PATH } from './BRIDGE_PATH.ts'
 import { type Answer, ask, notify, type Question } from './desktop.ts'
 import { grantFor, serversNamed } from './grant.ts'
-import { type Pairing, pairingOf } from './pairingLink.ts'
+import { type Pairing, pairingOf, withoutScheme } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
 import { requestedLines } from './requestedLines.ts'
 import { siteTls } from './siteTls.ts'
@@ -40,11 +40,6 @@ export type HandlerSettings = {
     /** The bridge package install was run from, where it is a checkout rather than a release (44.89). */
     checkout?: string
     env: Record<string, string>
-}
-
-/** A site as the visitor reads it: what a link names, without its scheme. */
-function shownSite(site: string): string {
-    return site.slice(site.indexOf('://') + 3)
 }
 
 /** Whether the visitor's options leave Claude Code in auto mode (44.81). */
@@ -84,7 +79,7 @@ export function question(
         note,
     }: { name?: string | undefined; note?: string | undefined } = {},
 ): Question {
-    const site = shownSite(pairing.site)
+    const site = withoutScheme(pairing.site)
     // The name is the site's to choose, so the site it is served from is always beside it.
     const asker = name === undefined ? site : `${name} (${site})`
     const owner = name ?? site
@@ -329,7 +324,7 @@ export async function consented(
               })
     if (before !== undefined) {
         say(
-            `Pairing with ${asker.name ?? shownSite(pairing.site)}, which you always allow.`,
+            `Pairing with ${asker.name ?? withoutScheme(pairing.site)}, which you always allow.`,
         )
         return before.granted === 'siteTools' ? siteToolsOnly(pairing) : pairing
     }

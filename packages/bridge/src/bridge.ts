@@ -35,11 +35,10 @@ type Report = TurnReport | { type: 'missing'; tools: string[] }
 export async function bridge(options: {
     site: string
     code: string
-    claude?: string
+    claude: string
     claudeArgs?: string[]
     /** Everything `claude` has is the site's to use, prompts asked of its page. 44.82. */
     full?: boolean
-    say?: (line: string) => void
     replyMilliseconds?: number
     silenceMilliseconds?: number
 }): Promise<void> {
@@ -48,7 +47,7 @@ export async function bridge(options: {
     // WHAT IS SAID IS READ AS A NOTIFICATION, where a link opened the bridge (`opened.ts`): one short
     // sentence naming the site by its host. The detail goes to Claude Code, in the failure it is answered.
     const host = new URL(site).host
-    const say = options.say ?? ((line: string) => console.error(line))
+    const say = (line: string): void => console.error(line)
     const full = options.full ?? false
     const silenceMilliseconds =
         options.silenceMilliseconds ?? SILENCE_MILLISECONDS
@@ -159,7 +158,7 @@ export async function bridge(options: {
 
     const core = serveTurns({
         site,
-        claude: options.claude ?? 'claude',
+        claude: options.claude,
         claudeArgs: () => options.claudeArgs ?? [],
         full,
         report,

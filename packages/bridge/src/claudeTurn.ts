@@ -78,16 +78,20 @@ type CodeLine = {
 }
 
 // 44.16 — the options a site may set: each only shapes the answer, and reaches nothing of this machine.
-const SITE_OPTIONS = new Set([
-    'model',
-    'fallbackModel',
-    'systemPrompt',
-    'appendSystemPrompt',
-    'effort',
-    'maxBudgetUsd',
-    'betas',
-    'disallowedTools',
-])
+// Keyed by `ClaudeCodeConfig`'s own keys, so a key added on abide's side is a compile error here
+// until it is decided whether a site may set it.
+const SITE_OPTIONS = new Set(
+    Object.keys({
+        model: true,
+        fallbackModel: true,
+        systemPrompt: true,
+        appendSystemPrompt: true,
+        effort: true,
+        maxBudgetUsd: true,
+        betas: true,
+        disallowedTools: true,
+    } satisfies Record<keyof Omit<ClaudeCodeConfig, 'tools'>, true>),
+)
 
 /** Claude Code's flag for an option named in camelCase: `fallbackModel` is `--fallback-model`. */
 function flagOf(option: string): string {
