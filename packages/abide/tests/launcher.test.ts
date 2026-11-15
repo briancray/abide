@@ -1,4 +1,4 @@
-// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165, 38.182-38.185 — the native launcher's session, options, accent
+// 38.71-38.75, 38.80-38.81, 38.101-38.102, 38.107, 38.150-38.165, 38.182-38.185, 38.187 — the native launcher's session, options, accent
 // and own page, apart from the window: none of the four needs one to be checked.
 //
 // THE REVERT, for the accent: average every opaque pixel instead of binning by hue, and dogfood's
@@ -9,6 +9,7 @@ import { rm } from 'node:fs/promises' // bun exposes no directory removal of its
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
 
 import { buildDirectory, servedBuild } from '#server/appBuild.ts'
+import { derived, launcherDataDirectory } from '#server/config.ts'
 import type { App } from '#server/createApp.ts'
 import { HOOKS } from '#server/hooks.ts'
 import { iconAccent, inkOn } from '#server/iconAccent.ts'
@@ -144,6 +145,64 @@ test('a Dock that follows the window stays in the menu bar on Quit — 38.183, 3
         role: 'quit',
         key: 'cmd+q',
     })
+})
+
+// THE REVERT is the group pushed above Quit: the slice reads Hide…Show All where Settings… is due.
+test('a menu named for the app grows the application menu below About, in order — 38.88', () => {
+    const [application] = menuBar(
+        'Faster',
+        true,
+        [
+            { label: 'Faster', items: [{ label: 'Settings…', key: 'cmd+,' }] },
+            { label: 'Faster', items: [] },
+            { label: 'Faster', items: [{ label: 'Account…' }] },
+        ],
+        'Check for Updates…',
+        false,
+    )
+    if (application === undefined || application === 'separator')
+        throw new Error('no application menu')
+    expect(application.items?.slice(0, 7)).toEqual([
+        { label: 'About Faster', role: 'about' },
+        { label: 'Check for Updates…', role: 'update' },
+        'separator',
+        { label: 'Settings…', key: 'cmd+,' },
+        'separator',
+        { label: 'Account…' },
+        'separator',
+    ])
+})
+
+// THE REVERT is `added` pushed as it is: the right-click menu holds a `Faster` submenu.
+test('the menu bar extra lists a menu named for the app in place — 38.170', () => {
+    expect(
+        menuBarExtraMenu('Faster', [
+            { label: 'Faster', items: [{ label: 'Settings…', key: 'cmd+,' }] },
+            { label: 'Reports', items: [] },
+        ]),
+    ).toEqual([
+        { label: 'Open Faster', role: 'window' },
+        'separator',
+        { label: 'Settings…', key: 'cmd+,' },
+        { label: 'Reports', items: [] },
+        'separator',
+        { label: 'Quit Faster', role: 'quit', key: 'cmd+q' },
+    ])
+})
+
+// THE REVERT is the folder named off the package alone: it answers the derived folder where
+// `/tmp/faster-dev` is due, and two builds of one app share one `native.json`.
+test('the launcher remembers under the APP_DATA_DIR the environment sets — 38.73', () => {
+    const asFound = process.env.APP_DATA_DIR
+    try {
+        process.env.APP_DATA_DIR = '/tmp/faster-dev'
+        expect(launcherDataDirectory()).toBe('/tmp/faster-dev')
+        delete process.env.APP_DATA_DIR
+        expect(launcherDataDirectory()).toBe(derived().APP_DATA_DIR as string)
+    } finally {
+        if (asFound === undefined) delete process.env.APP_DATA_DIR
+        else process.env.APP_DATA_DIR = asFound
+    }
 })
 
 test('a maximum below the minimum is refused — 38.151', () => {
@@ -524,6 +583,26 @@ test('a launcher whose one form asks for nothing starts at launch — 38.182', a
         await session.resume(startOnly, {})
         expect(session.shown).toBeDefined()
         expect(session.remembered.last).toEqual({ start: {} })
+        await session.disconnect()
+    } finally {
+        LISTENING.server = undefined
+        await rm(directory, { recursive: true, force: true })
+    }
+})
+
+// 38.187 — TOLD TO START AT ONCE, the launcher does so with a form that asks and connecting still
+// offered: the defaults are what it starts with, and nothing of them is remembered as the person's.
+// THE REVERT: drop the `'immediately'` arm of `NativeSession.resume`; the first launch shows nothing.
+test('a launcher told to start immediately starts at launch whatever it asks — 38.187', async () => {
+    const directory = `${tmpdir()}/abide-native-${crypto.randomUUID()}`
+    const immediately = launcherOf({ start: 'immediately' }) as Launcher
+    try {
+        const session = await NativeSession.open(directory, async () =>
+            fakeApp([], 'app'),
+        )
+        await session.resume(immediately, { NATIVE_TEST_REGION: 'eu' })
+        expect(session.shown).toBeDefined()
+        expect(session.remembered.values).toEqual({})
         await session.disconnect()
     } finally {
         LISTENING.server = undefined

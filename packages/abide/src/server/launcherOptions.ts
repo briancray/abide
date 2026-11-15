@@ -46,7 +46,10 @@ export type LauncherOptions = {
     inspector?: boolean
     panelWidth?: number
     panelHeight?: number
-} & ({ start?: true; connect?: boolean } | { start: false; connect?: true }) &
+} & (
+    | { start?: true | 'immediately'; connect?: boolean }
+    | { start: false; connect?: true }
+) &
     (
         | { dock?: boolean; menuBarExtra?: boolean }
         | { dock: 'window'; menuBarExtra: true }
@@ -73,7 +76,7 @@ export type Launcher = {
     menuBarExtra: boolean
     panelWidth: number
     panelHeight: number
-    start: boolean
+    start: boolean | 'immediately'
     connect: boolean
     update: string | undefined
 }
@@ -104,8 +107,9 @@ const CHOICES: Record<string, readonly string[]> = {
     titlebar: ['standard', 'hidden', 'inset'],
     vibrancy: Object.keys(VIBRANCY_MATERIALS),
     appearance: ['system', 'light', 'dark'],
-    // 38.183 — beside the booleans `SWITCHES` takes.
+    // 38.183, 38.187 — beside the booleans `SWITCHES` takes.
     dock: ['window'],
+    start: ['immediately'],
 }
 
 /**

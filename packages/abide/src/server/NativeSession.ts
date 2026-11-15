@@ -183,7 +183,8 @@ export class NativeSession {
     /**
      * 38.73 — WHAT IT DID LAST, done again, where the launcher still offers it. `offered` is what the
      * start form offers at this launch, so a remembered value the app now offers is forgotten as a
-     * start's own would be. 38.182 — a launcher whose one form asks for nothing starts at once.
+     * start's own would be. 38.182 — a launcher whose one form asks for nothing starts at once, and
+     * 38.187 — so does one told to.
      */
     async resume(
         options: Launcher,
@@ -195,9 +196,10 @@ export class NativeSession {
         else if (options.connect && last !== null && 'connect' in last)
             await this.connect(last.connect)
         else if (
-            options.start &&
-            !options.connect &&
-            Object.keys(offered).length === 0
+            options.start === 'immediately' ||
+            (options.start &&
+                !options.connect &&
+                Object.keys(offered).length === 0)
         )
             await this.start({}, offered)
     }

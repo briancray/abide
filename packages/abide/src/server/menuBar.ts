@@ -7,8 +7,10 @@ import type { NativeMenuItem } from '#shared/menuItem.ts'
 /**
  * The menu bar the window shows: the application, File, Edit, View and Window menus, and `added`.
  *
- * 38.88 — AN ADDED MENU NAMED AS A DEFAULT ONE GROWS IT, and any other stands before Window, where
- * the platform puts an app's own. 38.83 — no Connect… where what `onLauncher` answers turns connecting off.
+ * 38.88 — AN ADDED MENU NAMED AS A DEFAULT ONE GROWS IT — the application menu with a group of its
+ * own below About, where the platform puts Settings… — and any other stands before Window, where the
+ * platform puts an app's own. 38.83 — no Connect… where what `onLauncher` answers turns connecting
+ * off.
  * 38.149 — the `update` role under the app's name where `onLauncher` answers an `update`, labelled
  * `update`. 38.184 — where the Dock follows the window, its Quit closes the window instead.
  */
@@ -21,6 +23,9 @@ export function menuBar(
 ): NativeMenuItem[] {
     const bar = defaultMenu(appName, connect, update, dockFollowsWindow)
     const window = bar.pop() as NativeMenuItem
+    const application = (bar[0] as { items: NativeMenuItem[] }).items
+    // Where the next group the application menu grows goes: after About's, and after each before it.
+    let grown = application.indexOf('separator') + 1
     for (const menu of added) {
         const named =
             menu === 'separator'
@@ -36,7 +41,11 @@ export function menuBar(
             menu === 'separator'
         )
             bar.push(menu)
-        else named.items = [...(named.items ?? []), ...(menu.items ?? [])]
+        else if (named === bar[0]) {
+            if (menu.items === undefined || menu.items.length === 0) continue
+            application.splice(grown, 0, ...menu.items, 'separator')
+            grown += menu.items.length + 1
+        } else named.items = [...(named.items ?? []), ...(menu.items ?? [])]
     }
     bar.push(window)
     return bar
@@ -44,7 +53,8 @@ export function menuBar(
 
 /**
  * The menu the menu bar extra's secondary click opens: the item that brings the window forward,
- * `added` — the menus the page filed — and Quit. 38.170.
+ * `added` — the menus the page filed, a menu named for the app listing its items in place, as it has
+ * no application menu to grow — and Quit. 38.170.
  */
 export function menuBarExtraMenu(
     appName: string,
@@ -54,7 +64,10 @@ export function menuBarExtraMenu(
         { label: `Open ${appName}`, role: 'window' },
         'separator',
     ]
-    for (const item of added) menu.push(item)
+    for (const item of added)
+        if (item !== 'separator' && item.label === appName)
+            for (const inner of item.items ?? []) menu.push(inner)
+        else menu.push(item)
     if (added.length !== 0) menu.push('separator')
     menu.push({ label: `Quit ${appName}`, role: 'quit', key: 'cmd+q' })
     return menu
