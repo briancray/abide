@@ -11,7 +11,12 @@
 /** The marker scheme a grid page is built in: two comments per slot, one, or none. */
 export type Variant = 'two-markers' | 'one-marker' | 'no-markers'
 
-/** A built grid page: its markup, the hand-written script that mounts it, and its slot count. */
+/**
+ * A built grid page: its markup, the hand-written script that mounts it, and its slot count.
+ *
+ * The script finds its table under `scope`, the root it is run with (`new Function('scope', …)`), so
+ * several pages can share one document.
+ */
 export type Grid = { markup: string; script: string; cells: number }
 
 /**
@@ -93,7 +98,7 @@ function mount(variant: Variant, shape: Shape): string {
                 : 'found.push(td.childNodes[0].firstChild, td.childNodes[2].firstChild, td.childNodes[3].firstChild)'
         return `
 const found = []
-const rows = document.querySelector('#g').firstChild.childNodes
+const rows = scope.querySelector('#g').firstChild.childNodes
 for (let r = 0; r < rows.length; r += 1) {
     const tds = rows[r].childNodes
     for (let c = 0; c < tds.length; c += 1) {
@@ -107,7 +112,7 @@ globalThis.__SLOTS__ = found
     // One or two markers: the walk is over COMMENTS and the number is read off the marker.
     return `
 const found = []
-const walker = document.createTreeWalker(document.querySelector('#g'), NodeFilter.SHOW_COMMENT)
+const walker = document.createTreeWalker(scope.querySelector('#g'), NodeFilter.SHOW_COMMENT)
 while (true) {
     const comment = walker.nextNode()
     if (comment === null) break

@@ -20,7 +20,7 @@
 
 import { expect, test } from '@playwright/test'
 
-import { buildBench } from '../bench/buildBench.ts'
+import { buildBench, openInjected } from '../bench/buildBench.ts'
 import type { Row } from '../bench/listCases.ts'
 
 const built = await buildBench('list')
@@ -47,11 +47,7 @@ test('a keyed reorder against the DOM-call floor and against a rebuild', async (
 }, testInfo) => {
     // Four cases, three arms each, batched against a ~100 µs clock over 200-row lists.
     test.setTimeout(15 * 60 * 1000)
-    await page.addInitScript({ content: built })
-    // `setContent` on a page still on its initial `about:blank` reruns no init script
-    // — nothing navigated — so the injection would be silently absent.
-    await page.goto('about:blank')
-    await page.setContent('<!doctype html><html><body></body></html>')
+    await openInjected(page, built)
 
     const rows = (await page.evaluate(() =>
         (

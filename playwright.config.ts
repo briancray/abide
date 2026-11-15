@@ -17,7 +17,6 @@ const SUB_PORT = 3132
 const SUB_BASE = `http://localhost:${SUB_PORT}/docs`
 
 export default defineConfig({
-    testDir: './packages/dogfood/e2e',
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,

@@ -9,7 +9,7 @@
 //
 // `bun packages/abide/bench/muxShare.ts [K] [chunks]`
 
-import { codeLinesOf } from './countLines.ts'
+import { countLines } from './countLines.ts'
 import { httpStream, httpStreamServer } from './vanillaHttpStreams.ts'
 import { MuxClient, muxStreamServer } from './vanillaMuxStreams.ts'
 
@@ -105,10 +105,6 @@ async function muxArm(): Promise<Tally & { read: number }> {
     return { ...proxy.tally, read }
 }
 
-async function linesOf(name: string): Promise<number> {
-    return codeLinesOf(await Bun.file(new URL(name, import.meta.url)).text())
-}
-
 const http = await httpArm()
 const mux = await muxArm()
 const rows = [
@@ -130,7 +126,9 @@ const rows = [
         http.down,
         http.up,
         (http.down / http.read).toFixed(1),
-        await linesOf('vanillaHttpStreams.ts'),
+        await countLines(new URL('./', import.meta.url), [
+            'vanillaHttpStreams.ts',
+        ]),
     ],
     [
         'mux',
@@ -140,7 +138,9 @@ const rows = [
         mux.down,
         mux.up,
         (mux.down / mux.read).toFixed(1),
-        await linesOf('vanillaMuxStreams.ts'),
+        await countLines(new URL('./', import.meta.url), [
+            'vanillaMuxStreams.ts',
+        ]),
     ],
 ]
 console.log(`${STREAMS} streams x ${CHUNKS} chunks`)

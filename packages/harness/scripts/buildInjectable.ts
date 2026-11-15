@@ -10,15 +10,15 @@
 
 const ENTRY = new URL('../src/measure/injectable.ts', import.meta.url).pathname
 
-/** Builds the measure lane's injectable and returns its source. */
-export async function buildInjectable(): Promise<string> {
+/** Builds the measure lane's injectable — or another entry's, the same way — and returns its source. */
+export async function buildInjectable(entry = ENTRY): Promise<string> {
     const built = await Bun.build({
-        entrypoints: [ENTRY],
+        entrypoints: [entry],
         format: 'iife',
         target: 'browser',
         minify: false,
     })
     if (!built.success)
-        throw new AggregateError(built.logs, 'measure did not build')
+        throw new AggregateError(built.logs, `${entry} did not build`)
     return (built.outputs[0] as Blob).text()
 }

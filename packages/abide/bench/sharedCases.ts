@@ -2,7 +2,7 @@
 // reach's parameter defaults.
 // The canonical-key case runs the spellings it chose between beside the one shipped, and it and
 // the validateJson case carry SHARE rows pricing the layer against the whole op somebody waits on. JSC with
-// `bun packages/harness/scripts/benchShared.ts`, V8 with `bun run bench` — `shared.spec.ts`, which
+// `bun run bench:shared`, V8 with `bun run bench` — `shared.spec.ts`, which
 // the e2e gate runs only as a one-rep smoke.
 import { jsonSchema, reactive, validateJson } from '@abide/abide'
 

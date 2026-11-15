@@ -3,16 +3,14 @@
 
 import { test } from '@playwright/test'
 
-import { buildBench } from '../bench/buildBench.ts'
+import { buildBench, openInjected } from '../bench/buildBench.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const built = await buildBench('shapes')
 
 test('callable shapes in this engine', async ({ page }, testInfo) => {
     test.setTimeout(10 * 60 * 1000)
-    await page.addInitScript({ content: built })
-    await page.goto('about:blank')
-    await page.setContent('<!doctype html><html><body></body></html>')
+    await openInjected(page, built)
     const rows = (await page.evaluate(
         (sizing) =>
             (

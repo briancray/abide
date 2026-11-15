@@ -3,7 +3,7 @@
 
 import { test } from '@playwright/test'
 
-import { buildBench } from '../bench/buildBench.ts'
+import { buildBench, openInjected } from '../bench/buildBench.ts'
 import type { runShared } from '../bench/sharedRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
@@ -13,9 +13,7 @@ test('shared allocations, current against candidate, in this engine', async ({
     page,
 }, testInfo) => {
     test.setTimeout(15 * 60 * 1000)
-    await page.addInitScript({ content: built })
-    await page.goto('about:blank')
-    await page.setContent('<!doctype html><html><body></body></html>')
+    await openInjected(page, built)
     const rows = await page.evaluate(
         (sizing) =>
             (

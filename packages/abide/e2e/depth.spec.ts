@@ -35,24 +35,6 @@ test.skip(
     'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
 )
 
-/**
- * A scheme's slot script, re-pointed from the document at the root it is handed.
- *
- * The three schemes share one page so `batch()` can interleave them, and each script finds its
- * tree by id — so each is scoped to its own container rather than to whichever tree comes first.
- */
-function rooted(script: string): string {
-    const scoped = script.replaceAll(
-        'document.querySelector(',
-        'scope.querySelector(',
-    )
-    if (scoped === script)
-        throw new Error(
-            'a depth script no longer finds its tree the way this re-points',
-        )
-    return scoped
-}
-
 test('the walk against tree depth, in this engine', async ({
     page,
 }, testInfo) => {
@@ -148,7 +130,7 @@ test('the walk against tree depth, in this engine', async ({
             },
             here.map((built) => ({
                 scheme: built.scheme,
-                script: rooted(built.script),
+                script: built.script,
             })),
         )
 

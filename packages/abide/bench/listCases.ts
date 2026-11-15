@@ -4,7 +4,7 @@
 // for it: `bench:grid` deliberately has no clock, and `list.test.ts` asserts nodes
 // moved. A COUNT IS NOT A COST, and converting one to the other is what this file is.
 //
-// IN `scripts/` AND BROWSER-ONLY, for the same two reasons the reactive cases are.
+// IN `bench/` AND BROWSER-ONLY, for the same two reasons the reactive cases are.
 // `batch()` refuses a duration whose op touched an emulated DOM (43.22) and it is
 // right to: a reorder in happy-dom is a fact about happy-dom, because only a real
 // engine puts the moved element in a reflow. So there is no bun-side entry here —
@@ -337,8 +337,6 @@ export const listCases = (): Case[] => [
         'reverse',
     ),
 ]
-
-export type { Case }
 
 /** One case's reading: each arm per op, the two ratios, and the work each was checked on. */
 export type Row = {

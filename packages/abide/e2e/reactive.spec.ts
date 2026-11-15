@@ -9,14 +9,15 @@
 
 import { test } from '@playwright/test'
 
-import { buildBench } from '../bench/buildBench.ts'
+import { buildBench, openInjected } from '../bench/buildBench.ts'
 import type { runReactive } from '../bench/reactiveRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const built = await buildBench('reactive')
 
-// WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
-// and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.
+// WEBKIT CANNOT PRICE THESE: its clock is 1 ms, so 43.11's bar is 100 ms a sample and `batch()`
+// refuses rather than report the clock — under `bun run bench` too, where "construct a keyed value"
+// spends its 20 s budget at n=21,748,243 after 1 of 10 reps. `list.spec.ts` carries the whole reason.
 test.skip(
     ({ browserName }) => browserName === 'webkit',
     'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
@@ -29,11 +30,7 @@ test('the reactive core against the hand-written arm, in this engine', async ({
     // larger n and the whole run is minutes rather than seconds — and the batcher's default
     // two-second ceiling is not enough to reach it, so the budget handed in is twenty.
     test.setTimeout(15 * 60 * 1000)
-    await page.addInitScript({ content: built })
-    // `setContent` on a page still on its initial `about:blank` reruns no init script
-    // — nothing navigated — so the injection would be silently absent.
-    await page.goto('about:blank')
-    await page.setContent('<!doctype html><html><body></body></html>')
+    await openInjected(page, built)
 
     const rows = await page.evaluate(
         (sizing) =>

@@ -28,7 +28,7 @@ export async function countLines(
 }
 
 /** Counts the lines of `text` that are neither blank nor comment-only. */
-export function codeLinesOf(text: string): number {
+function codeLinesOf(text: string): number {
     let lines = 0
     // A `/* */` BODY IS STILL A COMMENT even when its lines do not start with `*`.
     // The per-line test alone counts the prose inside one as code, which makes the

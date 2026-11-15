@@ -5,7 +5,7 @@
 // rather than scaled, so a design decision taken on one engine's numbers is taken on a
 // coin flip.
 //
-// In `scripts/` rather than under `src/measure/` deliberately: this imports abide, and
+// In abide's `bench/` rather than under harness's `src/measure/` deliberately: this imports abide, and
 // `harness/measure` has no abide in its graph at all — the property `lanes.test.ts`
 // walks by resolution, and the reason the harness is a package.
 

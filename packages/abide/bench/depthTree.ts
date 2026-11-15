@@ -15,6 +15,7 @@
 
 export type Scheme = 'structural' | 'cursor' | 'markers'
 
+/** A built tree: its markup, the slot script that binds it under `scope` (the root it is run with), its slots and its depth. */
 export type Tree = {
     markup: string
     script: string
@@ -109,7 +110,7 @@ function slotScript(scheme: Scheme, paths: number[][]): string {
     if (scheme === 'markers')
         return `
 const found = []
-const walker = document.createTreeWalker(document.querySelector('#r'), NodeFilter.SHOW_COMMENT)
+const walker = document.createTreeWalker(scope.querySelector('#r'), NodeFilter.SHOW_COMMENT)
 while (true) {
     const comment = walker.nextNode()
     if (comment === null) break
@@ -122,7 +123,7 @@ globalThis.__SLOTS__ = found
     if (scheme === 'cursor') return cursorWalk(paths)
     // The naive emit: one walk from the region root per binding.
     return `
-const root = document.querySelector('#r')
+const root = scope.querySelector('#r')
 const paths = ${JSON.stringify(paths)}
 const found = []
 for (let i = 0; i < paths.length; i += 1) {
@@ -193,7 +194,7 @@ function cursorWalk(paths: number[][]): string {
             `found[${at}] = ${leaves.get((paths[at] as number[]).join(','))}`,
         )
     return `
-const root = document.querySelector('#r')
+const root = scope.querySelector('#r')
 ${lines.join('\n')}
 const found = []
 ${found.join('\n')}

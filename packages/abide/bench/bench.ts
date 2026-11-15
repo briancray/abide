@@ -1,7 +1,8 @@
 // `bun run bench` — the machinery triple's two countable members for the harness package itself,
 // printed: code lines and exported names. The third, branches added to a shared path, stays
 // hand-counted. Then the browser specs that only REPORT — `reactive`, `shared` and `shapes` —
-// at full size in both engines, which the e2e gate runs only as a one-rep smoke (`BENCH_SIZING`).
+// at full size in both engines, save `reactive` in webkit, whose 1 ms clock no budget clears
+// (`reactive.spec.ts`); the e2e gate runs them only as a one-rep smoke (`BENCH_SIZING`).
 // Every other bench is a script of its own under `bench:*`, and the ones with a hand-written arm
 // are rows on the docs app's `/bench` page too.
 //
@@ -68,7 +69,7 @@ const REPORT_SPECS = ['reactive', 'shared', 'shapes']
 
 /** The report-only browser specs at full size, through playwright, in both engines. */
 async function reportSpecs(): Promise<number> {
-    const command = ['bunx', 'playwright', 'test']
+    const command = ['bunx', '--bun', 'playwright', 'test']
     for (const name of REPORT_SPECS)
         command.push(`packages/abide/e2e/${name}.spec.ts`)
     command.push('--project', 'abide', '--project', 'abide-webkit')
