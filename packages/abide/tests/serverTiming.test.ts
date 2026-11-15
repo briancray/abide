@@ -30,6 +30,22 @@ export const held = GET(
     ),
 )
 
+function spin(milliseconds: number): void {
+    const until = performance.now() + milliseconds
+    while (performance.now() < until) {}
+}
+
+export const primed = GET(
+    reactive(
+        async (args: { n: number }) => {
+            spin(50)
+            await Promise.resolve()
+            return { n: args.n }
+        },
+        { global: true, ttl: 60_000 },
+    ),
+)
+
 export const guarded = GET(
     async () => {
         await Bun.sleep(100)
@@ -111,6 +127,17 @@ test('a global production already held answers as Cached — 21.15', async () =>
     const second = await timings(`${RPC}/held?n=1`)
     expect([...second.keys()]).toEqual(['Cached', 'Middleware'])
     expect(second.get('Cached')).toBeLessThan(45)
+})
+
+// 21.15 — WHAT A BODY DOES BEFORE ITS FIRST AWAIT IS THE HANDLER'S TIME: calling a `global`
+// production starts its body, so a clock read after the call misses that work — and, on a loaded
+// machine, any pause before the clock is read, which is how `held` once read 35 ms for its 50 ms
+// sleep. THE REVERT: time `outcomeOf` from after `handler(args)` in `invokeHandler`, and this reads
+// 0.2 where 50 is due.
+test("a handler's work before its first await is its own time — 21.15", async () => {
+    expect(
+        (await timings(`${RPC}/primed?n=1`)).get('Direct'),
+    ).toBeGreaterThanOrEqual(50)
 })
 
 // 21.20, 21.21 — THE REVERT: drop the `handled` split in `answerRpc`; `Direct` reads the rung's

@@ -300,14 +300,16 @@ function drop(caller: string, entry: Entry): void {
 }
 
 /**
- * How a call's reached value settles, timed from here.
+ * How a call's reached value settles, timed from `started` — from here where the caller took none.
  *
  * 1.4 — a call's `Reactive` is thenable, and this is its settling. 1.6 — A STREAMING one is read by
  * its brand first and answered as its chunks, which `answerValue` frames as they land: settling it
  * would be one snapshot, once the run had closed.
  */
-export function outcomeOf(reached: unknown): Promise<Outcome> {
-    const started = performance.now()
+export function outcomeOf(
+    reached: unknown,
+    started = performance.now(),
+): Promise<Outcome> {
     // 9.6 — AND ONE THAT TURNS INTO A STREAM when its load resolves to a generator, as a handler
     // behind rungs does: waited for as far as the turn, and never out to the run's close.
     return (

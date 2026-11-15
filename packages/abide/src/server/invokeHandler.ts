@@ -124,9 +124,13 @@ export async function invokeHandler(
     const heldAt = held === undefined ? undefined : heldGenerationOf(held)
     const timing = currentRequestScope()?.timing
     if (timing !== undefined) timing.answering = handler
+    // 21.15 — timed from before the call: the body starts inside it, and what it does before its
+    // first await, or a pause before the clock is read, is the handler's time too.
     const started = performance.now()
     const outcome =
-        seeded === undefined ? await outcomeOf(handler(args)) : await seeded
+        seeded === undefined
+            ? await outcomeOf(handler(args), started)
+            : await seeded
     const entry = key === undefined ? undefined : global?.at(key)
     const run: Run =
         seeded !== undefined
