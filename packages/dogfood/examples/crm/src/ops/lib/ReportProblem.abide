@@ -1,0 +1,33 @@
+<script>
+import { onRefusal, reactive, report } from '@abide/abide'
+
+import listReports from '../listReports.handler.ts'
+import sendStatement from '../sendStatement.handler.ts'
+
+let failed = reactive<string | undefined>(undefined)
+const reports = reactive(() => listReports())
+
+// The report starts from the trace of the call that failed.
+onRefusal((_refusal, call) => {
+    failed = call.trace
+})
+
+async function reportIt() {
+    if (await report({ trace: failed }).open()) reports.refresh()
+}
+</script>
+
+<div class="row">
+    <button onclick={() => sendStatement({ id: 'c2' })}>
+        Email Grace her statement</button>
+    <button onclick={reportIt} disabled={failed === undefined}>
+        Report this</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>failed trace</span><strong>{failed ?? '—'}</strong></li>
+    <li><span>reports sent</span>
+        <strong>
+            {reports.ready() ? reports.join(' · ') || 'none' : '—'}
+        </strong></li>
+</ul>

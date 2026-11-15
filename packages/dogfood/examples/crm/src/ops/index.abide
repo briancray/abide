@@ -22,6 +22,7 @@ import FollowUps from './lib/FollowUps.abide'
 import Health from './lib/Health.abide'
 import OfflineBanner from './lib/OfflineBanner.abide'
 import Pool from './lib/Pool.abide'
+import ReportProblem from './lib/ReportProblem.abide'
 import Retries from './lib/Retries.abide'
 import Sync from './lib/Sync.abide'
 
@@ -52,4 +53,6 @@ watch(() => {
     <Sync />
     <h2>Log</h2>
     <Console />
+    <h2>Problem reports</h2>
+    <ReportProblem />
 </main>

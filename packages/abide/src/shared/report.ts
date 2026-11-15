@@ -63,13 +63,16 @@ export class ReportDraft {
         )
     }
 
-    /** 48.9 — shows the draft in abide's own dialog over the page, in a browser. */
-    open(): void {
+    /**
+     * 48.9 — shows the draft in abide's own dialog over the page, in a browser; settles `true` once
+     * it is sent, and `false` where it is closed unsent.
+     */
+    open(): Promise<boolean> {
         if (typeof document === 'undefined')
             throw new Error(
                 'abide: a ReportDraft opens only in a browser; on a server, send it. RULEBOOK 48.9.',
             )
-        void import('#ui/reportDialog.ts').then(({ reportDialog }) =>
+        return import('#ui/reportDialog.ts').then(({ reportDialog }) =>
             reportDialog(this),
         )
     }

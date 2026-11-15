@@ -4638,7 +4638,8 @@ out.
 the `Report`, and MUST leave the draft as it was.
 
 48.9 `ReportDraft.open` MUST show the draft in a modal `<dialog>` over the page, its `markdown` shown
-above its send, and MUST throw outside a browser.
+above its send, settling `true` once the draft is sent and `false` once the dialog is closed unsent,
+and MUST throw outside a browser.
 
 48.10 Neither a `Report` nor a line the server hands a `ReportDraft` MUST hold the value of
 `ABIDE_PRINCIPAL_SECRET` or of a `ConfigField` whose `input` is `password`, four characters long or

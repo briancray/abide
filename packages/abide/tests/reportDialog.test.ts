@@ -71,7 +71,7 @@ const settle = async (): Promise<void> => {
 test('a draft holds the page’s lines and the server’s for its trace, and the dialog shows what is sent — 48.2, 48.4, 48.7, 48.9', async () => {
     log.warning('clicked sync')
     const draft = report({ trace: TRACE })
-    reportDialog(draft)
+    const opened = reportDialog(draft)
     await settle()
     const dialog = document.querySelector(
         'dialog.abide-report',
@@ -103,14 +103,15 @@ test('a draft holds the page’s lines and the server’s for its trace, and the
         (body.lines as { message: string }[]).map((line) => line.message),
     ).not.toContain('billing refused the key')
     expect(document.querySelector('dialog.abide-report')).toBeNull()
+    expect(await opened).toBe(true)
 })
 
 // THE REVERT: close the dialog in the send's rejection too — the draft is gone with it.
-test('a refused send leaves the dialog open on its draft, saying why — 48.8', async () => {
+test('a refused send leaves the dialog open on its draft, saying why, and Cancel closes it unsent — 48.8, 48.9', async () => {
     sendStatus = 502
     const draft = report()
     draft.summary.set('Still failing')
-    reportDialog(draft)
+    const opened = reportDialog(draft)
     await settle()
     const dialog = document.querySelector(
         'dialog.abide-report',

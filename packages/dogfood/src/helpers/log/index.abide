@@ -39,7 +39,8 @@ import Section from '#src/lib/Section.abide'
             <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
             <tbody>
                 <tr><td><code>log.records</code></td><td>the lines kept, as a reactive value: an admin page reads it and follows it</td></tr>
-                <tr><td><code>LogRecord</code></td><td>one line: <code>time</code>, <code>level</code>, <code>namespace</code>, <code>message</code> and <code>trace</code></td></tr>
+                <tr><td><code>LogRecord</code></td><td>one line: <code>time</code>, <code>level</code>, <code>namespace</code>, <code>message</code>, <code>trace</code>, and <code>span</code> on a span's line</td></tr>
+                <tr><td><code>Span</code></td><td>a span's id, the span it opened under, its name, duration and whether it failed</td></tr>
                 <tr><td><code>ABIDE_MAX_LOG_BUFFER_COUNT</code></td><td>how many lines <code>log.records</code> keeps in memory</td></tr>
                 <tr><td><code>ABIDE_LOG_FORMAT</code></td><td><code>tsv</code> or <code>json</code> for a collector; unset, a terminal's readable form</td></tr>
                 <tr><td><code>NO_COLOR</code></td><td>no color, anywhere</td></tr>

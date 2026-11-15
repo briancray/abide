@@ -1,0 +1,62 @@
+<script>
+import ReportProblem from 'crm/src/ops/lib/ReportProblem.abide'
+import reportProblemSource from 'crm/src/ops/lib/ReportProblem.abide' with { type: 'text' }
+import reportProblemTestSource from 'crm/src/ops/lib/ReportProblem.test.ts' with { type: 'text' }
+import listReportsSource from 'crm/src/ops/listReports.handler.ts' with { type: 'text' }
+import sendStatementSource from 'crm/src/ops/sendStatement.handler.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+</script>
+
+<Doc>
+    <Section title="A failed call is reported from its trace, in words the person reads first">
+        <Example
+            id="report"
+            app="crm"
+            title="`report` — a draft of what failed, sent to `onReport`"
+            summary="Emailing a statement fails, and the page keeps the failed call's trace. Report this opens the draft on it: write what went wrong, read everything that will be sent, and send it."
+            files={{
+                'src/ops/lib/ReportProblem.abide': reportProblemSource,
+                'src/ops/sendStatement.handler.ts': sendStatementSource,
+                'src/ops/listReports.handler.ts': listReportsSource,
+                'src/ops/lib/ReportProblem.test.ts': reportProblemTestSource,
+            }}
+        >
+            <ReportProblem />
+        </Example>
+
+        <p><code>onRefusal</code> hands the page the trace of every call that failed, and
+            <code>report</code> starts a draft from it. <code>open()</code> shows it in abide's own
+            dialog, with every word that will be sent above the Send button, and settles
+            <code>true</code> once it is sent. A page that draws its own binds
+            <code>summary</code> and <code>description</code>, shows <code>markdown</code>, and
+            calls <code>send()</code>.</p>
+
+        <p>Where a report goes is the server's to say, in <code>onReport</code>. The CRM keeps
+            each one for the browser that sent it; an app posts it to its tracker, its inbox or its
+            support desk:</p>
+
+        <Snippet source={listReportsSource} path="src/ops/listReports.handler.ts" from={['onReport(']} />
+
+        <table>
+            <thead><tr><th>What a draft holds</th><th>Where</th></tr></thead>
+            <tbody>
+                <tr><td>the page's newest log lines</td><td>in every browser</td></tr>
+                <tr><td>the server's lines for its trace</td><td>in the native app's window, and on a server</td></tr>
+                <tr><td>the app's version, the user agent and the route</td><td>everywhere</td></tr>
+            </tbody>
+        </table>
+
+        <p>Anywhere else the trace is enough: the server's lines are already the app's, in its
+            logs or its tracing, under the same id. The principal secret and every
+            <code>password</code> field of the config are taken out of every line before it leaves
+            the server, and out of every report before <code>onReport</code> sees it. With no
+            <code>onReport</code> filed, a send is refused.</p>
+    </Section>
+
+    <Registry />
+</Doc>

@@ -294,7 +294,7 @@ export const SITE: readonly SiteGroup[] = [
     {
         group: 'Helpers',
         description:
-            'Logging, the database, the content security policy, addresses, navigation and observing elements.',
+            'Logging, problem reports, the database, the content security policy, addresses, navigation and observing elements.',
         pages: [
             {
                 route: '/helpers/log',
@@ -303,6 +303,14 @@ export const SITE: readonly SiteGroup[] = [
                 description:
                     'Named, leveled logging that reads `DEBUG` on both sides.',
                 registry: '`log`',
+            },
+            {
+                route: '/helpers/report',
+                title: '`report`',
+                nav: '`report`',
+                description:
+                    'A problem report a person writes and reads in full before it is sent, to wherever the app says.',
+                registry: '`report`',
             },
             {
                 route: '/helpers/database',

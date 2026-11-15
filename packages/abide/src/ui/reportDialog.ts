@@ -14,8 +14,12 @@ const STYLE = `.abide-report{max-width:40rem;width:calc(100% - 2rem);font:inheri
 
 let styled = false
 
-/** Shows `draft` in a modal dialog: the summary and the description to write, and every word that is sent. */
-export function reportDialog(draft: ReportDraft): void {
+/**
+ * Shows `draft` in a modal dialog — the summary and the description to write, and every word that is
+ * sent — settling `true` once it is sent, and `false` where it is closed unsent.
+ */
+export function reportDialog(draft: ReportDraft): Promise<boolean> {
+    const { promise, resolve } = Promise.withResolvers<boolean>()
     if (!styled) {
         const style = document.createElement('style')
         style.textContent = STYLE
@@ -62,24 +66,31 @@ export function reportDialog(draft: ReportDraft): void {
     const stop = watch(() => {
         preview.textContent = draft.markdown()
     })
-    const close = (): void => {
+    const close = (sent: boolean): void => {
         stop()
         dialog.close()
         dialog.remove()
+        resolve(sent)
     }
-    cancel.addEventListener('click', close)
+    cancel.addEventListener('click', () => close(false))
+    // Escape closes a modal dialog without a click.
+    dialog.addEventListener('cancel', () => close(false))
     form.addEventListener('submit', (event) => {
         event.preventDefault()
         send.disabled = true
         status.textContent = 'Sending…'
-        draft.send().then(close, (thrown: unknown) => {
-            // 48.8 — the draft stands as it was, to be sent again.
-            send.disabled = false
-            status.textContent = `Not sent: ${isFailed(thrown) || thrown instanceof Error ? thrown.message : String(thrown)}`
-        })
+        draft.send().then(
+            () => close(true),
+            (thrown: unknown) => {
+                // 48.8 — the draft stands as it was, to be sent again.
+                send.disabled = false
+                status.textContent = `Not sent: ${isFailed(thrown) || thrown instanceof Error ? thrown.message : String(thrown)}`
+            },
+        )
     })
     document.body.append(dialog)
     dialog.showModal()
+    return promise
 }
 
 function labelled<Field extends HTMLInputElement | HTMLTextAreaElement>(
