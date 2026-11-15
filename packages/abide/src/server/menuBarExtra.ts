@@ -13,6 +13,7 @@ import {
     nsString,
     objcClass,
     rectOf,
+    responds,
     selector,
     send,
     sendFlag,
@@ -267,6 +268,10 @@ function openPanel(
                     run: () => {
                         // 38.171 — the key a page's `alert` takes from it as a sheet (38.178).
                         if (send(window, 'attachedSheet') !== null) return
+                        // 38.171 — and the key its own Web Inspector takes (38.163): closing the
+                        // panel hides the page inspected, WebKit brings it back to show it, and the
+                        // two windows trade the key forever.
+                        if (inspecting(view)) return
                         resigned()
                         send(window, 'orderOut:', null)
                     },
@@ -298,6 +303,21 @@ function placeUnder(window: Id, button: Id, width: number): void {
         FFIType.void,
         left,
         y - height,
+    )
+}
+
+/**
+ * Whether `view`'s Web Inspector is showing. `_inspector` and its `isVisible` are WebKit's own,
+ * unpublished, so each is asked whether it answers first — a WebKit without them inspects nothing
+ * this reads as open.
+ */
+function inspecting(view: Id): boolean {
+    if (!responds(view, '_inspector')) return false
+    const inspector = send(view, '_inspector')
+    return (
+        inspector !== null &&
+        responds(inspector, 'isVisible') &&
+        isTrue(inspector, 'isVisible')
     )
 }
 

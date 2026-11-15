@@ -130,6 +130,17 @@ export function sendNumber(
     sendTyped(receiver, name, [type], FFIType.void, value)
 }
 
+/** Whether `receiver` answers `name` — asked before sending one a platform may not have. */
+export function responds(receiver: Id, name: string): boolean {
+    return sendTyped(
+        receiver,
+        'respondsToSelector:',
+        [FFIType.ptr],
+        FFIType.bool,
+        selector(name),
+    ) as boolean
+}
+
 /** The window's standard button `button` — close 0, miniaturize 1, zoom 2 (`NSWindowButton`). */
 export function windowButton(window: Id, button: number): Id {
     return sendTyped(
