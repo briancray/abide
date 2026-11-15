@@ -12,6 +12,7 @@
 
 import { encodeMappings, type Segment } from '#server/sourceMappings.ts'
 
+import { IDENTIFIER_PART } from './isNamedAlone.ts'
 import { lineAt, lineStarts } from './lineOf.ts'
 import type { LoweredChunk } from './Lowering.ts'
 import type { Origin } from './projectShadow.ts'
@@ -162,12 +163,12 @@ function anchor(
     return undefined
 }
 
-const NAME = /[\w$.]/
+const NAME = /[\p{ID_Continue}$\u200c\u200d.]/u
 
 // Not the middle of a longer name, or a member of one: `count()` inside `__count()` is not it.
 function standsAlone(output: string, start: number, end: number): boolean {
     return (
         !NAME.test(output[start - 1] ?? ' ') &&
-        !/[\w$]/.test(output[end] ?? ' ')
+        !IDENTIFIER_PART.test(output[end] ?? ' ')
     )
 }

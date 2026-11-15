@@ -5,6 +5,7 @@ import type { Read } from './classifyRead.ts'
 import { holdsSlot } from './classifyTemplate.ts'
 import type { Finding } from './Diagnostics.ts'
 import { abideBindings } from './hookCalls.ts'
+import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
 import { type AbideFile, leadingSpace, scriptBodies } from './parseAbide.ts'
 import {
     type Origin,
@@ -418,7 +419,7 @@ export class Lowering {
             if (token.kind === SyntaxKind.DotToken) {
                 at += 1
                 const step = tokens[at]
-                if (step === undefined || !/^[A-Za-z_$][\w$]*$/.test(step.text))
+                if (step === undefined || !isNamedAlone(step.text))
                     return undefined
                 segments.push(JSON.stringify(step.text))
                 continue
@@ -773,7 +774,7 @@ export class Lowering {
             const text = this.projection.text
             const named =
                 text.slice(read.item, read.item + spelled.length) === spelled &&
-                !/[\w$]/.test(text[read.item + spelled.length] ?? '')
+                !IDENTIFIER_PART.test(text[read.item + spelled.length] ?? '')
             value = named ? from : `${record}_${spelled}(${from})`
             uses.record += 1
         } else uses.cell += 1

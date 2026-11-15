@@ -585,7 +585,9 @@ function appRootOf(path: string): string | undefined {
  * character where none does.
  */
 function wordLength(line: string, character: number): number {
-    const word = /^[\w$]+/.exec(line.slice(character))?.[0]
+    const word = /^[\p{ID_Continue}$\u200c\u200d]+/u.exec(
+        line.slice(character),
+    )?.[0]
     return word === undefined ? 1 : word.length
 }
 

@@ -99,6 +99,24 @@ let contact = reactive({ name: 'Ada', address: { city: 'London' } })
     expect(out()).toBe('Ada Paris')
 })
 
+// 32.5, 31.8 — A STEP IS ANY IDENTIFIER, not an ASCII one. THE REVERT: test a step against
+// `[A-Za-z_$][\w$]*`; the bind is lowered as a plain read and the server writes `value=""`.
+test('bind:value on a path whose step is spelled outside ASCII writes the path — 32.5, 31.8', async () => {
+    const { html } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let contact = reactive({ ñame: 'Ada' })
+</script>
+
+<input id="city" bind:value={contact.ñame}>
+<p id="out">{contact.ñame}</p>`)
+    expect(html).toContain('value="Ada"')
+    input('city').value = 'Zoë'
+    input('city').dispatchEvent(new Event('input'))
+    flushSync()
+    expect(out()).toBe('Zoë')
+})
+
 // 32.5, 31.8 — A COMPUTED SEGMENT IS PART OF THE PATH, and its key is read when the input writes, so
 // the write lands on the entry the key names then and the read follows the key. THE REVERT: hold
 // `boundPath` to names and dots; the server writes `value=""`, and past that `#out` stays at `1 2`.
