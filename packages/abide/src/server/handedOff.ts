@@ -77,7 +77,12 @@ export function handedOff(answer: Response, request: Request): Response {
                     const value =
                         leftover === undefined
                             ? waited.value
-                            : joined(leftover, waited.value)
+                            : new Uint8Array(
+                                  Bun.concatArrayBuffers([
+                                      leftover,
+                                      waited.value,
+                                  ]),
+                              )
                     leftover = undefined
                     const last = value.lastIndexOf(NEWLINE)
                     if (last === -1) {
@@ -118,11 +123,4 @@ export function handedOff(answer: Response, request: Request): Response {
         )
         controller.close()
     }
-}
-
-function joined(first: Uint8Array, second: Uint8Array): Uint8Array {
-    const both = new Uint8Array(first.length + second.length)
-    both.set(first)
-    both.set(second, first.length)
-    return both
 }

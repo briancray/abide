@@ -489,6 +489,12 @@ export type ReceivedFrom = {
  */
 export const RECEIVED_FROM = new WeakMap<Request, ReceivedFrom>()
 
+/** Files `request` as received from where its socket mux's `upgrade` was, where that was filed. */
+export function receivedAsUpgrade(request: Request, upgrade: Request): void {
+    if (RECEIVED_FROM.has(upgrade))
+        RECEIVED_FROM.set(request, RECEIVED_FROM.get(upgrade) ?? null)
+}
+
 /**
  * The address the request being served came from, or `'in-process'` for one no listener received.
  *

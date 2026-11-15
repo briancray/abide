@@ -19,7 +19,7 @@ import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 
 import { Frame, type Peer } from './Followers.ts'
 import { park } from './parkedAnswers.ts'
-import { RECEIVED_FROM } from './requestScope.ts'
+import { receivedAsUpgrade } from './requestScope.ts'
 
 // The upgrade's own headers, which say nothing about a `GET` made from it.
 const UPGRADE_HEADERS = [
@@ -81,8 +81,7 @@ export async function streamOverMux(
     })
     const request = new Request(url, { headers, signal: run.signal })
     // 22.12 — the call came from where the upgrade did.
-    if (RECEIVED_FROM.has(upgrade))
-        RECEIVED_FROM.set(request, RECEIVED_FROM.get(upgrade) ?? null)
+    receivedAsUpgrade(request, upgrade)
     const response = await answer(request)
     if (signal.aborted) return void response.body?.cancel()
     const { status } = response

@@ -31,7 +31,7 @@ import {
 } from '#shared/reactive/producer.ts'
 
 import { positiveSetting } from './config.ts'
-import { currentRequestScope, heldByApp, releaseScope } from './requestScope.ts'
+import { currentRequestScope, heldByApp, holdScope } from './requestScope.ts'
 
 const HYDRATE_LOG = namedLogger('abide:hydrate')
 
@@ -138,15 +138,8 @@ export function seedFor(caller: string): SeedSink {
         // 41.13 — THE RENDER'S SCOPE IS HELD WHILE WHAT IT REACHED IS IN FLIGHT: the page is answered
         // before a slow value lands, and letting the scope go stops that value's run — a stream the
         // browser's call would join then never closes. Let go once it settles, a stream at its close.
-        const scope = currentRequestScope()
-        if (scope !== undefined && isReactive(reached)) {
-            scope.holds += 1
-            let held = true
-            entry.letGo = () => {
-                if (!held) return
-                held = false
-                releaseScope(scope)
-            }
+        if (isReactive(reached)) {
+            entry.letGo = holdScope()
             Promise.resolve(reached).then(entry.letGo, entry.letGo)
         }
         const bound = positiveSetting(

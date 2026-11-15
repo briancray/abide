@@ -21,7 +21,7 @@ const MUX_ADMITTED = 204
 type Carried = { handlers: { size: number } }
 
 /** Whether `request` is the mux's upgrade, at `pathname` below the mount. */
-function asksForMux(
+export function asksForMux(
     pathname: string,
     request: Request,
     carried: Carried,

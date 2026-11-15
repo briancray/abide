@@ -437,11 +437,9 @@ export function shellWords(local: boolean): [usage: string, meaning: string][] {
         ],
         ['handlers', 'every handler call can reach, with its args'],
         ['watch <address> [args]', 'follow a GET — watch chat/room room=lobby'],
-    ]
-    words.push(
         ['help', 'this list — Ctrl+C clears the line, Ctrl+L the panel'],
         ['exit', local ? 'stop the app and leave' : 'leave the shell'],
-    )
+    ]
     return words
 }
 

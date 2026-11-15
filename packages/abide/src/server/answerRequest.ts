@@ -42,7 +42,7 @@ import {
     type LaneRung,
 } from './hooks.ts'
 import { type Mounted, mountedOwn } from './mountHandlers.ts'
-import { muxAdmission } from './muxUpgrade.ts'
+import { asksForMux, muxAdmission } from './muxUpgrade.ts'
 import { OFFLINE_STANDIN } from './OFFLINE_STANDIN.ts'
 import { beginPageRender } from './PageRender.ts'
 import { plainAnswer } from './plainAnswer.ts'
@@ -177,7 +177,7 @@ export async function answerRequest(
     const surface = SURFACES.get(asked)
     if (surface !== undefined) {
         const answer = await surface.answer(app, request)
-        if (answer === undefined) return notFoundResponse()
+        if (answer === undefined) return plainAnswer('not found', 404)
         // 21.4 — an answer about the app's surfaces is never cached.
         return answerValue(
             answer,
@@ -194,7 +194,7 @@ export async function answerRequest(
     if (admitted !== undefined) return admitted
     if (isFrameworkAddress(asked)) {
         const answer = app.framework(asked, request)
-        if (answer === undefined) return notFoundResponse()
+        if (answer === undefined) return plainAnswer('not found', 404)
         return readsOnly(request)
             ? answer
             : methodRefused(app, asked, READS, request)
@@ -261,7 +261,7 @@ export function laneOf(app: AppSources, request: Request): Lane {
     if (OWN_HANDLERS.has(asked)) return 'handler'
     const surface = SURFACES.get(asked)
     if (surface !== undefined) return surface.lane
-    if (muxAdmission(asked, request, app) !== undefined) return 'socket'
+    if (asksForMux(asked, request, app)) return 'socket'
     if (isFrameworkAddress(asked)) return 'abide'
     if (app.published.has(decodedOrKept(asked))) return 'file'
     const parts = partsOf(asked)
@@ -469,10 +469,6 @@ export function answerInside(
     rungs: LaneRung[],
 ): (ctx: AppContext) => Promise<Response> {
     return compose(rungs, ({ request }) => answerMatched(app, request, found))
-}
-
-function notFoundResponse(): Response {
-    return plainAnswer('not found', 404)
 }
 
 /** Whether the request only reads: a `GET` or a `HEAD`. 15.17. */
