@@ -38,7 +38,7 @@ export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
-export { type Logger, type LogRecord, log } from './log.ts'
+export { type Logger, type LogRecord, log, type Span } from './log.ts'
 export type { Middleware } from './Middleware.ts'
 export type { Params } from './matchRoute.ts'
 // 38.88 — a native app's menu items, and the hook a route's layouts and page file them with.

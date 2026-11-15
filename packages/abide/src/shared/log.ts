@@ -23,6 +23,21 @@ export type LogRecord = {
     namespace: string
     message: string
     trace: string
+    /** 24.9 — what makes the line a span, and `undefined` on every other line. */
+    span: Span | undefined
+}
+
+/** A span's place in its trace, and how it went. */
+export type Span = {
+    id: string
+    /** The span it ran under — the caller's, for a request's own — or `''` where none did. */
+    parent: string
+    name: string
+    kind: 'server' | 'internal'
+    /** Milliseconds, measured monotonically (24.4). */
+    duration: number
+    status: 'ok' | 'error'
+    attributes: Record<string, string | number>
 }
 
 export type Logger = ((...args: unknown[]) => void) & {
@@ -218,6 +233,7 @@ function write(
     level: Level,
     args: unknown[],
     time = new Date().toISOString(),
+    span: Span | undefined = undefined,
 ): void {
     const record: LogRecord = {
         time,
@@ -225,6 +241,7 @@ function write(
         namespace,
         message: messageOf(args),
         trace: TRACE.current(),
+        span,
     }
     const format = formatOf()
     let line: string
@@ -295,13 +312,20 @@ export function appName(): string {
 }
 
 /**
- * Writes a span as an `info` line under the app's namespace, stamped with its start.
+ * Writes `span` as a line stamped with its start: an `info` under the app's namespace where none is
+ * given, which is `trace.span`'s.
  *
- * 24.3, 24.4 — A SPAN IS A LINE under the app's own namespace, stamped with when it STARTED. Written
- * whatever `DEBUG` says: an app that opened one asked for it.
+ * 24.3, 24.4 — A SPAN IS A LINE, stamped with when it STARTED. Written whatever `DEBUG` says: an app
+ * that opened one asked for it, and the caller of a request's own has checked its own reason (24.10).
  */
-export function writeSpan(startedAt: string, message: string): void {
-    write(appName(), 'info', [message], startedAt)
+export function writeSpan(
+    startedAt: string,
+    message: string,
+    span: Span,
+    namespace = appName(),
+    level: Level = 'info',
+): void {
+    write(namespace, level, [message], startedAt, span)
 }
 
 /**

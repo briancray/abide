@@ -51,6 +51,12 @@ import Snippet from '#src/lib/Snippet.abide'
         <p>With <code>timing</code>, a span joins <code>server-timing</code> under its name, so the
             name has to be a plain token. A call to another service carries the trace on with
             <code>{'fetch(url, { headers: trace.headers() })'}</code>.</p>
+
+        <p>A span's line is a <code>LogRecord</code> with a <code>span</code> on it: its own id,
+            the id of the span it opened under, and whether its body threw. So the lines of one
+            trace make a tree. With <code>DEBUG=abide:request</code> the request itself is written
+            as the root, under the id <code>traceresponse</code> names and the span of the
+            caller's <code>traceparent</code>.</p>
     </Section>
 
     <Registry />

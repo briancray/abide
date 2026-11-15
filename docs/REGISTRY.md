@@ -480,7 +480,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | --- | --- | --- | --- |
 | `trace` | `() => string` | The trace id of the operation this work belongs to. | 24.1 |
 | `trace.sampled` | `() => boolean` | The caller's sampling decision, carried through verbatim. | 24.2 |
-| `trace.span` | `<T>(name: string, body: () => T, options?: { timing?: boolean }) => T` | Opens a child span around a body. | 24.3, 24.4, 24.6, 24.7, 24.8 |
+| `trace.span` | `<T>(name: string, body: () => T, options?: { timing?: boolean }) => T` | Opens a child span around a body. | 24.3, 24.4, 24.6, 24.7, 24.8, 24.9 |
 | `trace.headers` | `() => Record<string, string>` | What an outbound request carries. | 24.5 |
 
 ## `server`
@@ -550,9 +550,10 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `log.named` | `(name: string) => Logger` | A logger under a named namespace. | 28.4, 28.5, 28.12 |
 | `Logger` | `typeof log` | What `log.named` hands back. | 28.5 |
 | `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. | 28.6, 28.7 |
-| `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string }` | One line, as a value. | 24.3 |
+| `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string; span: Span \| undefined }` | One line, as a value. | 24.3, 24.9 |
+| `Span` | `{ id: string; parent: string; name: string; kind: 'server' \| 'internal'; duration: number; status: 'ok' \| 'error'; attributes: Record<string, string \| number> }` | A line's place in its trace, and how the work it timed went. | 24.4, 24.9, 24.10 |
 | `log.records` | `Reactive<LogRecord[]>` | The lines kept, appended to as each is written. | 28.1 |
-| `abide:request` | `debug` | One line per request. | 28.8 |
+| `abide:request` | `debug` | One line per request. | 24.10, 28.8 |
 | `abide:socket` | `debug` | One line per frame on the socket mux. | 28.8 |
 | `abide:lifecycle` | `debug` `error` | A lifecycle that ran. | 28.8 |
 | `abide:principal` | `debug` `warning` | A principal set or cleared. | 28.8 |

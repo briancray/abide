@@ -57,7 +57,8 @@ export type RequestScope = Scope & {
     /** Whether an answer has taken what was written through `response` (`applyWritten`). */
     applied: boolean
     /** This scope's trace, built on the first ask (`trace.ts`). 24.1. */
-    trace: { id: string; span: string; flags: string } | undefined
+    trace:
+        { id: string; span: string; parent: string; flags: string } | undefined
     /** `undefined` where the scope was opened without one — 42.8's scope, which 22.1 throws in. */
     request: Request | undefined
     /**

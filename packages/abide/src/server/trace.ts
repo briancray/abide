@@ -51,10 +51,11 @@ function traceOf(scope: RequestScope): NonNullable<RequestScope['trace']> {
     )
     scope.trace =
         given === null || /^0+$/.test(given[1] as string)
-            ? { id: hex(16), span: hex(8), flags: '00' }
+            ? { id: hex(16), span: hex(8), parent: '', flags: '00' }
             : {
                   id: given[1] as string,
                   span: hex(8),
+                  parent: given[2] as string,
                   flags: given[3] as string,
               }
     return scope.trace
@@ -107,27 +108,49 @@ export const trace = Object.assign(
                 )
             const scope = currentRequestScope()
             if (scope === undefined) return body()
-            traceOf(scope)
+            // 24.9 — its own id, and the span it opened under.
+            const id = hex(8)
+            const parent = currentSpan(scope)
             const startedAt = new Date().toISOString()
             const started = performance.now()
-            const close = (): void => {
+            const close = (status: 'ok' | 'error'): void => {
                 const duration = performance.now() - started
-                writeSpan(startedAt, `${name} ${duration.toFixed(3)}ms`)
+                writeSpan(startedAt, `${name} ${duration.toFixed(3)}ms`, {
+                    id,
+                    parent,
+                    name,
+                    kind: 'internal',
+                    duration,
+                    status,
+                    attributes: {},
+                })
                 if (timing) timed(scope.timing, name, duration)
             }
+            const succeeded = (): void => close('ok')
+            const failed = (): void => close('error')
             let result: T
             try {
-                result = SPAN.run(hex(8), body)
+                result = SPAN.run(id, body)
             } catch (thrown) {
-                close()
+                failed()
                 throw thrown
             }
-            if (result instanceof Promise) return result.finally(close) as T
+            if (result instanceof Promise)
+                return result.then(
+                    (value) => {
+                        succeeded()
+                        return value
+                    },
+                    (thrown: unknown) => {
+                        failed()
+                        throw thrown
+                    },
+                ) as T
             // 24.8 — ANY OTHER THENABLE IS WATCHED, NOT WRAPPED, so the caller keeps what it was
             // handed. A `Reactive` is a value here (1.6) and closes the span now.
             if (isThenable(result) && !isReactive(result))
-                result.then(close, close)
-            else close()
+                result.then(succeeded, failed)
+            else succeeded()
             return result
         },
         /**
@@ -145,6 +168,48 @@ export const trace = Object.assign(
         },
     },
 )
+
+/**
+ * Writes the request's own span, answered at `status` after `duration` milliseconds, under `namespace`
+ * as a `debug` line: its id is the one `traceresponse` names, and its parent the caller's (24.10).
+ */
+export function writeRequestSpan(
+    request: Request,
+    status: number,
+    startedAt: string,
+    duration: number,
+    namespace: string,
+): void {
+    const scope = currentRequestScope()
+    if (scope === undefined) return
+    const current = traceOf(scope)
+    const { route } = scope
+    const path = new URL(request.url).pathname
+    // A route, not the address: the name of every request to `/contacts/[id]` is the same.
+    const name =
+        route === undefined ? request.method : `${request.method} ${route}`
+    const attributes: Record<string, string | number> = {
+        'http.request.method': request.method,
+        'url.path': path,
+        'http.response.status_code': status,
+    }
+    if (route !== undefined) attributes['http.route'] = route
+    writeSpan(
+        startedAt,
+        `${request.method} ${path} ${status} ${duration.toFixed(1)}ms`,
+        {
+            id: current.span,
+            parent: current.parent,
+            name,
+            kind: 'server',
+            duration,
+            status: status >= 500 ? 'error' : 'ok',
+            attributes,
+        },
+        namespace,
+        'debug',
+    )
+}
 
 /**
  * The answer's `traceresponse` value, naming this process's own span for the request.

@@ -74,10 +74,11 @@ import {
     serverTiming,
 } from './requestScope.ts'
 import { heldBody } from './streamEvent.ts'
-import { traceResponse } from './trace.ts'
+import { traceResponse, writeRequestSpan } from './trace.ts'
 
 // 28.8 — one line per request.
-const REQUEST_LOG = namedLogger('abide:request')
+const REQUEST_NAMESPACE = 'abide:request'
+const REQUEST_LOG = namedLogger(REQUEST_NAMESPACE)
 
 // 42.18 — HALF OF `docker stop`'s TEN-SECOND GRACE, the shortest a common supervisor gives before its
 // `SIGKILL`: the other half is `onStop`'s, so the teardown runs before the kill rather than being cut
@@ -327,6 +328,8 @@ export async function bootEntered(
         const parked = takeParked(request)
         if (parked !== undefined) return parked
         inFlight += 1
+        // 24.10 — the request's span is stamped with its start, read only where one is written.
+        const startedAt = REQUEST_LOG.enabled() ? new Date().toISOString() : ''
         const started = performance.now()
         try {
             // 42.6 — `run`, with dispatch over it — and the headers every answer carries stamped
@@ -349,12 +352,13 @@ export async function bootEntered(
                     }
                     const stamped = beating(stamp(answered, booted.offline))
                     // 28.7 — a closed namespace does not pay for the line it would have written.
-                    if (REQUEST_LOG.enabled())
-                        REQUEST_LOG.debug(
-                            request.method,
-                            new URL(request.url).pathname,
+                    if (startedAt !== '')
+                        writeRequestSpan(
+                            request,
                             stamped.status,
-                            `${(performance.now() - started).toFixed(1)}ms`,
+                            startedAt,
+                            performance.now() - started,
+                            REQUEST_NAMESPACE,
                         )
                     return stamped
                 },

@@ -1915,6 +1915,14 @@ name, where it closed before the head was sent.
 24.8 A `trace.span` whose body returns a thenable MUST close when it settles, and MUST take a
 `Reactive` as a value per 1.6.
 
+24.9 A span MUST carry its own id and the id of the span it opened under in its `LogRecord`'s
+`span`, and MUST close as an error where its body threw or its thenable rejected.
+
+24.10 Where `abide:request` is enabled, each request MUST be written as a `server` span whose id is
+the one `traceresponse` names and whose parent is the one the caller's `traceparent` names, named by
+its method and the route it matched, and closing as an error where its answer's status is 500 or
+above.
+
 # 25. Health
 
 25.1 `GET /__abide/health` MUST answer `Health` over http.
