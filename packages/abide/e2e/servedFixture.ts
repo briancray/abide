@@ -81,8 +81,8 @@ export async function startedFixture(
         },
     )
     // The first address the banner names, which is `Local:` — read past the color playwright's
-    // `FORCE_COLOR` gives it. The pipe is DRAINED after that rather than released: a server whose
-    // stdout nobody reads blocks, or dies, on the next line it logs.
+    // `FORCE_COLOR` gives it. Read no further: a pipe nobody reads does not stall the server, which
+    // bun drains into memory itself (`tests/builtApp.ts` `addressOf`).
     const reader = server.stdout
         .pipeThrough(new TextDecoderStream())
         .getReader()
@@ -93,9 +93,6 @@ export async function startedFixture(
         said += value
         const found = /(http:\/\/localhost:\d+)/.exec(said)
         if (found === null) continue
-        void (async () => {
-            while (!(await reader.read()).done);
-        })()
         return { base: found[1] as string, server }
     }
     throw new Error(`abide start exited ${await server.exited}: ${said}`)

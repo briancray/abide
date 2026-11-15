@@ -7,7 +7,7 @@
 // `/about` is served as an EMPTY shell on purpose: it is the direct-hit case, and it proves the
 // same module both hydrates what a server painted and builds what it did not.
 
-import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs' // bun has no sync mkdir/rm/stat of its own
+import { existsSync, rmSync, statSync } from 'node:fs' // bun has no sync rm/stat of its own
 import { join, normalize } from 'node:path' // bun has no path helpers of its own
 
 import {
@@ -18,6 +18,8 @@ import {
 import { render } from '@abide/abide/server'
 import { expect, test } from '@playwright/test'
 import type { Server } from 'bun'
+
+import { buildFixture, writeFixture } from './servedFixture.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 // ONE FIXTURE TREE PER PROJECT, and the project name is what separates them. This spec runs in
@@ -57,28 +59,16 @@ let server: Server<undefined> | null = null
 test.beforeAll(async ({}, testInfo) => {
     APP = join(REPO, `.test-modules/e2e-routeapp-${testInfo.project.name}`)
     rmSync(APP, { recursive: true, force: true })
-    mkdirSync(`${APP}/plain`, { recursive: true })
-    mkdirSync(`${APP}/about`, { recursive: true })
-    writeFileSync(
-        `${APP}/plain/index.abide`,
-        '<main id="plain"><h1>Plain</h1></main>',
-    )
-    writeFileSync(
-        `${APP}/index.abide`,
-        `<script>\nimport { navigate, reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
-    )
-    writeFileSync(
-        `${APP}/about/index.abide`,
-        `<script>\nimport { navigate, route } from '@abide/abide'\n</script>\n<head><title>About</title><meta name="description" content="the about page"></head>\n<main id="about"><h1>About</h1><a id="back" href="/">home</a><p id="at">{route.index}</p><button id="step-back" onclick={() => navigate(-1).then(() => Object.assign(window, { __LANDED__: document.querySelector('#home') !== null }))}>back</button></main>`,
-    )
-    // A package's own directory, so the tsconfig beside its manifest is no file of an address (23.22).
-    writeFileSync(
-        `${APP}/package.json`,
-        JSON.stringify({ name: 'routing-fixture', type: 'module' }),
-    )
-    writeFileSync(
-        `${APP}/tsconfig.json`,
-        JSON.stringify({
+    writeFixture(APP, {
+        'plain/index.abide': '<main id="plain"><h1>Plain</h1></main>',
+        'index.abide': `<script>\nimport { navigate, reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
+        'about/index.abide': `<script>\nimport { navigate, route } from '@abide/abide'\n</script>\n<head><title>About</title><meta name="description" content="the about page"></head>\n<main id="about"><h1>About</h1><a id="back" href="/">home</a><p id="at">{route.index}</p><button id="step-back" onclick={() => navigate(-1).then(() => Object.assign(window, { __LANDED__: document.querySelector('#home') !== null }))}>back</button></main>`,
+        // A package's own directory, so the tsconfig beside its manifest is no file of an address (23.22).
+        'package.json': JSON.stringify({
+            name: 'routing-fixture',
+            type: 'module',
+        }),
+        'tsconfig.json': JSON.stringify({
             compilerOptions: {
                 strict: true,
                 target: 'esnext',
@@ -89,10 +79,8 @@ test.beforeAll(async ({}, testInfo) => {
             },
             include: ['**/*'],
         }),
-    )
-    await Bun.$`${process.execPath} ${join(REPO, 'packages/abide/bin/abide.ts')} build --root ${APP} --out ${APP}/.abide`
-        .cwd(REPO)
-        .quiet()
+    })
+    await buildFixture(APP)
     const compilation: Compilation = await Bun.file(
         `${APP}/.abide/compilation.json`,
     ).json()
