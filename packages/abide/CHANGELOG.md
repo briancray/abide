@@ -1,5 +1,13 @@
 # @abide/abide
 
+## 0.137.0
+
+### Minor Changes
+
+- bce9218: native() answers the name the app's menu bar shows, beside its version ([`3519ee8`](https://github.com/briancray/abide/commit/3519ee83a379ddc93c059076561b3a39664e6bbb))
+- bce9218: onLauncher's start: 'immediately', and a menu named for the app grows the application menu below About ([`bc1bbaa`](https://github.com/briancray/abide/commit/bc1bbaa6f7964868a4224aa31998672ac088dc43))
+- bce9218: a native app opened from the Finder writes what it prints to ~/Library/Logs ([`bf7a0eb`](https://github.com/briancray/abide/commit/bf7a0ebb5931b0e5c28b1510bfd27445fc403735))
+
 ## 0.136.1
 
 ### Patch Changes
