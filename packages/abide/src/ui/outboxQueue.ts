@@ -27,6 +27,7 @@ import { OUTBOX_SENDING } from '#shared/OUTBOX_SENDING.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import { isReactive, type Reactive, reactive } from '#shared/reactive/index.ts'
 import { produceInto, refuseInto, standIn } from '#shared/reactive/producer.ts'
+import { requested } from '#shared/requested.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 
 import { Backoff } from './Backoff.ts'
@@ -371,16 +372,15 @@ function memoryShelf(): Shelf {
 function databaseShelf(): Shelf {
     let opening: Promise<IDBDatabase> | undefined
     const database = (): Promise<IDBDatabase> => {
-        opening ??= new Promise((resolve, reject) => {
+        if (opening === undefined) {
             const asked = indexedDB.open(DATABASE, 1)
             asked.onupgradeneeded = () =>
                 asked.result.createObjectStore(STORE, {
                     keyPath: 'seq',
                     autoIncrement: true,
                 })
-            asked.onsuccess = () => resolve(asked.result)
-            asked.onerror = () => reject(asked.error)
-        })
+            opening = requested(asked)
+        }
         return opening
     }
     const inStore = async <Result>(
@@ -390,11 +390,7 @@ function databaseShelf(): Shelf {
         const store = (await database())
             .transaction(STORE, mode)
             .objectStore(STORE)
-        return new Promise((resolve, reject) => {
-            const request = work(store)
-            request.onsuccess = () => resolve(request.result)
-            request.onerror = () => reject(request.error)
-        })
+        return requested(work(store))
     }
     return {
         load: () => inStore('readonly', (store) => store.getAll()),

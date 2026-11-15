@@ -38,7 +38,12 @@ export { bindFiles } from './bindFiles.ts'
 export { bindGroup } from './bindGroup.ts'
 export { bindProperty } from './bindProperty.ts'
 export { bindSpread } from './bindSpread.ts'
-export { escapeless } from './escapeless.ts'
+// A run's dynamic part on the CLIENT, written through `data` rather than parsed — so not escaped,
+// where the server's `escapeText` is: escaping here would put `&lt;` on the screen where the server
+// put `<`. A name of its own, so the emitted run reads the same on both sides with one difference.
+// 32.26 — a `Raw` is written as its html, which matches the server's bytes; a run holding one is
+// parsed through `setMarkup` instead, after its binding asks `isRaw`.
+export { textOf as escapeless } from '#shared/Raw.ts'
 // 32.23 — an invocation whose `{...expr}` has not landed, made once it has.
 export { invokeLanded } from './invokeLanded.ts'
 // 39.1 — a component's `<head>`, joined to the routed level mounting it.

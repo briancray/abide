@@ -1,4 +1,5 @@
 import type { Store } from '../reactive/index.ts'
+import { requested } from '../requested.ts'
 import type { Schema } from '../Schema.ts'
 import { KeptText, storeKey } from '../storedValue.ts'
 
@@ -93,13 +94,6 @@ async function written(
 function channelOf(): BroadcastChannel {
     channel ??= new BroadcastChannel(`${DATABASE_NAME}-store`)
     return channel
-}
-
-function requested<Result>(request: IDBRequest<Result>): Promise<Result> {
-    return new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result)
-        request.onerror = () => reject(request.error)
-    })
 }
 
 /**

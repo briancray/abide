@@ -153,8 +153,7 @@ export function wire(
     // landing (or `delay` past it), where the browser says it is online, and when it says so otherwise.
     const whenOnline = (args: unknown, delay: number): void => {
         if (method !== 'GET') return
-        const again = (): void =>
-            (value as (args: unknown) => { refresh(): void })(args).refresh()
+        const again = (): void => entryOf(args).refresh()
         if (navigator.onLine) setTimeout(again, delay)
         else addEventListener('online', again, { once: true })
     }
@@ -168,8 +167,7 @@ export function wire(
         // this runs while the call that started the load still has its signal set.
         const signal = startingLoadCall().signal
         const request = requestOf(args)
-        const restart = (): void =>
-            (value as (args: unknown) => { refresh(): void })(args).refresh()
+        const restart = (): void => entryOf(args).refresh()
         // 16.93 — A `GET` IS READ OVER THE MUX, holding no http connection while it streams, save
         // one the page's early-call script already started (41.20, 16.97) and one the mux sends back.
         const muxed =
@@ -214,7 +212,7 @@ export function wire(
     const follow = (args: unknown, answer: Answer): void => {
         if (method === 'GET' && answer.followable)
             followRpc(address, args, answer.version, answer.life, () =>
-                (value as (args: unknown) => unknown)(args),
+                entryOf(args),
             )
     }
     // A KEYED VALUE OF ITS OWN where the handler's declares what its copy behaves by, so every entry —
@@ -250,6 +248,9 @@ export function wire(
                   options === undefined ? undefined : copyOptions(options),
               )
             : produce
+    // A GET's entry for `args`, which `whenOnline`, `streamed` and `follow` reach again.
+    const entryOf = (args: unknown): { refresh(): void } =>
+        (value as (args: unknown) => { refresh(): void })(args)
     // Typed as the body either way: `declare` reads which arm off the brand (16.5), and its types
     // keep a built value off the arms that build one.
     const rpc = declare(method)(value as typeof produce)

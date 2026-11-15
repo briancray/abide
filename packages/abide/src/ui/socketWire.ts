@@ -179,7 +179,6 @@ class MuxStream {
     // Whether the frame naming it went out over the socket standing now.
     sent: boolean
     settle: (answer: Answer | Promise<Answer> | undefined) => void
-    fail: (reason: unknown) => void
     // The body its head opened, once it has; `null` while it has not.
     body: ReadableStreamDefaultController<Uint8Array> | null
     // A new run in place of this one, for a connection reopened under another caller (18.25).
@@ -194,7 +193,6 @@ class MuxStream {
         id: number,
         url: string,
         settle: (answer: Answer | Promise<Answer> | undefined) => void,
-        fail: (reason: unknown) => void,
         restart: () => void,
         mux: string,
         signal: AbortSignal | undefined,
@@ -207,7 +205,6 @@ class MuxStream {
         this.url = url
         this.sent = false
         this.settle = settle
-        this.fail = fail
         this.body = null
         this.restart = restart
     }
@@ -350,7 +347,6 @@ class Mux {
                 this.nextId++,
                 url,
                 settle,
-                fail,
                 restart,
                 this.url,
                 signal,
