@@ -10,7 +10,6 @@ import {
     created,
     definedClass,
     type Id,
-    nsBoolean,
     nsString,
     objcClass,
     rectOf,
@@ -250,15 +249,10 @@ function openPanel(
         options.panelWidth,
         options.panelHeight,
     )
+    // 38.163 — NEVER OPEN TO WEB INSPECTOR, whatever `inspector` answers: the inspector is a window
+    // of its own that takes the key, and the panel closes as it loses it (38.171), so the two trade
+    // the key in a loop. Its page is inspected in the window, at the address the panel loads.
     const view = created('WKWebView')
-    // 38.163.
-    if (options.inspector)
-        send(
-            send(send(view, 'configuration'), 'preferences'),
-            'setValue:forKey:',
-            nsBoolean(true),
-            nsString('developerExtrasEnabled'),
-        )
     send(view, 'setUIDelegate:', uiDelegate)
     send(view, 'setNavigationDelegate:', uiDelegate)
     // 38.140 — the panel's page is the native app's as much as the window's is.

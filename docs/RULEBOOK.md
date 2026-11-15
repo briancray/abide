@@ -3467,7 +3467,9 @@ the platform's.
 38.162 Where `onLauncher` answers `rememberFrame: false`, the window MUST open centered at the
 `width` and `height` it answers at every launch.
 
-38.163 Where `onLauncher` answers `inspector: false`, the page MUST NOT be open to Web Inspector.
+38.163 Where `onLauncher` answers `inspector: false`, the page MUST NOT be open to Web Inspector. The
+menu bar extra's panel MUST NOT be open to it whatever `inspector` answers, since the inspector takes
+the key the panel closes on losing (38.171).
 
 38.164 The launcher's own page MUST carry a `data-abide-titlebar` element across its top as tall as
 `--abide-titlebar-height`.
