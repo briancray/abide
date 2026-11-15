@@ -44,6 +44,35 @@ const text = (value: string): void =>
     })
 
 print({ type: 'system', subtype: 'init' })
+// 44.99 — told to call a tool, it calls it, answers with what it was told, and then would go on
+// talking forever: a run that is not ended at the tool's answer never ends.
+const told = /^Call the tool (\S+) once/.exec(words)
+if (told !== null) {
+    const name = told[1] as string
+    const given = words.slice(words.indexOf('\n\n') + 2)
+    print({
+        type: 'stream_event',
+        event: {
+            type: 'content_block_start',
+            index: 0,
+            content_block: { type: 'tool_use', id: 'toolu_9', name, input: {} },
+        },
+    })
+    print({
+        type: 'user',
+        message: {
+            content: [
+                {
+                    type: 'tool_result',
+                    tool_use_id: 'toolu_9',
+                    content: [{ type: 'text', text: `called ${given}` }],
+                },
+            ],
+        },
+    })
+    text('the meetings are')
+    await new Promise(() => {})
+}
 text('checking')
 if (words.includes('hang')) await new Promise(() => {})
 

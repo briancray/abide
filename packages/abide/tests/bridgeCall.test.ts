@@ -323,7 +323,8 @@ test('a caller hanging up ends the call — 44.98', async () => {
 
 // 44.95 — A SERVER AT AN HTTP ADDRESS is sent the headers its configuration names and nothing of the
 // page's, its session carried, and its answer read out of an event stream; a call it answers 401 is
-// refused 502. THE REVERT: read the answer as JSON whatever its type, and the call is refused 502.
+// made by a turn (44.99). THE REVERT: read the answer as JSON whatever its type, and the first call
+// is made by the turn, answering `called {"lane":2}`.
 test('a call reaches an http server with its own headers alone — 44.95', async () => {
     const seen: Record<string, string | null>[] = []
     const server = Bun.serve({
@@ -405,33 +406,99 @@ test('a call reaches an http server with its own headers alone — 44.95', async
             'session-1',
         ])
         expect(seen.every((one) => one.cookie === null)).toBe(true)
+        // 44.99 — refused for want of a sign-in, it is made by a turn instead.
         const locked = await call('http', 'mcp__locked__cards', {})
-        expect(locked.status).toBe(502)
-        expect(await locked.text()).toContain('sign-in')
+        expect(locked.status).toBe(200)
+        expect(await locked.json()).toEqual({
+            content: [{ type: 'text', text: 'called {}' }],
+            failed: false,
+        })
     } finally {
         server.stop(true)
     }
 }, 30_000)
 
-// 44.96 — A BRIDGE THAT NEVER SAID IT MAKES CALLS — an older release — is refused 409 at once, rather
-// than sent a call it would never answer. Paired here by hand, as such a bridge pairs. THE REVERT: drop
-// the `calls` check from `runCall`, and the call waits until the request is given up on.
-test('a call to a bridge that never said it makes calls is refused 409 — 44.96', async () => {
+// 44.96, 44.99 — A BRIDGE THAT NEVER SAID IT MAKES CALLS — an older release — is sent a turn that
+// makes it at once, rather than a call it would never answer. Paired here by hand, as such a bridge
+// pairs. THE REVERT: drop the `calls` check from `runCall`, and it is sent a `call` frame instead.
+test('a call to a bridge that never said it makes calls is sent as a turn — 44.96, 44.99', async () => {
     const code = await pairingCode('old')
     const stream = await Bun.fetch(`${base}/__abide/bridge?code=${code}`, {
         headers: { accept: 'text/event-stream' },
     })
     expect(stream.status).toBe(200)
+    const hangUp = new AbortController()
+    const answer = call(
+        'old',
+        'mcp__calendar__meetings',
+        { day: 'monday' },
+        hangUp.signal,
+    ).catch(() => undefined)
+    const reader = (stream.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let read = ''
+    let sent: { type: string; config?: unknown } | undefined
     try {
-        const answer = await call(
-            'old',
-            'mcp__calendar__meetings',
-            {},
-            AbortSignal.timeout(5_000),
-        )
-        expect(answer.status).toBe(409)
-        expect(await answer.text()).toContain('release')
+        while (sent === undefined) {
+            const { value, done } = await reader.read()
+            if (done) break
+            read += decoder.decode(value, { stream: true })
+            for (const line of read.split('\n'))
+                if (line.startsWith('data:') && line.includes('"id"')) {
+                    const frame = JSON.parse(line.slice(5)) as { type: string }
+                    if (frame.type === 'turn' || frame.type === 'call')
+                        sent = frame
+                }
+        }
+        expect(sent?.type).toBe('turn')
+        expect(sent?.config).toEqual({
+            model: 'haiku',
+            effort: 'low',
+            tools: ['mcp__calendar__meetings'],
+        })
     } finally {
-        await stream.body?.cancel()
+        hangUp.abort()
+        await answer
+        await reader.cancel()
     }
+}, 30_000)
+
+// 44.99 — A CALL THE BRIDGE COULD NOT MAKE IS MADE BY A TURN, and answers the tool's answer, not the
+// model's: a server that cannot be started, called through the scripted Claude Code, which answers
+// the call and then talks on forever — so the run has to be ended at the tool's answer, and is.
+// THE REVERT: end the run after leaving the turn rather than before, and the scripted Claude Code is
+// still running once the call has answered.
+test('a call the bridge could not make is made by a turn, ended at its answer — 44.99', async () => {
+    const { config } = await visitorServers({
+        broken: { command: '/nonexistent/server' },
+    })
+    await pairBridge('fallback', [
+        '--mcp-config',
+        config,
+        '--tools',
+        'mcp__broken',
+    ])
+    const answer = await call('fallback', 'mcp__broken__meetings', {
+        day: 'monday',
+    })
+    expect(answer.status).toBe(200)
+    expect(await answer.json()).toEqual({
+        content: [{ type: 'text', text: 'called {"day":"monday"}' }],
+        failed: false,
+    })
+    const { args, pid } = (await Bun.file(RECORD).json()) as {
+        args: string[]
+        pid: number
+    }
+    expect(args[args.indexOf('--model') + 1]).toBe('haiku')
+    let alive = true
+    for (let tries = 0; alive && tries < 100; tries++) {
+        await Bun.sleep(50)
+        try {
+            process.kill(pid, 0)
+        } catch {
+            alive = false
+        }
+    }
+    expect(alive).toBe(false)
 }, 30_000)

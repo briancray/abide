@@ -12,7 +12,7 @@
 //
 // 44.93 — ONE TOOL OF THE VISITOR'S MACHINE CAN BE CALLED WITH NO MODEL, through `callTool`: the bridge
 // speaks MCP to the server itself, under the grant a turn naming that tool alone would have, and
-// asks nothing past it (44.94).
+// asks nothing past it (44.94). Where the bridge cannot make it, a turn does (44.99).
 
 export type { BridgeStatus } from '#shared/BridgeStatus.ts'
 
@@ -242,20 +242,80 @@ function permit(id: string, allow: boolean): void {
 
 /**
  * What the MCP tool `tool` of the visitor's machine, named `mcp__<server>__<tool>`, answered `input`,
- * called through this browser's bridge with no model. 44.93. Ended where the request is.
+ * called through this browser's bridge with no model (44.93), or by a turn where the bridge could not
+ * make the call itself (44.99). Ended where the request is.
  *
- * Throws 409 where no bridge that makes calls is paired, 403 where the visitor did not give the site
- * the tool to call (44.94), and 502 where the call failed (44.95).
+ * Throws 409 where no bridge is paired, 403 where the visitor did not give the site the tool to call
+ * (44.94), and 502 where neither the bridge nor a turn made the call.
  */
-function callTool(tool: string, input: unknown): Promise<ToolAnswer> {
-    return runCall({
+async function callTool(tool: string, input: unknown): Promise<ToolAnswer> {
+    const asking = {
         caller: askingCaller(),
         signedIn: signedInAs(),
         local: fromNativeWindow(),
+    }
+    const called = await runCall({
+        ...asking,
         name: tool,
         input,
         signal: request().signal,
     })
+    return called ?? calledByTurn(asking, tool, input)
+}
+
+/**
+ * 44.99 — THE CALL THE BRIDGE COULD NOT MAKE, made by the cheapest turn that makes it: the one tool
+ * granted, the model told the input, a prompt for that call allowed as the call itself would be
+ * (44.94), and the run ended the moment the tool answers — so what is returned is the tool's answer,
+ * never the model's copy of it, and no tokens are spent past the call.
+ */
+async function calledByTurn(
+    asking: { caller: string; signedIn: string; local: boolean },
+    tool: string,
+    input: unknown,
+): Promise<ToolAnswer> {
+    const ending = new AbortController()
+    const signal = AbortSignal.any([request().signal, ending.signal])
+    let callId: string | undefined
+    for await (const event of runTurn({
+        ...asking,
+        prompt: [
+            {
+                type: 'text',
+                text: `Call the tool ${tool} once, with exactly this input, and do nothing else.\n\n${JSON.stringify(input ?? {})}`,
+            },
+        ],
+        config: { model: 'haiku', effort: 'low', tools: [tool] },
+        maxTurns: 2,
+        answer: () => Promise.resolve(mcpFailure(-32601, 'no tools')),
+        signal,
+    })) {
+        if (
+            event.type === 'tool' &&
+            event.name === tool &&
+            callId === undefined
+        )
+            callId = event.id
+        else if (event.type === 'permission')
+            permitPrompt({
+                ...asking,
+                id: event.id,
+                allow: event.name === tool,
+            })
+        else if (event.type === 'result' && event.id === callId) {
+            // 44.18 — ended while the turn still listens, so the bridge stops the run before the
+            // model writes a word about the answer.
+            ending.abort()
+            return {
+                content: [{ type: 'text', text: event.text }],
+                failed: event.failed,
+            }
+        }
+    }
+    throw refuse(
+        502,
+        `The call failed: the bridge could not reach ${tool}, and Claude Code did not call it.`,
+    )
 }
 
 /** The visitor's own Claude Code as a provider, with the pairing that reaches it. */

@@ -456,8 +456,10 @@ function closed(bridge: Bridge, turn: string): void {
  * One call of the MCP tool `name` with `input` on the bridge paired to `caller` signed in as
  * `signedIn` — `local` as `runTurn` reads it — with no model: what the tool answered. 44.93.
  *
- * Throws 409 where nothing is paired, or the paired bridge makes no calls; 403 where the bridge
- * refused it (44.94); 502 where it failed (44.95); and ends the call where `signal` aborts.
+ * Answers `undefined` where the bridge could not make it — a release that makes no calls (44.96), or
+ * a server it could not start or reach (44.95) — for a turn to make instead (44.99). Throws 409 where
+ * nothing is paired and 403 where the bridge refused it (44.94), and ends the call where `signal`
+ * aborts.
  */
 export async function runCall({
     caller,
@@ -473,14 +475,10 @@ export async function runCall({
     name: string
     input: unknown
     signal: AbortSignal
-}): Promise<ToolAnswer> {
+}): Promise<ToolAnswer | undefined> {
     const bridge = await pairedBridge(caller, signedIn, local)
     // 44.96 — a bridge that never said it makes calls would leave one waiting forever.
-    if (!bridge.calls)
-        throw refuse(
-            409,
-            'The Claude Code bridge paired with this browser is a release that makes no call of a tool. Pair again with provider.claudeCode.bridgeCommand(), which runs the release this site needs.',
-        )
+    if (!bridge.calls) return undefined
     const { turn, inbox } = opened(bridge)
     bridge.frames.push({ type: 'call', id: turn, name, input })
     // 44.98 — a caller hanging up ends the call on the bridge.
@@ -492,13 +490,9 @@ export async function runCall({
         for await (const item of inbox) {
             if (item.kind === 'answer') return item.event as ToolAnswer
             if (item.kind === 'refused') throw refuse(403, item.message)
-            if (item.kind === 'fail')
-                throw refuse(502, `The call failed: ${item.message}`)
+            if (item.kind === 'fail') return undefined
         }
-        throw refuse(
-            502,
-            'The call failed: the Claude Code bridge disconnected',
-        )
+        return undefined
     } finally {
         signal.removeEventListener('abort', cancel)
         closed(bridge, turn)

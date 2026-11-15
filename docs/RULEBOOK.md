@@ -4353,16 +4353,23 @@ names that tool alone, and only where the visitor's `--disallowedTools` names no
 
 44.95 A bridge MUST make a call on the server 44.58 finds for its tool, started for that call alone —
 its command run in an empty directory removed when the call ends, or its http address sent the
-headers its configuration names and no other credential — and ended with the call, and
-`provider.claudeCode.callTool` MUST refuse 502 a call the bridge could not make.
+headers its configuration names and no other credential — and ended with the call, and MUST report
+to `provider.claudeCode.callTool` a call it could not make, for 44.99 to make.
 
 44.96 A bridge MUST say, as it pairs with `/__abide/bridge`, that it makes calls, and
-`provider.claudeCode.callTool` MUST refuse 409 a call where the paired bridge did not.
+`provider.claudeCode.callTool` MUST NOT send a call to a paired bridge that did not, making it as
+44.99 does instead.
 
 44.97 A bridge MUST make each call as `/__abide/bridge` sends it, without waiting on any other call or
 turn.
 
 44.98 `provider.claudeCode.callTool` MUST end its call on the bridge when the caller hangs up.
+
+44.99 `provider.claudeCode.callTool` MUST make a call the paired bridge could not (44.95, 44.96) by a
+turn granted that tool alone, telling the model the input and allowing the permission prompt for that
+tool as 44.94 allows the call, MUST answer what the tool answered in that turn rather than what the
+model said of it, MUST end the turn on the bridge once the tool has answered, and MUST refuse 502
+where the turn ended without calling it.
 
 # 45. Offline
 

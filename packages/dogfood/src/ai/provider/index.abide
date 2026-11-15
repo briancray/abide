@@ -96,8 +96,13 @@ import Section from '#src/lib/Section.abide'
             It answers a <code>ToolAnswer</code>, the tool's pieces and whether it failed, like a tool
             call in a conversation. Several calls at once run side by side. The bridge talks to the
             visitor's server itself, starting it for that one call in an empty directory, or
-            reaching its http address with only the headers its configuration names. So a server
-            that signs in through Claude Code cannot be called this way.</p>
+            reaching its http address with only the headers its configuration names.</p>
+
+        <p>Where the bridge cannot make the call, Claude Code does, and the app writes nothing
+            for it. That covers a server that signs in through Claude Code, and a bridge from
+            before calls existed. The turn is the cheapest one that makes the call: Haiku, granted
+            that tool alone, ended the moment the tool answers. The answer is still the tool's own,
+            never the model's copy of it.</p>
 
         <Code code={`const { content } = await provider.claudeCode.callTool(
     'mcp__calendar__meetings',
@@ -107,8 +112,7 @@ import Section from '#src/lib/Section.abide'
         <p>A call is held to the tools the visitor gave: it runs where a turn naming that tool
             alone would get it, and never where their <code>--disallowedTools</code> names it.
             Nothing past that asks, because the call is already the site's own choice of tool and
-            input. Anything else is refused 403, saying why, and a bridge from before calls existed
-            is refused 409.</p>
+            input. Anything else is refused 403, saying why.</p>
 
         <Code code={`bunx @abide/bridge <site> <code> -- --tools mcp__calendar__meetings`} />
 
@@ -238,7 +242,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>onPairing</code></td><td>The options every pairing's command and install command carry after <code>--</code>, for the person asking.</td></tr>
                 <tr><td><code>provider.claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired, then paired, each with the command to run and the link to open.</td></tr>
                 <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, missing, command, link, install }'}</code>. <code>install</code> is the command that installs what opens the link, at the release the command runs.</td></tr>
-                <tr><td><code>provider.claudeCode.callTool</code></td><td>Calls one MCP tool of the visitor's machine with no model, answering what the tool answered.</td></tr>
+                <tr><td><code>provider.claudeCode.callTool</code></td><td>Calls one MCP tool of the visitor's machine with no model, or by a turn where the bridge cannot, answering what the tool answered.</td></tr>
                 <tr><td><code>provider.claudeCode.permit</code></td><td>Answers a <code>permission</code> event the paired bridge is waiting on, allowing the call or not.</td></tr>
                 <tr><td><code>provider.claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>
                 <tr><td><code>/__abide/bridge</code></td><td>Where the visitor's bridge connects. It opens the first time a command is minted.</td></tr>
