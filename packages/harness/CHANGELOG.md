@@ -1,5 +1,25 @@
 # @abide/harness
 
+## 0.4.3
+
+### Patch Changes
+
+- d8fef91: one withoutScheme; SITE_OPTIONS keyed by ClaudeCodeConfig; bridge() drops options nothing passes ([`4725199`](https://github.com/briancray/abide/commit/4725199666442d61d52758aec21615491d6a37c1))
+- d8fef91: buildBench is harness's buildInjectable over its entry; one openInjected; grid and depth scripts emit scope.querySelector ([`b627cbc`](https://github.com/briancray/abide/commit/b627cbc76eb1762b8501288236f532a64f26e057))
+- d8fef91: openInjected lives beside buildInjectable in harness, where its third copy was; firstChunkShare writes its fixture through writeFixture ([`dfc223a`](https://github.com/briancray/abide/commit/dfc223a1977f5675bb04fbe4167e54bc475989f9))
+- Updated dependencies [d8fef91]
+- Updated dependencies [d8fef91]
+- Updated dependencies [d8fef91]
+- Updated dependencies [d8fef91]
+- Updated dependencies [d8fef91]
+- Updated dependencies [d8fef91]
+- Updated dependencies [d8fef91]
+- Updated dependencies [d8fef91]
+- Updated dependencies [b78c6c7]
+- Updated dependencies [68c4298]
+- Updated dependencies [647585f]
+  - @abide/abide@0.136.1
+
 ## 0.4.2
 
 ### Patch Changes
