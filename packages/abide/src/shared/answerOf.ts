@@ -52,6 +52,8 @@ export type Answer = {
      * or a binary's where `framing` is `null`.
      */
     body: ReadableStream<Uint8Array> | null | undefined
+    /** The trace id its `traceresponse` named (21.2), handed to `onRefusal` with a refusal (37.24). */
+    trace: string | undefined
 }
 
 /**
@@ -130,6 +132,7 @@ export function noAnswer(): Answer {
         text: '',
         bytes: undefined,
         body: undefined,
+        trace: undefined,
     }
 }
 
@@ -168,6 +171,7 @@ export function answerFrom(
         text: undefined,
         bytes: undefined,
         body: undefined,
+        trace: headers.get('traceresponse')?.split('-')[1],
     }
     if (read !== undefined) {
         if (binary) answer.bytes = new Uint8Array(read)
@@ -200,7 +204,10 @@ export function answerFrom(
  * handler holds once its run has closed — for a copy the build did not mark as streaming, whose
  * value is one production. A marked one reads its body as it lands (`framedStream`).
  */
-export function answered(answer: Answer, call: RefusedCall): unknown {
+export function answered(
+    answer: Answer,
+    call: Omit<RefusedCall, 'trace'>,
+): unknown {
     if (answer.status === 204) return undefined
     if (answer.ok) {
         // 16.34 — a binary decodes back to the bytes it was.
@@ -218,6 +225,10 @@ export function answered(answer: Answer, call: RefusedCall): unknown {
     const refusal = isProblem(body)
         ? failedFrom(body)
         : refuse(answer.status, answer.statusText || undefined)
-    refused(refusal, call)
+    refused(refusal, {
+        method: call.method,
+        url: call.url,
+        trace: answer.trace,
+    })
     return refusal
 }

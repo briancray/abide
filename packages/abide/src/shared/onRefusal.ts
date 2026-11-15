@@ -12,7 +12,12 @@ import type { Failed } from './Failed.ts'
 import { untracked } from './reactive/tracking.ts'
 import type { Method } from './rpc.ts'
 
-export type RefusedCall = { method: Method; url: string }
+export type RefusedCall = {
+    method: Method
+    url: string
+    /** The trace id the answer's `traceresponse` named, where it carried one (37.24). */
+    trace: string | undefined
+}
 
 const HOOKS = new BrowserHooks<
     [refusal: Failed<string, unknown>, call: RefusedCall]
@@ -36,7 +41,7 @@ export function refused(
     if (HOOKS.empty()) return
     // UNTRACKED: an answer the server painted settled is read inside the value's body (41.27), and a
     // hook's read there would subscribe that value to whatever the hook reads.
-    untracked(handRefused, refusal, { method: call.method, url: call.url })
+    untracked(handRefused, refusal, call)
 }
 
 function handRefused(

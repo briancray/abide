@@ -29,7 +29,7 @@ import { onRefusal } from '@abide/abide'
 import Inner from './Inner.abide'
 
 const state = (globalThis as unknown as { refusalState: { shown: () => boolean; heard: string[] } }).refusalState
-onRefusal((refusal, call) => state.heard.push(\`outer:\${refusal.status} \${call.method} \${call.url}\`))
+onRefusal((refusal, call) => state.heard.push(\`outer:\${refusal.status} \${call.method} \${call.url} \${call.trace}\`))
 </script>
 
 <main>{#if state.shown()}<Inner/>{/if}</main>`
@@ -50,6 +50,8 @@ onRefusal((refusal) => {
 const BOARD = 'http://on-refusal.test/board'
 
 const unstubbedFetch = globalThis.fetch
+// The trace every answer names, which a hook is handed beside the call (37.24).
+const TRACE = '4bf92f3577b34da6a3ce929d0e0e4736'
 // The status the next call is answered at: a proxy's bare 401, as no handler's Problem Details.
 let status = 401
 
@@ -58,7 +60,10 @@ let mount: () => unknown
 beforeAll(async () => {
     ;(globalThis as unknown as Shared).refusalState = STATE
     globalThis.fetch = (async () =>
-        new Response('', { status })) as unknown as typeof fetch
+        new Response('', {
+            status,
+            headers: { traceresponse: `00-${TRACE}-00f067aa0ba902b7-00` },
+        })) as unknown as typeof fetch
     ;({ mount } = await renderPage(PAGE, { Inner: INNER }))
 })
 
@@ -96,10 +101,14 @@ test("a server's render files no onRefusal — 37.22", async () => {
 })
 
 // THE REVERT: drop `refused` from `answered` in `answerOf.ts`, and the list reads `[]` while the
-// value still refuses — which is what the second assertion is there to show stands either way.
-test('a call refused at 401 reaches every onRefusal standing once, nearest first, and still refuses — 37.24, 37.27', async () => {
+// value still refuses — which is what the second assertion is there to show stands either way. Drop
+// `trace` from `answerFrom`, and the outer line ends `undefined`.
+test('a call refused at 401 reaches every onRefusal standing once, nearest first, with its trace, and still refuses — 37.24, 37.27', async () => {
     const error = await refusedCall()
-    expect(heard()).toEqual(['inner:401', `outer:401 GET ${BOARD}?n=${calls}`])
+    expect(heard()).toEqual([
+        'inner:401',
+        `outer:401 GET ${BOARD}?n=${calls} ${TRACE}`,
+    ])
     expect(error?.status).toBe(401)
 })
 
@@ -109,7 +118,10 @@ test('an onRefusal that throws keeps no other from hearing — 37.26', async () 
     status = 418
     await refusedCall()
     status = 401
-    expect(heard()).toEqual(['inner:418', `outer:418 GET ${BOARD}?n=${calls}`])
+    expect(heard()).toEqual([
+        'inner:418',
+        `outer:418 GET ${BOARD}?n=${calls} ${TRACE}`,
+    ])
 })
 
 // THE REVERT: hand `onRefusal`'s unfiling to nothing (return it without `owned` in
@@ -118,7 +130,7 @@ test('a component that went takes its onRefusal with it — 37.22', async () => 
     STATE.shown.set(false)
     flushSync()
     await refusedCall()
-    expect(heard()).toEqual([`outer:401 GET ${BOARD}?n=${calls}`])
+    expect(heard()).toEqual([`outer:401 GET ${BOARD}?n=${calls} ${TRACE}`])
 })
 
 // THE REVERT: return the no-op wherever nothing is set up, and the call below files nothing and

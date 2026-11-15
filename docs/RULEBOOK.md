@@ -2950,7 +2950,8 @@ file nothing.
 37.24 In a browser, every `Failed` an `Rpc` call is answered with over http — one its handler
 returned, one anything between the browser and the handler answered with, 16.79's, and one a call
 `outbox` sends is answered with — MUST reach every `onRefusal` 37.22 filed, the last filed first,
-and once, handed the call's method and URL beside it.
+and once, handed the call's method and URL beside it, and the trace id the answer's `traceresponse`
+names.
 
 37.25 A call whose `signal` aborted MUST NOT reach `onRefusal`.
 

@@ -445,6 +445,7 @@ test('every rpc carries the transport refusal in its failures — 16.8', async (
             text: 'the handler threw',
             bytes: undefined,
             body: undefined,
+            trace: undefined,
         },
         { method: 'GET', url: '/ask' },
     )
