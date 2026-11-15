@@ -22,6 +22,7 @@ import { handOnError } from './hooks.ts'
 import { recordInRender } from './PageRender.ts'
 import { SERVER_PRINCIPAL } from './principal.ts'
 import { reportHealth } from './reportHealth.ts'
+import { installReporting } from './reporting.ts'
 import {
     handlerTook,
     request,
@@ -38,6 +39,7 @@ export function installServer(): void {
     APP_NAME.derived = derivedAppName
     UNEXPECTED.report = handOnError
     HEALTH.report = reportHealth
+    installReporting()
     CSP.rung = cspRung
     CSP.nonce = nonce
     Object.assign(PRINCIPAL, SERVER_PRINCIPAL)

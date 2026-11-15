@@ -567,6 +567,14 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
 | `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.10, 41.15, 41.24, 45.10 |
 
+## `report`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `report` | `(options?: { trace?: string }) => ReportDraft` | A problem report a person can read, write and send. | 48.1, 48.2, 48.3, 48.4, 48.5 |
+| `ReportDraft` | `class ReportDraft { summary: Reactive<string>; description: Reactive<string>; traces: string[]; lines: Reactive<LogRecord[]>; markdown: Reactive<string>; open(): void; send(): Promise<void> }` | A report not yet sent. | 48.6, 48.7, 48.8, 48.9 |
+| `Report` | `{ summary: string; description: string; version: string; platform: string; route: string; traces: string[]; lines: LogRecord[]; markdown: string }` | What `onReport` is handed. | 48.7, 48.10, 48.11 |
+
 ## `database`
 
 | Name | Signature | Meaning | Rules |
@@ -807,6 +815,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2, 37.7, 37.13 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7, 37.13 |
 | `onPairing` | `(args: () => readonly string[]) => () => void` | The Claude Code arguments every pairing's command and install carry after `--`, for the person asking. | 37.7, 37.13, 44.76, 44.78 |
+| `onReport` | `(send: (report: Report) => void \| Promise<void>) => () => void` | Where the app's problem reports go. | 37.7, 37.13, 48.6, 48.8 |
 | `onLauncher` | `(options: () => LauncherOptions) => () => void` | The window the native app opens and the forms its launcher offers. | 38.80, 38.81, 38.83, 38.86, 38.102, 38.107, 38.156, 38.182, 38.187 |
 
 ## The native app

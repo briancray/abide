@@ -86,6 +86,7 @@ These are immutable. A change to them is a change to what this document is.
 - [45. Offline](#45)
 - [46. Outbox](#46)
 - [47. Databases](#47)
+- [48. Problem reports](#48)
 
 ## Terms
 
@@ -2889,7 +2890,7 @@ nearest route first, and on one outside every request where filed at the root ro
 37.6 A hook `onStart` or `onStop` wraps that throws MUST fail hard, and the server MUST NOT
 start.
 
-37.7 `onConfig`, `onPrincipal`, `onStart`, `onStop`, `onHealth` and `onPairing` MUST each compose
+37.7 `onConfig`, `onPrincipal`, `onStart`, `onStop`, `onHealth`, `onPairing` and `onReport` MUST each compose
 every hook filed, by route depth, then by route, then in the order called — the answers of `onConfig` and
 `onPrincipal` merged, a later one's member over an earlier one's.
 
@@ -4611,3 +4612,36 @@ called with, inside 47.7's transaction.
 
 47.21 An opener called at any point of its own open but 47.20's MUST throw, and MUST NOT open a
 second `Database`.
+
+# 48. Problem reports
+
+48.1 `report` MUST answer a `ReportDraft` holding the trace it was given among its `traces`, and
+none where it was given none.
+
+48.2 A `ReportDraft` in a browser MUST hold the newest 200 of the page's `log.records`.
+
+48.3 A `ReportDraft` on a server MUST hold the newest 200 of the server's `log.records` whose trace
+is among its `traces`.
+
+48.4 A `ReportDraft` in the window `abide native`'s executable opens MUST also hold the lines 48.3
+names, handed to the window by the credential 44.79 names.
+
+48.5 The server MUST NOT hand a line it wrote to a `ReportDraft` anywhere 48.4 does not name.
+
+48.6 `ReportDraft.send` MUST hand the `Report` to every `onReport` filed, and MUST refuse 501 where
+none is.
+
+48.7 `Report.markdown` MUST be what the draft's `markdown` held as it was sent, save what 48.10 takes
+out.
+
+48.8 `ReportDraft.send` MUST refuse 502 where an `onReport` threw, once every other has been handed
+the `Report`, and MUST leave the draft as it was.
+
+48.9 `ReportDraft.open` MUST show the draft in a modal `<dialog>` over the page, its `markdown` shown
+above its send, and MUST throw outside a browser.
+
+48.10 Neither a `Report` nor a line the server hands a `ReportDraft` MUST hold the value of
+`ABIDE_PRINCIPAL_SECRET` or of a `ConfigField` whose `input` is `password`, four characters long or
+longer, each written in its place as `[redacted <name>]`.
+
+48.11 A line a browser sends with a `Report` MUST reach `onReport` naming no trace.

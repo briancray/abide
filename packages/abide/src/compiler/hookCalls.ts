@@ -18,6 +18,7 @@ export const HOOK_NAMES: ReadonlySet<string> = new Set([
     'onHealth',
     'onPrincipal',
     'onPairing',
+    'onReport',
     'onLauncher',
     'onMenu',
     'onRefusal',

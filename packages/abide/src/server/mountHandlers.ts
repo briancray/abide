@@ -143,13 +143,14 @@ export function mountedOwn(
     address: string,
     name: string,
     handler: object,
+    method: Mounted['method'] = 'GET',
 ): [string, Mounted] {
     addressed(handler, address)
     return [
         address,
         {
             address,
-            method: 'GET',
+            method,
             // The root's rungs run before routing (37.3), and nothing is filed below a route
             // of abide's own.
             rungs: [],

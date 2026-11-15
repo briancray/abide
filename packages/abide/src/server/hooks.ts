@@ -16,6 +16,7 @@ import { isAbort } from '#shared/isAbort.ts'
 import { namedLogger } from '#shared/log.ts'
 import type { Rung } from '#shared/Middleware.ts'
 import { refuse } from '#shared/refuse.ts'
+import type { Report } from '#shared/report.ts'
 import {
     coversRoute,
     parseRoutePattern,
@@ -92,6 +93,7 @@ export const HOOKS = {
     principal: [] as Filed<(claims: unknown) => unknown | Promise<unknown>>[],
     launcher: [] as Filed<() => LauncherOptions>[],
     pairing: [] as Filed<() => readonly string[]>[],
+    reports: [] as Filed<(report: Report) => unknown>[],
 }
 
 const ROOT = '/'
@@ -309,6 +311,18 @@ export function onLauncher(options: () => LauncherOptions): () => void {
  */
 export function onPairing(args: () => readonly string[]): () => void {
     return filed(HOOKS.pairing, args)
+}
+
+/**
+ * Files where the app's problem reports go, handed each `Report` a person sends; returns what unfiles
+ * it.
+ *
+ * 37.7, 48.6 — every one filed is handed each report, in route order.
+ */
+export function onReport(
+    send: (report: Report) => void | Promise<void>,
+): () => void {
+    return filed(HOOKS.reports, send)
 }
 
 /**

@@ -48,6 +48,7 @@ import { beginPageRender } from './PageRender.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { PRINCIPAL_MOUNT } from './principal.ts'
 import { boundPage, type Component, renderDocument } from './render.ts'
+import { REPORT_MOUNTS } from './reporting.ts'
 import {
     adoptRequest,
     type AnsweringApp,
@@ -424,6 +425,7 @@ const OWN_HANDLERS = new Map([
     PRINCIPAL_MOUNT,
     PAIRING_MOUNT,
     mountedOwn(HEALTH_ADDRESS, 'health', health),
+    ...REPORT_MOUNTS,
 ])
 
 // THE ADDRESSES ABIDE ANSWERS ITSELF, looked up once rather than asked in turn: each to its value,
