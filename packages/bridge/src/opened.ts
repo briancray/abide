@@ -35,7 +35,7 @@ export type HandlerSettings = {
     claude: string
     path: string
     claudeArgs: string[]
-    /** `abide-bridge install --full`: every link's bridge is run `--full` (44.82). An older install's settings hold none. */
+    /** `abide-bridge install --full`: every link's bridge is run `--full` (44.82). */
     full: boolean
     /** The bridge package install was run from, where it is a checkout rather than a release (44.89). */
     checkout?: string
@@ -61,7 +61,7 @@ export function offersSiteTools(
     pairing: Pairing,
     settings: HandlerSettings,
 ): boolean {
-    return settings.full !== true && (pairing.full || pairing.tools.length > 0)
+    return !settings.full && (pairing.full || pairing.tools.length > 0)
 }
 
 /**
@@ -90,7 +90,7 @@ export function question(
     const headline = `${asker} is requesting access to Claude Code.`
     // 44.92 — what it asks of this machine, as what that lets it do, never a list of tool names.
     const said = [
-        settings.full === true
+        settings.full
             ? 'Requested from this computer: full access, which you gave every site when you installed the bridge.'
             : pairing.full
               ? 'Requested from this computer: full access to everything Claude Code can do.'
@@ -99,9 +99,9 @@ export function question(
                 : `Requested from this computer:\n• ${requestedLines(pairing.tools).join('\n• ')}`,
     ]
     // The site's own tools are approved without asking (44.81), so auto mode is said only of this machine's.
-    if (settings.full === true || pairing.full || pairing.tools.length > 0)
+    if (settings.full || pairing.full || pairing.tools.length > 0)
         said.push(auto)
-    if (unserved.length > 0 && !pairing.full && settings.full !== true)
+    if (unserved.length > 0 && !pairing.full && !settings.full)
         said.push(
             `You don’t have a ${serversNamed(unserved)} MCP server, so its tools won’t work. Add it with \`claude mcp add --scope user\` first.`,
         )
@@ -142,7 +142,7 @@ export function bridgeArguments(
         pairing.code,
         '--claude',
         settings.claude,
-        ...(settings.full === true || pairing.full ? ['--full'] : []),
+        ...(settings.full || pairing.full ? ['--full'] : []),
         ...(claudeArgs.length === 0 ? [] : ['--', ...claudeArgs]),
     ]
 }
@@ -278,7 +278,7 @@ export async function unservedOf(
     const { grant } = await grantFor(
         pairing.tools,
         claudeArgsOf(pairing, settings),
-        settings.full === true,
+        settings.full,
         () => {},
     )
     return grant.unserved
@@ -313,7 +313,7 @@ export async function consented(
         unservedOf(pairing, settings),
     ])
     // An install run `--full` gives full access to every link, so a link's ask for it is moot.
-    const asksFull = pairing.full && settings.full !== true
+    const asksFull = pairing.full && !settings.full
     const { holder } = asker
     const before =
         holder === undefined

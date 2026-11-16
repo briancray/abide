@@ -121,17 +121,6 @@ async function ran(
     }
 }
 
-/** Runs one AppleScript with `argv` as its `argv`. */
-function appleScript(
-    lines: string[],
-    ...argv: string[]
-): ReturnType<typeof ran> {
-    const script: string[] = ['-e', 'on run argv']
-    for (const line of lines) script.push('-e', line)
-    script.push('-e', 'end run')
-    return ran(['osascript', ...script, ...argv])
-}
-
 /** Writes `icon` where a dialog can read it as a file, answering where, or `undefined` for none. */
 async function iconFile(
     icon: Uint8Array | undefined,
@@ -263,10 +252,16 @@ export async function ask(
 /** Shows `line` as a notification, where this desktop has a way to. */
 export async function notify(line: string): Promise<void> {
     if (process.platform === 'darwin')
-        await appleScript(
-            [`display notification (item 1 of argv) with title "${TITLE}"`],
+        await ran([
+            'osascript',
+            '-e',
+            'on run argv',
+            '-e',
+            `display notification (item 1 of argv) with title "${TITLE}"`,
+            '-e',
+            'end run',
             line,
-        )
+        ])
     else if (process.platform === 'linux' && Bun.which('notify-send') !== null)
         await ran(['notify-send', TITLE, line])
 }

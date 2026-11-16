@@ -56,6 +56,8 @@ type Waiting = {
     method: string
     answer: (reply: Record<string, unknown>) => void
     deadline: ReturnType<typeof setTimeout>
+    /** A prompt's input, handed back as Claude Code's `updatedInput` where the page allows it. */
+    input: unknown
 }
 
 /** 44.46 — the abort reason of a turn the site missed part of, which it reports failed with. */
@@ -153,13 +155,10 @@ export function serveTurns(options: {
     const { site, report } = options
     const replyMilliseconds = options.replyMilliseconds ?? REPLY_MILLISECONDS
     const waiting = new Map<number, Waiting>()
-    // Each prompt's input, handed back as Claude Code's `updatedInput` where the page allows it.
-    const inputs = new Map<number, unknown>()
     const answer = (id: number, reply: Record<string, unknown>): void => {
         const waiter = waiting.get(id)
         if (waiter === undefined) return
         waiting.delete(id)
-        inputs.delete(id)
         clearTimeout(waiter.deadline)
         waiter.answer(reply)
     }
@@ -210,11 +209,18 @@ export function serveTurns(options: {
                 })
             const id = ++asked
             const method = prompted ? 'permission' : message.method
+            const { tool_name, input } = (
+                prompted
+                    ? ((message.params as { arguments?: unknown })?.arguments ??
+                      {})
+                    : {}
+            ) as { tool_name?: string; input?: unknown }
             const reply = new Promise<Record<string, unknown>>((done) => {
                 waiting.set(id, {
                     turn,
                     method,
                     answer: done,
+                    input,
                     // 44.24 — a reply lost on the way is a failure Claude Code is told of.
                     deadline: setTimeout(
                         () =>
@@ -229,11 +235,7 @@ export function serveTurns(options: {
                     ),
                 })
             })
-            if (prompted) {
-                const { tool_name, input } = ((
-                    message.params as { arguments?: unknown }
-                )?.arguments ?? {}) as { tool_name?: string; input?: unknown }
-                inputs.set(id, input)
+            if (prompted)
                 report({
                     type: 'permission',
                     turn,
@@ -241,7 +243,7 @@ export function serveTurns(options: {
                     name: tool_name ?? '',
                     input,
                 })
-            } else
+            else
                 report({
                     type: 'mcp',
                     turn,
@@ -367,7 +369,7 @@ export function serveTurns(options: {
                     frame.id,
                     decided(
                         frame.allow,
-                        inputs.get(frame.id),
+                        waiter.input,
                         'The person at the page said no.',
                     ),
                 )
