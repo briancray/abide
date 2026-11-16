@@ -21,6 +21,11 @@
 
 import { NotLanded } from './reactive/NotLanded.ts'
 
+// 32.96 — HOW MANY READS AN ABORT HAS TAKEN, for a `{#try}` to tell a body still on its first load
+// from one that rendered. A render is synchronous from a `{#try}`'s body to its end, so a count read
+// on either side of it is that body's alone, whatever other request the process is rendering.
+let aborted = 0
+
 /** The value `read` returns, or `undefined` where a `NotLanded` aborted it. */
 export function slotValue(read: () => unknown): unknown {
     try {
@@ -28,7 +33,27 @@ export function slotValue(read: () => unknown): unknown {
     } catch (thrown) {
         // 2.14 — a `NotLanded` and a `Failed` are distinguishable by brand, and only the first is
         // "not yet". A producer that FAILED is 2.2's throw and belongs to whoever is rendering.
-        if (thrown instanceof NotLanded) return undefined
+        if (thrown instanceof NotLanded) {
+            aborted += 1
+            return undefined
+        }
         throw thrown
     }
+}
+
+/** How many reads `slotValue` has aborted, for `abortedSince`. */
+export function abortedReads(): number {
+    return aborted
+}
+
+/**
+ * Whether a read was aborted since `abortedReads` answered `count`, putting the count back to it.
+ *
+ * 32.96 — PUT BACK, so a read inside a `{#try}` is that `{#try}`'s alone and never one the `{#try}`
+ * around it counts.
+ */
+export function abortedSince(count: number): boolean {
+    const moved = aborted !== count
+    aborted = count
+    return moved
 }

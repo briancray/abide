@@ -6,6 +6,9 @@
 import { installServer } from './installServer.ts'
 
 export * from '#shared/emitted.ts'
+// 32.96's run-time half on the server: how a `{#try}` tells a body on its first load from one that
+// rendered. The browser's boundary hears it from its own bindings (`TryRegion`).
+export { abortedReads, abortedSince } from '#shared/slotValue.ts'
 // 41.28's run-time half: an emitted component reads it on either side of its setup, and one whose
 // setup made a call answers as a page does.
 export { callsInRender } from './PageRender.ts'

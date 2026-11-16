@@ -200,6 +200,22 @@ const unsure = reactive(() => maybe ?? 'nobody')
 {#for row of keyed}<input value={row.id}/>{/for}
 {#for row of decoy}<input value={row.id}/>{/for}`
 
+// 32.97 — A `{#for}` SUBJECT FALLING BACK TO AN EMPTY LIST over a read: the `ready()` test, `||` and
+// `??` over a value that may be absent. `rows ?? []` is 14.17's, and `constant || []` reads nothing.
+const FALLBACK = `<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 1 }])
+let maybe = reactive<{ id: number }[] | undefined>(undefined)
+const constant = [{ id: 2 }]
+</script>
+
+{#for row of rows.ready() ? rows : []}<b>{row.id}</b>{/for}
+{#for row of rows || []}<b>{row.id}</b>{/for}
+{#for row of rows ?? []}<b>{row.id}</b>{/for}
+{#for row of maybe ?? []}<b>{row.id}</b>{/for}
+{#for row of constant || []}<b>{row.id}</b>{/for}`
+
 // 14.19 — each read below would be warned on, and the line above it silences the clause it names.
 // `misnamed` is the near miss: its directive names 14.14, and the warning it earns is 14.16.
 const IGNORED = `<script>
@@ -444,6 +460,7 @@ const { start = 0 } = props<{ start?: number }>()
         'lib/sum.ts': "export const sum: number = 'x'\n",
         'lib/direct.ts': DIRECT,
         'listened/index.abide': LISTENED,
+        'fallback/index.abide': FALLBACK,
     })
     found = await checkApp(app)
 }, 60_000)
@@ -821,6 +838,18 @@ test('an unkeyed loop over a body holding state warns at its subject — 32.14',
         place(WARNED, 'rows}<input'),
         place(WARNED, 'decoy}<input'),
     ])
+})
+
+// THE REVERTS: answer `undefined` from `fallsBackEmpty` for every `||` and `??`; the second and
+// fourth loops go unwarned (1 against 3). Drop `citedAt`; `rows ?? []` is warned under both clauses
+// (4 against 3).
+test('a {#for} subject falling back to an empty list warns, once — 32.97', () => {
+    const warned = (clause: string) =>
+        inFile('fallback/index.abide')
+            .filter((diagnosis) => diagnosis.message.includes(clause))
+            .map(({ line }) => line)
+    expect(warned('32.97')).toEqual([9, 10, 12])
+    expect(warned('14.17')).toEqual([11])
 })
 
 // 33.11 — AN INDEX SIGNATURE BESIDE TYPED PROPS LEAVES THEM TYPED. `size` indexes a record by its

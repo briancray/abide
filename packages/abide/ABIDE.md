@@ -115,6 +115,11 @@ affected code saying what it did, and tell the user.
   it read being a derived value. What a timer or a call it started hands back is written when that
   lands, the way an event handler writes. A user action's effect belongs in its event handler. A `watch` runs during a server render too (RULEBOOK 12.5), so one that starts a
   timer or touches a browser global returns a `Disposer`.
+- A listener on the window or the document is `<window onkeydown={…}/>` or `<document …/>` at the
+  top of the component: added when it mounts, removed when it leaves, never run on the server
+  (RULEBOOK 39.21, 39.23) — not an `addEventListener` in a `watch` behind `isServer()` with a
+  hand-written `removeEventListener`. A listener that needs options is an object, on any element as
+  much as there: `onwheel={{ handleEvent: zoom, passive: false }}` (32.95).
 - A preference the page renders — a currency, a theme, a panel left open — lives in a cookie:
   `const theme = reactive(() => cookies().get('theme') ?? 'light')`, written with
   `cookies().set('theme', next)`. `cookies()` is the request's on the server and the document's in
@@ -125,8 +130,12 @@ affected code saying what it did, and tell the user.
 - A value that has not landed leaves its place in markup as it was — empty before it first lands,
   the last value while it reloads — and fills it when it lands (RULEBOOK 32.23), so markup needs no
   guard. Do not paper over it with `?? []` or `x.ready() ? x : undefined`
-  — that makes "not loaded yet" read as "empty". Branch on `x.ready()` or `x.busy()` only where a
-  placeholder is actually wanted.
+  — that makes "not loaded yet" read as "empty". A `{#for}` over a subject that has not landed
+  renders nothing (RULEBOOK 32.22), so `{#for car of cars}` is the whole of it and
+  `{#for car of cars.ready() ? cars : []}` is warned on (32.97). Where a placeholder is actually
+  wanted, a `{#try}`'s `{:pending}` arm stands in for its body until what the body reads first lands,
+  and never again on a reload (32.16, 32.96); branch on `x.ready()` or `x.busy()` only for a
+  placeholder that should come back.
 
 ## Settings and untrusted input
 

@@ -10,6 +10,12 @@
 //
 // What anything outside sees is `follow` (the region's watch), `guard` (a scope's binding under
 // it), `stop` and the `failure` the catch binds; the retry is this module's alone.
+//
+// 32.96 — A FIRST LOAD IS A FAILURE THAT THE `{:pending}` ARM CATCHES. A binding in the body that
+// reads a value still in flight is recorded as one under `PENDING`, while the body has never stood
+// whole and only where the author wrote the arm: the same retry watches what it read, and the value
+// landing is the body coming back. Once the body has stood, a value in flight is what 32.23 says,
+// and the arm is never taken again.
 
 import { namedArm } from '#shared/armAnchor.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
@@ -22,9 +28,17 @@ import { Mismatch } from './Mismatch.ts'
 import { fillRegion, type Region, removeUntil } from './regions.ts'
 import { type Scope, type Stoppable, underBoundary } from './Scope.ts'
 
+/** What `failure` holds while a first load is the body's (32.96), which takes the arm `2`. */
+const PENDING: unique symbol = Symbol('pending')
+
+/** The arm a failure takes: the body where there is none, the `{:pending}` arm, or the catch. */
+function armFor(failure: unknown): number {
+    return failure === undefined ? 0 : failure === PENDING ? 2 : 1
+}
+
 /**
  * The body until something in it fails, then the catch until the failure clears. Arm `0` is the
- * body and `1` the catch, which is handed the failure.
+ * body and `1` the catch, which is handed the failure; `2`, where written, the `{:pending}` arm.
  *
  * THE BODY BUILDS AND MOUNTS UNDER THE BOUNDARY, the catch outside it — a catch arm that throws is
  * not its own catch's to swallow. A failure raised while a swap builds the body does not wake the
@@ -54,6 +68,8 @@ export class TryRegion extends ArmRegion {
     private triedFailed: boolean
     private triedError: unknown
     private triedAgain: (() => unknown) | undefined
+    /** 32.96 — whether the body has stood whole, which ends the first load for good. */
+    private loaded: boolean
 
     constructor(region: Region, owner: Scope, arms: ArmMakers) {
         super(region, owner, arms, true)
@@ -70,6 +86,7 @@ export class TryRegion extends ArmRegion {
         this.triedFailed = false
         this.triedError = undefined
         this.triedAgain = undefined
+        this.loaded = false
         owner.own(this)
     }
 
@@ -84,7 +101,9 @@ export class TryRegion extends ArmRegion {
      * as it would anywhere (2.12) — so this watch is what the value landing wakes.
      */
     follow(): void {
-        if (this.at === undefined && namedArm(this.region.open.data) === 1) {
+        // 32.96 — a `{:pending}` arm the server painted is hydrated as its catch is.
+        const painted = namedArm(this.region.open.data)
+        if (this.at === undefined && painted !== undefined && painted !== 0) {
             this.pending = this.remount
             this.startRetry()
             if (
@@ -95,7 +114,7 @@ export class TryRegion extends ArmRegion {
                 this.remount()
             }
         }
-        this.show(this.failure() === undefined ? 0 : 1)
+        this.show(armFor(this.failure()))
     }
 
     /**
@@ -104,7 +123,8 @@ export class TryRegion extends ArmRegion {
      * Every scope it builds carries it, and a throw straight out of the mount — a handler or a node
      * reference that failed as it was bound — is the boundary's too. A hydration mismatch is not a
      * failure of the body, and is left to the caller that rebuilds; and a value still in flight is
-     * not a failure either: it aborts the run as it would anywhere (2.12).
+     * not a failure either: it aborts the run as it would anywhere (2.12) — and where it is the body's
+     * first load and the `{:pending}` arm is written, it is recorded as one as well (32.96).
      *
      * `again` IS WHAT A RETRY RERUNS: the binding that threw, or the body mounted again.
      */
@@ -112,11 +132,18 @@ export class TryRegion extends ArmRegion {
         try {
             return underBoundary(this, run)
         } catch (thrown) {
+            if (thrown instanceof NotLanded && this.waits())
+                this.fail(PENDING, again)
             if (thrown instanceof Mismatch || thrown instanceof NotLanded)
                 throw thrown
             this.fail(thrown, again)
             return undefined
         }
+    }
+
+    /** 32.96 — whether a value in flight in the body is its first load, which the arm takes. */
+    private waits(): boolean {
+        return !this.loaded && this.arms.length > 2
     }
 
     /** Stops the retry. The arm's scope is stopped by the owner holding it, beside this. */
@@ -152,16 +179,17 @@ export class TryRegion extends ArmRegion {
                     next = 1
                     continue
                 }
-                if (next === 1) fillRegion(region, arm.build)
+                if (next !== 0) fillRegion(region, arm.build)
             }
             scope.own(
                 next === 0
                     ? this.guard(() => arm.mount(region), this.remount)
                     : arm.mount(region),
             )
-            if (next === 1) this.startRetry()
-            next = this.failure.peek() === undefined ? 0 : 1
+            if (next !== 0) this.startRetry()
+            next = armFor(this.failure.peek())
         }
+        if (this.at === 0) this.loaded = true
     }
 
     /** The catch is handed the failure it binds. */
@@ -262,13 +290,21 @@ export class TryRegion extends ArmRegion {
         }
         const again = this.triedAgain
         this.triedAgain = undefined
+        // 32.96 — a first load is waited on: the read still in flight is thrown to the retry's watch,
+        // which a value landing wakes (2.13), with the failure the `{:pending}` arm is taken by.
+        let waiting: NotLanded | undefined
         if (again !== undefined)
             try {
                 again()
-            } catch {}
+            } catch (thrown) {
+                if (thrown instanceof NotLanded && this.triedError === PENDING)
+                    waiting = thrown
+            }
         mounted?.stop()
         fillRegion(body)
-        throw this.triedError
+        if (waiting === undefined) throw this.triedError
+        if (this.failure.peek() === undefined) this.failure.set(PENDING)
+        throw waiting
     }
 
     private static recover(region: TryRegion): void {

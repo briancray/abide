@@ -7,6 +7,6 @@
 export const TEMPLATE_BLOCKS: Readonly<Record<string, readonly string[]>> = {
     if: ['else', 'else if'],
     for: [],
-    try: ['catch', 'finally'],
+    try: ['pending', 'catch', 'finally'],
     component: [],
 }

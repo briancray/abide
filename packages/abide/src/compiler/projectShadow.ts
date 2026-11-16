@@ -485,7 +485,11 @@ function project(file: AbideFile): Projection {
             // with `void`, as a `catch` binding is never reported unused. An arm that names none binds
             // nothing.
             if (node.block === 'try') {
-                const [tried, caught] = node.branches as [Branch, Branch]
+                const [tried, caught, pending] = node.branches as [
+                    Branch,
+                    Branch,
+                    Branch | undefined,
+                ]
                 text += '{\n'
                 inBody(tried)
                 text +=
@@ -494,6 +498,11 @@ function project(file: AbideFile): Projection {
                         : `}\n{ const ${node.error}: any = undefined; void ${node.error}\n`
                 inBody(caught)
                 text += '}\n'
+                if (pending !== undefined) {
+                    text += '{\n'
+                    inBody(pending)
+                    text += '}\n'
+                }
                 continue
             }
             // AN `{#if}` IS PROJECTED AS THE `if` IT IS, so an arm is checked under what its condition

@@ -2323,8 +2323,9 @@ function MUST warn in development.
 32.15 `{#for}` over an async iterable that is not also iterable MUST render each item as it
 arrives, and MUST append rather than reconcile.
 
-32.16 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
-body.
+32.16 `{#try}` MUST be a render-time boundary over a region: a failure MUST replace the whole body
+with its `{:catch}` arm, and its first load (32.96) MUST replace the whole body with its `{:pending}`
+arm where it has one.
 
 32.17 A capitalized tag `<Name/>` MUST be a component invocation.
 
@@ -2443,8 +2444,8 @@ component's `props` call declares for that prop, and MUST report a mismatch on t
 32.55 A `{#component Name(pattern)}` at the template's top level whose name an import, a `<script>`
 declaration or a `<script module>` declaration of its file also binds MUST be a build error.
 
-32.56 A `{:catch}` or a `{:finally}` anywhere but directly inside a `{#try}` MUST be a build
-error.
+32.56 A `{:pending}`, a `{:catch}` or a `{:finally}` anywhere but directly inside a `{#try}` MUST be
+a build error.
 
 32.57 An `await` in a template expression — a slot, an attribute value, a listener, a `bind:`
 operand, a `{#if}` condition, a `{#for}` subject or key, or a value handed to a component — outside
@@ -2593,6 +2594,14 @@ nothing, whether the server writes it or the browser does.
 
 32.95 An `on<event>` listener that is an `EventListenerObject`, written or spread, MUST be added with
 its `capture`, `once`, `passive` and `signal` as the listener's options.
+
+32.96 A `{#try}`'s first load MUST last from where its region is first rendered until its body first
+renders with no read in it, outside any `{#try}` it holds, aborted by a `NotLanded` (2.12), and MUST
+NOT begin again.
+
+32.97 The compiler MUST warn on a `{#for}` subject that falls back to an empty list where a reactive
+read in it has not landed — `x.ready() ? x : []`, `x || []`, or `x ?? []` where 14.17 does not warn —
+naming 32.22.
 
 # 33. Props
 

@@ -544,7 +544,11 @@ export function parseAbide(source: string): AbideFile {
                 at = end + 1
                 continue
             }
-            if (/^:catch(?![\w$])/.test(inner) || inner === ':finally') {
+            if (
+                /^:catch(?![\w$])/.test(inner) ||
+                inner === ':finally' ||
+                inner === ':pending'
+            ) {
                 const block = blocks[blocks.length - 1]
                 // 32.56 — ONLY A `{#try}` HAS THESE ARMS. Anywhere else the tag was dropped and what
                 // followed it read as the body it stood in: a `{#for}`'s catch rendered in every row.
@@ -554,14 +558,21 @@ export function parseAbide(source: string): AbideFile {
                     block.block !== 'try'
                 )
                     throw new PositionedRefusal(
-                        `abide: {${inner}} stands outside a {#try}, and only a {#try} has a catch or a finally arm. RULEBOOK 32.56.`,
+                        `abide: {${inner}} stands outside a {#try}, and only a {#try} has a pending, a catch or a finally arm. RULEBOOK 32.56.`,
                         at,
                     )
                 unwindToArm(open, stack)
-                // The finally arm is a third branch until `{/try}` folds it into the other two.
+                // The finally and pending arms are branches of their own until `{/try}` folds them
+                // into place.
                 if (inner.startsWith(':catch'))
                     block.error = inner.slice(6).trim()
-                const branch = newBranch(inner === ':finally' ? FINALLY : '')
+                const branch = newBranch(
+                    inner === ':finally'
+                        ? FINALLY
+                        : inner === ':pending'
+                          ? PENDING
+                          : '',
+                )
                 block.branches.push(branch)
                 openArm(branch.children)
                 at = end + 1
@@ -985,24 +996,33 @@ function assertNoNestedHeadIn(components: readonly InlineComponent[]): void {
 
 /** The subject a `{:finally}` branch is parsed under, until `closeTry` folds it away. */
 const FINALLY = '\u0000finally'
+/** The subject a `{:pending}` branch is parsed under, until `closeTry` puts it third. */
+const PENDING = '\u0000pending'
 
 /**
  * Folds a `{#try}`'s arms into its body and catch, and returns its `{:finally}` markup.
  *
- * 32.16 — THE TWO ARMS A `{#try}` RENDERS ONE OF: the body, and the catch — an empty one where the
- * author wrote none. The `{:finally}` markup stands on both paths, so it stands AFTER the region
- * rather than in either arm, and is handed back for the caller to place there.
+ * 32.16 — THE ARMS A `{#try}` RENDERS ONE OF: the body, the catch — an empty one where the author
+ * wrote none — and the `{:pending}` arm third, where written. The `{:finally}` markup stands on
+ * every path, so it stands AFTER the region rather than in any arm, and is handed back for the caller
+ * to place there.
  */
 function closeTry(
     block: TemplateNode & { kind: 'block'; block: 'try' },
 ): TemplateNode[] {
     let after: TemplateNode[] = []
+    let pending: Branch | undefined
     const kept: Branch[] = []
     for (const branch of block.branches)
         if (branch.subject === FINALLY) after = branch.children
-        else kept.push(branch)
+        else if (branch.subject === PENDING) {
+            // 32.16 — read as an arm with no subject, which is what every arm of a `{#try}` is.
+            branch.subject = ''
+            pending ??= branch
+        } else kept.push(branch)
     if (kept.length === 1) kept.push(newBranch(''))
     block.branches = kept.slice(0, 2)
+    if (pending !== undefined) block.branches.push(pending)
     return after
 }
 
