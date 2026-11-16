@@ -180,7 +180,7 @@ function readsBareProbe(file: AbideFile, markup: string): boolean {
     let names = ''
     for (const [local, imported] of abideBindings(scriptBodies(file)))
         if (imported === 'busy' || imported === 'ready')
-            names += `${names === '' ? '' : '|'}${local.replaceAll('$', '\\$')}`
+            names += `${names === '' ? '' : '|'}${RegExp.escape(local)}`
     return (
         names !== '' &&
         new RegExp(

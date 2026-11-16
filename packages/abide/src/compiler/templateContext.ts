@@ -131,11 +131,12 @@ function blocksAfter(sigil: string, text: string, at: number): string[] {
  */
 function componentsIn(text: string): string[] {
     const names = new Set<string>()
-    for (const script of text.matchAll(
-        /<script\b[^>]*>([\s\S]*?)(?:<\/script|$)/gi,
-    ))
-        for (const { name } of importedNames(script[1] as string))
+    for (const open of text.matchAll(/<script\b[^>]*>/gi)) {
+        const body = open.index + open[0].length
+        const end = closeTagAt(text, 'script', body)?.start ?? text.length
+        for (const { name } of importedNames(text.slice(body, end)))
             if (/^[A-Z]/.test(name)) names.add(name)
+    }
     for (const found of text.matchAll(/\{#component\s+([A-Z][\w$]*)/g))
         names.add(found[1] as string)
     return [...names]

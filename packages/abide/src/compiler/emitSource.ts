@@ -21,7 +21,7 @@ import { sourceMapOf } from './sourceMapOf.ts'
  * module (`''` where it has none) and its scoped stylesheet.
  *
  * Everything that mode depends on is where the file is placed (`placement`) and whether another
- * file invokes it (`componentGraph`), so a test handing over the same facts compiles what the build
+ * file invokes it (`withDependencies`' `invoked`), so a test handing over the same facts compiles what the build
  * would.
  */
 export function emitSource(

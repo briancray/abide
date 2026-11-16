@@ -135,7 +135,6 @@ export async function appLayout(root: string): Promise<AppLayout> {
         refusals,
         unparsed,
     )
-    const invoked = found.invoked
     const sources: PlacedSource[] = []
     for (const source of found.sources) {
         const relative = relativeTo(root, source.path)
@@ -144,7 +143,9 @@ export async function appLayout(root: string): Promise<AppLayout> {
             found.positions.get(source.path) ?? relative,
         )
         refusePlace(source, placed, resolve, refusals)
-        sources.push(placedSource(source, placed, invoked.has(source.path)))
+        sources.push(
+            placedSource(source, placed, found.invoked.has(source.path)),
+        )
     }
     const texts = await textsAt(found.handlers.map((file) => file.path))
     const placedHandlers: PlacedHandler[] = []

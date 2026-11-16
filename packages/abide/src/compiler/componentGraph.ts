@@ -12,8 +12,9 @@ type Resolve = (specifier: string, from: string) => string | undefined
  * the file that wrote it. By PATH, not by file name: two `Row.abide` in two directories are two
  * components, and only the one somebody imports carries its own markup (`emitClient`'s `selfFill`).
  *
- * `resolve` is the app's: a build asks bun, and a harness that lays an app out by hand answers for
- * its own seams. A specifier it cannot resolve, or that lands outside `files`, invokes nothing.
+ * The build reads the same set off its own pass (`withDependencies`' `invoked`); this is for a
+ * harness that lays an app out by hand — the bench's compiled page and the corpus test — whose
+ * `resolve` answers for its own seams. A specifier it cannot resolve, or that lands outside `files`, invokes nothing.
  */
 export function componentGraph(
     files: readonly { path: string; file: AbideFile }[],

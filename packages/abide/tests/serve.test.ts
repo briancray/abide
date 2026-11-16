@@ -41,7 +41,7 @@ let count = reactive(0)
 // 32.17 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. Left as
 // written with its extension swapped, the specifier the emitted page carries is
 // `#src/lib/components/Badge.ts` — a file that exists in the output tree and nowhere in the source tree
-// the import map points at. `componentGraph` resolves it to a path inside the build; without that
+// the import map points at. The build resolves it to a path inside the build; without that
 // the bundle cannot resolve the client half and the build fails.
 const BADGE = `<script>
 import { props } from '@abide/abide'
@@ -176,9 +176,6 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 // THE REVERT: hand the page `{ params: found.params }` rather than `{ params: () => … }` in
 // `answerRequest` and this reports `params is not a function` instead of the id — which is the same
 // break `Router.ts`'s `routeProps` carries on the client side of the same contract.
-// THE REVERT: hand the emitters no `componentGraph` imports in `compileApp` and the build this
-// file serves fails before any address answers — `Could not resolve: "#src/lib/components/Badge.client.ts"`,
-// the module the page imports being in the source tree, where the compiler wrote nothing.
 // THE REVERT: leave `splitImports` to rewrite `.abide` specifiers alone and the build this file
 // serves fails before any address answers — `Could not resolve: "../lib/greeting.ts"`, beside the output.
 test('a relative import in a page resolves from the page — 34.14', async () => {
