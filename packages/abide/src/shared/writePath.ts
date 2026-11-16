@@ -1,3 +1,4 @@
+import { isPlainData } from './isPlainData.ts'
 import { putOwn } from './putOwn.ts'
 
 /**
@@ -52,13 +53,7 @@ export function writePath(
 
 // Plain data: what a copy reproduces whole. An absent level is plain — the copy builds it fresh.
 function isPlain(value: unknown): boolean {
-    if (value === null || typeof value !== 'object') return true
-    const prototype = Object.getPrototypeOf(value)
-    return (
-        prototype === Object.prototype ||
-        prototype === null ||
-        Array.isArray(value)
-    )
+    return value === null || typeof value !== 'object' || isPlainData(value)
 }
 
 // The rest of the path walked on the live objects from `from`, and the last step assigned there.

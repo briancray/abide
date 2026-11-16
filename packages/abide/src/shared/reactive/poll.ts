@@ -14,6 +14,7 @@
 
 import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
 import type { Cell } from './cellShape.ts'
+import { armTimer } from './Expiry.ts'
 import type { Reactive } from './Reactive.ts'
 import { unrefTimer } from './unrefTimer.ts'
 import { owned, owning } from './watch.ts'
@@ -38,7 +39,7 @@ class Clock {
     readonly values: () => Iterable<Polled>
     /** Whether the clock is running — a timer armed, or a settle being waited on (7.33). */
     running = false
-    timer: ReturnType<typeof setTimeout> | undefined = undefined
+    timer: ReturnType<typeof setTimeout> | null = null
     /** Moved by every stop, so a settle waited on before it arms nothing after it. */
     turn = 0
     /** 7.29 — the value whose first run is still to come, or `null` once it has run. */
@@ -250,8 +251,8 @@ function start(clock: Clock): void {
 function halt(clock: Clock): void {
     clock.running = false
     clock.turn += 1
-    clearTimeout(clock.timer)
-    clock.timer = undefined
+    if (clock.timer !== null) clearTimeout(clock.timer)
+    clock.timer = null
 }
 
 /**
@@ -273,15 +274,11 @@ function afterSettle(clock: Clock): void {
 }
 
 function armOnce(clock: Clock): void {
-    clock.timer = setTimeout(
-        () => {
-            clock.timer = undefined
-            for (const value of clock.values()) refreshIdle(value)
-            afterSettle(clock)
-        },
-        Math.min(clock.every, LONGEST_DELAY),
-    )
-    unrefTimer(clock.timer)
+    armTimer(clock, clock.every, () => {
+        clock.timer = null
+        for (const value of clock.values()) refreshIdle(value)
+        afterSettle(clock)
+    })
 }
 
 // A PROMISE AROUND `then` RATHER THAN `then` ITSELF: what `then` hands back is a value (2.16), and

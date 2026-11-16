@@ -13,6 +13,7 @@
 // Imports no part of the core, so `scoped.ts` can carry the contract without reaching `Keyed.ts`.
 
 import { DERIVED_ARGS } from '../DERIVED_ARGS.ts'
+import { isPlainData } from '../isPlainData.ts'
 import type { Issues } from '../Issues.ts'
 import { putOwn } from '../putOwn.ts'
 import { refuse } from '../refuse.ts'
@@ -179,9 +180,7 @@ function canonical(value: unknown, path: Steps): unknown {
         }
         return out
     }
-    const prototype = Object.getPrototypeOf(value)
-    if (prototype !== Object.prototype && prototype !== null)
-        throw outside(named(value as object), path)
+    if (!isPlainData(value)) throw outside(named(value as object), path)
     const source = value as Record<string, unknown>
     const keys = Object.keys(source).sort()
     // AN ORDINARY OBJECT, AND `putOwn` FOR THE ONE KEY THAT NEEDS IT: `__proto__` is a SETTER on

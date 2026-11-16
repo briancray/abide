@@ -22,6 +22,7 @@
 // holds it directly: `list.push(row); row.name = x`. So a placed object is SENT AS IT STANDS WHEN THE
 // CALLBACK RETURNS — every op's value is copied then rather than at its write — and a write made
 // under one is not kept, since that copy already carries it.
+import { isPlainData } from '../isPlainData.ts'
 import type { PatchLog, PatchOp } from './patchLog.ts'
 import { markWritten, openPatch } from './patchMarks.ts'
 import { RESHAPING } from './RESHAPING.ts'
@@ -49,7 +50,7 @@ export function recordWrites<Value>(
     mutate: (value: Value) => void,
     sink?: PatchLog,
 ): void {
-    if (!isWrappable(root)) {
+    if (!isPlainData(root)) {
         // A root no proxy can stand in for is written as a whole: what the callback reads out of it
         // reaches the rows that show it with no proxy to say so.
         if (root === null || typeof root !== 'object') {
@@ -95,7 +96,7 @@ export function recordWrites<Value>(
         // First reached: nothing below the root is written before it is reached, so there is no
         // write here for the new parent to be marked by.
         if (known === undefined) {
-            const proxy = isWrappable(value) ? new Proxy(value, handler) : null
+            const proxy = isPlainData(value) ? new Proxy(value, handler) : null
             const entry = new Reached(proxy, parent)
             reached.set(value, entry)
             return entry
@@ -307,7 +308,7 @@ export function recordWrites<Value>(
         if (value === null || typeof value !== 'object') return value
         const target = (value as { [TARGET]?: object })[TARGET]
         if (target !== undefined) return target
-        if (!isWrappable(value)) return value
+        if (!isPlainData(value)) return value
         walked ??= new Set()
         if (walked.has(value)) return value
         walked.add(value)
@@ -556,12 +557,4 @@ function* markedEach(
 function markedOut<Value>(value: Value, epoch: number): Value {
     if (typeof value === 'object' && value !== null) markWritten(value, epoch)
     return value
-}
-
-/** Whether a proxy can stand in for `value`: an array or a plain object. */
-function isWrappable(value: unknown): value is object {
-    if (value === null || typeof value !== 'object') return false
-    if (Array.isArray(value)) return true
-    const prototype = Object.getPrototypeOf(value)
-    return prototype === Object.prototype || prototype === null
 }
