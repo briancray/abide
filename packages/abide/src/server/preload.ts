@@ -8,10 +8,14 @@
 import { beforeEach } from 'bun:test'
 
 import { invalidate } from '#shared/reactive/index.ts'
+import { keepLoads } from '#shared/reactive/producer.ts'
 
 import { processBuild, servedBuild, spawnedBuild } from './appBuild.ts'
 import { addDerived } from './config.ts'
 import { appRoot } from './createApp.ts'
+
+// 38.206 — the loads `settled` waits on, kept from here on and in no process that did not load this.
+keepLoads()
 
 // 38.120 — a sign-in seals under test where the app declared no secret: derived, so the app's
 // `onConfig` default and the env both still win (27.2), where an env value would beat the default.
@@ -29,9 +33,13 @@ if (root !== undefined && !(await isWorkspaceRoot(root)))
 // happened to run the files in. Bun has no per-file hook a preload can register, so a test's own
 // `beforeEach` notices the file change through `Bun.main`. Outside the test runner — a bench or a
 // script importing `mount`'s module — there is no runner to register with, and nothing to reset.
+//
+// 38.204 — AND EACH TEST WAITS ON ITS OWN LOADS: a value an earlier test left loading — a stream
+// still open, a call nothing answered — is that test's, and `settled` in this one does not wait on it.
 let fileUnderTest: string | undefined
 try {
     beforeEach(() => {
+        keepLoads()
         if (Bun.main === fileUnderTest) return
         if (fileUnderTest !== undefined) invalidate()
         fileUnderTest = Bun.main
@@ -45,4 +53,5 @@ async function isWorkspaceRoot(directory: string): Promise<boolean> {
     return json.workspaces !== undefined
 }
 
+export { settled } from './settled.ts'
 export { type Mounted, mount } from './testMount.ts'

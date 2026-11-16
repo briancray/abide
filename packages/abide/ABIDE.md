@@ -32,7 +32,14 @@ affected code saying what it did, and tell the user.
   A prop the test moves is handed as a getter — `Label({ get label() { return source() } })` —
   and is read through it on every read (RULEBOOK 38.134); any other prop is the value it was given.
   A test waits on a value landing — `await` the handler call, or the `Reactive` the component
-  reads, which is thenable (RULEBOOK 1.4) — never on `Bun.sleep` or a timer. Break the code once and
+  reads, which is thenable (RULEBOOK 1.4), or, after a click whose calls the test cannot reach,
+  `await settled()` from `@abide/harness/abide`, which waits until no value is loading and names
+  any that never lands (RULEBOOK 38.204, 38.205) — never on `Bun.sleep` or a timer.
+  Assert the work as a ceiling — `atMost(work, { wakes: 9, nodesCreated: 0 })` from
+  `@abide/harness/gate` (RULEBOOK 43.40) — not as `expect(work.wakes).toBe(9)`: `wakes`,
+  `bindingRuns` and `descents` count abide's internals, and an exact number breaks on a release that
+  moved them while the app's own work did not. abide's own gates stay exact; an app's test holds the
+  most it allows. Break the code once and
   watch a new test fail; a test that has never failed has not been shown to test anything.
   Called outside a request, a `GET` keeps its answer for the whole test process: a test that changes
   the data behind one calls its `invalidate()` in `beforeEach`. A handler that reads `config()` or

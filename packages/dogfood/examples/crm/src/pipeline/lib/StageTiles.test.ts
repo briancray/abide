@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { mount } from '@abide/harness/abide'
+import { mount, settled } from '@abide/harness/abide'
 
 import getStage from '../getStage.handler.ts'
 import { LOADS } from './LOADS.server.ts'
@@ -21,7 +21,7 @@ test('three readers of one stage are one load', async () => {
     pick(0, 'won')
     pick(1, 'won')
     pick(2, 'won')
-    await Bun.sleep(600)
+    await settled()
     // All three panels on `won`: one load between them.
     expect((LOADS.won ?? 0) - before).toBe(1)
 })

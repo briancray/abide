@@ -3667,6 +3667,18 @@ leaves with no paragraph under it.
 writes opens with, it MUST put that one under the file's first line where that is a heading, and at
 its top otherwise.
 
+## Tests
+
+38.204 `settled` MUST resolve only once no value that went loading since the test awaiting it began
+is still loading and no effect is pending, and MUST NOT resolve before a turn of the event loop has
+passed since it was called.
+
+38.205 `settled` MUST throw where its timeout passes first, naming each value still loading — by the
+method and address of the handler a call reached it through, where one did.
+
+38.206 A value that goes loading MUST NOT be kept for `settled` in a process that has not loaded
+`@abide/abide/test`.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -4112,8 +4124,9 @@ runner wrote no report as `broken` rather than as a result, and MUST stop a file
 minutes after it started and report it as `broken`.
 
 43.28 The DOM `@abide/harness/preload` registers MUST leave the runtime's own `fetch`, `Request`,
-`Response`, `Headers`, `Blob`, `File`, `FormData`, `AbortController`, `AbortSignal`, `WebSocket`,
-`TransformStream` and `WritableStream` the globals.
+`Response`, `Headers`, `AbortController`, `AbortSignal`, `WebSocket`, `TransformStream` and
+`WritableStream` the globals, and MUST make the global `Blob`, `File` and `FormData` subclasses of the
+runtime's own whose `instanceof` takes every instance of the runtime's.
 
 43.29 `runBenches` MUST run, as one bench each, every function a bench file exports other than
 `CEILINGS`.
@@ -4135,6 +4148,21 @@ it parses names.
 43.36 The DOM `@abide/harness/preload` registers MUST give an element `showPopover`, `hidePopover`
 and `togglePopover`, MUST fire `toggle` on each change of state, MUST match `:popover-open` while one
 is open, and MUST throw on an element with no `popover` attribute.
+
+43.37 A `Blob` or `File` the global constructors build from strings, buffers or one another MUST be
+taken by the DOM `@abide/harness/preload` registers wherever that DOM takes one of its own.
+
+43.38 A `FormData` constructed from a form under `@abide/harness/preload` MUST carry that form's
+entries, the files of each file input included.
+
+43.39 The DOM `@abide/harness/preload` registers MUST NOT load the page an `iframe` names.
+
+43.40 `atMost` MUST pass where every field it is given a ceiling for is at or under that ceiling, and
+otherwise MUST fail naming each field over its ceiling with the value the record carries.
+
+43.41 `atMost` MUST fail where a field it is given a ceiling for is absent from the record.
+
+43.42 `atMost` MUST report its failure at the line that called it.
 
 # 44. The assistant
 

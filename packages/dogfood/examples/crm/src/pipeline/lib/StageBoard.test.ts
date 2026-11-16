@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { mount } from '@abide/harness/abide'
+import { mount, settled } from '@abide/harness/abide'
 
 import { LOADS } from './LOADS.server.ts'
 import StageBoard from './StageBoard.abide'
@@ -12,11 +12,11 @@ function counted(): number[] {
 
 test('winning a lead reloads lead and won, and no other stage', async () => {
     using _board = await mount(StageBoard({}))
-    await Bun.sleep(600)
+    await settled()
     const before = counted()
 
     document.querySelector('button')?.click()
-    await Bun.sleep(600)
+    await settled()
     const after = counted()
     expect(after.map((count, at) => count - (before[at] ?? 0))).toEqual([
         1, 0, 0, 1,

@@ -5,7 +5,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
-import { spawned } from '@abide/harness/gate'
+import { inAFreshProcess, spawned } from '@abide/harness/gate'
 
 import { BUNFIG } from '#compiler/scaffold.ts'
 
@@ -510,3 +510,91 @@ test('a private handler a mounted component calls', async () => {
         '0 true',
     )
 }, 90_000)
+
+// 38.204 — A TEST AWAITS `settled` AFTER A CLICK, and reads the page as the call left it: a click's
+// handler awaits a slow call and writes what it answered. 38.205 — AND A CALL THAT NEVER ANSWERS IS
+// NAMED by the time `settled` gives up. THE REVERT: drop `keepLoads()` from `preload.ts`; nothing is
+// kept, `settled` resolves on its first turn, the page still reads "none" and the hung call is never
+// named — exit 1, `0 pass`. Drop `nameLoad` from the `Rpc`'s call in `rpc.ts` and the hung call is
+// named "(reactive)" — `1 pass`. And each test waits on its own: drop `keepLoads()` from the
+// `beforeEach` in `preload.ts` and the click waits on the hung call too, "1 still loading" — `1 pass`.
+test('settled waits out a call a click made, and names one that never answers — 38.204, 38.205', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'settled-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/lib/Slow.abide': `<script server>
+import { POST } from '@abide/abide/server'
+
+const save = POST(async () => {
+    await Bun.sleep(150)
+    return 'saved'
+})
+const hang = POST(() => new Promise<string>(() => {}))
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let out = reactive('none')
+const press = async () => {
+    out = await save()
+}
+const stall = () => {
+    hang()
+}
+</script>
+
+<button id="save" onclick={press}>save</button>
+<button id="hang" onclick={stall}>hang</button>
+<p id="out">{out}</p>`,
+        'src/tests/Slow.test.ts': `import { expect, test } from 'bun:test'
+import { mount, settled } from '@abide/harness/abide'
+import Slow from '../lib/Slow.abide'
+
+test('a call that never answers is named', async () => {
+    using _slow = await mount(Slow({}))
+    document.querySelector<HTMLButtonElement>('#hang')?.click()
+    let named = ''
+    try {
+        await settled({ timeout: 200 })
+    } catch (thrown) {
+        named = String(thrown)
+    }
+    expect(named).toContain('settled() waited 200 ms and 1 still loading (POST ')
+})
+
+test('a click is settled, past the call the test above left hanging', async () => {
+    using _slow = await mount(Slow({}))
+    document.querySelector<HTMLButtonElement>('#save')?.click()
+    await settled()
+    expect(document.querySelector('#out')?.textContent).toBe('saved')
+})
+`,
+    })
+    const ran = await spawned(['bun', 'test', './src/tests/Slow.test.ts'], {
+        cwd,
+    })
+    expect(`${ran.exitCode} ${ran.stderr.includes('2 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
+// 38.206 — NOTHING IS KEPT FOR `settled` WHERE THE TEST ENTRY NEVER LOADED: a page or a server keeps
+// no list of the values that went loading. Taken in a child, since this process loaded the entry.
+// THE REVERT: call `keepLoads()` where `Reactive.ts` declares it; this reports `["reactive"]`.
+test('a process that never loaded @abide/abide/test keeps no load — 38.206', async () => {
+    const run = await inAFreshProcess(`
+import { reactive } from '${import.meta.dir}/../src/shared/reactive/index.ts'
+import { pendingWork } from '${import.meta.dir}/../src/shared/reactive/producer.ts'
+
+const waiting = reactive(() => new Promise(() => {}))
+waiting.busy()
+console.log(JSON.stringify(pendingWork().loading))
+`)
+    expect(run.output.trim()).toBe('[]')
+})

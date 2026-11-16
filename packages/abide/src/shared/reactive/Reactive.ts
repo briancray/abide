@@ -513,6 +513,61 @@ export function flushSync(): void {
 }
 
 /**
+ * 38.204-38.206 — THE LOADS A TEST WAITS ON, kept only once `@abide/abide/test` asks for them. A
+ * value going loading is not otherwise listed anywhere, so `settled` would have nothing to read; and
+ * a list every page kept would hold every value that ever loaded, so outside a test nothing is kept
+ * and the one cost is the `null` check where a load starts.
+ *
+ * SWEPT AS IT GROWS rather than as each load ends: a load starts on the four paths that set `loading`
+ * and ends on every path that clears it, so the starts are where it is kept, and a value that has
+ * stopped loading is let go the next time the list doubles or `pendingWork` walks it.
+ */
+let LOADS: Set<Cell> | null = null
+let LOAD_NAMES: WeakMap<Cell, string> | null = null
+let sweepLoadsAt = 1024
+
+/** Keeps every value a load starts on from now, for `pendingWork`, forgetting any kept before. */
+export function keepLoads(): void {
+    LOADS = new Set()
+    LOAD_NAMES = new WeakMap()
+    sweepLoadsAt = 1024
+}
+
+function keepLoad(cell: Cell): void {
+    const loads = LOADS as Set<Cell>
+    loads.add(cell)
+    if (loads.size < sweepLoadsAt) return
+    for (const kept of loads) if (!kept.loading) loads.delete(kept)
+    sweepLoadsAt = Math.max(1024, loads.size * 2)
+}
+
+/** Names the value a handler's call reached by its method and address, for `pendingWork`. */
+export function nameLoad(
+    value: unknown,
+    method: string,
+    address: string | undefined,
+): void {
+    if (LOAD_NAMES === null || !isReactive(value)) return
+    LOAD_NAMES.set(
+        (value as unknown as Callable)[CELL],
+        `${method} ${address ?? 'a handler'}`,
+    )
+}
+
+/** Every value still loading, by name, and the effects queued for the drain. */
+export function pendingWork(): { loading: string[]; effects: number } {
+    const loading: string[] = []
+    if (LOADS !== null)
+        for (const cell of LOADS) {
+            // 12.14 — a released value is one nothing reads, and what it lands is seen by no one.
+            if (!cell.loading) LOADS.delete(cell)
+            else if (cell.alive)
+                loading.push(LOAD_NAMES?.get(cell) ?? cell.label)
+        }
+    return { loading, effects: pendingCount + WAKING.length }
+}
+
+/**
  * Sets `direct` where `when` holds and the value is `plain`.
  *
  * WHAT A VALUE CARRYING A `ttl` GIVES UP, stated once because four paths restore `direct`
@@ -1179,6 +1234,7 @@ function hold(cell: Cell, cap: Cap, value: unknown): void {
     cap.held = value
     cap.holding = true
     cell.loading = true
+    if (LOADS !== null) keepLoad(cell)
     // Nothing a reader can see moved, and `busy` did.
     probesMoved(cell)
 }
@@ -1999,6 +2055,7 @@ Cell.prototype.notify = function notify(this: Cell): void {
  */
 function abortRun(cell: Cell): void {
     cell.loading = true
+    if (LOADS !== null) keepLoad(cell)
     cell.aborted = true
     if (cell.servable) unserve(cell)
     else probesMoved(cell)
@@ -2584,6 +2641,7 @@ function beginLoad(cell: Cell): void {
     if (!cell.filed && reloads(cell)) fileProducer(cell)
     if (cell.loading) return
     cell.loading = true
+    if (LOADS !== null) keepLoad(cell)
     probesMoved(cell)
 }
 
@@ -4518,8 +4576,10 @@ export function createReactive<
     } else if (body === null) {
         if (initial === undefined) landOpening(cell)
         else if (initial !== NO_INITIAL) open(cell, initial)
-    } else if (deferred) cell.loading = true
-    else if (job) {
+    } else if (deferred) {
+        cell.loading = true
+        if (LOADS !== null) keepLoad(cell)
+    } else if (job) {
         // 7.29 — A JOB'S FIRST RUN IS OWED, as 7.12's is: the first read, probe or trigger settles
         // it, or `App.listen` does through a refresh.
         cell.direct = false

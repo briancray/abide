@@ -863,6 +863,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | --- | --- | --- | --- |
 | `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134 |
 | `Mounted` | `{ stop(): void; [Symbol.dispose](): void }` | A component `mount` hydrated, until it is stopped. | 38.119 |
+| `settled` | `(options?: { timeout?: number }) => Promise<void>` | A wait until nothing a test started is still loading or pending. | 38.204, 38.205, 38.206 |
 
 # The measurement harness
 
@@ -885,7 +886,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Meaning | Rules |
 | --- | --- | --- |
-| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4, 43.28, 43.35, 43.36 |
+| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4, 43.28, 43.35, 43.36, 43.37, 43.38, 43.39 |
 
 ## `@abide/harness/engine` — what the browser engine did
 
@@ -931,6 +932,7 @@ rows a runner prints, and an adapter for an abide app.
 | `gate` | `(name: string, spec: GateSpec, body: () => void \| Promise<void>) => void` | A test with a runnable revert. | 43.9 |
 | `GateSpec` | `{ revert: () => unknown; worth: Record<string, number \| string> }` | A gate's revert and what the broken arm reports. | 43.9 |
 | `spawned` | `(command: string[], options?: { cwd?: string; env?: Record<string, string \| undefined>; deadline?: number }) => Promise<{ exitCode: number; stdout: string; stderr: string }>` | A child process run to its end, awaited. | 43.24 |
+| `atMost` | `<Counted extends object>(record: Counted, ceilings: { [Field in keyof Counted as Counted[Field] extends number \| null ? Field : never]?: number }) => void` | An assertion that each named field of a record is at most its ceiling. | 43.40, 43.41, 43.42 |
 | `inAFreshProcess` | `(source: string, workerId?: string, timeoutMilliseconds?: number) => Promise<{ ok: boolean; output: string }>` | Source run in a child bun with no DOM preloaded. | 43.25 |
 
 ## `@abide/harness/rows` — what a runner prints
