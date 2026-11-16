@@ -38,6 +38,13 @@ export type CheckedShadow = {
     refusals: Finding[]
 }
 
+/** What `name` holds when it is read: what calling it hands back, and through a props accessor, what calling that does. */
+function valueType(name: string, through: boolean): string {
+    return through
+        ? `ReturnType<ReturnType<typeof ${name}>>`
+        : `ReturnType<typeof ${name}>`
+}
+
 /**
  * What a checked module's default export is declared as. Scaffolding, so a jump to it is a jump to
  * the component's file (`LoweredFile.inspect`).
@@ -115,8 +122,8 @@ export function checkedShadow(
         const local = localRecords.get(span.start)
         if (local !== undefined) {
             text += `const ${CHECKED_VALUES}${span.start}: {\n`
-            for (const name of local)
-                text += `    ${name}: ReturnType<typeof ${name}>\n`
+            for (const [name, through] of local)
+                text += `    ${name}: ${valueType(name, through)}\n`
             text += '} = null!\n'
         }
         text += lowering.lower(span, holds, origins, text.length)
@@ -148,11 +155,7 @@ export function checkedShadow(
     // props accessor, what calling what that hands back does.
     let values = ''
     for (const [name, through] of lowering.values)
-        values += `    ${name}: ${
-            through
-                ? `ReturnType<ReturnType<typeof ${name}>>`
-                : `ReturnType<typeof ${name}>`
-        }\n`
+        values += `    ${name}: ${valueType(name, through)}\n`
     text += `declare const ${CHECKED_VALUES}: {\n${values}}\n`
     text += `declare function ${CHECKED_WRITE}<Cell extends { (): unknown; set(value: never): unknown }, Value>(cell: Cell, value: Value): Value extends ReturnType<Cell> ? Value : ReturnType<Cell>\n`
     text += configDeclarations(lowering)

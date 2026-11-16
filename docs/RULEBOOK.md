@@ -3416,9 +3416,9 @@ at any nesting included.
 
 38.138 `abide check` MUST check each arm of an `{#if}`, and every body nested in one, under what its
 condition and the conditions of the arms before it established, as TypeScript checks nested `if`
-statements — a value a branch-local `<script>` declares as much as one the file's `<script>` does —
-and MUST NOT carry what a condition established past a write of the value, nor into a function the
-arm declares.
+statements — a value a branch-local `<script>` declares, or a prop an inline component's pattern
+binds (32.40), as much as one the file's `<script>` declares — and MUST NOT carry what a condition
+established past a write of the value, nor into a function the arm declares.
 
 38.139 A refusal that stops `abide build`, or the build 38.100 makes, MUST be printed as `abide check`
 prints it and fail the command, and MUST NOT be printed as a stack.

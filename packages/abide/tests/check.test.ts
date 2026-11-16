@@ -1181,6 +1181,25 @@ test('a check reports what only building the whole app refuses — 16.73', async
     expect(refused.length).toBe(1)
 }, 60_000)
 
+// 38.138, 32.40 — AN INLINE COMPONENT'S PROP NARROWS AS A PAGE'S OWN VALUE DOES: its checked reads
+// go through a record declared ahead of the component's head, not through a call, so an `{#if}` on a
+// union's tag narrows what its arms read. THE REVERT: leave `declaredAt` unset on an inline prop's
+// reads in `propsReads`; each is checked as `part()`, and the two arms report TS2339, 2 where 0.
+test("an inline component's prop narrows under {#if} — 38.138, 32.40", async () => {
+    const found = await checkApp(
+        appFixture({
+            'index.abide': `<script>
+type Part = { kind: 'a'; a: string } | { kind: 'b'; b: number }
+const parts: Part[] = [{ kind: 'a', a: 'x' }]
+</script>
+
+{#component Show({ part }: { part: Part })}{#if part.kind === 'a'}<i>{part.a}</i>{:else}<b>{part.b}</b>{/if}{/component}
+{#for part of parts}<Show part={part} />{/for}`,
+        }),
+    )
+    expect(found.map((diagnosis) => diagnosis.message)).toEqual([])
+}, 60_000)
+
 // 38.33, 34.20 — A REFUSAL OF WHERE A FILE SITS IS A FINDING AT THAT FILE, beside every other the app
 // has: a server block under a `public` directory, and a page that does not parse. THE REVERT: refuse
 // 34.20 at the app's root (`refusals.at(root, …)` in `appLayout`'s `refusePlace`), as the emit once

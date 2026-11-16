@@ -963,10 +963,10 @@ export class Lowering {
     /**
      * The record a checked lowering reads `read` through, or `undefined` where it is called.
      *
-     * 38.138 — A BRANCH-LOCAL NAME HAS A RECORD OF ITS OWN, declared at the head of the setup that
-     * declares it (`localRecords`): it is out of scope where the page's is declared, and two bodies
-     * may each declare one of the same spelling. A local read with no setup declaring it — an inline
-     * component's prop — is called, and narrows as a call does: not at all.
+     * 38.138 — A BRANCH-LOCAL NAME HAS A RECORD OF ITS OWN, declared ahead of the setup or the
+     * inline component's head that declares it (`localRecords`): it is out of scope where the page's
+     * is declared, and two bodies may each declare one of the same spelling. Read through a record,
+     * a prop narrows under an `{#if}` as a page's own value does; called, it would not narrow at all.
      */
     private recordOf(spelled: string, read: Read): string | undefined {
         if (!this.checking) return undefined
@@ -978,26 +978,35 @@ export class Lowering {
         return setup === undefined ? undefined : `${CHECKED_VALUES}${setup}`
     }
 
-    /** Where the branch-local `<script>` declaring `read`'s name starts, or `undefined`. */
+    /**
+     * Where the branch-local `<script>` or the inline component's head (32.40) declaring `read`'s
+     * name starts, or `undefined`.
+     */
     private setupDeclaring(read: Read): number | undefined {
         if (read.declaredAt === -1) return undefined
         const setup = this.projection.positions.holding(read.declaredAt)
-        return setup?.kind === 'setup' ? setup.start : undefined
+        return setup?.kind === 'setup' || setup?.kind === 'head'
+            ? setup.start
+            : undefined
     }
 
     /**
-     * 38.138 — each branch-local `<script>` a checked read goes through, by where it starts, and the
-     * names read through its record: what `checkedShadow` declares at its head.
+     * 38.138 — each branch-local `<script>` or inline component head a checked read goes through,
+     * by where it starts, and the names read through its record — each with whether it is read
+     * through a props accessor (`Read.through`): what `checkedShadow` declares ahead of it.
      */
-    localRecords(): Map<number, Set<string>> {
-        const records = new Map<number, Set<string>>()
+    localRecords(): Map<number, Map<string, boolean>> {
+        const records = new Map<number, Map<string, boolean>>()
         if (!this.checking) return records
         for (const read of this.answer.reads) {
             if (!read.local) continue
             const setup = this.setupDeclaring(read)
             if (setup === undefined) continue
-            const names = records.get(setup) ?? new Set<string>()
-            names.add(this.projection.text.slice(read.start, read.end))
+            const names = records.get(setup) ?? new Map<string, boolean>()
+            names.set(
+                this.projection.text.slice(read.start, read.end),
+                read.through,
+            )
             records.set(setup, names)
         }
         return records

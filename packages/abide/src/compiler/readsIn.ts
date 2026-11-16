@@ -1069,6 +1069,8 @@ async function propsReads(
         defaults: Read[]
         rest: boolean
         local: boolean
+        /** Where an inline component's head binds the name (`Read.declaredAt`), or -1. */
+        declaredAt: number
     }[] = []
     for (let at = 0; at < calls.length; at += 1) {
         const symbol = named[at]
@@ -1122,6 +1124,7 @@ async function propsReads(
                 defaults,
                 rest: element.dotDotDotToken !== undefined,
                 local,
+                declaredAt: local ? name.getStart() : -1,
             })
         }
     }
@@ -1172,6 +1175,7 @@ async function propsReads(
                 const read = classifyPropRead(node)
                 if (read === undefined) continue
                 read.local = binding.local
+                read.declaredAt = binding.declaredAt
                 if (read.shape !== 'value') {
                     reads.push(read)
                     continue
@@ -1186,6 +1190,7 @@ async function propsReads(
                                 asHeld.shape = 'asWritten'
                             asHeld.held = true
                             asHeld.local = binding.local
+                            asHeld.declaredAt = binding.declaredAt
                             reads.push(asHeld)
                         },
                     ),
@@ -1199,6 +1204,7 @@ async function propsReads(
         for (const { node, read } of uses) {
             read.through = true
             read.local = binding.local
+            read.declaredAt = binding.declaredAt
             reads.push(read)
             if (read.shape === 'value')
                 holding.push(holdIn(checker, abide, node, read))
