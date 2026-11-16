@@ -52,6 +52,9 @@ affected code saying what it did, and tell the user.
   43.31, 43.32, 43.33).
 - `bun run format` — `abide format` over every `.abide`, then `bun fmt` over the rest. Run it once
   your changes are done.
+- `bunx abide upgrade --from <the release you left>` — after moving `@abide/abide` to a new
+  release, changes what each release since then changed in how an app is written, and prints the
+  diff (RULEBOOK 38.198, 38.201). `--check` prints it without writing.
 - `bun run dev` — serves the app on a local port and rebuilds when a file changes.
 - `bun run build` then `bun run start` — the production build, and the app served from it.
 - The native app `abide native` writes, opened from the Finder, prints to

@@ -38,7 +38,8 @@ type SourceCommands = Record<
     | 'routes'
     | 'compile'
     | 'native'
-    | 'lsp',
+    | 'lsp'
+    | 'upgrade',
     Command
 >
 
@@ -218,6 +219,11 @@ function commandsOf(host: Host): Row[] {
             'native',
         ),
         fromSource('lsp', 'the .abide language server, over stdio', 'lsp'),
+        fromSource(
+            'upgrade [--check] [--from <version>]',
+            "move the app's own files past what each release since --from changed",
+            'upgrade',
+        ),
     ]
 }
 
@@ -264,6 +270,7 @@ function usage(host: Host, commands: Row[]): string {
   --required   marks the update native writes as one to install now
   --notes      a file whose text native's update carries, for the page to show
   --method     the method call sends, where the handler answers more than one
+  --from       the release upgrade moves the app from — every migration where none is named
   --version    the version of abide
 `
     return text
@@ -304,6 +311,8 @@ function parseFlags(argv: string[]) {
             required: { type: 'boolean' },
             notes: { type: 'string' },
             platforms: { type: 'string' },
+            // 38.198 — the release `abide upgrade` moves the app from.
+            from: { type: 'string' },
             json: { type: 'boolean' },
             check: { type: 'boolean' },
             help: { type: 'boolean', short: 'h' },

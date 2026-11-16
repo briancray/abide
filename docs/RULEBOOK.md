@@ -607,6 +607,10 @@ cookie, per 22.6.
 8.42 `store.sqlite` given a string MUST keep the value in the `Database` the opener `database`
 returns for that string hands back, per 47, and MUST make one such opener per string.
 
+8.43 A release that changes the key or the JSON a `store` keeps a value under MUST, in that release
+and each one before the next minor release after it, read a value kept in the form before the
+change, and MUST write what it read back in the new form.
+
 # 9. Streams and wired values
 
 9.1 A streaming producer's `Stored` MUST be the chunks accumulated so far, materialized on the
@@ -1400,6 +1404,9 @@ from being refreshed.
 
 16.105 A handler whose value may hold `undefined` as an array or tuple item MUST be a compile error
 naming the handler and the path to it.
+
+16.106 A release that changes the shape of a request an `Rpc` sends MUST, in that release and each
+one before the next minor release after it, answer a request sent in the shape before the change.
 
 # 17. Response helpers
 
@@ -3626,6 +3633,39 @@ files where the input is `multiple`.
 38.194 A page's `navigator.mediaDevices` and `navigator.geolocation` in the window the `.app`
 `abide native` writes opens MUST be present, and MUST reach the camera, the microphone and the
 person's location only once the person allows it through the platform.
+
+## Agent notes and upgrading
+
+38.195 The `AGENTS.md` `abide scaffold` writes MUST state nothing of abide but where the installed
+package holds the instructions 38.104 names.
+
+38.196 `abide check` MUST warn at each paragraph of the `AGENTS.md` beside the app's `package.json`
+that is, whitespace aside, one the `ABIDE.md` the installed package holds or one an earlier release's
+`abide scaffold` wrote into `AGENTS.md`, save a heading and one the `AGENTS.md` it writes now holds,
+and MUST warn at no other paragraph of it.
+
+38.197 A paragraph of an `AGENTS.md` or an `ABIDE.md` that 38.196 reads MUST be a heading line, a
+list item and the lines under it, a fenced block, or a run of lines between blank lines.
+
+38.198 `abide upgrade` MUST apply, in the order of the releases they are keyed to, the migrations the
+abide running it holds keyed to a release after the one `--from` names, and every one where `--from`
+names none.
+
+38.199 A migration `abide upgrade` applies MUST change only what is written in the form the release
+it is keyed to replaced.
+
+38.200 `abide upgrade` run over what it wrote MUST change nothing.
+
+38.201 `abide upgrade` MUST print each file it changes as a unified diff, and `abide upgrade --check`
+MUST print the same, write nothing, and exit non-zero where a file would change.
+
+38.202 The migration keyed to 0.140.0 MUST remove from the `AGENTS.md` beside the app's
+`package.json` every paragraph 38.196 warns at, and every heading below the file's first line it
+leaves with no paragraph under it.
+
+38.203 Where 38.202 removes a paragraph from a file holding none the `AGENTS.md` `abide scaffold`
+writes opens with, it MUST put that one under the file's first line where that is a heading, and at
+its top otherwise.
 
 # 39. Head and view transitions
 

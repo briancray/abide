@@ -6,6 +6,7 @@ import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory
 import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { brotliCompress, constants } from 'node:zlib' // bun's brotli is `CompressionStream`, which compresses on the main thread — 1390 ms against this pool's 300 ms over the docs bundle
 
+import { agentNoteFindings } from '#compiler/agentNotes.ts'
 import { paints } from '#compiler/appLayout.ts'
 import { appMap, mapText } from '#compiler/appMap.ts'
 import { BuildRefusal } from '#compiler/BuildRefusal.ts'
@@ -21,6 +22,8 @@ import { formatAbide } from '#compiler/formatAbide.ts'
 import { parseAbide } from '#compiler/parseAbide.ts'
 import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
+import { unifiedDiff } from '#compiler/unifiedDiff.ts'
+import { upgrade } from '#compiler/upgrade.ts'
 import {
     abideModules,
     type Compilation,
@@ -45,6 +48,7 @@ import { appOnDisk, appRoot, enterApp, noAppHere } from '#server/createApp.ts'
 import { executableName } from '#server/executableName.ts'
 import { iconAccent } from '#server/iconAccent.ts'
 import { namesUnder } from '#server/namesUnder.ts'
+import { packageDirectory } from '#server/packageDirectory.ts'
 import { skipped } from '#server/placement.ts'
 import { ran } from '#server/ran.ts'
 import { realOrAsGiven } from '#server/realOrAsGiven.ts'
@@ -97,6 +101,7 @@ const DISK: Host = {
         compile: inApp(compile),
         native: inApp(nativeApp),
         lsp,
+        upgrade: inApp(upgradeCommand),
     },
 }
 
@@ -804,7 +809,11 @@ async function check(
 ): Promise<number> {
     const within = namedPaths(positionals)
     const found: Diagnosis[] = []
-    for (const diagnosis of await checkApp(root))
+    for (const diagnosis of [
+        ...(await checkApp(root)),
+        // 38.196 — the app's notes for an agent, beside its package.
+        ...(await agentNoteFindings(packageDirectory(root))),
+    ])
         if (
             within.length === 0 ||
             within.some(
@@ -819,6 +828,36 @@ async function check(
         `abide check: ${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${warnings === 1 ? '' : 's'}`,
     )
     return errors > 0 ? 1 : 0
+}
+
+/**
+ * `abide upgrade`: every migration past `--from` over the app's own files, each change printed as a
+ * diff and written — or, under `--check`, printed and failed on, and nothing written. 38.198, 38.201.
+ */
+async function upgradeCommand(
+    { root }: AppDirectories,
+    { values }: Given,
+): Promise<number> {
+    if (values.from !== undefined && !Bun.semver.satisfies(values.from, '*')) {
+        console.error(
+            `abide upgrade: --from takes a release, such as 0.139.0 — not '${values.from}'.`,
+        )
+        return 1
+    }
+    const directory = packageDirectory(root)
+    const edits = await upgrade(directory, values.from)
+    for (const { path, before, after } of edits) {
+        console.log(unifiedDiff(path, before, after))
+        if (values.check !== true)
+            await Bun.write(`${directory}/${path}`, after)
+    }
+    const files = `${edits.length} file${edits.length === 1 ? '' : 's'}`
+    console.log(
+        edits.length === 0
+            ? 'abide upgrade: nothing to change'
+            : `abide upgrade: ${files} ${values.check === true ? 'would change' : 'changed'}`,
+    )
+    return values.check === true && edits.length > 0 ? 1 : 0
 }
 
 /** The paths a command's `[path…]` names, each as the real path a finding is filed under. */
