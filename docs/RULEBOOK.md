@@ -3642,7 +3642,7 @@ person's location only once the person allows it through the platform.
 38.195 A prop a test hands a component it binds for `mount` as a `Reactive` MUST reach the component
 as 32.6 has a `bind:` hand it over.
 
-38.196 `abide check` MUST hold a prop a `.abide` file's component is called with directly to the
+38.196 `abide check` MUST hold a prop a `.ts` file calls a `.abide` file's component with to the
 type its `props` call declares for it, or to a `Reactive` holding and taking that type.
 
 # 39. Head and view transitions
