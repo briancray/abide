@@ -7,7 +7,7 @@
 //
 // PURE, SO AN APP THAT NEVER NAMES `pendingUpdate` DOES NOT SHIP IT, for `online`'s reason.
 
-import { hydrated, isHydrating } from './hydrating.ts'
+import { isHydrating, standIn } from './hydrating.ts'
 import { isServer } from './isServer.ts'
 import { ambient } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
@@ -50,11 +50,10 @@ export const pendingUpdate: Reactive<StagedUpdate | undefined> =
         window.addEventListener('abide:update', (event) => {
             const detail = (event as CustomEvent).detail
             told = detail === null ? undefined : new StagedUpdate(detail)
-            // 41.32 — a page hydrating keeps the server's answer until it has hydrated.
-            const landed = hydrated()
-            if (landed === undefined) value.set(told)
-            else void landed.then(() => value.set(told))
+            if (!isHydrating()) value.set(told)
         })
+        // 41.32 — a page hydrating keeps the server's answer until it has hydrated.
+        standIn(value, undefined, () => told)
         windowHandler('abideUpdate')?.postMessage('ask')
         return value
     })()

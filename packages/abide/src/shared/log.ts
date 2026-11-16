@@ -237,6 +237,11 @@ export function messageOf(args: unknown[], colors = false): string {
     return message
 }
 
+/** 36.8 — a record as one `ABIDE_LOG_FORMAT=tsv` line: its fields tab-separated, its newlines escaped. */
+export function tsvLine(record: LogRecord): string {
+    return `${record.time}\t${record.level}\t${record.namespace}\t${record.trace}\t${record.message.replaceAll('\n', '\\n')}`
+}
+
 function write(
     namespace: string,
     level: Level,
@@ -255,8 +260,7 @@ function write(
     const format = formatOf()
     let line: string
     if (format === 'json') line = JSON.stringify(record)
-    else if (format === 'tsv')
-        line = `${record.time}\t${level}\t${namespace}\t${record.trace}\t${record.message.replaceAll('\n', '\\n')}`
+    else if (format === 'tsv') line = tsvLine(record)
     else {
         const color = useColor()
         line = `${paint(color, '90', record.time)} ${paint(color, LEVEL_COLOR[level], level)} ${paint(color, '1', namespace)} ${record.message}`

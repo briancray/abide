@@ -3915,9 +3915,9 @@ markup.
 markup is built, and a load a component set up later, one only a pending value places, MAY have it
 choose another arm at hydration under 41.24.
 
-41.32 While a page hydrates, `online` and `media` MUST answer as the server does, and once it has
-hydrated each MUST be written with the browser's answer, so an arm that answer changes is swapped as
-an update and not under 41.24.
+41.32 While a page hydrates, `online`, `media` and `pendingUpdate` MUST answer as the server does,
+and once it has hydrated each MUST be written with the browser's answer, so an arm that answer
+changes is swapped as an update and not under 41.24.
 
 41.33 An `Rpc` call answering a stream whose run had closed when `render` built the markup from it
 MUST hold every chunk of that run, its run closed, as hydration adopts the page.

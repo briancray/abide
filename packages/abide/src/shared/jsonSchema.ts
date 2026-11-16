@@ -1,6 +1,6 @@
 import type { JsonValue } from './JsonValue.ts'
 import type { StandardSchemaV1 } from './Schema.ts'
-import { validateJson } from './validateJson.ts'
+import { issuesByPath } from './validateJson.ts'
 
 /**
  * A JSON Schema document as a Standard Schema, carrying its own validator.
@@ -30,16 +30,9 @@ export function jsonSchema<T = Untyped>(
             version: 1,
             vendor: 'abide',
             validate(value: unknown) {
-                const found = validateJson(document, value) as
-                    Record<string, string[]> | string[] | null
+                const found = issuesByPath(document, value)
                 if (found === null) return { value: value as T }
                 const issues: { message: string; path: string[] }[] = []
-                // A value that is not an object came back as the bare list, every issue on `''`.
-                if (Array.isArray(found)) {
-                    for (const message of found)
-                        issues.push({ message, path: [] })
-                    return { issues }
-                }
                 for (const path in found)
                     for (const message of found[path] as string[])
                         issues.push({

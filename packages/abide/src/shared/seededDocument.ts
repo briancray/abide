@@ -18,11 +18,12 @@ import { rpcRequest } from './rpcRequest.ts'
  */
 export function seededDocument<Document>(
     address: string,
+    args?: Record<string, unknown>,
 ):
     | Document
     | Failed<string, unknown>
     | Promise<Document | Failed<string, unknown>> {
-    const request = rpcRequest('GET', mounted(address), undefined)
+    const request = rpcRequest('GET', mounted(address), args)
     const answer = answerOf(request, false, undefined)
     return (
         answer instanceof Promise

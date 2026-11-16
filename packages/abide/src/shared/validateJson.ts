@@ -217,9 +217,18 @@ export function validateJson<T>(
     schema: JsonValue,
     value: unknown,
 ): Issues<T> | null {
+    const found = issuesByPath(schema, value)
+    return found === null ? null : (issuesOf(found, value) as Issues<T>)
+}
+
+/** `validateJson`'s issues keyed by path, `''` the value itself, whatever the value is — or `null`. */
+export function issuesByPath(
+    schema: JsonValue,
+    value: unknown,
+): Record<string, string[]> | null {
     const found: Record<string, string[]> = {}
     check(schema, value, '', found)
-    for (const _path in found) return issuesOf(found, value) as Issues<T>
+    for (const _path in found) return found
     return null
 }
 
@@ -303,11 +312,7 @@ function check(
         noteOr(found, path, 'is not allowed here')
         return
     }
-    if (
-        schema === null ||
-        typeof schema !== 'object' ||
-        Array.isArray(schema)
-    ) {
+    if (!isRecord(schema)) {
         throw new Error(
             `validateJson was given ${typeName(schema)} where a schema object was expected, at ${placeOf(path)}.`,
         )

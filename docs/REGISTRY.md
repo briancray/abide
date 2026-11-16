@@ -833,7 +833,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `--abide-titlebar-height` | `<length>` | The height of the titlebar the native app's page is drawn under. | 38.153 |
 | `--abide-titlebar-inset` | `<length>` | The width the native app's window controls take from the page's start edge. | 38.153 |
 | `native` | `() => { version: string; name: string } \| undefined` | The version and shown name of the native app whose window the work running is for, a hint any client can claim. | 38.87, 38.140, 38.141 |
-| `pendingUpdate` | `Reactive<StagedUpdate \| undefined>` | The update the native app's window has staged, waiting for it to restart. | 38.142, 38.148 |
+| `pendingUpdate` | `Reactive<StagedUpdate \| undefined>` | The update the native app's window has staged, waiting for it to restart. | 38.142, 38.148, 41.32 |
 | `StagedUpdate` | `class StagedUpdate { version: string; required: boolean; notes: string \| undefined }` | What `pendingUpdate` holds. | 38.146, 38.148 |
 | `StagedUpdate.install` | `() => void` | Restarts the native app into the update. | 38.144, 38.145 |
 | `onMenu` | `(read: () => readonly MenuItem[]) => () => void` | The menus a layout or a page adds to the native app's menu bar while it stands. | 38.88, 38.92, 38.170 |

@@ -9,10 +9,11 @@
 import { REPORT_ADDRESS, REPORT_LINES_ADDRESS } from './ADDRESSES.ts'
 import { answered, answerOf } from './answerOf.ts'
 import { isFailed } from './Failed.ts'
-import { log, type LogRecord } from './log.ts'
+import { log, type LogRecord, tsvLine } from './log.ts'
 import { mounted } from './mount.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { rpcRequest } from './rpcRequest.ts'
+import { seededDocument } from './seededDocument.ts'
 
 /** What a draft's lines are cut to, newest kept: the page's, and the server's (48.2, 48.3). */
 export const REPORT_LINES = 200
@@ -139,16 +140,12 @@ function linesFor(traces: string[]): LogRecord[] | Promise<LogRecord[]> {
     if (REPORTING.lines !== undefined) return REPORTING.lines(traces)
     const page = log.records().slice(-REPORT_LINES)
     if (traces.length === 0) return page
-    const request = rpcRequest('GET', mounted(REPORT_LINES_ADDRESS), {
-        traces: traces.join(','),
-    })
-    return Promise.resolve(answerOf(request, false, undefined)).then(
-        (answer) => {
-            const server = answered(answer, request)
-            return Array.isArray(server)
-                ? mergedByTime(page, server as LogRecord[])
-                : page
-        },
+    return Promise.resolve(
+        seededDocument<LogRecord[]>(REPORT_LINES_ADDRESS, {
+            traces: traces.join(','),
+        }),
+    ).then((server) =>
+        Array.isArray(server) ? mergedByTime(page, server) : page,
     )
 }
 
@@ -184,7 +181,6 @@ export function markdownOf(
     if (traces.length !== 0) text += `- traces: ${traces.join(', ')}\n`
     if (lines.length === 0) return text
     text += '\n```\n'
-    for (const line of lines)
-        text += `${line.time}\t${line.level}\t${line.namespace}\t${line.trace}\t${line.message.replaceAll('\n', '\\n')}\n`
+    for (const line of lines) text += `${tsvLine(line)}\n`
     return `${text}\`\`\`\n`
 }

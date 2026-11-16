@@ -1,6 +1,6 @@
 // 41.32 — A VALUE WHOSE SERVER ANSWER IS A STAND-IN ANSWERS AS THE SERVER DID WHILE THE PAGE
-// HYDRATES, and is written with the browser's answer once it has. `media` and `online` are the two:
-// the server cannot know the viewport or the connection, so an `{#if}` choosing by either would pick
+// HYDRATES, and is written with the browser's answer once it has. `media`, `online` and `pendingUpdate` are the three:
+// the server cannot know the viewport, the connection or a staged update, so an `{#if}` choosing by either would pick
 // another arm than the server painted, and 41.24 rebuild it with a warning meant for a mismatch
 // nobody intended. Held, the painted arm is adopted, and the browser's answer swaps it as any update
 // would — however many derived values stand between the value and the `{#if}`.
@@ -13,9 +13,9 @@
 // In `#shared` because the values are; the router's hydration (`Router.hydrate`) begins and ends it.
 
 type StandIn = {
-    value: { set(next: boolean): unknown }
-    server: boolean
-    browser: () => boolean
+    value: { set(next: unknown): unknown }
+    server: unknown
+    browser: () => unknown
 }
 
 const HYDRATION: {
@@ -29,12 +29,12 @@ const HYDRATION: {
 }
 
 /** Files a value whose server answer is `server` and whose browser answer `browser` reads. */
-export function standIn(
-    value: StandIn['value'],
-    server: boolean,
-    browser: () => boolean,
+export function standIn<Value>(
+    value: { set(next: Value): unknown },
+    server: Value,
+    browser: () => Value,
 ): void {
-    HYDRATION.standIns.push({ value, server, browser })
+    HYDRATION.standIns.push({ value, server, browser } as StandIn)
 }
 
 /** Whether a page is hydrating, so a stand-in built now answers the server's answer. */

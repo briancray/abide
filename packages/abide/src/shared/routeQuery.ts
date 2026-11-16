@@ -6,6 +6,7 @@
 
 import { CURRENT_ROUTER } from './CURRENT_ROUTER.ts'
 import { navigate, noRouter } from './navigate.ts'
+import { numberFromText } from './numberFromText.ts'
 import { bareName, queryText } from './queryText.ts'
 import { pairReactive } from './reactive/pairReactive.ts'
 import type { Reactive } from './reactive/Reactive.ts'
@@ -84,8 +85,7 @@ function queryRead(
 /** 30.42 — a member's text as its default's type, or the default where the text is not one. */
 function parsed(text: string, fallback: unknown): unknown {
     if (typeof fallback === 'number') {
-        const number = text.trim() === '' ? Number.NaN : Number(text)
-        return Number.isNaN(number) ? fallback : number
+        return numberFromText(text) ?? fallback
     }
     if (typeof fallback === 'boolean')
         return text === 'true' ? true : text === 'false' ? false : fallback
