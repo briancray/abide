@@ -342,8 +342,7 @@ export class Router {
             options.replace === true || target.href === location.href,
             [scrollX, scrollY],
         )
-        arrive(target.href, found.route.pattern, found.params, this.index)
-        this.mounted = target.pathname
+        this.arriveAt(target, found)
         if (step.scroll !== undefined) scrollTo(step.scroll[0], step.scroll[1])
         else if (options.keepScroll !== true && target.hash !== '')
             scrollToFragment(target.hash)
