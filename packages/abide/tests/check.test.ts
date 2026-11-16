@@ -759,7 +759,7 @@ test('a listener is typed by its target, as a function or an object — 32.95, 3
     expect(inFile('listened/index.abide')).toEqual([])
 })
 
-// THE REVERT: hand `__record` the props as declared in `componentModule`, without `__bindable`;
+// THE REVERT: re-export the default in place of `__directly` in `ShadowHost.standIn`;
 // the bound call reports TS2322 too (3 against 2).
 test('a direct call takes a prop as its value or a Reactive of it — 38.196', () => {
     expect(

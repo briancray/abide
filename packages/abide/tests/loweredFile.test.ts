@@ -246,7 +246,11 @@ test('markup completes blocks, component tags and their props — 38.117', async
         'if',
         'try',
     ])
-    expect(await labelsAt(`${head}{#try}x{:`)).toEqual(['catch', 'finally'])
+    expect(await labelsAt(`${head}{#try}x{:`)).toEqual([
+        'catch',
+        'finally',
+        'pending',
+    ])
     expect(await labelsAt(`${head}{#if true}<p>x</p>{/`)).toEqual(['if'])
     expect(await labelsAt(`${head}<`)).toEqual(['Badge'])
     expect(await labelsAt(`${head}<Badge tone="x" `)).toEqual(['size'])

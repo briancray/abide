@@ -49,16 +49,18 @@ export const COMPONENT_STAND_IN = '__component'
 const COMPONENT_RECORD = '__record'
 
 /**
- * 38.196 — each prop as its value or a `Reactive` of it, the write path a `bind:` hands over (32.6).
- * A tag's own values reach it already read (`__prop`, `__bound`), so only a direct call ever hands
- * one over, and a union with the plain value keeps every position a read (31.3).
+ * 38.196 — what a `.ts` file importing a `.abide` calls: the component, with each prop as its value
+ * or a `Reactive` of it, the write path a `bind:` hands over (32.6). A tag calls the default, which
+ * takes the values alone — its own values reach it already read (`__prop`, `__bound`) — so what a
+ * tag is held to, hovered and completed by stays the `props` call as written. A union with the plain
+ * value keeps every position a read (31.3).
  */
-const BINDABLE = '__bindable'
+export const DIRECT_CALL = '__directly'
 
 /**
  * The component a checked module exports as its default: called with the record its tag passes
  * (`projectShadow`'s `invocation`), and answering the `Component` a server module's call of it
- * renders (34.16). What its blocks export by name is beside it.
+ * renders (34.16). What its blocks export by name is beside it, and so is `DIRECT_CALL`.
  *
  * `props` is spelled ONCE, between `head` and `tail`, so the one spelling is the one a tag's keys are
  * contextually typed by, and a caller can copy it from the author's call (38.116).
@@ -70,11 +72,13 @@ function componentModule(generics?: string): { head: string; tail: string } {
     const parameters = generics === undefined ? '' : `<${generics}>`
     return {
         head: `
-type ${BINDABLE}<Props> = { [Key in keyof Props]: [Props[Key]] extends [never] ? never : Props[Key] | import(${JSON.stringify(FRAMEWORK_SOURCES.reactive)}).Reactive<Props[Key], Props[Key], any, any> }
-type ${COMPONENT_RECORD}<Props> = {} extends Props ? [record?: ${BINDABLE}<Props>] : [record: ${BINDABLE}<Props>]
+type ${COMPONENT_RECORD}<Props> = {} extends Props ? [record?: Props] : [record: Props]
 declare const ${COMPONENT_STAND_IN}: ${parameters}(...record: ${COMPONENT_RECORD}<`,
         tail: `>) => import('${SERVER_SPECIFIER}').Component
 export default ${COMPONENT_STAND_IN}
+type __bindable<Props> = { [Key in keyof Props]: [Props[Key]] extends [never] ? never : Props[Key] | import(${JSON.stringify(FRAMEWORK_SOURCES.reactive)}).Reactive<Props[Key], Props[Key], any, any> }
+type __directCall<Call> = Call extends (...record: infer Record) => infer Answer ? (...record: { [Index in keyof Record]: __bindable<Record[Index]> }) => Answer : never
+export declare const ${DIRECT_CALL}: __directCall<typeof ${COMPONENT_STAND_IN}>
 `,
     }
 }
