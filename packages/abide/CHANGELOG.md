@@ -1,5 +1,18 @@
 # @abide/abide
 
+## 0.138.0
+
+### Minor Changes
+
+- db7cecb: The native app's window and menu bar extra panel give every page `navigator.setAppBadge` and `navigator.clearAppBadge`, drawing the badge on the Dock icon (RULEBOOK 38.188)
+- aa0d08d: The native app's window answers more of the web platform: `print` opens the print panel, `download` links and attachments save to Downloads, file inputs open the open panel, `prompt` asks in a sheet, `requestFullscreen` works, `Notification` shows macOS notifications, and the `.app` declares camera, microphone and location use so `getUserMedia` and `geolocation` are available (RULEBOOK 38.178, 38.189–38.194)
+- 4792db8: OpenTelemetry export over the standard variables. With `OTEL_EXPORTER_OTLP_ENDPOINT` (or a signal's own endpoint) set, every line the app logs is sent as an OTLP log record and every span as an OTLP span — each request the root span of its trace, under the id `traceresponse` names — as OTLP/HTTP JSON, batched each second, carrying `OTEL_EXPORTER_OTLP_HEADERS` and named by `OTEL_SERVICE_NAME` or `APP_NAME`. Unset, nothing is sent; `OTEL_SDK_DISABLED=true` turns it off. RULEBOOK 36.19-36.23.
+- 155e23e: Problem reports. `report({ trace })` drafts one — the page's own log lines, and in the native app's window the server's for that trace — and `ReportDraft.open()` shows it in abide's own dialog, every word that will be sent above the Send button; an app drawing its own binds `summary` and `description` and shows `markdown`. `send()` hands the `Report` to every `onReport` the server files, which decides where reports go, with the principal secret and every password config field taken out. RULEBOOK 48.
+  
+  `ReportDraft.open()` settles `true` once the draft is sent and `false` once it is closed unsent, so a page can refresh what a report changes.
+- cb76b5b: `onRefusal`'s `call` carries `trace`, the trace id the refused answer's `traceresponse` named, so a page can point a person, a log or a report at the request that failed (RULEBOOK 37.24).
+- a23fbda: A span's `LogRecord` carries `span`: its own id, the span it opened under, its name, kind, duration, status and attributes, so the lines of one trace form a tree (RULEBOOK 24.9). With `DEBUG=abide:request` each request is written as the root `server` span, under the id `traceresponse` names and the caller's `traceparent` (24.10).
+
 ## 0.137.0
 
 ### Minor Changes
