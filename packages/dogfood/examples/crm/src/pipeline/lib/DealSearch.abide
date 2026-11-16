@@ -12,7 +12,7 @@ const found = reactive(() => searchDeals({ q }))
 </label>
 
 <ul class="fields">
-    {#for name of found.ready() ? found : []}
+    {#for name of found}
         <li><strong>{name}</strong></li>
     {/for}
 </ul>

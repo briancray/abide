@@ -14,7 +14,7 @@ reactive.share('selectedDeal', () => reactive('d1'))
 <DealDetail />
 
 <div class="row">
-    {#for deal of deals.ready() ? deals : [] by deal.id}
+    {#for deal of deals by deal.id}
         <DealRow id={deal.id} name={deal.name} />
     {/for}
 </div>

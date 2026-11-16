@@ -25,7 +25,7 @@ function applyNextUpdate() {
 </script>
 
 <ul class="fields">
-    {#for deal of deals.ready() ? deals : [] by deal.id}
+    {#for deal of deals by deal.id}
         <li><span>{deal.stage}</span><strong>{dollars(deal.amount)}</strong>
             {deal.name}</li>
     {/for}
