@@ -563,7 +563,11 @@ export function parseAbide(source: string): AbideFile {
                 at = end + 1
                 continue
             }
-            if (opensWith(inner, ':catch') || inner === ':finally' || inner === ':pending') {
+            if (
+                opensWith(inner, ':catch') ||
+                inner === ':finally' ||
+                inner === ':pending'
+            ) {
                 const block = blocks[blocks.length - 1]
                 // 32.56 — ONLY A `{#try}` HAS THESE ARMS. Anywhere else the tag was dropped and what
                 // followed it read as the body it stood in: a `{#for}`'s catch rendered in every row.
