@@ -139,11 +139,33 @@ function currentStops(): (() => void)[] | undefined {
     return STORAGE.getStore()?.stops ?? RENDERING.getStore()
 }
 
+// 44.57 — WHETHER THE WORK RUNNING IS A `global` VALUE'S RUN: one for the process, which the request
+// that reached it first — the scope it runs in — does not own. Apart from STORAGE, which still names
+// that request for what the run reaches through it.
+const GLOBAL_RUN = new AsyncLocalStorage<true>()
+
+/** Whether the work running is a `global` value's run, or what that run started. */
+export function inGlobalRun(): boolean {
+    return GLOBAL_RUN.getStore() === true
+}
+
+function runIn<Given, Result>(
+    scope: Scope | undefined,
+    body: (given: Given) => Result,
+    given: Given,
+): Result {
+    return STORAGE.getStore() === scope
+        ? body(given)
+        : STORAGE.run(scope as RequestScope | undefined, body, given)
+}
+
 SCOPING.provider = {
     current: (): Scope | undefined => STORAGE.getStore(),
     serverStops: currentStops,
     run: (scope, body, given) =>
         STORAGE.run(scope as RequestScope | undefined, body, given),
+    runGlobal: (scope, body, given) =>
+        GLOBAL_RUN.run(true, runIn, scope, body, given),
     // 41.35 — A MODULE'S DECLARATION, which a component's own value is not: one built in a render
     // outside every request, or in a setup — a browser half mounted in a test process the server's
     // modules are loaded in — is no declaration to build again in every render after it.

@@ -10,6 +10,7 @@
 // caught one from somewhere else still finds the shape it expects.
 
 import { FAILURE_STATUS_TEXT } from './FAILURE_STATUS_TEXT.ts'
+import { TRANSIENT_STATUSES } from './TRANSIENT_STATUSES.ts'
 
 /**
  * A refusal: a named, status-carrying `Error` that is returned, never thrown.
@@ -138,6 +139,46 @@ export function failedFrom(problem: Problem): Failed<string, unknown> {
         problem.detail ?? problem.title ?? '',
         problem.data,
     )
+}
+
+/**
+ * Whether a refusal at `status` says "not now" rather than "no": 15.19's, which the next reach runs
+ * again rather than holds.
+ */
+export function isTransient(status: number): boolean {
+    return status >= 500 || TRANSIENT_STATUSES.includes(status)
+}
+
+/**
+ * 15.23 — the time a refusal's `Retry-After` named, kept beside the refusal rather than on it: 15.1's
+ * four fields are what a `Failed` is, and this is what the answer carrying one said of it.
+ */
+const RETRY_AT = new WeakMap<object, number>()
+
+/** The time, in epoch ms, before which `failure` is served rather than run again — 15.23. */
+export function retryAt(failure: object): number | undefined {
+    return RETRY_AT.get(failure)
+}
+
+/** Keeps `at` as the time `failure`'s `Retry-After` named. */
+export function holdUntil(failure: object, at: number): void {
+    RETRY_AT.set(failure, at)
+}
+
+/** A `Retry-After` header's time in epoch ms — delay-seconds or an HTTP date — or `undefined`. */
+export function retryAtOf(header: string | null): number | undefined {
+    if (header === null) return undefined
+    const text = header.trim()
+    if (/^\d+$/.test(text)) return Date.now() + Number(text) * 1000
+    const date = Date.parse(text)
+    return Number.isNaN(date) ? undefined : date
+}
+
+/** The `Retry-After` `failure` crosses a wire with — 15.24 — as the whole seconds left, or `undefined`. */
+export function retryAfterOf(failure: object): string | undefined {
+    const at = RETRY_AT.get(failure)
+    if (at === undefined) return undefined
+    return String(Math.max(0, Math.ceil((at - Date.now()) / 1000)))
 }
 
 /** Whether a value is the refusal of that name: `Rpc.isError` and a value's alike (3.1). */

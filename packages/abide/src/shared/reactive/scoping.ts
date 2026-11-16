@@ -46,6 +46,15 @@ export type Scoping = {
         given: Given,
     ): Result
     /**
+     * `run`, marking the work a `global` value's run — what `assistant` reads to tell a run no
+     * request owns from the request it runs in (44.57).
+     */
+    runGlobal<Given, Result>(
+        scope: Scope | undefined,
+        body: (given: Given) => Result,
+        given: Given,
+    ): Result
+    /**
      * Told of every unkeyed `reactive` filed as a forwarder with its home built (`scoped.ts`).
      *
      * 41.34 — the server keeps each a module declared whose home has a load in flight, for every
@@ -68,7 +77,7 @@ export function serverStops(): (() => void)[] | undefined {
 }
 
 /**
- * Runs `body` under `scope` and returns what it returns.
+ * Runs `body` under `scope` and returns what it returns — marked a `global` value's run where `global`.
  *
  * Called straight through where there is no provider, or where `scope` is already the current one,
  * which inside a render it almost always is.
@@ -77,9 +86,12 @@ export function runInScope<Given, Result>(
     scope: Scope | undefined,
     body: (given: Given) => Result,
     given: Given,
+    global = false,
 ): Result {
     const provider = SCOPING.provider
-    return provider === null || provider.current() === scope
+    if (provider === null) return body(given)
+    if (global) return provider.runGlobal(scope, body, given)
+    return provider.current() === scope
         ? body(given)
         : provider.run(scope, body, given)
 }

@@ -3,7 +3,7 @@
 // the listener answer as text (21.3). Which lane a request is in is the caller's to know; what each
 // lane's failure looks like is decided here, once.
 
-import { type Failed, problemOf } from '#shared/Failed.ts'
+import { type Failed, problemOf, retryAfterOf } from '#shared/Failed.ts'
 import { RENDER_LOG } from '#shared/log.ts'
 import { coversPrefix, partsOf } from '#shared/matchRoute.ts'
 import { coversRoute, parseRoutePattern } from '#shared/routePattern.ts'
@@ -36,11 +36,14 @@ export function handlerHeaders(): Headers {
 /**
  * The `Response` a refusal is answered with.
  *
- * 15.1 — a refusal crosses the wire as Problem Details (RFC 9457), at its own status.
+ * 15.21 — a refusal crosses the wire as Problem Details (RFC 9457), at its own status.
  */
 export function answered(failure: Failed<string, unknown>): Response {
     const headers = handlerHeaders()
     headers.set('content-type', 'application/problem+json')
+    // 15.24 — the wait a refusal was answered with goes on with it, as what is left of it.
+    const retryAfter = retryAfterOf(failure)
+    if (retryAfter !== undefined) headers.set('retry-after', retryAfter)
     return new Response(JSON.stringify(problemOf(failure)), {
         status: failure.status,
         headers,

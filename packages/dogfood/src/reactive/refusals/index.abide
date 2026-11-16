@@ -40,6 +40,15 @@ import Section from '#src/lib/Section.abide'
             named <code>HttpError</code>, so <code>moveDeal.isError(error, 'HttpError')</code> narrows to
             it, and the status is the only thing a caller can tell apart.</p>
 
+        <p>A refusal is held like a value until its <code>ttl</code> ends, because asking again
+            changes nothing. A refusal for now is not: <code>408</code>, <code>425</code>,
+            <code>429</code>, any status from <code>500</code>, and a throw run the body again on
+            the next read. Set <code>retry-after</code> beside one and every read before that time
+            gets the refusal without a call:
+            <code>{"response().headers.set('retry-after', '30'); return refuse(429)"}</code>. The
+            header crosses with the refusal, so a handler handing on a refusal it was answered
+            with hands on the wait too.</p>
+
         <p>A move that lands writes the server's answer over <code>deal</code>, a derived value, so
             the page shows the new stage without loading the deal again. The write stands until the
             body reruns, when <code>id</code> changes.</p>

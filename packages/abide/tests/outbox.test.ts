@@ -236,6 +236,44 @@ test('a call refused 401 holds the line until retry — 46.6, 46.12', async () =
     expect(outbox()).toEqual([])
 })
 
+// 46.4, 46.21 — A CALL REFUSED FOR NOW STAYS UNREFUSED AND IS SENT AGAIN, no sooner than the
+// `retry-after` it was answered with. One call queued leaves the backoff's wait at two seconds, and
+// the 429 names three. THE REVERTS: drop `TRANSIENT_STATUSES` from `sendLine`'s test; the 429 is a
+// refusal 46.5 keeps — `HttpError` where `undefined` is due. Drop `answer.retryAt` from its
+// `backoff.later`; the call is sent again at two seconds — 2 sends where 1 is due.
+test('a call refused 429 waits out its retry-after and is sent again — 46.4, 46.21', async () => {
+    const addNote = wire('POST', '/rpc/addNote') as Caller
+    network = false
+    const added = addNote(
+        { text: 'a' },
+        { offline: () => ({ from: 'device' }) },
+    )
+    await added
+    await Bun.sleep(10)
+    network = true
+    answers.set(
+        '/rpc/addNote',
+        () =>
+            new Response(null, {
+                status: 429,
+                headers: { 'retry-after': '3' },
+            }),
+    )
+    sent.length = 0
+    const adds = (): number =>
+        sent.filter((send) => send.path === '/rpc/addNote').length
+    await delivered()
+    expect(adds()).toBe(1)
+    expect(added.error()).toBe(undefined)
+    expect(outbox().length).toBe(1)
+    answers.clear()
+    await Bun.sleep(2_300)
+    expect(adds()).toBe(1)
+    await Bun.sleep(1_000)
+    expect(adds()).toBe(2)
+    expect(outbox()).toEqual([])
+}, 10_000)
+
 // 46.13 — A CALL CAN BE LET GO, and only that one. THE REVERT: keep every call in `discard`; the line
 // still holds two.
 test("a call's discard drops it alone — 46.13", async () => {

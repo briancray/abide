@@ -198,7 +198,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `refuse.named` | `<Name extends string>(name: Name, status?: number, message?: string) => ((data?: undefined) => Failed<Name, undefined>) & { is: (error: unknown) => error is Failed<Name, undefined> }` | A reusable factory for a named, narrowable failure. | 15.3, 15.13, 15.18 |
 | `refuse.named` | `<Name extends string, Data extends JsonValue>(name: Name, status: number \| undefined, message: string \| ((data: Data) => string) \| undefined, options: { schema: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | The same, carrying data its schema declares. | 15.3, 15.11, 15.12, 15.13, 15.14, 15.15, 15.18 |
-| `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in-process and over a wire alike. | 15.1, 15.2, 15.6, 16.40, 16.41, 15.21 |
+| `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in-process and over a wire alike. | 15.1, 15.2, 15.6, 16.40, 16.41, 15.21, 15.24 |
 | `isFailed` | `(value: unknown) => value is Failed<string, unknown>` | Whether a value is a refusal. | 15.6 |
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.4, 15.5 |
 | `refuse.notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | abide's own refusal for an address nothing answers. | 15.7, 15.9, 15.22 |
@@ -296,7 +296,7 @@ type Reached = { readonly [REACHED]: true }
 | `response.sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.45, 16.57, 16.75, 17.6, 17.7 |
 | `response.bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.34, 16.75, 17.6, 17.7 |
 | `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `response.redirect` may carry. | 17.3 |
-| `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.5, 15.9, 15.10, 15.16, 15.19, 15.20, 16.40, 17.4, 17.5, 17.8 |
+| `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.5, 15.9, 15.10, 15.16, 15.19, 15.20, 15.23, 16.40, 17.4, 17.5, 17.8 |
 
 ## Mount paths
 
@@ -367,7 +367,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39, 44.57, 44.100 |
+| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39, 44.57, 44.100, 44.101 |
 | `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string \| AssistantContent[] }` | One turn of the transcript a caller sends: its words, or its pieces in order. | 44.3, 44.4 |
 | `AssistantContent` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string }` | A piece of a turn: words, or an image as base64 with its type. | 44.5, 44.35, 44.36, 44.37, 44.38, 44.39 |
 | `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; handler: { method: string; address: string } \| undefined } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean; handler: { method: string; address: string } \| undefined; value: unknown } \| { type: 'permission'; id: string; name: string; input: unknown } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, a permission prompt, and the end. | 44.2, 44.11, 44.28, 44.48, 44.49, 44.81 |
@@ -461,7 +461,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `outbox` | `<Chosen extends Selection>(selection?: Chosen, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 46.20, 18.35 |
+| `outbox` | `<Chosen extends Selection>(selection?: Chosen, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 46.20, 46.21, 18.35 |
 | `rpc.outbox` | `(pattern?: Partial<Args>) => QueuedCall[]` | `outbox` narrowed to the handler's calls. | 46.1, 13.12 |
 | `QueuedCall` | `{ id: string; method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string; args: Record<string, JsonValue> \| undefined; queuedAt: number; attempts: number; value: Reactive<Value, Value, Failed<string, unknown>>; retry: () => void; discard: () => void }` | One call `outbox` holds. | 46.1, 46.10 |
 | `call.value` | `Reactive<Value, Value, Failed<string, unknown>>` | The value a queued call settled. | 46.5, 46.7, 46.18, 46.19 |
@@ -579,8 +579,9 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `database` | `(file: string \| (() => string), options?: { migrations?: (string \| ((database: Database) => void))[]; openNewer?: boolean; open?: (database: Database) => void; strict?: boolean; readonly?: boolean; safeIntegers?: boolean }) => (() => Database) & { close: (options?: { remove?: boolean }) => void }` | The opener of the app's `bun:sqlite` database `file`, from `@abide/abide/server`. | 36.4, 47.1, 47.2, 47.3, 47.4, 47.5, 47.6, 47.7, 47.8, 47.9, 47.10, 47.11, 47.12, 47.13, 47.14, 47.15, 47.16, 47.18, 47.19, 47.20, 47.21 |
+| `database` | `(file: string \| (() => string), options?: { migrations?: (string \| ((database: Database) => void))[]; openNewer?: boolean; open?: (database: Database) => void; strict?: boolean; readonly?: boolean; safeIntegers?: boolean }) => (() => Database) & { close: (options?: { remove?: boolean }) => void; changed: Reactive<number> }` | The opener of the app's `bun:sqlite` database `file`, from `@abide/abide/server`. | 36.4, 47.1, 47.2, 47.3, 47.4, 47.5, 47.6, 47.7, 47.8, 47.9, 47.10, 47.11, 47.12, 47.13, 47.14, 47.15, 47.16, 47.18, 47.19, 47.20, 47.21 |
 | `opener.close` | `(options?: { remove?: boolean }) => void` | Closes the `Database` an opener holds, and with `remove` deletes the file it last opened. | 47.11, 47.16, 47.17 |
+| `opener.changed` | `Reactive<number>` | How many times the opener has found another connection's commits to its file. | 47.22, 47.23, 47.24 |
 
 ## `csp`
 

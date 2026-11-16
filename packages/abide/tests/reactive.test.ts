@@ -24,6 +24,7 @@ import {
     structural,
     watch,
 } from '#shared'
+import { holdUntil } from '#shared/Failed.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
@@ -310,15 +311,17 @@ test('a body declaring a parameter is keyed, and one declaring none is not', () 
 // THE REVERT: drop the prototype test and the finite test from `canonical`. This reports
 // `runs: 1` for two distinct `Set`s, and `served: null` for the `NaN` reach — one entry, one body
 // run, and the second caller handed the first caller's answer.
-// 15.19, 15.20 — A 5xx REFUSAL AND A THROW ARE RUN AGAIN BY THE NEXT REACH; ANYTHING BELOW 500 IS HELD.
-// A `global` entry with an hour's `ttl` is where holding one hurts: an outage the body reported
-// once would be replayed to every caller until the hour ran out. THE REVERT: drop the
-// `failedTransiently` test from `Keyed`'s reach; the 503 and the throw are each served again
-// without a run — 3 runs where 5 are due.
-test('a reach runs a body again after a 5xx refusal or a throw, and holds a 4xx — 15.19, 15.20', async () => {
+// 15.19, 15.20 — A REFUSAL FOR NOW — 408, 425, 429, OR 500 AND ABOVE — AND A THROW ARE RUN AGAIN BY
+// THE NEXT REACH; ANY OTHER REFUSAL IS HELD. A `global` entry with an hour's `ttl` is where holding
+// one hurts: an outage or a rate limit the body reported once would be replayed to every caller
+// until the hour ran out. THE REVERTS: drop the `failedTransiently` test from `Keyed`'s reach; the
+// 503 is served again without a run — `503` where `up` is due. Drop `TRANSIENT_STATUSES` from
+// `isTransient`; the 429 is held — `429` where `let through` is due.
+test('a reach runs a body again after a refusal for now or a throw, and holds a 4xx — 15.19, 15.20', async () => {
     const runs: string[] = []
     const answers: Record<string, (() => unknown)[]> = {
         down: [() => refuse(503), () => 'up'],
+        limited: [() => refuse(429), () => 'let through'],
         broken: [
             () => {
                 throw new Error('boom')
@@ -341,11 +344,55 @@ test('a reach runs a body again after a 5xx refusal or a throw, and holds a 4xx 
             (failure: { status?: number; message?: string }) =>
                 failure.status ?? failure.message,
         )
-    for (const path of ['down', 'broken', 'missing']) await outcome(path)
+    for (const path of ['down', 'limited', 'broken', 'missing'])
+        await outcome(path)
     expect(await outcome('down')).toBe('up')
+    expect(await outcome('limited')).toBe('let through')
     expect(await outcome('broken')).toBe('fixed')
     expect(await outcome('missing')).toBe(404)
-    expect(runs).toEqual(['down', 'broken', 'missing', 'down', 'broken'])
+    expect(runs).toEqual([
+        'down',
+        'limited',
+        'broken',
+        'missing',
+        'down',
+        'limited',
+        'broken',
+    ])
+})
+
+// 15.23 — A REFUSAL FOR NOW THAT SAID HOW LONG IS SERVED UNTIL THEN. The `Retry-After` a wire read is
+// kept beside the refusal it rebuilt (`holdUntil`), and every reach before that time is answered
+// with the refusal, not a run. THE REVERT: drop the `retryAt` test from `failedTransiently`; the
+// reach inside the wait runs the body — `let through` where `429` is due.
+test('a refusal for now is served, not run, until its Retry-After — 15.23', async () => {
+    let runs = 0
+    const record = reactive(
+        async (_args: { path: string }) => {
+            runs += 1
+            if (runs > 1) return 'let through'
+            const limited = refuse(429)
+            holdUntil(limited, Date.now() + 30_000)
+            return limited
+        },
+        { global: true, ttl: 3_600_000 },
+    )
+    const outcome = (): Promise<unknown> =>
+        Promise.resolve(record({ path: 'held' })).then(
+            (value) => value,
+            (failure: { status?: number }) => failure.status,
+        )
+    try {
+        expect(await outcome()).toBe(429)
+        setSystemTime(new Date(Date.now() + 29_000))
+        expect(await outcome()).toBe(429)
+        expect(`runs: ${runs}`).toBe('runs: 1')
+        setSystemTime(new Date(Date.now() + 2_000))
+        expect(await outcome()).toBe('let through')
+        expect(`runs: ${runs}`).toBe('runs: 2')
+    } finally {
+        setSystemTime()
+    }
 })
 
 test('an Args member the canonical key cannot carry is refused at the reach', () => {

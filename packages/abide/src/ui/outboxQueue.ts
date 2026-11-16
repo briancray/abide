@@ -29,6 +29,7 @@ import { isReactive, type Reactive, reactive } from '#shared/reactive/index.ts'
 import { produceInto, refuseInto, standIn } from '#shared/reactive/producer.ts'
 import { requested } from '#shared/requested.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
+import { TRANSIENT_STATUSES } from '#shared/TRANSIENT_STATUSES.ts'
 
 import { Backoff } from './Backoff.ts'
 
@@ -190,11 +191,16 @@ async function sendLine(): Promise<void> {
             showSending(call)
             const answer = await send(call)
             showSending(undefined)
-            if (unanswered(answer)) {
+            // 46.4 — no answer, a gateway's, or a refusal for now (15.19): try again later — 46.21,
+            // no sooner than a `Retry-After` it was answered with names.
+            if (
+                unanswered(answer) ||
+                TRANSIENT_STATUSES.includes(answer.status)
+            ) {
                 call.attempts += 1
                 await shelf.put(call)
                 publish()
-                backoff.later()
+                backoff.later(answer.retryAt)
                 return
             }
             const value = answeredValue(answer, call)

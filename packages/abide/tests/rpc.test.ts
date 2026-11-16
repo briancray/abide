@@ -446,6 +446,7 @@ test('every rpc carries the transport refusal in its failures — 16.8', async (
             bytes: undefined,
             body: undefined,
             trace: undefined,
+            retryAt: undefined,
         },
         { method: 'GET', url: '/ask' },
     )
@@ -539,4 +540,28 @@ test('an rpc answers the free probes as its handler does', () => {
     settled()()
     expect(busy(settled)).toBe(false)
     expect(settled.ready()).toBe(true)
+})
+
+// 15.19 — A REFUSAL FOR NOW IS RUN AGAIN BY THE NEXT CALL, NOT BY THE CALL IT ANSWERS. An unkeyed
+// handler's instance is built by the first read of the value a call reaches, and a body refusing
+// synchronously has refused by then: asking that call whether its value failed transiently ran the
+// body a second time before the call had been answered once — a rate limit hit twice per request.
+// THE REVERT: test `failedTransiently` alone in `callLoad`, without `LEFT_AT`; `runs` reads 2 after
+// the first call, where 1 is due.
+test('a handler refusing for now runs once per call, and again on the next — 15.19', async () => {
+    let runs = 0
+    const limited = GET(() => {
+        runs += 1
+        return refuse(429)
+    })
+    const call = (): Promise<unknown> =>
+        Promise.resolve(limited()).catch(
+            (failure: { status: number }) => failure.status,
+        )
+    await inScope(new Request('http://app/'), async () => {
+        expect(await call()).toBe(429)
+        expect(`runs: ${runs}`).toBe('runs: 1')
+        expect(await call()).toBe(429)
+        expect(`runs: ${runs}`).toBe('runs: 2')
+    })
 })

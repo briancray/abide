@@ -4,6 +4,7 @@
 // sent (36.6), and neither variable is read anywhere else.
 
 import { applyPatch } from '#shared/applyPatch.ts'
+import { isTransient } from '#shared/Failed.ts'
 import { thrownError } from '#shared/filledSegments.ts'
 import { eventsOf, framingOf } from '#shared/framing.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
@@ -40,7 +41,8 @@ export function remoteHeaders(): Record<string, string> {
     return token === undefined ? {} : { authorization: `Bearer ${token}` }
 }
 
-// The exit codes the CLI answers a call with: 0 answered, 7 refused, 8 faulted.
+// The exit codes the CLI answers a call with: 0 answered, 7 refused, 8 faulted — or, 15.19, refused
+// for now rather than for good, which a script tells apart to call again.
 const REFUSED = 7
 const FAULTED = 8
 
@@ -73,7 +75,11 @@ export async function callHandler(
     })
     const text = await answer.text()
     const code =
-        answer.status >= 500 ? FAULTED : answer.status >= 400 ? REFUSED : 0
+        answer.status >= 400
+            ? isTransient(answer.status)
+                ? FAULTED
+                : REFUSED
+            : 0
     return { code, text }
 }
 

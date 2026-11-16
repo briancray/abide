@@ -70,6 +70,14 @@ import Section from '#src/lib/Section.abide'
             string, <code>store.sqlite</code> opens it as <code>database</code> would, scratch
             directory and all.</p>
 
+        <p><code>changed</code> on the opener counts the times another connection has written the
+            file: a script, a second server, the <code>sqlite3</code> shell. Writes through the opener
+            itself do not count. Follow it with <code>watch</code> and refresh in the effect:
+            <code>{'watch(() => { crmDatabase.changed(); refresh() })'}</code>. A bare
+            <code>refresh()</code> reloads every value something is reading, so pages showing the
+            file read it again. <code>changed</code> asks the file once a second, and only while
+            something reads it. It never opens the file itself, so it counts from the first open.</p>
+
         <p><code>open</code> runs at every open, before the migrations, for what a connection sets
             rather than what the file keeps: <code>{"open: (db) => db.run('PRAGMA synchronous = NORMAL')"}</code>.
             <code>strict</code>, <code>readonly</code> and <code>safeIntegers</code> go to

@@ -4,7 +4,7 @@
 // server module — and, through `wire` itself, that the browser's `Rpc` is the same value the server's
 // is. Spawned for `serve.test.ts`'s reason: happy-dom's preload clobbers `Response`.
 
-import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { afterAll, beforeAll, expect, setSystemTime, test } from 'bun:test'
 
 import { buildFiles } from '#server/appBuild.ts'
 import { takeParked } from '#server/parkedAnswers.ts'
@@ -45,6 +45,8 @@ export async function* pairings(): AsyncGenerator<{ ready: boolean }> {
 export const provider: (() => void) & { pairings: typeof pairings } = Object.assign(() => {}, { pairings })
 
 export const latch = { sendRest: (): void => {} }
+
+export const limits = { calls: 0 }
 `,
     'invoices/getInvoice.handler.ts': `${SERVER}import { SECRET } from '#src/lib/database.server.ts'
 import { notYours } from './lib/shared.ts'
@@ -65,6 +67,19 @@ export default GET(async ({ id }: { id: string }) => {
     response().status = 201
     response().headers.set('location', '/invoices/9')
     return { id: '9' }
+})
+`,
+    // 15.19, 15.23 — a rate limit: refused for now, the first time saying for how long.
+    'invoices/limited.handler.ts': `${SERVER}import { limits } from './lib/shared.ts'
+
+export default GET(() => {
+    limits.calls += 1
+    if (limits.calls === 1) {
+        response().headers.set('retry-after', '30')
+        return refuse(429)
+    }
+    if (limits.calls === 2) return refuse(429)
+    return { calls: limits.calls }
 })
 `,
     'invoices/whoAsked.handler.ts': `${SERVER}export default GET(() => request().headers.get('x-caller'))\n`,
@@ -235,6 +250,50 @@ test('a handler reads its request and writes its response — 22.1, 22.9', async
     const made = await Bun.fetch(`${base}${RPC}/created`, { method: 'POST' })
     expect(made.status).toBe(201)
     expect(made.headers.get('location')).toBe('/invoices/9')
+})
+
+// 15.19, 15.23, 15.24 — A RATE LIMIT IS REFUSED FOR NOW, AND SAYS FOR HOW LONG. The `Retry-After` the
+// handler wrote crosses with the Problem Details, the refusal the wire rebuilds keeps it, and every
+// reach before it ends is served the refusal without a call. Once it has passed, the next reach
+// calls again — and a 429 naming no wait is called again by the very next reach, as a 503 is.
+// THE REVERT: drop `holdUntil` from `answered` in `answerOf.ts`, and the reach inside the wait
+// calls — 2 calls where 1 is due.
+test('a 429 runs again on the next reach, and not before its Retry-After — 15.19, 15.23', async () => {
+    const calls: (string | null)[] = []
+    const window = globalThis as { fetch: typeof fetch }
+    const previous = window.fetch
+    window.fetch = (async (input: string, init?: RequestInit) => {
+        const answer = await Bun.fetch(input, init)
+        calls.push(answer.headers.get('retry-after'))
+        return answer
+    }) as typeof fetch
+    try {
+        const limited = wire(
+            'GET',
+            `${base}${RPC}/limited`,
+        ) as () => PromiseLike<unknown> & {
+            error(): unknown
+            catch(onFailed: () => void): Promise<unknown>
+        }
+        const first = limited()
+        await first.catch(() => {})
+        expect((first.error() as { status: number }).status).toBe(429)
+        expect(calls).toEqual(['30'])
+        // Before the wait it named, the refusal is served and nothing is asked.
+        await limited().catch(() => {})
+        expect(calls.length).toBe(1)
+        setSystemTime(new Date(Date.now() + 31_000))
+        const second = limited()
+        await second.catch(() => {})
+        expect((second.error() as { status: number }).status).toBe(429)
+        expect(calls.length).toBe(2)
+        // Named no wait, so the next reach calls at once.
+        expect(await limited()).toEqual({ calls: 3 })
+        expect(calls.length).toBe(3)
+    } finally {
+        setSystemTime()
+        window.fetch = previous
+    }
 })
 
 // Every chunk of the browser's bundle, as one text.

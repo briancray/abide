@@ -2,6 +2,9 @@ import { Database, type DatabaseOptions } from 'bun:sqlite'
 import { mkdirSync, readdirSync, rmSync } from 'node:fs' // bun exposes no directory creation or listing, nor synchronous removal, of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path resolution of its own
 
+import { type Reactive, reactive } from '#shared/reactive/index.ts'
+import { isSubscribed } from '#shared/reactive/producer.ts'
+
 import { config, derived } from './config.ts'
 import { onStop } from './hooks.ts'
 import { isRunning } from './isRunning.ts'
@@ -16,6 +19,9 @@ const PATH = /[/.]/
 const IN_MEMORY = ':memory:'
 
 const BUSY_TIMEOUT = 5000
+
+/** 47.22 — how often `changed` asks the file whether another connection committed, while followed. */
+const CHANGED_EVERY = 1000
 
 /** 47.17 — what SQLite keeps beside a WAL file, removed with it. */
 const BESIDE = ['', '-wal', '-shm']
@@ -55,7 +61,10 @@ const SCRATCH = /^abide-test-(\d+)-/
 export function database(
     file: string | (() => string),
     options?: Options,
-): (() => Database) & { close: (options?: { remove?: boolean }) => void } {
+): (() => Database) & {
+    close: (options?: { remove?: boolean }) => void
+    changed: Reactive<number>
+} {
     if (typeof file === 'string') checked(file)
     let opened: Database | undefined
     // 47.17 — the file the opener last opened, kept past a close: 47.10's leaves it to a `remove` after.
@@ -112,7 +121,55 @@ export function database(
         }
         return opened
     }
-    return Object.assign(opener, { close })
+    // 47.22 — WHAT ANOTHER CONNECTION COMMITTED, counted. `PRAGMA data_version` moves on a connection
+    // when any other one commits to the file, and never for its own writes; asked of the connection
+    // the opener holds, and never opening one.
+    //
+    // 47.23 — ASKED ONLY WHILE SOMETHING FOLLOWS IT. A read runs the body, which arms the clock once
+    // the reader has subscribed, and ticks at once; a tick finding no one following stops it and marks
+    // the value, so the next read runs the body and arms it again.
+    let outside = 0
+    let seenOn: Database | undefined
+    let seenVersion = 0
+    let clock: ReturnType<typeof setInterval> | undefined
+    const tick = (): void => {
+        if (!isSubscribed(changed)) {
+            clearInterval(clock)
+            clock = undefined
+            changed.invalidate()
+            return
+        }
+        const held = opened
+        if (held === undefined) return
+        // `safeIntegers` reads it as a bigint.
+        const version = Number(
+            (
+                held.query('PRAGMA data_version').get() as {
+                    data_version: number | bigint
+                }
+            ).data_version,
+        )
+        const moved = seenOn === held && version !== seenVersion
+        seenOn = held
+        seenVersion = version
+        if (!moved) return
+        outside += 1
+        changed.refresh()
+    }
+    const follow = (): void => {
+        if (clock !== undefined) return
+        clock = setInterval(tick, CHANGED_EVERY)
+        clock.unref()
+        tick()
+    }
+    const changed: Reactive<number> = reactive(
+        () => {
+            queueMicrotask(follow)
+            return outside
+        },
+        { global: true },
+    )
+    return Object.assign(opener, { close, changed })
 }
 
 function checked(file: unknown): string {

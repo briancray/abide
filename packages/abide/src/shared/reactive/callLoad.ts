@@ -9,6 +9,7 @@
 
 import { beginLoadCall, endLoadCall, reachedInLoadCall } from '../loadCall.ts'
 import { refuse } from '../refuse.ts'
+import { type Cell, cellOf } from './cellShape.ts'
 import { armTimer } from './Expiry.ts'
 // Through the barrel first, for the cycle it names: rpc reaches this module ahead of the barrel.
 import { isReactive, STREAMING } from './index.ts'
@@ -70,6 +71,9 @@ class Attended {
 
 const ATTENDED = new WeakMap<object, Attended>()
 
+/** 15.19 — the run each value stood at as the last call to reach it left it. */
+const LEFT_AT = new WeakMap<Cell, number>()
+
 /**
  * Reaches `args` through `reach` as a call does, under that call's `signal` and `timeout`.
  *
@@ -94,14 +98,25 @@ export function callLoad(
         attended = ATTENDED.get(reached as object)
         // 16.62 — the callers of an aborted load stopped waiting, and this one has not.
         // 15.19 — and of one whose last answer failed transiently, which runs again here where an
-        // unkeyed handler has no reach of its own to run it.
+        // unkeyed handler has no reach of its own to run it: a failure some call before this one
+        // was handed. One this reach's own run produced — a fresh value's first run, a `Keyed`
+        // entry its reach already ran again — is this call's answer, and running it again here ran
+        // a body that refuses synchronously twice per call.
         let again = false
         if (attended?.abandoned) {
             attended.abandoned = false
             again = loadOf(reached) === undefined
         }
-        if (again || failedTransiently(reached))
+        // Keyed by the cell: an unkeyed handler's forwarder is one for every request's instance.
+        const cell = isReactive(reached) ? cellOf(reached) : undefined
+        if (
+            again ||
+            (cell !== undefined &&
+                LEFT_AT.get(cell) === cell.generation &&
+                failedTransiently(reached))
+        )
             (reached as { refresh(): void }).refresh()
+        if (cell !== undefined) LEFT_AT.set(cell, cell.generation)
     } finally {
         endLoadCall()
     }

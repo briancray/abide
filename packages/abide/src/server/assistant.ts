@@ -14,6 +14,10 @@
 // conversation runs in a scope over the window's latest request as 44.7 carries it, so the principal,
 // the caller and the window's credential all read as they did there, and `provider.claudeCode` finds
 // the app's own bridge (44.77) by the same check a request from the window passes.
+//
+// 44.101 — OUTSIDE A REQUEST ANYWHERE ELSE, NO ONE ASKS: a `global` value's run among them, which
+// runs in whichever request reached it first and is still no request's. The app's life is its signal,
+// and it has no tools, there being no one for them to act as.
 
 import type {
     AssistantContent,
@@ -23,6 +27,7 @@ import type {
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
+import { stopSignal } from '#shared/reactive/poll.ts'
 import { refuse } from '#shared/refuse.ts'
 
 import { carriesWindowCredential } from './bridgeRelay.ts'
@@ -30,9 +35,9 @@ import { mcpFailure, type McpReply, McpSurface } from './generatedSurfaces.ts'
 import {
     type AnsweringApp,
     currentRequestScope,
+    inGlobalRun,
     inOpenScope,
     releaseScope,
-    request,
     scopeFor,
     within,
 } from './requestScope.ts'
@@ -110,10 +115,29 @@ export async function* assistant(
     provider: Provider,
     options: AssistantOptions = {},
 ): AsyncGenerator<AssistantEvent> {
-    if (currentRequestScope()?.request === undefined) {
+    // 44.57 — A `global` VALUE'S RUN IS NO REQUEST'S, whichever request reached it first: the reader
+    // leaving is not the end of an answer every other reader is reading.
+    const asking = inGlobalRun() ? undefined : currentRequestScope()?.request
+    if (asking === undefined && WINDOW.asker !== undefined) {
         yield* asWindow(messages, provider, options)
         return
     }
+    // 44.101 — NO ONE ASKED: a `global` value's run, a timer's, `onStart`'s. There is no one for a
+    // tool to act as, and a `global` value's answer is every caller's.
+    if (asking === undefined && options.mcp === true)
+        throw new Error(
+            'abide: assistant was asked for tools outside a request, and there is no asker for them to act as — no request is being answered, and none has come from the native app’s window. RULEBOOK 44.101.',
+        )
+    yield* converse(messages, provider, options, asking)
+}
+
+/** The conversation `assistant` decided `asking` asks — `undefined` for no one. */
+async function* converse(
+    messages: AssistantMessage[],
+    provider: Provider,
+    options: AssistantOptions,
+    asking: Request | undefined,
+): AsyncGenerator<AssistantEvent> {
     // 44.3 — a transcript a model can answer ends on the asker's turn.
     if (messages.at(-1)?.role !== 'user')
         throw refuse(
@@ -148,12 +172,17 @@ export async function* assistant(
         }
     }
     const surface = options.mcp === true ? appSurface() : NO_SURFACE
-    const tools = toolboxOver(surface, askerOf(request()))
-    // 44.57 — the caller's signal and the request's are one: either ends the conversation.
+    const tools = toolboxOver(
+        surface,
+        asking === undefined ? NO_ASKER : askerOf(asking),
+    )
+    // 44.57 — the caller's signal and the request's are one: either ends the conversation. Where no
+    // request owns the run, the app's own life is the one it has, as a `global` value's `poll` (7.26).
+    const owner = asking === undefined ? stopSignal() : asking.signal
     const signal =
         options.signal === undefined
-            ? request().signal
-            : AbortSignal.any([request().signal, options.signal])
+            ? owner
+            : AbortSignal.any([owner, options.signal])
     const events = endedBy(
         provider.run(turns, tools, {
             maxTurns: options.maxTurns ?? MAX_TURNS,
@@ -357,21 +386,28 @@ export function forwardOf(tools: Toolbox): McpForward {
 /**
  * `assistant` in a scope over the window's latest request, each step taken inside it. 44.100.
  *
- * Throws where no request has come from the window — outside the native app, always.
+ * Called only once a request has come from the window — inside the native app, alone.
  */
 async function* asWindow(
     messages: AssistantMessage[],
     provider: Provider,
     options: AssistantOptions,
 ): AsyncGenerator<AssistantEvent> {
-    const { asker, app } = WINDOW
-    if (asker === undefined || app === undefined)
-        throw new Error(
-            'abide: assistant was called outside a request, and no request has come from the native app’s window to run it as. RULEBOOK 22.1, 44.100.',
-        )
-    // The asker's own signal never aborts, so the caller's is the only one that ends the conversation.
+    const asker = WINDOW.asker as Request
+    const app = WINDOW.app as AnsweringApp
+    // 44.57 — the asker's own signal never aborts, so the app stopping ends the conversation, or the
+    // caller's signal.
+    const ended =
+        options.signal === undefined
+            ? stopSignal()
+            : AbortSignal.any([stopSignal(), options.signal])
     const scope = scopeFor(asker, asker, app)
-    const conversation = assistant(messages, provider, options)
+    const conversation = converse(
+        messages,
+        provider,
+        { ...options, signal: ended },
+        asker,
+    )
     try {
         for (;;) {
             const step = await inOpenScope(scope, () => conversation.next())
