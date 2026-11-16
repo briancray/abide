@@ -13,7 +13,8 @@
 //   attr={expr}  {...expr}         an expression attribute and a spread (32.11)
 //   {#if c}…{:else if c}…{:else}…{/if}
 //   {#for item, index of list by key}…{/for}
-//   {#try}…{:catch error}…{:finally}…{/try}
+//   {#try}…{:pending}…{:catch error}…{:finally}…{/try}
+//   <window on…={…}/>  <document on…={…}/>   elements, as HTML reads any tag (39.21)
 //   {#component Name(pattern)}…{/component}
 //
 // What stands between the braces is `code`, which the external scanner reads by balancing braces
@@ -70,11 +71,14 @@ module.exports = grammar(HTML, {
             seq(
                 $.try_start,
                 repeat($._node),
+                optional($.pending_clause),
                 optional($.catch_clause),
                 optional($.finally_clause),
                 $.try_end,
             ),
         try_start: ($) => seq(keyword($, '{#try'), '}'),
+        pending_clause: ($) => seq($.pending_start, repeat($._node)),
+        pending_start: ($) => seq(keyword($, '{:pending'), '}'),
         catch_clause: ($) => seq($.catch_start, repeat($._node)),
         catch_start: ($) =>
             seq(keyword($, '{:catch'), optional(field('error', $.code)), '}'),

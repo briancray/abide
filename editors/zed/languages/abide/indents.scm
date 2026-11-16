@@ -25,6 +25,8 @@
   (try_start) @start
   (try_end)? @end) @indent
 
+(pending_clause) @indent
+
 (catch_clause) @indent
 
 (finally_clause) @indent

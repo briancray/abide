@@ -38,6 +38,7 @@
 (for_start "}" @keyword)
 (for_end "}" @keyword)
 (try_start "}" @keyword)
+(pending_start "}" @keyword)
 (catch_start "}" @keyword)
 (finally_start "}" @keyword)
 (try_end "}" @keyword)
