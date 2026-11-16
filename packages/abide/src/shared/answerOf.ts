@@ -4,7 +4,7 @@
 // ONE CLASSIFIER. The early-call script (41.20) records the `Response` and nothing it decides, so
 // an answer the page started and one fetched here are read by `answerFrom` alike.
 
-import { failedFrom, isProblem } from './Failed.ts'
+import { failedFrom, holdUntil, isProblem, retryAtOf } from './Failed.ts'
 import {
     carriesBytes,
     type Framed,
@@ -54,6 +54,8 @@ export type Answer = {
     body: ReadableStream<Uint8Array> | null | undefined
     /** The trace id its `traceresponse` named (21.2), handed to `onRefusal` with a refusal (37.24). */
     trace: string | undefined
+    /** 15.23 — the time a failure's `Retry-After` named, in epoch ms. */
+    retryAt: number | undefined
 }
 
 /**
@@ -133,6 +135,7 @@ export function noAnswer(): Answer {
         bytes: undefined,
         body: undefined,
         trace: undefined,
+        retryAt: undefined,
     }
 }
 
@@ -172,6 +175,7 @@ export function answerFrom(
         bytes: undefined,
         body: undefined,
         trace: headers.get('traceresponse')?.split('-')[1],
+        retryAt: ok ? undefined : retryAtOf(headers.get('retry-after')),
     }
     if (read !== undefined) {
         if (binary) answer.bytes = new Uint8Array(read)
@@ -225,6 +229,8 @@ export function answered(
     const refusal = isProblem(body)
         ? failedFrom(body)
         : refuse(answer.status, answer.statusText || undefined)
+    // 15.23 — the wait the answer named stays with the refusal it rebuilt.
+    if (answer.retryAt !== undefined) holdUntil(refusal, answer.retryAt)
     refused(refusal, {
         method: call.method,
         url: call.url,

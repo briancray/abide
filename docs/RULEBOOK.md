@@ -1056,11 +1056,12 @@ there.
 and its data's type MUST be inferred from that `schema`; a `message` function MUST be accepted only
 beside one.
 
-15.19 A `Keyed` entry or an `Rpc` whose last answer was a refusal at status 500 or above, or a throw,
-MUST run its body again for the next reach rather than serve that answer.
+15.19 A `Keyed` entry or an `Rpc` whose last answer was a transient refusal — at status 408, 425,
+429, or 500 and above — or a throw, MUST run its body again for the next reach rather than serve that
+answer, save as 15.23 holds it.
 
-15.20 A refusal below status 500 MUST be held for the next reach as a production is, until its
-`ttl` ends.
+15.20 A refusal 15.19 does not count transient MUST be held for the next reach as a production is,
+until its `ttl` ends.
 
 15.21 A refusal MUST cross a wire as Problem Details (RFC 9457) under `application/problem+json`: its
 name as `type`, or `about:blank` titled by its status's reason phrase where it was not declared, its
@@ -1069,6 +1070,12 @@ message as `detail`, and its data as a `data` member.
 15.22 The `refuse.notFound` 15.7 returns, and the 405 15.17 answers at a route, MUST be painted as
 a page's failure where the request prefers `text/html` over `application/json`, and MUST cross as
 15.21 states otherwise.
+
+15.23 A transient refusal answered with a `Retry-After`, in seconds or as an HTTP date, MUST be
+served by every reach before the time that header names, rather than run again under 15.19.
+
+15.24 A refusal answered with a `Retry-After` MUST carry one naming the same time wherever it crosses
+a wire again under 15.21.
 
 # 16. Handlers and transports
 
@@ -4543,7 +4550,8 @@ the browser's navigation preload, and where the browser makes none, with the nav
 request, unchanged.
 
 45.26 The worker `ABIDE_OFFLINE` turns on MUST drop the copy it saved of an address where the network
-answers that address with an answer 45.3 or 45.4 does not let it save, save one of 500 or above.
+answers that address with an answer 45.3 or 45.4 does not let it save, save one at a status 15.19
+counts transient.
 
 45.27 The worker `ABIDE_OFFLINE` turns on MUST NOT answer a request of another origin, nor a
 navigation whose destination is not `document`.
@@ -4553,7 +4561,8 @@ whose `cache` is none 45.20 names, with that copy while 45.19 has it stand in, b
 answers, and MUST ask for that address's page behind it as 45.21 and 45.23 have it ask.
 
 45.29 The worker `ABIDE_OFFLINE` turns on MUST navigate again the window a navigation 45.28 opened
-from a copy, where the page asked for behind it answers other than 200 and below 500.
+from a copy, where the page asked for behind it answers other than 200, at a status 15.19 does not
+count transient.
 
 # 46. Outbox
 
@@ -4564,8 +4573,8 @@ discarded, narrowed to the handler a selection names and the args a pattern matc
 
 46.3 `outbox` MUST send its calls oldest first, one at a time.
 
-46.4 A call `outbox` sends that gets no answer, or an answer at 502, 503 or 504, MUST stay in
-`outbox`, and MUST hold back the calls after it until it is sent again.
+46.4 A call `outbox` sends that gets no answer, or an answer at 408, 425, 429, 502, 503 or 504,
+MUST stay in `outbox`, and MUST hold back the calls after it until it is sent again.
 
 46.5 A call `outbox` sends that is refused MUST stay in `outbox`, its `value` refused as the server
 refused it, and MUST NOT hold back the calls after it.
@@ -4607,6 +4616,9 @@ keep it, as a write made here (3.10).
 
 46.20 A page MUST NOT open the store 46.2 keeps `outbox` in where `outbox` held no call when it last
 changed.
+
+46.21 The wait 46.8 makes after a send 46.4 keeps that was answered with a `Retry-After` MUST last
+at least until the time that header names.
 
 # 47. Databases
 

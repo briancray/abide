@@ -3,6 +3,8 @@ import { expect, test } from 'bun:test'
 import { answered, answerFailure } from '#server/answerFailure.ts'
 import { plainAnswer } from '#server/plainAnswer.ts'
 import { inReleasedScope } from '#server/requestScope.ts'
+import { answered as answeredValue, answerFrom } from '#shared/answerOf.ts'
+import { holdUntil, retryAt } from '#shared/Failed.ts'
 import { refuse } from '#shared/refuse.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 
@@ -20,6 +22,51 @@ test('the handler lane answers a refusal as Problem Details at its status — 15
         status: 403,
         detail: 'no',
     })
+})
+
+// 15.24 — A REFUSAL'S Retry-After CROSSES EVERY WIRE IT CROSSES. Read off an answer, it stays with
+// the refusal rebuilt from it; answered again — a handler handing on what a call it made refused —
+// it is a header again, naming what is left of the same wait. THE REVERT: drop the `retry-after`
+// write from `answered`; the second answer carries `null` where `30` is due.
+test('a refusal answered with a Retry-After carries it again — 15.24', async () => {
+    const rebuiltFrom = async (retryAfter: string) =>
+        answeredValue(
+            await answerFrom(
+                new Response(
+                    JSON.stringify({
+                        type: 'about:blank',
+                        title: 'Too Many Requests',
+                        status: 429,
+                        detail: 'later',
+                    }),
+                    {
+                        status: 429,
+                        headers: {
+                            'content-type': 'application/problem+json',
+                            'retry-after': retryAfter,
+                        },
+                    },
+                ),
+                undefined,
+                false,
+            ),
+            { method: 'GET', url: '/limited' },
+        ) as ReturnType<typeof refuse>
+    const rebuilt = await rebuiltFrom('30')
+    expect(Math.round(((retryAt(rebuilt) as number) - Date.now()) / 1000)).toBe(
+        30,
+    )
+    expect(answered(rebuilt).headers.get('retry-after')).toBe('30')
+    // An HTTP date names the same kind of time.
+    const dated = await rebuiltFrom(new Date(Date.now() + 60_000).toUTCString())
+    const again = Number(answered(dated).headers.get('retry-after'))
+    expect(again).toBeGreaterThan(57)
+    expect(again).toBeLessThanOrEqual(60)
+    // Kept beside the refusal, so one answered with none answers with none.
+    const plain = refuse(429)
+    expect(answered(plain).headers.get('retry-after')).toBe(null)
+    holdUntil(plain, Date.now() + 5_000)
+    expect(answered(plain).headers.get('retry-after')).toBe('5')
 })
 
 // 21.3 — ABIDE'S OWN ADDRESSES answer as typed text, never stored.

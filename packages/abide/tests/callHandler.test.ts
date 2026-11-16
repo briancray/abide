@@ -19,3 +19,20 @@ test('a route parameter missing from JSON args is refused naming 30.3, as from n
     expect(await asked([])).toBe(expected)
     expect(await asked(['size=2'])).toBe(expected)
 })
+
+// 15.19 — A REFUSAL FOR NOW EXITS AS A FAULT DOES, 8, so a script calls again; one for good exits 7.
+// THE REVERT: read `>= 500` alone for `FAULTED` in `callHandler`; the 429 exits 7 where 8 is due.
+test('a call refused 429 exits 8 as a 503 does, and a 404 exits 7 — 15.19', async () => {
+    let status = 429
+    using server = Bun.serve({
+        port: 0,
+        fetch: () => new Response('{}', { status }),
+    })
+    const code = async (): Promise<number> =>
+        (await callHandler(server.url.origin, 'ping', [], 'GET', [])).code
+    expect(await code()).toBe(8)
+    status = 503
+    expect(await code()).toBe(8)
+    status = 404
+    expect(await code()).toBe(7)
+})

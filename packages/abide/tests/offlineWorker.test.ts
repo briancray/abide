@@ -530,13 +530,18 @@ test("another origin's request and a frame's navigation are left to the browser 
 // 45.26 — AN ANSWER THE WORKER DOES NOT SAVE STILL REPLACES THE COPY IT HELD: the session behind a
 // sign-in proxy lapses, the page opens from its copy, and the navigation alongside it is answered 401
 // — so the load after it goes to the network, where the proxy sends it to sign in, rather than to the
-// signed-out copy. A server error leaves the copy standing. THE REVERT: return from `keep` where
-// `copy` is `undefined`, as before; the load after the 401 reads `kept` from the copy.
-test('a copy answered over by a 401 or a redirect is dropped, and a 5xx leaves it — 45.26', async () => {
+// signed-out copy. A server error, or a refusal for now (15.19), leaves the copy standing. THE
+// REVERT: return from `keep` where `copy` is `undefined`, as before; the load after the 401 reads
+// `kept` from the copy. Drop `TRANSIENT` from the worker's `transient`; the 429 drops the copy —
+// `[]` where the address is due.
+test('a copy answered over by a 401 or a redirect is dropped, and a 5xx or a 429 leaves it — 45.26', async () => {
     let answering: () => Response = () => aged('kept', PAGE_KEPT)
     const offline = await worker(MANIFEST, () => answering())
     await offline.navigate('/')
     answering = () => new Response('', { status: 503 })
+    expect(await (await offline.navigate('/'))?.text()).toBe('kept')
+    expect(offline.saved('abide:saved')).toEqual([`${ORIGIN}/`])
+    answering = () => new Response('', { status: 429 })
     expect(await (await offline.navigate('/'))?.text()).toBe('kept')
     expect(offline.saved('abide:saved')).toEqual([`${ORIGIN}/`])
     answering = () => new Response('sign in', { status: 401 })
@@ -550,8 +555,9 @@ test('a copy answered over by a 401 or a redirect is dropped, and a 5xx leaves i
 // 45.29 — THE WINDOW A DROPPED COPY OPENED IS OPENED AGAIN, by the browser: the proxy's redirect to
 // sign in arrives as the navigation alongside the copy, so the reader is sent to sign in on this load
 // rather than on a reload nobody knows to make — once, since the copy that would open it again is
-// gone. A server error navigates nothing. THE REVERT: drop the `navigate` loop from `revalidated`;
-// `navigated: 0` where the redirect is due 1.
+// gone. A server error, or a refusal for now (15.19), navigates nothing. THE REVERTS: drop the
+// `navigate` loop from `revalidated`; `navigated: 0` where the redirect is due 1. Drop `TRANSIENT`
+// from the worker's `transient`; the 429 navigates — `navigated: 1` where 0 is due.
 test('a window opened from a copy the network now redirects is opened again, once — 45.29', async () => {
     let answering: () => Response = () => aged('kept', PAGE_KEPT)
     const offline = await worker(MANIFEST, () => answering())
@@ -560,6 +566,9 @@ test('a window opened from a copy the network now redirects is opened again, onc
     const elsewhere = offline.opened('/elsewhere')
     answering = () => new Response('', { status: 502 })
     await offline.navigate('/')
+    answering = () => new Response('', { status: 429 })
+    await offline.navigate('/')
+    expect(`navigated: ${open.navigated}`).toBe('navigated: 0')
     answering = () =>
         new Response(null, {
             status: 302,

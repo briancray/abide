@@ -117,7 +117,7 @@ import Snippet from '#src/lib/Snippet.abide'
             <tbody>
                 <tr><td><code>0</code></td><td>the handler answered</td></tr>
                 <tr><td><code>7</code></td><td>the handler refused</td></tr>
-                <tr><td><code>8</code></td><td>the app faulted</td></tr>
+                <tr><td><code>8</code></td><td>the app faulted, or refused for now with a <code>408</code>, <code>425</code> or <code>429</code>, so call again later</td></tr>
             </tbody>
         </table>
 

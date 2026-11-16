@@ -12,7 +12,13 @@
 // included — a shape that grows a field on a later path is two hidden classes and every
 // read downstream of it deoptimizes.
 
-import { type Failed, isFailed, isFailedNamed } from '../Failed.ts'
+import {
+    type Failed,
+    isFailed,
+    isFailedNamed,
+    isTransient,
+    retryAt,
+} from '../Failed.ts'
 import { isAbort } from '../isAbort.ts'
 import { namedLogger } from '../log.ts'
 import { refuse } from '../refuse.ts'
@@ -3981,15 +3987,20 @@ export function dropAnswered(value: unknown): void {
 /**
  * Whether `value` stands on a failure the next reach runs again rather than serves.
  *
- * 15.19, 15.20 — A REFUSAL BELOW 500 IS AN ANSWER, held as a production is: the caller asked for
- * something that is not there, and asking again changes nothing. One at 500 or above, and a throw,
- * is the server's own trouble, and holding it for a `ttl` replays an outage after it has passed.
+ * 15.19, 15.20 — A REFUSAL THAT SAYS "NO" IS AN ANSWER, held as a production is: the caller asked
+ * for something that is not there, and asking again changes nothing. One that says "not now" — a
+ * 408, 425 or 429, or 500 and above — and a throw, is trouble that passes, and holding it for a `ttl`
+ * replays an outage or a rate limit after it has lifted. 15.23 — until the `Retry-After` it was
+ * answered with, where it was answered with one: asking sooner is what it said not to do.
  */
 export function failedTransiently(value: unknown): boolean {
     const cell = (value as Callable)[CELL]
     const failure = cell.failure
     if (cell.loading || failure === undefined) return false
-    return !isFailed(failure) || failure.status >= 500
+    if (!isFailed(failure)) return true
+    if (!isTransient(failure.status)) return false
+    const at = retryAt(failure)
+    return at === undefined || Date.now() >= at
 }
 
 /**

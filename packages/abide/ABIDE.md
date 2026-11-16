@@ -157,6 +157,11 @@ affected code saying what it did, and tell the user.
 - A file past a few hundred lines is a component or a module waiting to be split out; split it
   before adding to it.
 - Use Bun's APIs (`Bun.file`, `Bun.write`, `Bun.$`, `bun:sqlite`) before `node:` ones.
+- Refuse a rate limit as `refuse(429)`, not as a 503. A 408, 425, 429 or anything from 500 runs
+  again on the next read, where any other refusal is held until its `ttl` ends (RULEBOOK 15.19,
+  15.20). Where you know the wait, set it beside the refusal —
+  `response().headers.set('retry-after', '30')` — and every read before then is answered with the
+  refusal without a call (15.23).
 - Put shutdown work in `onStop`, never in `process.on('SIGTERM')`: in the native app the app runs
   on a thread of its own, which no signal reaches (RULEBOOK 38.180).
 - Style with tailwind classes. `style=` is for a value computed at runtime. Tailwind is wired

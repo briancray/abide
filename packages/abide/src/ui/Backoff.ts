@@ -20,10 +20,17 @@ export class Backoff {
         }
     }
 
-    /** Arms the attempt at the wait standing, in place of one armed, and doubles the wait. */
-    later(): void {
+    /**
+     * Arms the attempt at the wait standing — or at `notBefore`, an epoch ms, where that is later —
+     * in place of one armed, and doubles the wait.
+     */
+    later(notBefore?: number): void {
         clearTimeout(this.timer)
-        this.timer = setTimeout(this.fire, this.wait)
+        const wait =
+            notBefore === undefined
+                ? this.wait
+                : Math.max(this.wait, notBefore - Date.now())
+        this.timer = setTimeout(this.fire, wait)
         this.wait = Math.min(this.wait * 2, this.ceiling)
     }
 

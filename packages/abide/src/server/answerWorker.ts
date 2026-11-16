@@ -19,6 +19,7 @@ import {
 } from '#shared/OFFLINE_CACHES.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { REACHED_MESSAGE } from '#shared/REACHED_MESSAGE.ts'
+import { TRANSIENT_STATUSES } from '#shared/TRANSIENT_STATUSES.ts'
 
 import type { Manifest } from './manifestOf.ts'
 
@@ -150,16 +151,20 @@ async function opened(event) {
     }
 }
 
+function transient(status) {
+    return status >= 500 || TRANSIENT.includes(status)
+}
+
 // 45.29 — THE PAGE OPENED FROM ITS COPY WHERE THE ADDRESS NOW ANSWERS SOMETHING ELSE — a redirect to
 // sign in above all, or a refusal — is opened again: the copy is dropped (RULEBOOK 45.26), so the window's next
 // load is the browser's own, and the sign-in it is sent to is reached now rather than on a reload
-// nobody makes. A 200 is the page itself, which the next load opens; a server error leaves the copy,
-// and the window, standing.
+// nobody makes. A 200 is the page itself, which the next load opens; a refusal for now (RULEBOOK 15.19)
+// leaves the copy, and the window, standing.
 async function revalidated(request, response, since) {
     const copy = kept(response) ? response : undefined
     if (copy === undefined) response.body?.cancel()
     await keep(request, response, copy, since)
-    if (response.status === 200 || response.status >= 500) return
+    if (response.status === 200 || transient(response.status)) return
     for (const client of await self.clients.matchAll({ type: 'window' }))
         if (client.url === request.url) await client.navigate(client.url)
 }
@@ -344,10 +349,10 @@ async function keep(request, response, copy, since) {
     }
     // 45.26 — AN ANSWER NOT SAVED STILL REPLACES THE COPY: a redirect or a 401 is what the address
     // answers now, and a copy left standing would open every load in its place — a session lapsed
-    // behind a sign-in proxy never reaching the sign-in. A server error is no answer to replace a
-    // copy with.
+    // behind a sign-in proxy never reaching the sign-in. A refusal for now (RULEBOOK 15.19) is no answer to
+    // replace a copy with.
     if (copy === undefined) {
-        if (response.status >= 500) return
+        if (transient(response.status)) return
         await Promise.all([
             caches.open(SAVED).then((cache) => cache.delete(request)),
             caches.open(SHARED).then((cache) => cache.delete(request)),
@@ -418,6 +423,8 @@ const REACHED = ${JSON.stringify(REACHED_MESSAGE)}
 // 45.4 — the types a stream 16.32 frames, which has no end to save.
 const STREAMED = ${JSON.stringify(STREAMED_TYPES)}
 const OFFLINE = ${JSON.stringify(OFFLINE)}
+// 15.19 — the refusals below 500 that say "not now", 45.26 and 45.29 reading them as 500 and above.
+const TRANSIENT = ${JSON.stringify(TRANSIENT_STATUSES)}
 const FILES = new Set(${JSON.stringify(paths)}.map((path) => new URL(path, self.location).href))
 ${SAVING}`
     }
