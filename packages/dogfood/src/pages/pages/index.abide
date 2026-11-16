@@ -171,7 +171,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A shortcut listens on the window for as long as its component is there">
         <Example
             id="window-listener"
-            app="crm"
             title="`<window onkeydown>` — a key that finds a contact from anywhere on the page"
             summary="A search box the contacts list puts above itself. Press / anywhere on the page."
             files={{
