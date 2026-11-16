@@ -42,8 +42,21 @@ function signedText(
     )
 }
 
-const base64 = (bytes: ArrayBuffer): string =>
-    Buffer.from(bytes).toString('base64')
+const base64 = (bytes: ArrayBuffer): string => new Uint8Array(bytes).toBase64()
+
+/** The Ed25519 key `privateKey` holds, as the PKCS #8 text `ABIDE_UPDATE_KEY` is written in. */
+function signingKey(
+    privateKey: string,
+    extractable: boolean,
+): Promise<CryptoKey> {
+    return crypto.subtle.importKey(
+        'pkcs8',
+        Uint8Array.fromBase64(privateKey),
+        'Ed25519',
+        extractable,
+        ['sign'],
+    )
+}
 
 /** A new signing key, as the PKCS #8 text `ABIDE_UPDATE_KEY` holds. */
 export async function newUpdateKey(): Promise<string> {
@@ -56,15 +69,13 @@ export async function newUpdateKey(): Promise<string> {
 
 /** The public half of `privateKey`, as the text the executable is built with. */
 export async function publicKeyOf(privateKey: string): Promise<string> {
-    const key = await crypto.subtle.importKey(
-        'pkcs8',
-        Buffer.from(privateKey, 'base64'),
-        'Ed25519',
-        true,
-        ['sign'],
+    const { x } = await crypto.subtle.exportKey(
+        'jwk',
+        await signingKey(privateKey, true),
     )
-    const { x } = await crypto.subtle.exportKey('jwk', key)
-    return Buffer.from(x as string, 'base64url').toString('base64')
+    return Uint8Array.fromBase64(x as string, {
+        alphabet: 'base64url',
+    }).toBase64()
 }
 
 /**
@@ -119,13 +130,7 @@ export async function publishUpdate(
         .update(await Bun.file(`${directory}/${file}`).bytes())
         .digest('hex')
     const unsigned = { ...release, file, sha256 }
-    const key = await crypto.subtle.importKey(
-        'pkcs8',
-        Buffer.from(privateKey, 'base64'),
-        'Ed25519',
-        false,
-        ['sign'],
-    )
+    const key = await signingKey(privateKey, false)
     const feed: UpdateFeed = {
         ...unsigned,
         signature: base64(
@@ -160,19 +165,20 @@ export async function verifiedFeed(
     const feed = answered as UpdateFeed
     const key = await crypto.subtle.importKey(
         'raw',
-        Buffer.from(publicKey, 'base64'),
+        Uint8Array.fromBase64(publicKey),
         'Ed25519',
         false,
         ['verify'],
     )
-    const signed = await crypto.subtle
-        .verify(
+    // A signature that is not base64 at all is one this key did not make.
+    const signed = await Promise.try(() =>
+        crypto.subtle.verify(
             'Ed25519',
             key,
-            Buffer.from(feed.signature, 'base64'),
+            Uint8Array.fromBase64(feed.signature),
             signedText(feed),
-        )
-        .catch(() => false)
+        ),
+    ).catch(() => false)
     return signed
         ? feed
         : 'the update feed is not signed by the key this app was bundled with'

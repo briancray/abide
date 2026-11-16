@@ -130,6 +130,28 @@ export function sendNumber(
     sendTyped(receiver, name, [type], FFIType.void, value)
 }
 
+/** Sends `name` to `receiver` with two doubles — a size or a point — answering nothing. */
+export function sendPair(
+    receiver: Id,
+    name: string,
+    first: number,
+    second: number,
+): void {
+    sendTyped(
+        receiver,
+        name,
+        [FFIType.f64, FFIType.f64],
+        FFIType.void,
+        first,
+        second,
+    )
+}
+
+/** What `receiver` answers `name` with, a `BOOL` getter taking nothing. */
+export function flagOf(receiver: Id, name: string): boolean {
+    return sendTyped(receiver, name, [], FFIType.bool) as boolean
+}
+
 /** The window's standard button `button` — close 0, miniaturize 1, zoom 2 (`NSWindowButton`). */
 export function windowButton(window: Id, button: number): Id {
     return sendTyped(

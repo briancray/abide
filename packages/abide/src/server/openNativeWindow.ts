@@ -13,6 +13,7 @@ import {
     callBlockLater,
     created,
     definedClass,
+    flagOf,
     type Id,
     nsBoolean,
     nsString,
@@ -22,6 +23,7 @@ import {
     send,
     sendFlag,
     sendNumber,
+    sendPair,
     sendTyped,
     stringOf,
     windowButton,
@@ -215,29 +217,13 @@ export function openNativeWindow(
     // 38.161.
     if (!options.shadow) sendFlag(window, 'setHasShadow:', false)
     sendFlag(window, 'setReleasedWhenClosed:', false)
-    sendTyped(
-        window,
-        'setContentSize:',
-        [FFIType.f64, FFIType.f64],
-        FFIType.void,
-        options.width,
-        options.height,
-    )
-    sendTyped(
-        window,
-        'setContentMinSize:',
-        [FFIType.f64, FFIType.f64],
-        FFIType.void,
-        options.minWidth,
-        options.minHeight,
-    )
+    sendPair(window, 'setContentSize:', options.width, options.height)
+    sendPair(window, 'setContentMinSize:', options.minWidth, options.minHeight)
     // 38.150.
     if (Number.isFinite(options.maxWidth) || Number.isFinite(options.maxHeight))
-        sendTyped(
+        sendPair(
             window,
             'setContentMaxSize:',
-            [FFIType.f64, FFIType.f64],
-            FFIType.void,
             Math.min(options.maxWidth, Number.MAX_VALUE),
             Math.min(options.maxHeight, Number.MAX_VALUE),
         )
@@ -411,44 +397,25 @@ export function openNativeWindow(
     send(
         controller,
         'addScriptMessageHandler:name:',
-        send(
-            definedClass('AbideWindowBridge', {
-                'userContentController:didReceiveScriptMessage:': {
-                    types: 'v@:@@',
-                    args: [FFIType.ptr, FFIType.ptr],
-                    returns: FFIType.void,
-                    run: (_controller: Id, message: Id) => {
-                        const [kind, ...rest] = stringOf(
-                            send(message, 'body'),
-                        ).split(' ')
-                        // 38.155 — the press that posted this is the event AppKit is handling.
-                        if (kind === 'drag') {
-                            const event = send(application, 'currentEvent')
-                            if (event !== null)
-                                send(
-                                    window,
-                                    'performWindowDragWithEvent:',
-                                    event,
-                                )
-                        } else if (kind === 'zoom') titlebarDoubleClick(window)
-                        // 38.156.
-                        else if (
-                            kind === 'background' &&
-                            options.vibrancy === undefined
-                        ) {
-                            const color = rest.map(Number) as [
-                                number,
-                                number,
-                                number,
-                            ]
-                            send(window, 'setBackgroundColor:', colorOf(color))
-                            launcher.rememberBackground(color)
-                        }
-                    },
-                },
-            }),
-            'new',
-        ),
+        scriptHandler('AbideWindowBridge', (body) => {
+            const [kind, rest] = kindAndRest(body)
+            // 38.155 — the press that posted this is the event AppKit is handling.
+            if (kind === 'drag') {
+                const event = send(application, 'currentEvent')
+                if (event !== null)
+                    send(window, 'performWindowDragWithEvent:', event)
+            } else if (kind === 'zoom') titlebarDoubleClick(window)
+            // 38.156.
+            else if (kind === 'background' && options.vibrancy === undefined) {
+                const color = rest.split(' ').map(Number) as [
+                    number,
+                    number,
+                    number,
+                ]
+                send(window, 'setBackgroundColor:', colorOf(color))
+                launcher.rememberBackground(color)
+            }
+        }),
         nsString('abideWindow'),
     )
     const fullScreenChanged = (entered: boolean) => (): void => {
@@ -563,36 +530,19 @@ export function openNativeWindow(
             front()
             tellPages('notification', { id, type: 'click' })
         })
-    const pageHandler = send(
-        definedClass('AbidePageBridge', {
-            'userContentController:didReceiveScriptMessage:': {
-                types: 'v@:@@',
-                args: [FFIType.ptr, FFIType.ptr],
-                returns: FFIType.void,
-                run: (_controller: Id, message: Id) => {
-                    const body = stringOf(send(message, 'body'))
-                    const space = body.indexOf(' ')
-                    const kind = space === -1 ? body : body.slice(0, space)
-                    const rest = space === -1 ? '' : body.slice(space + 1)
-                    if (kind === 'badge') setBadge(rest)
-                    // 38.189.
-                    else if (kind === 'print')
-                        printPage(send(message, 'webView'))
-                    else if (kind === 'permission') {
-                        if (center === null) answerPermission(false)
-                        else
-                            void launcher
-                                .requestNotifications()
-                                .then(answerPermission)
-                    } else if (kind === 'notify' && center !== null)
-                        showNotification(center, JSON.parse(rest))
-                    else if (kind === 'close' && center !== null)
-                        closeNotification(center, rest)
-                },
-            },
-        }),
-        'new',
-    )
+    const pageHandler = scriptHandler('AbidePageBridge', (body, message) => {
+        const [kind, rest] = kindAndRest(body)
+        if (kind === 'badge') setBadge(rest)
+        // 38.189.
+        else if (kind === 'print') printPage(send(message, 'webView'))
+        else if (kind === 'permission') {
+            if (center === null) answerPermission(false)
+            else void launcher.requestNotifications().then(answerPermission)
+        } else if (kind === 'notify' && center !== null)
+            showNotification(center, JSON.parse(rest))
+        else if (kind === 'close' && center !== null)
+            closeNotification(center, rest)
+    })
     const connectPage = (target: Id): void => {
         updateViews.push(target)
         const pageController = send(
@@ -612,25 +562,11 @@ export function openNativeWindow(
             'setElementFullscreenEnabled:',
             true,
         )
-        updateBridge ??= send(
-            definedClass('AbideUpdateBridge', {
-                'userContentController:didReceiveScriptMessage:': {
-                    types: 'v@:@@',
-                    args: [FFIType.ptr, FFIType.ptr],
-                    returns: FFIType.void,
-                    run: (_controller: Id, message: Id) => {
-                        const asked = stringOf(send(message, 'body'))
-                        if (asked === 'ask') tellPage()
-                        else if (
-                            asked === 'install' &&
-                            updates?.staged !== undefined
-                        )
-                            restart()
-                    },
-                },
-            }),
-            'new',
-        )
+        updateBridge ??= scriptHandler('AbideUpdateBridge', (asked) => {
+            if (asked === 'ask') tellPage()
+            else if (asked === 'install' && updates?.staged !== undefined)
+                restart()
+        })
         send(
             pageController,
             'addScriptMessageHandler:name:',
@@ -767,29 +703,15 @@ export function openNativeWindow(
         }
     connectPage(view)
     send(
-        send(send(view, 'configuration'), 'userContentController'),
+        controller,
         'addScriptMessageHandler:name:',
-        send(
-            definedClass('AbideMenuBridge', {
-                'userContentController:didReceiveScriptMessage:': {
-                    types: 'v@:@@',
-                    args: [FFIType.ptr, FFIType.ptr],
-                    returns: FFIType.void,
-                    run: (_controller: Id, message: Id) => {
-                        try {
-                            showMenu(
-                                JSON.parse(
-                                    stringOf(send(message, 'body')),
-                                ) as NativeMenuItem[],
-                            )
-                        } catch (thrown) {
-                            launcher.report(thrown)
-                        }
-                    },
-                },
-            }),
-            'new',
-        ),
+        scriptHandler('AbideMenuBridge', (body) => {
+            try {
+                showMenu(JSON.parse(body) as NativeMenuItem[])
+            } catch (thrown) {
+                launcher.report(thrown)
+            }
+        }),
         nsString('abideMenu'),
     )
     const navigate = (address: string): void => {
@@ -859,12 +781,7 @@ function uiDelegateClass(): Id {
                     [FFIType.i64],
                     !loads
                         ? 0
-                        : sendTyped(
-                                action,
-                                'shouldPerformDownload',
-                                [],
-                                FFIType.bool,
-                            )
+                        : flagOf(action, 'shouldPerformDownload')
                           ? 2
                           : 1,
                 )
@@ -894,7 +811,7 @@ function uiDelegateClass(): Id {
                     : ''
                 const saved =
                     /^\s*attachment/i.test(disposition) ||
-                    !sendTyped(navigation, 'canShowMIMEType', [], FFIType.bool)
+                    !flagOf(navigation, 'canShowMIMEType')
                 // WKNavigationResponsePolicyDownload, or Allow.
                 callBlock(decide, [FFIType.i64], saved ? 2 : 1)
             },
@@ -929,22 +846,12 @@ function uiDelegateClass(): Id {
                     sendFlag(
                         panel,
                         'setCanChooseDirectories:',
-                        sendTyped(
-                            parameters,
-                            'allowsDirectories',
-                            [],
-                            FFIType.bool,
-                        ) as boolean,
+                        flagOf(parameters, 'allowsDirectories'),
                     )
                     sendFlag(
                         panel,
                         'setAllowsMultipleSelection:',
-                        sendTyped(
-                            parameters,
-                            'allowsMultipleSelection',
-                            [],
-                            FFIType.bool,
-                        ) as boolean,
+                        flagOf(parameters, 'allowsMultipleSelection'),
                     )
                     send(
                         panel,
@@ -1044,6 +951,36 @@ function uiDelegateClass(): Id {
 const WEB_SCHEMES = new Set(['http', 'https', 'about', 'blob', 'data', 'file'])
 
 /** An opaque `NSColor` of sRGB bytes. */
+/**
+ * A new instance of a `WKScriptMessageHandler` class named `className`, handing `hear` each message's
+ * body as text, and the message itself.
+ */
+function scriptHandler(
+    className: string,
+    hear: (body: string, message: Id) => void,
+): Id {
+    return send(
+        definedClass(className, {
+            'userContentController:didReceiveScriptMessage:': {
+                types: 'v@:@@',
+                args: [FFIType.ptr, FFIType.ptr],
+                returns: FFIType.void,
+                run: (_controller: Id, message: Id) =>
+                    hear(stringOf(send(message, 'body')), message),
+            },
+        }),
+        'new',
+    )
+}
+
+/** A bridge message's kind — its first word — and the rest of it, `''` where there is none. */
+function kindAndRest(body: string): [kind: string, rest: string] {
+    const space = body.indexOf(' ')
+    return space === -1
+        ? [body, '']
+        : [body.slice(0, space), body.slice(space + 1)]
+}
+
 function colorOf([red, green, blue]: [number, number, number]): Id {
     return sendTyped(
         objcClass('NSColor'),
@@ -1176,14 +1113,7 @@ function printPage(view: Id): void {
     )
     // The operation's view is made with no size, and a view of no size prints blank pages.
     const [, , width, height] = rectOf(view, 'frame')
-    sendTyped(
-        send(operation, 'view'),
-        'setFrameSize:',
-        [FFIType.f64, FFIType.f64],
-        FFIType.void,
-        width,
-        height,
-    )
+    sendPair(send(operation, 'view'), 'setFrameSize:', width, height)
     sendTyped(
         operation,
         'runOperationModalForWindow:delegate:didRunSelector:contextInfo:',
@@ -1218,14 +1148,7 @@ function ask(
                   nsString(field),
               )
     if (input !== null) {
-        sendTyped(
-            input,
-            'setFrameSize:',
-            [FFIType.f64, FFIType.f64],
-            FFIType.void,
-            260,
-            24,
-        )
+        sendPair(input, 'setFrameSize:', 260, 24)
         send(panel, 'setAccessoryView:', input)
         send(panel, 'layout')
         send(send(panel, 'window'), 'setInitialFirstResponder:', input)

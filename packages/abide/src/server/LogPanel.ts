@@ -1,4 +1,4 @@
-import { useColor } from '#shared/log.ts'
+import { messageOf, useColor } from '#shared/log.ts'
 import { paint } from '#shared/paint.ts'
 
 const ESCAPE = '\x1b['
@@ -57,7 +57,7 @@ export class LogPanel {
             debug: console.debug,
         }
         const write = (...args: unknown[]): void =>
-            this.write(formatted(args, this.#color))
+            this.write(messageOf(args, this.#color))
         for (const method of CONSOLE_METHODS) console[method] = write
         process.stdout.on('resize', this.#resize)
         // A signal ends the process through `stopOnSignalOrFault`, and a terminal left on the
@@ -224,16 +224,4 @@ export class LogPanel {
     #paint(code: string, text: string): string {
         return paint(this.#color, code, text)
     }
-}
-
-/** A console call's arguments as the one line `console.log` would print. */
-function formatted(args: unknown[], color: boolean): string {
-    let text = ''
-    for (let at = 0; at < args.length; at += 1) {
-        const arg = args[at]
-        if (at > 0) text += ' '
-        text +=
-            typeof arg === 'string' ? arg : Bun.inspect(arg, { colors: color })
-    }
-    return text
 }

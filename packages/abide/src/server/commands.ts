@@ -255,14 +255,14 @@ function usage(host: Host, commands: Row[]): string {
   --root       the app's source directory, where its pages sit —
                src/ where you stand, or where you stand, whichever has one
   --out        where the build goes, beside the app by default; the file compile and
-               bundle write — named after the app, where you stand
+               native write — named after the app, where you stand
   --port       the listen port for dev, start and the shell's app
   --hostname   the interface they listen on — every one where none is named
   --url        the running app the shell, call, watch, openapi and mcp talk to
   --target     the platform compile builds for — linux-x64, darwin-arm64, windows-x64…
   --platforms  several of them, comma-separated, one executable each
-  --required   marks the update bundle writes as one to install now
-  --notes      a file whose text bundle's update carries, for the page to show
+  --required   marks the update native writes as one to install now
+  --notes      a file whose text native's update carries, for the page to show
   --method     the method call sends, where the handler answers more than one
   --version    the version of abide
 `

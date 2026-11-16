@@ -9,6 +9,7 @@ import { MENU_BAR_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
     created,
     definedClass,
+    flagOf,
     type Id,
     nsString,
     objcClass,
@@ -17,6 +18,7 @@ import {
     send,
     sendFlag,
     sendNumber,
+    sendPair,
     sendTyped,
     windowButton,
 } from './appKit.ts'
@@ -86,14 +88,7 @@ export function openMenuBarExtra(
                 icon.bytes.length,
             ) as Id,
         )
-        sendTyped(
-            image,
-            'setSize:',
-            [FFIType.f64, FFIType.f64],
-            FFIType.void,
-            ICON_POINTS,
-            ICON_POINTS,
-        )
+        sendPair(image, 'setSize:', ICON_POINTS, ICON_POINTS)
         sendFlag(image, 'setTemplate:', icon.template)
         send(button, 'setImage:', image)
     }
@@ -108,16 +103,16 @@ export function openMenuBarExtra(
     // delegate hears every way it goes (38.183).
     const toggleWindow = (): void => {
         if (
-            isTrue(window, 'isVisible') &&
-            isTrue(window, 'isKeyWindow') &&
-            isTrue(application, 'isActive')
+            flagOf(window, 'isVisible') &&
+            flagOf(window, 'isKeyWindow') &&
+            flagOf(application, 'isActive')
         )
             send(window, 'close')
         else front()
     }
     // 38.168.
     const togglePanel = (address: string): void => {
-        if (panel !== undefined && isTrue(panel.window, 'isVisible')) {
+        if (panel !== undefined && flagOf(panel.window, 'isVisible')) {
             send(panel.window, 'orderOut:', null)
             return
         }
@@ -241,14 +236,7 @@ function openPanel(
     sendFlag(window, 'setReleasedWhenClosed:', false)
     sendNumber(window, 'setLevel:', STATUS_WINDOW_LEVEL)
     sendNumber(window, 'setCollectionBehavior:', PANEL_BEHAVIOR, FFIType.u64)
-    sendTyped(
-        window,
-        'setContentSize:',
-        [FFIType.f64, FFIType.f64],
-        FFIType.void,
-        options.panelWidth,
-        options.panelHeight,
-    )
+    sendPair(window, 'setContentSize:', options.panelWidth, options.panelHeight)
     // 38.163 — NEVER OPEN TO WEB INSPECTOR, whatever `inspector` answers: the inspector is a window
     // of its own that takes the key, and the panel closes as it loses it (38.171), so the two trade
     // the key in a loop. Its page is inspected in the window, at the address the panel loads.
@@ -297,16 +285,5 @@ function placeUnder(window: Id, button: Id, width: number): void {
         Math.max(x + buttonWidth / 2 - width / 2, screenX + SCREEN_MARGIN),
         screenX + screenWidth - width - SCREEN_MARGIN,
     )
-    sendTyped(
-        window,
-        'setFrameOrigin:',
-        [FFIType.f64, FFIType.f64],
-        FFIType.void,
-        left,
-        y - height,
-    )
-}
-
-function isTrue(receiver: Id, name: string): boolean {
-    return sendTyped(receiver, name, [], FFIType.bool) as boolean
+    sendPair(window, 'setFrameOrigin:', left, y - height)
 }

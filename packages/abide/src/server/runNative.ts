@@ -113,7 +113,7 @@ async function openWindow(
     const answers = new Map<number, (value: unknown) => void>()
     let calls = 0
     const call = <Answer>(
-        name: 'check' | 'forget' | 'hasPage' | 'notifications',
+        name: Extract<ToLauncher, { kind: 'call' }>['name'],
         address = '',
     ): Promise<Answer> =>
         new Promise((answered) => {
@@ -404,6 +404,15 @@ async function launch(
                   version,
                   (staged) => tell({ kind: 'staged', staged }),
               )
+    // 38.143 — a feed that refused is reported, wherever the check was asked from.
+    const checkReported = async () => {
+        const checked = await updater?.check()
+        if (checked?.outcome === 'refused')
+            reportUnexpected(
+                new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
+            )
+        return checked
+    }
     const answer = async (
         message: Extract<ToLauncher, { kind: 'call' }>,
     ): Promise<unknown> => {
@@ -419,12 +428,7 @@ async function launch(
                 (answered) => answered.ok,
                 () => false,
             )
-        const checked = await updater?.check()
-        if (checked?.outcome === 'refused')
-            reportUnexpected(
-                new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
-            )
-        return checked
+        return checkReported()
     }
     hear = (message) => {
         if (message.kind === 'call')
@@ -466,13 +470,7 @@ async function launch(
     if (updater === undefined) return
     // 38.142 — as it launches and hourly after; a feed that cannot be reached is tried again at
     // the next, and only a refusal is reported (38.143).
-    const checkQuietly = (): void =>
-        void updater.check().then((checked) => {
-            if (checked.outcome === 'refused')
-                reportUnexpected(
-                    new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
-                )
-        })
+    const checkQuietly = (): void => void checkReported()
     checkQuietly()
     setInterval(checkQuietly, UPDATE_INTERVAL)
 }

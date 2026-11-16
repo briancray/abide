@@ -217,14 +217,15 @@ const LEVEL_COLOR: Record<Level, string> = {
     error: '31',
 }
 
-function messageOf(args: unknown[]): string {
+/** A console call's arguments as the one line `console.log` would print, in color where `colors`. */
+export function messageOf(args: unknown[], colors = false): string {
     let message = ''
     for (let at = 0; at < args.length; at += 1) {
         const arg = args[at]
         if (at > 0) message += ' '
         if (typeof arg === 'string') message += arg
         else if (typeof globalThis.Bun?.inspect === 'function')
-            message += Bun.inspect(arg)
+            message += Bun.inspect(arg, { colors })
         else if (arg instanceof Error) message += arg.stack ?? arg.message
         else
             try {
