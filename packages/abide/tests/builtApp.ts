@@ -93,7 +93,9 @@ export async function addressOf(
     let seen = ''
     for await (const chunk of child.stdout as ReadableStream<Uint8Array>) {
         seen += new TextDecoder().decode(chunk)
-        const found = /http:\/\/[^\s]+/.exec(seen)
+        // ENDED, not just begun: a color code (`FORCE_COLOR`) or a chunk boundary right after the
+        // port would otherwise land in the origin — an escape `new URL` refuses, or a port cut short.
+        const found = /http:\/\/[^\s\x1b/]+(?=[\s\x1b/])/.exec(seen)
         if (found) return new URL(found[0]).origin
     }
     throw new Error(`abide printed no address: ${seen}${await told()}`)

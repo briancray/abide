@@ -91,9 +91,10 @@ export async function startedFixture(
         const { done, value } = await reader.read()
         if (done) break
         said += value
-        const found = /(http:\/\/localhost:\d+)/.exec(said)
+        // The same reading as `tests/builtApp.ts`'s `addressOf`: an origin ended, not just begun.
+        const found = /http:\/\/[^\s\x1b/]+(?=[\s\x1b/])/.exec(said)
         if (found === null) continue
-        return { base: found[1] as string, server }
+        return { base: found[0], server }
     }
     throw new Error(`abide start exited ${await server.exited}: ${said}`)
 }
