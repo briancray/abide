@@ -30,7 +30,9 @@ dlopen(
     },
 )
 
-// UNAuthorizationOptions.
+// UNAuthorizationOptions. BADGE too: macOS draws an app's Dock badge (38.188) only once its
+// notifications are allowed with the badge among them.
+const BADGE = 1
 const SOUND = 2
 const ALERT = 4
 // UNNotificationPresentationOptions: shown while the app is in front, as a page's would be.
@@ -62,7 +64,7 @@ export function requestNotificationPermission(): Promise<boolean> {
             'requestAuthorizationWithOptions:completionHandler:',
             [FFIType.u64, FFIType.ptr],
             FFIType.void,
-            ALERT | SOUND,
+            BADGE | ALERT | SOUND,
             blockOnce(
                 [FFIType.bool, FFIType.ptr],
                 (granted: boolean) => answered(granted),

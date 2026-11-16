@@ -3622,14 +3622,15 @@ values its start form offers at a launch where 38.73 does nothing, rather than s
 38.188 A page in the window `abide native`'s executable opens, or in its menu bar extra's panel, MUST
 have `navigator.setAppBadge` and `navigator.clearAppBadge` as the W3C Badging API defines them, the
 badge they set drawn on the native app's Dock icon as its count, as a mark with no number where none
-is given, and as nothing where it is cleared. The window showing the launcher's page MUST clear it.
+is given, and as nothing where it is cleared, once the person has allowed the native app's
+notifications per 38.190. The window showing the launcher's page MUST clear it.
 
 38.189 A page's `print` in the window `abide native`'s executable opens, or in its menu bar extra's
 panel, MUST open the platform's print panel on that page, as a sheet on that window or panel.
 
 38.190 A page in the window `abide native`'s executable opens, or in its menu bar extra's panel, MUST
-have a `Notification` whose `requestPermission` asks the person through the platform and answers
-what they chose, and whose instance, once permission is `granted`, MUST show as the platform's
+have a `Notification` whose `requestPermission` asks the person through the platform, for the badge
+38.188 draws as well as alerts and sounds, and answers what they chose, and whose instance, once permission is `granted`, MUST show as the platform's
 notification under the native app's name, replacing the one shown under the same `tag`, and MUST
 dispatch `click` where the person clicks it, bringing the window to the front. Where permission is
 not `granted` the instance MUST dispatch `error` and show nothing. `Notification.permission` MUST
