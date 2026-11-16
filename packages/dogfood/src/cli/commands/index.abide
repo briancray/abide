@@ -168,6 +168,29 @@ import Snippet from '#src/lib/Snippet.abide'
             keeps its address across deploys, so it revalidates instead.</p>
     </Section>
 
+    <Section title="`abide upgrade` moves your app past what a release changed">
+        <Code code={`bun add @abide/abide@latest
+    abide upgrade --check --from 0.139.0
+    abide upgrade --from 0.139.0`} />
+
+        <p><code>abide upgrade [--check] [--from &lt;version&gt;]</code> applies each migration
+            keyed to a release after the one <code>--from</code> names to your app's own files, and
+            prints every change as a diff <code>git apply</code> takes. Name the release you upgraded
+            from. Without <code>--from</code> it applies every migration it holds. Each one changes
+            only text written in the form its release replaced, so a second run changes nothing.
+            <code>--check</code> prints the same diff, writes nothing, and fails where a file would
+            change.</p>
+
+        <p>The first migration clears the notes an earlier scaffold wrote into <code>AGENTS.md</code>.
+            Every abide fact an agent needs ships in the <code>ABIDE.md</code> the package installs and
+            changes with it, so a copy in your notes goes stale a release later.
+            <code>abide check</code> warns at each paragraph of <code>AGENTS.md</code> that is, word for
+            word, one <code>ABIDE.md</code> holds or one an earlier scaffold wrote.
+            <code>abide upgrade</code> removes those, drops a heading it leaves empty, and puts the
+            pointer to <code>ABIDE.md</code> under your title. A paragraph you reworded is yours: neither
+            command touches it.</p>
+    </Section>
+
     <Section title="Compile the CRM to a single binary">
         <Code code={`abide compile
     abide compile --platforms linux-x64,darwin-arm64`} />
