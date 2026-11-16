@@ -4,8 +4,13 @@
 import { expect, test } from 'bun:test'
 
 import { assistant, type Provider } from '../src/server/assistant.ts'
+import { GET } from '../src/server/index.ts'
 import { inScope } from '../src/server/requestScope.ts'
 import { isFailed } from '../src/shared/Failed.ts'
+import {
+    renewStopSignal,
+    stopUnownedPolls,
+} from '../src/shared/reactive/poll.ts'
 
 const NEVER = new Promise<never>(() => {})
 
@@ -86,4 +91,54 @@ test('a request aborting ends a conversation whose provider is stuck — 44.57',
             expect(handed[0]?.aborted).toBe(true)
         },
     )
+})
+
+// 44.57, 44.101 — A `global` VALUE'S CONVERSATION, mdn's shape: a one-shot turn streamed by a `GET`
+// declaring `global`, its answer shared by every reader. No request owns the run, so the first reader
+// leaving is not the end of it — the app stopping is, as it is the end of a `global` value's `poll`.
+// The run is in the first reader's request scope, as every `global` entry's is. THE REVERT: read the
+// request off that scope without asking `inGlobalRun`; the provider is handed the reader's signal,
+// and the reader leaving aborts it — `true` where `false` is due.
+test('a global handler streams a conversation its first reader leaving does not end — 44.57, 44.101', async () => {
+    const { provider, handed } = stuckProvider()
+    const implications = GET(
+        async function* ({ path }: { path: string }) {
+            yield* assistant(
+                [{ role: 'user', content: `implications of ${path}` }],
+                provider,
+            )
+        },
+        { global: true, ttl: 60_000 },
+    )
+    const reader = new AbortController()
+    const said: unknown[] = []
+    await inScope(
+        new Request('http://localhost/implications', { signal: reader.signal }),
+        async () => {
+            const answer = implications({
+                path: 'css/has',
+            }) as unknown as AsyncIterable<unknown>
+            for await (const chunk of answer) {
+                said.push(chunk)
+                break
+            }
+        },
+    )
+    reader.abort()
+    expect(said).toEqual([{ type: 'text', text: 'thinking' }])
+    expect(handed[0]?.aborted).toBe(false)
+    const drained = stopUnownedPolls()
+    expect(handed[0]?.aborted).toBe(true)
+    await drained()
+    renewStopSignal()
+})
+
+// 44.101 — outside a request, with no window to act as, a conversation asked for tools has no one
+// for them to act as.
+test('a conversation outside a request asked for tools throws — 44.101', async () => {
+    const { provider } = stuckProvider()
+    const thrown = await assistant(ASKED, provider, { mcp: true })
+        .next()
+        .catch((error: unknown) => error)
+    expect((thrown as Error).message).toContain('RULEBOOK 44.101')
 })

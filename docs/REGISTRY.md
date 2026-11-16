@@ -367,7 +367,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39, 44.57, 44.100 |
+| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39, 44.57, 44.100, 44.101 |
 | `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string \| AssistantContent[] }` | One turn of the transcript a caller sends: its words, or its pieces in order. | 44.3, 44.4 |
 | `AssistantContent` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string }` | A piece of a turn: words, or an image as base64 with its type. | 44.5, 44.35, 44.36, 44.37, 44.38, 44.39 |
 | `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; handler: { method: string; address: string } \| undefined } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean; handler: { method: string; address: string } \| undefined; value: unknown } \| { type: 'permission'; id: string; name: string; input: unknown } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, a permission prompt, and the end. | 44.2, 44.11, 44.28, 44.48, 44.49, 44.81 |

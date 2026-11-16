@@ -1887,7 +1887,7 @@ function run(cell: Cell): void {
         // 11.32 — UNDER THE VALUE'S OWN SCOPE, not the ambient one. A drain runs every body a
         // turn's writes woke, and the turn is whichever request scheduled it — so without this a
         // body filed under one request reads the values of another.
-        produced = runInScope(cell.scope, body, cell.args)
+        produced = runInScope(cell.scope, body, cell.args, cell.global)
     } catch (thrown) {
         TRACKING.reader = previous
         if (reader.cursor < reader.sources.length) truncate(reader)
@@ -2131,6 +2131,7 @@ function pumpRun(
         cell.scope,
         () => pump(cell, stream, iterator, run),
         undefined,
+        cell.global,
     ).then(undefined, (thrown: unknown) =>
         pumpFailed(cell, stream, run, thrown),
     )

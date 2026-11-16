@@ -4294,9 +4294,11 @@ names or a HEIC or HEIF, which 44.52 draws, reading its `items` where its `files
 44.56 The `install` of a pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge`
 mints MUST run `abide-bridge install` at the bridge release its command runs.
 
-44.57 `assistant` MUST hand its `Provider` a `limits.signal` that aborts once the request's signal
-aborts or once the `signal` its caller passed does, and once that signal aborts MUST end the
-conversation without waiting for the provider to, refused with `refuse.aborted` at status 499.
+44.57 `assistant` MUST hand its `Provider` a `limits.signal` that aborts once the `signal` its caller
+passed does, and once the request's signal aborts — or, called outside a request or in the run of a
+`global` value, which no request owns whichever request reached it first, once `stopSignal` does —
+and once that signal aborts MUST end the conversation without waiting for the provider to, refused
+with `refuse.aborted` at status 499.
 
 44.58 A bridge MUST find the visitor's MCP servers, at each turn, in each `--mcp-config` the visitor
 passed after `--`, or where they passed none, in the user scope of their Claude Code configuration,
@@ -4460,10 +4462,13 @@ tool as 44.94 allows the call, MUST answer what the tool answered in that turn r
 model said of it, MUST end the turn on the bridge once the tool has answered, and MUST refuse 502
 where the turn ended without calling it.
 
-44.100 `assistant` called outside a request in the app `abide native`'s executable starts MUST run
-its conversation as a request carrying the `cookie` and `authorization` headers of the latest request
-that carried the window's credential (44.79), through the app that request reached, with a signal
-that aborts only where the caller's `signal` does, and MUST throw where no such request has come.
+44.100 `assistant` called outside a request, or in the run of a `global` value, in the app `abide
+native`'s executable starts MUST run its conversation as a request carrying the `cookie` and
+`authorization` headers of the latest request that carried the window's credential (44.79), through
+the app that request reached, where such a request has come.
+
+44.101 `assistant` called outside a request, or in the run of a `global` value, where 44.100 does not
+run it, MUST run its conversation carrying no asker's credentials, and MUST throw where given `mcp`.
 
 # 45. Offline
 
