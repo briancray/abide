@@ -49,7 +49,14 @@ test('a block tag abide has no block for is refused by name — 32.65', () => {
     expect(refusalOf('{#each xs as x}{/each}')).toContain('{#for item of list}')
     expect(refusalOf('{#await p}x')).toContain('no {#await}')
     expect(refusalOf('{@html x}')).toContain('{raw(value)}')
-    for (const source of ['{#iffy}', '{/iffy}', '{:then v}', '{@const x = 1}'])
+    // A name character outside ASCII continues the word too: `{#ifé x}` is no `{#if}`.
+    for (const source of [
+        '{#iffy}',
+        '{/iffy}',
+        '{:then v}',
+        '{@const x = 1}',
+        '{#ifé x}{/if}',
+    ])
         expect(refusalOf(source), source).toContain('RULEBOOK 32.65')
 })
 

@@ -4,7 +4,7 @@ import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
 
 import { isComponentTag, isSlot, propKeyOf } from './classifyTemplate.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
-import { isNamedAlone } from './isNamedAlone.ts'
+import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
 import { lineOf } from './lineOf.ts'
 import { PositionedRefusal } from './PositionedRefusal.ts'
 import { importedNames } from './splitImports.ts'
@@ -140,12 +140,24 @@ function innermostOpen(
     return ` The block open here is the {#${blockName(block)}} at ${line}:${column}.`
 }
 
+/**
+ * Whether `inner` opens with `keyword` as a whole word — a name character after it (`IDENTIFIER_PART`,
+ * outside ASCII too) makes it a different word, which the unknown-block refusal answers (32.65).
+ */
+function opensWith(inner: string, keyword: string): boolean {
+    if (!inner.startsWith(keyword)) return false
+    const next = inner.codePointAt(keyword.length)
+    return (
+        next === undefined || !IDENTIFIER_PART.test(String.fromCodePoint(next))
+    )
+}
+
 /** What to write instead of a block abide has none of, where there is one thing to write. */
 function unknownHint(inner: string): string {
-    if (/^#each(?![\w$])/.test(inner)) return ' — a list is {#for item of list}'
-    if (/^#await(?![\w$])/.test(inner))
+    if (opensWith(inner, '#each')) return ' — a list is {#for item of list}'
+    if (opensWith(inner, '#await'))
         return ' — there is no {#await}, and a loading arm is {#if value.ready()}'
-    if (/^@html(?![\w$])/.test(inner)) return ' — markup is {raw(value)}'
+    if (opensWith(inner, '@html')) return ' — markup is {raw(value)}'
     if (/^:else/.test(inner))
         return ' — an else arm is {:else} or {:else if condition}'
     return ''
@@ -464,7 +476,7 @@ export function parseAbide(source: string): AbideFile {
             // 32.41 — `{#component Name(pattern)}` and `{/component}`, wherever a node may stand. It
             // opens an arm as a block does, and is filed under the list it stands in rather than
             // pushed into it: it renders nothing there, so the text either side is one run.
-            if (/^#component(?![\w$])/.test(inner)) {
+            if (opensWith(inner, '#component')) {
                 const component = inlineComponent(
                     trimmed(source, slot.at + '#component'.length, end),
                 )
@@ -477,7 +489,7 @@ export function parseAbide(source: string): AbideFile {
             }
             // `{#if}`, `{:else}`, `{:else if}`, `{/if}` — a control block opens a new ARM rather
             // than a new element, so it keeps its own stack beside the element one.
-            if (/^#if(?![\w$])/.test(inner)) {
+            if (opensWith(inner, '#if')) {
                 const subject = trimmed(source, slot.at + 3, end)
                 const branch = newBranch(subject.text)
                 origins.holders.set(branch, subject.at)
@@ -491,7 +503,7 @@ export function parseAbide(source: string): AbideFile {
                 at = end + 1
                 continue
             }
-            if (/^:else(?![\w$])/.test(inner)) {
+            if (opensWith(inner, ':else')) {
                 const block = blocks[blocks.length - 1]
                 // 32.64 — AN ELSE ARM OUTSIDE A `{#if}` IS REFUSED, for the reason 32.56 refuses a
                 // stray catch: dropped, the text after it read as the body it stood in.
@@ -538,7 +550,7 @@ export function parseAbide(source: string): AbideFile {
                 at = end + 1
                 continue
             }
-            if (/^:catch(?![\w$])/.test(inner) || inner === ':finally') {
+            if (opensWith(inner, ':catch') || inner === ':finally') {
                 const block = blocks[blocks.length - 1]
                 // 32.56 — ONLY A `{#try}` HAS THESE ARMS. Anywhere else the tag was dropped and what
                 // followed it read as the body it stood in: a `{#for}`'s catch rendered in every row.
@@ -561,7 +573,7 @@ export function parseAbide(source: string): AbideFile {
                 at = end + 1
                 continue
             }
-            if (/^#for(?![\w$])/.test(inner)) {
+            if (opensWith(inner, '#for')) {
                 const block = forBlock(
                     source,
                     trimmed(source, slot.at + 4, end),

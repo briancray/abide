@@ -74,6 +74,13 @@ import Slow from '../lib/Slow.abide'
 
 <main><Flag /><Slow /></main>`
 
+// The same probe under a local name with a `$` in it — a name the probe test spells into a pattern.
+const DOLLAR_FLAG = `<script>
+import { busy as $busy } from '@abide/abide'
+</script>
+
+<p id="flag">{#if $busy()}busy{:else}idle{/if}</p>`
+
 let stop = (): void => {}
 let base = ''
 
@@ -83,6 +90,11 @@ beforeAll(async () => {
         'inline/index.abide': INLINE,
         'flagfirst/index.abide': FLAG_FIRST,
         'lib/Flag.abide': FLAG,
+        'dollarflag/index.abide': FLAG_FIRST.replace(
+            'Flag.abide',
+            'DollarFlag.abide',
+        ),
+        'lib/DollarFlag.abide': DOLLAR_FLAG,
         'lib/Tick.abide': child('getTick', 'tick'),
         'lib/Slow.abide': child('getSlow', 'slow'),
         'lib/Grand.abide': GRAND,
@@ -157,6 +169,14 @@ test("a deferred child's head keeps its place in the tree's order — 39.4", asy
 // started its call, and paints `idle` where `busy` is due — the arm hydration then rebuilds (41.24).
 test('a bare busy in a child answers over the loads its later siblings start — 41.28', async () => {
     expect(await page('/flagfirst')).toContain(
+        '<p id="flag"><!--[0-->busy<!--]--></p>',
+    )
+})
+
+// THE REVERT: splice the local names into the probe pattern unescaped; `$busy`'s `$` is an end
+// anchor, the probe is never found, and `idle` is painted where `busy` is due.
+test('a bare busy under a local name holding a $ is deferred the same — 41.28', async () => {
+    expect(await page('/dollarflag')).toContain(
         '<p id="flag"><!--[0-->busy<!--]--></p>',
     )
 })

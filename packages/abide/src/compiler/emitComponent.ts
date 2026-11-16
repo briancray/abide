@@ -5,6 +5,7 @@ import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { placed } from './Cursor.ts'
 import { guardedSetup } from './guardedSetup.ts'
 import { abideBindings } from './hookCalls.ts'
+import { IDENTIFIER_PART } from './isNamedAlone.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { privateExports } from './projectShadow.ts'
@@ -179,10 +180,13 @@ function readsBareProbe(file: AbideFile, markup: string): boolean {
     let names = ''
     for (const [local, imported] of abideBindings(scriptBodies(file)))
         if (imported === 'busy' || imported === 'ready')
-            names += `${names === '' ? '' : '|'}${local}`
+            names += `${names === '' ? '' : '|'}${local.replaceAll('$', '\\$')}`
     return (
         names !== '' &&
-        new RegExp(`(?<![\\w$.])(?:${names})\\(\\s*\\)`).test(markup)
+        new RegExp(
+            `(?<!${IDENTIFIER_PART.source}|\\.)(?:${names})\\(\\s*\\)`,
+            'u',
+        ).test(markup)
     )
 }
 

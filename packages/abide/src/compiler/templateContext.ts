@@ -1,3 +1,5 @@
+import { IDENTIFIER_PART } from './isNamedAlone.ts'
+import { closeTagAt } from './parseAbide.ts'
 import { importedNames } from './splitImports.ts'
 import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
 import { skipQuoted } from './tokenize.ts'
@@ -86,19 +88,15 @@ export function templateContext(
 /** Where the markup holding `offset` starts, or -1 where `offset` is inside a script or a style. */
 function markupStart(text: string, offset: number): number {
     let start = 0
-    const lower = text.toLowerCase()
     const opened = /<(script|style)\b[^>]*>/gi
     for (;;) {
         const open = opened.exec(text)
         if (open === null || open.index >= offset) return start
         const body = open.index + open[0].length
-        const close = lower.indexOf(
-            `</${(open[1] as string).toLowerCase()}`,
-            body,
-        )
-        if (offset >= body && (close === -1 || offset <= close)) return -1
-        if (close === -1) return -1
-        start = text.indexOf('>', close) + 1
+        const close = closeTagAt(text, open[1] as string, body)
+        if (close === null || (offset >= body && offset <= close.start))
+            return -1
+        start = close.end
         opened.lastIndex = start
     }
 }
@@ -111,7 +109,10 @@ function blocksAfter(sigil: string, text: string, at: number): string[] {
     const blocks = Object.keys(TEMPLATE_BLOCKS)
     if (sigil === '#') return blocks
     const open: string[] = []
-    const marks = new RegExp(`\\{([#/])(${blocks.join('|')})(?![\\w$])`, 'g')
+    const marks = new RegExp(
+        `\\{([#/])(${blocks.join('|')})(?!${IDENTIFIER_PART.source})`,
+        'gu',
+    )
     for (const mark of text.slice(0, at).matchAll(marks)) {
         if (mark[1] === '#') open.push(mark[2] as string)
         else if (open[open.length - 1] === mark[2]) open.pop()
