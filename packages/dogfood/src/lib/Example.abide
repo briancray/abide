@@ -12,17 +12,15 @@ const resultsOf = GET(() => exampleResults(APP))
 // fenced from every server file, and its source is shown to a reader the way the app's tarball
 // already ships it (40.41). Only a server file of the CRM, by a path below its root.
 const SERVER_FILE = /^src\/(?:[\w-]+\/)*[\w-]+\.server\.ts$/
-const serverSources = GET(
-    async ({ paths }: { paths: string[] }) => {
-        const directory = await exampleDirectory(APP)
-        const sources: Record<string, string> = {}
-        if (directory === undefined) return sources
-        for (const path of paths)
-            if (SERVER_FILE.test(path))
-                sources[path] = await Bun.file(`${directory}/${path}`).text()
-        return sources
-    },
-)
+const serverSources = GET(async ({ paths }: { paths: string[] }) => {
+    const directory = await exampleDirectory(APP)
+    const sources: Record<string, string> = {}
+    if (directory === undefined) return sources
+    for (const path of paths)
+        if (SERVER_FILE.test(path))
+            sources[path] = await Bun.file(`${directory}/${path}`).text()
+    return sources
+})
 </script>
 
 <script>
@@ -92,9 +90,7 @@ const kindOf = (path: string) =>
 
 // Read only once a test or bench tab is open, so a card nobody inspects never asks.
 const results = reactive(() =>
-    kindOf(paths[open] ?? '') !== 'file'
-        ? resultsOf()
-        : null,
+    kindOf(paths[open] ?? '') !== 'file' ? resultsOf() : null,
 )
 </script>
 
