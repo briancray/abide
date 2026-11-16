@@ -7,6 +7,9 @@ import dockBadgeTestSource from 'crm/src/reports/lib/DockBadge.test.ts' with { t
 import UpdateNotice from 'crm/src/reports/lib/UpdateNotice.abide'
 import updateNoticeSource from 'crm/src/reports/lib/UpdateNotice.abide' with { type: 'text' }
 import updateNoticeTestSource from 'crm/src/reports/lib/UpdateNotice.test.ts' with { type: 'text' }
+import WinNotification from 'crm/src/reports/lib/WinNotification.abide'
+import winNotificationSource from 'crm/src/reports/lib/WinNotification.abide' with { type: 'text' }
+import winNotificationTestSource from 'crm/src/reports/lib/WinNotification.test.ts' with { type: 'text' }
 
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
@@ -171,6 +174,44 @@ import Snippet from '#src/lib/Snippet.abide'
             current whatever page is open belongs in the root layout. In a browser the call is
             the browser's: an installed web app may draw it, and a tab answers nothing, so guard
             it with <code>?.</code> and the page runs unchanged.</p>
+    </Section>
+
+    <Section title="Notify people of a win">
+        <Example
+            id="win-notification"
+            app="crm"
+            title="`Notification` — a deal won, as the platform shows it"
+            summary="Here the browser asks for permission and shows it. In the native app the same code asks macOS, and the notification carries the CRM's name and icon."
+            files={{
+                'src/reports/lib/WinNotification.abide': winNotificationSource,
+                'src/reports/lib/WinNotification.test.ts': winNotificationTestSource,
+            }}
+        >
+            <WinNotification />
+        </Example>
+
+        <p>The window answers the web's own <code>Notification</code> with the platform's.
+            <code>Notification.requestPermission</code> asks once, with the system's prompt, and
+            <code>Notification.permission</code> starts each launch at what the person chose. A
+            notification shows even while the CRM is in front, one with the same
+            <code>tag</code> replaces it, and a click brings the window forward and fires its
+            <code>click</code>. Run outside a <code>.app</code>, by <code>bun</code> itself, the
+            permission is <code>denied</code>, since macOS keeps notifications per app.</p>
+    </Section>
+
+    <Section title="What else the window answers">
+        <p>The rest of what a page asks of a browser, the window answers the same way, with no
+            code of the CRM's. <code>print</code> opens the print panel as a sheet, and Print
+            Report… works as the button does in a browser. A link marked <code>download</code>,
+            and an answer sent as an attachment, such as the CRM's CSV exports, save to
+            Downloads, numbered where the name is taken, and the page stays put. A file input
+            opens the open panel as a sheet, <code>prompt</code> asks in a sheet as
+            <code>alert</code> and <code>confirm</code> do, and
+            <code>requestFullscreen</code> takes the whole screen. The camera, the microphone and
+            the location are there for <code>getUserMedia</code> and
+            <code>geolocation</code>, each asked for with the system's prompt the first time.
+            <code>navigator.share</code>, the clipboard and <code>navigator.wakeLock</code> are
+            WebKit's own and work unchanged.</p>
     </Section>
 
     <Registry />

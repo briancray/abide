@@ -27,13 +27,19 @@ import {
     windowButton,
 } from './appKit.ts'
 import { onSignal, sleepInAppKit } from './appKitLoop.ts'
-import { badgeBridge } from './badgeBridge.ts'
 import { installMenu } from './installMenu.ts'
 import { type Launcher, VIBRANCY_MATERIALS } from './launcherOptions.ts'
 import { menuBar, menuBarExtraMenu, opensInWindow } from './menuBar.ts'
 import { type MenuBarIcon, openMenuBarExtra } from './menuBarExtra.ts'
+import {
+    closeNotification,
+    hearNotifications,
+    notificationCenter,
+    showNotification,
+} from './nativeNotifications.ts'
 import type { Checked, Staged } from './NativeUpdater.ts'
 import { nativeUserAgent } from './nativeUserAgent.ts'
+import { pageBridge } from './pageBridge.ts'
 import { windowBridge } from './windowBridge.ts'
 
 const SIGINT = 2
@@ -68,6 +74,8 @@ export type LauncherThread = {
     forget(): Promise<void>
     /** Whether the app at `address` answers it. */
     hasPage(address: string): Promise<boolean>
+    /** 38.190 — asks the person to allow notifications, answering whether they are. */
+    requestNotifications(): Promise<boolean>
     /** 38.156. */
     rememberBackground(color: [number, number, number]): void
     /**
@@ -358,7 +366,6 @@ export function openNativeWindow(
         'userContentController',
     )
     const bridge = `(${windowBridge.toString()})()`
-    const badge = `(${badgeBridge.toString()})()`
     let fullScreen = false
     const titlebarScript = (): string => {
         let height = 0
@@ -393,7 +400,7 @@ export function openNativeWindow(
         send(controller, 'removeAllUserScripts')
         send(controller, 'addUserScript:', userScript(bridge))
         send(controller, 'addUserScript:', userScript(told))
-        send(controller, 'addUserScript:', userScript(badge))
+        send(controller, 'addUserScript:', userScript(pageScript()))
         send(
             view,
             'evaluateJavaScript:completionHandler:',
@@ -494,7 +501,7 @@ export function openNativeWindow(
     // what its route exports, and again after every navigation it makes.
     // 38.148 — EVERY PAGE THE APP SHOWS HEARS OF AN UPDATE: the window's, and the menu bar extra's
     // panel's once it is built. Each asks on load and is told again when one is staged.
-    // 38.188 — and each sets the Dock icon's badge.
+    // 38.188-38.190 — and each has the badge, `print` and `Notification` of `pageBridge`.
     const updateViews: Id[] = []
     let updateBridge: Id = null
     const dockTile = send(application, 'dockTile')
@@ -505,14 +512,83 @@ export function openNativeWindow(
             label === '' ? null : nsString(label === 'flag' ? '•' : label),
         )
     }
-    const badgeHandler = send(
-        definedClass('AbideBadgeBridge', {
+    // 38.190 — what the person last answered, kept with the app's settings; `denied` where the
+    // process is no `.app`, which has no notifications.
+    const center = notificationCenter()
+    const defaults = send(objcClass('NSUserDefaults'), 'standardUserDefaults')
+    const permissionKey = nsString('AbideNotificationPermission')
+    let permission: NotificationPermission =
+        center === null
+            ? 'denied'
+            : ((stringOf(send(defaults, 'stringForKey:', permissionKey)) ||
+                  'default') as NotificationPermission)
+    const pageScript = (): string =>
+        `(${pageBridge.toString()})(${JSON.stringify(permission)})`
+    const tellPages = (type: string, detail: unknown): void => {
+        for (const told of updateViews)
+            send(
+                told,
+                'evaluateJavaScript:completionHandler:',
+                nsString(
+                    `dispatchEvent(new CustomEvent('abide:${type}', { detail: ${JSON.stringify(detail)} }))`,
+                ),
+                null,
+            )
+    }
+    const answerPermission = (granted: boolean): void => {
+        permission = granted ? 'granted' : 'denied'
+        if (center !== null)
+            send(
+                defaults,
+                'setObject:forKey:',
+                nsString(permission),
+                permissionKey,
+            )
+        // The next page each view loads is told it from the start: the window's at each
+        // navigation (`tellTitlebar`), the panel's here.
+        for (const told of updateViews) {
+            if (told === view) continue
+            const panelController = send(
+                send(told, 'configuration'),
+                'userContentController',
+            )
+            send(panelController, 'removeAllUserScripts')
+            send(panelController, 'addUserScript:', userScript(pageScript()))
+        }
+        tellTitlebar()
+        tellPages('permission', permission)
+    }
+    if (center !== null)
+        hearNotifications(center, (id) => {
+            front()
+            tellPages('notification', { id, type: 'click' })
+        })
+    const pageHandler = send(
+        definedClass('AbidePageBridge', {
             'userContentController:didReceiveScriptMessage:': {
                 types: 'v@:@@',
                 args: [FFIType.ptr, FFIType.ptr],
                 returns: FFIType.void,
-                run: (_controller: Id, message: Id) =>
-                    setBadge(stringOf(send(message, 'body'))),
+                run: (_controller: Id, message: Id) => {
+                    const body = stringOf(send(message, 'body'))
+                    const space = body.indexOf(' ')
+                    const kind = space === -1 ? body : body.slice(0, space)
+                    const rest = space === -1 ? '' : body.slice(space + 1)
+                    if (kind === 'badge') setBadge(rest)
+                    // 38.189.
+                    else if (kind === 'print')
+                        printPage(send(message, 'webView'))
+                    else if (kind === 'permission') {
+                        if (center === null) answerPermission(false)
+                        else
+                            void launcher
+                                .requestNotifications()
+                                .then(answerPermission)
+                    } else if (kind === 'notify' && center !== null)
+                        showNotification(center, JSON.parse(rest))
+                    else if (kind === 'close' && center !== null)
+                        closeNotification(center, rest)
+                },
             },
         }),
         'new',
@@ -526,10 +602,16 @@ export function openNativeWindow(
         send(
             pageController,
             'addScriptMessageHandler:name:',
-            badgeHandler,
-            nsString('abideBadge'),
+            pageHandler,
+            nsString('abidePage'),
         )
-        send(pageController, 'addUserScript:', userScript(badge))
+        send(pageController, 'addUserScript:', userScript(pageScript()))
+        // 38.191.
+        sendFlag(
+            send(send(target, 'configuration'), 'preferences'),
+            'setElementFullscreenEnabled:',
+            true,
+        )
         updateBridge ??= send(
             definedClass('AbideUpdateBridge', {
                 'userContentController:didReceiveScriptMessage:': {
@@ -634,15 +716,7 @@ export function openNativeWindow(
                       required: staged.required,
                       notes: staged.notes,
                   }
-        for (const told of updateViews)
-            send(
-                told,
-                'evaluateJavaScript:completionHandler:',
-                nsString(
-                    `dispatchEvent(new CustomEvent('abide:update', { detail: ${JSON.stringify(detail)} }))`,
-                ),
-                null,
-            )
+        tellPages('update', detail)
     }
     // 38.145 — a staged update is installed by restarting; with none, the feed is read now and
     // the person told what it found.
@@ -752,7 +826,8 @@ export function openNativeWindow(
 }
 
 // What a page asks of its window: a link out opens in the browser, one of a scheme the web view
-// cannot load opens in the app that takes it, and `alert` and `confirm` are sheets the page waits on (38.178).
+// cannot load opens in the app that takes it, `alert`, `confirm` and `prompt` are sheets the page
+// waits on (38.178), a download is saved (38.192) and a file input opens the open panel (38.193).
 // The window's and the panel's web views take one of these as their UI delegate and their
 // navigation delegate alike.
 let uiDelegate: Id = null
@@ -777,10 +852,117 @@ function uiDelegateClass(): Id {
                         'openURL:',
                         url,
                     )
-                // WKNavigationActionPolicyAllow, or Cancel.
-                callBlock(decide, [FFIType.i64], loads ? 1 : 0)
+                // WKNavigationActionPolicyDownload for a link marked `download` (38.192), else
+                // Allow, or Cancel.
+                callBlock(
+                    decide,
+                    [FFIType.i64],
+                    !loads
+                        ? 0
+                        : sendTyped(
+                                action,
+                                'shouldPerformDownload',
+                                [],
+                                FFIType.bool,
+                            )
+                          ? 2
+                          : 1,
+                )
             },
         },
+        // 38.192 — an answer the web view cannot show, or one sent as an attachment, is saved.
+        'webView:decidePolicyForNavigationResponse:decisionHandler:': {
+            types: 'v@:@@@?',
+            args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+            returns: FFIType.void,
+            run: (_view: Id, navigation: Id, decide: Id) => {
+                const response = send(navigation, 'response')
+                const disposition = sendTyped(
+                    response,
+                    'isKindOfClass:',
+                    [FFIType.ptr],
+                    FFIType.bool,
+                    objcClass('NSHTTPURLResponse'),
+                )
+                    ? stringOf(
+                          send(
+                              response,
+                              'valueForHTTPHeaderField:',
+                              nsString('Content-Disposition'),
+                          ),
+                      )
+                    : ''
+                const saved =
+                    /^\s*attachment/i.test(disposition) ||
+                    !sendTyped(navigation, 'canShowMIMEType', [], FFIType.bool)
+                // WKNavigationResponsePolicyDownload, or Allow.
+                callBlock(decide, [FFIType.i64], saved ? 2 : 1)
+            },
+        },
+        'webView:navigationAction:didBecomeDownload:': {
+            types: 'v@:@@@',
+            args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+            returns: FFIType.void,
+            run: (_view: Id, _action: Id, download: Id) =>
+                send(download, 'setDelegate:', downloadDelegate()),
+        },
+        'webView:navigationResponse:didBecomeDownload:': {
+            types: 'v@:@@@',
+            args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+            returns: FFIType.void,
+            run: (_view: Id, _response: Id, download: Id) =>
+                send(download, 'setDelegate:', downloadDelegate()),
+        },
+        // 38.193 — a file input opens the platform's open panel, a sheet on the window it is in.
+        'webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:':
+            {
+                types: 'v@:@@@@?',
+                args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+                returns: FFIType.void,
+                run: (view: Id, parameters: Id, _frame: Id, done: Id) => {
+                    const answer = callBlockLater(done)
+                    const panel = send(
+                        send(objcClass('NSOpenPanel'), 'openPanel'),
+                        'retain',
+                    )
+                    sendFlag(panel, 'setCanChooseFiles:', true)
+                    sendFlag(
+                        panel,
+                        'setCanChooseDirectories:',
+                        sendTyped(
+                            parameters,
+                            'allowsDirectories',
+                            [],
+                            FFIType.bool,
+                        ) as boolean,
+                    )
+                    sendFlag(
+                        panel,
+                        'setAllowsMultipleSelection:',
+                        sendTyped(
+                            parameters,
+                            'allowsMultipleSelection',
+                            [],
+                            FFIType.bool,
+                        ) as boolean,
+                    )
+                    send(
+                        panel,
+                        'beginSheetModalForWindow:completionHandler:',
+                        send(view, 'window'),
+                        // NSModalResponseOK.
+                        blockOnce([FFIType.i64], (response: bigint) => {
+                            answer(
+                                [FFIType.ptr],
+                                Number(response) === 1
+                                    ? send(panel, 'URLs')
+                                    : null,
+                            )
+                            send(panel, 'release')
+                        }),
+                    )
+                },
+            },
         'webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:':
             {
                 types: '@@:@@@@',
@@ -822,6 +1004,38 @@ function uiDelegateClass(): Id {
                     )
                 },
             },
+        'webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:':
+            {
+                types: 'v@:@@@@@?',
+                args: [
+                    FFIType.ptr,
+                    FFIType.ptr,
+                    FFIType.ptr,
+                    FFIType.ptr,
+                    FFIType.ptr,
+                ],
+                returns: FFIType.void,
+                run: (
+                    view: Id,
+                    message: Id,
+                    given: Id,
+                    _frame: Id,
+                    done: Id,
+                ) => {
+                    const answer = callBlockLater(done)
+                    ask(
+                        send(view, 'window'),
+                        message,
+                        true,
+                        (accepted, text) =>
+                            answer(
+                                [FFIType.ptr],
+                                accepted ? nsString(text) : null,
+                            ),
+                        stringOf(given),
+                    )
+                },
+            },
     })
     return uiDelegate
 }
@@ -860,24 +1074,172 @@ function titlebarDoubleClick(window: Id): void {
     )
 }
 
-// 38.178 — an `NSAlert` with `message`, a sheet on `window`; `answered` hears whether it was accepted.
+let downloads: Id = null
+// 38.192 — where each download is going, by the download, to be told the Downloads stack once there.
+const DOWNLOADING = new Map<Id, string>()
+function downloadDelegate(): Id {
+    downloads ??= send(
+        definedClass('AbideDownloadDelegate', {
+            'download:decideDestinationUsingResponse:suggestedFilename:completionHandler:':
+                {
+                    types: 'v@:@@@@?',
+                    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+                    returns: FFIType.void,
+                    run: (download: Id, _response: Id, name: Id, done: Id) => {
+                        const path = freePath(
+                            `${Bun.env.HOME}/Downloads`,
+                            stringOf(name) || 'download',
+                        )
+                        DOWNLOADING.set(download, path)
+                        callBlock(
+                            done,
+                            [FFIType.ptr],
+                            send(
+                                objcClass('NSURL'),
+                                'fileURLWithPath:',
+                                nsString(path),
+                            ),
+                        )
+                    },
+                },
+            'downloadDidFinish:': {
+                types: 'v@:@',
+                args: [FFIType.ptr],
+                returns: FFIType.void,
+                run: (download: Id) => {
+                    const path = DOWNLOADING.get(download)
+                    DOWNLOADING.delete(download)
+                    if (path === undefined) return
+                    // What bounces the Downloads stack in the Dock.
+                    send(
+                        send(
+                            objcClass('NSDistributedNotificationCenter'),
+                            'defaultCenter',
+                        ),
+                        'postNotificationName:object:',
+                        nsString('com.apple.DownloadFileFinished'),
+                        nsString(path),
+                    )
+                },
+            },
+            'download:didFailWithError:resumeData:': {
+                types: 'v@:@@@',
+                args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+                returns: FFIType.void,
+                run: (download: Id, error: Id) => {
+                    const path = DOWNLOADING.get(download) ?? ''
+                    DOWNLOADING.delete(download)
+                    ask(
+                        send(send(download, 'webView'), 'window'),
+                        nsString(
+                            `${path.slice(path.lastIndexOf('/') + 1) || 'The file'} could not be downloaded. ${stringOf(send(error, 'localizedDescription'))}`,
+                        ),
+                        false,
+                    )
+                },
+            },
+        }),
+        'new',
+    )
+    return downloads
+}
+
+/** `name` in `directory`, numbered as the Finder numbers a copy where the name is taken. */
+function freePath(directory: string, name: string): string {
+    const files = send(objcClass('NSFileManager'), 'defaultManager')
+    const dot = name.lastIndexOf('.')
+    const stem = dot > 0 ? name.slice(0, dot) : name
+    const extension = dot > 0 ? name.slice(dot) : ''
+    let path = `${directory}/${name}`
+    for (
+        let copy = 2;
+        sendTyped(
+            files,
+            'fileExistsAtPath:',
+            [FFIType.ptr],
+            FFIType.bool,
+            nsString(path),
+        );
+        copy += 1
+    )
+        path = `${directory}/${stem} ${copy}${extension}`
+    return path
+}
+
+/** 38.189 — the page the web view shows, in the platform's print panel as a sheet on its window. */
+function printPage(view: Id): void {
+    if (view === null) return
+    const operation = send(
+        view,
+        'printOperationWithPrintInfo:',
+        send(objcClass('NSPrintInfo'), 'sharedPrintInfo'),
+    )
+    // The operation's view is made with no size, and a view of no size prints blank pages.
+    const [, , width, height] = rectOf(view, 'frame')
+    sendTyped(
+        send(operation, 'view'),
+        'setFrameSize:',
+        [FFIType.f64, FFIType.f64],
+        FFIType.void,
+        width,
+        height,
+    )
+    sendTyped(
+        operation,
+        'runOperationModalForWindow:delegate:didRunSelector:contextInfo:',
+        [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+        FFIType.void,
+        send(view, 'window'),
+        null,
+        null,
+        null,
+    )
+}
+
+// 38.178 — an `NSAlert` with `message`, a sheet on `window`; `answered` hears whether it was
+// accepted, and what its field holds where it has one — given `field`, its text to start with.
 function ask(
     window: Id,
     message: Id,
     cancellable: boolean,
-    answered: (accepted: boolean) => void = () => {},
+    answered: (accepted: boolean, text: string) => void = () => {},
+    field?: string,
 ): void {
     const panel = created('NSAlert')
     send(panel, 'setMessageText:', message)
     send(panel, 'addButtonWithTitle:', nsString('OK'))
     if (cancellable) send(panel, 'addButtonWithTitle:', nsString('Cancel'))
+    const input =
+        field === undefined
+            ? null
+            : send(
+                  objcClass('NSTextField'),
+                  'textFieldWithString:',
+                  nsString(field),
+              )
+    if (input !== null) {
+        sendTyped(
+            input,
+            'setFrameSize:',
+            [FFIType.f64, FFIType.f64],
+            FFIType.void,
+            260,
+            24,
+        )
+        send(panel, 'setAccessoryView:', input)
+        send(panel, 'layout')
+        send(send(panel, 'window'), 'setInitialFirstResponder:', input)
+    }
     send(
         panel,
         'beginSheetModalForWindow:completionHandler:',
         window,
         // NSAlertFirstButtonReturn.
         blockOnce([FFIType.i64], (response: bigint) =>
-            answered(Number(response) === 1000),
+            answered(
+                Number(response) === 1000,
+                input === null ? '' : stringOf(send(input, 'stringValue')),
+            ),
         ),
     )
 }

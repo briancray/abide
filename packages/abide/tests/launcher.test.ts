@@ -9,7 +9,6 @@ import { rm } from 'node:fs/promises' // bun exposes no directory removal of its
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
 
 import { buildDirectory, servedBuild } from '#server/appBuild.ts'
-import { badgeBridge } from '#server/badgeBridge.ts'
 import { derived, launcherDataDirectory } from '#server/config.ts'
 import type { App } from '#server/createApp.ts'
 import { HOOKS } from '#server/hooks.ts'
@@ -22,6 +21,7 @@ import {
 import { type Launch, launcherPage } from '#server/launcherPage.ts'
 import { menuBar, menuBarExtraMenu, opensInWindow } from '#server/menuBar.ts'
 import { NativeSession } from '#server/NativeSession.ts'
+import { pageBridge } from '#server/pageBridge.ts'
 import { LISTENING } from '#server/requestScope.ts'
 import { windowBridge } from '#server/windowBridge.ts'
 import { LAUNCHER_PAGE } from '#shared/NATIVE_FILES.ts'
@@ -249,38 +249,106 @@ test('a press on the titlebar drags and a double press zooms, and a control in i
     }
 })
 
-// 38.188 — THE BADGING API, AS THE STANDARD HAS IT, CARRIED TO THE DOCK. THE REVERT: drop the
-// range check in `badgeBridge`; `setAppBadge(-1)` resolves and posts `-1` where it rejects.
-test('setAppBadge posts a count, a flag or none, and refuses what is no count — 38.188', async () => {
+// What the native window does for `pageBridge`: hears what the page posts.
+function playWindow(): { posted: string[]; [Symbol.dispose](): void } {
     const posted: string[] = []
     const scope = globalThis as { webkit?: unknown }
+    const before = {
+        print: globalThis.print,
+        Notification: globalThis.Notification,
+    }
     scope.webkit = {
         messageHandlers: {
-            abideBadge: {
+            abidePage: {
                 postMessage: (message: string) => posted.push(message),
             },
         },
     }
+    return {
+        posted,
+        [Symbol.dispose]() {
+            delete (navigator as { setAppBadge?: unknown }).setAppBadge
+            delete (navigator as { clearAppBadge?: unknown }).clearAppBadge
+            Object.assign(globalThis, before)
+            delete scope.webkit
+        },
+    }
+}
+
+// 38.188 — THE BADGING API, AS THE STANDARD HAS IT, CARRIED TO THE DOCK. THE REVERT: drop the
+// range check in `pageBridge`; `setAppBadge(-1)` resolves and posts `badge -1` where it rejects.
+test('setAppBadge posts a count, a flag or none, and refuses what is no count — 38.188', async () => {
+    using window = playWindow()
+    pageBridge('default')
     const badging = navigator as Navigator & {
         setAppBadge(contents?: number): Promise<void>
         clearAppBadge(): Promise<void>
     }
-    badgeBridge()
-    try {
-        await badging.setAppBadge(3)
-        await badging.setAppBadge(2.9)
-        await badging.setAppBadge()
-        await badging.setAppBadge(0)
-        await badging.setAppBadge(7)
-        await badging.clearAppBadge()
-        await expect(badging.setAppBadge(-1)).rejects.toThrow(TypeError)
-        await expect(badging.setAppBadge(Number.NaN)).rejects.toThrow(TypeError)
-        expect(posted).toEqual(['3', '2', 'flag', '', '7', ''])
-    } finally {
-        delete (navigator as { setAppBadge?: unknown }).setAppBadge
-        delete (navigator as { clearAppBadge?: unknown }).clearAppBadge
-        delete scope.webkit
-    }
+    await badging.setAppBadge(3)
+    await badging.setAppBadge(2.9)
+    await badging.setAppBadge()
+    await badging.setAppBadge(0)
+    await badging.setAppBadge(7)
+    await badging.clearAppBadge()
+    await expect(badging.setAppBadge(-1)).rejects.toThrow(TypeError)
+    await expect(badging.setAppBadge(Number.NaN)).rejects.toThrow(TypeError)
+    expect(window.posted).toEqual([
+        'badge 3',
+        'badge 2',
+        'badge flag',
+        'badge ',
+        'badge 7',
+        'badge ',
+    ])
+})
+
+// 38.189 — PRINT IS THE PLATFORM'S. THE REVERT: drop the `print` definition in `pageBridge`; the
+// page's own `print` runs, and 0 messages are posted where 1 is due.
+test('print asks the window to print the page — 38.189', () => {
+    using window = playWindow()
+    pageBridge('default')
+    print()
+    expect(window.posted).toEqual(['print'])
+})
+
+// 38.190 — A NOTIFICATION IS SHOWN ONLY ONCE ALLOWED, AND HEARS ITS CLICK BY ITS ID. THE REVERT:
+// drop the `permission !== 'granted'` guard in `pageBridge`; the first notification is posted
+// where it errors, 2 notify messages where 1 is due.
+test('Notification asks, shows once allowed, and hears its click — 38.190', async () => {
+    using window = playWindow()
+    pageBridge('default')
+    expect(Notification.permission).toBe('default')
+    const heard: string[] = []
+    const refused = new Notification('Too soon')
+    refused.onerror = () => heard.push('error')
+    await Promise.resolve()
+
+    const asked = Notification.requestPermission()
+    expect(window.posted.at(-1)).toBe('permission')
+    dispatchEvent(new CustomEvent('abide:permission', { detail: 'granted' }))
+    expect(await asked).toBe('granted')
+    expect(Notification.permission).toBe('granted')
+
+    const won = new Notification('Deal won', { body: 'Acme', tag: 'acme' })
+    won.onshow = () => heard.push('show')
+    won.onclick = () => heard.push('click')
+    await Promise.resolve()
+    dispatchEvent(
+        new CustomEvent('abide:notification', {
+            detail: { id: 'acme', type: 'click' },
+        }),
+    )
+    const notified = window.posted.filter((message) =>
+        message.startsWith('notify '),
+    )
+    expect(notified).toEqual([
+        `notify ${JSON.stringify({ id: 'acme', title: 'Deal won', body: 'Acme', silent: false })}`,
+    ])
+    expect(heard).toEqual(['error', 'show', 'click'])
+    const closing = new Notification('Later', { tag: 'later' })
+    await Promise.resolve()
+    closing.close()
+    expect(window.posted.at(-1)).toBe('close later')
 })
 
 // 38.80 — THE `onLauncher` `native/launcher.abide`'s SERVER BLOCK CALLS IS WHAT THE LAUNCH READS: the file is

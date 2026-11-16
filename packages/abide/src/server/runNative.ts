@@ -27,6 +27,7 @@ import { type Launch, launcherPage } from './launcherPage.ts'
 import { loginShellPath } from './loginShellPath.ts'
 import { LOOPBACK } from './LOOPBACK.ts'
 import type { MenuBarIcon } from './menuBarExtra.ts'
+import { requestNotificationPermission } from './nativeNotifications.ts'
 import { NativeSession } from './NativeSession.ts'
 import { appOf, NativeUpdater, type Staged } from './NativeUpdater.ts'
 import { type LauncherThread, openNativeWindow } from './openNativeWindow.ts'
@@ -87,7 +88,7 @@ type ToLauncher =
     | {
           kind: 'call'
           call: number
-          name: 'check' | 'forget' | 'hasPage'
+          name: 'check' | 'forget' | 'hasPage' | 'notifications'
           address: string
       }
     | { kind: 'background'; color: [number, number, number] }
@@ -112,7 +113,7 @@ async function openWindow(
     const answers = new Map<number, (value: unknown) => void>()
     let calls = 0
     const call = <Answer>(
-        name: 'check' | 'forget' | 'hasPage',
+        name: 'check' | 'forget' | 'hasPage' | 'notifications',
         address = '',
     ): Promise<Answer> =>
         new Promise((answered) => {
@@ -132,6 +133,7 @@ async function openWindow(
         },
         forget: () => call('forget'),
         hasPage: (address) => call('hasPage', address),
+        requestNotifications: () => call('notifications'),
         rememberBackground: (color) => tell({ kind: 'background', color }),
         quit: (reopen) => tell({ kind: 'quit', reopen }),
         report: (error) =>
@@ -409,6 +411,9 @@ async function launch(
             await session.forget()
             return tellShown()
         }
+        // 38.190.
+        if (message.name === 'notifications')
+            return requestNotificationPermission()
         if (message.name === 'hasPage')
             return fetch(message.address, { method: 'HEAD' }).then(
                 (answered) => answered.ok,

@@ -295,10 +295,15 @@ const GLOBAL_BLOCK = (
  * Global, so AppKit's copy of it is the block itself and nothing it captures is copied; its memory
  * and its function are let go at the main thread's next yield to bun (`appKitLoop`), once AppKit
  * has released it — not on a timer, which that thread runs only when something wakes it.
+ *
+ * `threadsafe` for a block called on a thread of the system's: `run` is queued to the thread that
+ * made the block and runs after the call returns, so it may read the scalars it is handed and
+ * nothing an object argument points to, which is let go by then.
  */
 export function blockOnce(
     args: FFIType[],
     run: (...values: never[]) => void,
+    threadsafe = false,
 ): Id {
     const memory = SYSTEM.symbols.malloc(BLOCK_BYTES) as number
     const implementation = new JSCallback(
@@ -309,7 +314,7 @@ export function blockOnce(
                 SYSTEM.symbols.free(memory as never)
             })
         },
-        { args: [FFIType.ptr, ...args], returns: FFIType.void },
+        { args: [FFIType.ptr, ...args], returns: FFIType.void, threadsafe },
     )
     const fields = new DataView(toArrayBuffer(memory as never, 0, BLOCK_BYTES))
     fields.setBigUint64(0, BigInt(GLOBAL_BLOCK), true)

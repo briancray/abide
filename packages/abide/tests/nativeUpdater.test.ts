@@ -319,9 +319,12 @@ test('onLauncher takes an update address, and refuses one that is not a URL — 
 // as `abide native` runs — past a schema that requires what only the start form supplies — and the
 // executable and the identifier the platform keeps the app's state under stay `faster-app`. THE
 // REVERT: name `infoPlist` and `out` by `executableName(identity.name)`, as before; the bundle is
-// `faster-app.app` and its name `faster-app`.
+// `faster-app.app` and its name `faster-app`. 38.194 — and it names the reasons the camera, the
+// microphone and the location are asked for: WebKit leaves `navigator.mediaDevices` undefined in
+// a bundle that names none. THE REVERT: drop the three entries from `infoPlist`; the camera's
+// reason reads undefined.
 test.skipIf(process.platform !== 'darwin')(
-    'abide native names the bundle by APP_NAME and keeps its executable and identifier — 38.78, 38.87',
+    'abide native names the bundle by APP_NAME and keeps its executable and identifier — 38.78, 38.87, 38.194',
     async () => {
         const app = temporaryModule({
             'package.json': JSON.stringify({
@@ -368,6 +371,15 @@ onConfig(() => ({ APP_NAME: 'Faster' }), {
                 plist,
             )?.[1]
         expect(entry('CFBundleName')).toBe('Faster')
+        for (const [key, use] of [
+            ['NSCameraUsageDescription', 'the camera'],
+            ['NSMicrophoneUsageDescription', 'the microphone'],
+            ['NSLocationUsageDescription', 'your location'],
+            ['NSLocationWhenInUseUsageDescription', 'your location'],
+        ])
+            expect(entry(key as string)).toBe(
+                `Faster uses ${use} when a page of it asks.`,
+            )
         expect(entry('CFBundleDisplayName')).toBe('Faster')
         expect(entry('CFBundleExecutable')).toBe('faster-app')
         expect(entry('CFBundleIdentifier')).toBe('abide.app.faster-app')

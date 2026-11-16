@@ -549,6 +549,24 @@ function infoPlist(
             'NSAppTransportSecurity',
             '<dict><key>NSAllowsArbitraryLoads</key><true/></dict>',
         ],
+        // 38.194 — the reasons the platform shows as it asks; WebKit offers a page none of the
+        // three where the bundle names no reason.
+        [
+            'NSCameraUsageDescription',
+            `<string>${escapeText(name)} uses the camera when a page of it asks.</string>`,
+        ],
+        [
+            'NSMicrophoneUsageDescription',
+            `<string>${escapeText(name)} uses the microphone when a page of it asks.</string>`,
+        ],
+        [
+            'NSLocationUsageDescription',
+            `<string>${escapeText(name)} uses your location when a page of it asks.</string>`,
+        ],
+        [
+            'NSLocationWhenInUseUsageDescription',
+            `<string>${escapeText(name)} uses your location when a page of it asks.</string>`,
+        ],
     ]
     let body = ''
     for (const [key, value] of entries)

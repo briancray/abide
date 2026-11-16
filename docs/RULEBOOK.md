@@ -3552,9 +3552,10 @@ window, bring the window to the front and close the panel, rather than hand it t
 
 38.177 Picking the `window` role MUST bring the window to the front, showing it where it is hidden.
 
-38.178 A page's `alert` and `confirm` in the window `abide native`'s executable opens, or in its menu
-bar extra's panel, MUST show as a sheet on that window or panel, and what checking for an update
-finds as one on the window, brought to the front.
+38.178 A page's `alert`, `confirm` and `prompt` in the window `abide native`'s executable opens, or
+in its menu bar extra's panel, MUST show as a sheet on that window or panel, `prompt`'s with a field
+holding the text it was given and answering what the field holds, or `null` where it is cancelled,
+and what checking for an update finds as one on the window, brought to the front.
 
 38.179 The app `abide native`'s executable starts, its launcher's page and its timers MUST go on
 answering while the window is resized, a menu of it is held open or a sheet of 38.178 is shown, and
@@ -3596,6 +3597,35 @@ values its start form offers at a launch where 38.73 does nothing, rather than s
 have `navigator.setAppBadge` and `navigator.clearAppBadge` as the W3C Badging API defines them, the
 badge they set drawn on the native app's Dock icon as its count, as a mark with no number where none
 is given, and as nothing where it is cleared. The window showing the launcher's page MUST clear it.
+
+38.189 A page's `print` in the window `abide native`'s executable opens, or in its menu bar extra's
+panel, MUST open the platform's print panel on that page, as a sheet on that window or panel.
+
+38.190 A page in the window `abide native`'s executable opens, or in its menu bar extra's panel, MUST
+have a `Notification` whose `requestPermission` asks the person through the platform and answers
+what they chose, and whose instance, once permission is `granted`, MUST show as the platform's
+notification under the native app's name, replacing the one shown under the same `tag`, and MUST
+dispatch `click` where the person clicks it, bringing the window to the front. Where permission is
+not `granted` the instance MUST dispatch `error` and show nothing. `Notification.permission` MUST
+start at what the person last chose for the native app, and at `denied` where the executable runs
+outside a `.app`.
+
+38.191 An element's `requestFullscreen` in the window `abide native`'s executable opens MUST show
+that element over the whole screen.
+
+38.192 A link marked `download` in the window `abide native`'s executable opens, or in its menu bar
+extra's panel, and an answer that the web view cannot show or that is sent with a
+`Content-Disposition` of `attachment`, MUST be saved to the person's Downloads folder under the
+name it suggests, numbered where that name is taken, and the page MUST stay where it is. A download
+that fails MUST be told on the window it was asked from.
+
+38.193 A file input in the window `abide native`'s executable opens, or in its menu bar extra's
+panel, MUST open the platform's open panel as a sheet on that window or panel, admitting several
+files where the input is `multiple`.
+
+38.194 A page's `navigator.mediaDevices` and `navigator.geolocation` in the window the `.app`
+`abide native` writes opens MUST be present, and MUST reach the camera, the microphone and the
+person's location only once the person allows it through the platform.
 
 # 39. Head and view transitions
 

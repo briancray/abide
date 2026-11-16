@@ -48,13 +48,13 @@ const WAITS_ON_BUN =
 
 // THE WINDOW'S MODULES ARE FOUND BY WHAT THEY IMPORT, from the two the main thread starts in, so a
 // module added under them is read without anyone listing it. A type import loads nothing.
-// `windowBridge` and `badgeBridge` are exempt by what they ARE: each function is handed to the page
+// `windowBridge` and `pageBridge` are exempt by what they ARE: each function is handed to the page
 // as source, and runs in WebKit rather than here.
 // THE REVERT: `blockOnce` freeing its block in a `setTimeout`, as it did, is named here.
 test("nothing on the native window's main thread waits on bun's own loop", async () => {
     const PAGE_SIDE = new Set([
         'server/windowBridge.ts',
-        'server/badgeBridge.ts',
+        'server/pageBridge.ts',
     ])
     const read = new Map<string, string>()
     const pending = ['server/openNativeWindow.ts', 'server/appKitLoop.ts']
@@ -74,7 +74,7 @@ test("nothing on the native window's main thread waits on bun's own loop", async
             )
         }
     }
-    for (const bridge of ['windowBridge', 'badgeBridge'])
+    for (const bridge of ['windowBridge', 'pageBridge'])
         expect(read.get('server/openNativeWindow.ts')).toContain(
             `${bridge}.toString()`,
         )
