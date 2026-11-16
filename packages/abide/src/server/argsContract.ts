@@ -24,6 +24,7 @@ import { refuse } from '#shared/refuse.ts'
 import { validateJson } from '#shared/validateJson.ts'
 
 import type { Mounted } from './mountHandlers.ts'
+import { standardJsonSchemaOf } from './standardJsonSchemaOf.ts'
 
 export type Document = {
     type?: string | string[]
@@ -49,12 +50,7 @@ export function argsDocumentOf(handler: Gated<unknown>): Document | undefined {
 }
 
 function declaredDocument(handler: Gated<unknown>): Document | undefined {
-    const gate = gateOf(handler) as
-        { '~standard'?: { jsonSchema?: { input?: () => unknown } } } | undefined
-    const document = gate?.['~standard']?.jsonSchema?.input?.()
-    return document !== null && typeof document === 'object'
-        ? (document as Document)
-        : undefined
+    return standardJsonSchemaOf(gateOf(handler)) as Document | undefined
 }
 
 /**

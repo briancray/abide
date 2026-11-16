@@ -12,7 +12,8 @@
 
 import { EXPORT, type LogRecord, type Span } from '#shared/log.ts'
 
-import { config } from './config.ts'
+import { appIdentity } from './config.ts'
+import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 const FLUSH_MILLISECONDS = 1000
 const BATCH = 512
@@ -48,7 +49,10 @@ function destinationOf(
     env: Record<string, string | undefined>,
 ): Destination | undefined {
     if (env.OTEL_SDK_DISABLED?.toLowerCase() === 'true') return undefined
-    const base = env.OTEL_EXPORTER_OTLP_ENDPOINT?.replace(/\/+$/, '')
+    const base =
+        env.OTEL_EXPORTER_OTLP_ENDPOINT === undefined
+            ? undefined
+            : withoutTrailingSlash(env.OTEL_EXPORTER_OTLP_ENDPOINT)
     const logs =
         env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ??
         (base === undefined || base === '' ? undefined : `${base}/v1/logs`)
@@ -157,14 +161,16 @@ async function post(
 
 /** 36.22 — the app, as every OTLP backend names a service: `OTEL_SERVICE_NAME`, else `APP_NAME`. */
 function resourceOf(): { attributes: Attribute[] } {
-    const resolved = (config.peek() ?? {}) as Record<string, unknown>
-    const name =
-        process.env.OTEL_SERVICE_NAME ??
-        (typeof resolved.APP_NAME === 'string' ? resolved.APP_NAME : 'app')
-    const attributes: Attribute[] = [attribute('service.name', name)]
-    if (typeof resolved.APP_VERSION === 'string')
-        attributes.push(attribute('service.version', resolved.APP_VERSION))
-    return { attributes }
+    const identity = appIdentity()
+    return {
+        attributes: [
+            attribute(
+                'service.name',
+                process.env.OTEL_SERVICE_NAME ?? identity.name,
+            ),
+            attribute('service.version', identity.version),
+        ],
+    }
 }
 
 type Attribute = {

@@ -3,6 +3,7 @@
 // return where the schema has no document to read.
 
 import { HOOKS, inOrder } from './hooks.ts'
+import { standardJsonSchemaOf } from './standardJsonSchemaOf.ts'
 
 type Property = {
     type?: string | string[]
@@ -40,21 +41,9 @@ export function configFields(
             if (answered !== null && typeof answered === 'object')
                 Object.assign(defaults, answered)
         } catch {}
-        const schema = options?.schema as
-            | {
-                  '~standard'?: {
-                      jsonSchema?: { input?: (options: unknown) => unknown }
-                  }
-              }
-            | undefined
-        let document:
+        const document = standardJsonSchemaOf(options?.schema) as
             | { properties?: Record<string, Property>; required?: string[] }
             | undefined
-        try {
-            document = schema?.['~standard']?.jsonSchema?.input?.({
-                target: 'draft-2020-12',
-            }) as typeof document
-        } catch {}
         if (document?.properties !== undefined)
             declared = { ...declared, ...document.properties }
         for (const name of document?.required ?? []) required.add(name)

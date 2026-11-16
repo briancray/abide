@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path' // bun exposes no path resolution o
 import { config, derived } from './config.ts'
 import { onStop } from './hooks.ts'
 import { isRunning } from './isRunning.ts'
+import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** 47.2, 47.3 — a name, opened as `<name>.sqlite`. A string neither a name nor a path is refused. */
 const NAME = /^[\w-]+$/
@@ -209,7 +210,7 @@ function pathOf(file: string, scratch: boolean): string {
 function scratchDirectory(): string {
     let directory = scratchDirectories.get(Bun.main)
     if (directory === undefined) {
-        const temporary = (Bun.env.TMPDIR ?? '/tmp').replace(/\/$/, '')
+        const temporary = withoutTrailingSlash(Bun.env.TMPDIR ?? '/tmp')
         // 47.19 — `bun test` runs no `exit` listener, so what a finished process left is removed by
         // the next one to make a scratch directory.
         if (scratchDirectories.size === 0)
