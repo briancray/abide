@@ -30,7 +30,7 @@ affected code saying what it did, and tell the user.
   interaction did with `measure`, both from `@abide/harness/abide` (RULEBOOK 38.119, 43.23) — a
   test that only reads the text back passes against a component doing ten times the work.
   A prop the test moves is handed as its `Reactive` — `Label({ label })` — which the component
-  reads live and writes back to as a `bind:` would (RULEBOOK 38.195, 38.196), or as a getter —
+  reads live and writes back to as a `bind:` would (RULEBOOK 38.207, 38.208), or as a getter —
   `Label({ get label() { return source() } })` — read through on every read (RULEBOOK 38.134); any
   other prop is the value it was given.
   A test waits on a value landing — `await` the handler call, or the `Reactive` the component

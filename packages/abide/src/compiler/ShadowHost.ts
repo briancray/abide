@@ -152,7 +152,7 @@ export class ShadowHost {
                 ? 'declare const text: string\nexport default text\n'
                 : undefined
         // 34.17 — WHAT A `.abide` EXPORTS, to anything importing it: the component its checked
-        // module declares, as a direct call takes it (38.196), and nothing else. The checker resolves `./x.abide` by trying
+        // module declares, as a direct call takes it (38.208), and nothing else. The checker resolves `./x.abide` by trying
         // `./x.abide.d.ts`; the bindings the projection re-exports for the build (16.70) are not
         // the importer's to read.
         //

@@ -53,7 +53,7 @@ export function boundProp(hold: () => unknown): (held?: true) => unknown {
 /**
  * A prop a direct call hands a component, as the accessor a tag would have passed for it.
  *
- * 38.195 — a `Reactive` is the write path a `bind:` hands over (32.6), and any other value is the
+ * 38.207 — a `Reactive` is the write path a `bind:` hands over (32.6), and any other value is the
  * value it held when the component was bound (38.134).
  */
 export function passedProp(value: unknown): (held?: true) => unknown {

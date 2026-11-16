@@ -383,7 +383,7 @@ const retries: number = config().RETRIES
 const wrong: string = config().RETRIES
 </script>`
 
-// 38.196 — A DIRECT CALL TAKES A PROP AS ITS VALUE OR AS A `Reactive` OF IT, the write path a
+// 38.208 — A DIRECT CALL TAKES A PROP AS ITS VALUE OR AS A `Reactive` OF IT, the write path a
 // `bind:` hands over (32.6), and nothing else: a `Reactive` of another type is still refused.
 const DIRECT = `import { reactive } from '@abide/abide'
 import Held from './Held.abide'
@@ -761,7 +761,7 @@ test('a listener is typed by its target, as a function or an object — 32.95, 3
 
 // THE REVERT: re-export the default in place of `__directly` in `ShadowHost.standIn`;
 // the bound call reports TS2322 too (3 against 2).
-test('a direct call takes a prop as its value or a Reactive of it — 38.196', () => {
+test('a direct call takes a prop as its value or a Reactive of it — 38.208', () => {
     expect(
         inFile('lib/direct.ts').map(({ line, code }) => ({ line, code })),
     ).toEqual([

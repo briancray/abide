@@ -3411,7 +3411,7 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
 
 38.134 A prop a test hands a component it binds for `mount` as an own getter MUST be read through
-that getter on each read the component makes, and any other prop but a `Reactive` (38.195) MUST be
+that getter on each read the component makes, and any other prop but a `Reactive` (38.207) MUST be
 the value it held when the component was bound.
 
 38.135 `abide routes` MUST print beside each handler every rung its declaration's `middleware`
@@ -3639,10 +3639,10 @@ files where the input is `multiple`.
 `abide native` writes opens MUST be present, and MUST reach the camera, the microphone and the
 person's location only once the person allows it through the platform.
 
-38.195 A prop a test hands a component it binds for `mount` as a `Reactive` MUST reach the component
+38.207 A prop a test hands a component it binds for `mount` as a `Reactive` MUST reach the component
 as 32.6 has a `bind:` hand it over.
 
-38.196 `abide check` MUST hold a prop a `.ts` file calls a `.abide` file's component with to the
+38.208 `abide check` MUST hold a prop a `.ts` file calls a `.abide` file's component with to the
 type its `props` call declares for it, or to a `Reactive` holding and taking that type.
 
 # 39. Head and view transitions

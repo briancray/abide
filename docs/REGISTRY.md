@@ -726,7 +726,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4, 38.196 |
+| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4, 38.208 |
 | `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31, 41.34, 41.35 |
 
 ## Sinks
@@ -862,7 +862,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134, 38.195 |
+| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134, 38.207 |
 | `Mounted` | `{ stop(): void; [Symbol.dispose](): void }` | A component `mount` hydrated, until it is stopped. | 38.119 |
 
 # The measurement harness

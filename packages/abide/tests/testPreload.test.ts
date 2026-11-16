@@ -176,12 +176,12 @@ test('the getter source moves the mounted label', async () => {
     )
 }, 90_000)
 
-// 38.195 — A PROP HANDED AS A `Reactive` IS BOUND TO IT, as a tag's `bind:` would be (32.6): the
+// 38.207 — A PROP HANDED AS A `Reactive` IS BOUND TO IT, as a tag's `bind:` would be (32.6): the
 // component reads it live and its write by name reaches the caller's value. THE REVERT: hand every
 // prop to `boundModule`'s accessors as `() => value`; a prop the component only reads is then the
 // `Reactive` itself, which has no `toUpperCase` — exit 1, `0 pass`. (One it writes adopts the
 // `Reactive` either way, through its cell — 11.12.)
-test('a prop handed to a mounted component as a Reactive is bound to it — 38.195', async () => {
+test('a prop handed to a mounted component as a Reactive is bound to it — 38.207', async () => {
     const cwd = temporaryModule({
         'package.json': JSON.stringify({
             name: 'bound-prop-fixture',

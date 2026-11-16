@@ -49,7 +49,7 @@ export const COMPONENT_STAND_IN = '__component'
 const COMPONENT_RECORD = '__record'
 
 /**
- * 38.196 — what a `.ts` file importing a `.abide` calls: the component, with each prop as its value
+ * 38.208 — what a `.ts` file importing a `.abide` calls: the component, with each prop as its value
  * or a `Reactive` of it, the write path a `bind:` hands over (32.6). A tag calls the default, which
  * takes the values alone — its own values reach it already read (`__prop`, `__bound`) — so what a
  * tag is held to, hovered and completed by stays the `props` call as written. A union with the plain
