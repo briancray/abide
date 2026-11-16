@@ -3754,6 +3754,15 @@ function refreshIn(cell: Cell, tags: string[] | null): void {
 }
 
 /**
+ * Whether anything reads `value`, or asks its probes — what a source that costs only while it is
+ * followed (47.22's poll) asks before it does the work.
+ */
+export function isSubscribed(value: unknown): boolean {
+    const cell = (value as Callable)[CELL]
+    return readByAny(cell.readers) || readByAny(cell.probeReaders)
+}
+
+/**
  * Whether any of `readers` is something reading the value rather than a keyed entry's lifetime.
  *
  * THE LIFETIME IS THE ONE MIRROR WITH NO ADOPTER (`Subscriber.isMirror`): it subscribes to an entry

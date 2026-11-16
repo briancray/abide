@@ -4692,6 +4692,14 @@ called with, inside 47.7's transaction.
 47.21 An opener called at any point of its own open but 47.20's MUST throw, and MUST NOT open a
 second `Database`.
 
+47.22 An opener's `changed` MUST increase where another connection, in this process or another, has
+committed to the file since the `Database` the opener holds was last checked, checking it every 1000
+milliseconds, and MUST NOT increase for a write made through that `Database`.
+
+47.23 An opener's `changed` MUST be checked only while something reads it or asks its probes.
+
+47.24 Checking an opener's `changed` MUST NOT open its `Database`.
+
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding the trace it was given among its `traces`, and

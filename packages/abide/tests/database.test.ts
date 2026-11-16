@@ -11,7 +11,7 @@ import { spawned } from '@abide/harness/gate'
 import { config } from '#server/config.ts'
 import { database } from '#server/database.ts'
 import { sqlite } from '#server/stores/sqlite.ts'
-import { reactive } from '#shared'
+import { reactive, watch } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -664,4 +664,60 @@ test('close with remove deletes the file the opener last opened, after the app s
         cars: { cars: 0 },
     })
     garage.close({ remove: true })
+})
+
+// 47.22, 47.23 — ANOTHER CONNECTION'S COMMIT MOVES `changed`, AND NOTHING ASKS WHILE NOTHING FOLLOWS.
+// The work is the `PRAGMA data_version` the poll asks, counted off the connection the opener holds:
+// none while only a `peek` has read the value, some while a `watch` follows it, and none again once
+// the watch has stopped. A write on the opener's own connection moves nothing.
+// THE REVERT: drop the `isSubscribed` test from `tick`; the `peek` alone starts a poll that never
+// stops — `asked: 2` where 0 is due.
+test('changed counts another connection’s commits, and is asked only while followed — 47.22, 47.23', async () => {
+    const garage = database('followed', { migrations: [CARS] })
+    const db = garage()
+    let asked = 0
+    const query = db.query.bind(db)
+    db.query = ((sql: string) => {
+        if (sql === 'PRAGMA data_version') asked += 1
+        return query(sql)
+    }) as typeof db.query
+    const tick = (): Promise<void> => Bun.sleep(1_100)
+    expect(garage.changed.peek()).toBe(0)
+    await tick()
+    expect(`asked: ${asked}`).toBe('asked: 0')
+
+    const seen: number[] = []
+    const stop = watch(() => {
+        seen.push(garage.changed())
+    })
+    await Bun.sleep(0)
+    expect(asked).toBeGreaterThan(0)
+    const elsewhere = new Database(db.filename)
+    elsewhere.run("INSERT INTO cars (vin) VALUES ('1G1YB')")
+    elsewhere.close()
+    await tick()
+    garage().run("INSERT INTO cars (vin) VALUES ('5YJ3E')")
+    await tick()
+    expect(seen).toEqual([0, 1])
+
+    stop()
+    await tick()
+    const stopped = asked
+    await tick()
+    expect(`asked: ${asked}`).toBe(`asked: ${stopped}`)
+    garage.close({ remove: true })
+}, 15_000)
+
+// 47.24 — FOLLOWED BEFORE THE APP HAS OPENED THE FILE, `changed` WAITS FOR IT rather than opening it.
+// THE REVERT: ask `opener()` in `tick` in place of the `Database` held; the file is made — `true`
+// where `false` is due.
+test('following changed does not open the database — 47.24', async () => {
+    onDisk()
+    const garage = database('unopened', { migrations: [CARS] })
+    const stop = watch(() => {
+        garage.changed()
+    })
+    await Bun.sleep(1_100)
+    stop()
+    expect(await Bun.file(`${directory}/unopened.sqlite`).exists()).toBe(false)
 })

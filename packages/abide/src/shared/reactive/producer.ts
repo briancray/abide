@@ -28,6 +28,7 @@ export {
     dropAnswered,
     failedTransiently,
     isAsyncGenerator,
+    isSubscribed,
     patchInto,
     produceInto,
     refreshCallerHeld,

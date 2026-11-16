@@ -162,6 +162,10 @@ affected code saying what it did, and tell the user.
   15.20). Where you know the wait, set it beside the refusal —
   `response().headers.set('retry-after', '30')` — and every read before then is answered with the
   refusal without a call (15.23).
+- Where another process writes a `database` file — a script, a second server — follow it with
+  `watch(() => { db.changed(); refresh() })` in a server module. `changed` asks the file once a
+  second while followed (RULEBOOK 47.22, 47.23), and a bare `refresh()` reloads every value something
+  reads (13.7). Do not poll `PRAGMA data_version` yourself.
 - `assistant` runs in a `global` handler, its conversation ending when the app stops rather than
   when the first reader leaves, with no tools (RULEBOOK 44.57, 44.101). Do not hand a provider a
   signal of your own to keep it alive.
