@@ -164,11 +164,12 @@ function focusOnKey(input: Element) {
             </div>
         {/if}
 
+        {#component Part({ part }: { part: AnswerPart })}{#if part.kind === 'html'}<div class="flow">{raw(part.html)}</div>{:else if part.kind === 'code'}<Code code={part.code} language={part.language} />{:else}<Shown show={part.show} />{/if}{/component}
         {#for turn, index of turns by index}
             <article class="turn">
                 <p class="asked">{turn.question}</p>
                 {#for part, at of turn.parts by at}
-                    {#if part.kind === 'html'}<div class="flow">{raw(part.html)}</div>{:else if part.kind === 'code'}<Code code={part.code} language={part.language} />{:else}<Shown show={part.show} />{/if}
+                    <Part part={part} />
                 {/for}
             </article>
         {/for}
@@ -177,7 +178,7 @@ function focusOnKey(input: Element) {
             <article class="turn">
                 <p class="asked">{asking.at(-1)?.content}</p>
                 {#for part, at of live.parts by at}
-                    {#if part.kind === 'html'}<div class="flow">{raw(part.html)}</div>{:else if part.kind === 'code'}<Code code={part.code} language={part.language} />{:else}<Shown show={part.show} />{/if}
+                    <Part part={part} />
                 {/for}
                 {#if live.tail?.kind === 'html'}
                     <div class="flow">{raw(live.tail.html)}</div>
