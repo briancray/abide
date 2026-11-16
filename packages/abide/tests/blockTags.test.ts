@@ -56,6 +56,9 @@ test('a block tag abide has no block for is refused by name — 32.65', () => {
         '{:then v}',
         '{@const x = 1}',
         '{#ifé x}{/if}',
+        '{#éach x}',
+        '{@é}',
+        '{#if a}x{/ifé}{/if}',
     ])
         expect(refusalOf(source), source).toContain('RULEBOOK 32.65')
 })

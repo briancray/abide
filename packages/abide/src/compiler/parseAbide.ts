@@ -140,6 +140,13 @@ function innermostOpen(
     return ` The block open here is the {#${blockName(block)}} at ${line}:${column}.`
 }
 
+// 32.65 — a sigil and a name, or a close and nothing but a name: a name by `IDENTIFIER_PART`, so a
+// keyword spelled outside ASCII is refused as one rather than read as an expression.
+const UNKNOWN_BLOCK = new RegExp(
+    `^(?:[#:@]\\p{ID_Start}|\\/\\s*\\p{ID_Start}${IDENTIFIER_PART.source}*$)`,
+    'u',
+)
+
 /**
  * Whether `inner` opens with `keyword` as a whole word — a name character after it (`IDENTIFIER_PART`,
  * outside ASCII too) makes it a different word, which the unknown-block refusal answers (32.65).
@@ -624,9 +631,7 @@ export function parseAbide(source: string): AbideFile {
             // 32.65 — `{#each}`, `{#await}`, `{@html}` and every other tag abide has no block for.
             // Read as an expression, each surfaced as a TypeScript syntax error about a `#` or an
             // `@`, which names nothing the author wrote.
-            const unknown = /^(?:[#:@][A-Za-z]|\/\s*[A-Za-z][\w$]*$)/.test(
-                inner,
-            )
+            const unknown = UNKNOWN_BLOCK.test(inner)
             if (unknown)
                 throw new PositionedRefusal(
                     `abide: {${inner}} is not a block abide has. A template has {#if}, {#for}, {#try} and {#component Name(pattern)}, each closed by its own {/if}, {/for}, {/try} or {/component}${unknownHint(inner)}. RULEBOOK 32.65.`,

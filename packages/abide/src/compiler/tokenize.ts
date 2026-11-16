@@ -1,6 +1,8 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner, type Scanner } from 'typescript/unstable/ast/scanner'
 
+import { IDENTIFIER_PART } from './isNamedAlone.ts'
+
 // ONE TOKENIZER, read by `splitImports`, `forBlock`, `projectShadow` and `Lowering`, and by
 // `parseAbide` through `slotEnd`, which is the same scan. A template literal's re-scan, the
 // regex-or-division question and where a slot ends are each answered once, so every reader agrees
@@ -86,7 +88,10 @@ export function slotEnd(source: string, open: number): number {
     while (first < source.length && isSpace(source[first] as string)) first += 1
     if (source[first] === '/') {
         let close = first + 1
-        while (close < source.length && isLetter(source[close] as string))
+        while (
+            close < source.length &&
+            IDENTIFIER_PART.test(source[close] as string)
+        )
             close += 1
         if (close > first + 1) {
             while (close < source.length && isSpace(source[close] as string))
@@ -98,7 +103,10 @@ export function slotEnd(source: string, open: number): number {
     let depth = 0
     if (source[first] === '#') {
         let name = first + 1
-        while (name < source.length && isLetter(source[name] as string))
+        while (
+            name < source.length &&
+            IDENTIFIER_PART.test(source[name] as string)
+        )
             name += 1
         if (name > first + 1) {
             from = name
@@ -344,9 +352,4 @@ export function skipQuoted(source: string, open: number): number {
         at += 1
     }
     return at
-}
-
-/** A block name is lower-case ASCII. */
-function isLetter(char: string): boolean {
-    return char >= 'a' && char <= 'z'
 }
