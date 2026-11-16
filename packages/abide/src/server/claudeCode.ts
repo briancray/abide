@@ -38,6 +38,7 @@ import {
     type ToolAnswer,
 } from './assistant.ts'
 import {
+    type Asker,
     fromNativeWindow,
     mintCode,
     pairingArgs,
@@ -131,16 +132,14 @@ function foldedContent(
     return blocksOf(pieces)
 }
 
-/** Who asks of a pairing: the browser (44.13), the principal signed in, and whether the window does (44.77). */
-function asker(): { caller: string; signedIn: string; local: boolean } {
+/** Who asks of a pairing, as the request in scope says. */
+function asker(): Asker {
     return {
         caller: askingCaller(),
         signedIn: signedInAs(),
         local: fromNativeWindow(),
     }
 }
-
-type Asker = ReturnType<typeof asker>
 
 /** The browser asking, which a pairing is to. 44.13. */
 function askingCaller(): string {

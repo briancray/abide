@@ -34,13 +34,11 @@ function secrets(): [name: string, value: string][] {
     for (const secret of principalSecrets())
         if (secret.length >= SHORTEST_SECRET)
             found.push(['ABIDE_PRINCIPAL_SECRET', secret])
-    const names: string[] = []
-    for (const field of configFields({}))
-        if (field.input === 'password') names.push(field.name)
-    for (const name of names) {
-        const value = resolved[name] ?? process.env[name]
+    for (const field of configFields({})) {
+        if (field.input !== 'password') continue
+        const value = resolved[field.name] ?? process.env[field.name]
         if (typeof value === 'string' && value.length >= SHORTEST_SECRET)
-            found.push([name, value])
+            found.push([field.name, value])
     }
     return found
 }

@@ -147,9 +147,11 @@ export function sendPair(
     )
 }
 
-/** What `receiver` answers `name` with, a `BOOL` getter taking nothing. */
-export function flagOf(receiver: Id, name: string): boolean {
-    return sendTyped(receiver, name, [], FFIType.bool) as boolean
+/** What `receiver` answers `name` with — a `BOOL` — handed `values` as objects. */
+export function flagOf(receiver: Id, name: string, ...values: Id[]): boolean {
+    const args: FFIType[] = []
+    for (let at = 0; at < values.length; at += 1) args.push(FFIType.ptr)
+    return sendTyped(receiver, name, args, FFIType.bool, ...values) as boolean
 }
 
 /** The window's standard button `button` — close 0, miniaturize 1, zoom 2 (`NSWindowButton`). */

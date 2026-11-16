@@ -49,16 +49,13 @@ function destinationOf(
     env: Record<string, string | undefined>,
 ): Destination | undefined {
     if (env.OTEL_SDK_DISABLED?.toLowerCase() === 'true') return undefined
-    const base =
-        env.OTEL_EXPORTER_OTLP_ENDPOINT === undefined
-            ? undefined
-            : withoutTrailingSlash(env.OTEL_EXPORTER_OTLP_ENDPOINT)
+    const base = withoutTrailingSlash(env.OTEL_EXPORTER_OTLP_ENDPOINT ?? '')
     const logs =
         env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ??
-        (base === undefined || base === '' ? undefined : `${base}/v1/logs`)
+        (base === '' ? undefined : `${base}/v1/logs`)
     const traces =
         env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ??
-        (base === undefined || base === '' ? undefined : `${base}/v1/traces`)
+        (base === '' ? undefined : `${base}/v1/traces`)
     if (logs === undefined && traces === undefined) return undefined
     const headers: Record<string, string> = {
         'content-type': 'application/json',

@@ -4703,8 +4703,8 @@ the `Report`, and MUST leave the draft as it was.
 above its send, settling `true` once the draft is sent and `false` once the dialog is closed unsent,
 and MUST throw outside a browser.
 
-48.10 Neither a `Report` nor a line the server hands a `ReportDraft` MUST hold the value of
-`ABIDE_PRINCIPAL_SECRET` or of a `ConfigField` whose `input` is `password`, four characters long or
-longer, each written in its place as `[redacted <name>]`.
+48.10 Neither a `Report` nor a line the server hands a `ReportDraft` MUST hold any secret
+`ABIDE_PRINCIPAL_SECRET` lists (36.5) or the value of a `ConfigField` whose `input` is `password`,
+four characters long or longer, each written in its place as `[redacted <name>]`.
 
 48.11 A line a browser sends with a `Report` MUST reach `onReport` naming no trace.

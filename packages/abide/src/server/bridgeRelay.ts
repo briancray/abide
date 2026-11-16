@@ -131,6 +131,9 @@ const LOCAL: {
     args: new Map(),
 }
 
+/** Who asks of a pairing: the browser (44.13), the principal signed in, and whether the request is from the native app's window (`fromNativeWindow`, 44.77). */
+export type Asker = { caller: string; signedIn: string; local: boolean }
+
 /**
  * Lends this machine's Claude Code to every request carrying `secret` in `NATIVE_COOKIE` — the
  * native app's window onto the app it started. 44.77, 44.79. Settles once the user scope's MCP
@@ -349,11 +352,7 @@ export async function* runTurn({
     answer,
     signal,
     local,
-}: {
-    caller: string
-    signedIn: string
-    /** Whether the request is from the native app's window (`fromNativeWindow`). */
-    local: boolean
+}: Asker & {
     prompt: unknown[]
     config: unknown
     maxTurns: number
@@ -460,10 +459,7 @@ export async function runCall({
     name,
     input,
     signal,
-}: {
-    caller: string
-    signedIn: string
-    local: boolean
+}: Asker & {
     name: string
     input: unknown
     signal: AbortSignal
@@ -503,10 +499,7 @@ export function permit({
     local,
     id,
     allow,
-}: {
-    caller: string
-    signedIn: string
-    local: boolean
+}: Asker & {
     id: string
     allow: boolean
 }): void {

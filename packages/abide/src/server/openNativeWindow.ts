@@ -230,13 +230,7 @@ export function openNativeWindow(
     send(window, 'center')
     // 38.162 — where the window was and how large, as the last launch left it.
     if (options.rememberFrame)
-        sendTyped(
-            window,
-            'setFrameAutosaveName:',
-            [FFIType.ptr],
-            FFIType.bool,
-            nsString(`${appName} window`),
-        )
+        flagOf(window, 'setFrameAutosaveName:', nsString(`${appName} window`))
     // 38.156 — the background the last page reported, so the window opens on it rather than a flash.
     if (background !== null && options.vibrancy === undefined)
         send(window, 'setBackgroundColor:', colorOf(background))
@@ -251,15 +245,7 @@ export function openNativeWindow(
             nsBoolean(true),
             nsString('developerExtrasEnabled'),
         )
-        if (
-            sendTyped(
-                view,
-                'respondsToSelector:',
-                [FFIType.ptr],
-                FFIType.bool,
-                selector('setInspectable:'),
-            )
-        )
+        if (flagOf(view, 'respondsToSelector:', selector('setInspectable:')))
             sendFlag(view, 'setInspectable:', true)
     }
     const uiDelegate = send(uiDelegateClass(), 'new')
@@ -794,11 +780,9 @@ function uiDelegateClass(): Id {
             returns: FFIType.void,
             run: (_view: Id, navigation: Id, decide: Id) => {
                 const response = send(navigation, 'response')
-                const disposition = sendTyped(
+                const disposition = flagOf(
                     response,
                     'isKindOfClass:',
-                    [FFIType.ptr],
-                    FFIType.bool,
                     objcClass('NSHTTPURLResponse'),
                 )
                     ? stringOf(
@@ -1090,13 +1074,7 @@ function freePath(directory: string, name: string): string {
     let path = `${directory}/${name}`
     for (
         let copy = 2;
-        sendTyped(
-            files,
-            'fileExistsAtPath:',
-            [FFIType.ptr],
-            FFIType.bool,
-            nsString(path),
-        );
+        flagOf(files, 'fileExistsAtPath:', nsString(path));
         copy += 1
     )
         path = `${directory}/${stem} ${copy}${extension}`
