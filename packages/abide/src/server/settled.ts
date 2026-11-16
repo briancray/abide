@@ -1,6 +1,6 @@
-// 38.195 — `settled` from `@abide/abide/test`: what a test awaits after it clicks, in place of a
+// 38.204 — `settled` from `@abide/abide/test`: what a test awaits after it clicks, in place of a
 // `Bun.sleep` long enough on the machine it was written on. The loads it waits on are the ones the
-// core keeps once this entry has loaded (`keepLoads`, 38.197).
+// core keeps once this entry has loaded (`keepLoads`, 38.206).
 
 import { pendingWork } from '#shared/reactive/producer.ts'
 import { flushSync } from '#shared/reactive/Reactive.ts'
@@ -31,7 +31,7 @@ export async function settled(options?: { timeout?: number }): Promise<void> {
         if (pending.effects > 0)
             named.push(`${pending.effects} effects pending`)
         throw new Error(
-            `abide: settled() waited ${timeout} ms and ${named.join(' and ')}. RULEBOOK 38.196.`,
+            `abide: settled() waited ${timeout} ms and ${named.join(' and ')}. RULEBOOK 38.205.`,
         )
     }
 }

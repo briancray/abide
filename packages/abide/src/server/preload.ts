@@ -14,7 +14,7 @@ import { processBuild, servedBuild, spawnedBuild } from './appBuild.ts'
 import { addDerived } from './config.ts'
 import { appRoot } from './createApp.ts'
 
-// 38.197 — the loads `settled` waits on, kept from here on and in no process that did not load this.
+// 38.206 — the loads `settled` waits on, kept from here on and in no process that did not load this.
 keepLoads()
 
 // 38.120 — a sign-in seals under test where the app declared no secret: derived, so the app's
@@ -34,7 +34,7 @@ if (root !== undefined && !(await isWorkspaceRoot(root)))
 // `beforeEach` notices the file change through `Bun.main`. Outside the test runner — a bench or a
 // script importing `mount`'s module — there is no runner to register with, and nothing to reset.
 //
-// 38.195 — AND EACH TEST WAITS ON ITS OWN LOADS: a value an earlier test left loading — a stream
+// 38.204 — AND EACH TEST WAITS ON ITS OWN LOADS: a value an earlier test left loading — a stream
 // still open, a call nothing answered — is that test's, and `settled` in this one does not wait on it.
 let fileUnderTest: string | undefined
 try {

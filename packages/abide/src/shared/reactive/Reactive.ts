@@ -513,7 +513,7 @@ export function flushSync(): void {
 }
 
 /**
- * 38.195-38.197 — THE LOADS A TEST WAITS ON, kept only once `@abide/abide/test` asks for them. A
+ * 38.204-38.206 — THE LOADS A TEST WAITS ON, kept only once `@abide/abide/test` asks for them. A
  * value going loading is not otherwise listed anywhere, so `settled` would have nothing to read; and
  * a list every page kept would hold every value that ever loaded, so outside a test nothing is kept
  * and the one cost is the `null` check where a load starts.

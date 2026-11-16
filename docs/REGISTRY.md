@@ -863,7 +863,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | --- | --- | --- | --- |
 | `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134 |
 | `Mounted` | `{ stop(): void; [Symbol.dispose](): void }` | A component `mount` hydrated, until it is stopped. | 38.119 |
-| `settled` | `(options?: { timeout?: number }) => Promise<void>` | A wait until nothing a test started is still loading or pending. | 38.195, 38.196, 38.197 |
+| `settled` | `(options?: { timeout?: number }) => Promise<void>` | A wait until nothing a test started is still loading or pending. | 38.204, 38.205, 38.206 |
 
 # The measurement harness
 

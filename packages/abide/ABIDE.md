@@ -34,7 +34,7 @@ affected code saying what it did, and tell the user.
   A test waits on a value landing — `await` the handler call, or the `Reactive` the component
   reads, which is thenable (RULEBOOK 1.4), or, after a click whose calls the test cannot reach,
   `await settled()` from `@abide/harness/abide`, which waits until no value is loading and names
-  any that never lands (RULEBOOK 38.195, 38.196) — never on `Bun.sleep` or a timer.
+  any that never lands (RULEBOOK 38.204, 38.205) — never on `Bun.sleep` or a timer.
   Assert the work as a ceiling — `atMost(work, { wakes: 9, nodesCreated: 0 })` from
   `@abide/harness/gate` (RULEBOOK 43.40) — not as `expect(work.wakes).toBe(9)`: `wakes`,
   `bindingRuns` and `descents` count abide's internals, and an exact number breaks on a release that

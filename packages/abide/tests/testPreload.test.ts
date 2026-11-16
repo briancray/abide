@@ -511,14 +511,14 @@ test('a private handler a mounted component calls', async () => {
     )
 }, 90_000)
 
-// 38.195 — A TEST AWAITS `settled` AFTER A CLICK, and reads the page as the call left it: a click's
-// handler awaits a slow call and writes what it answered. 38.196 — AND A CALL THAT NEVER ANSWERS IS
+// 38.204 — A TEST AWAITS `settled` AFTER A CLICK, and reads the page as the call left it: a click's
+// handler awaits a slow call and writes what it answered. 38.205 — AND A CALL THAT NEVER ANSWERS IS
 // NAMED by the time `settled` gives up. THE REVERT: drop `keepLoads()` from `preload.ts`; nothing is
 // kept, `settled` resolves on its first turn, the page still reads "none" and the hung call is never
 // named — exit 1, `0 pass`. Drop `nameLoad` from the `Rpc`'s call in `rpc.ts` and the hung call is
 // named "(reactive)" — `1 pass`. And each test waits on its own: drop `keepLoads()` from the
 // `beforeEach` in `preload.ts` and the click waits on the hung call too, "1 still loading" — `1 pass`.
-test('settled waits out a call a click made, and names one that never answers — 38.195, 38.196', async () => {
+test('settled waits out a call a click made, and names one that never answers — 38.204, 38.205', async () => {
     const cwd = temporaryModule({
         'package.json': JSON.stringify({
             name: 'settled-fixture',
@@ -584,10 +584,10 @@ test('a click is settled, past the call the test above left hanging', async () =
     )
 }, 90_000)
 
-// 38.197 — NOTHING IS KEPT FOR `settled` WHERE THE TEST ENTRY NEVER LOADED: a page or a server keeps
+// 38.206 — NOTHING IS KEPT FOR `settled` WHERE THE TEST ENTRY NEVER LOADED: a page or a server keeps
 // no list of the values that went loading. Taken in a child, since this process loaded the entry.
 // THE REVERT: call `keepLoads()` where `Reactive.ts` declares it; this reports `["reactive"]`.
-test('a process that never loaded @abide/abide/test keeps no load — 38.197', async () => {
+test('a process that never loaded @abide/abide/test keeps no load — 38.206', async () => {
     const run = await inAFreshProcess(`
 import { reactive } from '${import.meta.dir}/../src/shared/reactive/index.ts'
 import { pendingWork } from '${import.meta.dir}/../src/shared/reactive/producer.ts'

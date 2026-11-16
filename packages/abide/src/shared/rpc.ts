@@ -650,7 +650,7 @@ export function declare<Declared extends Method>(
                 options?.offline as ((args: unknown) => unknown) | undefined,
             )
             RPC_SERVER.reached?.(rpc, args, reached, route)
-            // 38.196 — what `settled` names a call still in flight by.
+            // 38.205 — what `settled` names a call still in flight by.
             nameLoad(reached, method, rpc.address)
             return reached
         }

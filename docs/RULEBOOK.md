@@ -3627,14 +3627,14 @@ files where the input is `multiple`.
 `abide native` writes opens MUST be present, and MUST reach the camera, the microphone and the
 person's location only once the person allows it through the platform.
 
-38.195 `settled` MUST resolve only once no value that went loading since the test awaiting it began
+38.204 `settled` MUST resolve only once no value that went loading since the test awaiting it began
 is still loading and no effect is pending, and MUST NOT resolve before a turn of the event loop has
 passed since it was called.
 
-38.196 `settled` MUST throw where its timeout passes first, naming each value still loading — by the
+38.205 `settled` MUST throw where its timeout passes first, naming each value still loading — by the
 method and address of the handler a call reached it through, where one did.
 
-38.197 A value that goes loading MUST NOT be kept for `settled` in a process that has not loaded
+38.206 A value that goes loading MUST NOT be kept for `settled` in a process that has not loaded
 `@abide/abide/test`.
 
 # 39. Head and view transitions
