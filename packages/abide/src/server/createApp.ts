@@ -31,6 +31,7 @@ import {
     spawnedBuild,
 } from './appBuild.ts'
 import { holdsApp } from './appTree.ts'
+import { noteWindow } from './assistant.ts'
 import { presumeCaller } from './callerOf.ts'
 import {
     APP_PACKAGE,
@@ -330,6 +331,7 @@ export async function bootEntered(
         // 16.94 — an answer already made, whose rungs and handler ran as the mux asked for it.
         const parked = takeParked(request)
         if (parked !== undefined) return parked
+        noteWindow(request, answering)
         inFlight += 1
         // 24.10 — the request's span is stamped with its start, read only where one is written.
         const written = REQUEST_LOG.enabled()

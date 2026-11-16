@@ -1512,6 +1512,66 @@ process.exit(0)
     ])
 }, 30_000)
 
+// 44.100 — A CONVERSATION NOBODY ASKED FOR, from a timer or `onStart`: in the native app it runs as the
+// window's person, on this machine's Claude Code, its tools answered as the window's last request
+// was; before the window has asked anything it throws, a request without the credential does not
+// stand in for the window, and a timer a browser's request set keeps that request, so a browser
+// cannot launder a turn through one. THE REVERT: drop `noteWindow` from `App.fetch`, and `after`
+// throws as `before` does.
+test('a conversation outside a request runs as the native app’s window — 44.100', async () => {
+    const configured = await scratch({})
+    const shim = `${configured}/bin/claude`
+    await Bun.write(shim, `#!/bin/sh\nexec bun ${FAKE_CLAUDE} "$@"\n`)
+    await spawned(['chmod', '+x', shim])
+    await Bun.write(
+        `${app}/unasked.ts`,
+        `import { servedBuild } from '${SERVER}/appBuild.ts'
+import { assistant } from '${SERVER}/assistant.ts'
+import { serveLocally } from '${SERVER}/bridgeRelay.ts'
+import { bootApp } from '${SERVER}/createApp.ts'
+import { provider } from '${SERVER}/provider.ts'
+
+const served = await servedBuild('${app}', '${app}/.abide', undefined)
+const app = await bootApp(served.origin, served.load)
+process.env.PATH = '${configured}/bin:' + process.env.PATH
+await serveLocally('window-secret')
+const talk = async () => {
+    try {
+        let text = ''
+        for await (const event of assistant([{ role: 'user', content: 'who am I?' }], provider.claudeCode(), { mcp: true }))
+            if (event.type === 'text') text += event.text
+        return text
+    } catch (thrown) {
+        return 'threw ' + ((thrown as { status?: number }).status ?? 'outside')
+    }
+}
+const visit = (cookie: string) => app.fetch(new Request('http://app.test/', { headers: { cookie } }))
+const before = await talk()
+await visit('who=ada; abide-caller=desk; abide-native-credential=window-secret')
+await visit('who=eve; abide-caller=laptop')
+const after = await talk()
+const laundered = await app.run(
+    () => new Promise<string>((resolve) => setTimeout(() => void talk().then(resolve), 0)),
+    { request: new Request('http://app.test/', { headers: { cookie: 'who=eve; abide-caller=laptop' } }) },
+)
+await app.stop()
+console.log(JSON.stringify({ before, after, laundered }))
+process.exit(0)
+`,
+    )
+    const printed = await lastLinePrinted<{
+        before: string
+        after: string
+        laundered: string
+    }>(['bun', `${app}/unasked.ts`], {
+        cwd: app,
+        env: { ...environment, CLAUDE_CONFIG_DIR: configured },
+    })
+    expect(printed.before).toBe('threw outside')
+    expect(printed.after).toContain('saw "ada"')
+    expect(printed.laundered).toBe('threw 409')
+}, 30_000)
+
 // THE PIN IS THE ONE PLACE THE BRIDGE'S VERSION IS WRITTEN: abide names the bridge it is published
 // beside, and the pairing command reads that one's own `package.json`. A pin that drifts from the
 // workspace's bridge stops linking it, and the install fetches some other release from the registry.

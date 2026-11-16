@@ -9,6 +9,11 @@
 // and nothing more. Both are CAPTURED when the conversation starts: a provider may call a tool from
 // another request's scope — `provider.claudeCode` answers one from the bridge's — and the call is still this
 // asker's.
+//
+// 44.100 — OUTSIDE A REQUEST, IN THE NATIVE APP, THE ASKER IS THE WINDOW: a timer's or `onStart`'s
+// conversation runs in a scope over the window's latest request as 44.7 carries it, so the principal,
+// the caller and the window's credential all read as they did there, and `provider.claudeCode` finds
+// the app's own bridge (44.77) by the same check a request from the window passes.
 
 import type {
     AssistantContent,
@@ -20,8 +25,17 @@ import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
 
+import { carriesWindowCredential } from './bridgeRelay.ts'
 import { mcpFailure, type McpReply, McpSurface } from './generatedSurfaces.ts'
-import { request, within } from './requestScope.ts'
+import {
+    type AnsweringApp,
+    currentRequestScope,
+    inOpenScope,
+    releaseScope,
+    request,
+    scopeFor,
+    within,
+} from './requestScope.ts'
 import type { Listed } from './surfaceOf.ts'
 
 /**
@@ -76,12 +90,30 @@ const ASSISTANT_LOG = namedLogger('abide:assistant')
 // 44.7 — the caller's credentials, and nothing else of their request.
 const CARRIED_HEADERS = ['cookie', 'authorization']
 
+// 44.100 — the native app's window as its latest request left it: that request as a tool call carries
+// it, and the app it reached.
+const WINDOW: { asker: Request | undefined; app: AnsweringApp | undefined } = {
+    asker: undefined,
+    app: undefined,
+}
+
+/** Keeps `given` as the window's latest request, where it carries the window's credential. 44.100. */
+export function noteWindow(given: Request, app: AnsweringApp): void {
+    if (!carriesWindowCredential(given)) return
+    WINDOW.asker = askerOf(given)
+    WINDOW.app = app
+}
+
 /** A conversation over `messages`, run by `provider`, as the events it produces. */
 export async function* assistant(
     messages: AssistantMessage[],
     provider: Provider,
     options: AssistantOptions = {},
 ): AsyncGenerator<AssistantEvent> {
+    if (currentRequestScope()?.request === undefined) {
+        yield* asWindow(messages, provider, options)
+        return
+    }
     // 44.3 — a transcript a model can answer ends on the asker's turn.
     if (messages.at(-1)?.role !== 'user')
         throw refuse(
@@ -322,6 +354,36 @@ export function forwardOf(tools: Toolbox): McpForward {
 }
 
 // The protocol's own requests ask nothing of the asker, so what answers them is asked as nobody.
+/**
+ * `assistant` in a scope over the window's latest request, each step taken inside it. 44.100.
+ *
+ * Throws where no request has come from the window — outside the native app, always.
+ */
+async function* asWindow(
+    messages: AssistantMessage[],
+    provider: Provider,
+    options: AssistantOptions,
+): AsyncGenerator<AssistantEvent> {
+    const { asker, app } = WINDOW
+    if (asker === undefined || app === undefined)
+        throw new Error(
+            'abide: assistant was called outside a request, and no request has come from the native app’s window to run it as. RULEBOOK 22.1, 44.100.',
+        )
+    // The asker's own signal never aborts, so the caller's is the only one that ends the conversation.
+    const scope = scopeFor(asker, asker, app)
+    const conversation = assistant(messages, provider, options)
+    try {
+        for (;;) {
+            const step = await inOpenScope(scope, () => conversation.next())
+            if (step.done === true) return
+            yield step.value
+        }
+    } finally {
+        await inOpenScope(scope, () => conversation.return(undefined))
+        releaseScope(scope)
+    }
+}
+
 const NO_ASKER = new Request('http://abide.invalid/')
 
 // Without `mcp` there is no surface to forward to, so this is the protocol over nothing — and

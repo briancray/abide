@@ -143,8 +143,13 @@ export function serveLocally(secret: string): Promise<void> {
 
 /** Whether the request being answered is from the native app's window, by its credential. 44.79. */
 export function fromNativeWindow(): boolean {
+    return carriesWindowCredential(request())
+}
+
+/** Whether `given` carries the native app's window credential. 44.79. */
+export function carriesWindowCredential(given: Request): boolean {
     if (LOCAL.secret === '') return false
-    const cookie = request().headers.get('cookie')
+    const cookie = given.headers.get('cookie')
     return (
         cookie !== null &&
         new Bun.CookieMap(cookie).get(NATIVE_COOKIE) === LOCAL.secret

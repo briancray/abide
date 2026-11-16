@@ -4453,6 +4453,11 @@ tool as 44.94 allows the call, MUST answer what the tool answered in that turn r
 model said of it, MUST end the turn on the bridge once the tool has answered, and MUST refuse 502
 where the turn ended without calling it.
 
+44.100 `assistant` called outside a request in the app `abide native`'s executable starts MUST run
+its conversation as a request carrying the `cookie` and `authorization` headers of the latest request
+that carried the window's credential (44.79), through the app that request reached, with a signal
+that aborts only where the caller's `signal` does, and MUST throw where no such request has come.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker
