@@ -66,7 +66,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A page reads a handler like a value">
         <Example
             id="contact-list"
-            app="crm"
             title="`listContacts` — a handler file, read like a value"
             summary="The contacts page lists every contact. The list is empty until the handler answers, then fills in."
             files={{
@@ -95,7 +94,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A page calls a handler with typed arguments">
         <Example
             id="deal"
-            app="crm"
             title={'`getDeal({ id })` — a handler called with typed arguments'}
             summary="Pick a deal. The page asks the server for that one, and its fields fill in when it lands."
             files={{
@@ -148,7 +146,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A handler can answer with a file">
         <Example
             id="export"
-            app="crm"
             title="`exportDeals.url()` — a CSV file a link downloads"
             summary="Sales wants the pipeline in a spreadsheet. The link downloads every deal as a CSV file."
             files={{
@@ -201,7 +198,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`refreshes` reloads every tab showing what a write changed">
         <Example
             id="refreshes"
-            app="crm"
             title={"`POST(write, { refreshes: ['stage:lead'] })` — reload by tag after a write"}
             summary="The same board, with a write that says what it changed. Qualify a lead, in two tabs if you have them."
             files={{
@@ -255,7 +251,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A channel on the server reaches every open tab">
         <Example
             id="live-feed"
-            app="crm"
             title="`GET` + `POST` — one account's feed, every tab"
             summary="The activity feed on Hopper & Co. Open this page in a second tab, log a call in either, and both lists grow."
             files={{
@@ -307,7 +302,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A handler that yields sends each entry as it is read">
         <Example
             id="stream"
-            app="crm"
             title="`async function*` — the archive, an entry at a time"
             summary="Hopper & Co's older activity, read from a slow archive. The list fills an entry at a time."
             files={{
@@ -347,7 +341,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="An export is written as its rows are read">
         <Example
             id="csv"
-            app="crm"
             title="`response.bytes(values)` — a CSV written as the cursor reaches each row"
             summary="A rep takes an account's activity into a spreadsheet. The preview above the link is the file it downloads."
             files={{
@@ -381,7 +374,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A wallboard is sent events whatever it asks for">
         <Example
             id="ticker"
-            app="crm"
             title="`response.sse(values)` — events, whoever asks"
             summary="A wallboard by the sales floor reads today's deal moves with the plain request its script has always sent."
             files={{
@@ -403,7 +395,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A `middleware` rung refuses before the handler runs">
         <Example
             id="admins-only"
-            app="crm"
             title="`middleware: [rung]` — admins only"
             summary="Exporting every contact is for admins. Export signed out, as Theo, then as Maya."
             files={{
@@ -432,7 +423,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`crossOrigin` opens one handler to a partner">
         <Example
             id="partner"
-            app="crm"
             title="`crossOrigin: ['https://books.example']` — one partner, named back"
             summary="The bookkeeping partner's site reads an account statement from its own pages. Ask as the partner, then as any other site."
             files={{
@@ -468,7 +458,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`timeout` bounds how long a call may go without progress">
         <Example
             id="timeout"
-            app="crm"
             title="`timeout` — milliseconds without progress, not since the first byte"
             summary="Sales by region, a row every 300 ms, under a 500 ms timeout. North runs longer than the timeout and finishes; south stops producing after its first row."
             files={{

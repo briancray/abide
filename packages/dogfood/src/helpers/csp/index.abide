@@ -16,7 +16,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="`csp()` lets the app's own scripts run, and nothing else">
         <Example
             id="csp"
-            app="crm"
             title="`csp()` — your own scripts run, a stranger's do not"
             summary="A support widget somebody pasted into the CRM from another origin. Add it, and the page's policy refuses it."
             files={{

@@ -57,7 +57,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A layout holds what the companies pages share">
         <Example
             id="layout"
-            app="crm"
             title="`layout.abide` — the header the companies pages share, built once"
             summary="The companies header holds a note for the call you are on. Type one, then open a company and come back: the page changes, and the note stays."
             files={{
@@ -86,7 +85,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`error.abide` answers when a page cannot">
         <Example
             id="error-page"
-            app="crm"
             title="`error.abide` — a company that is not there"
             summary="An old link points at a company that was merged away. The handler refuses at once, and the companies error page answers with a 404."
             files={{

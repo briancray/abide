@@ -15,14 +15,21 @@ import { config } from 'zod'
 config({ jitless: true })
 
 /**
- * Marks the rail link of the heading the reader has scrolled to, until `signal` aborts.
+ * Installs the scroll spy for a page's rail — marking the rail link of the heading the reader has
+ * scrolled to — returning its teardown.
+ *
+ * 32.9's callback: the node, and the teardown for it. One `AbortController` per install, so the
+ * listeners a page's rail hangs leave with that page — which is what a `Disposer` is for and what a
+ * navigation runs.
  *
  * Offsets are MEASURED ONCE — on load, on resize, and after the webfonts swap, which is itself a
  * reflow — so the scroll handler is arithmetic with no layout read in it. An IntersectionObserver
  * band was tried first and got two cases wrong: nothing was active at the top, and the last
  * sections never activated because at max scroll they never enter the band.
  */
-function installScrollSpy(signal: AbortSignal) {
+export function installDocs(_rail: Element): () => void {
+    const installing = new AbortController()
+    const signal = installing.signal
     // READ AT EACH MEASURE, not at install: on a page the reader navigated to, the rail's list is
     // filled after the rail itself, as the page's sections register their headings.
     let headings: Element[] = []
@@ -107,19 +114,5 @@ function installScrollSpy(signal: AbortSignal) {
     requestAnimationFrame(() => {
         if (!signal.aborted) measure()
     })
-}
-
-/**
- * Installs the scroll spy for a page's rail, returning its teardown.
- *
- * 32.9's callback: the node, and the teardown for it. One `AbortController` per install, so the
- * listeners a page's rail hangs leave with that page — which is what a `Disposer` is for and what a
- * navigation runs.
- */
-export function installDocs(_rail: Element): () => void {
-    const installing = new AbortController()
-    installScrollSpy(installing.signal)
-    return () => {
-        installing.abort()
-    }
+    return () => installing.abort()
 }

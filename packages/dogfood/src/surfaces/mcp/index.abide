@@ -15,7 +15,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="MCP lets a model call the handlers">
         <Example
             id="mcp"
-            app="crm"
             title="`/__abide/mcp` — the search handler, as a model sees it"
             summary="A model is asked who works at Hopper. Ask the app's MCP endpoint for its tools, then call one as the model's client does."
             files={{

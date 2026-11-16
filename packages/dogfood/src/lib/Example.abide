@@ -1,25 +1,20 @@
 <script server>
 import { GET } from '@abide/abide/server'
 
-import { exampleDirectory } from './exampleDirectory.server.ts'
-import type { ExampleResults } from './ExampleResults.ts'
+import { exampleDirectory, exampleResults } from './exampleDirectory.server.ts'
 
-// What `bun run examples:results` last kept for the app, or `null` where this build never ran it.
-const resultsOf = GET(async ({ app }: { app: string }) => {
-    const directory = await exampleDirectory(app)
-    const results = directory && Bun.file(`${directory}/.abide/results.json`)
-    return results && (await results.exists())
-        ? ((await results.json()) as ExampleResults)
-        : null
-})
+// 40.38 — THE example app: every card's files are the CRM's, and it is what a card offers to download.
+const APP = 'crm'
+
+const resultsOf = GET(() => exampleResults(APP))
 
 // 16.29 — A SERVER FILE'S TEXT IS READ HERE, never imported into the page: the browser's bundle is
 // fenced from every server file, and its source is shown to a reader the way the app's tarball
 // already ships it (40.41). Only a server file of the CRM, by a path below its root.
 const SERVER_FILE = /^src\/(?:[\w-]+\/)*[\w-]+\.server\.ts$/
 const serverSources = GET(
-    async ({ app, paths }: { app: string; paths: string[] }) => {
-        const directory = await exampleDirectory(app)
+    async ({ paths }: { paths: string[] }) => {
+        const directory = await exampleDirectory(APP)
         const sources: Record<string, string> = {}
         if (directory === undefined) return sources
         for (const path of paths)
@@ -53,7 +48,6 @@ const {
     summary,
     files,
     serverFiles = [],
-    app,
 } = props<{
     /** The example's name: its anchor on the page. */
     id: string
@@ -63,8 +57,6 @@ const {
     files: Record<string, string>
     /** Server files of the CRM, by their path in it, whose text is read on the server. */
     serverFiles?: string[]
-    /** The app the files are from, which the card links to and offers as a download. */
-    app?: string
 }>()
 
 // FRAMED IN AN ANSWER, `?card=` names this card: the page shows it alone (`app.css`'s `.embed`) and
@@ -85,8 +77,8 @@ function reportHeight(card: Element) {
 
 const paths = [...serverFiles, ...Object.keys(files)]
 const shownSources = reactive(() =>
-    app !== undefined && serverFiles.length > 0
-        ? serverSources({ app, paths: serverFiles })
+    serverFiles.length > 0
+        ? serverSources({ paths: serverFiles })
         : ({} as Record<string, string>),
 )
 let open = reactive(0)
@@ -100,8 +92,8 @@ const kindOf = (path: string) =>
 
 // Read only once a test or bench tab is open, so a card nobody inspects never asks.
 const results = reactive(() =>
-    app !== undefined && kindOf(paths[open] ?? '') !== 'file'
-        ? resultsOf({ app })
+    kindOf(paths[open] ?? '') !== 'file'
+        ? resultsOf()
         : null,
 )
 </script>
@@ -110,11 +102,9 @@ const results = reactive(() =>
     <figcaption>
         <span class="ex-title">{raw(inline(title))}</span>
         <span class="ex-summary">{summary}</span>
-        {#if app !== undefined}
-            <span class="ex-app">
-                <a href={url(`/examples/${app}.tar.gz` as RouteLiteral)} download>Download {app}</a>
-            </span>
-        {/if}
+        <span class="ex-app">
+            <a href={url('/examples/crm.tar.gz' as RouteLiteral)} download>Download crm</a>
+        </span>
     </figcaption>
     <div class="ex-render"><slot /></div>
     <div class="ex-files" role="tablist">

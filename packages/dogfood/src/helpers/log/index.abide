@@ -13,7 +13,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="Log namespaces are turned on one at a time">
         <Example
             id="log"
-            app="crm"
             title="`log.named` and `DEBUG` — one namespace on, one off"
             summary="Billing and sync each log under their own name, and DEBUG names billing. Send an invoice, then poll: only the invoice is written."
             files={{

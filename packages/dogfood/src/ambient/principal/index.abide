@@ -20,7 +20,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`principal.set` signs a caller in">
         <Example
             id="sign-in"
-            app="crm"
             title="`principal.set` — sign in, sign out"
             summary="A team member signs in to the CRM by email, and signs out again."
             files={{
@@ -69,7 +68,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A handler decides which fields a caller may read">
         <Example
             id="deal-value"
-            app="crm"
             title="`principal.resolved` in a handler — the deal value, for admins"
             summary="Grace Hopper's contact card. Maya is an admin and sees the deal value; Theo is in sales and sees the rest."
             files={{

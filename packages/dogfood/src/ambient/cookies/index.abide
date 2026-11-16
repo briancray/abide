@@ -13,7 +13,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`cookies()` reads and writes a cookie on both sides">
         <Example
             id="density"
-            app="crm"
             title="`cookies()` — one jar, read on both sides"
             summary="The contact list's density, kept in a cookie. Pick one and reload: the server paints the one you picked."
             files={{

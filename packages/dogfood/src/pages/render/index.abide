@@ -18,7 +18,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="The page is sent before the data lands">
         <Example
             id="page-sent-first"
-            app="crm"
             title="The whole contacts page, before the contacts answer"
             summary="The contacts handler takes 400 ms. Request the page the way a browser does, and compare when it is complete with when the contacts answer."
             files={{
@@ -45,7 +44,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`render` builds a document from a component">
         <Example
             id="render"
-            app="crm"
             title="`render(component)` — an account sheet from the component itself"
             summary="A rep sends a customer a one-page account sheet. The handler renders the sheet component into a document of its own, and the frame shows it."
             files={{

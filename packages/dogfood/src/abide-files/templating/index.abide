@@ -24,7 +24,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A field and its value are one copy">
         <Example
             id="bind-value"
-            app="crm"
             title="`bind:value` — the field writes the value, and the value fills the field"
             summary="A contact's email, with what a save would send. Type a new one."
             files={{
@@ -86,7 +85,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A keyed list removes one row and leaves the rest">
         <Example
             id="keyed-list"
-            app="crm"
             title={'`{#for tag of tags by tag}` — a row per tag, kept by its key'}
             summary="A contact's tags. Remove one."
             files={{
@@ -109,7 +107,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A branch is in the page only while its condition holds">
         <Example
             id="conditional"
-            app="crm"
             title={'`{#if}` — a date field that exists only when asked for'}
             summary="A follow-up reminder for this contact. Tick the box, then clear it."
             files={{
@@ -129,7 +126,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A one-item keyed loop builds its markup again">
         <Example
             id="fresh-subtree"
-            app="crm"
             title={'`{#for shown of [open] by shown}` — a panel built fresh per contact'}
             summary="A contact panel that fades in. Open Ada, then Grace."
             files={{

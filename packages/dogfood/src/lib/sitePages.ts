@@ -13,10 +13,12 @@ export const HOME: SitePage = {
 // THE SITE MAP READ BY ROUTE, walked once: every page in reading order, and the group each is in.
 const ORDER: SitePage[] = [HOME]
 const GROUP_OF = new Map<string, SiteGroup>()
+const ROUTE_OF_SECTION = new Map<string, string>()
 for (const group of SITE)
     for (const page of group.pages) {
         ORDER.push(page)
         GROUP_OF.set(page.route, group)
+        ROUTE_OF_SECTION.set(page.registry, page.route)
     }
 
 /** Every page in reading order, the home page first: what the markdown bundle walks. */
@@ -32,6 +34,11 @@ export function pageAt(route: string): SitePage {
 export function isSitePage(route: string): boolean {
     for (const page of ORDER) if (page.route === route) return true
     return false
+}
+
+/** The route of the page a REGISTRY section is documented on, or `''` where none is. */
+export function routeOfSection(section: string): string {
+    return ROUTE_OF_SECTION.get(section) ?? ''
 }
 
 /** The group a page is listed under, or `undefined` for the home page. */

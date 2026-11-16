@@ -19,7 +19,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A component's styles reach only its own markup">
         <Example
             id="scoped-style"
-            app="crm"
             title="`<style>` — two components, one class name, two rules"
             summary="A lead badge and a customer badge, side by side. Each styles its own badge class in its own color."
             files={{
@@ -49,7 +48,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A script runs per instance, and a module script once">
         <Example
             id="script"
-            app="crm"
             title="`<script>` and `<script module>` — per row, and once"
             summary="Two contact rows from one component. Log a call on the first."
             files={{

@@ -15,7 +15,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="The browser going offline is a reactive value">
         <Example
             id="offline"
-            app="crm"
             title="`online` — the connection, read by name"
             summary="On a train the network comes and goes. Take the browser offline in DevTools' Network panel and the banner says so."
             files={{

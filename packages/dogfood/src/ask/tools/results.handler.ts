@@ -1,14 +1,11 @@
 import { GET } from '@abide/abide/server'
 
-import { exampleDirectory } from '#src/lib/exampleDirectory.server.ts'
-import type { ExampleResults } from '#src/lib/ExampleResults.ts'
+import { exampleResults } from '#src/lib/exampleDirectory.server.ts'
 
 export default GET(
     async ({ path }: { path: string }) => {
-        const crm = await exampleDirectory('crm')
-        const kept = crm && Bun.file(`${crm}/.abide/results.json`)
-        if (!kept || !(await kept.exists())) return null
-        const results = (await kept.json()) as ExampleResults
+        const results = await exampleResults('crm')
+        if (results === null) return null
         const bench = results.benches[path]
         if (bench !== undefined)
             return {

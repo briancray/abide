@@ -1,3 +1,4 @@
+import { attributeOf } from '#src/lib/attributeOf.ts'
 import { exampleDirectory } from '#src/lib/exampleDirectory.server.ts'
 
 /** An example card on a docs page: where it is, and what it is made of. */
@@ -13,19 +14,6 @@ export type SiteExample = {
 const CARD = /<Example\b([\s\S]*?)>\s*<[A-Z]/g
 const FILE_KEY = /'(src\/[^']+)':/g
 const SERVER_FILES = /serverFiles=\{\[([\s\S]*?)\]\}/
-
-/**
- * An attribute's text, written `name="…"` or as a string expression — `{'…'}`, `{"…"}` or
- * `{`…`}`, which a title holding a quote or a brace needs.
- */
-function attributeOf(opening: string, name: string): string | undefined {
-    const found = new RegExp(
-        `\\b${name}=(?:"([^"]*)"|\\{'((?:[^'\\\\]|\\\\.)*)'\\}|\\{"((?:[^"\\\\]|\\\\.)*)"\\}|\\{\`([^\`]*)\`\\})`,
-    ).exec(opening)
-    if (found === null) return undefined
-    const text = found[1] ?? found[2] ?? found[3] ?? found[4] ?? ''
-    return found[1] === undefined ? text.replace(/\\(.)/g, '$1') : text
-}
 
 let read: Promise<SiteExample[]> | undefined
 

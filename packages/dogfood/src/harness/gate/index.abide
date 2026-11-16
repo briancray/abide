@@ -15,7 +15,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A gate fails with the fix taken out">
         <Example
             id="gate"
-            app="crm"
             title={'`gate(name, { revert, worth }, body)` — a test that runs its own revert'}
             summary="Every won deal's amount goes through one formatter. Winning a deal builds none, and the gate puts the formatter-per-amount version back to prove the test can tell."
             files={{

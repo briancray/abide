@@ -14,7 +14,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A test holds the app with `createApp`">
         <Example
             id="app-fetch"
-            app="crm"
             title="`createApp()` — the app a test holds, with no port"
             summary="The reports page opens on a summary of the pipeline. Its test asks the app for the same handler the tiles read, as a request, and reads the answer the wire would carry."
             files={{

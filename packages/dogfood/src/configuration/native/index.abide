@@ -133,7 +133,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Tell people an update is waiting">
         <Example
             id="update-notice"
-            app="crm"
             title="`pendingUpdate` — an update waiting for a restart"
             summary="A browser stages no update, so this card stays empty here. Its test plays the window, telling the page of an update and then of a required one."
             files={{
@@ -156,7 +155,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Count open deals on the Dock icon">
         <Example
             id="dock-badge"
-            app="crm"
             title="`navigator.setAppBadge` — a count on the Dock icon"
             summary="A browser tab draws no badge, so here only the line shows. Its test plays the window, which answers the page's badge."
             files={{
@@ -179,7 +177,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="Notify people of a win">
         <Example
             id="win-notification"
-            app="crm"
             title="`Notification` — a deal won, as the platform shows it"
             summary="Here the browser asks for permission and shows it. In the native app the same code asks macOS, and the notification carries the CRM's name and icon."
             files={{

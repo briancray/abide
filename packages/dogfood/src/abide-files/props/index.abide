@@ -19,7 +19,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A component reads its props live">
         <Example
             id="props"
-            app="crm"
             title="`props()` — the avatar follows the name it was handed"
             summary="A contact card with an avatar component. Change the name."
             files={{
@@ -57,7 +56,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="An edit to a copy of a prop stands until the prop changes">
         <Example
             id="prop-draft"
-            app="crm"
             title={'`reactive(() => name)` — a draft that starts over with each contact'}
             summary="A display name field under two contacts. Edit Grace's, then open Ada."
             files={{

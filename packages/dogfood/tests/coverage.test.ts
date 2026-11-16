@@ -135,13 +135,12 @@ test('every file a card renders or shows is on disk', async () => {
 
 // 40.32 — A CARD RENDERS A COMPONENT FROM A `lib` OF THE CRM, so what a reader runs on the page is a
 // file of the app they download, and a `.abide` outside a `lib` would be a page of its own (23.21).
-// THE REVERT: drop a card's `app`, and it is named.
+// THE REVERT: render a component from outside a `lib`, and it is named.
 test('every card renders a component in a lib of the CRM', async () => {
     const strays: string[] = []
     for (const card of await allCards())
         if (
-            card.app === undefined ||
-            !card.component.startsWith(`examples/${card.app}/src/`) ||
+            !card.component.startsWith('examples/crm/src/') ||
             !card.component.includes('/lib/')
         )
             strays.push(`${card.id}: ${card.component}`)

@@ -14,7 +14,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A render's bytes grow by the same amount per deal">
         <Example
             id="export-bytes"
-            app="crm"
             title="`bytes(of)` — what a render sends, compared across sizes"
             summary="The export renders every deal as a table row on the server. Its test renders it at 20, 40 and 80 deals and asserts every deal adds the same bytes."
             files={{

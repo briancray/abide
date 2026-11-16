@@ -16,7 +16,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A test mounts a component and counts what a click did">
         <Example
             id="range-switch"
-            app="crm"
             title="`mount(component)` and `measure(body)` — the DOM calls one click made"
             summary="The closed-deals tiles total the last 7 or 30 days. Its test switches the range and asserts that two numbers changed and nothing was built."
             files={{

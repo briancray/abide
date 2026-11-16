@@ -53,7 +53,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`[id=SLUG].abide` answers for every company">
         <Example
             id="company-page"
-            app="crm"
             title="`[id=SLUG].abide` — one file for every company"
             summary="Two companies, one page file. Pick one: the address changes, and the page loads the company the address names."
             files={{
@@ -81,7 +80,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A param file says what an id looks like">
         <Example
             id="param-matcher"
-            app="crm"
             title="`SLUG.param.ts` — an address that cannot be an id never reaches the page"
             summary="A rep pastes a company's name where its id goes. No id has a capital or a space, so no page takes the address, and nothing asks the database for it."
             files={{
@@ -125,7 +123,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A view transition carries the company across pages">
         <Example
             id="view-transition"
-            app="crm"
             title="`view-transition-name` — a company name that moves to where it lands"
             summary="A rep opens a company from the list, and the name they clicked becomes the heading they land on. Open one and watch it travel."
             files={{
@@ -148,7 +145,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A page's `<head>` wins over its layout's, key by key">
         <Example
             id="head"
-            app="crm"
             title="`<head>` in a page and its layout — the deepest title wins"
             summary="The companies layout titles every page, and a company page titles itself. Open each in a tab of its own: the company's tab takes its name."
             files={{

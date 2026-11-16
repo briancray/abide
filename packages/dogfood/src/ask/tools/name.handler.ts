@@ -1,14 +1,11 @@
 import { GET } from '@abide/abide/server'
 
 import { registryRows } from '#src/lib/registryRows.ts'
-import { SITE } from '#src/lib/SITE.ts'
+import { routeOfSection } from '#src/lib/sitePages.ts'
 
 import REGISTRY from '../../../../../docs/REGISTRY.md' with { type: 'text' }
 
 const ROWS = registryRows(REGISTRY)
-const ROUTE_OF = new Map<string, string>()
-for (const group of SITE)
-    for (const page of group.pages) ROUTE_OF.set(page.registry, page.route)
 
 export default GET(
     ({ name }: { name: string }) => {
@@ -32,7 +29,7 @@ export default GET(
                 signature: row.cells[1] ?? '',
                 meaning: row.cells[2] ?? '',
                 rules: row.cells[3] ?? '',
-                route: ROUTE_OF.get(row.section) ?? '',
+                route: routeOfSection(row.section),
             })
         }
         return rows

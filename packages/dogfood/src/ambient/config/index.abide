@@ -17,7 +17,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="The deployment overrides a setting's default">
         <Example
             id="config"
-            app="crm"
             title="`onConfig(fn)` and `config()` — a default the deployment overrides"
             summary="The CRM retries a failed call 3 times by default, and this deployment's .env says 5. The page adds one for the first try and shows 6."
             files={{

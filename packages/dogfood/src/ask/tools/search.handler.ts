@@ -2,6 +2,7 @@ import { GET } from '@abide/abide/server'
 
 import { registryRows } from '#src/lib/registryRows.ts'
 import { SITE } from '#src/lib/SITE.ts'
+import { routeOfSection } from '#src/lib/sitePages.ts'
 import { rulebookClauses } from '#src/rulebook/lib/rulebookClauses.ts'
 
 import REGISTRY from '../../../../../docs/REGISTRY.md' with { type: 'text' }
@@ -40,10 +41,8 @@ export default GET(
             hit: { route: string; title: string; description: string }
             score: number
         }[] = []
-        const routeOf = new Map<string, string>()
         for (const group of SITE)
             for (const page of group.pages) {
-                routeOf.set(page.registry, page.route)
                 const found = score(
                     `${page.title} ${page.description} ${group.group}`,
                     words,
@@ -69,7 +68,7 @@ export default GET(
                     hit: {
                         name: row.cells[0] ?? '',
                         meaning: row.cells[2] ?? '',
-                        route: routeOf.get(row.section) ?? '',
+                        route: routeOfSection(row.section),
                     },
                     score: found,
                 })

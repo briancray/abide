@@ -21,7 +21,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="A failed call is reported from its trace, in words the person reads first">
         <Example
             id="report"
-            app="crm"
             title="`report` — a draft of what failed, sent to `onReport`"
             summary="Emailing a statement fails, and the page keeps the failed call's trace. Report this opens the draft on it: write what went wrong, read everything that will be sent, and send it."
             files={{
@@ -66,7 +65,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="An assistant fills in a draft that only the person sends">
         <Example
             id="report-assistant"
-            app="crm"
             title="`resultsOf` — what the assistant wrote, put in the draft"
             summary="Emailing a statement fails, and the page drafts a report on it. Ask the assistant: it reads the draft and fills in the summary and description. Review and send opens it, written, with nothing sent yet."
             files={{

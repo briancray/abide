@@ -16,7 +16,6 @@ import Snippet from '#src/lib/Snippet.abide'
     <Section title="One trace id covers everything one request did">
         <Example
             id="trace"
-            app="crm"
             title="`trace()` — the id on every line a request writes"
             summary="Syncing a contact logs in the handler, and the billing module it calls times its work and logs again. Sync, and every line carries the request's trace; sync again for a new one."
             files={{

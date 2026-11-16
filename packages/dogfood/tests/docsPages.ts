@@ -3,6 +3,7 @@
 // what the voice and coverage gates hold the words to.
 
 import { addressOf, BIN } from '../../abide/tests/builtApp.ts'
+import { attributeOf } from '../src/lib/attributeOf.ts'
 import type { SitePage } from '../src/lib/SITE.ts'
 import { groupOf, markdownAddressOf, PAGES } from '../src/lib/sitePages.ts'
 
@@ -23,8 +24,6 @@ export type Card = {
     id: string
     /** The page embedding it. */
     route: string
-    /** The app its files are from, where it names one. */
-    app: string | undefined
     /** The component it renders, from the docs app's root. */
     component: string
     /** Each file the card shows, by the path a reader is shown, to the file from the docs app's root. */
@@ -85,19 +84,17 @@ export function cardsOf(page: DocsPage): Card[] {
         const files = new Map<string, string>()
         const listed =
             /files=\{\{([\s\S]*?)\}\}/.exec(attributes as string)?.[1] ?? ''
-        const app = /\bapp="([^"]+)"/.exec(attributes as string)?.[1]
         // A server file's text is read by the card on the server, by its path in the CRM.
         const server =
             /serverFiles=\{\[([\s\S]*?)\]\}/.exec(attributes as string)?.[1] ??
             ''
         for (const [, shown] of server.matchAll(/'([^']+)'/g))
-            files.set(shown as string, `examples/${app}/${shown}`)
+            files.set(shown as string, `examples/crm/${shown}`)
         for (const [, shown, source] of listed.matchAll(FILE_ENTRY))
             files.set(shown as string, imported.get(source as string) ?? '')
         cards.push({
             id,
             route: page.route,
-            app,
             component: imported.get(tag as string) ?? '',
             files,
         })
@@ -230,19 +227,6 @@ export function tagEnd(source: string, from: number, closed = true): number {
     return source.length
 }
 
-/** An attribute's value as written: `"…"`, `{'…'}` or `` {`…`} ``. */
-export function attributeOf(tag: string, name: string): string {
-    const plain = new RegExp(`\\b${name}="([^"]*)"`).exec(tag)
-    if (plain) return plain[1] as string
-    const quoted = new RegExp(`\\b${name}=\\{'((?:\\\\.|[^'])*)'\\}`).exec(tag)
-    if (quoted) return (quoted[1] as string).replace(/\\(.)/g, '$1')
-    const template = new RegExp(`\\b${name}=\\{\`((?:\\\\.|[^\`])*)\`\\}`).exec(
-        tag,
-    )
-    if (template) return (template[1] as string).replace(/\\(.)/g, '$1')
-    return ''
-}
-
 /** Every `<Code>` a page writes, in order. */
 export function fencesOf(page: DocsPage): Fence[] {
     const fences: Fence[] = []
@@ -251,18 +235,22 @@ export function fencesOf(page: DocsPage): Fence[] {
     let section = ''
     for (let match = tags.exec(source); match; match = tags.exec(source)) {
         if (match[1] === 'Section') {
-            section = attributeOf(
-                source.slice(match.index, tagEnd(source, match.index, false)),
-                'title',
-            )
+            section =
+                attributeOf(
+                    source.slice(
+                        match.index,
+                        tagEnd(source, match.index, false),
+                    ),
+                    'title',
+                ) ?? ''
             continue
         }
         const end = tagEnd(source, match.index)
         const tag = source.slice(match.index, end)
         fences.push({
-            language: attributeOf(tag, 'language'),
-            caption: attributeOf(tag, 'caption'),
-            code: attributeOf(tag, 'code'),
+            language: attributeOf(tag, 'language') ?? '',
+            caption: attributeOf(tag, 'caption') ?? '',
+            code: attributeOf(tag, 'code') ?? '',
             section,
         })
         tags.lastIndex = end

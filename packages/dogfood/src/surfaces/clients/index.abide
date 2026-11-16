@@ -28,7 +28,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`clients` keeps a handler off a surface">
         <Example
             id="withhold"
-            app="crm"
             title={'`clients: { mcp: false }` — off the tool list, on the network'}
             summary="The export button reads every contact at once, and no model needs that. Ask the MCP endpoint for its tools, then ask the export's own address."
             files={{

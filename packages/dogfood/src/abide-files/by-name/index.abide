@@ -16,7 +16,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A value is read and written by name">
         <Example
             id="star"
-            app="crm"
             title="`starred` — read by name, written by name"
             summary="Grace Hopper is the contact you call most. Star her, then take the star off."
             files={{
@@ -57,7 +56,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A write through a path copies down the path">
         <Example
             id="path-write"
-            app="crm"
             title={'`bind:value={contact.address.city}` — a write two levels down'}
             summary="A contact's city, inside its address. Type a new city."
             files={{

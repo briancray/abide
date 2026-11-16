@@ -14,7 +14,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="Find which layer a click spends its time in">
         <Example
             id="layer-share"
-            app="crm"
             title="`traceOp(page, op, body)` and `shares(trace, spec)` — one layer's part of a click"
             summary="Ranking five thousand deals takes a sort and a render. Its spec clicks the other ranking in Chromium and asks what part of the click the sort was."
             files={{

@@ -14,7 +14,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`route.query` keeps a page's state in the address">
         <Example
             id="navigate"
-            app="crm"
             title="`route.query(defaults)` — the query as one value, written by navigating"
             summary="A company page keeps its open tab in the address, so a link can open it. Type a draft, then switch tabs: the address moves, and the draft stays."
             files={{

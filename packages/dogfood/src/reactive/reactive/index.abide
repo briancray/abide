@@ -81,7 +81,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="Every value is a `Reactive`">
         <Example
             id="one-type"
-            app="crm"
             title="`Reactive` — four ways to get a value, one way to ask"
             summary="A note on a contact. Watch which rows say … on arrival, then type a note and save it."
             files={{
@@ -107,7 +106,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A transform shapes what the record keeps">
         <Example
             id="transform"
-            app="crm"
             title={'`reactive(v, { transform })` — the record keeps the digits'}
             summary="A phone number typed with punctuation. Type one in the usual way."
             files={{
@@ -127,7 +125,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A derived value follows the fields it read">
         <Example
             id="derived"
-            app="crm"
             title="`reactive(() => …)` — initials and a count, computed from the fields"
             summary="A profile's initials and how much of it is filled in. Change the name, then add a phone."
             files={{
@@ -150,7 +147,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A refresh keeps the figures on screen">
         <Example
             id="pipeline"
-            app="crm"
             title="`busy()` and `ready()` — a first load and a refresh, told apart"
             summary="The pipeline's total. Wait for it, then press Refresh: the old figure stays until the new one lands."
             files={{
@@ -189,7 +185,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="The form clears once the deal is added">
         <Example
             id="quick-deal"
-            app="crm"
             title={'`saving.then(…)` — the next step, once the call lands'}
             summary="Sales adds renewals one after another. Press Add deal: the name clears when the server has the deal, ready for the next."
             files={{
@@ -250,7 +245,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A call with the same arguments is one load">
         <Example
             id="stage-shared"
-            app="crm"
             title={'`getStage({ stage })` — one entry per set of arguments'}
             summary="Three panels, each with its own stage picker. Put one on won, and then the others."
             files={{
@@ -294,7 +288,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`refresh` reloads now, and `invalidate` marks stale">
         <Example
             id="stale"
-            app="crm"
             title="`refresh()` and `invalidate()` — the two ways back to the server"
             summary="The weighted forecast, with both buttons under it. Press Reload now, then Mark stale."
             files={{
@@ -328,7 +321,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A confirmation goes back to how it started">
         <Example
             id="ttl-reset"
-            app="crm"
             title={'`reactive(false, { ttl: 2_000 })` — a flag that falls back on its own'}
             summary="A deal with a button that copies its link. Copy it, and watch the button."
             files={{
@@ -354,7 +346,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A search box waits for the typing to stop">
         <Example
             id="search"
-            app="crm"
             title={'`{ debounce }` — one search once the typing stops'}
             summary="A search over the deals. Type hopper quickly, and watch the results rather than the field."
             files={{
@@ -391,7 +382,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="`patch` changes one row of a list in place">
         <Example
             id="patch"
-            app="crm"
             title="`deals.patch(mutate)` — change what is held, and wake its readers"
             summary="The deal list, loaded once. Updates arrive one deal at a time; apply a few."
             files={{
@@ -419,7 +409,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="Two components far apart share one value">
         <Example
             id="share"
-            app="crm"
             title="`reactive.share(key, build)` — one value for a subtree"
             summary="A detail panel above a row of deals. Pick a deal, and the panel follows."
             files={{
@@ -447,7 +436,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A `store` keeps a value between visits">
         <Example
             id="store"
-            app="crm"
             title={'`{ store }` — where a value lives between visits'}
             summary="The quarter's target, which the whole team works to. Set a new one, then reload the page."
             files={{
@@ -499,7 +487,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A channel is an array anything can append to">
         <Example
             id="channel"
-            app="crm"
             title="`reactive<Activity[]>([])` — a channel anything can reach"
             summary="A quick-log bar on a contact, and a line above it that reports the last touch. Log a call and watch a component the bar never names."
             files={{
@@ -530,7 +517,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A channel keeps its last few entries">
         <Example
             id="recent"
-            app="crm"
             title="`patch` with a trim — the last three entries"
             summary="The same channel listed in full, already three entries long. Log a meeting and watch the top of the list."
             files={{
@@ -557,7 +543,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="Background work is a value on a clock">
         <Example
             id="job"
-            app="crm"
             title={'`reactive(async function* () { … }, { global: true, poll })` — a job'}
             summary="Every five minutes the CRM walks the leads and lists the ones still waiting on a follow-up. The list is here before anyone asks for it."
             files={{
@@ -601,7 +586,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="Heavy work runs in a worker thread">
         <Example
             id="worker"
-            app="crm"
             title={'`new Worker(url)` behind `reactive(async function* () { … })` — work off the main thread'}
             summary="Scoring every deal takes long enough to stall every request the server is answering. It runs in a worker, and the scores arrive one deal at a time."
             files={{

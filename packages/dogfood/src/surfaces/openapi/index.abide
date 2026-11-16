@@ -15,7 +15,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="OpenAPI is generated from the handler files">
         <Example
             id="openapi"
-            app="crm"
             title="`/__abide/openapi.json` — the operation, from the handler file"
             summary="A partner's integration wants the CRM's contact search as an OpenAPI operation. Read the app's document: the operation carries the handler's sentence and its typed argument."
             files={{

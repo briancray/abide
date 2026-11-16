@@ -14,7 +14,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A refusal carries a name the page can match">
         <Example
             id="move"
-            app="crm"
             title="`moveDeal.isError(error, 'DealClosed')` — the refusal, matched by name"
             summary="Move the open deal between stages, then try to move the deal already won. The server refuses, and says why."
             files={{

@@ -14,7 +14,6 @@ import Section from '#src/lib/Section.abide'
     <Section title="A new deal is checked before it is written">
         <Example
             id="new-deal"
-            app="crm"
             title={'`POST(fn, { args })` — a write checked before it runs'}
             summary="A new deal with no company and an amount of 0. Press Add deal: the server refuses it, with a message filed under each field that is wrong."
             files={{
