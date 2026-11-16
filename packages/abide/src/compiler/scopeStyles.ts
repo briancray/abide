@@ -15,7 +15,7 @@ import {
     type TemplateNode,
     visitBodies,
 } from './TemplateNode.ts'
-import { skipQuoted } from './tokenize.ts'
+import { isSpace, skipQuoted } from './tokenize.ts'
 
 // What never carries a token: a document-level tag, and the tags a head contributes. The head's
 // own contributions never reach here — `parseAbide` splits them off the template.
@@ -265,12 +265,7 @@ function lastCombinator(selector: string): number {
         else if (char === ')' || char === ']') depth -= 1
         else if (
             depth === 0 &&
-            (char === ' ' ||
-                char === '\n' ||
-                char === '\t' ||
-                char === '>' ||
-                char === '+' ||
-                char === '~')
+            (isSpace(char) || char === '>' || char === '+' || char === '~')
         )
             start = at + 1
     }

@@ -80,7 +80,7 @@ export const CLIENT_LANE: MarkupLane = {
         // mount closes over, so each arm or row the browser built ran it twice — and the first
         // run's watches had no scope to land in (12.13). An empty region is what the block already
         // fills without a word (32.17, 41.4), so it costs one more fill and adds nothing.
-        if (holdsSetup(node)) return `${OPEN_ANCHOR} + ${CLOSE_ANCHOR}`
+        if (holdsSetup(node)) return EMPTY_REGION
         // 32.17 — the child's own client module fills its region.
         if (node.kind === 'element' && isComponentTag(node.tag))
             return EMPTY_REGION

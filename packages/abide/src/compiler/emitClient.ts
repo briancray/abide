@@ -683,33 +683,57 @@ function textUnit(
     lowering: Lowering,
     watched: 'watch' | 'itemWatch' | null,
 ): string {
-    const values: string[] = []
-    const brands: string[] = []
+    const parts = runParts(
+        at.run,
+        (piece) => `__v${slot}_${piece}`,
+        (node) => lowering.binding(node),
+        lowering,
+    )
+    const text = `${lowering.use('setText')}(__t${slot}, ${parts.text.join(' + ')})`
+    const write = `    const ${parts.assigned.join(', ')}
+    __t${slot} = ${parts.raw.length === 0 ? text : `${parts.raw.join(' || ')} ? ${lowering.use('setMarkup')}(__t${slot}, ${parts.markup.join(' + ')}) : ${text}`}`
+    const found = `let __t${slot} = ${lowering.use('textHere')}(${at.name})`
+    return watched === null
+        ? `{\n${found}\n${write}\n}`
+        : `${found}\n${SCOPE}.${watched}(() => {\n${write}\n})`
+}
+
+/**
+ * One text run's pieces as the build and the write both spell them: each expression assigned to its
+ * name, the run as text, and — only where the run can hold markup (32.26, `holdsMarkup`) — the run
+ * as markup and the `isRaw` test of each part. A run of proven parts is text for good, so neither its
+ * build nor its write carries a branch it can never take.
+ */
+function runParts(
+    run: readonly TemplateNode[],
+    nameOf: (piece: number) => string,
+    valueOf: (node: TemplateNode) => string,
+    lowering: Lowering,
+): { assigned: string[]; text: string[]; markup: string[]; raw: string[] } {
+    const holdsMarkup = lowering.holdsMarkup(run)
+    const assigned: string[] = []
     const text: string[] = []
     const markup: string[] = []
-    for (let piece = 0; piece < at.run.length; piece += 1) {
-        const node = at.run[piece] as TemplateNode
+    const raw: string[] = []
+    for (let piece = 0; piece < run.length; piece += 1) {
+        const node = run[piece] as TemplateNode
         if (node.kind === 'text') {
-            markup.push(JSON.stringify(node.text))
             // 32.27 — static text is markup, and `data` is not a parse: a piece with an entity in
             // it goes in as the characters it stands for, decoded by the build.
             text.push(
                 JSON.stringify(decodeCharacterReferences(node.text, 'text')),
             )
+            if (holdsMarkup) markup.push(JSON.stringify(node.text))
             continue
         }
-        const value = `__v${slot}_${piece}`
-        values.push(`${value} = ${lowering.binding(node)}`)
-        brands.push(`${lowering.use('isRaw')}(${value})`)
+        const value = nameOf(piece)
+        assigned.push(`${value} = ${valueOf(node)}`)
         text.push(`${lowering.use('escapeless')}(${value})`)
+        if (!holdsMarkup) continue
         markup.push(`${lowering.use('escapeText')}(${value})`)
+        raw.push(`${lowering.use('isRaw')}(${value})`)
     }
-    const write = `    const ${values.join(', ')}
-    __t${slot} = ${brands.join(' || ')} ? ${lowering.use('setMarkup')}(__t${slot}, ${markup.join(' + ')}) : ${lowering.use('setText')}(__t${slot}, ${text.join(' + ')})`
-    const found = `let __t${slot} = ${lowering.use('textHere')}(${at.name})`
-    return watched === null
-        ? `{\n${found}\n${write}\n}`
-        : `${found}\n${SCOPE}.${watched}(() => {\n${write}\n})`
+    return { assigned, text, markup, raw }
 }
 
 /**
@@ -1047,39 +1071,28 @@ function builtRun(
     const make = (text: string): string =>
         into(at, `${DOCUMENT}.createTextNode(${text})`)
     if (lowering.isLiveRun(at.run)) return at.blank ? [] : [make("''")]
+    const { assigned, text, markup, raw } = runParts(
+        at.run,
+        (piece) => `${at.name}_${piece}`,
+        (node) => lowering.expression(node),
+        lowering,
+    )
     const lines: string[] = []
-    const text: string[] = []
-    const markup: string[] = []
-    const raw: string[] = []
-    for (let piece = 0; piece < at.run.length; piece += 1) {
-        const node = at.run[piece] as TemplateNode
-        if (node.kind === 'text') {
-            text.push(
-                JSON.stringify(decodeCharacterReferences(node.text, 'text')),
-            )
-            markup.push(JSON.stringify(node.text))
-            continue
-        }
-        const value = `${at.name}_${piece}`
-        lines.push(`const ${value} = ${lowering.expression(node)}`)
-        text.push(`${lowering.use('escapeless')}(${value})`)
-        markup.push(`${lowering.use('escapeText')}(${value})`)
-        raw.push(`${lowering.use('isRaw')}(${value})`)
-    }
+    for (const line of assigned) lines.push(`const ${line}`)
     const whole = concat(text)
-    if (raw.length === 0) {
-        lines.push(make(whole))
+    const otherwise = raw.length === 0 ? '' : 'else '
+    if (at.blank) lines.push(`let ${at.name}`)
+    if (raw.length > 0)
+        lines.push(
+            `if (${raw.join(' || ')}) for (const __made of ${lowering.use('markupNodes')}(${at.within === null ? PARENT : at.within.name}, ${RAW_OPEN_MARKUP} + ${markup.join(' + ')} + ${RAW_CLOSE_MARKUP})) ${into(at, '__made')}`,
+        )
+    if (!at.blank) {
+        lines.push(`${otherwise}${make(whole)}`)
         return lines
     }
     lines.push(
-        `if (${raw.join(' || ')}) for (const __made of ${lowering.use('markupNodes')}(${at.within === null ? PARENT : at.within.name}, ${RAW_OPEN_MARKUP} + ${markup.join(' + ')} + ${RAW_CLOSE_MARKUP})) ${into(at, '__made')}`,
+        `${otherwise}if ((${at.name} = ${whole}) !== '') ${make(at.name)}`,
     )
-    if (!at.blank) {
-        lines.push(`else ${make(whole)}`)
-        return lines
-    }
-    lines.push(`else if ((${at.name} = ${whole}) !== '') ${make(at.name)}`)
-    lines.splice(lines.length - 2, 0, `let ${at.name}`)
     return lines
 }
 
