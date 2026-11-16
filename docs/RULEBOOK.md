@@ -3592,6 +3592,11 @@ a `log` line in it reads, and MUST be set aside as `<name>.1.log` at each launch
 38.187 Where `onLauncher` answers `start: 'immediately'`, the launcher MUST start the app with the
 values its start form offers at a launch where 38.73 does nothing, rather than show its page.
 
+38.188 A page in the window `abide native`'s executable opens, or in its menu bar extra's panel, MUST
+have `navigator.setAppBadge` and `navigator.clearAppBadge` as the W3C Badging API defines them, the
+badge they set drawn on the native app's Dock icon as its count, as a mark with no number where none
+is given, and as nothing where it is cleared. The window showing the launcher's page MUST clear it.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

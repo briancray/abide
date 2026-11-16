@@ -1,6 +1,9 @@
 <script>
 import launcherSource from 'crm/src/native/launcher.abide' with { type: 'text' }
 import reportsPageSource from 'crm/src/reports/index.abide' with { type: 'text' }
+import DockBadge from 'crm/src/reports/lib/DockBadge.abide'
+import dockBadgeSource from 'crm/src/reports/lib/DockBadge.abide' with { type: 'text' }
+import dockBadgeTestSource from 'crm/src/reports/lib/DockBadge.test.ts' with { type: 'text' }
 import UpdateNotice from 'crm/src/reports/lib/UpdateNotice.abide'
 import updateNoticeSource from 'crm/src/reports/lib/UpdateNotice.abide' with { type: 'text' }
 import updateNoticeTestSource from 'crm/src/reports/lib/UpdateNotice.test.ts' with { type: 'text' }
@@ -145,6 +148,29 @@ import Snippet from '#src/lib/Snippet.abide'
             installs it too, so no copy goes on without it. The reports page shows the notice; an
             app with updates people must not put off renders it from its root layout, so it stands
             over every page.</p>
+    </Section>
+
+    <Section title="Count open deals on the Dock icon">
+        <Example
+            id="dock-badge"
+            app="crm"
+            title="`navigator.setAppBadge` — a count on the Dock icon"
+            summary="A browser tab draws no badge, so here only the line shows. Its test plays the window, which answers the page's badge."
+            files={{
+                'src/reports/lib/DockBadge.abide': dockBadgeSource,
+                'src/reports/lib/DockBadge.test.ts': dockBadgeTestSource,
+            }}
+        >
+            <DockBadge />
+        </Example>
+
+        <p>The window gives every page the web's own badging API. A count from
+            <code>navigator.setAppBadge</code> shows on the Dock icon, a call with no count shows a
+            dot, and <code>0</code> or <code>navigator.clearAppBadge</code> takes it off. The
+            menu bar extra's panel sets the same badge, and Disconnect clears it. A badge kept
+            current whatever page is open belongs in the root layout. In a browser the call is
+            the browser's: an installed web app may draw it, and a tab answers nothing, so guard
+            it with <code>?.</code> and the page runs unchanged.</p>
     </Section>
 
     <Registry />

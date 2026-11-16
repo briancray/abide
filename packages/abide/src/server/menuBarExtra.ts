@@ -59,7 +59,7 @@ export function openMenuBarExtra(
     uiDelegate: Id,
     shown: () => string | undefined,
     hasPage: (address: string) => Promise<boolean>,
-    connectUpdates: (view: Id) => void,
+    connectPage: (view: Id) => void,
     front: () => void,
 ): { setMenu(menu: Id): void; closePanel(): void } {
     const application = send(objcClass('NSApplication'), 'sharedApplication')
@@ -126,7 +126,7 @@ export function openMenuBarExtra(
             options,
             nativeUserAgent(version, appName),
             uiDelegate,
-            connectUpdates,
+            connectPage,
             () => {
                 resignedAt = Date.now()
             },
@@ -223,7 +223,7 @@ function openPanel(
     options: Launcher,
     userAgent: string,
     uiDelegate: Id,
-    connectUpdates: (view: Id) => void,
+    connectPage: (view: Id) => void,
     resigned: () => void,
 ): Panel {
     const window = created('NSPanel')
@@ -257,8 +257,8 @@ function openPanel(
     send(view, 'setNavigationDelegate:', uiDelegate)
     // 38.140 — the panel's page is the native app's as much as the window's is.
     send(view, 'setCustomUserAgent:', nsString(userAgent))
-    // 38.148 — before it loads, so its `pendingUpdate` asks a channel that is there.
-    connectUpdates(view)
+    // 38.148, 38.188 — before it loads, so its `pendingUpdate` and its badge reach a channel that is there.
+    connectPage(view)
     send(window, 'setContentView:', view)
     // 38.171.
     send(

@@ -27,6 +27,7 @@ import {
     windowButton,
 } from './appKit.ts'
 import { onSignal, sleepInAppKit } from './appKitLoop.ts'
+import { badgeBridge } from './badgeBridge.ts'
 import { installMenu } from './installMenu.ts'
 import { type Launcher, VIBRANCY_MATERIALS } from './launcherOptions.ts'
 import { menuBar, menuBarExtraMenu, opensInWindow } from './menuBar.ts'
@@ -357,6 +358,7 @@ export function openNativeWindow(
         'userContentController',
     )
     const bridge = `(${windowBridge.toString()})()`
+    const badge = `(${badgeBridge.toString()})()`
     let fullScreen = false
     const titlebarScript = (): string => {
         let height = 0
@@ -391,6 +393,7 @@ export function openNativeWindow(
         send(controller, 'removeAllUserScripts')
         send(controller, 'addUserScript:', userScript(bridge))
         send(controller, 'addUserScript:', userScript(told))
+        send(controller, 'addUserScript:', userScript(badge))
         send(
             view,
             'evaluateJavaScript:completionHandler:',
@@ -491,10 +494,42 @@ export function openNativeWindow(
     // what its route exports, and again after every navigation it makes.
     // 38.148 — EVERY PAGE THE APP SHOWS HEARS OF AN UPDATE: the window's, and the menu bar extra's
     // panel's once it is built. Each asks on load and is told again when one is staged.
+    // 38.188 — and each sets the Dock icon's badge.
     const updateViews: Id[] = []
     let updateBridge: Id = null
-    const connectUpdates = (target: Id): void => {
+    const dockTile = send(application, 'dockTile')
+    const setBadge = (label: string): void => {
+        send(
+            dockTile,
+            'setBadgeLabel:',
+            label === '' ? null : nsString(label === 'flag' ? '•' : label),
+        )
+    }
+    const badgeHandler = send(
+        definedClass('AbideBadgeBridge', {
+            'userContentController:didReceiveScriptMessage:': {
+                types: 'v@:@@',
+                args: [FFIType.ptr, FFIType.ptr],
+                returns: FFIType.void,
+                run: (_controller: Id, message: Id) =>
+                    setBadge(stringOf(send(message, 'body'))),
+            },
+        }),
+        'new',
+    )
+    const connectPage = (target: Id): void => {
         updateViews.push(target)
+        const pageController = send(
+            send(target, 'configuration'),
+            'userContentController',
+        )
+        send(
+            pageController,
+            'addScriptMessageHandler:name:',
+            badgeHandler,
+            nsString('abideBadge'),
+        )
+        send(pageController, 'addUserScript:', userScript(badge))
         updateBridge ??= send(
             definedClass('AbideUpdateBridge', {
                 'userContentController:didReceiveScriptMessage:': {
@@ -515,7 +550,7 @@ export function openNativeWindow(
             'new',
         )
         send(
-            send(send(target, 'configuration'), 'userContentController'),
+            pageController,
             'addScriptMessageHandler:name:',
             updateBridge,
             nsString('abideUpdate'),
@@ -540,7 +575,7 @@ export function openNativeWindow(
               uiDelegate,
               () => launcher.shown,
               launcher.hasPage,
-              connectUpdates,
+              connectPage,
               front,
           )
         : undefined
@@ -656,7 +691,7 @@ export function openNativeWindow(
             showMenu(shownMenu)
             tellPage()
         }
-    connectUpdates(view)
+    connectPage(view)
     send(
         send(send(view, 'configuration'), 'userContentController'),
         'addScriptMessageHandler:name:',
@@ -686,6 +721,8 @@ export function openNativeWindow(
     const navigate = (address: string): void => {
         // 38.92.
         showMenu([])
+        // 38.188 — the launcher's page sets no badge, and the app it leaves keeps none.
+        if (address.startsWith(base)) setBadge('')
         tellTitlebar()
         extra?.closePanel()
         send(

@@ -9,6 +9,7 @@ import { rm } from 'node:fs/promises' // bun exposes no directory removal of its
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
 
 import { buildDirectory, servedBuild } from '#server/appBuild.ts'
+import { badgeBridge } from '#server/badgeBridge.ts'
 import { derived, launcherDataDirectory } from '#server/config.ts'
 import type { App } from '#server/createApp.ts'
 import { HOOKS } from '#server/hooks.ts'
@@ -244,6 +245,40 @@ test('a press on the titlebar drags and a double press zooms, and a control in i
         expect(posted).toEqual(['drag', 'zoom'])
     } finally {
         header.remove()
+        delete scope.webkit
+    }
+})
+
+// 38.188 — THE BADGING API, AS THE STANDARD HAS IT, CARRIED TO THE DOCK. THE REVERT: drop the
+// range check in `badgeBridge`; `setAppBadge(-1)` resolves and posts `-1` where it rejects.
+test('setAppBadge posts a count, a flag or none, and refuses what is no count — 38.188', async () => {
+    const posted: string[] = []
+    const scope = globalThis as { webkit?: unknown }
+    scope.webkit = {
+        messageHandlers: {
+            abideBadge: {
+                postMessage: (message: string) => posted.push(message),
+            },
+        },
+    }
+    const badging = navigator as Navigator & {
+        setAppBadge(contents?: number): Promise<void>
+        clearAppBadge(): Promise<void>
+    }
+    badgeBridge()
+    try {
+        await badging.setAppBadge(3)
+        await badging.setAppBadge(2.9)
+        await badging.setAppBadge()
+        await badging.setAppBadge(0)
+        await badging.setAppBadge(7)
+        await badging.clearAppBadge()
+        await expect(badging.setAppBadge(-1)).rejects.toThrow(TypeError)
+        await expect(badging.setAppBadge(Number.NaN)).rejects.toThrow(TypeError)
+        expect(posted).toEqual(['3', '2', 'flag', '', '7', ''])
+    } finally {
+        delete (navigator as { setAppBadge?: unknown }).setAppBadge
+        delete (navigator as { clearAppBadge?: unknown }).clearAppBadge
         delete scope.webkit
     }
 })
