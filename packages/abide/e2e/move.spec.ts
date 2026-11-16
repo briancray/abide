@@ -57,14 +57,10 @@ const compiled = await buildCompiledPage(PAGE_SOURCE)
 test('a reordered row keeps the state a rebuild would destroy', async ({
     page,
 }, testInfo) => {
-    await loadCompiledPage(page, compiled, false)
+    await loadCompiledPage(page, compiled, true)
 
     const result = (await page.evaluate(() => {
-        const lane = globalThis as unknown as {
-            __MOUNT__?: () => void
-            __FLUSH__?: () => void
-        }
-        lane.__MOUNT__?.()
+        const lane = globalThis as unknown as { __FLUSH__?: () => void }
         const focused = document.querySelector('#i-b') as HTMLInputElement
         focused.focus()
         ;(document.querySelector('#go') as HTMLElement).click()

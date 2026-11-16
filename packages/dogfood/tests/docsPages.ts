@@ -4,6 +4,7 @@
 
 import { addressOf, BIN } from '../../abide/tests/builtApp.ts'
 import { attributeOf } from '../src/lib/attributeOf.ts'
+import { exampleCardsIn } from '../src/lib/exampleCardsIn.ts'
 import type { SitePage } from '../src/lib/SITE.ts'
 import { groupOf, markdownAddressOf, PAGES } from '../src/lib/sitePages.ts'
 
@@ -67,7 +68,6 @@ function resolvedFrom(file: string, specifier: string): string {
 }
 
 const IMPORT = /^import (\w+) from '([^']+)'(?: with \{ type: 'text' \})?$/gm
-const CARD = /<Example\b([\s\S]*?)>\s*<([A-Z]\w*)/g
 const FILE_ENTRY = /'([^']+)':\s*(\w+)/g
 
 /** The cards `page` embeds, in the order it embeds them. */
@@ -79,23 +79,21 @@ export function cardsOf(page: DocsPage): Card[] {
             resolvedFrom(page.file, specifier as string),
         )
     const cards: Card[] = []
-    for (const [, attributes, tag] of page.source.matchAll(CARD)) {
-        const id = /\bid="([^"]+)"/.exec(attributes as string)?.[1] ?? ''
+    for (const { opening, component, serverFiles } of exampleCardsIn(
+        page.source,
+    )) {
+        const id = attributeOf(opening, 'id') ?? ''
         const files = new Map<string, string>()
-        const listed =
-            /files=\{\{([\s\S]*?)\}\}/.exec(attributes as string)?.[1] ?? ''
+        const listed = /files=\{\{([\s\S]*?)\}\}/.exec(opening)?.[1] ?? ''
         // A server file's text is read by the card on the server, by its path in the CRM.
-        const server =
-            /serverFiles=\{\[([\s\S]*?)\]\}/.exec(attributes as string)?.[1] ??
-            ''
-        for (const [, shown] of server.matchAll(/'([^']+)'/g))
-            files.set(shown as string, `examples/crm/${shown}`)
+        for (const shown of serverFiles)
+            files.set(shown, `examples/crm/${shown}`)
         for (const [, shown, source] of listed.matchAll(FILE_ENTRY))
             files.set(shown as string, imported.get(source as string) ?? '')
         cards.push({
             id,
             route: page.route,
-            component: imported.get(tag as string) ?? '',
+            component: imported.get(component) ?? '',
             files,
         })
     }
@@ -227,6 +225,16 @@ export function tagEnd(source: string, from: number, closed = true): number {
     return source.length
 }
 
+/** The title of the `<Section>` whose tag opens at `index` in `source`. */
+export function sectionTitleAt(source: string, index: number): string {
+    return (
+        attributeOf(
+            source.slice(index, tagEnd(source, index, false)),
+            'title',
+        ) ?? ''
+    )
+}
+
 /** Every `<Code>` a page writes, in order. */
 export function fencesOf(page: DocsPage): Fence[] {
     const fences: Fence[] = []
@@ -235,14 +243,7 @@ export function fencesOf(page: DocsPage): Fence[] {
     let section = ''
     for (let match = tags.exec(source); match; match = tags.exec(source)) {
         if (match[1] === 'Section') {
-            section =
-                attributeOf(
-                    source.slice(
-                        match.index,
-                        tagEnd(source, match.index, false),
-                    ),
-                    'title',
-                ) ?? ''
+            section = sectionTitleAt(source, match.index)
             continue
         }
         const end = tagEnd(source, match.index)

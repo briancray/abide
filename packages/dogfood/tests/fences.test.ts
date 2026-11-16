@@ -1,13 +1,12 @@
 import { expect, test } from 'bun:test'
 
-import { attributeOf } from '../src/lib/attributeOf.ts'
 import { EXCERPT, withoutExcerpt } from '../src/lib/highlight.ts'
 import {
     type DocsPage,
     docsPages,
     type Fence,
     fencesOf,
-    tagEnd,
+    sectionTitleAt,
 } from './docsPages.ts'
 
 /** A label is an ADDRESS when it is a path rather than one of BRAND's four side words. */
@@ -21,15 +20,7 @@ function fenceOnlySections(page: DocsPage): number {
     let section = ''
     for (const match of page.source.matchAll(/<(Section|Example)\b/g)) {
         if (match[1] === 'Example') withExample.add(section)
-        else
-            section =
-                attributeOf(
-                    page.source.slice(
-                        match.index,
-                        tagEnd(page.source, match.index, false),
-                    ),
-                    'title',
-                ) ?? ''
+        else section = sectionTitleAt(page.source, match.index)
     }
     const teaching = new Set<string>()
     for (const fence of fencesOf(page))

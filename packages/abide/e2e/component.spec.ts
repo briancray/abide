@@ -15,6 +15,7 @@ import {
     buildCompiledPage,
     type CompiledPage,
 } from '../bench/buildCompiledPage.ts'
+import { microseconds } from '../bench/milliseconds.ts'
 import {
     abideCardSource,
     abideComponentSource,
@@ -217,7 +218,7 @@ test('the mount of a list of components, against the same rows inline', async ({
             'the component mount left slots unbound',
         ).toBe(built.size * 3)
         lines.push(
-            `  ${String(built.size).padStart(4)} rows   inline ${(measured.inline / 1000).toFixed(1)} µs   component ${(measured.component / 1000).toFixed(1)} µs   ${measured.claim}   [n=${measured.n} floor=${(measured.floor * 100).toFixed(2)}%]` +
+            `  ${String(built.size).padStart(4)} rows   inline ${microseconds(measured.inline)}   component ${microseconds(measured.component)}   ${measured.claim}   [n=${measured.n} floor=${(measured.floor * 100).toFixed(2)}%]` +
                 `\n              ${(measured.inline / built.size).toFixed(0)} ns a row inline, ${(measured.component / built.size).toFixed(0)} ns a row as a component`,
         )
         if (measured.workDisagreement.length > 0)

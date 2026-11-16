@@ -1,4 +1,5 @@
 import { attributeOf } from '#src/lib/attributeOf.ts'
+import { exampleCardsIn } from '#src/lib/exampleCardsIn.ts'
 import { exampleDirectory } from '#src/lib/exampleDirectory.server.ts'
 
 /** An example card on a docs page: where it is, and what it is made of. */
@@ -10,10 +11,7 @@ export type SiteExample = {
     files: string[]
 }
 
-// The opening tag ends where the component the card shows begins: a title is free to hold a `>`.
-const CARD = /<Example\b([\s\S]*?)>\s*<[A-Z]/g
 const FILE_KEY = /'(src\/[^']+)':/g
-const SERVER_FILES = /serverFiles=\{\[([\s\S]*?)\]\}/
 
 let read: Promise<SiteExample[]> | undefined
 
@@ -34,16 +32,13 @@ async function readExamples(): Promise<SiteExample[]> {
     for await (const file of new Bun.Glob('**/index.abide').scan(site)) {
         const source = await Bun.file(`${site}/${file}`).text()
         const route = `/${file.slice(0, -'/index.abide'.length)}`
-        for (const card of source.matchAll(CARD)) {
-            const opening = card[1] ?? ''
+        for (const { opening, serverFiles } of exampleCardsIn(source)) {
             const id = attributeOf(opening, 'id')
             if (id === undefined) continue
             const files: string[] = []
             for (const key of opening.matchAll(FILE_KEY))
                 files.push(key[1] ?? '')
-            const server = SERVER_FILES.exec(opening)?.[1] ?? ''
-            for (const shown of server.matchAll(/'([^']+)'/g))
-                files.push(shown[1] ?? '')
+            for (const shown of serverFiles) files.push(shown)
             examples.push({
                 id,
                 route,
