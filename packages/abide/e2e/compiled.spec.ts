@@ -61,14 +61,12 @@ test('the compiled page against the hand-written one, in this engine', async ({
         markup: string,
         script: string,
     ): Promise<{ counts: Counts; text: string }> {
-        await loadCompiledPage(page, { markup, script }, false)
+        await loadCompiledPage(page, { markup, script })
         return (await page.evaluate(() => {
             const lane = globalThis as unknown as {
                 __HARNESS_MEASURE__: { measure(body: () => void): Counts }
-                __MOUNT__?: () => void
                 __FLUSH__?: () => void
             }
-            lane.__MOUNT__?.()
             // THE TURN ENDS INSIDE THE MEASUREMENT. A reactive drain is batched to the end of
             // one, so a body that clicks and returns is read before any binding has run — and
             // reports a page doing NO work as a page doing less of it. The hand-written arm has

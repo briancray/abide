@@ -27,7 +27,7 @@ const compiled = await buildCompiledPage(PAGE_SOURCE)
 test('a style group parses its attribute as the browser does — 32.71', async ({
     page,
 }) => {
-    await loadCompiledPage(page, compiled, true)
+    await loadCompiledPage(page, compiled)
     await page.click('#quoted')
     const style = await page.evaluate(() => {
         const out = (document.querySelector('#out') as HTMLElement).style

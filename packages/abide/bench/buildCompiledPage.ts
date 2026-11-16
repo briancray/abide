@@ -188,13 +188,13 @@ export async function openCompiledPage(
     const page = await context.newPage()
     // MOUNTED OUTSIDE THE OP. Hydration is setup here, not the thing being priced, and `traceOp`
     // clears the marks it left before the op begins.
-    await loadCompiledPage(page, built, true)
+    await loadCompiledPage(page, built)
     return page
 }
 
 /**
- * Loads a built page into `page` — its markup as the body, its script after — and mounts it where
- * `mount`.
+ * Loads a built page into `page` — its markup as the body, its script after — and mounts it. A page
+ * with no `__MOUNT__` — a hand-written arm — loads the same way and the mount is inert.
  *
  * A FRESH NAVIGATION FIRST: `setContent` replaces the document but KEEPS the JavaScript context, so
  * a `__MOUNT__` an earlier page defined would still be on the global and mount into this one.
@@ -202,17 +202,15 @@ export async function openCompiledPage(
 export async function loadCompiledPage(
     page: Page,
     built: { markup: string; script: string },
-    mount: boolean,
 ): Promise<void> {
     await page.goto('about:blank')
     await page.setContent(
         `<!doctype html><html><body>${built.markup}</body></html>`,
     )
     await page.addScriptTag({ content: built.script })
-    if (mount)
-        await page.evaluate(() => {
-            ;(globalThis as unknown as { __MOUNT__?: () => void }).__MOUNT__?.()
-        })
+    await page.evaluate(() => {
+        ;(globalThis as unknown as { __MOUNT__?: () => void }).__MOUNT__?.()
+    })
 }
 
 if (import.meta.main) {

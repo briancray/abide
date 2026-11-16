@@ -37,7 +37,7 @@ const compiled = await buildCompiledPage(PAGE_SOURCE, { Dot: DOT_SOURCE })
 test('an xlink attribute the client builds inside an svg is XLink’s — 32.70', async ({
     page,
 }) => {
-    await loadCompiledPage(page, compiled, true)
+    await loadCompiledPage(page, compiled)
     await page.click('#grow')
     const spaces = await page.evaluate(() => {
         const rows = document.querySelectorAll('#drawn > g')

@@ -57,7 +57,7 @@ const compiled = await buildCompiledPage(PAGE_SOURCE)
 test('a reordered row keeps the state a rebuild would destroy', async ({
     page,
 }, testInfo) => {
-    await loadCompiledPage(page, compiled, true)
+    await loadCompiledPage(page, compiled)
 
     const result = (await page.evaluate(() => {
         const lane = globalThis as unknown as { __FLUSH__?: () => void }
