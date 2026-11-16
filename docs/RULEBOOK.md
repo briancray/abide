@@ -2291,8 +2291,8 @@ value refused a property that type does not declare, on the `.abide` line.
 
 32.3 A `name={expr}` attribute or property expression MUST be reactive, whole or interpolated.
 
-32.4 `on<event>` MUST bind a native listener on an element, and MUST be an ordinary prop on a
-component.
+32.4 `on<event>` MUST bind a native listener on an element, a function or an `EventListenerObject`
+alike, and MUST be an ordinary prop on a component.
 
 32.5 `bind:value` MUST read the property and write it back on input or change, through the member
 path where its operand is a path into a value (31.8), a computed step's key read at each write.
@@ -2590,6 +2590,9 @@ MUST create no node but those its markup parses to, whatever was parsed before i
 
 32.94 A `style:prop` whose value is `null`, `undefined` or empty up to its first `;` MUST declare
 nothing, whether the server writes it or the browser does.
+
+32.95 An `on<event>` listener that is an `EventListenerObject`, written or spread, MUST be added with
+its `capture`, `once`, `passive` and `signal` as the listener's options.
 
 # 33. Props
 
@@ -3695,6 +3698,16 @@ transition without them.
 (39.13) or as the head is reconciled — MUST reach `onError` and warn as 12.6 has an `Effect`'s
 throw, once, MUST stand as what it last read until the page, layout or component that made it
 leaves, and MUST NOT keep the rest of the head from being reconciled.
+
+39.21 A `<window>` or a `<document>` MUST stand at the top level of a `.abide` file as 39.2 has a
+`<head>` stand, and MUST render nothing on the server or in a browser.
+
+39.22 A `<window>` or a `<document>` holding anything but `on<event>={listener}` attributes MUST be
+a build error.
+
+39.23 In a browser, each `on<event>` on a `<window>` or a `<document>` MUST be added to the window or
+the document as 32.4 and 32.95 add one to an element when the page, layout or component it is
+written in mounts, and MUST be removed when that page, layout or component leaves.
 
 # 40. Documentation
 

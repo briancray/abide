@@ -11,6 +11,17 @@
 
 import type { BooleanAttribute } from './BOOLEAN_ATTRIBUTES.ts'
 
+/** 32.4 — an `on<event>` value: a function, or an `EventListenerObject` carrying its options. */
+type Listener<Event> =
+    | ((event: Event) => unknown)
+    | {
+          handleEvent(event: Event): unknown
+          capture?: boolean
+          once?: boolean
+          passive?: boolean
+          signal?: AbortSignal
+      }
+
 /**
  * The element's properties an attribute sets: writable, and neither a method nor a node.
  *
@@ -130,11 +141,11 @@ type HtmlAttributes<Tag extends keyof HTMLElementTagNameMap> = {
         NonNullable<HTMLElementTagNameMap[Tag][Key]>
     > | null
 } & {
-    [Event in keyof HTMLElementEventMap as `on${Event}`]?: (
-        event: HTMLElementEventMap[Event] & {
+    [Event in keyof HTMLElementEventMap as `on${Event}`]?: Listener<
+        HTMLElementEventMap[Event] & {
             currentTarget: HTMLElementTagNameMap[Tag]
-        },
-    ) => unknown
+        }
+    >
 } & Unreflected<Tag> &
     Global & {
         itemscope?: boolean
@@ -156,11 +167,11 @@ type HtmlAttributes<Tag extends keyof HTMLElementTagNameMap> = {
 type SvgAttributes<Tag extends keyof SVGElementTagNameMap> = {
     [Name in SvgAttribute]?: string | number | null
 } & {
-    [Event in keyof SVGElementEventMap as `on${Event}`]?: (
-        event: SVGElementEventMap[Event] & {
+    [Event in keyof SVGElementEventMap as `on${Event}`]?: Listener<
+        SVGElementEventMap[Event] & {
             currentTarget: SVGElementTagNameMap[Tag]
-        },
-    ) => unknown
+        }
+    >
 } & Global & {
         id?: string
         lang?: string

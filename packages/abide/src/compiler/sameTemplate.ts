@@ -29,6 +29,7 @@ function shapeOf(file: AbideFile): string {
         nodesShape([file.document.html], parts)
         nodesShape([file.document.body], parts)
     }
+    nodesShape(file.listeners, parts)
     nodesShape(file.template, parts)
     for (const component of file.components) componentShape(component, parts)
     return parts.join('\u0000')

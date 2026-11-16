@@ -378,6 +378,17 @@ export const wrong = Held({ value: reactive(1) })
 export const wrongPlain = Held({ value: 1 })
 `
 
+// 32.95, 39.21 — A LISTENER IS HANDED ITS TARGET'S OWN EVENT, as a function or as an object carrying
+// its options: `event.key` is a storage event's, which only a window dispatches, and `event.deltaY` a
+// wheel event's.
+const LISTENED = `<script>
+let keys = 0
+</script>
+
+<window onstorage={(event) => (keys = event.key?.length ?? 0)}/>
+<document onvisibilitychange={() => keys++}/>
+<div onwheel={{ handleEvent: (event) => event.deltaY, passive: false }}>{keys}</div>`
+
 let app = ''
 let found: Diagnosis[] = []
 
@@ -432,6 +443,7 @@ const { start = 0 } = props<{ start?: number }>()
             "import notes from '#src/lib/notes.md' with { type: 'text' }\n\nexport const length: number = notes.length\n",
         'lib/sum.ts': "export const sum: number = 'x'\n",
         'lib/direct.ts': DIRECT,
+        'listened/index.abide': LISTENED,
     })
     found = await checkApp(app)
 }, 60_000)
@@ -722,6 +734,12 @@ test('a read given an argument is reported once for the whole app — 31.11', ()
             diagnosis.message.includes('RULEBOOK 31.11'),
         ).length,
     ).toBe(1)
+})
+
+// THE REVERT: drop the object member of `__Listener`; the wheel listener reports TS2322. Type
+// `__onTarget` by `HTMLElementEventMap`; `event.key` is no member of the `Event` it falls back to.
+test('a listener is typed by its target, as a function or an object — 32.95, 39.21', () => {
+    expect(inFile('listened/index.abide')).toEqual([])
 })
 
 // THE REVERT: hand `__record` the props as declared in `componentModule`, without `__bindable`;

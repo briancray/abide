@@ -648,7 +648,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
 | `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31, 32.70 |
 | `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37, 32.70, 32.71 |
-| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75 |
+| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75, 32.95 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3, 32.71 |
 | `bind:value` | Two-way bind on an element. | 5.16, 32.5, 32.58, 32.59, 32.60, 32.61, 32.62, 32.72, 32.74, 32.75, 32.76, 32.78 |
 | `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18, 32.76 |
@@ -714,6 +714,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Path | Meaning | Rules |
 | --- | --- | --- |
 | `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16, 39.17, 39.20 |
+| `<window>` · `<document>` | A page's, layout's or component's listeners on the window or the document. | 39.21, 39.22, 39.23 |
 | `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10, 39.18, 39.19 |
 | `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3, 30.34, 30.36 |
 | `[[name]]` | An optional segment. | 23.5, 30.4, 30.34, 30.36 |

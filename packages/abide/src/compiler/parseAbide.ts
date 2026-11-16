@@ -1,5 +1,6 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
+import { isEventName } from '#shared/isEventName.ts'
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
 
 import { isComponentTag, isSlot, propKeyOf } from './classifyTemplate.ts'
@@ -72,6 +73,11 @@ export type AbideFile = {
      * where the template is not.
      */
     document: { html: ElementNode; body: ElementNode } | undefined
+    /**
+     * 39.21 — every top-level `<window>` and `<document>`, split off the template as the head is: each
+     * holds its `on<event>` listeners and nothing else, and renders nothing where it is written.
+     */
+    listeners: ElementNode[]
     template: TemplateNode[]
     /** 32.43 — the inline components the template's own body declares, in source order. */
     components: InlineComponent[]
@@ -644,18 +650,24 @@ export function parseAbide(source: string): AbideFile {
 
     const components = fileComponents(root, declared)
     refuseImported(components, [...modules, ...servers, ...scripts])
+    assertNoNestedHeadIn(components)
     collapseWhitespace(root)
     const head: TemplateNode[] = []
     const template: TemplateNode[] = []
+    const listeners: ElementNode[] = []
     let document: AbideFile['document']
     for (const node of root) {
         if (node.kind === 'element' && node.lowerTag === 'html') {
-            document = documentOf(node, head, template)
+            document = documentOf(node, head, template, listeners)
             continue
         }
         if (node.kind === 'element' && node.lowerTag === 'head') {
             assertNoNestedHead(node.children, '<head>')
             for (const child of node.children) head.push(child)
+            continue
+        }
+        if (isListenerTarget(node)) {
+            listeners.push(listenerTarget(node))
             continue
         }
         assertNoNestedHead([node], '')
@@ -678,6 +690,7 @@ export function parseAbide(source: string): AbideFile {
         styles,
         head,
         document,
+        listeners,
         template,
         components,
         generics,
@@ -855,6 +868,7 @@ function documentOf(
     html: ElementNode,
     head: TemplateNode[],
     template: TemplateNode[],
+    listeners: ElementNode[],
 ): { html: ElementNode; body: ElementNode } {
     let body: ElementNode | undefined
     for (const child of html.children) {
@@ -866,8 +880,13 @@ function documentOf(
         }
         if (child.kind === 'element' && child.lowerTag === 'body' && !body) {
             body = child
-            assertNoNestedHead(child.children, '<body>')
-            for (const node of child.children) template.push(node)
+            // 39.21 — the body's own children are the template's top level, and so is a target there.
+            for (const node of child.children)
+                if (isListenerTarget(node)) listeners.push(listenerTarget(node))
+                else {
+                    assertNoNestedHead([node], '<body>')
+                    template.push(node)
+                }
             continue
         }
         throw new Error(
@@ -882,6 +901,34 @@ function documentOf(
     html.children = []
     body.children = []
     return { html, body }
+}
+
+/** 39.21 — whether a node is a `<window>` or a `<document>`, which listen rather than render. */
+function isListenerTarget(node: TemplateNode): node is ElementNode {
+    return (
+        node.kind === 'element' &&
+        (node.lowerTag === 'window' || node.lowerTag === 'document')
+    )
+}
+
+/**
+ * A top-level `<window>` or `<document>`, refused where it holds anything but `on<event>` listeners.
+ *
+ * 39.22 — a listener is all it is: a static `on<event>` value would be script compiled from text, and
+ * an attribute, a directive, a spread or a child has no element to land on.
+ */
+function listenerTarget(node: ElementNode): ElementNode {
+    for (const attribute of node.attributes)
+        if (!attribute.expression || !isEventName(attribute.lowerName))
+            throw new Error(
+                `abide: <${node.tag}> takes \`on<event>={listener}\` and nothing else, and ${attribute.name === '...' ? 'a spread' : attribute.name} is not one. Put it on an element. RULEBOOK 39.22.`,
+            )
+    for (const child of node.children)
+        if (!(child.kind === 'text' && isBlank(child.text)))
+            throw new Error(
+                `abide: <${node.tag}> holds nothing — it listens where it is written and renders nothing there. Move what it holds beside it. RULEBOOK 39.22.`,
+            )
+    return node
 }
 
 /**
@@ -901,6 +948,12 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
             throw new Error(
                 `abide: a <head> must be top level in a .abide file, and this one is inside ${within}. RULEBOOK 39.2.`,
             )
+        // 39.21 — and so must a `<window>` or a `<document>`, which listen for as long as the
+        // component is mounted rather than for as long as an arm or a row is.
+        if (within !== '' && isListenerTarget(node))
+            throw new Error(
+                `abide: a <${node.tag}> must be top level in a .abide file, and this one is inside ${within}. RULEBOOK 39.21.`,
+            )
         // 35.16 — the document's own elements are written once, at the top, around the rest.
         if (
             node.kind === 'element' &&
@@ -915,8 +968,18 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
                 : node.kind === 'block'
                   ? `{#${node.block}}`
                   : ''
-        for (const body of bodiesOf(node))
+        for (const body of bodiesOf(node)) {
             assertNoNestedHead(body.children, label)
+            assertNoNestedHeadIn(body.components)
+        }
+    }
+}
+
+/** `assertNoNestedHead` over inline components' bodies, which no node of the template holds. */
+function assertNoNestedHeadIn(components: readonly InlineComponent[]): void {
+    for (const component of components) {
+        assertNoNestedHead(component.children, `{#component ${component.name}}`)
+        assertNoNestedHeadIn(component.components)
     }
 }
 
