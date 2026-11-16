@@ -1,5 +1,11 @@
 # @abide/abide
 
+## 0.140.1
+
+### Patch Changes
+
+- 36a7b18: The native app's notification permission request now asks for the badge too, so `navigator.setAppBadge` is drawn on the Dock once the person allows notifications (RULEBOOK 38.188, 38.190).
+
 ## 0.140.0
 
 ### Minor Changes
