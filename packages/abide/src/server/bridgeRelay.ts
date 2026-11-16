@@ -25,6 +25,8 @@
 // read in this process by the same core a bridge runs (`@abide/bridge/serveTurns`), and its reports
 // land here as a post's would. It stands in for any pairing a request from the window asks after.
 
+import { serverOf, takeFlag, visitorServers } from '@abide/bridge/grant'
+
 import { isFailed } from '#shared/Failed.ts'
 import { appName, namedLogger } from '#shared/log.ts'
 import { refuse } from '#shared/refuse.ts'
@@ -121,14 +123,12 @@ const LOCAL: {
     servers: ReadonlySet<string>
     sourced: Map<string, ReadonlySet<string>>
     args: Map<string, readonly string[]>
-    grant: typeof import('@abide/bridge/grant') | undefined
 } = {
     secret: '',
     bridge: undefined,
     servers: new Set(),
     sourced: new Map(),
     args: new Map(),
-    grant: undefined,
 }
 
 /**
@@ -187,7 +187,7 @@ function missingFor(
     // 44.78 — given every tool asked for, it lacks only an MCP tool whose server is neither in the
     // user scope nor in an `--mcp-config` the request's `onPairing` arguments name.
     for (const tool of tools) {
-        const server = serverOfTool(tool)
+        const server = serverOf(tool)
         if (server !== undefined && !LOCAL.servers.has(server))
             outside.push(tool)
     }
@@ -200,16 +200,15 @@ async function unsourced(
     tools: readonly string[],
     args: string[],
 ): Promise<string[]> {
-    const grant = (LOCAL.grant ??= await import('@abide/bridge/grant'))
-    const sources = grant.takeFlag(args, ['--mcp-config']) ?? []
+    const sources = takeFlag(args, ['--mcp-config']) ?? []
     for (const source of sources)
         if (!LOCAL.sourced.has(source))
-            LOCAL.sourced.set(source, await serversOf(grant, source))
+            LOCAL.sourced.set(source, await serversOf(source))
     const missing: string[] = []
     for (const tool of tools) {
         let found = false
         for (const source of sources)
-            if (LOCAL.sourced.get(source)?.has(serverOfTool(tool) as string))
+            if (LOCAL.sourced.get(source)?.has(serverOf(tool) as string))
                 found = true
         if (!found) missing.push(tool)
     }
@@ -217,27 +216,11 @@ async function unsourced(
 }
 
 /** The names of the MCP servers `source` holds — none where it cannot be read, as Claude Code will say at the turn. */
-async function serversOf(
-    grant: typeof import('@abide/bridge/grant'),
-    source: string,
-): Promise<ReadonlySet<string>> {
-    const servers = await grant
-        .visitorServers([source])
-        .catch(() => new Map<string, unknown>())
+async function serversOf(source: string): Promise<ReadonlySet<string>> {
+    const servers = await visitorServers([source]).catch(
+        () => new Map<string, unknown>(),
+    )
     return new Set(servers.keys())
-}
-
-/**
- * The MCP server `tool` is of, as 44.29 names it, or `undefined` for a built-in.
- *
- * `@abide/bridge/grant`'s `serverOf`, copied: `missingFor` answers synchronously, before the grant
- * module this file loads lazily has been loaded.
- */
-function serverOfTool(tool: string): string | undefined {
-    if (!tool.startsWith('mcp__')) return undefined
-    const rest = tool.slice('mcp__'.length)
-    const end = rest.indexOf('__')
-    return end === -1 ? rest : rest.slice(0, end)
 }
 
 /**
@@ -245,11 +228,10 @@ function serverOfTool(tool: string): string | undefined {
  * tells every page watching where they changed. 44.58, 44.61, 44.78.
  */
 async function refreshLocalServers(): Promise<void> {
-    const grant = (LOCAL.grant ??= await import('@abide/bridge/grant'))
     const before = serversSaid()
-    LOCAL.servers = new Set((await grant.visitorServers(undefined)).keys())
+    LOCAL.servers = new Set((await visitorServers(undefined)).keys())
     for (const source of LOCAL.sourced.keys())
-        LOCAL.sourced.set(source, await serversOf(grant, source))
+        LOCAL.sourced.set(source, await serversOf(source))
     if (serversSaid() === before) return
     for (const wakes of WATCHERS.values()) for (const wake of wakes) wake()
 }
