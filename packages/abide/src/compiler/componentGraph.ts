@@ -37,7 +37,7 @@ export function componentGraph(
  * statically or through an `import('…')` naming it as a literal, which is the same edge (34.15).
  *
  * A specifier `resolve` cannot answer is not an edge. `checkSource` reads one file's components
- * through this and the build reads every file's (`componentGraph`), so the two cannot disagree
+ * through this and the build reads every file's (`withDependencies`), so the two cannot disagree
  * about what a page imports.
  */
 export function abideImportsOf(

@@ -5,7 +5,7 @@ import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 
 import { checkSource, lowerApp } from './checkApp.ts'
 import { citedClauses } from './citedClauses.ts'
-import { type Diagnosis, formatDiagnosis } from './Diagnostics.ts'
+import { type Diagnosis, diagnosisAt, formatDiagnosis } from './Diagnostics.ts'
 import { DOCS_SITE } from './DOCS_SITE.ts'
 import { formatAbide } from './formatAbide.ts'
 import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
@@ -179,17 +179,13 @@ export async function serveLanguage(
         } catch (thrown) {
             // The checker's own failure, not the page's: the next check opens another.
             found = [
-                {
+                diagnosisAt(
                     path,
-                    line: 1,
-                    column: 1,
-                    code: 0,
-                    category: 'error',
-                    message:
-                        thrown instanceof Error
-                            ? thrown.message
-                            : String(thrown),
-                },
+                    undefined,
+                    0,
+                    'error',
+                    thrown instanceof Error ? thrown.message : String(thrown),
+                ),
             ]
         }
         // A newer text has arrived while this one was checked, and will be published.

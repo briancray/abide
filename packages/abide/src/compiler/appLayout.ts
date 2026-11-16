@@ -15,7 +15,7 @@ import {
     type Segment,
 } from '#shared/routePattern.ts'
 
-import { abideImportsOf, componentGraph } from './componentGraph.ts'
+import { abideImportsOf } from './componentGraph.ts'
 import { type Diagnosis, Diagnostics } from './Diagnostics.ts'
 import type { HandlerFile } from './handlersUnder.ts'
 import { hookCalls, hooksIn } from './hookCalls.ts'
@@ -135,7 +135,7 @@ export async function appLayout(root: string): Promise<AppLayout> {
         refusals,
         unparsed,
     )
-    const invoked = componentGraph(found.sources, resolve).invoked
+    const invoked = found.invoked
     const sources: PlacedSource[] = []
     for (const source of found.sources) {
         const relative = relativeTo(root, source.path)
@@ -253,8 +253,11 @@ export async function withDependencies(
     positions: Map<string, string>
     /** 23.26 — each mounted directory, where it mounts, and the param files under it. */
     trees: MountedTree[]
+    /** 32.17 — every source another one imports, off the one reading of imports done here. */
+    invoked: Set<string>
 }> {
     const all = [...parsed]
+    const invoked = new Set<string>()
     const handlers: HandlerFile[] = []
     for (const relative of own)
         handlers.push({
@@ -334,9 +337,10 @@ export async function withDependencies(
             resolve,
         ).values()) {
             if (!byPath.has(target)) await add(target)
+            if (byPath.has(target)) invoked.add(target)
         }
     }
-    return { sources: all, handlers, positions, trees }
+    return { sources: all, handlers, positions, trees, invoked }
 }
 
 /** `source` at `placed`, with what its own text says it paints and calls. */
