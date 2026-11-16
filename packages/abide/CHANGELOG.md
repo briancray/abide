@@ -1,5 +1,50 @@
 # @abide/abide
 
+## 0.140.0
+
+### Minor Changes
+
+- a1b5f34: `abide upgrade [--check] [--from <version>]` applies the migrations keyed to each release after `--from` to your app's own files and prints every change as a diff; `--check` prints it, writes nothing and fails where a file would change (RULEBOOK 38.198-38.201). The first migration, keyed to this release, removes from `AGENTS.md` every paragraph an earlier `abide scaffold` wrote or `ABIDE.md` holds word for word, drops a heading left empty, and puts the pointer to `ABIDE.md` under the title (38.202, 38.203). `abide check` now warns at each such paragraph (38.196, 38.197). A change to a `store`'s key or JSON, or to the shape of a request an `Rpc` sends, now reads the old form until the next minor release (8.43, 16.106).
+- a direct component call takes a bound prop as its Reactive — 38.195, 38.196 ([`1349b4f`](https://github.com/briancray/abide/commit/1349b4f2cf1a50dceb268008a2f054cc32e98cb2))
+- {:pending} arm on {#try} for a body's first load, and a warning on a {#for} subject falling back to [] — 32.16, 32.56, 32.96, 32.97 ([`ee08338`](https://github.com/briancray/abide/commit/ee083384cef2799cbb3a1656013ecf4d7ac9b3ef))
+- <window> and <document> listeners, and on<event> listener objects carry their options — 32.95, 39.21-39.23 ([`f15edbb`](https://github.com/briancray/abide/commit/f15edbb5d0f3a0f6370bfb68389a29af15480393))
+- 7648980: `database()`'s opener carries `changed`, a `Reactive<number>` that increases when another connection — another process, or another connection in this one — commits to the file. It asks `PRAGMA data_version` once a second, only while something reads it, and never opens the file itself. Follow it with `watch(() => { db.changed(); refresh() })` to reload every value something reads. RULEBOOK 47.22, 47.23, 47.24.
+- 82b2282: `assistant` runs in the run of a `global` value — a `GET` declaring `global` that streams one answer to every reader. No request owns that run, so its provider's signal aborts when the app stops (`stopSignal`) or the caller's `signal` does, not when the first reader leaves; it carries no asker's credentials, and asking it for tools (`mcp`) throws. Outside a request elsewhere the same holds, where it used to throw. A conversation run as the native app's window ends when the app stops too. RULEBOOK 44.57, 44.100, 44.101.
+- 5622f70: A test waits on `await settled()` from `@abide/harness/abide` (or `@abide/abide/test`) in place of `Bun.sleep` and a `flushSync()` loop: it resolves once no value is loading and no effect is pending, and past its `timeout` (2000 ms by default) it throws naming each value still loading, a handler's call by its method and address. Loads are kept for it only in a process that loaded `@abide/abide/test`. RULEBOOK 38.204, 38.205, 38.206.
+  
+  `atMost(work, { wakes: 9, nodesCreated: 0 })` from `@abide/harness/gate` asserts ceilings on a work record, failing at the caller's line with every field over its ceiling and what it reported, and on a ceiling over a field the record carries as absent — an app's test holds the most it allows rather than an exact count of abide's internals. RULEBOOK 43.40, 43.41, 43.42.
+  
+  The `@abide/harness/preload` DOM takes the `File` and `Blob` a test builds — `DataTransfer`, `<input type="file">`, `FileReader` and `URL.createObjectURL` accept them, and they still go over the wire as bun's — `new FormData(form)` carries the form's fields and files, and an `iframe` loads no page. RULEBOOK 43.28, 43.37, 43.38, 43.39.
+- 62850ba: A refusal at 408, 425 or 429 is transient as one at 500 and above is: a `Keyed` entry or an `Rpc` runs its body again on the next reach rather than holding it for its `ttl`, so a rate limit no longer has to be rewritten as a 503. A `Retry-After` on such an answer, in seconds or as an HTTP date, holds the refusal until the time it names, and crosses the wire again with the refusal wherever it is answered on. The outbox keeps a call answered 408, 425 or 429 and waits at least its `Retry-After` before sending it again, the offline worker keeps its copy under one, and `abide call` exits 8 for one. A handler body refusing synchronously no longer runs twice per call. RULEBOOK 15.19, 15.20, 15.23, 15.24, 45.26, 45.29, 46.4, 46.21.
+- 0feb662: - `<window>` and `<document>` take `on<event>` listeners at a file's top level: added on mount, removed when the component leaves, never run on the server (RULEBOOK 39.21-39.23)
+  - an `on<event>` value may be an `EventListenerObject` — `{ handleEvent, passive: false }` — whose `capture`, `once`, `passive` and `signal` are the listener's options, written or spread (32.95)
+  - `{#try}…{:pending}…{/try}` renders the pending arm while the body's first load is out, and never again on a reload (32.16, 32.96)
+  - `abide check` warns on a `{#for}` subject written as `x.ready() ? x : []`, `x || []` or `x ?? []` (32.97)
+  - a component called directly — `mount(Picker({ job }))` — takes a prop as a `Reactive`, typed and bound as a `bind:` would hand it over (38.207, 38.208)
+
+### Patch Changes
+
+- 86c7508: who asks of a pairing is built in one place ([`08fef67`](https://github.com/briancray/abide/commit/08fef67877d4e9c73f41b69b3769819543cce795))
+- 86c7508: what round 1 left — flagOf takes objects, one Asker, one secrets loop ([`1296961`](https://github.com/briancray/abide/commit/12969619a0509365dc18d00a53b1594523eb11ef))
+- 86c7508: a run of proven parts builds and writes as text alone ([`1a48453`](https://github.com/briancray/abide/commit/1a48453ee1c48768ce9679fa724b2cb090c47292))
+- 86c7508: a block keyword spelled outside ASCII is refused by 32.65, not misread ([`1a63dc1`](https://github.com/briancray/abide/commit/1a63dc11fd9185b2e0595b5d01ab26ec01330816))
+- 86c7508: one reader of a schema's JSON Schema, one of the app's identity ([`207d52b`](https://github.com/briancray/abide/commit/207d52bdd4eb3474428987cac7e504eeb04bf1df))
+- 86c7508: bridgeRelay imports the grant module rather than copying from it ([`49c1b94`](https://github.com/briancray/abide/commit/49c1b94759e6798302009bac415a89939801002b))
+- a tag stays held to its props as declared; only a .ts importer's direct call takes a Reactive — 38.196 ([`4e281cd`](https://github.com/briancray/abide/commit/4e281cd02f87e1572bec0ab93cfb3fc85acd7e5e))
+- 86c7508: the layout reads each file's imports once ([`6907a17`](https://github.com/briancray/abide/commit/6907a17f8a9b45a3c84bdf502189cddaf2e05bbf))
+- 86c7508: one spelling each of a pair setter, a BOOL getter and a script handler ([`78ffb81`](https://github.com/briancray/abide/commit/78ffb81ea4d80bb5d15549e085ae0a746ffb4f8b))
+- 86c7508: an inline component's prop narrows under {#if} ([`79f4e31`](https://github.com/briancray/abide/commit/79f4e31d151d71cc5a1643c8c6f6f3b953a4651c))
+- 86c7508: an online, offline or media change while a page hydrates waits for it to end ([`95c6ade`](https://github.com/briancray/abide/commit/95c6ade4ddd4d6b0cc53119a94da58df05a5ed7e))
+- 86c7508: pendingUpdate is a hydration stand-in, and report reuses log's and seededDocument's spellings ([`b0c73a1`](https://github.com/briancray/abide/commit/b0c73a1f7d5f6f4dfe8ab28bfc0fca247584c636))
+- 86c7508: a name test is IDENTIFIER_PART's, so `$busy()` defers and `{#ifé}` is refused ([`b88d48f`](https://github.com/briancray/abide/commit/b88d48fd60af6486ed6215a093ca9148a8dee8f3))
+- 86c7508: each secret of a rotated ABIDE_PRINCIPAL_SECRET is redacted ([`b8ec6be`](https://github.com/briancray/abide/commit/b8ec6be39ae6c6804e0b526dfbb6277796b5ad16))
+- 86c7508: one isPlainData, and poll's settle timer armed through armTimer ([`bdd4ae7`](https://github.com/briancray/abide/commit/bdd4ae73be30e53f10cb9d5307c3d148636a6ef6))
+- format the merged {#try} arm test ([`d834b30`](https://github.com/briancray/abide/commit/d834b3019ea3f699f825d50b73d2008a7b1285da))
+- 86c7508: what round 1 left — RegExp.escape, closeTagAt in componentsIn, stale componentGraph notes ([`e9cf571`](https://github.com/briancray/abide/commit/e9cf57116f71a57d88ad42da579a93b20c699559))
+- 86c7508: a route followed in place arrives through arriveAt ([`f96ba4e`](https://github.com/briancray/abide/commit/f96ba4e27b9d894099c52538ff6c208d5e70a4af))
+- Updated dependencies [86c7508]
+  - @abide/bridge@0.8.3
+
 ## 0.139.0
 
 ### Minor Changes
