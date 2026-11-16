@@ -1,8 +1,10 @@
 // 41.32 — A VALUE WHOSE SERVER ANSWER IS A STAND-IN ANSWERS AS THE SERVER DID WHILE THE PAGE
-// HYDRATES, and is written with the browser's answer once it has. `media`, `online` and `pendingUpdate` are the three:
-// the server cannot know the viewport, the connection or a staged update, so an `{#if}` choosing by either would pick
-// another arm than the server painted, and 41.24 rebuild it with a warning meant for a mismatch
-// nobody intended. Held, the painted arm is adopted, and the browser's answer swaps it as any update
+// HYDRATES, and is written with the browser's answer once it has. `media`, `online` and
+// `pendingUpdate` are the three: the server cannot know the viewport, the connection or a staged
+// update, so an `{#if}` choosing by any would pick another arm than the server painted, and 41.24
+// rebuild it with a warning meant for a mismatch nobody intended. An event that lands while the page
+// hydrates goes through the same hold (`standIn`'s write) — hydration awaits its route's modules, so
+// there is time for one. Held, the painted arm is adopted, and the browser's answer swaps it as any update
 // would — however many derived values stand between the value and the `{#if}`.
 //
 // WRITTEN AT BOTH ENDS rather than decided where the value is built: a derived body runs when it is
@@ -28,13 +30,19 @@ const HYDRATION: {
     waiting: [],
 }
 
-/** Files a value whose server answer is `server` and whose browser answer `browser` reads. */
+/**
+ * Files a value whose server answer is `server` and whose browser answer `browser` reads, and answers
+ * the write its events go through: held while a page hydrates, when `endHydration` writes `browser()`.
+ */
 export function standIn<Value>(
     value: { set(next: Value): unknown },
     server: Value,
     browser: () => Value,
-): void {
+): (next: Value) => void {
     HYDRATION.standIns.push({ value, server, browser } as StandIn)
+    return (next) => {
+        if (!HYDRATION.pending) value.set(next)
+    }
 }
 
 /** Whether a page is hydrating, so a stand-in built now answers the server's answer. */

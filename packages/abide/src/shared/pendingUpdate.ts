@@ -47,13 +47,13 @@ export const pendingUpdate: Reactive<StagedUpdate | undefined> =
         const value = ambient<StagedUpdate | undefined>(() =>
             isServer() || isHydrating() ? undefined : told,
         )
+        // 41.32 — a page hydrating keeps the server's answer until it has hydrated.
+        const write = standIn(value, undefined, () => told)
         window.addEventListener('abide:update', (event) => {
             const detail = (event as CustomEvent).detail
             told = detail === null ? undefined : new StagedUpdate(detail)
-            if (!isHydrating()) value.set(told)
+            write(told)
         })
-        // 41.32 — a page hydrating keeps the server's answer until it has hydrated.
-        standIn(value, undefined, () => told)
         windowHandler('abideUpdate')?.postMessage('ask')
         return value
     })()

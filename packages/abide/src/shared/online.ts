@@ -21,8 +21,8 @@ export const online = /* @__PURE__ */ (() => {
     const value = ambient<boolean>(
         () => isServer() || isHydrating() || navigator.onLine,
     )
-    standIn(value, true, () => navigator.onLine)
-    window.addEventListener('online', () => value.set(true))
-    window.addEventListener('offline', () => value.set(false))
+    const write = standIn(value, true, () => navigator.onLine)
+    window.addEventListener('online', () => write(true))
+    window.addEventListener('offline', () => write(false))
     return value
 })()

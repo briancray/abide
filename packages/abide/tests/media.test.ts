@@ -8,6 +8,7 @@ import { inReleasedScope } from '#server/requestScope.ts'
 import { flushSync } from '#shared'
 import { beginHydration, endHydration } from '#shared/hydrating.ts'
 import { media } from '#shared/media.ts'
+import { online } from '#shared/online.ts'
 
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage, renderPage } from './typed.ts'
@@ -140,5 +141,31 @@ const browser = reactive(() => !isServer())
         ).toEqual([true, true, true])
     } finally {
         delete (navigator as unknown as { onLine?: boolean }).onLine
+    }
+})
+
+// 41.32, 23.7 — AN EVENT WHILE A PAGE HYDRATES IS HELD: the value keeps the server's answer until
+// hydration ends, and the browser's answer is written then. THE REVERT: write `online`'s `offline`
+// listener straight to the value — it reads false mid-hydration, an arm the server never painted.
+test('an offline event while the page hydrates waits for hydration to end — 41.32, 23.7', () => {
+    Object.defineProperty(navigator, 'onLine', {
+        configurable: true,
+        get: () => false,
+    })
+    try {
+        beginHydration()
+        try {
+            window.dispatchEvent(new Event('offline'))
+            flushSync()
+            expect(online()).toBe(true)
+        } finally {
+            endHydration()
+        }
+        flushSync()
+        expect(online()).toBe(false)
+    } finally {
+        delete (navigator as unknown as { onLine?: boolean }).onLine
+        window.dispatchEvent(new Event('online'))
+        flushSync()
     }
 })

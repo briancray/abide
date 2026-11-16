@@ -29,8 +29,8 @@ export function media(query: string): Reactive<boolean> {
         const followed = ambient<boolean>(
             () => !isServer() && !isHydrating() && list.matches,
         )
-        standIn(followed, false, () => list.matches)
-        list.addEventListener('change', (event) => followed.set(event.matches))
+        const write = standIn(followed, false, () => list.matches)
+        list.addEventListener('change', (event) => write(event.matches))
         value = followed
     }
     queries.set(query, value)
