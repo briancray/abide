@@ -44,7 +44,7 @@ function ttl(): number {
  *
  * 36.5 — A LIST: the first secret signs, and every one verifies, so a secret can be rotated in.
  */
-function secrets(): string[] {
+export function principalSecrets(): string[] {
     const declared = config.peek()?.ABIDE_PRINCIPAL_SECRET
     if (typeof declared !== 'string') return []
     const listed: string[] = []
@@ -106,7 +106,7 @@ function unseal(sealed: string | null): Sealed | undefined {
             alphabet: 'base64url',
         })
         let verified = false
-        for (const secret of secrets()) {
+        for (const secret of principalSecrets()) {
             const expected = signature(secret, `${header}.${payload}`)
             if (
                 expected.length === given.length &&
@@ -131,7 +131,7 @@ function unseal(sealed: string | null): Sealed | undefined {
 }
 
 function writeSeal(claims: Record<string, unknown>, expires: number): void {
-    const [secret] = secrets()
+    const [secret] = principalSecrets()
     if (secret === undefined)
         throw new Error(
             'abide: principal.set needs ABIDE_PRINCIPAL_SECRET to seal the cookie with.',
@@ -267,7 +267,7 @@ export function signedInBy(request: Request): string {
  * signed out, one per browser, and never the same for two.
  */
 export function holderOf(caller: string, signedIn: string): string {
-    const [secret] = secrets()
+    const [secret] = principalSecrets()
     return signedIn === 'null' || secret === undefined
         ? `browser.${new Bun.CryptoHasher('sha256').update(caller).digest('base64url')}`
         : `account.${signatureText(secret, signedIn)}`

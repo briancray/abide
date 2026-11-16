@@ -14,10 +14,11 @@ import {
 import { declare } from '#shared/rpc.ts'
 
 import { fromNativeWindow } from './bridgeRelay.ts'
-import { config } from './config.ts'
+import { appIdentity, config } from './config.ts'
 import { configFields } from './configFields.ts'
 import { HOOKS, inOrder } from './hooks.ts'
 import { mountedOwn } from './mountHandlers.ts'
+import { principalSecrets } from './principal.ts'
 import { currentRequestScope } from './requestScope.ts'
 
 const REPORT_LOG = namedLogger('abide:report')
@@ -29,7 +30,11 @@ const SHORTEST_SECRET = 4
 function secrets(): [name: string, value: string][] {
     const resolved = (config.peek() ?? {}) as Record<string, unknown>
     const found: [string, string][] = []
-    const names = ['ABIDE_PRINCIPAL_SECRET']
+    // 36.5 — a list, rotated in: each of its secrets is one to take out.
+    for (const secret of principalSecrets())
+        if (secret.length >= SHORTEST_SECRET)
+            found.push(['ABIDE_PRINCIPAL_SECRET', secret])
+    const names: string[] = []
     for (const field of configFields({}))
         if (field.input === 'password') names.push(field.name)
     for (const name of names) {
@@ -120,17 +125,11 @@ async function deliver(given: Report): Promise<void> {
     if (failed) throw refuse(502, 'the report was not delivered')
 }
 
-function version(): string {
-    const value = (config.peek() as Record<string, unknown> | undefined)
-        ?.APP_VERSION
-    return typeof value === 'string' ? value : ''
-}
-
 /** What a draft made on a server holds beside what was written: the app's version, and where. */
 function serverContext(): { version: string; platform: string; route: string } {
     const asked = currentRequestScope()?.request
     return {
-        version: version(),
+        version: appIdentity().version,
         platform: asked?.headers.get('user-agent') ?? process.platform,
         route: asked === undefined ? '' : new URL(asked.url).pathname,
     }

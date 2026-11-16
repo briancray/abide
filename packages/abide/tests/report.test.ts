@@ -171,3 +171,19 @@ test('a draft made on a server holds its lines and sends in process — 48.3, 48
     await draft.send()
     expect(reports[0]?.markdown).toBe(draft.markdown())
 })
+
+// 36.5 — A ROTATED SECRET IS A LIST, and each of its secrets is taken out on its own. THE REVERT:
+// redact `ABIDE_PRINCIPAL_SECRET` as one value — a line holding just one of the two keeps it.
+test('each secret of a rotated ABIDE_PRINCIPAL_SECRET is taken out of a draft — 48.10, 36.5', async () => {
+    process.env.ABIDE_PRINCIPAL_SECRET = `rotated-in-5678,${SECRET}`
+    try {
+        await using app = await inMemoryApp(sync)
+        const traced = await failedSync(app)
+        const draft = await app.run(() => report({ trace: traced }))
+        expect((await draft.lines)[0]?.message).toBe(
+            'contact loaded with key [redacted ABIDE_PRINCIPAL_SECRET]',
+        )
+    } finally {
+        process.env.ABIDE_PRINCIPAL_SECRET = SECRET
+    }
+})
