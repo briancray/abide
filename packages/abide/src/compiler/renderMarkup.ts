@@ -96,6 +96,8 @@ const CLOSE_ANCHOR = JSON.stringify(anchorMarkup(REGION_CLOSE))
 // 32.16 — the catch is the `{#try}`'s arm 1, named so the client hydrates the catch the server
 // painted rather than walking it as the body.
 const CAUGHT_ANCHOR = JSON.stringify(anchorMarkup(armAnchor(1)))
+// 32.96 — and its `{:pending}` arm is arm 2.
+const PENDING_ANCHOR = JSON.stringify(anchorMarkup(armAnchor(2)))
 const ROW_ANCHOR = JSON.stringify(anchorMarkup(ROW_OPEN))
 const EMPTY_REGION = JSON.stringify(regionMarkup(''))
 
@@ -238,16 +240,35 @@ function renderPosition(
     // anywhere in the body replaces all of it rather than leaving the markup up to the hole that
     // raised it. The catch arm reads the failure under the name the author bound, and opens on the
     // anchor that tells the client which arm it is standing on.
+    //
+    // 32.96 — AND WHERE A READ IN THE BODY WAS STILL IN FLIGHT, ITS `{:pending}` ARM in its place,
+    // opening on the anchor that names it. Told by the count of reads an abort took (`slotValue`),
+    // which the region puts back as it ends, so a `{#try}` inside it keeps its own reads. The client
+    // writes no anchor of its own and renders no arm here (`TryRegion` fills its region), so this is
+    // the server's alone.
     if (node.kind === 'block' && node.block === 'try') {
         const body = renderMarkup(at.inner[0] as Cursor, lowering, lane)
         const rescue = renderMarkup(at.inner[1] as Cursor, lowering, lane)
         const bound = node.error === '' ? '__failure' : node.error
+        const waiting = at.inner[2] as Cursor | undefined
+        const counted = lane === SERVER_LANE
+        const reads = counted
+            ? `const __reads = ${lowering.use('abortedReads')}()\n        `
+            : ''
+        const settled = counted
+            ? ` finally {\n            ${lowering.use('abortedSince')}(__reads)\n        }`
+            : ''
+        const returned =
+            waiting !== undefined && counted
+                ? `const __body = ${OPEN_ANCHOR} + ${body}
+            return ${lowering.use('abortedSince')}(__reads) ? ${PENDING_ANCHOR} + ${scoped(lane.declarations(waiting, lowering), renderMarkup(waiting, lowering, lane))} : __body`
+                : `return ${OPEN_ANCHOR} + ${body}`
         return `(() => {
-        try {
-            ${lane.declarations(at.inner[0] as Cursor, lowering)}return ${OPEN_ANCHOR} + ${body}
+        ${reads}try {
+            ${lane.declarations(at.inner[0] as Cursor, lowering)}${returned}
         } catch (__thrown) {
             return ${CAUGHT_ANCHOR} + ((${bound}) => ${scoped(lane.declarations(at.inner[1] as Cursor, lowering), rescue)})(__thrown)
-        }
+        }${settled}
     })() + ${CLOSE_ANCHOR}`
     }
 

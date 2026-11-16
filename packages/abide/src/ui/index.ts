@@ -49,6 +49,8 @@ export { invokeLanded } from './invokeLanded.ts'
 // 39.1 — a component's `<head>`, joined to the routed level mounting it.
 export { contributeHead } from './Level.ts'
 export { listAt, updateList } from './List.ts'
+// 32.95, 39.23 — an `on<event>` value that may carry its options, and a target's that leaves with it.
+export { listen } from './listen.ts'
 export { warnMismatch } from './Mismatch.ts'
 export { markupNodes, namespaceUnder } from './parseMarkup.ts'
 export { fillEmpty, fillRegion, isEmptyRegion, type Region } from './regions.ts'

@@ -10,6 +10,7 @@ export {
     boundProp,
     boundValue,
     groupHolds,
+    passedProp,
     selectedMarkup,
 } from './boundValue.ts'
 // 32.1 — the escaping.

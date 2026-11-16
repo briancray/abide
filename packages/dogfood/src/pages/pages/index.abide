@@ -15,6 +15,9 @@ import transitionFrameSource from 'crm/src/companies/lib/TransitionFrame.abide' 
 import matcherTestSource from 'crm/src/companies/Matcher.test.ts' with { type: 'text' }
 import slugSource from 'crm/src/companies/SLUG.param.ts' with { type: 'text' }
 import viewTransitionTestSource from 'crm/src/companies/ViewTransition.test.ts' with { type: 'text' }
+import QuickFind from 'crm/src/contacts/lib/QuickFind.abide'
+import quickFindSource from 'crm/src/contacts/lib/QuickFind.abide' with { type: 'text' }
+import quickFindTestSource from 'crm/src/contacts/lib/QuickFind.test.ts' with { type: 'text' }
 
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
@@ -163,6 +166,28 @@ import Section from '#src/lib/Section.abide'
             <code>&lt;link&gt;</code> by its <code>rel</code> and <code>href</code> each have a key,
             and the deepest contribution for a key wins. One with no key is appended. Leaving a page puts its layout's
             title back.</p>
+    </Section>
+
+    <Section title="A shortcut listens on the window for as long as its component is there">
+        <Example
+            id="window-listener"
+            app="crm"
+            title="`<window onkeydown>` — a key that finds a contact from anywhere on the page"
+            summary="A search box the contacts list puts above itself. Press / anywhere on the page."
+            files={{
+                'src/contacts/lib/QuickFind.abide': quickFindSource,
+                'src/contacts/lib/QuickFind.test.ts': quickFindTestSource,
+            }}
+        >
+            <QuickFind />
+        </Example>
+
+        <p><code>&lt;window&gt;</code> and <code>&lt;document&gt;</code> sit at the top level of a
+            file, as a <code>&lt;head&gt;</code> does, and hold nothing but <code>on&lt;event&gt;</code>
+            listeners. Each is added when the component mounts and removed when it leaves, and none
+            runs on the server, so there is no <code>isServer()</code> to ask and no
+            <code>removeEventListener</code> to write. The test presses <code>/</code> again once the
+            component is gone, and nothing takes it.</p>
     </Section>
 
     <Registry />

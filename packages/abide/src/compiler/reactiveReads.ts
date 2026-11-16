@@ -97,6 +97,7 @@ export async function reactiveReads(
                     source.text,
                     source.file,
                     answers[at] ?? UNCHECKED,
+                    warnings,
                 ),
             )
     }

@@ -2,6 +2,7 @@ import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Finding } from './Diagnostics.ts'
+import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 import { hookCalls } from './hookCalls.ts'
 import {
     CHECKED_CONFIG,
@@ -55,9 +56,18 @@ export const COMPONENT_STAND_IN = '__component'
 const COMPONENT_RECORD = '__record'
 
 /**
+ * 38.208 — what a `.ts` file importing a `.abide` calls: the component, with each prop as its value
+ * or a `Reactive` of it, the write path a `bind:` hands over (32.6). A tag calls the default, which
+ * takes the values alone — its own values reach it already read (`__prop`, `__bound`) — so what a
+ * tag is held to, hovered and completed by stays the `props` call as written. A union with the plain
+ * value keeps every position a read (31.3).
+ */
+export const DIRECT_CALL = '__directly'
+
+/**
  * The component a checked module exports as its default: called with the record its tag passes
  * (`projectShadow`'s `invocation`), and answering the `Component` a server module's call of it
- * renders (34.16). What its blocks export by name is beside it.
+ * renders (34.16). What its blocks export by name is beside it, and so is `DIRECT_CALL`.
  *
  * `props` is spelled ONCE, between `head` and `tail`, so the one spelling is the one a tag's keys are
  * contextually typed by, and a caller can copy it from the author's call (38.116).
@@ -73,6 +83,9 @@ type ${COMPONENT_RECORD}<Props> = {} extends Props ? [record?: Props] : [record:
 declare const ${COMPONENT_STAND_IN}: ${parameters}(...record: ${COMPONENT_RECORD}<`,
         tail: `>) => import('${SERVER_SPECIFIER}').Component
 export default ${COMPONENT_STAND_IN}
+type __bindable<Props> = { [Key in keyof Props]: [Props[Key]] extends [never] ? never : Props[Key] | import(${JSON.stringify(FRAMEWORK_SOURCES.reactive)}).Reactive<Props[Key], Props[Key], any, any> }
+type __directCall<Call> = Call extends (...record: infer Record) => infer Answer ? (...record: { [Index in keyof Record]: __bindable<Record[Index]> }) => Answer : never
+export declare const ${DIRECT_CALL}: __directCall<typeof ${COMPONENT_STAND_IN}>
 `,
     }
 }

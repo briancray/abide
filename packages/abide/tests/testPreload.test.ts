@@ -176,6 +176,56 @@ test('the getter source moves the mounted label', async () => {
     )
 }, 90_000)
 
+// 38.207 — A PROP HANDED AS A `Reactive` IS BOUND TO IT, as a tag's `bind:` would be (32.6): the
+// component reads it live and its write by name reaches the caller's value. THE REVERT: hand every
+// prop to `boundModule`'s accessors as `() => value`; a prop the component only reads is then the
+// `Reactive` itself, which has no `toUpperCase` — exit 1, `0 pass`. (One it writes adopts the
+// `Reactive` either way, through its cell — 11.12.)
+test('a prop handed to a mounted component as a Reactive is bound to it — 38.207', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'bound-prop-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/lib/Echo.abide': `<script>
+import { props } from '@abide/abide'
+
+const { label, note } = props<{ label: string; note: string }>()
+</script>
+
+<p id="label">{label} {note.toUpperCase()}</p>
+<button id="more" onclick={() => (label = label + '!')}>more</button>`,
+        'src/tests/Echo.test.ts': `import { expect, test } from 'bun:test'
+import { flushSync, reactive } from '@abide/abide'
+import { mount } from '@abide/harness/abide'
+import Echo from '../lib/Echo.abide'
+
+test('the caller reads what the component wrote, and the component what the caller set', async () => {
+    const label = reactive('one')
+    const note = reactive('a')
+    using _echo = await mount(Echo({ label, note }))
+    expect(document.querySelector('#label')?.textContent).toBe('one A')
+    document.querySelector<HTMLButtonElement>('#more')?.click()
+    flushSync()
+    expect(label()).toBe('one!')
+    label.set('two')
+    note.set('b')
+    flushSync()
+    expect(document.querySelector('#label')?.textContent).toBe('two B')
+})
+`,
+    })
+    const ran = await spawned(['bun', 'test', './src/tests/Echo.test.ts'], {
+        cwd,
+    })
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 12.5, 38.119 — THE SERVER PASS'S WATCH STOPS WITH IT. `mount` renders as a request does, and a
 // request's scope is torn down once its document is written: the watch the render opened runs its
 // disposer, and the one the hydration opened is the only one left live — until `stop` ends it too.

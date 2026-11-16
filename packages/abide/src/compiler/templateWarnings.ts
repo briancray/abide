@@ -35,20 +35,37 @@ const STATEFUL = new Set([
 ])
 
 /**
- * A template's warnings: each unkeyed `{#for}` over a changing subject whose body holds state.
+ * A template's warnings: each unkeyed `{#for}` over a changing subject whose body holds state, and
+ * each `{#for}` subject that falls back to an empty list where nothing has landed.
  *
- * 32.14 — see `STATEFUL`.
+ * 32.14 — see `STATEFUL`. 32.97 — see `fallsBackEmpty`; `others` are the checker's warnings, so a
+ * `??` 14.17 already warns on is not warned on twice.
  */
 export function templateWarnings(
     path: string,
     text: string,
     file: AbideFile,
     answer: CheckerAnswer,
+    others: readonly Diagnosis[] = [],
 ): Diagnosis[] {
     const lowering = new Lowering(file, answer)
     const warnings: Diagnosis[] = []
     const check = (body: Body): void => {
-        for (const node of body.children)
+        for (const node of body.children) {
+            const fallback =
+                node.kind === 'block' && node.block === 'for'
+                    ? fallsBackEmpty(node, lowering)
+                    : undefined
+            if (fallback !== undefined) {
+                const at = diagnosisAt(
+                    path,
+                    text,
+                    file.origins.holders.get(node) ?? 0,
+                    'warning',
+                    `abide: \`${(node as ForBlock).subject.trim()}\` falls back to an empty list, and a {#for} over a subject that has not landed already iterates zero times. Write {#for ${(node as ForBlock).item} of ${fallback}}. RULEBOOK 32.22, 32.97.`,
+                )
+                if (!citedAt(others, at, '14.17')) warnings.push(at)
+            }
             if (
                 node.kind === 'block' &&
                 node.block === 'for' &&
@@ -66,11 +83,55 @@ export function templateWarnings(
                         `abide: this {#for} has no key and its body holds state, so a reorder hands one row's state to another item. Name what tells two items apart with \`by\`: {#for ${node.item} of ${node.subject} by …}, or \`by\` on the value it walks. RULEBOOK 32.14, 32.32.`,
                     ),
                 )
+        }
     }
     // Not the `<head>`: it is applied as markup each time it changes (39.1), so no row in it keeps
     // state for a reorder to hand to another item.
     visitBodies(fileBody(file), undefined, check)
     return warnings
+}
+
+// `x.ready() ? x : []` or `ready(x) ? x : []`, and `x || []` or `x ?? []` — what 32.22 already is.
+const READY_OR_EMPTY =
+    /^(?:([\w$.]+)\.ready\(\)|ready\(([\w$.]+)\))\s*\?\s*([\w$.]+)\s*:\s*\[\s*\]$/
+const OR_EMPTY = /^([\w$.]+)\s*(?:\|\||\?\?)\s*\[\s*\]$/
+
+/**
+ * The subject a `{#for}` means where it falls back to an empty list over a reactive read, or
+ * `undefined` where it does not.
+ *
+ * 32.97 — a subject that has not landed already iterates zero times (32.22), so the fallback is the
+ * subject itself, written twice.
+ */
+function fallsBackEmpty(
+    node: ForBlock,
+    lowering: Lowering,
+): string | undefined {
+    const subject = node.subject.trim()
+    const ready = READY_OR_EMPTY.exec(subject)
+    if (ready !== null) {
+        const read = ready[1] ?? ready[2]
+        return read === ready[3] ? read : undefined
+    }
+    const or = OR_EMPTY.exec(subject)
+    return or !== null && lowering.holdsRead(node) ? or[1] : undefined
+}
+
+/** Whether a diagnosis in `others` stands where `at` does and cites `clause`. */
+function citedAt(
+    others: readonly Diagnosis[],
+    at: Diagnosis,
+    clause: string,
+): boolean {
+    for (const other of others)
+        if (
+            other.path === at.path &&
+            other.line === at.line &&
+            other.column === at.column &&
+            other.message.includes(`RULEBOOK ${clause}`)
+        )
+            return true
+    return false
 }
 
 function holdsState(node: TemplateNode): boolean {

@@ -649,7 +649,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
 | `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31, 32.70 |
 | `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37, 32.70, 32.71 |
-| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75 |
+| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75, 32.95 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3, 32.71 |
 | `bind:value` | Two-way bind on an element. | 5.16, 32.5, 32.58, 32.59, 32.60, 32.61, 32.62, 32.72, 32.74, 32.75, 32.76, 32.78 |
 | `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18, 32.76 |
@@ -676,8 +676,8 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 12.18, 32.12, 32.21, 32.63, 32.64, 32.65, 32.70, 41.24 |
-| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 41.8, 41.14, 41.15 |
-| `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64 |
+| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 41.8, 41.14, 41.15 |
+| `{#try}` | `{:pending}`, `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64, 32.96 |
 
 ### Components
 
@@ -715,6 +715,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Path | Meaning | Rules |
 | --- | --- | --- |
 | `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16, 39.17, 39.20 |
+| `<window>` · `<document>` | A page's, layout's or component's listeners on the window or the document. | 39.21, 39.22, 39.23 |
 | `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10, 39.18, 39.19 |
 | `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3, 30.34, 30.36 |
 | `[[name]]` | An optional segment. | 23.5, 30.4, 30.34, 30.36 |
@@ -726,7 +727,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4 |
+| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4, 38.208 |
 | `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31, 41.34, 41.35 |
 
 ## Sinks
@@ -862,7 +863,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134 |
+| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134, 38.207 |
 | `Mounted` | `{ stop(): void; [Symbol.dispose](): void }` | A component `mount` hydrated, until it is stopped. | 38.119 |
 | `settled` | `(options?: { timeout?: number }) => Promise<void>` | A wait until nothing a test started is still loading or pending. | 38.204, 38.205, 38.206 |
 

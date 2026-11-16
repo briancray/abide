@@ -200,6 +200,22 @@ const unsure = reactive(() => maybe ?? 'nobody')
 {#for row of keyed}<input value={row.id}/>{/for}
 {#for row of decoy}<input value={row.id}/>{/for}`
 
+// 32.97 — A `{#for}` SUBJECT FALLING BACK TO AN EMPTY LIST over a read: the `ready()` test, `||` and
+// `??` over a value that may be absent. `rows ?? []` is 14.17's, and `constant || []` reads nothing.
+const FALLBACK = `<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 1 }])
+let maybe = reactive<{ id: number }[] | undefined>(undefined)
+const constant = [{ id: 2 }]
+</script>
+
+{#for row of rows.ready() ? rows : []}<b>{row.id}</b>{/for}
+{#for row of rows || []}<b>{row.id}</b>{/for}
+{#for row of rows ?? []}<b>{row.id}</b>{/for}
+{#for row of maybe ?? []}<b>{row.id}</b>{/for}
+{#for row of constant || []}<b>{row.id}</b>{/for}`
+
 // 14.19 — each read below would be warned on, and the line above it silences the clause it names.
 // `misnamed` is the near miss: its directive names 14.14, and the warning it earns is 14.16.
 const IGNORED = `<script>
@@ -367,6 +383,28 @@ const retries: number = config().RETRIES
 const wrong: string = config().RETRIES
 </script>`
 
+// 38.208 — A DIRECT CALL TAKES A PROP AS ITS VALUE OR AS A `Reactive` OF IT, the write path a
+// `bind:` hands over (32.6), and nothing else: a `Reactive` of another type is still refused.
+const DIRECT = `import { reactive } from '@abide/abide'
+import Held from './Held.abide'
+
+export const bound = Held({ value: reactive('a') })
+export const plain = Held({ value: 'a' })
+export const wrong = Held({ value: reactive(1) })
+export const wrongPlain = Held({ value: 1 })
+`
+
+// 32.95, 39.21 — A LISTENER IS HANDED ITS TARGET'S OWN EVENT, as a function or as an object carrying
+// its options: `event.key` is a storage event's, which only a window dispatches, and `event.deltaY` a
+// wheel event's.
+const LISTENED = `<script>
+let keys = 0
+</script>
+
+<window onstorage={(event) => (keys = event.key?.length ?? 0)}/>
+<document onvisibilitychange={() => keys++}/>
+<div onwheel={{ handleEvent: (event) => event.deltaY, passive: false }}>{keys}</div>`
+
 let app = ''
 let found: Diagnosis[] = []
 
@@ -420,6 +458,9 @@ const { start = 0 } = props<{ start?: number }>()
         'lib/notes.ts':
             "import notes from '#src/lib/notes.md' with { type: 'text' }\n\nexport const length: number = notes.length\n",
         'lib/sum.ts': "export const sum: number = 'x'\n",
+        'lib/direct.ts': DIRECT,
+        'listened/index.abide': LISTENED,
+        'fallback/index.abide': FALLBACK,
     })
     found = await checkApp(app)
 }, 60_000)
@@ -712,6 +753,23 @@ test('a read given an argument is reported once for the whole app — 31.11', ()
     ).toBe(1)
 })
 
+// THE REVERT: drop the object member of `__Listener`; the wheel listener reports TS2322. Type
+// `__onTarget` by `HTMLElementEventMap`; `event.key` is no member of the `Event` it falls back to.
+test('a listener is typed by its target, as a function or an object — 32.95, 39.21', () => {
+    expect(inFile('listened/index.abide')).toEqual([])
+})
+
+// THE REVERT: re-export the default in place of `__directly` in `ShadowHost.standIn`;
+// the bound call reports TS2322 too (3 against 2).
+test('a direct call takes a prop as its value or a Reactive of it — 38.208', () => {
+    expect(
+        inFile('lib/direct.ts').map(({ line, code }) => ({ line, code })),
+    ).toEqual([
+        { line: 6, code: 2322 },
+        { line: 7, code: 2322 },
+    ])
+})
+
 test('a .ts file beside the pages is checked as it stands — 38.3', () => {
     expect(
         inFile('lib/sum.ts').map(({ line, column, code }) => ({
@@ -780,6 +838,18 @@ test('an unkeyed loop over a body holding state warns at its subject — 32.14',
         place(WARNED, 'rows}<input'),
         place(WARNED, 'decoy}<input'),
     ])
+})
+
+// THE REVERTS: answer `undefined` from `fallsBackEmpty` for every `||` and `??`; the second and
+// fourth loops go unwarned (1 against 3). Drop `citedAt`; `rows ?? []` is warned under both clauses
+// (4 against 3).
+test('a {#for} subject falling back to an empty list warns, once — 32.97', () => {
+    const warned = (clause: string) =>
+        inFile('fallback/index.abide')
+            .filter((diagnosis) => diagnosis.message.includes(clause))
+            .map(({ line }) => line)
+    expect(warned('32.97')).toEqual([9, 10, 12])
+    expect(warned('14.17')).toEqual([11])
 })
 
 // 33.11 — AN INDEX SIGNATURE BESIDE TYPED PROPS LEAVES THEM TYPED. `size` indexes a record by its

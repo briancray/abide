@@ -485,7 +485,11 @@ function project(file: AbideFile): Projection {
             // with `void`, as a `catch` binding is never reported unused. An arm that names none binds
             // nothing.
             if (node.block === 'try') {
-                const [tried, caught] = node.branches as [Branch, Branch]
+                const [tried, caught, pending] = node.branches as [
+                    Branch,
+                    Branch,
+                    Branch | undefined,
+                ]
                 text += '{\n'
                 inBody(tried)
                 text +=
@@ -494,6 +498,11 @@ function project(file: AbideFile): Projection {
                         : `}\n{ const ${node.error}: any = undefined; void ${node.error}\n`
                 inBody(caught)
                 text += '}\n'
+                if (pending !== undefined) {
+                    text += '{\n'
+                    inBody(pending)
+                    text += '}\n'
+                }
                 continue
             }
             // AN `{#if}` IS PROJECTED AS THE `if` IT IS, so an arm is checked under what its condition
@@ -570,6 +579,18 @@ function project(file: AbideFile): Projection {
     // 35.17 — the document's attributes are read as any element's are.
     if (file.document !== undefined)
         walk([file.document.html, file.document.body])
+    // 39.21 — a `<window>`'s or a `<document>`'s listener is handed that target's own event.
+    for (const target of file.listeners)
+        for (const attribute of target.attributes)
+            slots.set(
+                attribute,
+                expression(
+                    attribute.value,
+                    file.origins.holders.get(attribute),
+                    'listener',
+                    `${ON_TARGET}(${target.lowerTag === 'window' ? WINDOW_EVENTS : DOCUMENT_EVENTS}, ${JSON.stringify(attribute.lowerName.slice(2))}, `,
+                ),
+            )
     walk(file.template)
     if (subjects > 0) text += ROWS_OF_DECLARATION
     if (inlineProps) text += INLINE_PROPS_IMPORT
@@ -678,6 +699,9 @@ import { props as ${INLINE_PROPS} } from ${JSON.stringify(FRAMEWORK_SOURCES.prop
  */
 export const NO_PROPS = '{ [key: string]: never }'
 const ON = '__on'
+const ON_TARGET = '__onTarget'
+const WINDOW_EVENTS = '__windowEvents'
+const DOCUMENT_EVENTS = '__documentEvents'
 const ANY = '__any'
 /** 31.3 — what a `bind:` operand is wrapped in on an element and on a component. */
 const BIND = '__bind'
@@ -699,7 +723,11 @@ const ROUTE_PARAMS = `import(${JSON.stringify(FRAMEWORK_SOURCES.url)}).RoutePara
  * other file in the project would find them.
  */
 const POSITION_DECLARATIONS = `
-declare function ${ON}<Name extends string>(name: Name, handler: ((event: Name extends keyof HTMLElementEventMap ? HTMLElementEventMap[Name] : Event) => unknown) | null | undefined | false): void
+type __Listener<Event> = ((event: Event) => unknown) | { handleEvent(event: Event): unknown; capture?: boolean; once?: boolean; passive?: boolean; signal?: AbortSignal } | null | undefined | false
+declare function ${ON}<Name extends string>(name: Name, handler: __Listener<Name extends keyof HTMLElementEventMap ? HTMLElementEventMap[Name] : Event>): void
+declare function ${ON_TARGET}<Events, Name extends string>(events: Events, name: Name, handler: __Listener<Name extends keyof Events ? Events[Name] : Event>): void
+declare const ${WINDOW_EVENTS}: WindowEventMap
+declare const ${DOCUMENT_EVENTS}: DocumentEventMap
 declare function ${ANY}(value: any): void
 declare function ${PROP}<Value>(value: Value): Value
 declare function ${BIND}<Value>(value: { get(): Value; set(value: Value): unknown }): void

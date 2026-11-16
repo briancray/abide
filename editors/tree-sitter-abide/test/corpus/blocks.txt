@@ -114,6 +114,37 @@ Try, catch and finally
       (block_keyword))))
 
 ================================================================================
+A try block with a pending arm
+================================================================================
+
+{#try}<p>{rate}</p>{:pending}<p>loading</p>{/try}
+
+--------------------------------------------------------------------------------
+
+(document
+  (try_block
+    (try_start
+      (block_keyword))
+    (element
+      (start_tag
+        (tag_name))
+      (expression
+        (code))
+      (end_tag
+        (tag_name)))
+    (pending_clause
+      (pending_start
+        (block_keyword))
+      (element
+        (start_tag
+          (tag_name))
+        (text)
+        (end_tag
+          (tag_name))))
+    (try_end
+      (block_keyword))))
+
+================================================================================
 An inline component
 ================================================================================
 

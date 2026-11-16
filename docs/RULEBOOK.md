@@ -2305,8 +2305,8 @@ value refused a property that type does not declare, on the `.abide` line.
 
 32.3 A `name={expr}` attribute or property expression MUST be reactive, whole or interpolated.
 
-32.4 `on<event>` MUST bind a native listener on an element, and MUST be an ordinary prop on a
-component.
+32.4 `on<event>` MUST bind a native listener on an element, a function or an `EventListenerObject`
+alike, and MUST be an ordinary prop on a component.
 
 32.5 `bind:value` MUST read the property and write it back on input or change, through the member
 path where its operand is a path into a value (31.8), a computed step's key read at each write.
@@ -2337,8 +2337,9 @@ function MUST warn in development.
 32.15 `{#for}` over an async iterable that is not also iterable MUST render each item as it
 arrives, and MUST append rather than reconcile.
 
-32.16 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
-body.
+32.16 `{#try}` MUST be a render-time boundary over a region: a failure MUST replace the whole body
+with its `{:catch}` arm, and its first load (32.96) MUST replace the whole body with its `{:pending}`
+arm where it has one.
 
 32.17 A capitalized tag `<Name/>` MUST be a component invocation.
 
@@ -2457,8 +2458,8 @@ component's `props` call declares for that prop, and MUST report a mismatch on t
 32.55 A `{#component Name(pattern)}` at the template's top level whose name an import, a `<script>`
 declaration or a `<script module>` declaration of its file also binds MUST be a build error.
 
-32.56 A `{:catch}` or a `{:finally}` anywhere but directly inside a `{#try}` MUST be a build
-error.
+32.56 A `{:pending}`, a `{:catch}` or a `{:finally}` anywhere but directly inside a `{#try}` MUST be
+a build error.
 
 32.57 An `await` in a template expression — a slot, an attribute value, a listener, a `bind:`
 operand, a `{#if}` condition, a `{#for}` subject or key, or a value handed to a component — outside
@@ -2604,6 +2605,17 @@ MUST create no node but those its markup parses to, whatever was parsed before i
 
 32.94 A `style:prop` whose value is `null`, `undefined` or empty up to its first `;` MUST declare
 nothing, whether the server writes it or the browser does.
+
+32.95 An `on<event>` listener that is an `EventListenerObject`, written or spread, MUST be added with
+its `capture`, `once`, `passive` and `signal` as the listener's options.
+
+32.96 A `{#try}`'s first load MUST last from where its region is first rendered until its body first
+renders with no read in it, outside any `{#try}` it holds, aborted by a `NotLanded` (2.12), and MUST
+NOT begin again.
+
+32.97 The compiler MUST warn on a `{#for}` subject that falls back to an empty list where a reactive
+read in it has not landed — `x.ready() ? x : []`, `x || []`, or `x ?? []` where 14.17 does not warn —
+naming 32.22.
 
 # 33. Props
 
@@ -3413,8 +3425,8 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
 
 38.134 A prop a test hands a component it binds for `mount` as an own getter MUST be read through
-that getter on each read the component makes, and any other prop MUST be the value it held when the
-component was bound.
+that getter on each read the component makes, and any other prop but a `Reactive` (38.207) MUST be
+the value it held when the component was bound.
 
 38.135 `abide routes` MUST print beside each handler every rung its declaration's `middleware`
 names, as written — an entry by the function it calls or the name it refers to, a spread by what it
@@ -3686,6 +3698,12 @@ method and address of the handler a call reached it through, where one did.
 38.206 A value that goes loading MUST NOT be kept for `settled` in a process that has not loaded
 `@abide/abide/test`.
 
+38.207 A prop a test hands a component it binds for `mount` as a `Reactive` MUST reach the component
+as 32.6 has a `bind:` hand it over.
+
+38.208 `abide check` MUST hold a prop a `.ts` file calls a `.abide` file's component with to the
+type its `props` call declares for it, or to a `Reactive` holding and taking that type.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -3748,6 +3766,16 @@ transition without them.
 (39.13) or as the head is reconciled — MUST reach `onError` and warn as 12.6 has an `Effect`'s
 throw, once, MUST stand as what it last read until the page, layout or component that made it
 leaves, and MUST NOT keep the rest of the head from being reconciled.
+
+39.21 A `<window>` or a `<document>` MUST stand at the top level of a `.abide` file as 39.2 has a
+`<head>` stand, and MUST render nothing on the server or in a browser.
+
+39.22 A `<window>` or a `<document>` holding anything but `on<event>={listener}` attributes MUST be
+a build error.
+
+39.23 In a browser, each `on<event>` on a `<window>` or a `<document>` MUST be added to the window or
+the document as 32.4 and 32.95 add one to an element when the page, layout or component it is
+written in mounts, and MUST be removed when that page, layout or component leaves.
 
 # 40. Documentation
 

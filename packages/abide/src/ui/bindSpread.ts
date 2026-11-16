@@ -1,9 +1,10 @@
 // 32.11 — AN ELEMENT'S SPREAD, KEPT WRITTEN. The server wrote what the value carried at render; a
 // watch keeps writing it, removing an attribute the value no longer carries, and an `on<event>`
-// function becomes the element's listener, replaced when the value hands over another.
+// listener becomes the element's, with its options (32.4), replaced when the value hands over another.
 
 import { spreadEntries } from '#shared/spread.ts'
 
+import { listen } from './listen.ts'
 import type { Scope } from './Scope.ts'
 import { writeAttribute } from './setAttribute.ts'
 
@@ -31,15 +32,27 @@ export function bindSpread(
             seen.add(event)
             const standing = listeners.get(event)
             if (standing === listener) continue
-            if (standing !== undefined)
-                element.removeEventListener(event, standing)
-            element.addEventListener(event, listener)
+            if (standing !== undefined) unlisten(element, event, standing)
+            listen(element, event, listener)
             listeners.set(event, listener)
         }
         for (const [event, listener] of listeners)
             if (!seen.has(event)) {
-                element.removeEventListener(event, listener)
+                unlisten(element, event, listener)
                 listeners.delete(event)
             }
     })
+}
+
+/** Removes what `listen` added, under the options it was added with (32.4). */
+function unlisten(
+    element: Element,
+    event: string,
+    listener: EventListener,
+): void {
+    element.removeEventListener(
+        event,
+        listener,
+        listener as EventListenerOptions,
+    )
 }

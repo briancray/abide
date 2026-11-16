@@ -8,8 +8,9 @@
 //
 // ON AN ELEMENT, attributes: what the server writes into the tag, and what the client keeps writing.
 // A key the element names explicitly is the explicit attribute's (33.12's rule, held for elements
-// too); a value is written as a named attribute's is (32.37); a function is a listener where the
-// key is `on<event>`, and nothing under an `on<event>` key, nor any function, is ever markup.
+// too); a value is written as a named attribute's is (32.37); a function or an `EventListenerObject`
+// is a listener where the key is `on<event>`, and nothing under an `on<event>` key, nor any
+// function, is ever markup.
 
 import { attributeText, writtenMarkup } from './attributeText.ts'
 import { isEventName } from './isEventName.ts'
@@ -36,7 +37,7 @@ const ATTRIBUTE_NAME = /^[^\s"'>/=]+$/
  * the binding.
  *
  * THE LISTENERS COME OUT OF THE SAME WALK, as `[event, listener]` pushed onto `listeners`: a
- * function under `on<event>` that the element does not name explicitly. The server has nowhere to
+ * listener under `on<event>` that the element does not name explicitly. The server has nowhere to
  * put one and hands no array.
  */
 export function spreadEntries(
@@ -52,7 +53,7 @@ export function spreadEntries(
         // 32.4 — AN `on<event>` NAME IS NEVER MARKUP, whatever it holds: a string under `onclick`
         // written as an attribute is an inline handler, script compiled from data.
         if (isEventName(lower)) {
-            if (listeners !== null && typeof member === 'function')
+            if (listeners !== null && isListener(member))
                 listeners.push([lower.slice(2), member as EventListener])
             continue
         }
@@ -63,6 +64,16 @@ export function spreadEntries(
         if (text !== null) entries.push([name, text])
     }
     return entries
+}
+
+/** 32.4, 32.95 — a function, or an `EventListenerObject`: what an `on<event>` takes as a listener. */
+function isListener(member: unknown): boolean {
+    return (
+        typeof member === 'function' ||
+        (member !== null &&
+            typeof member === 'object' &&
+            typeof (member as EventListenerObject).handleEvent === 'function')
+    )
 }
 
 /**

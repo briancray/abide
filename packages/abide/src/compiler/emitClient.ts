@@ -1,3 +1,5 @@
+import { SyntaxKind } from 'typescript/unstable/ast'
+
 import { anchorMarkup } from '#shared/anchorMarkup.ts'
 import {
     RAW_CLOSE,
@@ -73,6 +75,7 @@ import type {
     Setup,
     TemplateNode,
 } from './TemplateNode.ts'
+import { type Token, tokenize } from './tokenize.ts'
 
 // The client half of one `.abide`. WHERE A NODE STANDS IS DECIDED ONCE, by `placeTemplate`, and the
 // server's markup is rendered from the same positions this module walks, builds and fills from. So
@@ -191,6 +194,19 @@ export function emitClient(
             for (const unit of units.attributes) lines.push(unit)
             for (const unit of units.elements) lines.push(unit)
         }
+    // 39.23 — A `<window>`'S OR A `<document>`'S LISTENERS, added at mount and removed when the
+    // component's scope stops. Nothing to find and nothing the server wrote, so no walk.
+    for (const target of file.listeners)
+        for (const attribute of target.attributes)
+            lines.push(
+                listenerCall(
+                    target.lowerTag,
+                    attribute.lowerName.slice(2),
+                    attribute,
+                    lowering,
+                    true,
+                ),
+            )
 
     // 34.2 — A `<script module>` IS PROCESS-WIDE IN A BROWSER, which is MODULE SCOPE: it is
     // evaluated once when this module is first imported rather than once per `mount`, so a second
@@ -768,7 +784,7 @@ function elementUnits(
         if (!isBound(one)) continue
         if (one.kind === 'handler')
             handlers.push(
-                `${element}.addEventListener(${JSON.stringify(one.event)}, ${lowering.listener(one.attribute)})`,
+                listenerCall(element, one.event, one.attribute, lowering),
             )
         // 32.5, 32.7, 32.8, 32.73 — THE PROPERTY AND THE VALUE, IN STEP BOTH WAYS: a watch on this
         // region's scope writes the property, and a listener writes it back.
@@ -858,6 +874,69 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
     for (const unit of spreads) attributes.push(unit)
     return { items, attributes, elements }
 }
+
+/**
+ * One `on<event>` listener added to `target`, and removed when the component's scope stops where
+ * `scoped` says so (39.23).
+ *
+ * 32.95 — A FUNCTION WRITTEN IN PLACE IS ADDED AS TODAY, `addEventListener(type, fn)`: it is no
+ * `EventListenerObject`, so it carries no options to hand on, and the common shape costs no byte
+ * more. Anything else may be one, and `listen` hands it over as its own options too.
+ */
+function listenerCall(
+    target: string,
+    event: string,
+    attribute: Attribute,
+    lowering: Lowering,
+    scoped = false,
+): string {
+    const listener = lowering.listener(attribute)
+    if (!scoped && isFunctionLiteral(attribute.value))
+        return `${target}.addEventListener(${JSON.stringify(event)}, ${listener})`
+    return `${lowering.use('listen')}(${target}, ${JSON.stringify(event)}, ${listener}${scoped ? `, ${SCOPE}` : ''})`
+}
+
+/** Whether an expression is a function written in place: `function …`, `x => …` or `(…) => …`. */
+function isFunctionLiteral(source: string): boolean {
+    const tokens = tokenize(source)
+    const at = tokens[0]?.text === 'async' ? 1 : 0
+    const first = tokens[at]
+    if (first?.kind === SyntaxKind.FunctionKeyword) return true
+    if (first?.kind === SyntaxKind.Identifier)
+        return tokens[at + 1]?.kind === SyntaxKind.EqualsGreaterThanToken
+    if (first?.kind !== SyntaxKind.OpenParenToken) return false
+    // The parameters' close, then `=>` — past a return type where one is written.
+    let depth = 0
+    let closed = -1
+    for (let index = at; index < tokens.length && closed === -1; index += 1) {
+        const kind = (tokens[index] as Token).kind
+        if (kind === SyntaxKind.OpenParenToken) depth += 1
+        else if (kind === SyntaxKind.CloseParenToken && --depth === 0)
+            closed = index
+    }
+    const after = tokens[closed + 1]?.kind
+    if (after === SyntaxKind.EqualsGreaterThanToken) return true
+    if (closed === -1 || after !== SyntaxKind.ColonToken) return false
+    for (let index = closed + 2; index < tokens.length; index += 1) {
+        const kind = (tokens[index] as Token).kind
+        if (OPENERS.has(kind)) depth += 1
+        else if (CLOSERS.has(kind)) depth -= 1
+        else if (depth === 0 && kind === SyntaxKind.EqualsGreaterThanToken)
+            return true
+    }
+    return false
+}
+
+const OPENERS: ReadonlySet<SyntaxKind> = new Set([
+    SyntaxKind.OpenParenToken,
+    SyntaxKind.OpenBraceToken,
+    SyntaxKind.OpenBracketToken,
+])
+const CLOSERS: ReadonlySet<SyntaxKind> = new Set([
+    SyntaxKind.CloseParenToken,
+    SyntaxKind.CloseBraceToken,
+    SyntaxKind.CloseBracketToken,
+])
 
 // A region's bindings go through its SCOPE, so what replaced the region can stop them (see
 // `Scope`). In the framework's own `__` namespace because a row binds the AUTHOR's item name as a

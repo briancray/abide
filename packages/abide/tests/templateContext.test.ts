@@ -24,7 +24,7 @@ test('every block and arm offered is one the parser reads — 38.117', () => {
     const written: Record<string, string> = {
         if: '{#if a}x{:else if b}y{:else}z{/if}',
         for: '{#for item of list}x{/for}',
-        try: '{#try}x{:catch error}y{:finally}z{/try}',
+        try: '{#try}x{:pending}w{:catch error}y{:finally}z{/try}',
         component: '{#component Row(props)}x{/component}',
     }
     for (const block of Object.keys(TEMPLATE_BLOCKS)) {

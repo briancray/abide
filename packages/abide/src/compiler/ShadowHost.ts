@@ -6,7 +6,7 @@ import { API, type Project, type Snapshot } from 'typescript/unstable/async'
 
 import { placeOf } from '#server/placement.ts'
 
-import { COMPONENT_MODULE } from './checkedShadow.ts'
+import { COMPONENT_MODULE, DIRECT_CALL } from './checkedShadow.ts'
 import type { LoweredFile } from './LoweredFile.ts'
 import { CHECKED_SUFFIX, SHADOW_SUFFIX, ShadowMap } from './ShadowMap.ts'
 import { SOURCE_SUFFIX } from './splitImports.ts'
@@ -152,7 +152,7 @@ export class ShadowHost {
                 ? 'declare const text: string\nexport default text\n'
                 : undefined
         // 34.17 — WHAT A `.abide` EXPORTS, to anything importing it: the component its checked
-        // module declares, and nothing else. The checker resolves `./x.abide` by trying
+        // module declares, as a direct call takes it (38.208), and nothing else. The checker resolves `./x.abide` by trying
         // `./x.abide.d.ts`; the bindings the projection re-exports for the build (16.70) are not
         // the importer's to read.
         //
@@ -166,7 +166,7 @@ export class ShadowHost {
         if (abide !== undefined) {
             if (!isFile(abide)) return undefined
             const own = `./${basename(abide)}`
-            return `export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
+            return `export { ${DIRECT_CALL} as default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
 `
         }
         // A projection not registered — a file with nothing to read, or one this host has not

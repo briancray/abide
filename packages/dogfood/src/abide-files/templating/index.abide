@@ -1,5 +1,8 @@
 <script>
 import { url } from '@abide/abide'
+import ForecastPlaceholder from 'crm/src/pipeline/lib/ForecastPlaceholder.abide'
+import forecastPlaceholderSource from 'crm/src/pipeline/lib/ForecastPlaceholder.abide' with { type: 'text' }
+import forecastPlaceholderTestSource from 'crm/src/pipeline/lib/ForecastPlaceholder.test.ts' with { type: 'text' }
 import ContactFields from 'crm/src/profile/lib/ContactFields.abide'
 import contactFieldsSource from 'crm/src/profile/lib/ContactFields.abide' with { type: 'text' }
 import contactFieldsBenchSource from 'crm/src/profile/lib/ContactFields.bench.ts' with { type: 'text' }
@@ -76,7 +79,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>{'class:name={cond}'}</code></td><td>one class, there while the condition holds</td></tr>
                 <tr><td><code>{'style:prop={value}'}</code></td><td>one style property</td></tr>
                 <tr><td><code>{'{...expr}'}</code></td><td>every attribute on an element, or every prop on a component</td></tr>
-                <tr><td><code>{'on<event>={fn}'}</code></td><td>a native listener, removed with its element</td></tr>
+                <tr><td><code>{'on<event>={fn}'}</code></td><td>a native listener, removed with its element; an object <code>{'{ handleEvent, passive: false }'}</code> is added with its fields as the listener's options</td></tr>
                 <tr><td><code>{'bind:element={Reactive<Element> | ((element: Element) => void | Disposer) | ((element: Element) => void | Disposer)[]}'}</code></td><td>the element itself, to focus or measure, or a list of callbacks each handed it</td></tr>
             </tbody>
         </table>
@@ -120,7 +123,33 @@ import Section from '#src/lib/Section.abide'
         <p><code>{'{#if cond}'}</code> builds the branch it takes and nothing of the one it does
             not. Clearing the box removes the date field, and an <code>{'{:else}'}</code> branch would
             render in its place. <code>{'{#try}'}</code> is the other block: it renders <code>{'{:catch e}'}</code>
-            in place of its whole body when rendering the body throws.</p>
+            in place of its whole body when rendering the body throws, and <code>{'{:pending}'}</code>
+            while the body waits on its first answer.</p>
+    </Section>
+
+    <Section title="A placeholder stands in for the first answer, and never for a reload">
+        <Example
+            id="first-load"
+            app="crm"
+            title={'`{#try}…{:pending}` — a slow report with a placeholder until it first lands'}
+            summary="The pipeline forecast, a report that takes half a second. Reload it."
+            files={{
+                'src/pipeline/lib/ForecastPlaceholder.abide': forecastPlaceholderSource,
+                'src/pipeline/lib/ForecastPlaceholder.test.ts':
+                    forecastPlaceholderTestSource,
+            }}
+        >
+            <ForecastPlaceholder />
+        </Example>
+
+        <p><code>{'{:pending}'}</code> renders in place of the whole body while a value the body
+            reads has never landed, on the server and in the browser alike. Once the body has
+            rendered, a reload keeps the figure up until the new one lands, and the test counts no
+            node built for it: the placeholder is for the first load alone.</p>
+
+        <p>A list needs no placeholder to be empty: a <code>{'{#for}'}</code> over a value that
+            has not landed renders no rows, so <code>{'{#for deal of deals}'}</code> is the whole of
+            it, and <code>abide check</code> warns on <code>{'deals.ready() ? deals : []'}</code>.</p>
     </Section>
 
     <Section title="A one-item keyed loop builds its markup again">

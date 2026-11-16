@@ -29,8 +29,10 @@ affected code saying what it did, and tell the user.
   calls it. Every component has a test that `mount`s it and counts the work an
   interaction did with `measure`, both from `@abide/harness/abide` (RULEBOOK 38.119, 43.23) — a
   test that only reads the text back passes against a component doing ten times the work.
-  A prop the test moves is handed as a getter — `Label({ get label() { return source() } })` —
-  and is read through it on every read (RULEBOOK 38.134); any other prop is the value it was given.
+  A prop the test moves is handed as its `Reactive` — `Label({ label })` — which the component
+  reads live and writes back to as a `bind:` would (RULEBOOK 38.207, 38.208), or as a getter —
+  `Label({ get label() { return source() } })` — read through on every read (RULEBOOK 38.134); any
+  other prop is the value it was given.
   A test waits on a value landing — `await` the handler call, or the `Reactive` the component
   reads, which is thenable (RULEBOOK 1.4), or, after a click whose calls the test cannot reach,
   `await settled()` from `@abide/harness/abide`, which waits until no value is loading and names
@@ -123,6 +125,11 @@ affected code saying what it did, and tell the user.
   it read being a derived value. What a timer or a call it started hands back is written when that
   lands, the way an event handler writes. A user action's effect belongs in its event handler. A `watch` runs during a server render too (RULEBOOK 12.5), so one that starts a
   timer or touches a browser global returns a `Disposer`.
+- A listener on the window or the document is `<window onkeydown={…}/>` or `<document …/>` at the
+  top of the component: added when it mounts, removed when it leaves, never run on the server
+  (RULEBOOK 39.21, 39.23) — not an `addEventListener` in a `watch` behind `isServer()` with a
+  hand-written `removeEventListener`. A listener that needs options is an object, on any element as
+  much as there: `onwheel={{ handleEvent: zoom, passive: false }}` (32.95).
 - A preference the page renders — a currency, a theme, a panel left open — lives in a cookie:
   `const theme = reactive(() => cookies().get('theme') ?? 'light')`, written with
   `cookies().set('theme', next)`. `cookies()` is the request's on the server and the document's in
@@ -133,8 +140,12 @@ affected code saying what it did, and tell the user.
 - A value that has not landed leaves its place in markup as it was — empty before it first lands,
   the last value while it reloads — and fills it when it lands (RULEBOOK 32.23), so markup needs no
   guard. Do not paper over it with `?? []` or `x.ready() ? x : undefined`
-  — that makes "not loaded yet" read as "empty". Branch on `x.ready()` or `x.busy()` only where a
-  placeholder is actually wanted.
+  — that makes "not loaded yet" read as "empty". A `{#for}` over a subject that has not landed
+  renders nothing (RULEBOOK 32.22), so `{#for car of cars}` is the whole of it and
+  `{#for car of cars.ready() ? cars : []}` is warned on (32.97). Where a placeholder is actually
+  wanted, a `{#try}`'s `{:pending}` arm stands in for its body until what the body reads first lands,
+  and never again on a reload (32.16, 32.96); branch on `x.ready()` or `x.busy()` only for a
+  placeholder that should come back.
 
 ## Settings and untrusted input
 
