@@ -12,6 +12,7 @@ import { rmSync } from 'node:fs' // bun has no sync rm of its own
 import { chromium } from '@playwright/test'
 
 import { writeFixture } from '../e2e/servedFixture.ts'
+import { median } from './median.ts'
 
 const REPO = process.argv[2] as string
 const RUNS = Number(process.argv[3] ?? 15)
@@ -133,7 +134,7 @@ await browser.close()
 server.kill()
 
 times.sort((a, b) => a - b)
-const median = times[Math.floor(times.length / 2)] as number
+const middle = median(times)
 console.log(
-    `${REPO}: delay ${DELAY} ms, latency ${LATENCY} ms, ${RUNS} runs — navigation -> first chunk painted: median ${median.toFixed(1)} ms, min ${times[0]?.toFixed(1)}, max ${times.at(-1)?.toFixed(1)}${landedBeforeLoad > 0 ? ` (${landedBeforeLoad} landed before load)` : ''}`,
+    `${REPO}: delay ${DELAY} ms, latency ${LATENCY} ms, ${RUNS} runs — navigation -> first chunk painted: median ${middle.toFixed(1)} ms, min ${times[0]?.toFixed(1)}, max ${times.at(-1)?.toFixed(1)}${landedBeforeLoad > 0 ? ` (${landedBeforeLoad} landed before load)` : ''}`,
 )

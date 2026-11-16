@@ -8,6 +8,7 @@ import { expect, type Page, test } from '@playwright/test'
 import type { Subprocess } from 'bun'
 
 import { servedFixture } from './servedFixture.ts'
+import { untilSaved } from './untilSaved.ts'
 
 // ONE TREE AND ONE WORKER PER PROJECT, for `routing.spec.ts`'s reason.
 test.describe.configure({ mode: 'default' })
@@ -148,9 +149,6 @@ test.afterAll(() => {
 
 /**
  * Loads `path` online and waits until the worker controls the page and has saved it (45.3, 45.13).
- *
- * POLLED FROM HERE: `waitForFunction` does not await a predicate that returns a promise, and a
- * promise is truthy, so an async predicate passed at once — before the worker had even activated.
  */
 async function visit(
     page: Page,
@@ -158,21 +156,7 @@ async function visit(
     alsoSaved: string[] = [],
 ): Promise<void> {
     await page.goto(`${base}${path}`)
-    await expect
-        .poll(() =>
-            page.evaluate(async (others) => {
-                if (navigator.serviceWorker.controller === null) return false
-                const saved = await caches.open('abide:saved')
-                for (const address of [location.href, ...others])
-                    if (
-                        (await saved.match(new URL(address, location.href))) ===
-                        undefined
-                    )
-                        return false
-                return true
-            }, alsoSaved),
-        )
-        .toBe(true)
+    await untilSaved(page, alsoSaved)
 }
 
 // 45.1, 45.3, 45.6, 45.13 — A PAGE VISITED COMES BACK OFFLINE, live, and so does the one that
@@ -242,15 +226,7 @@ test('a page reached by a click reloads offline — 45.24', async ({
     page,
     context,
 }) => {
-    const savedHere = () =>
-        expect
-            .poll(() =>
-                page.evaluate(async () => {
-                    const saved = await caches.open('abide:saved')
-                    return (await saved.match(location.href)) !== undefined
-                }),
-            )
-            .toBe(true)
+    const savedHere = () => untilSaved(page, [], false)
     await visit(page, '/')
     await page.click('#to-about')
     await expect(page.locator('#about h1')).toHaveText('About')
@@ -348,24 +324,7 @@ test('a page reopened from its kept copy hydrates with its data — 45.23, 41.30
     await visit(page, '/')
     await page.click('#to-note')
     await expect(page.locator('#text')).toHaveText('a saved note')
-    await expect
-        .poll(() =>
-            page.evaluate(async () => {
-                const saved = await caches.open('abide:saved')
-                for (const address of [
-                    location.href,
-                    '/data/getNote',
-                    '/data/getTags',
-                ])
-                    if (
-                        (await saved.match(new URL(address, location.href))) ===
-                        undefined
-                    )
-                        return false
-                return true
-            }),
-        )
-        .toBe(true)
+    await untilSaved(page, ['/data/getNote', '/data/getTags'], false)
     await context.setOffline(true)
     try {
         await page.reload()

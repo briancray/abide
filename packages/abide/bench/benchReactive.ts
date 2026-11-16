@@ -12,12 +12,19 @@ import {
 } from '@abide/harness/report'
 
 import { countExportedNames } from './countExportedNames.ts'
-import { reactiveCoreLines } from './reactiveCoreLines.ts'
+import { countLines } from './countLines.ts'
 import { formatReactive, runReactive } from './reactiveRun.ts'
 
 async function machinery(): Promise<void> {
-    const { abide: abideLines, vanilla: vanillaLines } =
-        await reactiveCoreLines()
+    // GLOBBED, not listed: the hand-written list this replaced had fallen ten files behind the
+    // directory, so the budget it printed left out everything the core had grown by.
+    const core = new URL('../src/shared/reactive/', import.meta.url)
+    const abideLines = await countLines(core, [
+        ...new Bun.Glob('*.ts').scanSync({ cwd: core.pathname }),
+    ])
+    const vanillaLines = await countLines(new URL('./', import.meta.url), [
+        'signal.ts',
+    ])
     const names = await countExportedNames(['@abide/abide'])
     console.log('\nMACHINERY BUDGET — the other half of the trade')
     console.log(

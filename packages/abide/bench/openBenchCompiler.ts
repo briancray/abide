@@ -1,5 +1,5 @@
 // A `.abide` source compiled and imported as the server component it emits — what the render and
-// component benches time, and what the bench page runs them through. One checker session per run:
+// component benches time. One checker session per run:
 // opening one is seconds, and every compile after it is not.
 
 import { emitComponent, parseAbide, TypeSession } from '@abide/abide/compiler'

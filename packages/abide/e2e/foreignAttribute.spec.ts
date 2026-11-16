@@ -9,7 +9,10 @@
 
 import { expect, test } from '@playwright/test'
 
-import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
+import {
+    buildCompiledPage,
+    loadCompiledPage,
+} from '../bench/buildCompiledPage.ts'
 
 const PAGE_SOURCE = `<script>
 import { reactive } from '@abide/abide'
@@ -34,14 +37,7 @@ const compiled = await buildCompiledPage(PAGE_SOURCE, { Dot: DOT_SOURCE })
 test('an xlink attribute the client builds inside an svg is XLink’s — 32.70', async ({
     page,
 }) => {
-    await page.goto('about:blank')
-    await page.setContent(
-        `<!doctype html><html><body>${compiled.markup}</body></html>`,
-    )
-    await page.addScriptTag({ content: compiled.script })
-    await page.evaluate(() => {
-        ;(globalThis as unknown as { __MOUNT__: () => void }).__MOUNT__()
-    })
+    await loadCompiledPage(page, compiled, true)
     await page.click('#grow')
     const spaces = await page.evaluate(() => {
         const rows = document.querySelectorAll('#drawn > g')

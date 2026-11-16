@@ -31,7 +31,10 @@
 
 import { expect, test } from '@playwright/test'
 
-import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
+import {
+    buildCompiledPage,
+    loadCompiledPage,
+} from '../bench/buildCompiledPage.ts'
 
 // THREE ROWS AND A REVERSE, so the middle row is a survivor that genuinely moves: in a reverse of
 // three, `b` keeps its place in the order but every sibling around it is rewritten, which is the
@@ -54,13 +57,7 @@ const compiled = await buildCompiledPage(PAGE_SOURCE)
 test('a reordered row keeps the state a rebuild would destroy', async ({
     page,
 }, testInfo) => {
-    // A FRESH NAVIGATION BEFORE `setContent`, per `compiled.spec.ts`: `setContent` replaces the
-    // document and keeps the JavaScript context, so a stale `__MOUNT__` would mount into it.
-    await page.goto('about:blank')
-    await page.setContent(
-        `<!doctype html><html><body>${compiled.markup}</body></html>`,
-    )
-    await page.addScriptTag({ content: compiled.script })
+    await loadCompiledPage(page, compiled, false)
 
     const result = (await page.evaluate(() => {
         const lane = globalThis as unknown as {

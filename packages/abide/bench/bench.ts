@@ -3,8 +3,7 @@
 // hand-counted. Then the browser specs that only REPORT — `reactive`, `shared` and `shapes` —
 // at full size in both engines, save `reactive` in webkit, whose 1 ms clock no budget clears
 // (`reactive.spec.ts`); the e2e gate runs them only as a one-rep smoke (`BENCH_SIZING`).
-// Every other bench is a script of its own under `bench:*`, and the ones with a hand-written arm
-// are rows on the docs app's `/bench` page too.
+// Every other bench is a script of its own under `bench:*`.
 //
 // A WORKSPACE SCRIPT AND NOT AN `abide` COMMAND. `abide <cmd>` is governed surface —
 // RULEBOOK 38 and REGISTRY's Commands section — so a bench subcommand would owe a

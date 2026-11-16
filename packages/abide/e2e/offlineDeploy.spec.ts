@@ -11,6 +11,7 @@ import {
     startedFixture,
     writeFixture,
 } from './servedFixture.ts'
+import { untilSaved } from './untilSaved.ts'
 
 // ONE APP PER TEST, each restarting its own server.
 test.describe.configure({ mode: 'default' })
@@ -80,20 +81,6 @@ async function deployed(app: string, base: string, color: string) {
 /** The color `page`'s stylesheet paints its body — black where none applies. */
 const painted = (page: Page): Promise<string> =>
     page.evaluate(() => getComputedStyle(document.body).color)
-
-/** Waits until the worker has saved the page `page` is on (45.13, 45.28). */
-async function saved(page: Page): Promise<void> {
-    await expect
-        .poll(() =>
-            page.evaluate(
-                async () =>
-                    (await (
-                        await caches.open('abide:saved')
-                    ).match(location.href)) !== undefined,
-            ),
-        )
-        .toBe(true)
-}
 
 /**
  * Waits until the worker of the build `base` now serves has taken over: its stylesheet saved, and no
@@ -182,7 +169,7 @@ test('the visit after a deploy opens the kept build at once, and the next the ne
     const { app, base } = await served(testInfo, 'deploy')
     await page.goto(base)
     await installed(page)
-    await saved(page)
+    await untilSaved(page, [], false)
     await deployed(app, base, BLUE)
     await page.goto(base)
     const visits = [await painted(page)]
@@ -207,7 +194,7 @@ test('a reload after a deploy opens the new build — 45.20', async ({
     const { app, base } = await served(testInfo, 'reload')
     await page.goto(base)
     await installed(page)
-    await saved(page)
+    await untilSaved(page, [], false)
     await deployed(app, base, BLUE)
     await page.reload()
     expect(await painted(page)).toBe(BLUE)
@@ -250,7 +237,7 @@ test('the second load with the server gone opens whole, stylesheet included — 
     const { base } = await served(testInfo, 'gone')
     await page.goto(base)
     await installed(page)
-    await saved(page)
+    await untilSaved(page, [], false)
     server?.kill()
     await server?.exited
     server = undefined

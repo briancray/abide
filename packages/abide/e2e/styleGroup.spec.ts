@@ -7,7 +7,10 @@
 
 import { expect, test } from '@playwright/test'
 
-import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
+import {
+    buildCompiledPage,
+    loadCompiledPage,
+} from '../bench/buildCompiledPage.ts'
 
 const PAGE_SOURCE = `<script>
 import { reactive } from '@abide/abide'
@@ -24,14 +27,7 @@ const compiled = await buildCompiledPage(PAGE_SOURCE)
 test('a style group parses its attribute as the browser does — 32.71', async ({
     page,
 }) => {
-    await page.goto('about:blank')
-    await page.setContent(
-        `<!doctype html><html><body>${compiled.markup}</body></html>`,
-    )
-    await page.addScriptTag({ content: compiled.script })
-    await page.evaluate(() => {
-        ;(globalThis as unknown as { __MOUNT__: () => void }).__MOUNT__()
-    })
+    await loadCompiledPage(page, compiled, true)
     await page.click('#quoted')
     const style = await page.evaluate(() => {
         const out = (document.querySelector('#out') as HTMLElement).style

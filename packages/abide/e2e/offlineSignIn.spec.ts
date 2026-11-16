@@ -8,6 +8,7 @@ import { expect, type Page, test } from '@playwright/test'
 import type { Server, Subprocess } from 'bun'
 
 import { servedFixture } from './servedFixture.ts'
+import { untilSaved } from './untilSaved.ts'
 
 test.describe.configure({ mode: 'default' })
 
@@ -119,17 +120,7 @@ test.afterAll(() => {
 async function signedIn(page: Page): Promise<void> {
     await page.goto(base)
     await expect(page.locator('#home h1')).toHaveText('Home')
-    await expect
-        .poll(() =>
-            page.evaluate(
-                async () =>
-                    navigator.serviceWorker.controller !== null &&
-                    (await (
-                        await caches.open('abide:saved')
-                    ).match(location.href)) !== undefined,
-            ),
-        )
-        .toBe(true)
+    await untilSaved(page)
 }
 
 /** Whether the browser holds the gateway's session cookie. */

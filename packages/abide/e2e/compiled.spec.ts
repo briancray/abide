@@ -13,7 +13,10 @@
 import { expect, test } from '@playwright/test'
 
 import { buildInjectable } from '../../harness/scripts/buildInjectable.ts'
-import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
+import {
+    buildCompiledPage,
+    loadCompiledPage,
+} from '../bench/buildCompiledPage.ts'
 
 const PAGE_SOURCE = `<script>
 import { reactive } from '@abide/abide'
@@ -51,19 +54,14 @@ test('the compiled page against the hand-written one, in this engine', async ({
     // also what stops the two arms from sharing a JavaScript context.
     await page.addInitScript({ content: measureLane })
 
-    // A FRESH NAVIGATION PER ARM. `setContent` replaces the document but KEEPS the JavaScript
-    // context, so `__MOUNT__` defined by the compiled arm was still on the global when the
-    // hand-written page loaded — and mounting abide into a page with no markers threw inside the
-    // VANILLA arm, where nothing about the failure pointed at the spec.
+    // A FRESH NAVIGATION PER ARM (`loadCompiledPage`): the compiled arm's `__MOUNT__` still on the
+    // global when the hand-written page loaded mounted abide into a page with no markers, and threw
+    // inside the VANILLA arm, where nothing about the failure pointed at the spec.
     async function run(
         markup: string,
         script: string,
     ): Promise<{ counts: Counts; text: string }> {
-        await page.goto('about:blank')
-        await page.setContent(
-            `<!doctype html><html><body>${markup}</body></html>`,
-        )
-        await page.addScriptTag({ content: script })
+        await loadCompiledPage(page, { markup, script }, false)
         return (await page.evaluate(() => {
             const lane = globalThis as unknown as {
                 __HARNESS_MEASURE__: { measure(body: () => void): Counts }

@@ -15,6 +15,7 @@ import {
     type Sample,
 } from '@abide/harness/report'
 
+import { microseconds } from './milliseconds.ts'
 import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
     abideLoopSource,
@@ -93,9 +94,6 @@ function drain(component: Render): string {
     return rendered.head + rendered.body
 }
 
-const µs = (sample: Sample): string =>
-    `${(sample.nanoseconds / 1000).toFixed(1)} µs`
-
 function report(size: number, measured: ReturnType<typeof batch>): Verdicts {
     const vanilla = measured.samples.vanilla as Sample
     const careful = measured.samples['vanilla, careful'] as Sample
@@ -112,7 +110,7 @@ function report(size: number, measured: ReturnType<typeof batch>): Verdicts {
         `  ${String(size).padStart(4)} cards   A/A floor ${(measured.floor * 100).toFixed(1)}%   n=${measured.n}`,
     )
     console.log(
-        `              vanilla ${µs(vanilla)}   careful ${µs(careful)}   {#for} ${µs(loop)} (${claimOf(verdicts.obvious)} vanilla, ${claimOf(verdicts.careful)} careful)   unrolled ${µs(unrolled)}`,
+        `              vanilla ${microseconds(vanilla.nanoseconds)}   careful ${microseconds(careful.nanoseconds)}   {#for} ${microseconds(loop.nanoseconds)} (${claimOf(verdicts.obvious)} vanilla, ${claimOf(verdicts.careful)} careful)   unrolled ${microseconds(unrolled.nanoseconds)}`,
     )
     console.log(
         `              ${(loop.nanoseconds / size).toFixed(0)} ns a card through the loop; unrolled is ${claimOf(verdicts.unrolled)} of it`,

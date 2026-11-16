@@ -18,6 +18,7 @@ import {
 } from '@abide/harness/report'
 import { allocated, closures } from '@abide/harness/server'
 
+import { microseconds } from './milliseconds.ts'
 import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
     abideCardSource,
@@ -95,7 +96,7 @@ async function main(): Promise<void> {
                 `  ${String(size).padStart(4)} cards   A/A floor ${(measured.floor * 100).toFixed(1)}%   n=${measured.n}`,
             )
             console.log(
-                `              vanilla ${µs(vanilla)}   inline ${µs(flat)} (${times(flat, vanilla, measured.floor)})   component ${µs(child)} (${times(child, vanilla, measured.floor)})`,
+                `              vanilla ${microseconds(vanilla.nanoseconds)}   inline ${microseconds(flat.nanoseconds)} (${times(flat, vanilla, measured.floor)})   component ${microseconds(child.nanoseconds)} (${times(child, vanilla, measured.floor)})`,
             )
             console.log(
                 `              ${perRow(flat, size)} ns a row inline, ${perRow(child, size)} ns a row as a component — ${times(child, flat, measured.floor)} for the invocation`,
@@ -159,8 +160,6 @@ function allocations(flat: Render, nested: Render, size: number): void {
     )
 }
 
-const µs = (sample: Sample): string =>
-    `${(sample.nanoseconds / 1000).toFixed(1)} µs`
 /** One sample's time over another's through `ratio()`, inside the A/A floor `batch()` measured. */
 const times = (sample: Sample, against: Sample, floor: number): string =>
     claimOf(ratio(sample, against, { floor }))
