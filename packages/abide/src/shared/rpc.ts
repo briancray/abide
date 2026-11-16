@@ -58,6 +58,7 @@ import {
     chunksOfStream,
     dropAnswered,
     isAsyncGenerator,
+    nameLoad,
     streamingOrSettled,
 } from './reactive/producer.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
@@ -649,6 +650,8 @@ export function declare<Declared extends Method>(
                 options?.offline as ((args: unknown) => unknown) | undefined,
             )
             RPC_SERVER.reached?.(rpc, args, reached, route)
+            // 38.196 — what `settled` names a call still in flight by.
+            nameLoad(reached, method, rpc.address)
             return reached
         }
         // THE HANDLER'S OWN MEMBERS, handed the pattern. A `Keyed` narrows by it and a `Reactive`'s

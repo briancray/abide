@@ -1,7 +1,7 @@
 // THE BUILT-IN ADAPTER FOR AN ABIDE APP, and the one entry of this package allowed to know abide.
 // Every lane measures anything; this is what makes the general instrument read like abide's own:
-// `measure` with abide's three counters on the record by name, and abide's `mount` beside it, so an
-// app's test imports both from one place.
+// `measure` with abide's three counters on the record by name, and abide's `mount` and `settled`
+// beside it, so an app's test imports all three from one place.
 //
 // ABIDE IS NOT IMPORTED TO COUNT. abide publishes its counters on the global every lane reads
 // (`WORK.ts`, 43.21) and this reads them back by name, so the counting stays in the lane and the
@@ -13,7 +13,7 @@ import {
     type Work,
 } from '../measure/index.ts'
 
-export { type Mounted, mount } from '@abide/abide/test'
+export { type Mounted, mount, settled } from '@abide/abide/test'
 
 const FIELDS = ['wakes', 'bindingRuns', 'descents'] as const
 

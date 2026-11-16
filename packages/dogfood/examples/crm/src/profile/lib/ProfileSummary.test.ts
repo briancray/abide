@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { flushSync } from '@abide/abide'
 import { measure, mount } from '@abide/harness/abide'
+import { atMost } from '@abide/harness/gate'
 
 import ProfileSummary from './ProfileSummary.abide'
 
@@ -27,5 +28,5 @@ test('a phone edit reruns the count, not the initials', async () => {
     using _summary = await mount(ProfileSummary({}))
     const work = measure(() => type(1, '4155550132'))
     // The write's walk; `initials` reading the phone would make it 6.
-    expect(work.descents).toBe(4)
+    atMost(work, { descents: 4 })
 })

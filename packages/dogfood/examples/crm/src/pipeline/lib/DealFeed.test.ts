@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test'
 
 import { flushSync } from '@abide/abide'
-import { measure, mount } from '@abide/harness/abide'
+import { measure, mount, settled } from '@abide/harness/abide'
 
 import DealFeed from './DealFeed.abide'
 
 test('an update rewrites one amount and builds nothing', async () => {
     using _feed = await mount(DealFeed({}))
-    await Bun.sleep(600)
+    await settled()
     const work = measure(() => {
         document.querySelector('button')?.click()
         flushSync()

@@ -8,7 +8,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { gate, spawned } from '@abide/harness/gate'
+import { atMost, gate, spawned } from '@abide/harness/gate'
 
 const GATE = new URL('../src/gate/index.ts', import.meta.url).pathname
 
@@ -73,4 +73,40 @@ gate('counts three', { revert: () => { counted = 4; return () => { counted = 3 }
 })`)
     expect(run.output).toContain('2 pass')
     expect(run.ok).toBe(true)
+})
+
+// 43.40 — A CEILING HOLDS AT AND UNDER ITSELF, and fails naming every field over it with what it
+// reported, so a `gate`'s `worth` finds its number in the failure. THE REVERT: compare with `>=`
+// in `atMost.ts`; the record at its ceiling throws "wakes: 9, over its ceiling of 9".
+test('atMost passes at and under a ceiling, and names each field over one — 43.40', () => {
+    const work = { wakes: 9, nodesCreated: 3, descents: 30 }
+    expect(() => atMost(work, { wakes: 9, nodesCreated: 27 })).not.toThrow()
+    expect(() =>
+        atMost(work, { wakes: 8, nodesCreated: 2, descents: 30 }),
+    ).toThrow(
+        'atMost: wakes: 9, over its ceiling of 8; nodesCreated: 3, over its ceiling of 2',
+    )
+})
+
+// 43.41 — ABSENT IS NOT UNDER: a counter no source published is `null` (43.19), and a ceiling on it
+// would pass against a counter nothing increments. THE REVERT: skip a non-number in `atMost.ts`;
+// this passes.
+test('atMost refuses a ceiling on a field carried as absent — 43.41', () => {
+    expect(() =>
+        atMost({ wakes: null as number | null }, { wakes: 9 }),
+    ).toThrow('wakes has a ceiling of 9 and the record carries it as absent')
+})
+
+// 43.42 — THE FAILURE IS THE CALLER'S LINE: bun prints a throw at its stack's first frame, and the
+// line a reader needs is the claim, not the helper. THE REVERT: drop `Error.captureStackTrace` from
+// `atMost.ts`; the first frame is `atMost.ts`.
+test('atMost fails from the line that called it — 43.42', () => {
+    let stack = ''
+    try {
+        atMost({ wakes: 2 }, { wakes: 1 })
+    } catch (failure) {
+        stack = String((failure as Error).stack)
+    }
+    const firstFrame = stack.split('\n').find((line) => line.includes(' at '))
+    expect(firstFrame).toContain('gate.test.ts')
 })

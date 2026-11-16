@@ -27,6 +27,7 @@
 
 import { test } from 'bun:test'
 
+export { atMost } from './atMost.ts'
 export { inAFreshProcess } from './inAFreshProcess.ts'
 export { spawned } from './spawned.ts'
 
