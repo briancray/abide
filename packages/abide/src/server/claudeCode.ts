@@ -86,9 +86,7 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
     return {
         async *run(messages, tools, { maxTurns, signal }) {
             yield* runTurn({
-                caller: askingCaller(),
-                signedIn: signedInAs(),
-                local: fromNativeWindow(),
+                ...asker(),
                 prompt: foldedContent(messages),
                 config,
                 maxTurns,
@@ -132,6 +130,17 @@ function foldedContent(
     pieces.push({ type: 'text', text: words })
     return blocksOf(pieces)
 }
+
+/** Who asks of a pairing: the browser (44.13), the principal signed in, and whether the window does (44.77). */
+function asker(): { caller: string; signedIn: string; local: boolean } {
+    return {
+        caller: askingCaller(),
+        signedIn: signedInAs(),
+        local: fromNativeWindow(),
+    }
+}
+
+type Asker = ReturnType<typeof asker>
 
 /** The browser asking, which a pairing is to. 44.13. */
 function askingCaller(): string {
@@ -232,9 +241,7 @@ async function* bridge(
  */
 function permit(id: string, allow: boolean): void {
     permitPrompt({
-        caller: askingCaller(),
-        signedIn: signedInAs(),
-        local: fromNativeWindow(),
+        ...asker(),
         id,
         allow,
     })
@@ -249,11 +256,7 @@ function permit(id: string, allow: boolean): void {
  * (44.94), and 502 where neither the bridge nor a turn made the call.
  */
 async function callTool(tool: string, input: unknown): Promise<ToolAnswer> {
-    const asking = {
-        caller: askingCaller(),
-        signedIn: signedInAs(),
-        local: fromNativeWindow(),
-    }
+    const asking = asker()
     const called = await runCall({
         ...asking,
         name: tool,
@@ -270,7 +273,7 @@ async function callTool(tool: string, input: unknown): Promise<ToolAnswer> {
  * never the model's copy of it, and no tokens are spent past the call.
  */
 async function calledByTurn(
-    asking: { caller: string; signedIn: string; local: boolean },
+    asking: Asker,
     tool: string,
     input: unknown,
 ): Promise<ToolAnswer> {
