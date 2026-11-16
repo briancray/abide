@@ -3399,8 +3399,8 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
 
 38.134 A prop a test hands a component it binds for `mount` as an own getter MUST be read through
-that getter on each read the component makes, and any other prop MUST be the value it held when the
-component was bound.
+that getter on each read the component makes, and any other prop but a `Reactive` (38.195) MUST be
+the value it held when the component was bound.
 
 38.135 `abide routes` MUST print beside each handler every rung its declaration's `middleware`
 names, as written — an entry by the function it calls or the name it refers to, a spread by what it
@@ -3626,6 +3626,12 @@ files where the input is `multiple`.
 38.194 A page's `navigator.mediaDevices` and `navigator.geolocation` in the window the `.app`
 `abide native` writes opens MUST be present, and MUST reach the camera, the microphone and the
 person's location only once the person allows it through the platform.
+
+38.195 A prop a test hands a component it binds for `mount` as a `Reactive` MUST reach the component
+as 32.6 has a `bind:` hand it over.
+
+38.196 `abide check` MUST hold a prop a `.abide` file's component is called with directly to the
+type its `props` call declares for it, or to a `Reactive` holding and taking that type.
 
 # 39. Head and view transitions
 

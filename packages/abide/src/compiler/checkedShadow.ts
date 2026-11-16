@@ -2,6 +2,7 @@ import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Finding } from './Diagnostics.ts'
+import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 import { hookCalls } from './hookCalls.ts'
 import {
     CHECKED_CONFIG,
@@ -48,6 +49,13 @@ export const COMPONENT_STAND_IN = '__component'
 const COMPONENT_RECORD = '__record'
 
 /**
+ * 38.196 — each prop as its value or a `Reactive` of it, the write path a `bind:` hands over (32.6).
+ * A tag's own values reach it already read (`__prop`, `__bound`), so only a direct call ever hands
+ * one over, and a union with the plain value keeps every position a read (31.3).
+ */
+const BINDABLE = '__bindable'
+
+/**
  * The component a checked module exports as its default: called with the record its tag passes
  * (`projectShadow`'s `invocation`), and answering the `Component` a server module's call of it
  * renders (34.16). What its blocks export by name is beside it.
@@ -62,7 +70,8 @@ function componentModule(generics?: string): { head: string; tail: string } {
     const parameters = generics === undefined ? '' : `<${generics}>`
     return {
         head: `
-type ${COMPONENT_RECORD}<Props> = {} extends Props ? [record?: Props] : [record: Props]
+type ${BINDABLE}<Props> = { [Key in keyof Props]: [Props[Key]] extends [never] ? never : Props[Key] | import(${JSON.stringify(FRAMEWORK_SOURCES.reactive)}).Reactive<Props[Key], Props[Key], any, any> }
+type ${COMPONENT_RECORD}<Props> = {} extends Props ? [record?: ${BINDABLE}<Props>] : [record: ${BINDABLE}<Props>]
 declare const ${COMPONENT_STAND_IN}: ${parameters}(...record: ${COMPONENT_RECORD}<`,
         tail: `>) => import('${SERVER_SPECIFIER}').Component
 export default ${COMPONENT_STAND_IN}

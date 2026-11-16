@@ -367,6 +367,17 @@ const retries: number = config().RETRIES
 const wrong: string = config().RETRIES
 </script>`
 
+// 38.196 — A DIRECT CALL TAKES A PROP AS ITS VALUE OR AS A `Reactive` OF IT, the write path a
+// `bind:` hands over (32.6), and nothing else: a `Reactive` of another type is still refused.
+const DIRECT = `import { reactive } from '@abide/abide'
+import Held from './Held.abide'
+
+export const bound = Held({ value: reactive('a') })
+export const plain = Held({ value: 'a' })
+export const wrong = Held({ value: reactive(1) })
+export const wrongPlain = Held({ value: 1 })
+`
+
 let app = ''
 let found: Diagnosis[] = []
 
@@ -420,6 +431,7 @@ const { start = 0 } = props<{ start?: number }>()
         'lib/notes.ts':
             "import notes from '#src/lib/notes.md' with { type: 'text' }\n\nexport const length: number = notes.length\n",
         'lib/sum.ts': "export const sum: number = 'x'\n",
+        'lib/direct.ts': DIRECT,
     })
     found = await checkApp(app)
 }, 60_000)
@@ -710,6 +722,17 @@ test('a read given an argument is reported once for the whole app — 31.11', ()
             diagnosis.message.includes('RULEBOOK 31.11'),
         ).length,
     ).toBe(1)
+})
+
+// THE REVERT: hand `__record` the props as declared in `componentModule`, without `__bindable`;
+// the bound call reports TS2322 too (3 against 2).
+test('a direct call takes a prop as its value or a Reactive of it — 38.196', () => {
+    expect(
+        inFile('lib/direct.ts').map(({ line, code }) => ({ line, code })),
+    ).toEqual([
+        { line: 6, code: 2322 },
+        { line: 7, code: 2322 },
+    ])
 })
 
 test('a .ts file beside the pages is checked as it stands — 38.3', () => {

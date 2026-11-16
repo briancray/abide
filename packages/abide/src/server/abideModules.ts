@@ -507,8 +507,10 @@ function compiledAt(served: Held, path: string): CompiledFile {
 // `render` invokes with nothing. The component is the module's one export (34.17).
 // 38.119 — and it carries what `mount` hydrates it with: the same accessors, and its browser module.
 // 38.134 — a prop written as a getter is read through it on every read, as a parent's would be.
+// 38.195 — and one handed as a `Reactive` is bound to it, as a tag's `bind:` would be.
 function boundModule(path: string): string {
     return `import component from ${JSON.stringify(path)}
+import { passedProp } from '${SERVER_RUNTIME_SPECIFIER}'
 export default (props = {}) => {
     const accessors = {}
     for (const key in props) {
@@ -517,8 +519,7 @@ export default (props = {}) => {
             accessors[key] = () => live.call(props)
             continue
         }
-        const value = props[key]
-        accessors[key] = () => value
+        accessors[key] = passedProp(props[key])
     }
     const bound = () => component(accessors)
     bound[Symbol.for(${JSON.stringify(MOUNTABLE.description)})] = {
