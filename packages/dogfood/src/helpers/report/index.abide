@@ -40,6 +40,12 @@ import Snippet from '#src/lib/Snippet.abide'
             <code>summary</code> and <code>description</code>, shows <code>markdown</code>, and
             calls <code>send()</code>.</p>
 
+        <p>A draft has its <code>id</code> from the moment it is made, and <code>send()</code>
+            settles to it. Every <code>Report</code> sent from the draft carries that id, so a
+            send retried after a refusal lands under the same one. Once sent, the draft settles
+            the same id again and sends nothing more. An <code>onReport</code> files the report
+            under its id, and the person can quote it back.</p>
+
         <p>Where a report goes is the server's to say, in <code>onReport</code>. The CRM keeps
             each one for the browser that sent it; an app posts it to its tracker, its inbox or its
             support desk:</p>

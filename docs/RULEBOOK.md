@@ -4830,3 +4830,10 @@ and MUST throw outside a browser.
 four characters long or longer, each written in its place as `[redacted <name>]`.
 
 48.11 A line a browser sends with a `Report` MUST reach `onReport` naming no trace.
+
+48.12 Every `Report` sent from a `ReportDraft` MUST carry the draft's `id`, and a `Report` a browser
+sends naming no `id` of 1 to 64 letters, digits, `_` or `-` MUST reach `onReport` under one the
+server mints.
+
+48.13 `ReportDraft.send` MUST settle the draft's `id`, and where a send of the draft is in flight or
+has settled it MUST settle that same `id` without handing the `Report` to any `onReport` again.

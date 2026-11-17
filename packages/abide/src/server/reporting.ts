@@ -99,6 +99,7 @@ async function deliver(given: Report): Promise<void> {
         route: given.route,
     }
     const report: Report = {
+        id: given.id,
         summary,
         description,
         ...context,
@@ -154,6 +155,9 @@ const linesHandler = declare('GET')(
     NO_SURFACE,
 )
 
+/** 48.12 — an id a browser's draft names, kept where it is one a tracker can file under. */
+const REPORT_ID = /^[\w-]{1,64}$/
+
 function textOf(value: unknown): string {
     return typeof value === 'string' ? value : ''
 }
@@ -183,12 +187,13 @@ function pageLines(value: unknown): LogRecord[] {
 // back where it is the native app's window, as its draft showed them (48.4).
 const sendHandler = declare('POST')(
     async (body: {
+        id?: unknown
         summary?: unknown
         description?: unknown
         route?: unknown
         traces?: unknown
         lines?: unknown
-    }): Promise<null> => {
+    }): Promise<string> => {
         const traces = Array.isArray(body.traces)
             ? body.traces.filter(
                   (trace): trace is string => typeof trace === 'string',
@@ -200,7 +205,12 @@ const sendHandler = declare('POST')(
             first.time < second.time ? -1 : first.time > second.time ? 1 : 0,
         )
         const context = serverContext()
+        const id =
+            typeof body.id === 'string' && REPORT_ID.test(body.id)
+                ? body.id
+                : crypto.randomUUID()
         await deliver({
+            id,
             summary: textOf(body.summary),
             description: textOf(body.description),
             version: context.version,
@@ -210,7 +220,7 @@ const sendHandler = declare('POST')(
             lines,
             markdown: '',
         })
-        return null
+        return id
     },
     NO_SURFACE,
 )

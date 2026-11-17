@@ -20,6 +20,8 @@ export const REPORT_LINES = 200
 
 /** A report as it is sent, and as `onReport` is handed it. */
 export type Report = {
+    /** 48.12 — the draft's, the same on every send of it. */
+    id: string
     summary: string
     description: string
     version: string
@@ -40,6 +42,8 @@ export const REPORTING: {
 
 /** A report not yet sent: what the person writes, and what goes with it. */
 export class ReportDraft {
+    /** 48.12 — minted with the draft, and what every send of it hands back. */
+    readonly id: string = crypto.randomUUID()
     readonly summary: Reactive<string> = reactive('')
     readonly description: Reactive<string> = reactive('')
     readonly traces: string[]
@@ -47,6 +51,8 @@ export class ReportDraft {
     /** 48.7 — the whole of what `send` sends, as text. */
     readonly markdown: Reactive<string>
     #context: { version: string; platform: string; route: string }
+    /** 48.13 — the send in flight or done, so a second one delivers nothing more. */
+    #sent: Promise<string> | undefined = undefined
 
     constructor(traces: string[]) {
         this.traces = traces
@@ -78,12 +84,29 @@ export class ReportDraft {
         )
     }
 
-    /** 48.8 — hands the report to every `onReport`; refuses, leaving the draft as it was, where one throws. */
-    async send(): Promise<void> {
+    /**
+     * 48.8, 48.13 — hands the report to every `onReport` and settles its `id`; refuses, leaving the
+     * draft as it was, where one throws. Sent once, it settles the same `id` without sending again.
+     */
+    send(): Promise<string> {
+        if (this.#sent !== undefined) return this.#sent
+        const sending = this.#deliver().then(
+            () => this.id,
+            (thrown: unknown) => {
+                this.#sent = undefined
+                throw thrown
+            },
+        )
+        this.#sent = sending
+        return sending
+    }
+
+    async #deliver(): Promise<void> {
         const summary = this.summary()
         const description = this.description()
         const lines = await this.lines
         const report: Report = {
+            id: this.id,
             summary,
             description,
             ...this.#context,
@@ -99,6 +122,7 @@ export class ReportDraft {
         }
         if (REPORTING.send !== undefined) return REPORTING.send(report)
         const request = rpcRequest('POST', mounted(REPORT_ADDRESS), {
+            id: this.id,
             summary,
             description,
             route: report.route,

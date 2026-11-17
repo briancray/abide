@@ -187,3 +187,56 @@ test('each secret of a rotated ABIDE_PRINCIPAL_SECRET is taken out of a draft �
         process.env.ABIDE_PRINCIPAL_SECRET = SECRET
     }
 })
+
+// THE REVERT: drop the `#sent` check from `ReportDraft.send` — the second send reaches `onReport`
+// again, and the tracker files the one problem three times (3 reports, not 1).
+test('a draft is sent once under its id, and sent again after a refusal under the same one — 48.8, 48.12, 48.13', async () => {
+    await using app = await inMemoryApp(sync)
+    const draft = await app.run(() => report())
+    let down = true
+    const reports: Report[] = []
+    unfile.push(
+        onReport((sent) => {
+            if (down) throw new Error('the tracker is down')
+            reports.push(sent)
+        }),
+    )
+    await expect(draft.send()).rejects.toMatchObject({ status: 502 })
+    down = false
+    const [first, second] = await Promise.all([draft.send(), draft.send()])
+    expect(first).toBe(draft.id)
+    expect(second).toBe(draft.id)
+    expect(await draft.send()).toBe(draft.id)
+    expect(reports.map((sent) => sent.id)).toEqual([draft.id])
+})
+
+// THE REVERT: hand `deliver` `textOf(body.id)` — the report with no id reaches `onReport` under ''.
+test('a browser’s report keeps the id its draft named, and one naming none is given one — 48.12', async () => {
+    const reports = received()
+    await using app = await inMemoryApp(sync)
+    const send = async (id: unknown): Promise<string> =>
+        (
+            await app.fetch(
+                new Request('http://app.test/__abide/report', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        id,
+                        summary: 's',
+                        traces: [],
+                        lines: [],
+                    }),
+                }),
+            )
+        ).json() as Promise<string>
+    expect(await send('draft-7f3a')).toBe('draft-7f3a')
+    const minted = await send(undefined)
+    const refused = await send('not an id\n')
+    expect(minted).toMatch(/^[\w-]{1,64}$/)
+    expect(refused).not.toBe('not an id\n')
+    expect(reports.map((sent) => sent.id)).toEqual([
+        'draft-7f3a',
+        minted,
+        refused,
+    ])
+})
