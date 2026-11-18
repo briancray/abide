@@ -630,9 +630,31 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 ## Guards — rungs that let a caller through
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `signedIn` | `Middleware<never, object, Failed<'SignedOut', undefined>>` | A rung admitting a caller the server authenticated, from `@abide/abide/server`. | 15.9, 54.1 |
+| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.9, 54.2, 54.3, 54.4 |
+| `readOnly` | `(options?: { allow?: readonly { address: string \| undefined }[]; message?: string }) => Middleware<never, object, Failed<'ReadOnly', undefined>>` | A rung refusing every write but one to a handler it allows, from `@abide/abide/server`. | 15.9, 54.5, 54.6 |
+
 ## `fetchJson` — fetches that time out and retry
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17 |
+| `fetchText` | `(url: string \| URL, options?: FetchOptions<string>) => Promise<string \| FetchFailed>` | The same answer as text, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17 |
+| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.12, 54.15, 54.17 |
+| `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up settles to. | 15.9, 54.14, 54.16, 54.17 |
+
 ## `job` — work on a schedule
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `job` | `(name: string, options: { every: number \| (() => number); run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26 |
+| `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
+| `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
+| `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
+| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
+| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
 
 # Components
 

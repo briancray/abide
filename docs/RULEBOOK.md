@@ -1040,7 +1040,8 @@ args leave a parameter of its route no spelling as a segment (30.3, 30.19) — i
 wire, and before the handler runs — at status 422.
 
 15.9 An implementation MUST declare no refusal names beyond those `refuse.notFound`,
-`refuse.validation` and `refuse.aborted` carry and the one 17.4 names.
+`refuse.validation` and `refuse.aborted` carry, the one 17.4 names, and those 54.1, 54.4, 54.5 and
+54.16 name.
 
 15.10 An expression statement whose type is `Failed` MUST be a compile error naming both repairs.
 
@@ -4875,3 +4876,91 @@ the states that pattern names.
 # 53. Keys, element behaviors and chat
 
 # 54. Guards, fetches and jobs
+
+## Rungs
+
+54.1 `signedIn` MUST answer a caller whose `principal.authenticated` is false with a refusal named
+`SignedOut`, at status 401, and MUST hand any other caller to `next`.
+
+54.2 `requireRole` MUST answer a caller whose `principal.resolved` is not authenticated as
+`signedIn` does, before it reads a role.
+
+54.3 `requireRole` given a string MUST admit a caller whose `principal.resolved` carries it as
+`role`, and given a function MUST admit a caller whose `principal.resolved` it answers true for.
+
+54.4 `requireRole` MUST answer an authenticated caller it does not admit with a refusal named
+`Forbidden`, at status 403, carrying the `message` it was given, or one naming the role where it was
+given a string and none.
+
+54.5 `readOnly` MUST hand a `GET`, a `HEAD` or an `OPTIONS` request to `next`, and MUST answer a
+request of any other method with a refusal named `ReadOnly`, at status 403, save one 54.6 admits.
+
+54.6 `readOnly` MUST hand to `next` a request addressed to the `rpc.address` of a handler its
+`allow` lists.
+
+## Fetches
+
+54.7 `fetchJson` and `fetchText` MUST abort an attempt not answered within `timeout` milliseconds,
+10000 where none is given.
+
+54.8 `fetchJson` and `fetchText` MUST ask again, up to `retries` times, after an attempt that threw,
+that 54.7 aborted, or that was answered at a status 15.19 counts transient, and MUST NOT ask again
+after an attempt answered at any other status.
+
+54.9 `retries` MUST default to 2 for a method RFC 9110 defines as idempotent, and to 0 for any
+other.
+
+54.10 A retry under 54.8 MUST wait the time the answer's `Retry-After` names, in seconds or as an
+HTTP date, or 250 milliseconds doubled for each retry before it where none is named, and MUST NOT be
+made where that wait is longer than `timeout`.
+
+54.11 An abort of the `signal` a caller passes `fetchJson` or `fetchText` MUST be thrown as its
+reason, and MUST NOT be asked again.
+
+54.12 A `GET` given a `ttl` MUST be answered with the body an earlier `GET` of the same URL and
+headers was answered with, for `ttl` milliseconds from that answer.
+
+54.13 A `GET` given a `ttl` MUST join a `GET` of the same URL and headers in flight rather than ask
+again.
+
+54.14 A `FetchFailed` MUST NOT be held under 54.12.
+
+54.15 `ttl` MUST be inert on a method other than `GET`.
+
+54.16 `fetchJson` and `fetchText` MUST settle to a `FetchFailed` at status 502 where they give up,
+carrying the status the last attempt was answered at, or null where none answered, and why, and MUST
+throw nothing but 54.11's abort.
+
+54.17 `fetchJson` MUST settle to a `FetchFailed` where the body does not parse as JSON, and
+`fetchJson` and `fetchText` MUST settle to one where their `schema` refuses the body.
+
+## Jobs
+
+54.18 A `job` MUST look whether a run is due every `every` milliseconds where `every` is a number
+under a minute, and every minute otherwise, from a first look made as 7.30 makes a held-back value's
+first run, and MUST stop looking where 7.26 stops a poll.
+
+54.19 A look MUST start a run of a `job` where no run has ended, or where `every` milliseconds have
+passed since the last one ended.
+
+54.20 `runNow`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second.
+
+54.21 A `job` MUST ask `lastRun` once, on its first look, for when its last run ended before this
+process, and MUST read the answer as a run that ended then.
+
+54.22 `Job.status` MUST be one `global` value, written as a run starts and as it ends.
+
+54.23 A run that throws MUST be written through `log.error` under the namespace `log.named` builds
+from `job` and the job's name, and its message MUST stand as `lastError` until a run ends without
+throwing.
+
+54.24 A run whose signal 54.26 aborted MUST NOT move `lastRun` or `lastError`.
+
+54.25 A `job` whose `every` is not a positive number MUST start no run from a look, and its
+`nextRun` MUST be null while it is not.
+
+54.26 `run` MUST be handed a signal aborted where the one `stopSignal` answers is, and where
+`Job.stop` is called.
+
+54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
+run, from a look or from `runNow`, and MUST hold `nextRun` null.
