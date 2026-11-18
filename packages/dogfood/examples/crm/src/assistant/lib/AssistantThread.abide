@@ -1,0 +1,10 @@
+<script>
+import Chat from '@abide/abide/Chat.abide'
+
+import askAssistant from '../askAssistant.handler.ts'
+</script>
+
+<Chat ask={askAssistant} placeholder="Which company is Ada at?"
+    class="chat [&_[data-part=transcript]]:flex
+        [&_[data-part=transcript]]:flex-col [&_[data-part=transcript]]:gap-snug
+        [&_[data-part=transcript]]:p-0 [&_[data-part=composer]]:row" />

@@ -1,0 +1,12 @@
+<script>
+import Chat from '@abide/abide/Chat.abide'
+import Pairing from '@abide/abide/Pairing.abide'
+
+import askClaudeCode from '../askClaudeCode.handler.ts'
+import permitClaudeCode from '../permitClaudeCode.handler.ts'
+</script>
+
+<Pairing class="flex flex-col gap-snug [&_[data-part=command]]:text-chrome">
+    <Chat ask={askClaudeCode} permit={permitClaudeCode}
+        placeholder="Which company is Grace at?" class="chat" />
+</Pairing>

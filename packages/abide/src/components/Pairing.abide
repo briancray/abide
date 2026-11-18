@@ -1,0 +1,55 @@
+<script>
+// The visitor's Claude Code paired with this page through `pairing` (44.69): connecting, the command
+// and the click that pair a bridge, the install where no bridge app opened, and once paired, what the
+// caller put inside it. 53.42 — the step is the root's `data-step`.
+import type { Attributes } from '#shared/Attributes.ts'
+import { copyText } from '#shared/copyText.ts'
+import { pairing } from '#shared/pairing.ts'
+import { props } from '#shared/props.ts'
+import { reactive } from '#shared/reactive/index.ts'
+
+const { ...rest } = props<Attributes<'section'>>()
+
+const { status, step, copied, start, copyInstall } = pairing()
+
+const shown = reactive(() => {
+    if (status.error()) return 'unavailable'
+    if (status === undefined) return 'connecting'
+    if (status.paired) return 'paired'
+    return step
+})
+
+const command = () => status.peek()?.command ?? ''
+</script>
+
+<section {...rest} data-step={shown}>
+    {#if shown === 'unavailable'}
+        <p data-part="message">Claude Code is unavailable here.</p>
+    {:else if shown === 'connecting'}
+        <p data-part="message">Connecting…</p>
+    {:else if shown === 'paired'}
+        {#if status?.missing.length}
+            <p data-part="missing">Claude Code here cannot use
+                {status.missing.join(', ')}.</p>
+        {/if}
+        <slot />
+        <button type="button" data-part="pair" onclick={start}>Reconnect</button>
+    {:else if shown === 'install'}
+        <p data-part="message">No bridge app opened. Install it once, in a
+            terminal, then pair again:</p>
+        <pre data-part="command">{status?.install}</pre>
+        <button type="button" data-part="copy"
+            data-copied={copied ? '' : undefined}
+            onclick={copyInstall}>{copied ? 'Copied' : 'Copy'}</button>
+        <button type="button" data-part="pair" onclick={start}>Pair again</button>
+    {:else}
+        <p data-part="message">Pair your Claude Code with this page with a
+            click, or run this in a terminal:</p>
+        <pre data-part="command">{status?.command}</pre>
+        <button type="button" data-part="copy"
+            bind:element={copyText(command)}>Copy</button>
+        <button type="button" data-part="pair" disabled={shown === 'waiting'}
+            onclick={start}>
+            {shown === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>
+    {/if}
+</section>

@@ -1,0 +1,125 @@
+<script>
+import CopyEmail from 'crm/src/contacts/lib/CopyEmail.abide'
+import copyEmailSource from 'crm/src/contacts/lib/CopyEmail.abide' with { type: 'text' }
+import copyEmailTestSource from 'crm/src/contacts/lib/CopyEmail.test.ts' with { type: 'text' }
+import QuickEdit from 'crm/src/contacts/lib/QuickEdit.abide'
+import quickEditSource from 'crm/src/contacts/lib/QuickEdit.abide' with { type: 'text' }
+import quickEditTestSource from 'crm/src/contacts/lib/QuickEdit.test.ts' with { type: 'text' }
+import ContractDrop from 'crm/src/deals/lib/ContractDrop.abide'
+import contractDropSource from 'crm/src/deals/lib/ContractDrop.abide' with { type: 'text' }
+import contractDropTestSource from 'crm/src/deals/lib/ContractDrop.test.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+</script>
+
+<Doc>
+    <Section title="A panel closes on a press outside it, or on Escape">
+        <Example
+            id="elements-dismissible"
+            title={'`dismissible(onDismiss, { inside })` — closed from outside'}
+            summary="A rep opens Ada's quick edit and changes her company. A press anywhere else on the page closes the panel, and so does Escape; the button that opened it closes it too."
+            files={{
+                'src/contacts/lib/QuickEdit.abide': quickEditSource,
+                'src/contacts/lib/QuickEdit.test.ts': quickEditTestSource,
+            }}
+        >
+            <QuickEdit />
+        </Example>
+
+        <p>Each helper on this page is a <code>bind:element</code> adaptor, the shape
+            <code>observe</code> hands back: a function of the element that hands back what
+            stops it. It stops when the element leaves, so a panel under
+            <code>{'{#if}'}</code> listens only while it is open. Bind several to one element as
+            a list, <code>{'bind:element={[dismissible(close), dropzone(attach)]}'}</code>.</p>
+
+        <p>A press counts as inside the panel and every element <code>inside</code> holds. Hand
+            it the button that opens the panel, or its press closes the panel and its click opens
+            it again. The press that opened the panel is over before the panel is bound, so it
+            never closes what it opened.</p>
+
+        <Snippet source={quickEditSource} path="src/contacts/lib/QuickEdit.abide"
+            from={['<form class=']} />
+
+        <p>Panels open at once stack in the order they opened. Escape closes the top one alone,
+            and a press closes each one it lands outside, from the top, until the one it lands
+            in. So a menu opened from the panel closes first. Escape is skipped where a field
+            inside took it for itself with <code>preventDefault</code>. The Escape that closes a
+            panel calls it, so a page shortcut on Escape does not run as well. Turn either off
+            with <code>{'{ escape: false }'}</code> or <code>{'{ outside: false }'}</code>.</p>
+    </Section>
+
+    <Section title="Files dropped on an element, filtered by type">
+        <Example
+            id="elements-dropzone"
+            title={'`dropzone(onFiles, { accept })` — files dropped on a deal'}
+            summary="A rep drags the signed contract onto the Ledger audit deal. The box lights up while files hover over it, and only a PDF is attached."
+            files={{
+                'src/deals/lib/ContractDrop.abide': contractDropSource,
+                'src/deals/lib/ContractDrop.test.ts': contractDropTestSource,
+            }}
+        >
+            <ContractDrop />
+        </Example>
+
+        <p><code>accept</code> is written the way an <code>{'<input type="file">'}</code>
+            writes it: MIME types, <code>image/*</code> wildcards and <code>.pdf</code>
+            extensions. Your callback gets the files it takes, and is not called where it takes
+            none. The drop is refused its default either way, so a PDF dropped beside the box
+            does not open in the tab.</p>
+
+        <p><code>accept</code> also takes a function from the transfer to the files it takes.
+            <code>{'accept: imageFiles'}</code> takes the images a model is shown, ready for
+            <code>imagePiece</code>. <code>{'{ paste: true }'}</code> takes files pasted into the
+            element as a drop, and words pasted alone paste as they always do.
+            <code>{'{ multiple: false }'}</code> takes the first file alone.</p>
+    </Section>
+
+    <Section title="A click copies a value, and the element says it did">
+        <Example
+            id="elements-copy-text"
+            title="`copyText(text)` — a contact's email to the clipboard"
+            summary="A rep copies Grace's email address to paste into a message. The button reads Copied until the mark wears off."
+            files={{
+                'src/contacts/lib/CopyEmail.abide': copyEmailSource,
+                'src/contacts/lib/CopyEmail.test.ts': copyEmailTestSource,
+            }}
+        >
+            <CopyEmail />
+        </Example>
+
+        <p>A click writes the text to the clipboard and puts <code>data-copied</code> on the
+            element for <code>copiedFor</code>, 1500 milliseconds by default. The CRM's button
+            swaps its word by that attribute alone, with Tailwind's <code>group-data-copied</code>
+            variant, so nothing in the script holds whether it copied.</p>
+
+        <Snippet source={copyEmailSource} path="src/contacts/lib/CopyEmail.abide"
+            from={['<button class="group"']} />
+
+        <p>Hand <code>copyText</code> a function to copy text that changes, and it is read at
+            the click. <code>navigator.clipboard</code> exists only on HTTPS and
+            <code>localhost</code>, so a page served over plain HTTP copies through a hidden
+            textarea instead.</p>
+    </Section>
+
+    <Section title="Styling an element by the attribute a behavior writes">
+        <p>None of the three adds a class or a style. Two write a <code>data-</code> attribute
+            on the element they are bound to while a state holds, and you style that.</p>
+
+        <table>
+            <thead><tr><th>Attribute</th><th>Written by</th><th>Present while</th><th>Target it with</th></tr></thead>
+            <tbody>
+                <tr><td><code>data-dragging</code></td><td><code>dropzone</code></td><td>files are dragged over the element, its children included</td><td><code>data-dragging:border-signal</code>, or <code>[data-dragging]</code> in a stylesheet</td></tr>
+                <tr><td><code>data-copied</code></td><td><code>copyText</code></td><td><code>copiedFor</code> milliseconds after a copy lands</td><td><code>data-copied:text-signal</code> on the element, <code>group-data-copied:inline</code> on a child of an element with <code>group</code>, or <code>[data-copied]</code></td></tr>
+            </tbody>
+        </table>
+
+        <p><code>dismissible</code> writes nothing: the panel is open while your own value says
+            so, and that value is what an <code>{'{#if}'}</code> or a class reads.</p>
+    </Section>
+
+    <Registry />
+</Doc>

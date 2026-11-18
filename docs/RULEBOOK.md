@@ -4874,4 +4874,130 @@ the states that pattern names.
 
 # 53. Keys, element behaviors and chat
 
+53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are
+written, whose key and modifiers match it.
+
+53.2 `hotkeys` MUST call `preventDefault` on a `keydown` it ran a binding for, and MUST NOT on any
+other.
+
+53.3 A `hotkeys` binding holding `mod` MUST match ⌘ on an Apple platform and Ctrl on any other,
+reading the platform off the user agent of the request being served on a server and off
+`navigator.userAgent` in a browser.
+
+53.4 A `hotkeys` binding MUST NOT match a `keydown` holding Ctrl, ⌘ or Alt where the binding does not
+hold it, nor one lacking a modifier the binding holds.
+
+53.5 A `hotkeys` binding whose key is a symbol MUST match whether shift is held or not, save where it
+holds `shift`, and any other binding MUST match shift as a modifier.
+
+53.6 A `hotkeys` binding MUST match its key against `KeyboardEvent.key` case-blind, and a letter or a
+digit by `KeyboardEvent.code` where the press typed no printable ASCII character.
+
+53.7 `hotkeys` MUST NOT run a binding for a `keydown` whose target `isEditableTarget` holds for, save
+a binding whose `editable` is `true`.
+
+53.8 `hotkeys` MUST NOT run a binding for a `keydown` already `defaultPrevented`, or one an input
+method is composing.
+
+53.9 `hotkeys` MUST throw where a binding holds a modifier other than `ctrl`, `meta`, `alt`, `shift`
+and `mod`.
+
+53.10 `isEditableTarget` MUST hold for a textarea, a select, an input that takes text and an element
+`contenteditable` makes writable, and MUST NOT hold for any other target.
+
+53.11 `keyLabel` MUST write `mod` as ⌘ where 53.3 matches it as ⌘, and as Ctrl where 53.3 matches it
+as Ctrl.
+
+53.12 `dismissible` MUST call its callback on a `pointerdown` landing outside its element and outside
+every element `inside` holds, save where `outside` is `false`.
+
+53.13 `dismissible` MUST NOT call its callback for a `pointerdown` dispatched when its element was
+bound.
+
+53.14 `dismissible` MUST call its callback on an Escape `keydown` not already `defaultPrevented`, and
+MUST call `preventDefault` on it, save where `escape` is `false`.
+
+53.15 Elements `dismissible` is bound to at once MUST stack in the order they were bound: an Escape
+dismissing the top one alone, and a press dismissing each from the top that it lands outside until
+the first it lands in.
+
+53.16 `dismissible`'s `Disposer` MUST take its element off the stack, and the last one MUST remove
+the document's listeners.
+
+53.17 `dropzone` MUST write `data-dragging` on its element while a drag carrying files is over it, and
+MUST remove it once the drag leaves or drops.
+
+53.18 `dropzone` MUST refuse the default of a `dragover` and a `drop` carrying files, whatever
+`accept` takes.
+
+53.19 `dropzone` MUST hand its callback the files a drop carries that `accept` takes, the first alone
+where `multiple` is `false`, and MUST NOT call it where it takes none.
+
+53.20 `dropzone` with `paste` MUST take a `paste` carrying files `accept` takes as a drop, and MUST
+leave a paste carrying none to the browser.
+
+53.21 `copyText` MUST write its text to the clipboard on a click of its element, calling a function
+it was given at the click.
+
+53.22 `copyText` MUST copy through a selected textarea where `navigator.clipboard` is absent or
+refuses.
+
+53.23 `copyText` MUST write `data-copied` on its element once a copy lands, and MUST remove it
+`copiedFor` milliseconds after the last.
+
+53.24 `transcript.fold` MUST join a `text` event to the text part ending the turn, in place, and MUST
+otherwise add a text part holding it.
+
+53.25 `transcript.fold` MUST set a tool part's `input` from the `input` event naming its id, and its
+`result`, `failed` and `value` from the `result` event naming it.
+
+53.26 `transcript.fold` MUST add a `permission` event as a permission part whose `allowed` is
+`undefined`.
+
+53.27 `transcript.fold` MUST set a turn's `stop` from a `done` event.
+
+53.28 `transcript.messages` MUST send a user turn's text and image parts in order, and an assistant
+turn's text parts alone.
+
+53.29 `transcript.messages` MUST leave out a turn with nothing to send.
+
+53.30 `transcript.turn` MUST set every field an `AssistantTurn` declares.
+
+53.31 `Chat` MUST call `ask` with what `transcript.messages` makes of the conversation, the new
+question included, and with a `signal` of its own.
+
+53.32 `Chat` MUST fold each event `ask` streams into the answering turn once, as it arrives.
+
+53.33 `Chat`'s composer MUST send on Enter, and MUST NOT on Shift+Enter or on an Enter an input
+method is composing.
+
+53.34 `Chat` MUST NOT send while an answer streams, while `disabled` is `true`, or with neither words
+nor an image to send.
+
+53.35 `Chat`'s Stop MUST abort the `signal` it handed `ask`, keeping what arrived and setting the
+answer's `stop` to `stopped`.
+
+53.36 `Chat` MUST set an answer's `failed` to the message of what `ask` threw, save where Stop
+aborted it.
+
+53.37 `Chat` MUST take an image `imageFiles` finds in a paste into or a drop on its composer as an
+image part `imagePiece` draws.
+
+53.38 `Chat` MUST answer a permission part through `permit` with the part's id and the visitor's
+answer, and MUST disable the part's buttons where `permit` is absent or the part is answered.
+
+53.39 `Chat` MUST render an assistant's text part through `Text` where one is given, and as text
+where none is.
+
+53.40 `Chat` MUST keep its transcript scrolled to its bottom as it grows, save while the reader has
+scrolled up from it.
+
+53.41 `Chat`'s transcript MUST carry `role="log"` and `aria-live="polite"`.
+
+53.42 `Pairing` MUST write its step as `data-step`: `connecting`, `unavailable`, `click`, `waiting`,
+`install` or `paired`.
+
+53.43 `Pairing` MUST render its children once `pairing` reports the bridge paired, and MUST NOT
+before.
+
 # 54. Guards, fetches and jobs

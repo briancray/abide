@@ -1,0 +1,32 @@
+<script>
+import { hotkeys, keyLabel, reactive } from '@abide/abide'
+
+let note = reactive('')
+let saved = reactive<string[]>([])
+
+function save() {
+    if (note.trim() === '') return
+    saved.push(note.trim())
+    note = ''
+}
+
+const keys = hotkeys({ 'mod+Enter': { run: save, editable: true } })
+</script>
+
+<form class="flex flex-col gap-snug" onsubmit={(event) => {
+    event.preventDefault()
+    save()
+}}>
+    <label>note on Ledger audit
+        <textarea bind:value={note} onkeydown={keys}></textarea></label>
+    <div class="row">
+        <button type="submit">Save</button>
+        <kbd class="status">{keyLabel('mod+Enter')}</kbd>
+    </div>
+</form>
+
+<ul class="fields stacked">
+    {#for each of saved}
+        <li><span>note</span><strong>{each}</strong></li>
+    {/for}
+</ul>

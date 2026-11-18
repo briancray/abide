@@ -21,15 +21,27 @@ export type {
     AssistantEvent,
     AssistantMessage,
 } from './AssistantEvent.ts'
+// 53.24-53.30 — a conversation as a chat holds it, and the namespace folding an answer into one.
+export type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 // 33.23 — an element's attributes, typed as a component's props.
 export type { Attributes } from './Attributes.ts'
 export { type Cookies, cookies } from './cookies.ts'
+// 53.21-53.23 — the `bind:element` adaptor copying text on a click.
+export { copyText } from './copyText.ts'
 export { csp } from './csp.ts'
+// 53.12-53.16 — the `bind:element` adaptor closing a panel from outside it.
+export { dismissible } from './dismissible.ts'
+// 53.17-53.20 — the `bind:element` adaptor taking dropped and pasted files.
+export { dropzone } from './dropzone.ts'
 // 38.141 — which native window the work running is for.
 export { native } from './native.ts'
 // 38.148 — the update the native app's window has staged.
 export { pendingUpdate, type StagedUpdate } from './pendingUpdate.ts'
 export { type Failed, isFailed } from './Failed.ts'
+// 53.1-53.11 — keyboard shortcuts, the fields they stand aside for, and a binding as a person reads it.
+export { type Hotkey, hotkeys } from './hotkeys.ts'
+export { isEditableTarget } from './isEditableTarget.ts'
+export { keyLabel } from './keyLabel.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'
 // 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.
@@ -98,6 +110,7 @@ export { refuse } from './refuse.ts'
 // 44.51 — what a conversation's calls to one handler answered.
 export { resultsOf } from './resultsOf.ts'
 export { route } from './route.ts'
+export * as transcript from './transcript/index.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 // 8.22, 8.34, 8.37 — the `Store`s, as one namespace: `store.web`, `store.indexedDB`, `store.cookies`.
 // `@abide/abide/server` exports its own over this one, with the two a server alone has.

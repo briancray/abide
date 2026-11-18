@@ -1,0 +1,137 @@
+<script>
+import askAssistantSource from 'crm/src/assistant/askAssistant.handler.ts' with { type: 'text' }
+import askClaudeCodeSource from 'crm/src/assistant/askClaudeCode.handler.ts' with { type: 'text' }
+import AssistantThread from 'crm/src/assistant/lib/AssistantThread.abide'
+import assistantThreadSource from 'crm/src/assistant/lib/AssistantThread.abide' with { type: 'text' }
+import assistantThreadTestSource from 'crm/src/assistant/lib/AssistantThread.test.ts' with { type: 'text' }
+import ClaudeCodeChat from 'crm/src/assistant/lib/ClaudeCodeChat.abide'
+import claudeCodeChatSource from 'crm/src/assistant/lib/ClaudeCodeChat.abide' with { type: 'text' }
+import claudeCodeChatTestSource from 'crm/src/assistant/lib/ClaudeCodeChat.test.ts' with { type: 'text' }
+import permitClaudeCodeSource from 'crm/src/assistant/permitClaudeCode.handler.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+</script>
+
+<Doc>
+    <Section title="An answer streams into the chat as the assistant writes it">
+        <Example
+            id="chat-assistant"
+            title={"`<Chat ask={askAssistant} />` — the CRM's assistant, as a conversation"}
+            summary="A rep asks the CRM's assistant which company Ada is at, and presses Enter. The tool call it makes shows as it runs, then the answer. The model is a recording; the search it calls is the CRM's own handler."
+            files={{
+                'src/assistant/lib/AssistantThread.abide': assistantThreadSource,
+                'src/assistant/askAssistant.handler.ts': askAssistantSource,
+                'src/assistant/lib/AssistantThread.test.ts': assistantThreadTestSource,
+            }}
+        >
+            <AssistantThread />
+        </Example>
+
+        <p><code>ask</code> is your assistant handler, the <code>POST</code> that yields
+            <code>assistant</code>'s events. <code>Chat</code> calls it with every turn so far
+            and reads the events as they stream. The handler keeps nothing between calls, so its
+            address, its middleware and its tools stay yours.</p>
+
+        <p>Enter sends and Shift+Enter starts a new line. An Enter that picks a word in an input
+            method does neither. An image pasted into the composer, or dropped on it, goes with
+            the next question, drawn by <code>imagePiece</code>. While the answer streams, Stop
+            replaces Send: it aborts the call, and the answer keeps what had arrived.</p>
+
+        <p>The assistant's words render as plain text. Hand a component taking
+            <code>text</code> as <code>Text</code> to render them another way, as markdown for
+            one. The transcript follows its bottom as the answer grows, until the reader scrolls
+            up, and again once they scroll back down.</p>
+
+        <p><code>Chat</code> holds the conversation as <code>AssistantTurn</code>s, and the
+            <code>transcript</code> functions it folds them with are yours for a chat laid out
+            some other way. Fold each event once, as it arrives, inside the
+            <code>patch</code> of the reactive value holding the turns. Words join the words
+            before them, so a chunk rewrites one text node. Folding every event again per chunk
+            costs the square of the answer's length, and the chat's test counts the reads to hold
+            it to one per event.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What it does</th></tr></thead>
+            <tbody>
+                <tr><td><code>transcript.turn('assistant')</code></td><td>a turn with every field set, for a question you build or an answer to fold into</td></tr>
+                <tr><td><code>transcript.fold(answering, event)</code></td><td>one event folded into its turn in place: words joined, a tool call paired with its input and its result by id, a permission prompt waiting, <code>done</code> setting <code>stop</code></td></tr>
+                <tr><td><code>transcript.messages(turns)</code></td><td>the turns as an assistant handler takes them, leaving out an answer stopped before a word</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="The visitor's Claude Code, paired before the chat">
+        <Example
+            id="chat-pairing"
+            title="`<Pairing>` — a chat once Claude Code is paired"
+            summary="A rep pairs their own Claude Code with the CRM. Until the bridge answers, the panel offers the click and the command that pair it; once paired, it shows the chat inside it."
+            files={{
+                'src/assistant/lib/ClaudeCodeChat.abide': claudeCodeChatSource,
+                'src/assistant/askClaudeCode.handler.ts': askClaudeCodeSource,
+                'src/assistant/permitClaudeCode.handler.ts': permitClaudeCodeSource,
+                'src/assistant/lib/ClaudeCodeChat.test.ts': claudeCodeChatTestSource,
+            }}
+        >
+            <ClaudeCodeChat />
+        </Example>
+
+        <p><code>Pairing</code> renders <code>pairing</code>'s steps: connecting, the command
+            with a click that pairs, the install where no bridge app opened, and paired. What you
+            put inside it renders once the bridge is paired, beside a Reconnect for a bridge that
+            stopped answering. A tool the visitor's Claude Code cannot make available is named
+            with it.</p>
+
+        <p>Claude Code asks before it runs a tool its permission mode would not approve on its
+            own. The prompt shows in the answer with Allow and Deny, and <code>permit</code>
+            sends the answer: your handler calling <code>provider.claudeCode.permit</code>.</p>
+    </Section>
+
+    <Section title="Styling a chat by its parts and states">
+        <p>Neither component ships a style or writes a class. A class you pass lands on the
+            root <code>section</code>, with every other attribute. Each element inside carries
+            <code>data-part</code>, and each state is a <code>data-</code> attribute, present
+            while it holds or valued where it has more than two.</p>
+
+        <Snippet source={assistantThreadSource} path="src/assistant/lib/AssistantThread.abide"
+            from={['<Chat ask=']} />
+
+        <table>
+            <thead><tr><th><code>Chat</code></th><th>What it is</th><th>Its states</th></tr></thead>
+            <tbody>
+                <tr><td>the root <code>section</code></td><td>the chat</td><td><code>data-streaming</code> while an answer streams</td></tr>
+                <tr><td><code>transcript</code></td><td>the <code>ol</code> of turns, <code>role="log"</code>; give it a height and <code>overflow-y: auto</code> to scroll</td><td></td></tr>
+                <tr><td><code>turn</code></td><td>one <code>li</code></td><td><code>data-speaker</code> is <code>you</code> or <code>assistant</code>; <code>data-streaming</code> on the answer arriving; <code>data-stop</code> holds why it ended; <code>data-failed</code> where it failed</td></tr>
+                <tr><td><code>speaker</code></td><td>the turn's label, you or assistant</td><td></td></tr>
+                <tr><td><code>text</code></td><td>a run of words: a <code>p</code>, or a <code>div</code> around <code>Text</code></td><td></td></tr>
+                <tr><td><code>image</code></td><td>an image the visitor sent</td><td></td></tr>
+                <tr><td><code>tool</code></td><td>a tool call's <code>details</code>, holding <code>tool-name</code>, <code>tool-input</code> and <code>tool-result</code></td><td><code>data-status</code> is <code>running</code>, <code>done</code> or <code>failed</code></td></tr>
+                <tr><td><code>permission</code></td><td>a prompt, holding <code>permission-name</code>, <code>permission-input</code>, <code>allow</code> and <code>deny</code></td><td><code>data-answer</code> is <code>waiting</code>, <code>allowed</code> or <code>denied</code></td></tr>
+                <tr><td><code>failure</code></td><td>the message an answer failed with</td><td></td></tr>
+                <tr><td><code>composer</code></td><td>the <code>form</code>, holding <code>input</code>, <code>send</code>, <code>stop</code>, and <code>attachments</code> with each <code>attachment</code> and its <code>remove</code></td><td><code>data-dragging</code> while files hover over it</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th><code>Pairing</code></th><th>What it is</th><th>Its states</th></tr></thead>
+            <tbody>
+                <tr><td>the root <code>section</code></td><td>the pairing</td><td><code>data-step</code> is <code>connecting</code>, <code>unavailable</code>, <code>click</code>, <code>waiting</code>, <code>install</code> or <code>paired</code></td></tr>
+                <tr><td><code>message</code></td><td>what the step asks of the visitor</td><td></td></tr>
+                <tr><td><code>command</code></td><td>the <code>pre</code> holding the command that pairs, or the one that installs the bridge app</td><td></td></tr>
+                <tr><td><code>copy</code></td><td>copies the command</td><td><code>data-copied</code> once it has</td></tr>
+                <tr><td><code>pair</code></td><td>pairs with a click, or reconnects once paired</td><td></td></tr>
+                <tr><td><code>missing</code></td><td>the tools the paired Claude Code cannot use</td><td></td></tr>
+            </tbody>
+        </table>
+
+        <p>Target a part with an attribute selector, <code>[data-part=turn][data-speaker=you]</code>
+            in a stylesheet, or from the root with a Tailwind arbitrary variant, as
+            <code>[&amp;_[data-part=transcript]]:p-0</code> does in the CRM's chat. A state on the
+            root is a variant of its own: <code>data-streaming:opacity-90</code>.</p>
+    </Section>
+
+    <Registry />
+</Doc>

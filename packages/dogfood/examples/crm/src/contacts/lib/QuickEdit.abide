@@ -1,0 +1,23 @@
+<script>
+import { dismissible, reactive } from '@abide/abide'
+
+let open = reactive(false)
+let company = reactive('Analytical Engines')
+let opener = reactive<HTMLButtonElement | undefined>(undefined)
+
+const close = () => (open = false)
+</script>
+
+<ul class="fields">
+    <li><span>Ada Lovelace</span><strong>{company}</strong></li>
+</ul>
+
+<button bind:element={opener} onclick={() => (open = !open)}>
+    {open ? 'Done' : 'Quick edit'}</button>
+
+{#if open}
+    <form class="row rounded-md border border-rule bg-raised p-snug"
+        bind:element={dismissible(close, { inside: [opener] })}>
+        <label>company <input bind:value={company}></label>
+    </form>
+{/if}
