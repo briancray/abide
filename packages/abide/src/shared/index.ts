@@ -23,6 +23,8 @@ export type {
 } from './AssistantEvent.ts'
 // 33.23 — an element's attributes, typed as a component's props.
 export type { Attributes } from './Attributes.ts'
+// 52.19-52.23 — the arithmetic under a chart, which `LineChart` and `Sparkline` draw with.
+export * as chart from './chart/index.ts'
 export { type Cookies, cookies } from './cookies.ts'
 export { csp } from './csp.ts'
 // 38.141 — which native window the work running is for.
@@ -30,6 +32,8 @@ export { native } from './native.ts'
 // 38.148 — the update the native app's window has staged.
 export { pendingUpdate, type StagedUpdate } from './pendingUpdate.ts'
 export { type Failed, isFailed } from './Failed.ts'
+// 52.1-52.7 — numbers, money and time as words, the same on both sides.
+export * as format from './format/index.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'
 // 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.
@@ -39,6 +43,8 @@ export type { JsonValue } from './JsonValue.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log, type Span } from './log.ts'
+// 52.8-52.16 — markdown as markup safe to hand `raw`.
+export { markdown } from './markdown/markdown.ts'
 export { type Report, ReportDraft, report } from './report.ts'
 export type { Middleware } from './Middleware.ts'
 export type { Params } from './matchRoute.ts'

@@ -1,0 +1,41 @@
+<script>
+import { format, reactive } from '@abide/abide'
+import Sparkline from '@abide/abide/Sparkline.abide'
+
+// Won revenue per month, June to November; Grace's August is not closed yet.
+const REPS = [
+    { name: 'Ada Lovelace', won: [12_000, 18_000, 15_000, 22_000, 26_000, 31_000] },
+    { name: 'Grace Hopper', won: [24_000, 21_000, null, 11_000, 14_000, 17_000] },
+    { name: 'Alan Turing', won: [9_000, 9_000, 9_000, 9_000, 9_000, 9_000] },
+]
+
+let months = reactive(6)
+</script>
+
+<div class="tabs">
+    {#for choice of [6, 3]}
+        <button aria-selected={months === choice} onclick={() => (months = choice)}>
+            {choice} months
+        </button>
+    {/for}
+</div>
+<table>
+    <thead><tr><th>Rep</th><th>November</th><th>Trend</th></tr></thead>
+    <tbody>
+        {#for rep of REPS by rep.name}
+            <tr>
+                <td>{rep.name}</td>
+                <td>{format.money(rep.won.at(-1), { digits: 0 })}</td>
+                <td>
+                    <Sparkline
+                        values={rep.won.slice(-months)}
+                        label="{rep.name}'s won revenue, {months} months"
+                        dot
+                        class="h-6 w-24 text-muted data-[trend=up]:text-good
+                            data-[trend=down]:text-bad"
+                    />
+                </td>
+            </tr>
+        {/for}
+    </tbody>
+</table>
