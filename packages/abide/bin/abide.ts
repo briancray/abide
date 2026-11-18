@@ -401,7 +401,7 @@ async function compileExecutable(
                 (path) =>
                     // Against the executable's entry, which every module the build bundled is
                     // part of — whatever the platform spells the embedded root as.
-                    `() => new Worker(new URL(${JSON.stringify(`./workers/${threads.names.get(path)}`)}, import.meta.url).href, { ref: false })`,
+                    `() => new Worker(new URL(${JSON.stringify(`./workers/${threads.names.get(path)}`)}, import.meta.url).href)`,
             ),
         ],
         // UNMINIFIED, AND MAPPED: the executable is a server, and an error it logs is read by

@@ -223,15 +223,12 @@ const WORKER_HOST = Bun.fileURLToPath(
     new URL('./workerHost.ts', import.meta.url),
 )
 
-/**
- * 55.1 — a server started from its sources runs a worker file in `workerHost`, handed the file's
- * path. 55.11 — no thread holds the process open unless a call is in flight (`WorkerModule`).
- */
+/** 55.1 — a server started from its sources runs a worker file in `workerHost`, handed the file's path. */
 export const HOSTED_WORKER: WorkerSpawn = (path) =>
-    `() => { const worker = new Worker(${JSON.stringify(WORKER_HOST)}, { ref: false }); worker.postMessage(${JSON.stringify(path)}); return worker }`
+    `() => { const worker = new Worker(${JSON.stringify(WORKER_HOST)}); worker.postMessage(${JSON.stringify(path)}); return worker }`
 
-// 55.1 — A WORKER FILE IMPORTED IS ITS STAND-INS, one per export, each posting its call to the thread
-// `spawn` starts. Its filter names the worker files and nothing else, as `handlerFilesPlugin`'s does,
+// 55.1 — A WORKER FILE IMPORTED IS ITS STAND-INS, one per export, each posting its call to a thread
+// `spawn` starts for it (55.4). Its filter names the worker files and nothing else, as `handlerFilesPlugin`'s does,
 // because the runtime's `onLoad` cannot fall through. 55.10 — and NEVER IN A BUNDLE A THREAD RUNS
 // (`workerBundles`), or in a thread a server started: a worker file imported there is the module.
 export function workerFilesPlugin(

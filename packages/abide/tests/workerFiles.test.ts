@@ -1,11 +1,11 @@
-// 55 — A WORKER FILE: its exports, imported, run in a thread of their own — on a server started from
-// its sources here, where the runtime's plugin answers each import with the file's stand-ins
+// 55 — A WORKER FILE: each call to an export runs in a thread started for it — on a server started
+// from its sources here, where the runtime's plugin answers each import with the file's stand-ins
 // (`workerFilesPlugin`), and the thread loads the file as written (`workerHost`).
 //
 // THE REVERT: drop `workerFilesPlugin` from `serveCompilation`. Each import is then the file itself,
-// run on this thread — `onMainThread` answers true, a function is echoed rather than refused, and
-// nothing stops with the app. The stream and the abort read the same either way, so each names a
-// revert of its own.
+// run on this thread — `onMainThread` answers true, two calls share a thread id and a count, a
+// function is echoed rather than refused, and nothing stops with the app. The stream, the abort and
+// the end of a thread each name a revert of their own.
 
 import { afterAll, expect, test } from 'bun:test'
 
@@ -19,13 +19,12 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)
 
-const THREAD = `import { threadId } from 'node:worker_threads'
+const THREAD = `import { appendFileSync } from 'node:fs' // bun has no sync append of its own
+import { threadId } from 'node:worker_threads' // bun exposes no thread id of its own
 
 import { threadOf } from './other.worker.ts'
 
 let calls = 0
-let produced = 0
-let stopped = false
 
 export async function onMainThread(): Promise<boolean> {
     return Bun.isMainThread
@@ -36,19 +35,21 @@ export async function counted(): Promise<number> {
     return calls
 }
 
-export async function* naturals(): AsyncGenerator<number> {
+export async function ownThread(): Promise<number> {
+    await Bun.sleep(5)
+    return threadId
+}
+
+export async function* naturals(record: string): AsyncGenerator<number> {
+    let produced = 0
     try {
         for (let at = 0; ; at += 1) {
             produced = at + 1
             yield at
         }
     } finally {
-        stopped = true
+        await Bun.write(record, JSON.stringify({ produced, stopped: true }))
     }
-}
-
-export async function pulled(): Promise<{ produced: number; stopped: boolean }> {
-    return { produced, stopped }
 }
 
 export async function* finite(to: number): AsyncGenerator<number, string> {
@@ -56,8 +57,13 @@ export async function* finite(to: number): AsyncGenerator<number, string> {
     return 'done'
 }
 
+export async function ticking(record: string): Promise<string> {
+    setInterval(() => appendFileSync(record, '.'), 1)
+    return 'ticking'
+}
+
 export async function untilAborted(signal: AbortSignal): Promise<string> {
-    if (signal.aborted) return 'already aborted'
+    if (signal.aborted) return 'aborted'
     return new Promise((resolve) =>
         signal.addEventListener('abort', () => resolve('aborted')),
     )
@@ -84,7 +90,7 @@ export async function threads(): Promise<number[]> {
 }
 `
 
-const OTHER = `import { threadId } from 'node:worker_threads'
+const OTHER = `import { threadId } from 'node:worker_threads' // bun exposes no thread id of its own
 
 export async function threadOf(): Promise<number> {
     return threadId
@@ -94,15 +100,16 @@ export async function threadOf(): Promise<number> {
 type Thread = {
     onMainThread: () => Promise<boolean>
     counted: () => Promise<number>
-    naturals: () => AsyncGenerator<number>
-    pulled: () => Promise<{ produced: number; stopped: boolean }>
+    ownThread: () => Promise<number>
+    naturals: (record: string) => AsyncGenerator<number>
     finite: (to: number) => AsyncGenerator<number, string>
+    ticking: (record: string) => Promise<string>
     untilAborted: (signal: AbortSignal) => Promise<string>
     fails: () => Promise<never>
     echo: (value: unknown) => Promise<unknown>
     never: () => Promise<never>
-    threads: () => Promise<number[]>
     page: (args: { at?: number }) => Promise<number>
+    threads: () => Promise<number[]>
 }
 
 // One app, its worker files served as the runtime serves a compilation's.
@@ -128,10 +135,17 @@ serveCompilation(dir, {
 })
 const thread = (await import(`${dir}/lib/thread.worker.ts`)) as Thread
 
-test('an export runs in a thread of its own, one thread for every call to the file — 55.1, 55.4', async () => {
+// THE REVERT, besides the plugin's: keep one thread per file, started by its first call. The two
+// calls in flight together answer one thread id, and the count reads 2.
+test('each call runs in a thread started for it, two at once in two threads — 55.1, 55.4', async () => {
     expect(await thread.onMainThread()).toBe(false)
-    const first = await thread.counted()
-    expect(await thread.counted()).toBe(first + 1)
+    expect(await thread.counted()).toBe(1)
+    expect(await thread.counted()).toBe(1)
+    const [first, second] = await Promise.all([
+        thread.ownThread(),
+        thread.ownThread(),
+    ])
+    expect(first).not.toBe(second)
 })
 
 test('a generator export streams, its return value included — 55.5', async () => {
@@ -148,28 +162,45 @@ test('a generator export streams, its return value included — 55.5', async () 
     expect(chunks).toEqual([1, 2, 3])
 })
 
-// THE REVERT: post every chunk as the generator yields it rather than on a pull — `naturals` never
-// ends, so the thread never turns to `pulled` and the test times out.
+// THE REVERTS: post every chunk as the generator yields it rather than on a pull — `naturals` never
+// ends, so the thread floods the stand-in and the test times out; and end the thread at once when the
+// consumer stops reading, rather than after the stop — the generator's `finally` never runs, and
+// nothing is written to `record`.
 test('a stream runs one chunk per chunk read, and a consumer that stops reading ends it — 55.5, 55.7', async () => {
+    const record = `${dir}/naturals.json`
     const read: number[] = []
-    for await (const natural of thread.naturals()) {
+    for await (const natural of thread.naturals(record)) {
         read.push(natural)
         if (read.length === 3) break
     }
     expect(read).toEqual([0, 1, 2])
-    expect(await thread.pulled()).toEqual({ produced: 3, stopped: true })
+    expect(await Bun.file(record).json()).toEqual({
+        produced: 3,
+        stopped: true,
+    })
 })
 
-// THE REVERT: drop `aborted` from the call `WorkerModule` posts — a signal aborted before the call
-// reaches the export unaborted, nothing aborts it after, and the second call never settles.
+// THE REVERT: drop `thread.end()` from the settling of `call` in `WorkerModule`; the thread lives on
+// past its answer, and `record` keeps growing.
+test('a thread ends once its call has settled — 55.11', async () => {
+    const record = `${dir}/ticking.txt`
+    expect(await thread.ticking(record)).toBe('ticking')
+    await Bun.sleep(20)
+    const settled = Bun.file(record).size
+    await Bun.sleep(40)
+    expect(Bun.file(record).size).toBe(settled)
+})
+
+// Aborted before the thread has the module or after: either is a signal aborted from whenever the
+// one passed is. THE REVERT: drop `aborted` from the call `WorkerModule` posts — a signal aborted
+// before the call reaches the export unaborted, nothing aborts it after, and the second call never
+// settles.
 test('an AbortSignal argument aborts in the thread as it aborts here — 55.6', async () => {
     const controller = new AbortController()
     const answered = thread.untilAborted(controller.signal)
     controller.abort()
     expect(await answered).toBe('aborted')
-    expect(await thread.untilAborted(AbortSignal.abort())).toBe(
-        'already aborted',
-    )
+    expect(await thread.untilAborted(AbortSignal.abort())).toBe('aborted')
 })
 
 test('what an export throws is what its call rejects with — 55.12', async () => {
@@ -178,7 +209,7 @@ test('what an export throws is what its call rejects with — 55.12', async () =
     expect((thrown as Error).message).toBe('failed in the thread')
 })
 
-test('an argument no thread can be handed fails its call, and the thread answers the next — 55.2', async () => {
+test('an argument no thread can be handed rejects its call — 55.2', async () => {
     const thrown = await thread.echo(() => 1).catch((error: unknown) => error)
     expect((thrown as Error).name).toBe('DataCloneError')
     expect(await thread.echo({ kept: [1, 2] })).toEqual({ kept: [1, 2] })
@@ -189,14 +220,12 @@ test('a worker file the thread imports is the module itself, run in that thread 
     expect(imported).toBe(own as number)
 })
 
-test('the app stopping aborts a call in flight, and the next call starts another thread — 55.8, 37.28', async () => {
+test('the app stopping aborts a call in flight — 55.8, 37.28', async () => {
     const app = await inMemoryApp({})
-    const before = await thread.counted()
     const inFlight = thread.never().catch((error: unknown) => error)
     await app.stop()
     expect(((await inFlight) as Error).name).toBe('AbortError')
-    // A new thread holds the file's module afresh.
-    expect(await thread.counted()).toBeLessThanOrEqual(before)
+    expect(await thread.counted()).toBe(1)
 })
 
 // THE REVERT: write every stand-in as `(...args)` — it declares a parameter whatever its export

@@ -5417,7 +5417,7 @@ NOT end the thread.
 55.3 A worker file exporting anything but an `async function` or an `async function*` declaration
 MUST be a build error naming the file and the export.
 
-55.4 Every call to one worker file's exports MUST run in one thread, started by the first call.
+55.4 Every call to a worker file's export MUST run in a thread of its own, started for that call.
 
 55.5 A call to an `async function*` export MUST answer an async generator running the export's
 generator one chunk for each chunk read, and returning what it returned.
@@ -5428,15 +5428,13 @@ from whenever, the one passed is.
 55.7 A consumer ending a stream before it is done MUST end the export's generator, its `finally`
 included.
 
-55.8 7.38's abort of `stopSignal` MUST end every thread, rejecting each call in flight, and the next
-call MUST start another.
+55.8 7.38's abort of `stopSignal` MUST end every thread, rejecting its call with that abort.
 
-55.9 A thread that fails outside a call MUST reject each call in flight, and the next call MUST start
-another.
+55.9 A thread that fails outside its export MUST reject its call.
 
 55.10 A worker file imported in a thread MUST be the module itself.
 
-55.11 A thread MUST NOT keep a server's process running while no call to its worker file is in flight.
+55.11 A thread MUST end once its call has settled, or once its stream has ended.
 
 55.12 A call to an `async function` export MUST settle as the export's promise settles: to its value,
 or rejected with what it rejected with.
