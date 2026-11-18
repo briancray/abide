@@ -3,7 +3,8 @@
 // And the CRM as a tarball, at `/examples/crm.tar.gz`.
 // A rung the root layout files as middleware, so it answers addresses no route has (37.3). Each
 // page's markdown is read off the page the app renders, so the words have the one home.
-import type { Middleware } from '@abide/abide'
+import { isFailed, type Middleware } from '@abide/abide'
+import type { FetchFailed } from '@abide/abide/server'
 
 import { exampleArchive } from './exampleArchive.server.ts'
 import { pageMarkdown } from './pageMarkdown.server.ts'
@@ -12,10 +13,19 @@ import { markdownAddressOf, PAGES } from './sitePages.ts'
 
 const MARKDOWN = { 'content-type': 'text/markdown; charset=utf-8' }
 
-// Built once per process: the pages do not change while it runs.
-let bundled: Promise<string> | undefined
+/** Markdown as the answer, or the refusal a page that could not be read settled to. */
+function markdownAnswer(
+    markdown: string | FetchFailed,
+): Response | FetchFailed {
+    return isFailed(markdown)
+        ? markdown
+        : new Response(markdown, { headers: MARKDOWN })
+}
 
-async function bundle(origin: string): Promise<string> {
+// Built once per process: the pages do not change while it runs.
+let bundled: Promise<string | FetchFailed> | undefined
+
+async function bundle(origin: string): Promise<string | FetchFailed> {
     let contents = ''
     for (const group of SITE) {
         contents += `\n**${group.group}**\n\n`
@@ -23,8 +33,11 @@ async function bundle(origin: string): Promise<string> {
             contents += `- ${page.nav} — \`${markdownAddressOf(page.route).slice(1)}\`: ${page.description}\n`
     }
     let body = ''
-    for (const page of PAGES)
-        body += `\n---\n\n<!-- ${markdownAddressOf(page.route).slice(1)} -->\n\n${await pageMarkdown(page.route, origin)}`
+    for (const page of PAGES) {
+        const markdown = await pageMarkdown(page.route, origin)
+        if (isFailed(markdown)) return markdown
+        body += `\n---\n\n<!-- ${markdownAddressOf(page.route).slice(1)} -->\n\n${markdown}`
+    }
     return `# abide documentation
 
 Every abide primitive, a page each, grouped by what it is for. Every page is also served on its own
@@ -59,12 +72,13 @@ export const serveDownloads: Middleware<Response> = async (
         return new Response('# abide\n\nEvery page, as markdown: abide.md\n')
     if (pathname === '/abide.md') {
         bundled ??= bundle(origin)
-        return new Response(await bundled, { headers: MARKDOWN })
+        const contents = await bundled
+        // A page that could not be read is not kept: the next ask builds the bundle again.
+        if (isFailed(contents)) bundled = undefined
+        return markdownAnswer(contents)
     }
     for (const page of PAGES)
         if (pathname === markdownAddressOf(page.route))
-            return new Response(await pageMarkdown(page.route, origin), {
-                headers: MARKDOWN,
-            })
+            return markdownAnswer(await pageMarkdown(page.route, origin))
     return next()
 }

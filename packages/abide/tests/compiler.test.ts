@@ -182,7 +182,8 @@ test('the compiler is not reachable from the server seam', async () => {
     // shared seam's, the server's own exported over the browser's (37.16), and `store` the same way,
     // the server's carrying `sqlite` (8.25) and `redis` (8.31) beside the shared three — `trace` is
     // 24's and `config` is 27's; `reachable` is 23's, `assistant` and `provider` are 44's,
-    // `database` 47's and `onReport` 48's. What only emitted code calls is on `server/runtime.ts`, not here.
+    // `database` 47's and `onReport` 48's, and the guards, fetches and `job` 54's. What only emitted
+    // code calls is on `server/runtime.ts`, not here.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -196,6 +197,9 @@ test('the compiler is not reachable from the server seam', async () => {
             'config',
             'createApp',
             'database',
+            'fetchJson',
+            'fetchText',
+            'job',
             'middleware',
             'onConfig',
             'onHealth',
@@ -207,10 +211,13 @@ test('the compiler is not reachable from the server seam', async () => {
             'onStop',
             'provider',
             'reachable',
+            'readOnly',
             'render',
             'request',
+            'requireRole',
             'response',
             'server',
+            'signedIn',
             'trace',
         ].sort(),
     )

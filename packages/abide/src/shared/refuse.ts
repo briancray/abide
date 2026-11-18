@@ -6,7 +6,8 @@
 // FOUR NAMES AND NO MORE. 15.9 caps what this framework may declare at `NotFound`,
 // `ValidationError`, `Aborted` and the `HttpError` 17.4 names — everything else is the app's,
 // through `refuse.named`. A fifth built-in here is a refusal an app cannot have predicted and
-// cannot narrow against a name it never wrote. `Aborted` is the one the app asks for itself: it
+// cannot narrow against a name it never wrote. The guards and fetches of group 54 declare theirs
+// outside this module, and only an app that names one of them is ever answered with its refusal. `Aborted` is the one the app asks for itself: it
 // comes back only from a call the app handed a signal and then aborted (16.49).
 
 import { type Failed, failed, isFailedNamed } from './Failed.ts'

@@ -51,6 +51,10 @@ for (const manifest of new Bun.Glob('examples/*/package.json').scanSync({
 }))
     EXAMPLE_APPS.push(`${manifest.slice(0, -'package.json'.length)}src`)
 const TSCONFIG = `${APP}tsconfig.json`
+// The components `@abide/abide` ships as entries of their own (RULEBOOK 49).
+const COMPONENTS = Bun.fileURLToPath(
+    new URL('../../abide/src/components/', import.meta.url),
+)
 
 // A file that is an app's page rather than a component a card renders.
 function isRoute(path: string): boolean {
@@ -93,6 +97,14 @@ async function appTree(session: TypeSession): Promise<{
             })
         }
     }
+    // 34.23 — A COMPONENT ABIDE SHIPS is compiled with the app that imports it, wherever it lies, and
+    // is served at its own path: an entry of `@abide/abide` resolves out of the copied tree to it.
+    for (const path of new Bun.Glob('*.abide').scanSync({ cwd: COMPONENTS }))
+        files.push({
+            path: `${COMPONENTS}${path}`,
+            file: parseAbide(await Bun.file(`${COMPONENTS}${path}`).text()),
+            belowRoot: `lib/${path}`,
+        })
     // 32.17 — which components another one invokes decides whether a module carries its own
     // markup for a row built in the browser. THE APP'S RESOLVER, not `Bun.resolveSync`: that asks
     // every plugin again, and a compilation an earlier file in this process served answers it from
@@ -111,7 +123,10 @@ async function appTree(session: TypeSession): Promise<{
             belowRoot,
         } = files[at] as (typeof files)[number]
         const names = answers[at]
-        const stem = absolute.slice(APP.length, -'.abide'.length)
+        // Keyed by its path below the app, or by its own where it lies outside it (`addCompilation`).
+        const stem = absolute.startsWith(APP)
+            ? absolute.slice(APP.length, -'.abide'.length)
+            : absolute.slice(0, -'.abide'.length)
         // 37.1 — a server block files its hooks at its route, or under a `lib` at its directory's.
         const server = emitComponent(
             file,
@@ -165,7 +180,7 @@ const UNPAIRED = JSON.stringify({
 })
 
 test('every example renders on the server and mounts on the client', async () => {
-    const session = await TypeSession.open(TSCONFIG)
+    const session = await TypeSession.open(TSCONFIG, APP)
     const broken: string[] = []
     let painting = ''
 

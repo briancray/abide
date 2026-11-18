@@ -630,9 +630,31 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 ## Guards — rungs that let a caller through
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `signedIn` | `Middleware<never, object, Failed<'SignedOut', undefined>>` | A rung admitting a caller the server authenticated, from `@abide/abide/server`. | 15.9, 54.1 |
+| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.9, 54.2, 54.3, 54.4 |
+| `readOnly` | `(options?: { allow?: readonly { address: string \| undefined }[]; message?: string }) => Middleware<never, object, Failed<'ReadOnly', undefined>>` | A rung refusing every write but one to a handler it allows, from `@abide/abide/server`. | 15.9, 54.5, 54.6 |
+
 ## `fetchJson` — fetches that time out and retry
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17 |
+| `fetchText` | `(url: string \| URL, options?: FetchOptions<string>) => Promise<string \| FetchFailed>` | The same answer as text, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17 |
+| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.12, 54.15, 54.17 |
+| `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up settles to. | 15.9, 54.14, 54.16, 54.17 |
+
 ## `job` — work on a schedule
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `job` | `(name: string, options: { every: number \| (() => number); run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26 |
+| `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
+| `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
+| `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
+| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
+| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
 
 # Components
 
@@ -641,9 +663,35 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 ## `Dialog` — dialogs, confirm and alert
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Dialog` | `{ open?: boolean; dismissible?: boolean; onclose?: (returnValue: string) => void } & Omit<Attributes<'dialog'>, 'open' \| 'onclose'>` | A native modal `<dialog>` whose children are its content, imported from `@abide/abide/Dialog.abide`. | 50.1, 50.2, 50.3, 50.4, 49.1, 49.2, 49.3, 49.5, 49.7 |
+| `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question asked in the app's `Prompts`. | 50.5, 50.7, 50.8, 50.11, 11.32 |
+| `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown in the app's `Prompts` until it is closed. | 50.5, 50.7, 50.9, 50.11, 11.32 |
+| `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string }` | What a prompt shows, and what its buttons say. | 50.7, 50.10 |
+| `Prompts` | `Omit<Attributes<'dialog'>, 'open' \| 'onclose' \| 'role'>` | The `Dialog` the queued prompts show in, rendered once and imported from `@abide/abide/Prompts.abide`. | 50.6, 50.8, 50.10, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+
 ## `Toasts` — notices that dismiss themselves
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16 |
+| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown } }` | A notice's tone, how long it stays, and the one action it offers. | 50.13, 50.14, 50.18 |
+| `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
+| `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
+| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined }` | One notice `toasts.list` holds. | 50.12 |
+| `Toasts` | `{ label?: string } & Omit<Attributes<'div'>, 'role'>` | The live region the notices are listed in, rendered once and imported from `@abide/abide/Toasts.abide`. | 50.17, 50.18, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+
 ## `Tooltip` and `Menu` — placed against an anchor
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `place` | `(anchor: Element, floating: Element, options?: PlaceOptions) => Placement` | Where a floating element sits beside its anchor, in viewport pixels. | 50.19, 50.20, 50.21, 50.22 |
+| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number }` | The side tried first, the edge lined up with, the gap to the anchor and the gap kept to the viewport. | 50.19, 50.20, 50.21 |
+| `Placement` | `{ x: number; y: number; side: Side; arrow: number }` | The left and top edges `place` chose, the side it took, and where along the facing edge the anchor's middle falls. | 50.19, 50.27 |
+| `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
+| `Tooltip` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; delay?: number } & Omit<Attributes<'span'>, 'popover' \| 'role'>` | A hint for the element written just before it, whose children are the hint, imported from `@abide/abide/Tooltip.abide`. | 50.23, 50.24, 50.25, 50.26, 50.27, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+| `Menu` | `{ label: string; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number } & Attributes<'div'>` | A button opening a list of actions, whose children are the menu items, imported from `@abide/abide/Menu.abide`. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7 |
 
 ## `Combobox` and `listbox` — a list filtered as you type, picked with the arrow keys
 
