@@ -1,7 +1,9 @@
 <script>
 import ContactList from './lib/ContactList.abide'
 import ContactNote from './lib/ContactNote.abide'
+import LogCallDialog from './lib/LogCallDialog.abide'
 import PageTiming from './lib/PageTiming.abide'
+import SavePhone from './lib/SavePhone.abide'
 import StarButton from './lib/StarButton.abide'
 </script>
 
@@ -13,4 +15,6 @@ import StarButton from './lib/StarButton.abide'
     <StarButton />
     <ContactNote />
     <PageTiming />
+    <LogCallDialog />
+    <SavePhone />
 </main>

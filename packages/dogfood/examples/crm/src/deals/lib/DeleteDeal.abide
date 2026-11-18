@@ -1,0 +1,33 @@
+<script>
+import { prompts, reactive } from '@abide/abide'
+import Prompts from '@abide/abide/Prompts.abide'
+
+let deals = reactive(['Engine renewal', 'Compiler pilot'])
+
+async function remove(deal: string) {
+    const sure = await prompts.confirm({
+        title: `Delete ${deal}?`,
+        body: 'Its notes and its stage history go with it.',
+        confirm: 'Delete',
+        danger: true,
+    })
+    if (sure) deals.splice(deals.indexOf(deal), 1)
+}
+</script>
+
+<ul class="fields">
+    {#for deal of deals}
+        <li>
+            <span>deal</span><strong>{deal}</strong>
+            <button onclick={() => remove(deal)}>Delete</button>
+        </li>
+    {/for}
+</ul>
+
+<Prompts
+    class="m-auto w-96 max-w-[calc(100%-2rem)] rounded-xl border border-rule
+    bg-raised p-5 text-ink backdrop:bg-paper/70
+    [&_[data-part=form]]:flex [&_[data-part=form]]:flex-col
+    [&_[data-part=form]]:gap-snug [&_[data-part=actions]]:row
+    data-[danger]:[&_[data-part=confirm]]:bg-bad"
+ />

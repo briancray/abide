@@ -1,0 +1,88 @@
+<script>
+import { url } from '@abide/abide'
+import SavePhone from 'crm/src/contacts/lib/SavePhone.abide'
+import savePhoneSource from 'crm/src/contacts/lib/SavePhone.abide' with { type: 'text' }
+import savePhoneTestSource from 'crm/src/contacts/lib/SavePhone.test.ts' with { type: 'text' }
+import savePhoneHandlerSource from 'crm/src/contacts/savePhone.handler.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+</script>
+
+<Doc>
+    <Section title="A notice that says whether a save landed">
+        <Example
+            id="notify-save-phone"
+            title={'`toasts.notify(text, { tone, action })` — a notice that takes itself down'}
+            summary="Saving Ada's phone says it landed, and a number too short to dial is refused with the reason and a way to report it."
+            files={{
+                'src/contacts/lib/SavePhone.abide': savePhoneSource,
+                'src/contacts/savePhone.handler.ts': savePhoneHandlerSource,
+                'src/contacts/lib/SavePhone.test.ts': savePhoneTestSource,
+            }}
+        >
+            <SavePhone />
+        </Example>
+
+        <p><code>toasts.notify</code> adds a notice to <code>toasts.list</code> and hands back
+            its id. <code>Toasts</code> lists them in a <code>role="status"</code> region, so a
+            screen reader reads each one out as it arrives. A notice takes itself down after three
+            seconds, and an error's after ten, long enough to reach its action. Pass
+            <code>toasts.dismiss</code> the id to take one down sooner.</p>
+
+        <p>The card renders <code>Toasts</code> beside the form. An app renders it once, in its
+            root layout, and every <code>toasts.notify</code> on every page lands there. Render it
+            twice and every notice shows twice. Style its root <code>fixed</code> where the
+            notices belong; abide does not position it.</p>
+
+        <p>An error's action here opens <code>report()</code>, a problem report holding the
+            page's log. Raise the notice from <code>onRefusal</code> instead, pass
+            <code>report</code> the trace it hands you, and the report holds the server's lines for
+            that call as well. See <a href={url('/helpers/report')}><code>report</code></a>.</p>
+
+        <p><code>toasts.list</code> is a reactive value without <code>global</code>, so on a
+            server each request has its own, and one visitor's notices never render into another
+            visitor's page. <code>toasts.notify</code> throws on a server all the same: a notice is
+            for a person, and a render has none to show it to.</p>
+    </Section>
+
+    <Section title="Notice options: `tone`, `timeout`, `action`">
+        <table>
+            <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+            <tbody>
+                <tr><td><code>tone</code></td><td><code>'info'</code>, <code>'success'</code> or <code>'error'</code>, written as <code>data-tone</code>; <code>'info'</code> by default</td></tr>
+                <tr><td><code>timeout</code></td><td>milliseconds before it goes; <code>Infinity</code> keeps it until it is dismissed</td></tr>
+                <tr><td><code>action</code></td><td><code>{'{ label, run }'}</code>: a button that takes the notice down and calls <code>run</code>, for an undo, a retry or a report</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="Styling notices by their parts and tone">
+        <p>abide ships no styles for it. Your <code>class</code> lands on the
+            <code>&lt;div role="status"&gt;</code>, and each notice and what is inside it is reached by its
+            <code>data-part</code>.</p>
+
+        <table>
+            <thead><tr><th>Element</th><th>What it is</th><th>Target it with</th></tr></thead>
+            <tbody>
+                <tr><td><code>&lt;div role="status"&gt;</code></td><td>the root, the live region</td><td><code>class</code> on <code>Toasts</code></td></tr>
+                <tr><td><code>data-part="toast"</code></td><td>one notice, a <code>&lt;div&gt;</code></td><td><code>*:…</code>, a direct child, or <code>[&amp;_[data-part=toast]]:…</code></td></tr>
+                <tr><td><code>data-tone</code></td><td>on each notice: <code>info</code>, <code>success</code> or <code>error</code></td><td><code>*:data-[tone=error]:…</code></td></tr>
+                <tr><td><code>data-part="text"</code></td><td>what it says</td><td><code>[&amp;_[data-part=text]]:…</code></td></tr>
+                <tr><td><code>data-part="action"</code></td><td>its action's button, where it has one</td><td><code>[&amp;_[data-part=action]]:…</code></td></tr>
+                <tr><td><code>data-part="close"</code></td><td>the <code>×</code> that dismisses it</td><td><code>[&amp;_[data-part=close]]:…</code></td></tr>
+            </tbody>
+        </table>
+
+        <Snippet source={savePhoneSource} path="src/contacts/lib/SavePhone.abide" from={['<Toasts']} />
+
+        <p><code>*:</code> styles every notice at once, and <code>*:data-[tone=error]:</code> only
+            the errors. In a stylesheet the same rule is
+            <code>[data-part=toast][data-tone=error]</code>.</p>
+    </Section>
+
+    <Registry />
+</Doc>
