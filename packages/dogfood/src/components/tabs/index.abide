@@ -1,0 +1,88 @@
+<script>
+import getDealSource from 'crm/src/deals/getDeal.handler.ts' with { type: 'text' }
+import DealTabs from 'crm/src/deals/lib/DealTabs.abide'
+import dealTabsSource from 'crm/src/deals/lib/DealTabs.abide' with { type: 'text' }
+import dealTabsTestSource from 'crm/src/deals/lib/DealTabs.test.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Section title="Tabs switch between views of one record">
+        <Example
+            id="deal-tabs"
+            title="`Tabs` — a tab per view, and one panel showing the selected one"
+            summary="A deal's details, its value and its stage, one at a time. Click a tab, or focus one and move with the arrow keys."
+            files={{
+                'src/deals/lib/DealTabs.abide': dealTabsSource,
+                'src/deals/getDeal.handler.ts': getDealSource,
+                'src/deals/lib/DealTabs.test.ts': dealTabsTestSource,
+            }}
+        >
+            <DealTabs />
+        </Example>
+
+        <p>Import it as <code>import Tabs from '@abide/abide/Tabs.abide'</code>. Hand it the
+            tabs, the <code>key</code> each is told apart by, and bind <code>selected</code> to the
+            key of the one showing. Its children are the panel. Read the selected key in them to
+            choose what to show, as the card does.</p>
+
+        <table>
+            <thead><tr><th>Prop</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>id</code></td><td>the root's id; each tab's id and the panel's are built from it</td></tr>
+                <tr><td><code>tabs</code></td><td>the tabs, in the order they render, as any items you like</td></tr>
+                <tr><td><code>key</code></td><td>what tells one tab from another, and what <code>selected</code> holds</td></tr>
+                <tr><td><code>label</code></td><td>a tab's text; its key where there is none</td></tr>
+                <tr><td><code>bind:selected</code></td><td>the selected tab's key, read and set; the first tab until one is picked</td></tr>
+                <tr><td><code>Tab</code></td><td>an inline component rendering a tab's content, handed <code>item</code>, for an icon beside a name</td></tr>
+                <tr><td>children</td><td>the panel's content</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th>Key, on a focused tab</th><th>What it does</th></tr></thead>
+            <tbody>
+                <tr><td>ArrowRight · ArrowLeft</td><td>selects the next or the previous tab, round the ends</td></tr>
+                <tr><td>Home · End</td><td>selects the first or the last tab</td></tr>
+            </tbody>
+        </table>
+
+        <p>A key moves focus to the tab it selects. Only the selected tab is in the page's tab
+            order, so Tab moves from it to the panel rather than through every tab. Switching
+            writes the marks on two tabs and leaves the rest alone. The panel keeps its element,
+            and what changes inside it is whatever your children read from the selected key.</p>
+    </Section>
+
+    <Section title="Styling tabs by their parts and states">
+        <p>The tabs ship no styles and write no class. Every element you can style carries a
+            <code>data-part</code>, and the selected tab carries <code>data-selected</code>. Any
+            attribute you pass, <code>class</code> included, lands on the root. The file tabs on
+            every card of these docs are this component, styled from the docs' own stylesheet.</p>
+
+        <table>
+            <thead><tr><th>Element</th><th>Part</th><th>States</th></tr></thead>
+            <tbody>
+                <tr><td>the root <code>div</code></td><td>—</td><td>—</td></tr>
+                <tr><td>the row of tabs</td><td><code>tablist</code></td><td>—</td></tr>
+                <tr><td>each tab's <code>button</code></td><td><code>tab</code></td><td><code>data-selected</code> on the selected tab</td></tr>
+                <tr><td>the panel</td><td><code>panel</code></td><td>—</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th>You write</th><th>It styles</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'[data-part=tab][data-selected] { … }'}</code></td><td>the selected tab, from a stylesheet</td></tr>
+                <tr><td><code>{'class="[&_[data-selected]]:font-semibold"'}</code></td><td>the same, as a Tailwind utility on the root</td></tr>
+                <tr><td><code>{'class="[&_[data-part=tablist]]:flex"'}</code></td><td>the row of tabs, from the root</td></tr>
+                <tr><td><code>{'class="[&_[data-part=panel]]:p-4"'}</code></td><td>the panel, from the root</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Registry />
+</Doc>
