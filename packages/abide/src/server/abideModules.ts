@@ -19,7 +19,11 @@
 
 import { basename, dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 
-import { SERVER_RUNTIME_SPECIFIER } from '#shared/SPECIFIERS.ts'
+import {
+    SERVER_RUNTIME_SPECIFIER,
+    WORKER_SPECIFIER,
+} from '#shared/SPECIFIERS.ts'
+import type { WorkerExport } from '#shared/worker/WorkerMessage.ts'
 
 import type { ServerTable } from './answerRequest.ts'
 import {
@@ -79,6 +83,8 @@ export type Compilation = {
     handlers: Record<string, HandlerFace>
     /** The build's own modules, by name below `__abide`. */
     tables: Record<string, string>
+    /** 55.1 — every worker file, by its path below the root, to how each export answers. */
+    workers: Record<string, Record<string, WorkerExport>>
 }
 
 const RELATIVE_OR_SUBPATH = /^(?:\.\.?\/|#)/
@@ -116,6 +122,8 @@ let registered = false
 // The handler files a registered `handlerFilesPlugin` already answers, by path: its filter is fixed,
 // but it reads each face from `RUNTIME`, so a later compilation of the same file needs no second one.
 const HANDLER_FILES_SERVED = new Set<string>()
+// The worker files a registered `workerFilesPlugin` already answers, to their exports, by path.
+const WORKER_FILES_SERVED = new Map<string, Record<string, WorkerExport>>()
 
 /**
  * Serves `compilation` to this process's imports from now on, and places a stack frame in each of
@@ -133,6 +141,14 @@ export function serveCompilation(root: string, compilation: Compilation): void {
         }
     if (unserved.length !== 0)
         Bun.plugin(handlerFilesPlugin(unserved, RUNTIME.handlers))
+    const workers = new Map<string, Record<string, WorkerExport>>()
+    for (const [path, kinds] of workerFilesOf(root, compilation))
+        if (!WORKER_FILES_SERVED.has(path)) {
+            WORKER_FILES_SERVED.set(path, kinds)
+            workers.set(path, kinds)
+        }
+    if (workers.size !== 0)
+        Bun.plugin(workerFilesPlugin(real, workers, HOSTED_WORKER))
     if (registered) return
     registered = true
     Bun.plugin(modulesPlugin(RUNTIME))
@@ -183,6 +199,91 @@ function handlerFilesPlugin(
             )
         },
     }
+}
+
+/** 55.1 — `compilation`'s worker files, by absolute path, to their exports. */
+export function workerFilesOf(
+    root: string,
+    compilation: Compilation,
+): Map<string, Record<string, WorkerExport>> {
+    const real = realOrAsGiven(root)
+    const files = new Map<string, Record<string, WorkerExport>>()
+    for (const [relative, kinds] of Object.entries(compilation.workers))
+        files.set(resolve(real, relative), kinds)
+    return files
+}
+
+/**
+ * What starts a worker file's thread: the source of a function answering a `Worker`, given the
+ * file's absolute path.
+ */
+export type WorkerSpawn = (path: string) => string
+
+const WORKER_HOST = Bun.fileURLToPath(
+    new URL('./workerHost.ts', import.meta.url),
+)
+
+/**
+ * 55.1 — a server started from its sources runs a worker file in `workerHost`, handed the file's
+ * path. 55.11 — no thread holds the process open unless a call is in flight (`WorkerModule`).
+ */
+export const HOSTED_WORKER: WorkerSpawn = (path) =>
+    `() => { const worker = new Worker(${JSON.stringify(WORKER_HOST)}, { ref: false }); worker.postMessage(${JSON.stringify(path)}); return worker }`
+
+// 55.1 — A WORKER FILE IMPORTED IS ITS STAND-INS, one per export, each posting its call to the thread
+// `spawn` starts. Its filter names the worker files and nothing else, as `handlerFilesPlugin`'s does,
+// because the runtime's `onLoad` cannot fall through. 55.10 — and NEVER IN A BUNDLE A THREAD RUNS
+// (`workerBundles`), or in a thread a server started: a worker file imported there is the module.
+export function workerFilesPlugin(
+    root: string,
+    files: ReadonlyMap<string, Record<string, WorkerExport>>,
+    spawn: WorkerSpawn,
+): Bun.BunPlugin {
+    return {
+        name: 'abide-worker-files',
+        setup(build) {
+            if (files.size === 0) return
+            build.onLoad(
+                {
+                    filter: new RegExp(
+                        `^(?:${[...files.keys()].map(RegExp.escape).join('|')})$`,
+                    ),
+                },
+                (args) => {
+                    const exported = files.get(args.path) as Record<
+                        string,
+                        WorkerExport
+                    >
+                    const lines = [
+                        `import { declareDefaults as __declareDefaults, WorkerModule as __WorkerModule } from '${WORKER_SPECIFIER}'`,
+                        `const __worker = new __WorkerModule(${JSON.stringify(relativeOrAbsolute(root, args.path))}, ${spawn(args.path)})`,
+                    ]
+                    // 55.14 — A PARAMETER WHERE THE EXPORT DECLARES ONE, AND ITS DEFAULTS, so a
+                    // `reactive` reads the stand-in as the body it reads the export as (11.1, 11.2,
+                    // 11.29) — and every argument passed, read off `arguments`, so a default is
+                    // the export's to apply in the thread.
+                    for (const [
+                        name,
+                        { kind, declares, defaults },
+                    ] of Object.entries(exported)) {
+                        lines.push(
+                            `export function ${name}(${declares ? 'args' : ''}) { return __worker.${kind}(${JSON.stringify(name)}, [...arguments]) }`,
+                        )
+                        if (defaults !== null)
+                            lines.push(
+                                `__declareDefaults(${name}, ${JSON.stringify(defaults)})`,
+                            )
+                    }
+                    return { contents: `${lines.join('\n')}\n`, loader: 'js' }
+                },
+            )
+        },
+    }
+}
+
+// A file below the root by its path there, as an error names it; one above it as it is.
+function relativeOrAbsolute(root: string, path: string): string {
+    return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path
 }
 
 /** What the server's table exports: its routes and error pages, server blocks and handlers. */

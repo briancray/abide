@@ -2,8 +2,8 @@
 
 Every name an app author can write, with its type and what it is.
 
-`@abide/abide/compiler`, and the `/runtime`, `/server/runtime`, `/routing` and `/wire` entries
-compiled output imports, are tooling rather than surface an app author writes, and none of their
+`@abide/abide/compiler`, and the `/runtime`, `/server/runtime`, `/routing`, `/wire` and `/worker`
+entries compiled output imports, are tooling rather than surface an app author writes, and none of their
 names is a row.
 
 ## What this document is
@@ -1097,6 +1097,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `src/**` | The app's source. | 36.10, 38.25 |
 | `**/lib/**` | The app's code that is no address: components and modules. | 23.15, 23.16, 23.18, 23.22, 37.1 |
 | `**/lib/**/<name>.server.<extension>` | A server file: source the browser never loads. | 16.29, 23.23, 34.20, 36.10 |
+| `**/lib/**/<name>.worker.ts` | A worker file: a module whose exports run in a thread of their own. | 55.1, 55.2, 55.3, 55.4, 55.5, 55.6, 55.7, 55.8, 55.9, 55.10, 55.11, 55.12, 55.13, 55.14 |
 | `**/<name>.test.ts` | A test file: one of the app's tests, wherever it lies. | 23.22, 38.109 |
 | `**/<name>.bench.ts` | A bench file: benches `bun run bench` runs, wherever it lies. | 23.22, 43.29 |
 | `**/<name>.d.ts` | A declaration file: types for the checker, wherever it lies. | 23.22 |

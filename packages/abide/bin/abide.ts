@@ -28,6 +28,8 @@ import {
     abideModules,
     type Compilation,
     serverMapsOf,
+    workerFilesOf,
+    workerFilesPlugin,
 } from '#server/abideModules.ts'
 import {
     buildDirectory,
@@ -56,6 +58,7 @@ import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { publicKeyOf, publishUpdate, updateKey } from '#server/updateFeed.ts'
+import { workerBundles } from '#server/workerBundles.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/NATIVE_FILES.ts'
 
@@ -366,11 +369,41 @@ async function compileExecutable(
     platform: string | undefined,
     outfile: string,
 ): Promise<void> {
-    const compiled = await Bun.build({
-        entrypoints: [written.entry],
+    // 34.16 — every `.abide` the app imports, as `abide start` serves it.
+    const plugins = [
+        SERVER_STYLESHEETS,
+        abideModules(root, written.compilation),
+    ]
+    // 55.1 — EVERY WORKER FILE, BUILT FIRST AND EMBEDDED AS AN ENTRY OF ITS OWN, at its path below
+    // the build's root: the directory the executable's entry is written to, which the executable
+    // holds its entry at.
+    const out = dirname(written.entry)
+    const workers = workerFilesOf(root, written.compilation)
+    const threads = await workerBundles(root, [...workers.keys()], {
         target: 'bun',
-        // 34.16 — every `.abide` the app imports, as `abide start` serves it.
-        plugins: [SERVER_STYLESHEETS, abideModules(root, written.compilation)],
+        format: 'esm',
+        plugins,
+        sourcemap: 'inline',
+        outdir: `${out}/workers`,
+    })
+    const compiled = await Bun.build({
+        entrypoints: [
+            written.entry,
+            ...threads.outputs.map((output) => output.path),
+        ],
+        root: out,
+        target: 'bun',
+        plugins: [
+            ...plugins,
+            workerFilesPlugin(
+                root,
+                workers,
+                (path) =>
+                    // Against the executable's entry, which every module the build bundled is
+                    // part of — whatever the platform spells the embedded root as.
+                    `() => new Worker(new URL(${JSON.stringify(`./workers/${threads.names.get(path)}`)}, import.meta.url).href, { ref: false })`,
+            ),
+        ],
         // UNMINIFIED, AND MAPPED: the executable is a server, and an error it logs is read by
         // whoever operates it — a minified line prints as the whole page module it sits in. The
         // map is embedded in the executable, which reads it from there.

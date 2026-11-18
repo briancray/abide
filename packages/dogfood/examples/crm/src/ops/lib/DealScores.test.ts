@@ -19,11 +19,12 @@ test('the app answers a request while the deals are being scored', async () => {
     )
 })
 
-test('stopping the app ends the scoring in flight', async () => {
+test('a stop ends the scoring and keeps the scores held', async () => {
     const app = await createApp()
+    const held = dealScores.peek()
     dealScores.refresh()
     expect(dealScores.busy()).toBe(true)
     await app.stop()
     expect(dealScores.busy()).toBe(false)
-    expect(dealScores.peek()?.length ?? 0).toBeLessThan(DEALS.length)
+    expect(dealScores.peek()).toEqual(held)
 })

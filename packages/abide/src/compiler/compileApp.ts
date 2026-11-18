@@ -178,6 +178,7 @@ export function compilationOf(app: CompiledApp): Compilation {
         files: app.files,
         handlers: app.handlers,
         tables: app.tables,
+        workers: app.workers,
     }
 }
 
@@ -216,6 +217,7 @@ export async function compiled(
         files: {},
         tables: {},
         handlers: {},
+        workers: layout.workers,
         routes: [],
         mounts: [],
         sources: layout.own,

@@ -152,6 +152,7 @@ export async function serveDev(
                     files: {},
                     handlers: {},
                     tables: {},
+                    workers: {},
                 },
                 published: new Map(),
                 failure,

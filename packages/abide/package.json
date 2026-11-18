@@ -39,6 +39,7 @@
         "./runtime": "./src/ui/index.ts",
         "./routing": "./src/ui/routing.ts",
         "./wire": "./src/ui/wire.ts",
+        "./worker": "./src/shared/worker/index.ts",
         "./server": "./src/server/index.ts",
         "./server/runtime": "./src/server/runtime.ts",
         "./test": "./src/server/preload.ts",

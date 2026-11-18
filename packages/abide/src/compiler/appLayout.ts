@@ -1,7 +1,14 @@
 import { relative as relativeTo } from 'node:path' // bun exposes no path helpers of its own
 
+import type { Compilation } from '#server/abideModules.ts'
 import { appFiles } from '#server/appTree.ts'
-import { type Placement, placement, routeOf } from '#server/placement.ts'
+import {
+    isWorkerFile,
+    type Placement,
+    placement,
+    routeOf,
+} from '#server/placement.ts'
+import { workerExports } from '#server/workerExports.ts'
 import {
     HEALTH_ADDRESS,
     MCP_ADDRESS,
@@ -95,6 +102,8 @@ export type AppLayout = {
     published: Map<string, string>
     /** 30.26 — every address a link may name: a page's, a public file's, and 21.4's four. */
     addresses: string[]
+    /** 55.1 — every worker file of the app's own, by its path below the root, to its exports. */
+    workers: Compilation['workers']
     /** What the tree refuses, each at its file; a build stops naming every one. */
     refused: Diagnosis[]
     /**
@@ -120,7 +129,7 @@ export async function appLayout(root: string): Promise<AppLayout> {
         root,
         refusals,
     )
-    await refuseModuleHooks(root, modules, refusals)
+    const workers = await readModules(root, modules, refusals)
     const resolve = resolverIn()
     const unparsed = new Diagnostics(root, true)
     const own = parseSources(
@@ -134,6 +143,15 @@ export async function appLayout(root: string): Promise<AppLayout> {
         resolve,
         refusals,
         unparsed,
+    )
+    // 55.1 — a mounted directory's worker files are the app's threads too, by their path from the root.
+    Object.assign(
+        workers,
+        await readModules(
+            root,
+            found.workers.map((path) => relativeTo(root, path)),
+            refusals,
+        ),
     )
     const sources: PlacedSource[] = []
     for (const source of found.sources) {
@@ -203,6 +221,7 @@ export async function appLayout(root: string): Promise<AppLayout> {
         errors,
         published,
         addresses: [...addresses].sort(),
+        workers,
         refused: refusals.refused,
         unparsed: unparsed.refused,
         resolve,
@@ -256,6 +275,8 @@ export async function withDependencies(
     trees: MountedTree[]
     /** 32.17 — every source another one imports, off the one reading of imports done here. */
     invoked: Set<string>
+    /** 55.1 — every worker file under a mounted directory, by path. */
+    workers: string[]
 }> {
     const all = [...parsed]
     const invoked = new Set<string>()
@@ -274,6 +295,7 @@ export async function withDependencies(
     // 23.20 — a directory mounts once, and by whom.
     const mountedBy = new Map<string, string>()
     const trees: MountedTree[] = []
+    const workers: string[] = []
     const add = async (path: string): Promise<void> => {
         let text: string
         try {
@@ -316,6 +338,8 @@ export async function withDependencies(
                 at: mount.at,
                 params: mount.params,
             })
+            for (const worker of mount.workers)
+                if (!workers.includes(worker)) workers.push(worker)
             for (const placed of mount.handlers) {
                 // Two mounts can overlap, one directory inside the other; a file is placed once.
                 if (handled.has(placed.path)) continue
@@ -341,7 +365,7 @@ export async function withDependencies(
             if (byPath.has(target)) invoked.add(target)
         }
     }
-    return { sources: all, handlers, positions, trees, invoked }
+    return { sources: all, handlers, positions, trees, invoked, workers }
 }
 
 /** `source` at `placed`, with what its own text says it paints and calls. */
@@ -409,20 +433,24 @@ function refusePlace(
 }
 
 /**
- * Refuses, naming the module, every module under a `lib` directory that calls a hook.
+ * Every worker file among the modules under a `lib` directory, to its exports, refusing each module
+ * that calls a hook and each worker file exporting what no thread can run, naming the module.
  *
  * 37.13 — a hook called in a module that is neither a `.abide` nor a handler file runs as the module
- * is imported, before any file's route is set, and not at all where nothing imports it.
+ * is imported, before any file's route is set, and not at all where nothing imports it. 55.3 — a
+ * worker file's every export is an async function or an async generator function.
  */
-async function refuseModuleHooks(
+async function readModules(
     root: string,
     modules: readonly string[],
     refusals: Diagnostics,
-): Promise<void> {
+): Promise<Compilation['workers']> {
     const texts = await textsAt(modules.map((module) => `${root}/${module}`))
+    const workers: Compilation['workers'] = {}
     for (let at = 0; at < modules.length; at += 1) {
         const module = modules[at] as string
-        const hook = hookCalls((texts[at] as { text: string }).text)[0]?.hook
+        const { text } = texts[at] as { text: string }
+        const hook = hookCalls(text)[0]?.hook
         if (hook !== undefined)
             refusals.at(
                 module,
@@ -430,7 +458,12 @@ async function refuseModuleHooks(
                     `abide: ${module} calls ${hook}, and it is neither a .abide nor a handler file, so the call has no route. Export what it is handed and call ${hook} in the page, layout or handler file it serves. RULEBOOK 37.13.`,
                 ),
             )
+        if (!isWorkerFile(module)) continue
+        const exported = workerExports(module, text)
+        if (exported instanceof Error) refusals.at(module, exported)
+        else workers[module] = exported
     }
+    return workers
 }
 
 /**

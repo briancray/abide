@@ -74,6 +74,7 @@ export async function buildCompiledPage(
             files: {},
             handlers: {},
             tables: {},
+            workers: {},
         }
         let at = 0
         for (const entry of files) {

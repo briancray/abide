@@ -93,6 +93,7 @@ These are immutable. A change to them is a change to what this document is.
 - [52. Formatting, markdown and charts](#52)
 - [53. Keys, element behaviors and chat](#53)
 - [54. Guards, fetches and jobs](#54)
+- [55. Worker files](#55)
 
 ## Terms
 
@@ -128,6 +129,8 @@ REGISTRY.md because none of them is a name an app author writes.
 | dependency's `.abide` | A `.abide` file under a `node_modules` directory or outside the app's root. |
 | fence | A `public` or `lib` directory, or the root's `native` directory. |
 | server file | A file named `<name>.server.<extension>`. |
+| worker file | A file named `<name>.worker.ts` under a `lib` directory or the root's `native` directory, of the app's own or under a directory it mounts. |
+| thread | The worker a worker file's exports run in: a `Worker` on a server, a Web Worker in a browser. |
 | test file | A `.test.ts` file. |
 | declaration file | A `.d.ts` file. |
 | handler file | A file of the app's own named `<name>.handler.ts`, directly in a directory under no fence. |
@@ -5402,3 +5405,43 @@ throwing.
 
 54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
 run, from a look or from `runNow`, and MUST hold `nextRun` null.
+
+# 55. Worker files
+
+55.1 An import of a worker file MUST answer each export with a function running that export in the
+file's thread, on a server, in a browser and in the executable `abide compile` writes alike.
+
+55.2 An argument or an answer the structured clone algorithm refuses MUST reject its call, and MUST
+NOT end the thread.
+
+55.3 A worker file exporting anything but an `async function` or an `async function*` declaration
+MUST be a build error naming the file and the export.
+
+55.4 Every call to one worker file's exports MUST run in one thread, started by the first call.
+
+55.5 A call to an `async function*` export MUST answer an async generator running the export's
+generator one chunk for each chunk read, and returning what it returned.
+
+55.6 An `AbortSignal` among a call's arguments MUST reach the export as a signal aborted whenever, and
+from whenever, the one passed is.
+
+55.7 A consumer ending a stream before it is done MUST end the export's generator, its `finally`
+included.
+
+55.8 7.38's abort of `stopSignal` MUST end every thread, rejecting each call in flight, and the next
+call MUST start another.
+
+55.9 A thread that fails outside a call MUST reject each call in flight, and the next call MUST start
+another.
+
+55.10 A worker file imported in a thread MUST be the module itself.
+
+55.11 A thread MUST NOT keep a server's process running while no call to its worker file is in flight.
+
+55.12 A call to an `async function` export MUST settle as the export's promise settles: to its value,
+or rejected with what it rejected with.
+
+55.13 A worker file no module of the browser's graph imports MUST NOT be built into the client bundle.
+
+55.14 A worker file's import MUST answer each export with a function declaring a parameter where the
+export declares one, and carrying the literal defaults 11.29 reads off the export's.

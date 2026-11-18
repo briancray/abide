@@ -12,7 +12,7 @@ import { realpathSync, statSync } from 'node:fs' // bun exposes no sync stat or 
 import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
 
 import { appFiles } from '#server/appTree.ts'
-import { placeOf } from '#server/placement.ts'
+import { isWorkerFile, placeOf } from '#server/placement.ts'
 
 import { Diagnostics } from './Diagnostics.ts'
 import { nearest } from './nearest.ts'
@@ -35,6 +35,8 @@ type DirectoryMount = {
     handlers: Placed[]
     /** 23.26 — the param files under it, by path: what its own segments' matchers resolve in. */
     params: string[]
+    /** 55.1 — the worker files under it, by path. */
+    workers: string[]
 }
 
 /**
@@ -90,6 +92,9 @@ export function mountsOf(
                 files: found.abide.map(placed),
                 handlers: found.handlers.map(placed),
                 params: found.params.map((below) => `${directory}/${below}`),
+                workers: found.modules
+                    .filter(isWorkerFile)
+                    .map((below) => `${directory}/${below}`),
             })
         }
     return mounts

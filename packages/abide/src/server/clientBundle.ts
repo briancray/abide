@@ -8,12 +8,20 @@
 
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 
-import { abideModules, type Compilation, tablePath } from './abideModules.ts'
+import {
+    abideModules,
+    type Compilation,
+    tablePath,
+    workerFilesOf,
+    workerFilesPlugin,
+    type WorkerSpawn,
+} from './abideModules.ts'
 import { appPlugins } from './appPlugins.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { fenceServer } from './fenceServer.ts'
 import { type Manifest, manifestOf, NO_MANIFEST } from './manifestOf.ts'
 import { type Encoding, negotiateEncoding } from './negotiateEncoding.ts'
+import { workerBundles } from './workerBundles.ts'
 
 /** One file the bundle produced: its bytes — a stylesheet's already rewritten — and its kind. */
 type BundledFile = {
@@ -46,12 +54,9 @@ export async function clientBundle(
     const bundle: ClientBundle = { files: new Map(), manifest: NO_MANIFEST }
     // A page among what compiled: the compiler writes the entry only where there is one to boot.
     if (compilation.tables[`${CLIENT_ENTRY}.ts`] === undefined) return bundle
-    const built = await Bun.build({
-        // The entry is a table the plugin serves (`abideModules`), below the root.
-        entrypoints: [tablePath(root, `${CLIENT_ENTRY}.ts`)],
-        // The app's own root, because `Bun.build` opens the entry's directory otherwise, and the
-        // tables' is not on disk to open.
-        root,
+    // Every file the bundle produced: each thread's a page starts (55.1), then the pages'.
+    const outputs: Bun.BuildArtifact[] = []
+    const config = {
         // 16.28, 16.29 — the browser's view of the server: a `<script server>` is its stand-ins and a
         // server file refuses — FENCED FIRST, before the plugin that would serve the module. 38.43
         // — then the app's own, as `bunfig.toml` declares them.
@@ -62,16 +67,11 @@ export async function clientBundle(
         ],
         target: 'browser',
         format: 'esm',
-        // So a destination's markup and bindings stay in the chunk its own route loads (30.11)
-        // rather than landing in the entry every page pays for.
-        splitting: true,
-        metafile: true,
         // 36.15 — a stylesheet's `url('/fonts/…')` is the public file's address, not a path here,
         // and `Bun.build` reads a leading `/` as a path on this disk and fails on it not being
         // there. The list is the files that exist rather than every `/…`: a URL naming nothing the
         // app serves is still worth a build error.
         external: [...published.values()],
-        throw: false,
         // 36.16 — THE MODE, NOT THE ENVIRONMENT: the bundler writes in the `NODE_ENV` this process
         // STARTED under, so the `production` `abide build` assigns once running never reached it.
         define: {
@@ -81,11 +81,6 @@ export async function clientBundle(
         },
         ...(mode === 'build'
             ? {
-                  // 38.5 — MINIFIED, and EVERY NAME HASHED, the entry's included: chunks and assets are
-                  // already `[name]-[hash]` by default and the entry is not, which left the one file
-                  // every page loads served for a year under a name the next deploy writes different
-                  // bytes to. The manifest is how the document learns what the entry was called.
-                  //
                   // NAMES KEPT, because a class's name is what an error reads to say what it was
                   // handed (`canonicalKey`), and a production error naming `a e` is one nobody can
                   // act on. It is free where it is paid: the JS the docs app's `/values` sends is
@@ -96,21 +91,69 @@ export async function clientBundle(
                       identifiers: true,
                       keepNames: true,
                   },
-                  naming: { entry: '[name]-[hash].[ext]' },
               }
             : {
                   // 38.97 — a debugger in the browser reads the `.abide` (`withAbideSources`).
                   sourcemap: 'linked' as const,
-                  // 38.16 — the entry named by its source, so what a browser loads and what a stack
-                  // trace names are the module the author wrote. A dev chunk that changed has to be
-                  // fetched again, and a name that changes with it is a cache the reload cannot clear.
-                  naming: {
-                      entry: '[name].[ext]',
-                      chunk: '[name]-[hash].[ext]',
-                      asset: '[name]-[hash].[ext]',
-                  },
               }),
+    } satisfies Parameters<typeof workerBundles>[2]
+    const pages = (spawn: WorkerSpawn) =>
+        Bun.build({
+            ...config,
+            // The entry is a table the plugin serves (`abideModules`), below the root.
+            entrypoints: [tablePath(root, `${CLIENT_ENTRY}.ts`)],
+            // The app's own root, because `Bun.build` opens the entry's directory otherwise, and the
+            // tables' is not on disk to open.
+            root,
+            // 55.1 — after the fence, so a worker file importing a server file still refuses.
+            plugins: [
+                ...config.plugins,
+                workerFilesPlugin(
+                    root,
+                    workerFilesOf(root, compilation),
+                    spawn,
+                ),
+            ],
+            // So a destination's markup and bindings stay in the chunk its own route loads (30.11)
+            // rather than landing in the entry every page pays for.
+            splitting: true,
+            metafile: true,
+            throw: false,
+            naming:
+                mode === 'build'
+                    ? // 38.5 — EVERY NAME HASHED, the entry's included: chunks and assets are
+                      // already `[name]-[hash]` by default and the entry is not, which left the one
+                      // file every page loads served for a year under a name the next deploy writes
+                      // different bytes to. The manifest is how the document learns what the entry
+                      // was called.
+                      { entry: '[name]-[hash].[ext]' }
+                    : // 38.16 — the entry named by its source, so what a browser loads and what a
+                      // stack trace names are the module the author wrote. A dev chunk that changed
+                      // has to be fetched again, and a name that changes with it is a cache the
+                      // reload cannot clear.
+                      {
+                          entry: '[name].[ext]',
+                          chunk: '[name]-[hash].[ext]',
+                          asset: '[name]-[hash].[ext]',
+                      },
+        })
+    // 55.13 — ONLY THE WORKER FILES A PAGE REACHES ARE BUILT FOR THE BROWSER: a worker file the server
+    // alone imports may import a server file. The first build finds them; where it found any, they
+    // are built and the pages again, now naming what each was written under — so a page's hashed
+    // name moves with every worker it starts.
+    const reached = new Set<string>()
+    let built = await pages((path) => {
+        reached.add(path)
+        return '() => undefined'
     })
+    if (built.success && reached.size !== 0) {
+        const threads = await workerBundles(root, [...reached], config)
+        outputs.push(...threads.outputs)
+        built = await pages(
+            (path) =>
+                `() => new Worker(new URL(${JSON.stringify(`./${threads.names.get(path)}`)}, import.meta.url), { type: 'module' })`,
+        )
+    }
     // THROWN RATHER THAN LOGGED: a build that emitted server modules and no bundle is an app that
     // serves every page dead — the markup right and nothing wired — which is the one failure a
     // reader cannot see. Dev catches it (38.17); the build stops on it.
@@ -119,12 +162,13 @@ export async function clientBundle(
             built.logs,
             `abide ${mode}: the client bundle failed`,
         )
+    outputs.push(...built.outputs)
     // The outputs are independent, so they are read at once rather than one after another.
     const read = await Promise.all(
-        built.outputs.map((output) => output.arrayBuffer()),
+        outputs.map((output) => output.arrayBuffer()),
     )
-    for (let index = 0; index < built.outputs.length; index += 1) {
-        const output = built.outputs[index] as Bun.BuildArtifact
+    for (let index = 0; index < outputs.length; index += 1) {
+        const output = outputs[index] as Bun.BuildArtifact
         const name = output.path.slice(output.path.lastIndexOf('/') + 1)
         let bytes = new Uint8Array(read[index] as ArrayBuffer)
         if (name.endsWith('.css'))

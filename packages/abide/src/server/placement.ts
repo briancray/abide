@@ -120,6 +120,11 @@ export function isServerFile(path: string): boolean {
 
 const SERVER_FILE = /[^/]\.server\.[^./]+$/
 
+/** 55.1 — whether `path` names a worker file, `<name>.worker.ts`, whose exports run in a thread of their own. */
+export function isWorkerFile(path: string): boolean {
+    return path.endsWith('.worker.ts')
+}
+
 /** 16.2 — whether `path` names a handler file, `<name>.handler.ts`, whose default export answers at its route. */
 export function isHandlerFile(path: string): boolean {
     return path.endsWith('.handler.ts')

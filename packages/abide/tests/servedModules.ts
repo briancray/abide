@@ -24,6 +24,7 @@ export function servedModules(
         files: {},
         handlers: {},
         tables: {},
+        workers: {},
     }
     for (const [name, compiled] of Object.entries(files))
         compilation.files[name] = {

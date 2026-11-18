@@ -1,0 +1,232 @@
+// 55 — A WORKER FILE: its exports, imported, run in a thread of their own — on a server started from
+// its sources here, where the runtime's plugin answers each import with the file's stand-ins
+// (`workerFilesPlugin`), and the thread loads the file as written (`workerHost`).
+//
+// THE REVERT: drop `workerFilesPlugin` from `serveCompilation`. Each import is then the file itself,
+// run on this thread — `onMainThread` answers true, a function is echoed rather than refused, and
+// nothing stops with the app. The stream and the abort read the same either way, so each names a
+// revert of its own.
+
+import { afterAll, expect, test } from 'bun:test'
+
+import { serveCompilation } from '#server/abideModules.ts'
+import { workerExports } from '#server/workerExports.ts'
+import { reactive } from '#shared'
+import type { WorkerExport } from '#shared/worker/WorkerMessage.ts'
+
+import { inMemoryApp } from './inMemoryApp.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+
+afterAll(removeTemporaryModules)
+
+const THREAD = `import { threadId } from 'node:worker_threads'
+
+import { threadOf } from './other.worker.ts'
+
+let calls = 0
+let produced = 0
+let stopped = false
+
+export async function onMainThread(): Promise<boolean> {
+    return Bun.isMainThread
+}
+
+export async function counted(): Promise<number> {
+    calls += 1
+    return calls
+}
+
+export async function* naturals(): AsyncGenerator<number> {
+    try {
+        for (let at = 0; ; at += 1) {
+            produced = at + 1
+            yield at
+        }
+    } finally {
+        stopped = true
+    }
+}
+
+export async function pulled(): Promise<{ produced: number; stopped: boolean }> {
+    return { produced, stopped }
+}
+
+export async function* finite(to: number): AsyncGenerator<number, string> {
+    for (let at = 1; at <= to; at += 1) yield at
+    return 'done'
+}
+
+export async function untilAborted(signal: AbortSignal): Promise<string> {
+    if (signal.aborted) return 'already aborted'
+    return new Promise((resolve) =>
+        signal.addEventListener('abort', () => resolve('aborted')),
+    )
+}
+
+export async function fails(): Promise<never> {
+    throw new TypeError('failed in the thread')
+}
+
+export async function echo(value: unknown): Promise<unknown> {
+    return value
+}
+
+export async function never(): Promise<never> {
+    return new Promise(() => {})
+}
+
+export async function page({ at = 1 }: { at?: number }): Promise<number> {
+    return at
+}
+
+export async function threads(): Promise<number[]> {
+    return [threadId, await threadOf()]
+}
+`
+
+const OTHER = `import { threadId } from 'node:worker_threads'
+
+export async function threadOf(): Promise<number> {
+    return threadId
+}
+`
+
+type Thread = {
+    onMainThread: () => Promise<boolean>
+    counted: () => Promise<number>
+    naturals: () => AsyncGenerator<number>
+    pulled: () => Promise<{ produced: number; stopped: boolean }>
+    finite: (to: number) => AsyncGenerator<number, string>
+    untilAborted: (signal: AbortSignal) => Promise<string>
+    fails: () => Promise<never>
+    echo: (value: unknown) => Promise<unknown>
+    never: () => Promise<never>
+    threads: () => Promise<number[]>
+    page: (args: { at?: number }) => Promise<number>
+}
+
+// One app, its worker files served as the runtime serves a compilation's.
+const dir = temporaryModule({
+    'package.json': JSON.stringify({ name: 'threads', type: 'module' }),
+    'lib/thread.worker.ts': THREAD,
+    'lib/other.worker.ts': OTHER,
+})
+serveCompilation(dir, {
+    files: {},
+    handlers: {},
+    tables: {},
+    workers: {
+        'lib/thread.worker.ts': workerExports(
+            'lib/thread.worker.ts',
+            THREAD,
+        ) as Record<string, WorkerExport>,
+        'lib/other.worker.ts': workerExports(
+            'lib/other.worker.ts',
+            OTHER,
+        ) as Record<string, WorkerExport>,
+    },
+})
+const thread = (await import(`${dir}/lib/thread.worker.ts`)) as Thread
+
+test('an export runs in a thread of its own, one thread for every call to the file — 55.1, 55.4', async () => {
+    expect(await thread.onMainThread()).toBe(false)
+    const first = await thread.counted()
+    expect(await thread.counted()).toBe(first + 1)
+})
+
+test('a generator export streams, its return value included — 55.5', async () => {
+    const chunks: number[] = []
+    const stream = thread.finite(3)
+    for (;;) {
+        const step = await stream.next()
+        if (step.done) {
+            expect(step.value).toBe('done')
+            break
+        }
+        chunks.push(step.value)
+    }
+    expect(chunks).toEqual([1, 2, 3])
+})
+
+// THE REVERT: post every chunk as the generator yields it rather than on a pull — `naturals` never
+// ends, so the thread never turns to `pulled` and the test times out.
+test('a stream runs one chunk per chunk read, and a consumer that stops reading ends it — 55.5, 55.7', async () => {
+    const read: number[] = []
+    for await (const natural of thread.naturals()) {
+        read.push(natural)
+        if (read.length === 3) break
+    }
+    expect(read).toEqual([0, 1, 2])
+    expect(await thread.pulled()).toEqual({ produced: 3, stopped: true })
+})
+
+// THE REVERT: drop `aborted` from the call `WorkerModule` posts — a signal aborted before the call
+// reaches the export unaborted, nothing aborts it after, and the second call never settles.
+test('an AbortSignal argument aborts in the thread as it aborts here — 55.6', async () => {
+    const controller = new AbortController()
+    const answered = thread.untilAborted(controller.signal)
+    controller.abort()
+    expect(await answered).toBe('aborted')
+    expect(await thread.untilAborted(AbortSignal.abort())).toBe(
+        'already aborted',
+    )
+})
+
+test('what an export throws is what its call rejects with — 55.12', async () => {
+    const thrown = await thread.fails().catch((error: unknown) => error)
+    expect(thrown).toBeInstanceOf(TypeError)
+    expect((thrown as Error).message).toBe('failed in the thread')
+})
+
+test('an argument no thread can be handed fails its call, and the thread answers the next — 55.2', async () => {
+    const thrown = await thread.echo(() => 1).catch((error: unknown) => error)
+    expect((thrown as Error).name).toBe('DataCloneError')
+    expect(await thread.echo({ kept: [1, 2] })).toEqual({ kept: [1, 2] })
+})
+
+test('a worker file the thread imports is the module itself, run in that thread — 55.10', async () => {
+    const [own, imported] = await thread.threads()
+    expect(imported).toBe(own as number)
+})
+
+test('the app stopping aborts a call in flight, and the next call starts another thread — 55.8, 37.28', async () => {
+    const app = await inMemoryApp({})
+    const before = await thread.counted()
+    const inFlight = thread.never().catch((error: unknown) => error)
+    await app.stop()
+    expect(((await inFlight) as Error).name).toBe('AbortError')
+    // A new thread holds the file's module afresh.
+    expect(await thread.counted()).toBeLessThanOrEqual(before)
+})
+
+// THE REVERT: write every stand-in as `(...args)` — it declares a parameter whatever its export
+// declares, so `counted` reads as a keyed body, and `reactive` hands back a `Keyed` with no `error`.
+test('a reactive reads a stand-in as it reads the export: keyed where it declares a parameter, by its defaults — 55.14', async () => {
+    const unkeyed = reactive(thread.counted) as unknown as { error: unknown }
+    expect(typeof unkeyed.error).toBe('function')
+    const pages = reactive(thread.page) as unknown as (args: {
+        at?: number
+    }) => PromiseLike<number>
+    expect(await pages({})).toBe(1)
+    // 11.29 — `{}` and `{ at: 1 }` are one entry, the default being part of the key.
+    expect(pages({})).toBe(pages({ at: 1 }))
+})
+
+test('an export that is no async function nor async generator function is refused — 55.3', () => {
+    expect(
+        workerExports(
+            'lib/a.worker.ts',
+            'export type Kept = number\nexport async function kept(): Promise<Kept> { return 1 }\n',
+        ),
+    ).toEqual({ kept: { kind: 'call', declares: false, defaults: null } })
+    for (const exported of [
+        'export const answer = async () => 1',
+        'export function plain() { return 1 }',
+        'export default async function () {}',
+        'async function inner() {}\nexport { inner as renamed }',
+    ]) {
+        const refused = workerExports('lib/a.worker.ts', exported)
+        expect(refused).toBeInstanceOf(Error)
+        expect((refused as Error).message).toContain('RULEBOOK 55.3')
+    }
+})

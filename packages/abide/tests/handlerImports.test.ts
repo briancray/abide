@@ -48,6 +48,7 @@ export { relative, withExtension, withoutExtension }
             },
         },
         tables: {},
+        workers: {},
     })
     const spellings = await import(`${dir}/lib/spellings.ts`)
     const mounted = await import(

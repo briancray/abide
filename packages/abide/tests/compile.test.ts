@@ -63,6 +63,23 @@ visits.set(visits() + 1)
 
 <main id="visits">{visits}</main>`
 
+// 55.1 — a worker file, run from the executable with no source on disk: its thread is an entry the
+// executable holds. THE REVERT: drop the threads' outputs from the executable's entrypoints; the
+// thread's file is not in it, and the call fails naming the module it could not find.
+const THREAD = `export async function* onThread(): AsyncGenerator<boolean> {
+    yield Bun.isMainThread
+}
+`
+
+const ON_THREAD = `import { GET } from '@abide/abide/server'
+
+import { onThread } from '#src/lib/thread.worker.ts'
+
+export default GET(async () => {
+    for await (const main of onThread()) return main ? 'main' : 'thread'
+})
+`
+
 let base = ''
 let stop = (): void => {}
 let listed: string[] = []
@@ -84,6 +101,8 @@ beforeAll(async () => {
         'src/layout.abide': `<script server>\n${HOOKS}</script>\n`,
         'src/lib/visits.ts': VISITS,
         'src/visits/index.abide': COUNTED,
+        'src/lib/thread.worker.ts': THREAD,
+        'src/identity/thread.handler.ts': ON_THREAD,
     })
     where = temporaryModule({})
     const compiled = await spawned(
@@ -144,6 +163,11 @@ test('the executable runs the app hooks and handlers it was compiled with — 38
     )
     const name = await Bun.fetch(`${base}/identity/name`)
     expect(await name.json()).toBe('@acme/ledger')
+})
+
+test('the executable runs a worker file in a thread of its own — 55.1', async () => {
+    const answered = await Bun.fetch(`${base}/identity/thread`)
+    expect(await answered.json()).toBe('thread')
 })
 
 // 11.67 — A MODULE'S `reactive` IS BUILT AFRESH IN EVERY REQUEST, even where the first request to
