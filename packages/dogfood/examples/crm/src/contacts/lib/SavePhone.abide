@@ -1,0 +1,34 @@
+<script>
+import { reactive, report, toasts } from '@abide/abide'
+import Toasts from '@abide/abide/Toasts.abide'
+
+import savePhone from '../savePhone.handler.ts'
+
+let phone = reactive('555 0100')
+
+// A refused save rejects with the refusal, which says why.
+async function save() {
+    try {
+        await savePhone({ phone })
+        toasts.notify('Phone saved', { tone: 'success' })
+    } catch (refused) {
+        toasts.notify((refused as Error).message, {
+            tone: 'error',
+            action: { label: 'Report', run: () => report().open() },
+        })
+    }
+}
+</script>
+
+<div class="row">
+    <label>Ada's phone <input bind:value={phone}></label>
+    <button onclick={save}>Save</button>
+</div>
+
+<Toasts
+    class="fixed right-5 bottom-5 flex flex-col gap-tight
+    *:flex *:items-center *:gap-snug *:rounded-lg *:border *:border-rule
+    *:bg-raised *:px-4 *:py-2 *:shadow-sm
+    *:data-[tone=error]:border-bad *:data-[tone=success]:border-good
+    [&_[data-part=close]]:bg-transparent [&_[data-part=close]]:text-muted"
+ />

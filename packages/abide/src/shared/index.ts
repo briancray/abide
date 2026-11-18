@@ -67,7 +67,12 @@ export { onMenu } from './onMenu.ts'
 export { pairing } from './pairing.ts'
 // 37.22 — the browser's `onRefusal`, which has no server's.
 export { onRefusal } from './onRefusal.ts'
+// 50.19 — where a floating element sits beside its anchor.
+export { type Placement, type PlaceOptions, place, type Side } from './place.ts'
 export { type Principal, principal } from './principal.ts'
+// 50.5 — a question or a message shown in the app's `Prompts`, as one namespace.
+export * as prompts from './prompts/index.ts'
+export type { PromptOptions } from './prompts/queue.ts'
 export { props } from './props.ts'
 export { Raw, raw } from './Raw.ts'
 export {
@@ -116,4 +121,8 @@ export {
     type Routes,
     url,
 } from './url.ts'
+// 50.12 — notices shown in the app's `Toasts`, as one namespace.
+export * as toasts from './toasts/index.ts'
+export type { Toast } from './toasts/list.ts'
+export type { NotifyOptions } from './toasts/notify.ts'
 export { validateJson } from './validateJson.ts'

@@ -1,0 +1,39 @@
+<script>
+import { reactive } from '@abide/abide'
+import Dialog from '@abide/abide/Dialog.abide'
+
+let logging = reactive(false)
+let note = reactive('')
+let calls = reactive<string[]>([])
+
+// The button that closed the form is the dialog's `returnValue`.
+function closed(returnValue: string) {
+    if (returnValue === 'log' && note.trim() !== '') calls.push(note.trim())
+    note = ''
+}
+</script>
+
+<button onclick={() => (logging = true)}>Log a call with Ada</button>
+
+<Dialog
+    bind:open={logging}
+    onclose={closed}
+    class="m-auto w-96 max-w-[calc(100%-2rem)] rounded-xl border border-rule
+    bg-raised p-5 text-ink backdrop:bg-paper/70"
+>
+    <form method="dialog" class="flex flex-col gap-snug">
+        <h2>Call with Ada Lovelace</h2>
+        <label>notes <textarea rows="3" bind:value={note} autofocus></textarea>
+        </label>
+        <div class="row">
+            <button value="log">Log call</button>
+            <button value="cancel">Cancel</button>
+        </div>
+    </form>
+</Dialog>
+
+<ul class="fields">
+    {#for call of calls}
+        <li><span>call</span><strong>{call}</strong></li>
+    {/for}
+</ul>
