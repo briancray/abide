@@ -6,7 +6,7 @@ import { atMost } from '@abide/harness/gate'
 
 import DealShortcuts from './DealShortcuts.abide'
 
-// A key pressed where focus is — the page, or the field — and whether a shortcut took it.
+// A key pressed where focus is, and whether a shortcut took it.
 function press(key: string, init: KeyboardEventInit = {}): boolean {
     const event = new KeyboardEvent('keydown', {
         key,
@@ -19,7 +19,7 @@ function press(key: string, init: KeyboardEventInit = {}): boolean {
     return event.defaultPrevented
 }
 
-test('n opens a new deal, and an n typed in it stays in the field', async () => {
+test('n opens a deal, and an n typed in it stays there', async () => {
     using _keys = await mount(DealShortcuts({}))
     expect(press('n')).toBe(true)
     const field = document.querySelector('input')

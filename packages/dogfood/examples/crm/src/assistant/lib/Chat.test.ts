@@ -6,8 +6,8 @@ import { expect, test } from 'bun:test'
 
 import type { AssistantEvent, AssistantMessage } from '@abide/abide'
 import { flushSync } from '@abide/abide'
-import { mount, settled } from '@abide/harness/abide'
 import Chat from '@abide/abide/Chat.abide'
+import { mount, settled } from '@abide/harness/abide'
 
 /** A stream the test writes to: what the chat was asked, and each event as the test pushes it. */
 function fed() {
@@ -229,7 +229,8 @@ test('an answer that fails says why, and the composer sends again', async () => 
         Chat({
             ask: () => ({
                 [Symbol.asyncIterator]: () => ({
-                    next: () => Promise.reject(new Error('The CRM is offline.')),
+                    next: () =>
+                        Promise.reject(new Error('The CRM is offline.')),
                 }),
             }),
         }),

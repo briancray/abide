@@ -5,8 +5,7 @@ import { mount } from '@abide/harness/abide'
 
 import ContractDrop from './ContractDrop.abide'
 
-// A drag carrying files, as a browser hands one over: the DOM here drops `dataTransfer` from the
-// event, and does not list `Files` among its types.
+// A drag carrying files, as a browser hands one to the element.
 function drag(type: string, files: File[]): boolean {
     const event = new DragEvent(type, { bubbles: true, cancelable: true })
     Object.defineProperty(event, 'dataTransfer', {
@@ -19,7 +18,7 @@ function drag(type: string, files: File[]): boolean {
 
 const zone = () => document.querySelector('div') as HTMLDivElement
 
-test('a dropped PDF is attached, and a photo dropped beside it is not', async () => {
+test('a dropped PDF is attached, and a photo beside it is not', async () => {
     using _drop = await mount(ContractDrop({}))
     const contract = new File(['%PDF'], 'ledger-audit.pdf', {
         type: 'application/pdf',

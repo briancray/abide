@@ -17,7 +17,7 @@ import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
-    <Section title="An answer streams into the chat as the assistant writes it">
+    <Section title="An assistant's answer streams into the chat word by word">
         <Example
             id="chat-assistant"
             title={"`<Chat ask={askAssistant} />` — the CRM's assistant, as a conversation"}
@@ -32,9 +32,9 @@ import Snippet from '#src/lib/Snippet.abide'
         </Example>
 
         <p><code>ask</code> is your assistant handler, the <code>POST</code> that yields
-            <code>assistant</code>'s events. <code>Chat</code> calls it with every turn so far
-            and reads the events as they stream. The handler keeps nothing between calls, so its
-            address, its middleware and its tools stay yours.</p>
+            <code>assistant</code>'s events. <code>Chat</code> calls it with every turn of the
+            conversation and reads the events as they stream. The handler keeps nothing between
+            calls, so its address, its middleware and its tools stay yours.</p>
 
         <p>Enter sends and Shift+Enter starts a new line. An Enter that picks a word in an input
             method does neither. An image pasted into the composer, or dropped on it, goes with

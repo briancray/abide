@@ -32,8 +32,8 @@ function type(words: string) {
     flushSync()
 }
 
-// The server renders the label for the browser that asked, so the page hydrates what it painted.
-test('on a Mac, ⌘Enter saves from inside the note, and Ctrl+Enter does not', async () => {
+// The server writes the label for the browser that asked.
+test('on a Mac, ⌘Enter saves the note and Ctrl+Enter does not', async () => {
     Object.defineProperty(navigator, 'userAgent', {
         configurable: true,
         get: () => MAC,

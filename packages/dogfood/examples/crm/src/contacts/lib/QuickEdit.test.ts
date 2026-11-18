@@ -16,7 +16,7 @@ function button(): HTMLButtonElement {
     return document.querySelector('button') as HTMLButtonElement
 }
 
-test('a press outside the panel closes it, and a press inside does not', async () => {
+test('a press outside closes the panel, one inside does not', async () => {
     using _edit = await mount(QuickEdit({}))
     button().click()
     flushSync()
@@ -35,7 +35,7 @@ test('a press outside the panel closes it, and a press inside does not', async (
     expect(button().textContent?.trim()).toBe('Quick edit')
 })
 
-test('Escape closes it, and leaves the page its Escape once it is gone', async () => {
+test('Escape closes the panel, then is the page’s again', async () => {
     using _edit = await mount(QuickEdit({}))
     button().click()
     flushSync()

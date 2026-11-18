@@ -26,7 +26,7 @@ function servedBy(app: App) {
 
 const step = () => document.querySelector('section')?.getAttribute('data-step')
 
-test('unpaired: the command and the click that pair, and no chat yet', async () => {
+test('unpaired: the command and the click, and no chat yet', async () => {
     await using app = await createApp()
     servedBy(app)
     using _chat = await mount(ClaudeCodeChat({}))
@@ -41,7 +41,7 @@ test('unpaired: the command and the click that pair, and no chat yet', async () 
     expect(document.querySelector('textarea')).toBeNull()
 })
 
-test('paired: the chat, and the tools Claude Code here cannot use', async () => {
+test('paired: the chat, and the tools it cannot use', async () => {
     globalThis.fetch = (async () =>
         Response.json({
             paired: true,

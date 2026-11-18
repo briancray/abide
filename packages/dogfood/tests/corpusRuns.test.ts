@@ -51,6 +51,9 @@ for (const manifest of new Bun.Glob('examples/*/package.json').scanSync({
 }))
     EXAMPLE_APPS.push(`${manifest.slice(0, -'package.json'.length)}src`)
 const TSCONFIG = `${APP}tsconfig.json`
+const SHIPPED = new URL('../../abide/src/components/', import.meta.url).pathname
+const SHIPPED_TSCONFIG = new URL('../../abide/tsconfig.json', import.meta.url)
+    .pathname
 
 // A file that is an app's page rather than a component a card renders.
 function isRoute(path: string): boolean {
@@ -93,12 +96,31 @@ async function appTree(session: TypeSession): Promise<{
             })
         }
     }
+    // 49 — THE SHIPPED COMPONENTS A CARD IMPORTS (`@abide/abide/Chat.abide`), compiled with the app
+    // as a build compiles a dependency's: typed in abide's own project, and keyed by their own path,
+    // which is above the copy's root.
+    const shipped: typeof files = []
+    for (const path of new Bun.Glob('*.abide').scanSync({ cwd: SHIPPED })) {
+        const text = await Bun.file(`${SHIPPED}${path}`).text()
+        shipped.push({
+            path: `${SHIPPED}${path}`,
+            file: parseAbide(text),
+            belowRoot: `lib/${path}`,
+        })
+    }
     // 32.17 — which components another one invokes decides whether a module carries its own
     // markup for a row built in the browser. THE APP'S RESOLVER, not `Bun.resolveSync`: that asks
     // every plugin again, and a compilation an earlier file in this process served answers it from
     // the directory read as a file — `InvoiceDocument.abide` is then looked for one level up.
-    const graph = componentGraph(files, resolverIn())
     const { answers } = await session.readsFor(files)
+    const own = await TypeSession.open(SHIPPED_TSCONFIG)
+    try {
+        answers.push(...(await own.readsFor(shipped)).answers)
+    } finally {
+        own.close()
+    }
+    files.push(...shipped)
+    const graph = componentGraph(files, resolverIn())
     const compilation: Compilation = {
         files: {},
         handlers: {},
@@ -111,7 +133,10 @@ async function appTree(session: TypeSession): Promise<{
             belowRoot,
         } = files[at] as (typeof files)[number]
         const names = answers[at]
-        const stem = absolute.slice(APP.length, -'.abide'.length)
+        const shipped = absolute.startsWith(SHIPPED)
+        const stem = shipped
+            ? absolute.slice(0, -'.abide'.length)
+            : absolute.slice(APP.length, -'.abide'.length)
         // 37.1 — a server block files its hooks at its route, or under a `lib` at its directory's.
         const server = emitComponent(
             file,
