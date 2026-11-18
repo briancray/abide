@@ -1,0 +1,69 @@
+<script>
+import { url } from '@abide/abide'
+import getDigestSource from 'crm/src/ops/getDigest.handler.ts' with { type: 'text' }
+import Digest from 'crm/src/ops/lib/Digest.abide'
+import digestSource from 'crm/src/ops/lib/Digest.abide' with { type: 'text' }
+import digestTestSource from 'crm/src/ops/lib/Digest.test.ts' with { type: 'text' }
+import sendDigestSource from 'crm/src/ops/sendDigest.handler.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Section title="A `job` runs nightly on the server, one run at a time">
+        <Example
+            id="nightly-job"
+            title={'`job(name, { every, run })` — the nightly follow-up digest'}
+            summary="Every night the CRM mails the team the leads still waiting on a follow-up. The panel shows when it last went out and when it goes next, and sends it now."
+            serverFiles={[
+                'src/ops/lib/digest.server.ts',
+                'src/pipeline/lib/crmDatabase.server.ts',
+            ]}
+            files={{
+                'src/ops/lib/Digest.abide': digestSource,
+                'src/ops/getDigest.handler.ts': getDigestSource,
+                'src/ops/sendDigest.handler.ts': sendDigestSource,
+                'src/ops/lib/Digest.test.ts': digestTestSource,
+            }}
+        >
+            <Digest />
+        </Example>
+
+        <p>Declare the job at the top of a server file, and import it from the handlers that show
+            and run it. Nothing runs as the file loads, or under a test that never listens: the
+            first run waits for the app to serve, and the app's stop ends the schedule and waits
+            for a run in flight. A job is a <code>global</code> value on a <code>poll</code> that
+            nothing reads, as <a href={url('/reactive/reactive')}><code>reactive</code></a> shows,
+            with the bookkeeping written once.</p>
+
+        <p><code>status</code> is one value for every caller, so <code>getDigest</code> serves it
+            as it is and the panel follows each run as it starts and ends. <code>runNow</code>,
+            and the schedule, join a run in flight rather than start a second, so pressing Send
+            twice mails the team once. The test sends twice at once and counts one digest in the
+            database.</p>
+
+        <p>A run that throws is logged with <code>log.error</code> under <code>job:digest</code>,
+            and its message stands as <code>lastError</code> until a run succeeds. See
+            <a href={url('/helpers/log')}><code>log</code></a>. <code>run</code> is handed the
+            signal a stopping app aborts. Pass it to a fetch, and a deploy stops a run rather than
+            waiting it out. <code>stop()</code> aborts the same signal for this job alone, waits for
+            the run in flight, and ends the schedule: nothing runs after it, <code>runNow</code>
+            included.</p>
+
+        <p>The job looks every minute whether a run is due. A job never run is due at once, so
+            every restart would send the digest again. <code>lastRun</code> says when it last went
+            out, here read from the CRM's own <a href={url('/helpers/database')}><code>database</code></a>, which
+            each run writes to, so a restart waits out the rest of the night and a server down past
+            the hour catches up as it opens. <code>every</code> can be a function, read at each
+            look, so <code>{'() => config().DIGEST_EVERY'}</code> follows the deployment, and 0
+            pauses the job.</p>
+
+        <p>The schedule is this process's. Two servers each run the job, so a job that has to
+            run once across them needs a lock of its own.</p>
+    </Section>
+
+    <Registry />
+</Doc>
