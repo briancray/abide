@@ -1,0 +1,32 @@
+<script>
+import { reactive } from '@abide/abide'
+import Combobox from '@abide/abide/Combobox.abide'
+
+import searchCompanies from '../searchCompanies.handler.ts'
+
+type Company = { id: string; name: string; city: string }
+
+let company = reactive<Company | undefined>(undefined)
+</script>
+
+<label for="works-at">Works at</label>
+<Combobox
+    id="works-at"
+    search={(q: string) => searchCompanies({ q })}
+    key={(found: Company) => found.id}
+    label={(found: Company) => found.name}
+    bind:value={company}
+    placeholder="Search companies"
+    class="flex flex-col gap-hair [&_[data-part=listbox]]:list-none
+        [&_[data-part=listbox]]:p-0 [&_[data-part=option]]:px-3
+        [&_[data-part=option]]:py-1 [&_[data-active]]:bg-signal/10"
+>
+    {#component Option({ item }: { item: Company })}
+        {item.name} · {item.city}
+    {/component}
+    No company matches
+</Combobox>
+
+<ul class="fields">
+    <li><span>works at</span><strong>{company?.name ?? '—'}</strong></li>
+</ul>

@@ -1,0 +1,36 @@
+<script>
+import { type Column, reactive } from '@abide/abide'
+import SortableTable from '@abide/abide/SortableTable.abide'
+
+import listCompanies from '../listCompanies.handler.ts'
+
+type Company = { id: string; name: string; city: string; contact: string }
+
+const COLUMNS: Column<Company>[] = [
+    { key: 'name', label: 'Company' },
+    { key: 'city', label: 'City' },
+    { key: 'contact', label: 'Contact' },
+]
+
+const companies = reactive(() => listCompanies())
+</script>
+
+<SortableTable
+    rows={companies}
+    columns={COLUMNS}
+    key={(company: Company) => company.id}
+    class="[&_th_button]:bg-transparent [&_th_button]:p-0
+        [&_th_button]:text-muted"
+>
+    {#component Cell({ row, column, text }: {
+        row: Company
+        column: Column<Company>
+        text: string
+    })}
+        {#if column.key === 'name'}
+            <a href={`/companies/${row.id}`}>{text}</a>
+        {:else}
+            {text}
+        {/if}
+    {/component}
+</SortableTable>

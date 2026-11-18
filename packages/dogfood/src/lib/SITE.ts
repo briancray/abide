@@ -444,7 +444,8 @@ export const SITE: readonly SiteGroup[] = [
                 nav: 'Comboboxes',
                 description:
                     'Filter a list as someone types and pick from it with the arrow keys.',
-                registry: '`Combobox` — a list filtered as you type',
+                registry:
+                    '`Combobox` and `listbox` — a list filtered as you type, picked with the arrow keys',
             },
             {
                 route: '/components/tabs',
@@ -460,7 +461,8 @@ export const SITE: readonly SiteGroup[] = [
                 nav: 'Sortable tables',
                 description:
                     'Sort rows by any column a header names, with empty values kept last.',
-                registry: '`SortableTable` — a table sorted by its headers',
+                registry:
+                    '`SortableTable` and `sortRows` — a table sorted by its headers',
             },
             {
                 route: '/components/chart',

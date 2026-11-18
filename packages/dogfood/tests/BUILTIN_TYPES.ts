@@ -38,6 +38,7 @@ export const BUILTIN_TYPES = new Set([
     'File',
     'HTMLButtonElement',
     'HTMLElementTagNameMap',
+    'KeyboardEvent',
     'SVGElementTagNameMap',
     'ReadableStream',
     'Request',
