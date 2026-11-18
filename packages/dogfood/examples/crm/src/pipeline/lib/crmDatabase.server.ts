@@ -9,5 +9,7 @@ export const crmDatabase = database('crm', {
             target INTEGER NOT NULL,
             setAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )`,
+        // When each nightly digest went out, in epoch milliseconds.
+        'CREATE TABLE digests (sentAt INTEGER NOT NULL)',
     ],
 })

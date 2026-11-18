@@ -1,0 +1,65 @@
+<script>
+import { url } from '@abide/abide'
+import getRegistrationSource from 'crm/src/companies/getRegistration.handler.ts' with { type: 'text' }
+import Registration from 'crm/src/companies/lib/Registration.abide'
+import registrationSource from 'crm/src/companies/lib/Registration.abide' with { type: 'text' }
+import registrationTestSource from 'crm/src/companies/lib/Registration.test.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Section title="`fetchJson` asks a failing service again, and a lasting failure is a refusal">
+        <Example
+            id="fetch-json"
+            title={"`fetchJson(url, { ttl })` — a company's entry at the registry"}
+            summary="The CRM fills in a company from the business registry, which is having a bad day. Hopper & Co answers on the third ask; Langley Research never does."
+            serverFiles={['src/companies/lib/registryOrigin.server.ts']}
+            files={{
+                'src/companies/lib/Registration.abide': registrationSource,
+                'src/companies/getRegistration.handler.ts': getRegistrationSource,
+                'src/companies/lib/Registration.test.ts': registrationTestSource,
+            }}
+        >
+            <Registration />
+        </Example>
+
+        <p>The handler returns what <code>fetchJson</code> settles to, and does nothing else. A
+            body is the answer. A service that gave up is a <code>FetchFailed</code>, a refusal at
+            502, and returning one refuses, so the page reads it from <code>error()</code> with its
+            message. See <a href={url('/reactive/refusals')}>Refusals</a>. Nothing is thrown but
+            your own abort: pass the request's <code>signal</code>, and a caller who leaves stops
+            the asking.</p>
+
+        <table>
+            <thead><tr><th>An attempt that</th><th>Is</th></tr></thead>
+            <tbody>
+                <tr><td>answers 2xx</td><td>the body</td></tr>
+                <tr><td>throws, or runs past <code>timeout</code> (10 s)</td><td>asked again</td></tr>
+                <tr><td>answers 408, 425, 429 or 5xx</td><td>asked again, after its <code>Retry-After</code></td></tr>
+                <tr><td>answers any other status</td><td>a <code>FetchFailed</code> at once</td></tr>
+                <tr><td>is the last of <code>retries</code> (2)</td><td>a <code>FetchFailed</code> carrying its status</td></tr>
+            </tbody>
+        </table>
+
+        <p>The waits double from 250 ms, and a <code>Retry-After</code> takes their place. One
+            asking for longer than <code>timeout</code> is not waited on: a service saying come back
+            in an hour is a failure now. A <code>POST</code> is asked once unless you set
+            <code>retries</code>, since asking it again may write twice. A retry sends the body
+            again, so give one as a string rather than a stream.</p>
+
+        <p><code>ttl</code> holds a <code>GET</code>'s answer in memory for that many milliseconds,
+            keyed by its URL and its headers, so two members' credentials are two answers. Two asks
+            at once are one request, which the test counts. A failure is never held. The cache is
+            this process's: a restart empties it, and a second server keeps its own.</p>
+
+        <p>Give a <code>schema</code> and the body is checked before it is the answer, a body it
+            refuses being a <code>FetchFailed</code> too. Without one, the type you name is a
+            promise about the service nothing checks. See <a href={url('/transports/schemas')}>Schemas</a>.</p>
+    </Section>
+
+    <Registry />
+</Doc>

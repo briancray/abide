@@ -1,0 +1,29 @@
+<script>
+import { reactive } from '@abide/abide'
+import Menu from '@abide/abide/Menu.abide'
+
+import { STAGES } from '#src/pipeline/lib/STAGES.ts'
+
+let stage = reactive('proposal')
+</script>
+
+<div class="row">
+    <strong>Engine renewal</strong>
+    <span class="status">{stage}</span>
+    <Menu
+        label="Move to…"
+        class="[&_[data-part=menu]]:m-0 [&_[data-part=menu]]:open:flex
+        [&_[data-part=menu]]:flex-col [&_[data-part=menu]]:gap-hair
+        [&_[data-part=menu]]:rounded-lg [&_[data-part=menu]]:border
+        [&_[data-part=menu]]:border-rule [&_[data-part=menu]]:bg-raised
+        [&_[data-part=menu]]:p-tight"
+    >
+        {#for next of STAGES}
+            <button
+                role="menuitem"
+                disabled={next === stage}
+                onclick={() => (stage = next)}
+            >{next}</button>
+        {/for}
+    </Menu>
+</div>

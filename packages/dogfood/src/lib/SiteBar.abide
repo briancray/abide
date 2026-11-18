@@ -9,12 +9,16 @@
 // IN THE NATIVE APP THE BAR IS THE TITLEBAR (38.155): a press on it drags the window, and its start
 // edge clears the window's controls by `--abide-titlebar-inset` (38.153), which is 0 in a browser.
 //
+// THE TWO HINTS ARE `Tooltip`s rather than `title`s: a keyboard reaches them, and they wear the site's
+// type rather than the platform's.
+//
 // `site` and `brand` carry no rule — they are what `e2e/dev.spec.ts` finds the bar by, and it
 // edits the brand's markup as written, which is why its span is styled from the link.
 //
 // NOT OVER A PAGE OF THE CRM (40.37), which is that app rather than the site — and with no bar, the
 // body lays it out as that app's page rather than as the site's grid (`app.css`).
 import { native, route, type RouteLiteral, url } from '@abide/abide'
+import Tooltip from '@abide/abide/Tooltip.abide'
 
 import Ask from './Ask.abide'
 import { isFramed } from './sitePages.ts'
@@ -28,9 +32,11 @@ import { isFramed } from './sitePages.ts'
         <a class="brand flex items-baseline gap-tight self-center px-4 pl-[calc(1rem+var(--abide-titlebar-inset,0px))] font-display text-title/5 font-bold tracking-display text-ink no-underline *:font-mono *:text-micro/2 *:font-medium *:tracking-brand *:text-muted *:uppercase" href={url('/')}>abide<span>docs</span></a>
         <div class="relative px-10 max-lg:px-3"><Ask /></div>
         {#if native() === undefined}
-            <a class="px-4 text-chrome text-muted no-underline hover:text-ink" href={url('/configuration/native' as RouteLiteral)} title="These docs as a native app, with Claude Code paired already">Native app</a>
+            <a class="px-4 text-chrome text-muted no-underline hover:text-ink" href={url('/configuration/native' as RouteLiteral)}>Native app</a>
+            <Tooltip side="bottom" align="end" class="m-0 w-max max-w-60 rounded-md border border-rule bg-raised px-3 py-2 text-chrome text-ink shadow-sm">These docs as a native app, with Claude Code paired already</Tooltip>
         {:else}
-            <span class="px-4 font-mono text-micro text-muted" title="The native app's version">v{native()?.version}</span>
+            <span class="px-4 font-mono text-micro text-muted" tabindex="0">v{native()?.version}</span>
+            <Tooltip side="bottom" align="end" class="m-0 w-max max-w-60 rounded-md border border-rule bg-raised px-3 py-2 text-chrome text-ink shadow-sm">The native app's version</Tooltip>
         {/if}
     </header>
 {/if}

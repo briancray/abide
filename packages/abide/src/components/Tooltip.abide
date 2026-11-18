@@ -1,0 +1,97 @@
+<script>
+// 50.23-50.27 — A HINT FOR THE ELEMENT WRITTEN JUST BEFORE IT, opened in the top layer as a manual
+// popover, so no stacking context covers it and no scroller clips it.
+import type { Attributes } from '#shared/Attributes.ts'
+import { follow } from '#shared/follow.ts'
+import type { Side } from '#shared/place.ts'
+import { props } from '#shared/props.ts'
+import { reactive } from '#shared/reactive/index.ts'
+
+const {
+    side = 'top',
+    align = 'center',
+    offset = 8,
+    delay = 300,
+    ...rest
+} = props<
+    {
+        /** The side of the anchor the hint opens on, flipped to the opposite one where it has no room. Default `'top'`. The side taken is written as `data-side`. */
+        side?: Side
+        /** Which edge of the anchor the hint lines up with: `'start'`, `'center'` or `'end'`. Default `'center'`. */
+        align?: 'start' | 'center' | 'end'
+        /** Pixels between the anchor and the hint. Default `8`. */
+        offset?: number
+        /** Milliseconds a pointer rests on the anchor before the hint opens. Focus opens it at once. Default `300`. */
+        delay?: number
+    } & Omit<Attributes<'span'>, 'popover' | 'role'>
+>()
+
+let open = reactive(false)
+// The side taken, which a flip can change from the one asked for.
+let placed = reactive((): Side => side)
+
+// The anchor is the element written just before the tooltip (50.23).
+function attach(tip: HTMLElement) {
+    const anchor = tip.previousElementSibling
+    if (anchor === null) return
+    if (tip.id === '')
+        tip.id = `tip-${crypto.getRandomValues(new Uint32Array(1))[0]?.toString(36)}`
+    const described = anchor.getAttribute('aria-describedby')
+    anchor.setAttribute(
+        'aria-describedby',
+        described === null ? tip.id : `${described} ${tip.id}`,
+    )
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let stop: (() => void) | undefined
+
+    const escape = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') hide()
+    }
+    const show = () => {
+        clearTimeout(timer)
+        if (stop !== undefined) return
+        tip.showPopover()
+        open = true
+        stop = follow(anchor, tip, { side, align, offset }, (placement) => {
+            placed = placement.side
+        })
+        document.addEventListener('keydown', escape)
+    }
+    function hide() {
+        clearTimeout(timer)
+        if (stop === undefined) return
+        stop()
+        stop = undefined
+        tip.hidePopover()
+        open = false
+        document.removeEventListener('keydown', escape)
+    }
+    const linger = () => {
+        clearTimeout(timer)
+        timer = setTimeout(show, delay)
+    }
+
+    anchor.addEventListener('mouseenter', linger)
+    anchor.addEventListener('mouseleave', hide)
+    anchor.addEventListener('focusin', show)
+    anchor.addEventListener('focusout', hide)
+    return () => {
+        hide()
+        anchor.removeEventListener('mouseenter', linger)
+        anchor.removeEventListener('mouseleave', hide)
+        anchor.removeEventListener('focusin', show)
+        anchor.removeEventListener('focusout', hide)
+        if (described === null) anchor.removeAttribute('aria-describedby')
+        else anchor.setAttribute('aria-describedby', described)
+    }
+}
+</script>
+
+<span
+    {...rest}
+    role="tooltip"
+    popover="manual"
+    data-open={open ? '' : undefined}
+    data-side={placed}
+    bind:element={attach}
+><slot /></span>

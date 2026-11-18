@@ -1,0 +1,25 @@
+<script>
+import { reactive } from '@abide/abide'
+
+import getTeamCommission from '../getTeamCommission.handler.ts'
+import SignInAs from './SignInAs.abide'
+
+const commission = reactive(() => getTeamCommission())
+
+// The figure, or a dash while there is none to show.
+const total = () =>
+    commission.ready() && !commission.error() ? commission.total : '—'
+
+function refusal() {
+    const failed = commission.error()
+    return failed ? `${failed.status} ${failed.name}: ${failed.message}` : ''
+}
+</script>
+
+<SignInAs />
+
+<ul class="fields">
+    <li><span>team commission</span>
+        <strong>{total()}</strong></li>
+</ul>
+<p class="status">{refusal()}</p>
