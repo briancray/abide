@@ -1,0 +1,8 @@
+<script server>
+import { middleware, readOnly } from '@abide/abide/server'
+
+// Every handler under src/pipeline/archive reads; none writes.
+middleware(readOnly({ message: 'Last year’s pipeline is archived.' }))
+</script>
+
+<slot />
