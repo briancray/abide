@@ -1,5 +1,5 @@
 <script>
-// 50.6, 50.8-50.10 — WHERE `prompts.confirm` AND `prompts.alert` SHOW: rendered once, in the root
+// 50.6, 50.8-50.10, 50.34 — WHERE `prompts.confirm`, `prompts.alert` AND `prompts.prompt` SHOW: rendered once, in the root
 // layout, and showing the queue's first prompt in a `Dialog` until it is answered.
 import type { Attributes } from '#shared/Attributes.ts'
 import { queue } from '#shared/prompts/queue.ts'
@@ -14,7 +14,8 @@ const { ...rest } =
 const current = reactive(() => queue[0])
 // Closing writes `false` here; the queue moving on computes it again.
 let showing = reactive(() => queue.length > 0)
-let typed = reactive('')
+// Each prompt starts from its own `value`; typing writes over it until the queue moves on.
+let typed = reactive(() => current?.value ?? '')
 const typedRight = reactive(() => {
     const asked = current?.mustType
     return (
@@ -27,12 +28,11 @@ const typedRight = reactive(() => {
 function answered(returnValue: string) {
     const asked = current
     if (asked === undefined) return
-    const confirmed = returnValue === 'confirm' && typedRight
-    typed = ''
+    const answer = returnValue === 'confirm' && typedRight ? typed : undefined
     queue.patch((waiting) => {
         waiting.shift()
     })
-    asked.resolve(confirmed)
+    asked.resolve(answer)
 }
 </script>
 
@@ -52,13 +52,19 @@ function answered(returnValue: string) {
             {#if current.body}
                 <p data-part="body">{current.body}</p>
             {/if}
-            {#if current.mustType !== undefined}
+            {#if current.mustType !== undefined || current.kind === 'prompt'}
                 <label data-part="field">
-                    Type {current.mustType} to confirm
+                    {#if current.mustType !== undefined}
+                        Type {current.mustType} to confirm
+                    {/if}
                     <input
                         data-part="input"
                         autocomplete="off"
                         autofocus
+                        aria-label={current.mustType === undefined
+                            ? (current.title ?? current.body)
+                            : undefined}
+                        placeholder={current.placeholder}
                         bind:value={typed}
                     >
                 </label>
@@ -69,14 +75,14 @@ function answered(returnValue: string) {
                     value="confirm"
                     data-part="confirm"
                     disabled={!typedRight}
-                    autofocus={!current.asks}
+                    autofocus={current.kind === 'alert'}
                 >{current.confirm}</button>
-                {#if current.asks}
+                {#if current.kind !== 'alert'}
                     <button
                         type="submit"
                         value="cancel"
                         data-part="cancel"
-                        autofocus={current.mustType === undefined}
+                        autofocus={current.kind === 'confirm' && current.mustType === undefined}
                     >{current.cancel}</button>
                 {/if}
             </div>

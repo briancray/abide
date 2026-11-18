@@ -4880,13 +4880,14 @@ NOT where it is false.
 
 50.4 A `Dialog` MUST focus the element inside it carrying `autofocus` as it opens.
 
-50.5 `prompts.confirm` and `prompts.alert` MUST queue their prompt behind every prompt not yet
+50.5 `prompts.confirm`, `prompts.alert` and `prompts.prompt` MUST queue their prompt behind every prompt not yet
 answered.
 
 50.6 `Prompts` MUST show the first prompt of the queue in a `Dialog` whose role is `alertdialog`,
 and the next once that one is answered.
 
-50.7 A string handed to `prompts.confirm` or `prompts.alert` MUST be the prompt's `body`.
+50.7 A string handed to `prompts.confirm`, `prompts.alert` or `prompts.prompt` MUST be the
+prompt's `body`.
 
 50.8 `prompts.confirm` MUST settle `true` where its prompt closed by the confirming button, and
 `false` where it closed any other way.
@@ -4896,7 +4897,7 @@ and the next once that one is answered.
 50.10 `Prompts` MUST keep the confirming button of a prompt carrying `mustType` disabled until the
 text typed, trimmed, matches `mustType`, trimmed, ignoring case.
 
-50.11 `prompts.confirm` and `prompts.alert` MUST throw where `isServer` is true.
+50.11 `prompts.confirm`, `prompts.alert` and `prompts.prompt` MUST throw where `isServer` is true.
 
 50.12 `toasts.notify` MUST add its notice to the end of `toasts.list` under an id no other notice
 holds, and hand back that id.
@@ -4956,6 +4957,12 @@ item, wrapping, and Home and End to the first and the last.
 focus to its trigger.
 
 50.32 A press on the trigger of an open `Menu` MUST close it, and MUST NOT open it again.
+
+50.33 `prompts.prompt` MUST settle with the text in its input where its prompt closed by the
+confirming button, and `undefined` where it closed any other way.
+
+50.34 `Prompts` MUST show an input for a prompt asked by `prompts.prompt`, starting from its
+`value`, and `''` where it has none.
 
 # 51. Lists and tables
 

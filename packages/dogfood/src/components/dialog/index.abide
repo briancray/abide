@@ -5,6 +5,9 @@ import logCallDialogTestSource from 'crm/src/contacts/lib/LogCallDialog.test.ts'
 import DeleteDeal from 'crm/src/deals/lib/DeleteDeal.abide'
 import deleteDealSource from 'crm/src/deals/lib/DeleteDeal.abide' with { type: 'text' }
 import deleteDealTestSource from 'crm/src/deals/lib/DeleteDeal.test.ts' with { type: 'text' }
+import RenameDeal from 'crm/src/deals/lib/RenameDeal.abide'
+import renameDealSource from 'crm/src/deals/lib/RenameDeal.abide' with { type: 'text' }
+import renameDealTestSource from 'crm/src/deals/lib/RenameDeal.test.ts' with { type: 'text' }
 
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
@@ -58,10 +61,11 @@ import Snippet from '#src/lib/Snippet.abide'
         <p><code>prompts.confirm</code> queues a question and settles <code>true</code> only
             when the confirming button closed it. Cancel, Escape and the backdrop settle
             <code>false</code>, so <code>if (await prompts.confirm(…))</code> is the whole of the
-            branch. <code>prompts.alert</code> takes the same options and settles once it closes.
+            branch. <code>prompts.alert</code> takes the same options and settles once it closes, and
+            <code>prompts.prompt</code> asks for text, below.
             A string in place of the options is the body. Both live on the <code>prompts</code>
-            namespace, so neither shadows the browser's own blocking <code>confirm</code> and
-            <code>alert</code>, and a call missing its import fails to compile.</p>
+            namespace, so none shadows the browser's own blocking <code>confirm</code>,
+            <code>alert</code> and <code>prompt</code>, and a call missing its import fails to compile.</p>
 
         <p>Both show in <code>Prompts</code>, a <code>Dialog</code> you render once. The card
             renders it beside the list. An app renders it once, in its root layout, and every
@@ -75,7 +79,27 @@ import Snippet from '#src/lib/Snippet.abide'
             visitor's page.</p>
     </Section>
 
-    <Section title="Prompt options: `title`, `body`, `confirm`, `cancel`, `danger`, `mustType`">
+    <Section title="`prompts.prompt` for a line of text">
+        <Example
+            id="prompt-rename-deal"
+            title={'`await prompts.prompt({ title, value })` — a line of text, or `undefined`'}
+            summary="Renaming a deal asks for the new name in a dialog that starts from the old one. Rename keeps what was typed; Cancel keeps the old name."
+            files={{
+                'src/deals/lib/RenameDeal.abide': renameDealSource,
+                'src/deals/lib/RenameDeal.test.ts': renameDealTestSource,
+            }}
+        >
+            <RenameDeal />
+        </Example>
+
+        <p><code>prompts.prompt</code> shows an input in the same <code>Prompts</code> and settles
+            with the text in it when the confirming button closed it, Enter included. Cancel,
+            Escape and the backdrop settle <code>undefined</code>, so an empty string still means
+            the person cleared the field and confirmed. The input starts from <code>value</code>,
+            and takes focus as it opens.</p>
+    </Section>
+
+    <Section title="Prompt options: `title`, `body`, `confirm`, `cancel`, `danger`, `mustType`, `value`, `placeholder`">
         <table>
             <thead><tr><th>Option</th><th>What it does</th></tr></thead>
             <tbody>
@@ -85,6 +109,8 @@ import Snippet from '#src/lib/Snippet.abide'
                 <tr><td><code>cancel</code></td><td>the declining button's text, <code>'Cancel'</code> by default; an alert has none</td></tr>
                 <tr><td><code>danger</code></td><td>writes <code>data-danger</code> on the dialog, for a warning's colors</td></tr>
                 <tr><td><code>mustType</code></td><td>a word the person types before the confirming button enables, matched ignoring case</td></tr>
+                <tr><td><code>value</code></td><td>the text a <code>prompts.prompt</code> input starts from, <code>''</code> by default</td></tr>
+                <tr><td><code>placeholder</code></td><td>that input's placeholder</td></tr>
             </tbody>
         </table>
 
@@ -107,7 +133,7 @@ import Snippet from '#src/lib/Snippet.abide'
                 <tr><td><code>data-part="form"</code></td><td>the <code>&lt;form method="dialog"&gt;</code> inside <code>Prompts</code></td><td><code>[&amp;_[data-part=form]]:…</code></td></tr>
                 <tr><td><code>data-part="title"</code></td><td>its <code>&lt;h2&gt;</code></td><td><code>[&amp;_[data-part=title]]:…</code></td></tr>
                 <tr><td><code>data-part="body"</code></td><td>its <code>&lt;p&gt;</code></td><td><code>[&amp;_[data-part=body]]:…</code></td></tr>
-                <tr><td><code>data-part="field"</code></td><td>the <code>&lt;label&gt;</code> around the <code>mustType</code> input</td><td><code>[&amp;_[data-part=field]]:…</code></td></tr>
+                <tr><td><code>data-part="field"</code></td><td>the <code>&lt;label&gt;</code> around the input of a <code>prompts.prompt</code> or a <code>mustType</code></td><td><code>[&amp;_[data-part=field]]:…</code></td></tr>
                 <tr><td><code>data-part="input"</code></td><td>that <code>&lt;input&gt;</code></td><td><code>[&amp;_[data-part=input]]:…</code></td></tr>
                 <tr><td><code>data-part="actions"</code></td><td>the <code>&lt;div&gt;</code> holding the buttons</td><td><code>[&amp;_[data-part=actions]]:…</code></td></tr>
                 <tr><td><code>data-part="confirm"</code></td><td>the confirming button, <code>disabled</code> until <code>mustType</code> matches</td><td><code>[&amp;_[data-part=confirm]]:…</code></td></tr>

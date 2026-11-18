@@ -1,7 +1,7 @@
 // 50 — THE OVERLAYS' PLAIN MODULES: where `place` puts a floating element (50.19-50.22), the notice
-// list `toasts.notify` and `toasts.dismiss` keep (50.12-50.15), the queue `prompts.confirm` and
-// `prompts.alert` fill (50.5, 50.7), and what a server does with both (50.11, 50.16, 11.32). What
-// the components render is the CRM's tests', which mount them.
+// list `toasts.notify` and `toasts.dismiss` keep (50.12-50.15), the queue `prompts.confirm`,
+// `prompts.alert` and `prompts.prompt` fill (50.5, 50.7, 50.34), and what a server does with both
+// (50.11, 50.16, 11.32). What the components render is the CRM's tests', which mount them.
 
 import { afterEach, expect, test } from 'bun:test'
 
@@ -149,16 +149,26 @@ test('a string is the body of the prompt confirm queues, behind the one before i
         confirm: 'OK',
         cancel: 'Cancel',
         danger: false,
-        asks: true,
+        kind: 'confirm',
     })
+})
+
+test('a prompt starts from its value, and an empty one from nothing — 50.34', () => {
+    void prompts.prompt({ title: 'Rename deal', value: 'Engine renewal' })
+    void prompts.prompt('Name the pipeline')
+    expect(queue().map((prompt) => [prompt.kind, prompt.value])).toEqual([
+        ['prompt', 'Engine renewal'],
+        ['prompt', ''],
+    ])
 })
 
 // THE REVERT: drop the `isServer` check from `queued`, and the request never settles: it holds a
 // prompt nobody can answer, which is the hang a server's `confirm` would be.
-test('confirm, alert and notify throw inside a request — 50.11, 50.16', async () => {
+test('confirm, alert, prompt and notify throw inside a request — 50.11, 50.16', async () => {
     await inScope(new Request('http://app/'), async () => {
         expect(() => prompts.confirm('Sure?')).toThrow('RULEBOOK 50.11')
         expect(() => prompts.alert('Done')).toThrow('RULEBOOK 50.11')
+        expect(() => prompts.prompt('Name?')).toThrow('RULEBOOK 50.11')
         expect(() => toasts.notify('Saved')).toThrow('RULEBOOK 50.16')
     })
 })
@@ -178,7 +188,9 @@ test('the notices and the prompts are one list per request — 11.32', async () 
                 cancel: 'Cancel',
                 danger: false,
                 mustType: undefined,
-                asks: true,
+                value: '',
+                placeholder: undefined,
+                kind: 'confirm',
                 resolve: () => {},
             },
         ])

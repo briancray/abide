@@ -207,7 +207,7 @@ server helper. Each has a page in `docs/abide.md` with a working card, every pro
 table.
 
 - Components, each imported on its own — `import Dialog from '@abide/abide/Dialog.abide'`:
-  `Dialog`, `Prompts` (the host for `prompts.confirm` / `prompts.alert`), `Toasts` (the host for
+  `Dialog`, `Prompts` (the host for `prompts.confirm` / `prompts.alert` / `prompts.prompt`), `Toasts` (the host for
   `toasts.notify`), `Tooltip`, `Menu`, `Combobox`, `Tabs`, `SortableTable`, `Markdown`, `LineChart`,
   `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same

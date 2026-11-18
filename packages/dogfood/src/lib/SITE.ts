@@ -416,11 +416,11 @@ export const SITE: readonly SiteGroup[] = [
         pages: [
             {
                 route: '/components/dialog',
-                title: 'Dialogs, `confirm` and `alert`',
+                title: 'Dialogs, `confirm`, `alert` and `prompt`',
                 nav: 'Dialogs',
                 description:
-                    'Ask before a change, or show a form over the page, in a native modal you style.',
-                registry: '`Dialog` — dialogs, confirm and alert',
+                    'Ask before a change, ask for a name, or show a form over the page, in a native modal you style.',
+                registry: '`Dialog` — dialogs, confirm, alert and prompt',
             },
             {
                 route: '/components/toasts',

@@ -7,7 +7,7 @@
 import { isServer } from '../isServer.ts'
 import { reactive } from '../reactive/index.ts'
 
-/** What a `prompts.confirm` or a `prompts.alert` shows, and what its buttons say. */
+/** What a `prompts.confirm`, `prompts.alert` or `prompts.prompt` shows, and what its buttons say. */
 export type PromptOptions = {
     /** The heading, written in the `title` part, and the dialog's accessible name where given. */
     title?: string
@@ -21,9 +21,13 @@ export type PromptOptions = {
     danger?: boolean
     /** A word the person types before the confirming button enables, matched trimmed and ignoring case. */
     mustType?: string
+    /** The text the input starts with: `''` by default. Only `prompts.prompt` asks for text unless `mustType` is set. */
+    value?: string
+    /** The input's placeholder. */
+    placeholder?: string
 }
 
-/** One queued prompt: what it shows, whether it asks, and what settles its caller. */
+/** One queued prompt: what it shows, which of the three asked it, and what settles its caller. */
 export type Prompt = {
     title: string | undefined
     body: string
@@ -31,24 +35,27 @@ export type Prompt = {
     cancel: string
     danger: boolean
     mustType: string | undefined
-    asks: boolean
-    resolve: (confirmed: boolean) => void
+    value: string
+    placeholder: string | undefined
+    kind: 'confirm' | 'alert' | 'prompt'
+    /** Settles the caller with the text typed where the confirming button closed it, and `undefined` otherwise. */
+    resolve: (answer: string | undefined) => void
 }
 
 /** The prompts waiting, oldest first, the first of them showing in `Prompts`. */
 export const queue = reactive<Prompt[]>([])
 
-/** Queues a prompt for `Prompts` to show, settling once it is answered. */
+/** Queues a prompt for `Prompts` to show, settling with the text typed once it is confirmed and `undefined` once it is closed any other way. */
 export function queued(
     asked: string | PromptOptions,
-    asks: boolean,
-): Promise<boolean> {
+    kind: Prompt['kind'],
+): Promise<string | undefined> {
     if (isServer())
         throw new Error(
-            `prompts.${asks ? 'confirm' : 'alert'} asks a person, and a server has none to ask. RULEBOOK 50.11.`,
+            `prompts.${kind} asks a person, and a server has none to ask. RULEBOOK 50.11.`,
         )
     const options = typeof asked === 'string' ? { body: asked } : asked
-    const { promise, resolve } = Promise.withResolvers<boolean>()
+    const { promise, resolve } = Promise.withResolvers<string | undefined>()
     const prompt: Prompt = {
         title: options.title,
         body: options.body ?? '',
@@ -56,7 +63,9 @@ export function queued(
         cancel: options.cancel ?? 'Cancel',
         danger: options.danger ?? false,
         mustType: options.mustType,
-        asks,
+        value: options.value ?? '',
+        placeholder: options.placeholder,
+        kind,
         resolve,
     }
     queue.patch((waiting) => {
