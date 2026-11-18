@@ -319,37 +319,42 @@
     }
 
     /* WRAPS rather than scrolls. One example per page means four to six files is the normal
-       case, and a hidden scrollbar put the last of them off the edge with nothing to say so. */
-    .ex-files {
+       case, and a hidden scrollbar put the last of them off the edge with nothing to say so.
+       The tabs are abide's `Tabs`, styled by the parts and states it writes. */
+    .ex-files [data-part=tablist] {
         @apply flex flex-wrap gap-hair border-y border-rule p-2;
     }
 
-    .ex-files button {
-        @apply flex flex-none cursor-pointer appearance-none items-center gap-tight rounded-sm border-0 bg-transparent px-2 py-1 font-mono text-chrome/3 font-normal text-muted;
+    .ex-files [data-part=tab] {
+        @apply flex-none cursor-pointer appearance-none rounded-sm border-0 bg-transparent px-2 py-1 font-mono text-chrome/3 font-normal text-muted;
     }
 
-    .ex-files button::before {
+    .ex-files [data-side] {
+        @apply flex items-center gap-tight;
+    }
+
+    .ex-files [data-side]::before {
         content: '';
         @apply size-1 flex-none rounded-full bg-(--side);
     }
 
-    .ex-files button[data-side=server] {
+    .ex-files [data-side=server] {
         --side: var(--color-warm);
     }
 
-    .ex-files button[data-side=browser] {
+    .ex-files [data-side=browser] {
         --side: var(--color-cool);
     }
 
-    .ex-files button[data-side=abide] {
+    .ex-files [data-side=abide] {
         --side: var(--color-signal);
     }
 
-    .ex-files button:hover {
+    .ex-files [data-part=tab]:hover {
         @apply text-ink;
     }
 
-    .ex-files button[aria-selected=true] {
+    .ex-files [data-part=tab][data-selected] {
         @apply bg-ink/7 text-ink;
     }
 
@@ -389,8 +394,8 @@
         @apply text-muted;
     }
 
-    .ex-files button[data-kind=test]::before,
-    .ex-files button[data-kind=bench]::before {
+    .ex-files [data-side][data-kind=test]::before,
+    .ex-files [data-side][data-kind=bench]::before {
         @apply rounded-none;
     }
 }
