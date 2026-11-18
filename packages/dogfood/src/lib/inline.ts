@@ -1,41 +1,16 @@
-import { type RouteLiteral, url } from '@abide/abide'
+import { markdown, type RouteLiteral, url } from '@abide/abide'
 
-import { escapeHtml } from './escapeHtml.ts'
-
-// A slot is NUL-delimited because the text it sits in is already escaped, so the one thing that
-// cannot appear around it is a control character.
-const CODE_SLOT = /\0(\d+)\0/g
+/** A path on the site written below its mount (16.10); any other address as it is. */
+export function siteHref(address: string): string {
+    return address.startsWith('/') ? url(address as RouteLiteral) : address
+}
 
 /**
- * One line of the site's own words — a title, an intent, a lead, a card's caption — as HTML: code
- * spans, links, bold and italic, the four marks the words in `SITE` use.
- *
- * A code span is LIFTED OUT before emphasis runs and put back after, which is what makes
- * `**\`initial\`**` one span rather than three. A link to a route is written through `url`, so it is
- * right below a mount (16.10).
+ * One line of the site's own words — a title, an intent, a lead, a card's caption — as HTML: the
+ * inline marks of `markdown`, with a link to a route written through `url`.
  */
 export function inline(text: string): string {
-    const parts = text.split('`')
-    const codes: string[] = []
-    let markup = ''
-    for (let index = 0; index < parts.length; index += 1) {
-        const part = parts[index] ?? ''
-        if (index % 2 === 1) {
-            markup += `\0${codes.length}\0`
-            codes.push(`<code>${escapeHtml(part)}</code>`)
-            continue
-        }
-        markup += escapeHtml(part)
-    }
-    return markup
-        .replace(
-            /\[([^\]]+)\]\(([^)]+)\)/g,
-            (_whole, label: string, href: string) =>
-                `<a href="${href.startsWith('/') ? url(href as RouteLiteral) : href}">${label}</a>`,
-        )
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        .replace(CODE_SLOT, (_whole, slot: string) => codes[Number(slot)] ?? '')
+    return markdown(text, { inline: true, href: siteHref })
 }
 
 /** A heading's anchor: its words, lowercased, with everything else a single dash. */

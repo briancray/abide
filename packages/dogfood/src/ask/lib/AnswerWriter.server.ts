@@ -1,4 +1,6 @@
-import { type RouteLiteral, url } from '@abide/abide'
+import { markdown } from '@abide/abide'
+
+import { siteHref } from '#src/lib/inline.ts'
 
 import type { AnswerPart, Show } from './AnswerPart.ts'
 
@@ -6,24 +8,22 @@ import type { AnswerPart, Show } from './AnswerPart.ts'
 const SHOW =
     /^<show\s+(example|code|name|clause|results|page|open)="([^"]*)"(?:\s+from="([^"]*)")?\s*\/?>\s*$/
 const FENCE = /^(`{3,}|~{3,})\s*([\w+-]*)/
+const SCHEMED = /^[a-zA-Z][a-zA-Z\d+.-]*:/
 
-// Only a link to a page of the site, an anchor, or the web; anything else is written as no link.
-const UNSAFE_HREF = /href="(?!https?:|\/|#|mailto:)[^"]*"/g
-const SITE_HREF = /href="(\/[^"]*)"/g
+/**
+ * 40.49 — where a link the model wrote goes: a page of the site below its mount, an anchor, or an
+ * address on a scheme `markdown` already let through. A path relative to nothing is no link.
+ */
+function answerHref(address: string): string | undefined {
+    if (SCHEMED.test(address) || address.startsWith('//')) return address
+    if (address.startsWith('#') || address.startsWith('/'))
+        return siteHref(address)
+    return undefined
+}
 
 /** Markdown as HTML: no raw markup from the model, and no address but the web's and the site's. */
-function htmlOf(markdown: string): string {
-    return Bun.markdown
-        .html(markdown, {
-            noHtmlBlocks: true,
-            noHtmlSpans: true,
-            autolinks: true,
-        })
-        .replace(UNSAFE_HREF, 'href="#"')
-        .replace(
-            SITE_HREF,
-            (_whole, path: string) => `href="${url(path as RouteLiteral)}"`,
-        )
+function htmlOf(text: string): string {
+    return markdown(text, { href: answerHref })
 }
 
 /**
