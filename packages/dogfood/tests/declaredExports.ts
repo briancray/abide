@@ -1,14 +1,9 @@
 // EVERY NAME THE PUBLIC ENTRY POINTS EXPORT, read off their barrels: what an app can import, for the
 // gate that every one of them is a name REGISTRY writes (`coverage.test.ts`).
 
-/**
- * The scope an entry's names are written in: abide's, the `@abide/harness/…` entry's own, or the
- * kit's — one scope across its entries, a component being an entry of its own.
- */
+/** The scope an entry's names are written in: abide's, or the `@abide/harness/…` entry's own. */
 export function scopeOf(entry: string): string {
-    if (entry.startsWith('@abide/abide')) return 'abide'
-    if (entry.startsWith('@abide/kit')) return '@abide/kit'
-    return entry
+    return entry.startsWith('@abide/abide') ? 'abide' : entry
 }
 
 const PACKAGES = new URL('../../', import.meta.url).pathname
@@ -16,20 +11,25 @@ const PACKAGES = new URL('../../', import.meta.url).pathname
 /** The entry points an app imports from, in the order a name exported by two is filed under. */
 async function entryPoints(): Promise<{ entry: string; file: string }[]> {
     const entries: { entry: string; file: string }[] = []
-    for (const subpath of ['.', './server', './test'])
-        entries.push({
-            entry: `@abide/abide${subpath.slice(1)}`,
-            file: `${PACKAGES}abide/${(await packageOf('abide')).exports[subpath]}`,
-        })
-    for (const name of ['harness', 'kit'])
-        for (const [subpath, file] of Object.entries(
-            (await packageOf(name)).exports,
-        ))
-            if (subpath !== './package.json')
-                entries.push({
-                    entry: `@abide/${name}${subpath.slice(1)}`,
-                    file: `${PACKAGES}${name}/${file}`,
-                })
+    // The app's three entries, and each component abide ships as an entry of its own (34.24).
+    const abide = (await packageOf('abide')).exports
+    for (const subpath of Object.keys(abide))
+        if (
+            ['.', './server', './test'].includes(subpath) ||
+            subpath.endsWith('.abide')
+        )
+            entries.push({
+                entry: `@abide/abide${subpath.slice(1)}`,
+                file: `${PACKAGES}abide/${abide[subpath]}`,
+            })
+    for (const [subpath, file] of Object.entries(
+        (await packageOf('harness')).exports,
+    ))
+        if (subpath !== './package.json')
+            entries.push({
+                entry: `@abide/harness${subpath.slice(1)}`,
+                file: `${PACKAGES}harness/${file}`,
+            })
     return entries
 }
 

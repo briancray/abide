@@ -620,6 +620,41 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown> }): (element: Element) => Disposer; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown> }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Element \| Document }): (element: Element) => Disposer }` | The `bind:element` adaptor writing whether an element is in view. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92 |
 | `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): (element: Element) => Disposer; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's rectangle in the viewport. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92 |
 
+## `format` — numbers, money and time as words
+
+## `markdown` — markdown rendered safely
+
+## `hotkeys` — keyboard shortcuts
+
+## Element behaviors — dismiss, drop and copy
+
+## Guards — rungs that let a caller through
+
+## `fetchJson` — fetches that time out and retry
+
+## `job` — work on a schedule
+
+# Components
+
+Components abide ships, each an entry of its own an app imports as `@abide/abide/<Name>.abide`,
+with no stylesheet: a caller styles one by the `data-` attributes and the `data-part`s it writes.
+
+## `Dialog` — dialogs, confirm and alert
+
+## `Toasts` — notices that dismiss themselves
+
+## `Tooltip` and `Menu` — placed against an anchor
+
+## `Combobox` — a list filtered as you type
+
+## `Tabs` — tabs
+
+## `SortableTable` — a table sorted by its headers
+
+## `LineChart` and `Sparkline` — charts
+
+## `Chat` — a chat over an assistant handler
+
 # `.abide` files
 
 ## Reading and writing by name
@@ -972,42 +1007,6 @@ rows a runner prints, and an adapter for an abide app.
 | Name | Meaning | Rules |
 | --- | --- | --- |
 | `preload = ["@abide/harness/abide/preload"]` | The `[test]` preload that registers a DOM a test mounts into and measures, then abide's own. | 38.109, 38.119, 38.133 |
-
-# The kit
-
-`@abide/kit`, a package of its own: headless components and the helpers beside them, each an entry
-an app imports alone — a component as `@abide/kit/<Name>.abide`, a helper module as
-`@abide/kit/<module>`.
-
-## `@abide/kit/dialog` — dialogs, confirm and alert
-
-## `@abide/kit/toasts` — notices that dismiss themselves
-
-## `@abide/kit/popover` — tooltips and menus placed against an anchor
-
-## `@abide/kit/listbox` — a combobox and the keyboard over a list
-
-## `@abide/kit/Tabs.abide` — tabs
-
-## `@abide/kit/table` — a table sorted by its headers
-
-## `@abide/kit/format` — numbers, money and time as words
-
-## `@abide/kit/markdown` — markdown rendered safely
-
-## `@abide/kit/chart` — line charts and sparklines
-
-## `@abide/kit/keys` — keyboard shortcuts
-
-## `@abide/kit/elements` — dismiss, drop and copy on an element
-
-## `@abide/kit/assistant` — a chat over an assistant handler
-
-## `@abide/kit/guard` — rungs that let a caller through
-
-## `@abide/kit/fetch` — fetches that time out and retry
-
-## `@abide/kit/job` — work on a schedule
 
 # CLI
 

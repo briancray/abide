@@ -7,10 +7,10 @@
         "packages/dogfood/examples/*"
     ],
     "scripts": {
-        "typecheck": "bun check -p packages/abide && bun check -p packages/harness && bun check -p packages/kit && bun check -p packages/dogfood && bun check -p packages/bridge",
-        "test": "bun run build && bun test packages/abide/tests packages/harness/tests packages/kit/tests packages/dogfood/tests --parallel --timings=test-timings.json",
-        "test:timings": "bun run build && bun test packages/abide/tests packages/harness/tests packages/kit/tests packages/dogfood/tests --parallel --timings=test-timings.json --update-timings",
-        "test:serial": "bun run build && bun test packages/abide/tests packages/harness/tests packages/kit/tests packages/dogfood/tests",
+        "typecheck": "bun check -p packages/abide && bun check -p packages/harness && bun check -p packages/dogfood && bun check -p packages/bridge",
+        "test": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json",
+        "test:timings": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json --update-timings",
+        "test:serial": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests",
         "test:changed": "bun test --changed",
         "build": "bun run --filter abide-docs build",
         "dev": "bun run --filter abide-docs dev",
@@ -22,7 +22,7 @@
         "e2e:failed": "bunx --bun playwright test --last-failed",
         "verify": "bun run typecheck && bun run format:check && bun run test",
         "bench": "bun packages/abide/bench/bench.ts",
-        "test:gates": "bun run build && HARNESS_VERIFY_GATES=1 bun test packages/abide/tests packages/harness/tests packages/kit/tests packages/dogfood/tests",
+        "test:gates": "bun run build && HARNESS_VERIFY_GATES=1 bun test packages/abide/tests packages/harness/tests packages/dogfood/tests",
         "bench:reactive": "bun packages/abide/bench/benchReactive.ts",
         "bench:component": "bun packages/abide/bench/benchComponent.ts",
         "bench:grid": "bun packages/abide/bench/benchGrid.ts",

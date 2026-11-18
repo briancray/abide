@@ -26,7 +26,5 @@ packages/dogfood/abide-docs
 packages/dogfood/abide-docs.app/
 packages/dogfood/updates/
 
-# What `@abide/abide` and `@abide/kit` ship for a reader with only node_modules, copied at pack time
-# (scripts/packDocs.ts, scripts/packKitDocs.ts).
+# What `@abide/abide` ships for a reader with only node_modules, copied at pack time (scripts/packDocs.ts).
 packages/abide/docs/
-packages/kit/docs/
