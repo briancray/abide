@@ -27,6 +27,8 @@ export type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 export type { Attributes } from './Attributes.ts'
 // 51.31-51.43 — a sortable table's columns, its sort, and the order its rows are in.
 export type { Column } from './Column.ts'
+// 52.19-52.23 — the arithmetic under a chart, which `LineChart` and `Sparkline` draw with.
+export * as chart from './chart/index.ts'
 export { type Cookies, cookies } from './cookies.ts'
 // 53.21-53.23 — the `bind:element` adaptor copying text on a click.
 export { copyText } from './copyText.ts'
@@ -44,6 +46,8 @@ export { type Failed, isFailed } from './Failed.ts'
 export { type Hotkey, hotkeys } from './hotkeys.ts'
 export { isEditableTarget } from './isEditableTarget.ts'
 export { keyLabel } from './keyLabel.ts'
+// 52.1-52.7 — numbers, money and time as words, the same on both sides.
+export * as format from './format/index.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'
 // 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.
@@ -55,6 +59,8 @@ export { type Listbox, type ListboxOptions, listbox } from './listbox.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log, type Span } from './log.ts'
+// 52.8-52.16 — markdown as markup safe to hand `raw`.
+export { markdown } from './markdown/markdown.ts'
 export { type Report, ReportDraft, report } from './report.ts'
 export type { Sort } from './Sort.ts'
 export { sortRows } from './sortRows.ts'

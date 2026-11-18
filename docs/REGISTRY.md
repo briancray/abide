@@ -622,7 +622,25 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 ## `format` — numbers, money and time as words
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `format` | `{ money; percent; number; plural; list; date; duration; relative; bytes }` | The formatters abide ships, as one namespace. | 52.1, 52.2, 52.6 |
+| `format.money` | `(value: unknown, options?: { currency?: string; compact?: boolean; signed?: boolean; digits?: number; locale?: string }) => string` | An amount of money as it is written. | 52.1, 52.2, 52.6 |
+| `format.percent` | `(value: unknown, options?: { digits?: number; signed?: boolean; locale?: string }) => string` | A fraction written as a percent. | 52.1, 52.2, 52.6 |
+| `format.number` | `(value: unknown, options?: { compact?: boolean; digits?: number; locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6 |
+| `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
+| `format.list` | `(value: unknown, options?: { conjunction?: 'and' \| 'or'; locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6 |
+| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'dateTime'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6 |
+| `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
+| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6 |
+| `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
+
 ## `markdown` — markdown rendered safely
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `markdown` | `(text: string, options?: { schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| undefined; inline?: boolean }) => string` | Markdown as HTML safe to hand `raw`. | 52.8, 52.9, 52.10, 52.11, 52.12, 52.13, 52.14, 52.15, 52.16 |
+| `Markdown` | `{ source: string; schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| undefined } & Attributes<'div'>` | A `div` of the markup `markdown` renders for `source`, the component `@abide/abide/Markdown.abide` exports. | 49.1, 49.3, 49.5, 49.6, 52.17, 52.18 |
 
 ## `hotkeys` — keyboard shortcuts
 
@@ -730,7 +748,18 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.49, 51.52, 51.58, 51.59 |
 | `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.45, 51.53, 51.54, 51.55 |
 
-## `LineChart` and `Sparkline` — charts
+## `LineChart`, `Sparkline` and `chart` — charts
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `LineChart` | `{ series: readonly { label: string; values: readonly (number \| null \| undefined)[] }[]; label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; width?: number; height?: number } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | One or more series drawn as lines over a shared x in an `svg`, the component `@abide/abide/LineChart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30 |
+| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31 |
+| `chart` | `{ ticks; scale; path; nearest }` | The arithmetic under a chart, as one namespace. | 52.19, 52.20, 52.21, 52.22, 52.23 |
+| `chart.ticks` | `(min: number, max: number, count?: number) => number[]` | Round values for an axis from `min` to `max`, about `count` intervals apart. | 52.19 |
+| `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
+| `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], baseline?: number) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`. | 52.21, 52.22 |
+| `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
+| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[] }` | One line of a chart: what it is called, and its values in x order. | 52.21, 52.24 |
 
 ## `Chat` — a chat over an assistant handler
 

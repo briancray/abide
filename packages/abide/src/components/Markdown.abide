@@ -1,0 +1,89 @@
+<script>
+// Markdown rendered as safe markup, a section at a time: a section a stream has moved past keeps
+// its nodes, so a chunk re-renders only the section still growing (52.18).
+import type { Attributes } from '#shared/Attributes.ts'
+import {
+    renderSection,
+    SCHEMES,
+    sectionEnd,
+    type Settings,
+} from '#shared/markdown/sections.ts'
+import { props } from '#shared/props.ts'
+import { raw } from '#shared/Raw.ts'
+import { reactive } from '#shared/reactive/index.ts'
+
+const { source, schemes, headingLevel, href, ...rest } = props<
+    {
+        /** The markdown to render, as it stands: a stream hands it the text so far. */
+        source: string
+        /**
+         * The schemes a link's address may have, lowercase and without the colon. A link to any
+         * other renders as its text. `['http', 'https', 'mailto']` by default.
+         */
+        schemes?: readonly string[]
+        /** The level a `#` heading renders at, the deeper ones below it, down to 6. 1 by default. */
+        headingLevel?: number
+        /**
+         * Rewrites the address of each link `schemes` lets through; a link it answers `undefined`
+         * for renders as its text. Pass one function for the component's life: a new one renders
+         * every section again.
+         */
+        href?: (address: string) => string | undefined
+    } & Attributes<'div'>
+>()
+
+type Section = { source: string; html: string }
+
+// The sections no later text can change, the source and settings they were rendered from, and the
+// section still growing as the last text left it.
+let closed: Section[] = []
+let closedSource = ''
+let closedSettings: Settings | undefined
+let open: Section | undefined
+
+// The section `source` renders as — the growing one itself where it closed as the last text left it.
+function sectionOf(source: string, settings: Settings): Section {
+    if (open?.source === source) return open
+    return { source, html: renderSection(source, settings) }
+}
+
+const sections = reactive(() => {
+    const text = source ?? ''
+    const settings: Settings = {
+        schemes: schemes ?? SCHEMES,
+        headingLevel: headingLevel ?? 1,
+        href,
+    }
+    if (
+        closedSettings === undefined ||
+        closedSettings.schemes.join() !== settings.schemes.join() ||
+        closedSettings.headingLevel !== settings.headingLevel ||
+        closedSettings.href !== settings.href ||
+        !text.startsWith(closedSource)
+    ) {
+        closed = []
+        closedSource = ''
+        open = undefined
+    }
+    closedSettings = settings
+    let at = closedSource.length
+    let end = sectionEnd(text, at)
+    while (end < text.length) {
+        closed.push(sectionOf(text.slice(at, end), settings))
+        at = end
+        end = sectionEnd(text, at)
+    }
+    closedSource = text.slice(0, at)
+    const shown = closed.slice()
+    if (at < text.length) {
+        open = sectionOf(text.slice(at), settings)
+        shown.push(open)
+    }
+    return shown
+})
+</script>
+
+<div {...rest}>
+    <!-- Keyed by the section itself: a closed section is the same object chunk after chunk. -->
+    {#for section of sections by section}{raw(section.html)}{/for}
+</div>

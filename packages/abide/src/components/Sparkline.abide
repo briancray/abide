@@ -1,0 +1,102 @@
+<script>
+// A trend with no axes, drawn into whatever box the caller gives it: the drawing stretches to the
+// box, and a stroke that does not scale keeps the line and the end dot their own width.
+import type { Attributes } from '#shared/Attributes.ts'
+import { path, scale } from '#shared/chart/index.ts'
+import { props } from '#shared/props.ts'
+import { reactive } from '#shared/reactive/index.ts'
+
+const {
+    values,
+    label,
+    area = false,
+    dot = false,
+    ...rest
+} = props<
+    {
+        /** The values in order, drawn left to right. `null` or `undefined` leaves a gap. */
+        values: readonly (number | null | undefined)[]
+        /** What the trend shows, as the image's accessible name: `'Won revenue, last 6 months'`. */
+        label: string
+        /** Whether to fill under the line, as `data-part="area"`. `false` by default. */
+        area?: boolean
+        /** Whether to mark the last value, as `data-part="dot"`. `false` by default. */
+        dot?: boolean
+    } & Omit<Attributes<'svg'>, 'values'>
+>()
+
+// The drawing's own units. `preserveAspectRatio="none"` stretches them to the box.
+const SIZE = 100
+
+const drawing = reactive(() => {
+    let low = Number.POSITIVE_INFINITY
+    let high = Number.NEGATIVE_INFINITY
+    let first: number | undefined
+    let last: number | undefined
+    let lastIndex = -1
+    for (let index = 0; index < values.length; index += 1) {
+        const value = values[index]
+        if (value === null || value === undefined || !Number.isFinite(value))
+            continue
+        if (value < low) low = value
+        if (value > high) high = value
+        first ??= value
+        last = value
+        lastIndex = index
+    }
+    const x = scale([0, Math.max(1, values.length - 1)], [0, SIZE])
+    const y = scale([low, high], [SIZE, 0])
+    const xs: number[] = []
+    const ys: (number | undefined)[] = []
+    for (let index = 0; index < values.length; index += 1) {
+        const value = values[index]
+        xs.push(x(index))
+        ys.push(value === null || value === undefined ? undefined : y(value))
+    }
+    return {
+        line: path(xs, ys),
+        area: path(xs, ys, SIZE),
+        end: last === undefined ? '' : `M${x(lastIndex)},${y(last)}Z`,
+        trend:
+            first === undefined || last === undefined || last === first
+                ? 'flat'
+                : last > first
+                  ? 'up'
+                  : 'down',
+    }
+})
+</script>
+
+<svg
+    {...rest}
+    viewBox="0 0 {SIZE} {SIZE}"
+    preserveAspectRatio="none"
+    overflow="visible"
+    role="img"
+    aria-label={label}
+    data-trend={drawing.trend}
+>
+    {#if area}
+        <path data-part="area" d={drawing.area} fill="currentColor" fill-opacity="0.15" stroke="none" />
+    {/if}
+    <path
+        data-part="line"
+        d={drawing.line}
+        fill="none"
+        stroke="currentColor"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+        vector-effect="non-scaling-stroke"
+     />
+    {#if dot && drawing.end !== ''}
+        <path
+            data-part="dot"
+            d={drawing.end}
+            fill="none"
+            stroke="currentColor"
+            stroke-width="4"
+            stroke-linecap="round"
+            vector-effect="non-scaling-stroke"
+         />
+    {/if}
+</svg>

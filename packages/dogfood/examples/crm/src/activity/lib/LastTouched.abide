@@ -1,0 +1,33 @@
+<script>
+import { format, reactive } from '@abide/abide'
+
+const HOUR = 3_600_000
+
+let now = reactive(Date.now())
+let touches = reactive([
+    { contact: 'Ada Lovelace', kind: 'Call', at: now - 3 * HOUR },
+    { contact: 'Grace Hopper', kind: 'Email', at: now - 26 * HOUR },
+])
+
+function logCall() {
+    now = Date.now()
+    touches = [
+        { contact: 'Katherine Johnson', kind: 'Call', at: now },
+        ...touches,
+    ]
+}
+</script>
+
+<ul class="fields">
+    {#for touch of touches by touch.contact}
+        <li><span>{touch.kind}</span>
+            <strong title={format.date(touch.at, { style: 'dateTime' })}>
+                {touch.contact}, {format.relative(touch.at, { now })}
+            </strong></li>
+    {/for}
+</ul>
+<div class="row">
+    <button disabled={touches.length > 2} onclick={logCall}>
+        Log a call with Katherine
+    </button>
+</div>

@@ -1,0 +1,22 @@
+<script>
+import { reactive } from '@abide/abide'
+import Markdown from '@abide/abide/Markdown.abide'
+
+let note = reactive(`**Ada** wants the annual plan. [Brief](https://x.co/b7)
+
+- legal review by *Friday*
+- [open the quote](javascript:alert('pwned'))
+
+<script>alert('pwned')<\/script>`)
+</script>
+
+<label>
+    Deal note
+    <textarea rows="7" bind:value={note}></textarea>
+</label>
+<Markdown
+    source={note}
+    headingLevel={3}
+    aria-label="Preview"
+    class="flex flex-col gap-tight"
+ />

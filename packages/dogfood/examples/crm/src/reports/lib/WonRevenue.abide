@@ -1,0 +1,26 @@
+<script>
+import { format } from '@abide/abide'
+import LineChart from '@abide/abide/LineChart.abide'
+
+const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
+// August's books are not closed yet.
+const WON = [18_000, 24_500, null, 31_000, 27_000, 42_000]
+const TARGET = [20_000, 22_000, 24_000, 26_000, 28_000, 30_000]
+</script>
+
+<LineChart
+    series={[
+        { label: 'Won', values: WON },
+        { label: 'Target', values: TARGET },
+    ]}
+    x={MONTHS}
+    label="Won revenue against target, June to November"
+    xFormat={(month) => format.date(month, { style: 'month' })}
+    yFormat={(amount) => format.money(amount, { compact: true })}
+    zero
+    class="h-60 w-full overflow-visible text-chrome text-muted
+        [&_[data-part=line]]:stroke-2 [&_[data-series='0']]:text-signal
+        [&_[data-series='0']]:stroke-signal
+        [&_[data-part=line][data-series='1']]:[stroke-dasharray:4_4]
+        [&_[data-part=readout]]:fill-ink"
+ />

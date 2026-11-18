@@ -1,0 +1,40 @@
+<script>
+import { format, reactive } from '@abide/abide'
+
+type Deal = { name: string; amount: number | null; probability: number }
+
+let deals = reactive<Deal[]>([
+    { name: 'Analytical Engines renewal', amount: 42_000, probability: 0.6 },
+    { name: 'Langley Research seats', amount: 15_000, probability: 0.35 },
+])
+
+const weighted = reactive(() =>
+    deals.reduce((sum, deal) => sum + (deal.amount ?? 0) * deal.probability, 0),
+)
+
+function addLead() {
+    deals = [...deals, { name: 'Babbage & Co', amount: null, probability: 0.1 }]
+}
+</script>
+
+<table>
+    <thead><tr><th>Deal</th><th>Amount</th><th>Chance</th></tr></thead>
+    <tbody>
+        {#for deal of deals by deal.name}
+            <tr>
+                <td>{deal.name}</td>
+                <td>{format.money(deal.amount, { digits: 0 })}</td>
+                <td>{format.percent(deal.probability)}</td>
+            </tr>
+        {/for}
+    </tbody>
+</table>
+<ul class="tiles">
+    <li><span>{format.plural(deals.length, 'open deal')}</span>
+        <strong>{format.money(weighted, { compact: true })}</strong></li>
+</ul>
+<div class="row">
+    <button disabled={deals.length > 2} onclick={addLead}>
+        Add Babbage & Co
+    </button>
+</div>

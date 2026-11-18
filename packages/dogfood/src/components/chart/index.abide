@@ -1,0 +1,112 @@
+<script>
+import { url } from '@abide/abide'
+import RepTrends from 'crm/src/reports/lib/RepTrends.abide'
+import repTrendsSource from 'crm/src/reports/lib/RepTrends.abide' with { type: 'text' }
+import repTrendsTestSource from 'crm/src/reports/lib/RepTrends.test.ts' with { type: 'text' }
+import WonRevenue from 'crm/src/reports/lib/WonRevenue.abide'
+import wonRevenueSource from 'crm/src/reports/lib/WonRevenue.abide' with { type: 'text' }
+import wonRevenueTestSource from 'crm/src/reports/lib/WonRevenue.test.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+</script>
+
+<Doc>
+    <Section title="A line chart with a gap where a month has no total">
+        <Example
+            id="chart-line"
+            title="`LineChart` — series over time, read out under the pointer"
+            summary="Won revenue against target for the last six months, with August's books not closed yet. Move the pointer across the chart to read both lines out."
+            files={{
+                'src/reports/lib/WonRevenue.abide': wonRevenueSource,
+                'src/reports/lib/WonRevenue.test.ts': wonRevenueTestSource,
+            }}
+        >
+            <WonRevenue />
+        </Example>
+
+        <p>Import the component as <code>import LineChart from '@abide/abide/LineChart.abide'</code>.
+            Hand it <code>series</code>, each a <code>label</code> and one value per position, and a
+            <code>label</code> for the chart, which is its accessible name. A <code>null</code>
+            breaks the line rather than drawing it down to zero.</p>
+
+        <Snippet source={wonRevenueSource} path="src/reports/lib/WonRevenue.abide" from={['<LineChart']} />
+
+        <p><code>x</code> places each position, a time in epoch milliseconds here, and
+            <code>xFormat</code> and <code>yFormat</code> write the ticks and the readout. The
+            <a href={url('/helpers/format')}>Formatting</a> helpers drop in as they are. The y gridlines
+            land on round values, and <code>zero</code> takes zero into the range and draws a line
+            there.</p>
+
+        <p>The chart measures the box it is laid out in and draws at that size, so its text is
+            never stretched. Size it with a class; <code>width</code> and <code>height</code> are
+            what it draws at before it is measured. While the pointer is over it, a crosshair sits
+            at the nearest position and the readout sits on the side with more room.</p>
+    </Section>
+
+    <Section title="A sparkline per row, colored by its trend">
+        <Example
+            id="chart-sparkline"
+            title="`Sparkline` — a trend in a table cell"
+            summary="Each rep's won revenue by month, with a sparkline per row. Switch to three months and each line redraws in place."
+            files={{
+                'src/reports/lib/RepTrends.abide': repTrendsSource,
+                'src/reports/lib/RepTrends.test.ts': repTrendsTestSource,
+            }}
+        >
+            <RepTrends />
+        </Example>
+
+        <p>A sparkline has no axes and stretches to the box you give it, while its line and its
+            dot keep their own width. It writes <code>data-trend</code> as <code>up</code>,
+            <code>down</code> or <code>flat</code>, by its last value against its first, so a
+            class can color it.</p>
+
+        <Snippet source={repTrendsSource} path="src/reports/lib/RepTrends.abide" from={['<Sparkline']} />
+
+        <p><code>area</code> fills under the line and <code>dot</code> marks the last value.
+            <code>chart.ticks</code>, <code>chart.scale</code>, <code>chart.path</code> and
+            <code>chart.nearest</code> from <code>@abide/abide</code> are the arithmetic both
+            components draw with, for a chart of your own.</p>
+    </Section>
+
+    <Section title="Styling a chart by its parts and states">
+        <p>The charts ship no styles and write no class. Every mark is drawn in
+            <code>currentColor</code>, so a <code>text-</code> class colors it, and every element you
+            can style carries a <code>data-part</code>. Any attribute you pass, <code>class</code>
+            included, lands on the root <code>svg</code>.</p>
+
+        <table>
+            <thead><tr><th>Element</th><th>Part</th><th>Attributes</th></tr></thead>
+            <tbody>
+                <tr><td>the root <code>svg</code></td><td>—</td><td><code>data-hovering</code> on a <code>LineChart</code> while its readout shows; <code>data-trend</code> on a <code>Sparkline</code>, <code>up</code>, <code>down</code> or <code>flat</code></td></tr>
+                <tr><td>a series' <code>path</code></td><td><code>line</code></td><td><code>data-series</code> on a <code>LineChart</code>'s, the series' index from 0</td></tr>
+                <tr><td>a horizontal gridline</td><td><code>grid</code></td><td>—</td></tr>
+                <tr><td>a tick label</td><td><code>tick</code></td><td><code>data-axis</code>, <code>x</code> or <code>y</code></td></tr>
+                <tr><td>the line at zero</td><td><code>zero</code></td><td>—</td></tr>
+                <tr><td>the vertical line under the pointer</td><td><code>crosshair</code></td><td>—</td></tr>
+                <tr><td>a series' point on the crosshair</td><td><code>point</code></td><td><code>data-series</code></td></tr>
+                <tr><td>the readout's <code>text</code></td><td><code>readout</code></td><td><code>data-align</code>, <code>start</code> or <code>end</code></td></tr>
+                <tr><td>the readout's x</td><td><code>readout-x</code></td><td>—</td></tr>
+                <tr><td>a series' value in the readout</td><td><code>readout-value</code></td><td><code>data-series</code></td></tr>
+                <tr><td>a <code>Sparkline</code>'s fill</td><td><code>area</code></td><td>—</td></tr>
+                <tr><td>a <code>Sparkline</code>'s last value</td><td><code>dot</code></td><td>—</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th>You write</th><th>It styles</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'class="[&_[data-series=\'0\']]:text-signal"'}</code></td><td>the first series, its line, its point and its value, as a Tailwind utility on the root</td></tr>
+                <tr><td><code>{'class="[&_[data-part=line]]:stroke-2"'}</code></td><td>every line's width</td></tr>
+                <tr><td><code>{'class="data-[trend=down]:text-bad"'}</code></td><td>a falling sparkline</td></tr>
+                <tr><td><code>{'[data-part=grid] { stroke-dasharray: 2 2 }'}</code></td><td>dashed gridlines, from a stylesheet</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Registry />
+</Doc>
