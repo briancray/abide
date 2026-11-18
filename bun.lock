@@ -13,12 +13,12 @@
     },
     "packages/abide": {
       "name": "@abide/abide",
-      "version": "0.130.1",
+      "version": "0.141.0",
       "bin": {
         "abide": "./bin/abide.ts",
       },
       "dependencies": {
-        "@abide/bridge": "0.6.2",
+        "@abide/bridge": "0.8.3",
         "typescript": "^7.0.2",
       },
       "devDependencies": {
@@ -27,7 +27,7 @@
     },
     "packages/bridge": {
       "name": "@abide/bridge",
-      "version": "0.6.2",
+      "version": "0.8.3",
       "bin": {
         "abide-bridge": "./bin/abideBridge.ts",
       },
@@ -40,6 +40,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@abide/abide": "workspace:*",
+        "@abide/kit": "workspace:*",
         "crm": "workspace:*",
         "zod": "^4.6.7",
       },
@@ -53,6 +54,7 @@
       "name": "crm",
       "dependencies": {
         "@abide/abide": "workspace:*",
+        "@abide/kit": "workspace:*",
       },
       "devDependencies": {
         "@abide/harness": "workspace:*",
@@ -63,7 +65,7 @@
     },
     "packages/harness": {
       "name": "@abide/harness",
-      "version": "0.4.2",
+      "version": "0.5.0",
       "bin": {
         "harness-bench": "./src/runner/harnessBench.ts",
       },
@@ -74,13 +76,24 @@
         "@abide/abide": "workspace:*",
       },
       "peerDependencies": {
-        "@abide/abide": ">=0.130.1",
+        "@abide/abide": ">=0.141.0",
         "@playwright/test": "^1.64.0",
       },
       "optionalPeers": [
         "@abide/abide",
         "@playwright/test",
       ],
+    },
+    "packages/kit": {
+      "name": "@abide/kit",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@abide/abide": "workspace:*",
+        "@abide/harness": "workspace:*",
+      },
+      "peerDependencies": {
+        "@abide/abide": ">=0.141.0",
+      },
     },
   },
   "packages": {
@@ -89,6 +102,8 @@
     "@abide/bridge": ["@abide/bridge@workspace:packages/bridge"],
 
     "@abide/harness": ["@abide/harness@workspace:packages/harness"],
+
+    "@abide/kit": ["@abide/kit@workspace:packages/kit"],
 
     "@changesets/apply-release-plan": ["@changesets/apply-release-plan@8.1.1", "", { "dependencies": { "@changesets/config": "^4.0.1", "@changesets/format": "^0.1.2", "@changesets/git": "^4.0.1", "@changesets/should-skip-package": "^1.0.0", "@changesets/types": "^7.0.0", "import-meta-resolve": "^4.2.0", "jsonc-parser": "^3.3.1", "semver": "^7.8.1" } }, "sha512-nk2Hbq3M9NeHMdaIRBDvawKrQJzXB9sGyBUE5yWnIKtvdcNCPj75zBekJYr0gTT2ecJH3eFeTrc8eisPImcv0Q=="],
 

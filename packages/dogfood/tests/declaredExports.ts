@@ -1,9 +1,14 @@
 // EVERY NAME THE PUBLIC ENTRY POINTS EXPORT, read off their barrels: what an app can import, for the
 // gate that every one of them is a name REGISTRY writes (`coverage.test.ts`).
 
-/** The scope an entry's names are written in: abide's, or the `@abide/harness/…` entry's own. */
+/**
+ * The scope an entry's names are written in: abide's, the `@abide/harness/…` entry's own, or the
+ * kit's — one scope across its entries, a component being an entry of its own.
+ */
 export function scopeOf(entry: string): string {
-    return entry.startsWith('@abide/abide') ? 'abide' : entry
+    if (entry.startsWith('@abide/abide')) return 'abide'
+    if (entry.startsWith('@abide/kit')) return '@abide/kit'
+    return entry
 }
 
 const PACKAGES = new URL('../../', import.meta.url).pathname
@@ -16,14 +21,15 @@ async function entryPoints(): Promise<{ entry: string; file: string }[]> {
             entry: `@abide/abide${subpath.slice(1)}`,
             file: `${PACKAGES}abide/${(await packageOf('abide')).exports[subpath]}`,
         })
-    for (const [subpath, file] of Object.entries(
-        (await packageOf('harness')).exports,
-    ))
-        if (subpath !== './package.json')
-            entries.push({
-                entry: `@abide/harness${subpath.slice(1)}`,
-                file: `${PACKAGES}harness/${file}`,
-            })
+    for (const name of ['harness', 'kit'])
+        for (const [subpath, file] of Object.entries(
+            (await packageOf(name)).exports,
+        ))
+            if (subpath !== './package.json')
+                entries.push({
+                    entry: `@abide/${name}${subpath.slice(1)}`,
+                    file: `${PACKAGES}${name}/${file}`,
+                })
     return entries
 }
 
@@ -57,6 +63,9 @@ async function resolvedFrom(
  * `export * as` as the one name. */
 async function exportsOf(file: string): Promise<Map<string, boolean>> {
     const names = new Map<string, boolean>()
+    // A `.abide` entry is one component, named for its file (34.17).
+    if (file.endsWith('.abide'))
+        return names.set(file.slice(file.lastIndexOf('/') + 1, -6), false)
     const source = (await Bun.file(file).text()).replace(/\/\/[^\n]*/g, '')
     for (const [, star] of source.matchAll(/export \* from '([^']+)'/g)) {
         const target = await resolvedFrom(file, star as string)

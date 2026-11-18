@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "private": true,
     "type": "module",
-    "description": "The abide documentation, as an abide app \u2014 and the app abide is dogfooded on",
+    "description": "The abide documentation, as an abide app — and the app abide is dogfooded on",
     "imports": {
         "#src/*": [
             "./src/*",
@@ -20,6 +20,7 @@
     },
     "dependencies": {
         "@abide/abide": "workspace:*",
+        "@abide/kit": "workspace:*",
         "crm": "workspace:*",
         "zod": "^4.6.7"
     },

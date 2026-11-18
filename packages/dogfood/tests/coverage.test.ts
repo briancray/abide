@@ -11,7 +11,7 @@ import { registryRows } from '../src/lib/registryRows.ts'
 import { SITE } from '../src/lib/SITE.ts'
 import { isFramed } from '../src/lib/sitePages.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
-import { declaredExports } from './declaredExports.ts'
+import { declaredExports, scopeOf } from './declaredExports.ts'
 import {
     allCards,
     cardsOf,
@@ -600,7 +600,7 @@ test('every source fence carries a caption', async () => {
 const named = new Set<string>()
 for (const row of registryRows(registry)) {
     const entry = /`(@abide\/[^`]+)`/.exec(row.section)?.[1]
-    const scope = entry ?? 'abide'
+    const scope = entry === undefined ? 'abide' : scopeOf(entry)
     const options = /`([^`]+)`/.exec(row.subsection ?? '')?.[1]
     if (options) named.add(`${scope}\0${options}`)
     if (row.header[0] !== 'Name') continue

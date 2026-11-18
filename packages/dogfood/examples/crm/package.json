@@ -20,7 +20,8 @@
         ]
     },
     "dependencies": {
-        "@abide/abide": "workspace:*"
+        "@abide/abide": "workspace:*",
+        "@abide/kit": "workspace:*"
     },
     "devDependencies": {
         "@abide/harness": "workspace:*",

@@ -973,6 +973,42 @@ rows a runner prints, and an adapter for an abide app.
 | --- | --- | --- |
 | `preload = ["@abide/harness/abide/preload"]` | The `[test]` preload that registers a DOM a test mounts into and measures, then abide's own. | 38.109, 38.119, 38.133 |
 
+# The kit
+
+`@abide/kit`, a package of its own: headless components and the helpers beside them, each an entry
+an app imports alone — a component as `@abide/kit/<Name>.abide`, a helper module as
+`@abide/kit/<module>`.
+
+## `@abide/kit/dialog` — dialogs, confirm and alert
+
+## `@abide/kit/toasts` — notices that dismiss themselves
+
+## `@abide/kit/popover` — tooltips and menus placed against an anchor
+
+## `@abide/kit/listbox` — a combobox and the keyboard over a list
+
+## `@abide/kit/Tabs.abide` — tabs
+
+## `@abide/kit/table` — a table sorted by its headers
+
+## `@abide/kit/format` — numbers, money and time as words
+
+## `@abide/kit/markdown` — markdown rendered safely
+
+## `@abide/kit/chart` — line charts and sparklines
+
+## `@abide/kit/keys` — keyboard shortcuts
+
+## `@abide/kit/elements` — dismiss, drop and copy on an element
+
+## `@abide/kit/assistant` — a chat over an assistant handler
+
+## `@abide/kit/guard` — rungs that let a caller through
+
+## `@abide/kit/fetch` — fetches that time out and retry
+
+## `@abide/kit/job` — work on a schedule
+
 # CLI
 
 ## Commands

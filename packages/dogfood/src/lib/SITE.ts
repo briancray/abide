@@ -576,6 +576,169 @@ export const SITE: readonly SiteGroup[] = [
         ],
     },
     {
+        group: 'Kit: overlays',
+        description:
+            '`@abide/kit`: dialogs, notices, tooltips and menus that float over the page, unstyled.',
+        pages: [
+            {
+                route: '/kit/dialog',
+                title: 'Dialogs, `confirm` and `alert`',
+                nav: 'Dialogs',
+                description:
+                    'Ask before a change, or show a form over the page, in a native modal you style.',
+                registry: '`@abide/kit/dialog` — dialogs, confirm and alert',
+            },
+            {
+                route: '/kit/toasts',
+                title: 'Toasts',
+                nav: 'Toasts',
+                description:
+                    'Tell someone a save landed or failed, in a notice that dismisses itself.',
+                registry:
+                    '`@abide/kit/toasts` — notices that dismiss themselves',
+            },
+            {
+                route: '/kit/popover',
+                title: 'Tooltips and menus',
+                nav: 'Tooltips and menus',
+                description:
+                    'Show a hint or a list of actions beside the control that opened it, kept on screen.',
+                registry:
+                    '`@abide/kit/popover` — tooltips and menus placed against an anchor',
+            },
+        ],
+    },
+    {
+        group: 'Kit: lists and tables',
+        description:
+            '`@abide/kit`: pick from a list, switch between panels and sort a table, from the keyboard as well as the pointer.',
+        pages: [
+            {
+                route: '/kit/combobox',
+                title: 'Comboboxes',
+                nav: 'Comboboxes',
+                description:
+                    'Filter a list as someone types and pick from it with the arrow keys.',
+                registry:
+                    '`@abide/kit/listbox` — a combobox and the keyboard over a list',
+            },
+            {
+                route: '/kit/tabs',
+                title: 'Tabs',
+                nav: 'Tabs',
+                description:
+                    'Switch between panels of one record, with the arrow keys moving between tabs.',
+                registry: '`@abide/kit/Tabs.abide` — tabs',
+            },
+            {
+                route: '/kit/table',
+                title: 'Sortable tables',
+                nav: 'Sortable tables',
+                description:
+                    'Sort rows by any column a header names, with empty values kept last.',
+                registry: '`@abide/kit/table` — a table sorted by its headers',
+            },
+        ],
+    },
+    {
+        group: 'Kit: words and charts',
+        description:
+            '`@abide/kit`: numbers, money and times as words, markdown made safe, and charts drawn in SVG.',
+        pages: [
+            {
+                route: '/kit/format',
+                title: 'Formatting numbers, money and time',
+                nav: 'Formatting',
+                description:
+                    'Show money, percents, counts, dates, durations and how long ago, the same on both sides.',
+                registry:
+                    '`@abide/kit/format` — numbers, money and time as words',
+            },
+            {
+                route: '/kit/markdown',
+                title: 'Markdown',
+                nav: 'Markdown',
+                description:
+                    'Render markdown a person or a model wrote, with its HTML escaped and its links checked.',
+                registry: '`@abide/kit/markdown` — markdown rendered safely',
+            },
+            {
+                route: '/kit/chart',
+                title: 'Line charts and sparklines',
+                nav: 'Charts',
+                description:
+                    'Draw a series over time as a line, with ticks, a hover readout and gaps where values are missing.',
+                registry: '`@abide/kit/chart` — line charts and sparklines',
+            },
+        ],
+    },
+    {
+        group: 'Kit: keys, elements and the assistant',
+        description:
+            '`@abide/kit`: keyboard shortcuts, behaviors bound to an element, and a chat over the assistant.',
+        pages: [
+            {
+                route: '/kit/keys',
+                title: 'Keyboard shortcuts',
+                nav: 'Shortcuts',
+                description:
+                    'Bind a key to a command across the page, skipped while someone types in a field.',
+                registry: '`@abide/kit/keys` — keyboard shortcuts',
+            },
+            {
+                route: '/kit/elements',
+                title: 'Dismiss, drop and copy',
+                nav: 'Element behaviors',
+                description:
+                    'Close a panel on a click outside it, take files dropped on it, or copy its text.',
+                registry:
+                    '`@abide/kit/elements` — dismiss, drop and copy on an element',
+            },
+            {
+                route: '/kit/assistant',
+                title: 'A chat over the assistant',
+                nav: 'Chat',
+                description:
+                    'Show an assistant conversation as it streams, with a composer that sends on Enter.',
+                registry:
+                    '`@abide/kit/assistant` — a chat over an assistant handler',
+            },
+        ],
+    },
+    {
+        group: 'Kit: server helpers',
+        description:
+            '`@abide/kit`: rungs that admit a caller, fetches that time out and retry, and jobs that run on a schedule.',
+        pages: [
+            {
+                route: '/kit/guard',
+                title: 'Guards',
+                nav: 'Guards',
+                description:
+                    'Let a handler answer only a signed-in caller, or one with a role, in one rung.',
+                registry:
+                    '`@abide/kit/guard` — rungs that let a caller through',
+            },
+            {
+                route: '/kit/fetch',
+                title: 'Fetching other services',
+                nav: 'Fetching',
+                description:
+                    'Call another service with a deadline, retries on a failure worth retrying, and a cache.',
+                registry:
+                    '`@abide/kit/fetch` — fetches that time out and retry',
+            },
+            {
+                route: '/kit/job',
+                title: 'Scheduled jobs',
+                nav: 'Jobs',
+                description:
+                    'Run work every interval on the server, one run at a time, with when it last ran.',
+                registry: '`@abide/kit/job` — work on a schedule',
+            },
+        ],
+    },
+    {
         group: 'CLI',
         description:
             'The `abide` command and the bridge that connects Claude Code to a site.',

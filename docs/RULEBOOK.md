@@ -87,6 +87,12 @@ These are immutable. A change to them is a change to what this document is.
 - [46. Outbox](#46)
 - [47. Databases](#47)
 - [48. Problem reports](#48)
+- [49. The kit](#49)
+- [50. The kit's overlays](#50)
+- [51. The kit's lists and tables](#51)
+- [52. The kit's words and charts](#52)
+- [53. The kit's keys, elements and assistant](#53)
+- [54. The kit's server helpers](#54)
 
 ## Terms
 
@@ -96,6 +102,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | Term | Definition |
 | --- | --- |
 | read | A call to `s` or to `s.peek`. |
+| kit component | A `.abide` file an entry of `@abide/kit`'s `exports` names. |
 | write | A call to `s.set` or to `s.patch`. |
 | gated | A production the `identity` comparison may collapse: one a write or a body mints, and not a chunk a stream lands. |
 | probe | Any of `s.busy`, `s.ready`, `s.error`, `s.issues`. |
@@ -4837,3 +4844,37 @@ server mints.
 
 48.13 `ReportDraft.send` MUST settle the draft's `id`, and where a send of the draft is in flight or
 has settled it MUST settle that same `id` without handing the `Report` to any `onReport` again.
+
+# 49. The kit
+
+49.1 A kit component MUST spread every attribute its caller passes beyond its own props onto its
+root element.
+
+49.2 A kit component MUST write each state a caller can style it by as a `data-` attribute on the
+element the state is about, valued where the state has more than two values, and present only while
+it holds where it has two.
+
+49.3 A kit component MUST NOT write a `class`.
+
+49.4 An element of a kit component other than its root that a caller can style MUST carry a
+`data-part` attribute naming it.
+
+49.5 `@abide/kit` MUST NOT ship a stylesheet.
+
+49.6 A kit component MUST write a `style` property only for a value it computes as it runs.
+
+49.7 A module of `@abide/kit` MUST reach abide through `@abide/abide` and `@abide/abide/server`
+alone.
+
+49.8 A kit component rendering a widget WAI-ARIA gives a pattern for MUST carry the roles and the
+states that pattern names.
+
+# 50. The kit's overlays
+
+# 51. The kit's lists and tables
+
+# 52. The kit's words and charts
+
+# 53. The kit's keys, elements and assistant
+
+# 54. The kit's server helpers
