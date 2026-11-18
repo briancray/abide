@@ -1,0 +1,24 @@
+<script>
+import getDigest from '../getDigest.handler.ts'
+import sendDigest from '../sendDigest.handler.ts'
+
+const digest = getDigest()
+
+const sending = () => digest.ready() && digest.running
+
+// An ISO time, to the minute.
+const minute = (at: string | null) =>
+    at === null ? '—' : `${at.slice(0, 16).replace('T', ' ')} UTC`
+</script>
+
+<ul class="fields">
+    <li><span>last sent</span>
+        <strong>{digest.ready() ? minute(digest.lastRun) : '—'}</strong></li>
+    <li><span>next</span>
+        <strong>{digest.ready() ? minute(digest.nextRun) : '—'}</strong></li>
+</ul>
+<div class="row">
+    <button disabled={sending()}
+        onclick={() => sendDigest()}>Send now</button>
+    <span class="status">{sending() ? 'sending…' : ''}</span>
+</div>

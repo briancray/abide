@@ -1040,7 +1040,8 @@ args leave a parameter of its route no spelling as a segment (30.3, 30.19) — i
 wire, and before the handler runs — at status 422.
 
 15.9 An implementation MUST declare no refusal names beyond those `refuse.notFound`,
-`refuse.validation` and `refuse.aborted` carry and the one 17.4 names.
+`refuse.validation` and `refuse.aborted` carry, the one 17.4 names, and those 54.1, 54.4, 54.5 and
+54.16 name.
 
 15.10 An expression statement whose type is `Failed` MUST be a compile error naming both repairs.
 
@@ -4868,6 +4869,94 @@ the states that pattern names.
 
 # 50. Dialogs, toasts and popovers
 
+50.1 `Dialog` MUST hold its `<dialog>` open with `showModal` while `open` is true, and closed while
+`open` is false.
+
+50.2 Every close of a `Dialog`, whatever closed it, MUST write `false` to `open` and then call
+`onclose` with the `returnValue` that close set, and `''` where it set none.
+
+50.3 Escape and a click on a `Dialog`'s backdrop MUST close it where `dismissible` is true, and MUST
+NOT where it is false.
+
+50.4 A `Dialog` MUST focus the element inside it carrying `autofocus` as it opens.
+
+50.5 `prompts.confirm` and `prompts.alert` MUST queue their prompt behind every prompt not yet
+answered.
+
+50.6 `Prompts` MUST show the first prompt of the queue in a `Dialog` whose role is `alertdialog`,
+and the next once that one is answered.
+
+50.7 A string handed to `prompts.confirm` or `prompts.alert` MUST be the prompt's `body`.
+
+50.8 `prompts.confirm` MUST settle `true` where its prompt closed by the confirming button, and
+`false` where it closed any other way.
+
+50.9 `prompts.alert` MUST settle once its prompt closes, however it closed.
+
+50.10 `Prompts` MUST keep the confirming button of a prompt carrying `mustType` disabled until the
+text typed, trimmed, matches `mustType`, trimmed, ignoring case.
+
+50.11 `prompts.confirm` and `prompts.alert` MUST throw where `isServer` is true.
+
+50.12 `toasts.notify` MUST add its notice to the end of `toasts.list` under an id no other notice
+holds, and hand back that id.
+
+50.13 A notice MUST leave `toasts.list` once its `timeout` has passed, and a `timeout` of `Infinity`
+MUST keep it there.
+
+50.14 A notice's `timeout` MUST default to 3000 milliseconds, and to 10000 where its tone is
+`error`.
+
+50.15 `toasts.dismiss` MUST take the notice holding its id out of `toasts.list`, and MUST NOT write
+`toasts.list` where no notice holds it.
+
+50.16 `toasts.notify` MUST throw where `isServer` is true.
+
+50.17 `Toasts` MUST render `toasts.list` in order, keyed by each notice's id, inside an element whose
+role is `status`.
+
+50.18 A notice's action MUST take the notice out of `toasts.list` and then call its `run`.
+
+50.19 `place` MUST put the floating element on `side`, `offset` pixels from its anchor, lined up
+along it as `align` names.
+
+50.20 `place` MUST take the side opposite `side` where `side` leaves less room than the floating
+element needs and the opposite side leaves more.
+
+50.21 `place` MUST keep the floating element at least `margin` pixels inside the viewport on both
+axes, its start edge kept where it does not fit.
+
+50.22 `place` MUST read layout alone, and MUST NOT write to the document.
+
+50.23 A `Tooltip` MUST describe the element written immediately before it, through that element's
+`aria-describedby`.
+
+50.24 A `Tooltip` MUST open once a pointer has rested on its anchor for `delay` milliseconds, and
+at once when its anchor takes focus.
+
+50.25 A `Tooltip` MUST close when the pointer leaves its anchor, when its anchor loses focus, and
+on Escape.
+
+50.26 A `Tooltip` and a `Menu` MUST open in the top layer as a popover placed by `place` against
+their anchor, and MUST be placed again while open whenever anything scrolls or the window resizes.
+
+50.27 A `Tooltip` and a `Menu` MUST write the side `place` took as `data-side`, and the `arrow` of
+its `Placement` as the `--arrow-offset` custom property.
+
+50.28 A `Menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
+opened it.
+
+50.29 The menu items of a `Menu` MUST be the descendants of its menu carrying `role="menuitem"` that
+are not disabled.
+
+50.30 In an open `Menu`, ArrowDown and ArrowUp MUST move focus to the next and the previous menu
+item, wrapping, and Home and End to the first and the last.
+
+50.31 Escape in an open `Menu`, and a click on one of its menu items, MUST close it and return
+focus to its trigger.
+
+50.32 A press on the trigger of an open `Menu` MUST close it, and MUST NOT open it again.
+
 # 51. Lists and tables
 
 # 52. Formatting, markdown and charts
@@ -4953,3 +5042,91 @@ against its first.
 # 53. Keys, element behaviors and chat
 
 # 54. Guards, fetches and jobs
+
+## Rungs
+
+54.1 `signedIn` MUST answer a caller whose `principal.authenticated` is false with a refusal named
+`SignedOut`, at status 401, and MUST hand any other caller to `next`.
+
+54.2 `requireRole` MUST answer a caller whose `principal.resolved` is not authenticated as
+`signedIn` does, before it reads a role.
+
+54.3 `requireRole` given a string MUST admit a caller whose `principal.resolved` carries it as
+`role`, and given a function MUST admit a caller whose `principal.resolved` it answers true for.
+
+54.4 `requireRole` MUST answer an authenticated caller it does not admit with a refusal named
+`Forbidden`, at status 403, carrying the `message` it was given, or one naming the role where it was
+given a string and none.
+
+54.5 `readOnly` MUST hand a `GET`, a `HEAD` or an `OPTIONS` request to `next`, and MUST answer a
+request of any other method with a refusal named `ReadOnly`, at status 403, save one 54.6 admits.
+
+54.6 `readOnly` MUST hand to `next` a request addressed to the `rpc.address` of a handler its
+`allow` lists.
+
+## Fetches
+
+54.7 `fetchJson` and `fetchText` MUST abort an attempt not answered within `timeout` milliseconds,
+10000 where none is given.
+
+54.8 `fetchJson` and `fetchText` MUST ask again, up to `retries` times, after an attempt that threw,
+that 54.7 aborted, or that was answered at a status 15.19 counts transient, and MUST NOT ask again
+after an attempt answered at any other status.
+
+54.9 `retries` MUST default to 2 for a method RFC 9110 defines as idempotent, and to 0 for any
+other.
+
+54.10 A retry under 54.8 MUST wait the time the answer's `Retry-After` names, in seconds or as an
+HTTP date, or 250 milliseconds doubled for each retry before it where none is named, and MUST NOT be
+made where that wait is longer than `timeout`.
+
+54.11 An abort of the `signal` a caller passes `fetchJson` or `fetchText` MUST be thrown as its
+reason, and MUST NOT be asked again.
+
+54.12 A `GET` given a `ttl` MUST be answered with the body an earlier `GET` of the same URL and
+headers was answered with, for `ttl` milliseconds from that answer.
+
+54.13 A `GET` given a `ttl` MUST join a `GET` of the same URL and headers in flight rather than ask
+again.
+
+54.14 A `FetchFailed` MUST NOT be held under 54.12.
+
+54.15 `ttl` MUST be inert on a method other than `GET`.
+
+54.16 `fetchJson` and `fetchText` MUST settle to a `FetchFailed` at status 502 where they give up,
+carrying the status the last attempt was answered at, or null where none answered, and why, and MUST
+throw nothing but 54.11's abort.
+
+54.17 `fetchJson` MUST settle to a `FetchFailed` where the body does not parse as JSON, and
+`fetchJson` and `fetchText` MUST settle to one where their `schema` refuses the body.
+
+## Jobs
+
+54.18 A `job` MUST look whether a run is due every `every` milliseconds where `every` is a number
+under a minute, and every minute otherwise, from a first look made as 7.30 makes a held-back value's
+first run, and MUST stop looking where 7.26 stops a poll.
+
+54.19 A look MUST start a run of a `job` where no run has ended, or where `every` milliseconds have
+passed since the last one ended.
+
+54.20 `runNow`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second.
+
+54.21 A `job` MUST ask `lastRun` once, on its first look, for when its last run ended before this
+process, and MUST read the answer as a run that ended then.
+
+54.22 `Job.status` MUST be one `global` value, written as a run starts and as it ends.
+
+54.23 A run that throws MUST be written through `log.error` under the namespace `log.named` builds
+from `job` and the job's name, and its message MUST stand as `lastError` until a run ends without
+throwing.
+
+54.24 A run whose signal 54.26 aborted MUST NOT move `lastRun` or `lastError`.
+
+54.25 A `job` whose `every` is not a positive number MUST start no run from a look, and its
+`nextRun` MUST be null while it is not.
+
+54.26 `run` MUST be handed a signal aborted where the one `stopSignal` answers is, and where
+`Job.stop` is called.
+
+54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
+run, from a look or from `runNow`, and MUST hold `nextRun` null.

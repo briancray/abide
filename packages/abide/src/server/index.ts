@@ -48,6 +48,14 @@ export { type Config, config } from './config.ts'
 export type { ConfigField } from './configFields.ts'
 // 47 — the app's SQLite database, opened and migrated on first use.
 export { database } from './database.ts'
+// 54 — rungs that let a caller through, another service asked with retries, and work on a schedule.
+export type { FetchFailed } from './fetchFailed.ts'
+export { fetchJson } from './fetchJson.ts'
+export { type FetchOptions, fetchText } from './fetchText.ts'
+export { type Job, type JobStatus, job } from './job.ts'
+export { readOnly } from './readOnly.ts'
+export { requireRole } from './requireRole.ts'
+export { signedIn } from './signedIn.ts'
 // 42 — the app object, and 37's hooks a `<script server>` calls.
 export { type App, createApp } from './createApp.ts'
 // 37 — the hooks a `<script server>` and a server module call.

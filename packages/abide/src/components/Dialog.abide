@@ -1,0 +1,71 @@
+<script>
+// 50.1-50.4 — A NATIVE MODAL: the browser puts a `showModal` dialog in the top layer, makes the page
+// behind it inert, keeps focus inside it and fires `cancel` on Escape, so none of that is code here.
+import type { Attributes } from '#shared/Attributes.ts'
+import { props } from '#shared/props.ts'
+import { reactive, watch } from '#shared/reactive/index.ts'
+
+const {
+    open = false,
+    dismissible = true,
+    onclose,
+    ...rest
+} = props<
+    {
+        /** Whether the dialog is showing, modal, over the page. Bind it — `bind:open={editing}` — and every way it closes writes `false` back. Mirrored as `data-open` on the `<dialog>`. */
+        open?: boolean
+        /** Whether Escape and a click on the backdrop close it. `false` keeps it open until `open` turns false or a `<form method="dialog">` inside it submits. Default `true`. */
+        dismissible?: boolean
+        /** Called each time it closes, however it closed, with the `<dialog>`'s `returnValue`: the `value` of the button that submitted a `<form method="dialog">`, or `''`. */
+        onclose?: (returnValue: string) => void
+    } & Omit<Attributes<'dialog'>, 'open' | 'onclose'>
+>()
+
+let dialog = reactive<HTMLDialogElement | undefined>(undefined)
+
+watch(() => {
+    const element = dialog
+    if (element === undefined || element.open === open) return
+    if (!open) return element.close()
+    element.returnValue = ''
+    element.showModal()
+    // What renders with the opening lands after `showModal`'s own focusing ran (50.4).
+    queueMicrotask(() =>
+        element.querySelector<HTMLElement>('[autofocus]')?.focus(),
+    )
+})
+
+// `open` is written before `onclose` runs, so a caller reopening from it is not undone (50.2).
+function closed() {
+    open = false
+    onclose?.(dialog?.returnValue ?? '')
+}
+
+function cancelled(event: Event) {
+    if (!dismissible) event.preventDefault()
+}
+
+// A click on the dialog itself, outside its box, is a click on the backdrop (50.3).
+function clicked(event: MouseEvent) {
+    const element = dialog
+    if (!dismissible || element === undefined || event.target !== element)
+        return
+    const box = element.getBoundingClientRect()
+    if (
+        event.clientX < box.left ||
+        event.clientX > box.right ||
+        event.clientY < box.top ||
+        event.clientY > box.bottom
+    )
+        element.close()
+}
+</script>
+
+<dialog
+    {...rest}
+    data-open={open ? '' : undefined}
+    bind:element={dialog}
+    onclose={closed}
+    oncancel={cancelled}
+    onclick={clicked}
+><slot /></dialog>

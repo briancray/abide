@@ -1,0 +1,85 @@
+<script>
+// 50.6, 50.8-50.10 — WHERE `prompts.confirm` AND `prompts.alert` SHOW: rendered once, in the root
+// layout, and showing the queue's first prompt in a `Dialog` until it is answered.
+import type { Attributes } from '#shared/Attributes.ts'
+import { queue } from '#shared/prompts/queue.ts'
+import { props } from '#shared/props.ts'
+import { reactive } from '#shared/reactive/index.ts'
+
+import Dialog from './Dialog.abide'
+
+const { ...rest } =
+    props<Omit<Attributes<'dialog'>, 'open' | 'onclose' | 'role'>>()
+
+const current = reactive(() => queue[0])
+// Closing writes `false` here; the queue moving on computes it again.
+let showing = reactive(() => queue.length > 0)
+let typed = reactive('')
+const typedRight = reactive(() => {
+    const asked = current?.mustType
+    return (
+        asked === undefined ||
+        typed.trim().toLowerCase() === asked.trim().toLowerCase()
+    )
+})
+
+// Only the confirming button's `value` confirms; Escape, the backdrop and Cancel decline (50.8).
+function answered(returnValue: string) {
+    const asked = current
+    if (asked === undefined) return
+    const confirmed = returnValue === 'confirm' && typedRight
+    typed = ''
+    queue.patch((waiting) => {
+        waiting.shift()
+    })
+    asked.resolve(confirmed)
+}
+</script>
+
+<Dialog
+    {...rest}
+    role="alertdialog"
+    aria-label={current?.title ?? current?.body}
+    data-danger={current?.danger ? '' : undefined}
+    bind:open={showing}
+    onclose={answered}
+>
+    {#if current}
+        <form method="dialog" data-part="form">
+            {#if current.title}
+                <h2 data-part="title">{current.title}</h2>
+            {/if}
+            {#if current.body}
+                <p data-part="body">{current.body}</p>
+            {/if}
+            {#if current.mustType !== undefined}
+                <label data-part="field">
+                    Type {current.mustType} to confirm
+                    <input
+                        data-part="input"
+                        autocomplete="off"
+                        autofocus
+                        bind:value={typed}
+                    >
+                </label>
+            {/if}
+            <div data-part="actions">
+                <button
+                    type="submit"
+                    value="confirm"
+                    data-part="confirm"
+                    disabled={!typedRight}
+                    autofocus={!current.asks}
+                >{current.confirm}</button>
+                {#if current.asks}
+                    <button
+                        type="submit"
+                        value="cancel"
+                        data-part="cancel"
+                        autofocus={current.mustType === undefined}
+                    >{current.cancel}</button>
+                {/if}
+            </div>
+        </form>
+    {/if}
+</Dialog>

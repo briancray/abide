@@ -1,12 +1,16 @@
-import { type RouteLiteral, url } from '@abide/abide'
+import { isFailed, type RouteLiteral, url } from '@abide/abide'
+import { type FetchFailed, fetchText } from '@abide/abide/server'
 
 import { markdownOf } from './markdownOf.server.ts'
 
-/** The page at `route` as markdown, read off the page this app renders at `origin`. */
+/**
+ * The page at `route` as markdown, read off the page this app renders at `origin`, or why the page
+ * could not be read.
+ */
 export async function pageMarkdown(
     route: string,
     origin: string,
-): Promise<string> {
-    const page = await fetch(new URL(url(route as RouteLiteral), origin))
-    return markdownOf(await page.text())
+): Promise<string | FetchFailed> {
+    const page = await fetchText(new URL(url(route as RouteLiteral), origin))
+    return isFailed(page) ? page : markdownOf(page)
 }

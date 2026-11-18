@@ -1,0 +1,149 @@
+<script>
+// 50.26-50.32 — A BUTTON AND THE ACTIONS IT OPENS: WAI-ARIA's menu button, its menu an auto popover,
+// so a click anywhere else and a second popover opening close it with no listener here.
+import type { Attributes } from '#shared/Attributes.ts'
+import { follow } from '#shared/follow.ts'
+import type { Side } from '#shared/place.ts'
+import { props } from '#shared/props.ts'
+import { reactive } from '#shared/reactive/index.ts'
+
+const {
+    label,
+    side = 'bottom',
+    align = 'start',
+    offset = 4,
+    ...rest
+} = props<
+    {
+        /** The text of the trigger, the `<button>` carrying `data-part="trigger"`, and the menu's accessible name. */
+        label: string
+        /** The side of the trigger the menu opens on, flipped to the opposite one where it has no room. Default `'bottom'`. The side taken is written as `data-side` on the menu. */
+        side?: Side
+        /** Which edge of the trigger the menu lines up with: `'start'`, `'center'` or `'end'`. Default `'start'`. */
+        align?: 'start' | 'center' | 'end'
+        /** Pixels between the trigger and the menu. Default `4`. */
+        offset?: number
+    } & Attributes<'div'>
+>()
+
+let open = reactive(false)
+let placed = reactive((): Side => side)
+let trigger: HTMLButtonElement | undefined
+let menu: HTMLElement | undefined
+let stop: (() => void) | undefined
+// Whether the menu was open as the trigger was pressed: a press outside an open popover closes it
+// before the click lands, and the click must not open it again.
+let openAtPress = false
+
+// 50.29 — the items the keys walk and a click picks.
+const ITEM = '[role=menuitem]:not([disabled]):not([aria-disabled=true])'
+const menuId = `menu-${crypto.getRandomValues(new Uint32Array(1))[0]?.toString(36)}`
+
+function items(): HTMLElement[] {
+    return menu === undefined
+        ? []
+        : [...menu.querySelectorAll<HTMLElement>(ITEM)]
+}
+
+function show(focused: 'first' | 'last') {
+    if (trigger === undefined || menu === undefined) return
+    menu.showPopover()
+    open = true
+    stop = follow(trigger, menu, { side, align, offset }, (placement) => {
+        placed = placement.side
+    })
+    const listed = items()
+    listed[focused === 'first' ? 0 : listed.length - 1]?.focus()
+}
+
+function hide() {
+    if (menu?.matches(':popover-open')) menu.hidePopover()
+}
+
+// Every way the menu closes — a pick, Escape, a click outside — arrives here.
+function toggled(event: ToggleEvent) {
+    if (event.newState !== 'closed') return
+    open = false
+    stop?.()
+    stop = undefined
+}
+
+function pressed() {
+    openAtPress = open
+}
+
+function clicked() {
+    if (open || openAtPress) hide()
+    else show('first')
+    openAtPress = false
+}
+
+function triggerKey(event: KeyboardEvent) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    show(event.key === 'ArrowDown' ? 'first' : 'last')
+}
+
+function menuKey(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+        event.preventDefault()
+        hide()
+        trigger?.focus()
+        return
+    }
+    if (event.key === 'Tab') return hide()
+    const listed = items()
+    const at = listed.indexOf(document.activeElement as HTMLElement)
+    const next =
+        event.key === 'ArrowDown'
+            ? (at + 1) % listed.length
+            : event.key === 'ArrowUp'
+              ? (at - 1 + listed.length) % listed.length
+              : event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? listed.length - 1
+                  : -1
+    if (next === -1) return
+    event.preventDefault()
+    listed[next]?.focus()
+}
+
+// A pick closes the menu and hands focus back to the trigger.
+function picked(event: MouseEvent) {
+    if (!(event.target instanceof Element)) return
+    if (event.target.closest(ITEM) === null) return
+    hide()
+    trigger?.focus()
+}
+</script>
+
+<div {...rest} data-open={open ? '' : undefined}>
+    <button
+        type="button"
+        data-part="trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        bind:element={(element: HTMLButtonElement) => {
+            trigger = element
+        }}
+        onpointerdown={pressed}
+        onclick={clicked}
+        onkeydown={triggerKey}
+    >{label}</button>
+    <div
+        id={menuId}
+        role="menu"
+        popover="auto"
+        aria-label={label}
+        data-part="menu"
+        data-side={placed}
+        bind:element={(element: HTMLElement) => {
+            menu = element
+        }}
+        ontoggle={toggled}
+        onkeydown={menuKey}
+        onclick={picked}
+    ><slot /></div>
+</div>

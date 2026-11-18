@@ -51,11 +51,9 @@ for (const manifest of new Bun.Glob('examples/*/package.json').scanSync({
 }))
     EXAMPLE_APPS.push(`${manifest.slice(0, -'package.json'.length)}src`)
 const TSCONFIG = `${APP}tsconfig.json`
+// The components `@abide/abide` ships as entries of their own (RULEBOOK 49).
 const COMPONENTS = Bun.fileURLToPath(
     new URL('../../abide/src/components/', import.meta.url),
-)
-const ABIDE_TSCONFIG = Bun.fileURLToPath(
-    new URL('../../abide/tsconfig.json', import.meta.url),
 )
 
 // A file that is an app's page rather than a component a card renders.
@@ -75,12 +73,7 @@ async function appTree(session: TypeSession): Promise<{
     compilation: Compilation
 }> {
     const tree: Record<string, string> = {}
-    const files: {
-        path: string
-        file: AbideFile
-        belowRoot: string
-        key: string
-    }[] = []
+    const files: { path: string; file: AbideFile; belowRoot: string }[] = []
     for (const root of EXAMPLE_APPS) {
         const manifest = `${root.slice(0, -'src'.length)}package.json`
         tree[manifest] = await Bun.file(`${APP}${manifest}`).text()
@@ -101,33 +94,23 @@ async function appTree(session: TypeSession): Promise<{
                 path: `${APP}${root}/${path}`,
                 file: parseAbide(text),
                 belowRoot: path,
-                key: `${root}/${path.slice(0, -'.abide'.length)}`,
             })
         }
     }
-    // THE COMPONENTS ABIDE SHIPS, which a card imports as `@abide/abide/<Name>.abide`: compiled at
-    // the path they resolve to, outside the copy of the app, as a build compiles them, and typed by
-    // abide's own project, which is the one whose include reaches them.
-    const own = files.length
+    // 34.23 — A COMPONENT ABIDE SHIPS is compiled with the app that imports it, wherever it lies, and
+    // is served at its own path: an entry of `@abide/abide` resolves out of the copied tree to it.
     for (const path of new Bun.Glob('*.abide').scanSync({ cwd: COMPONENTS }))
         files.push({
             path: `${COMPONENTS}${path}`,
             file: parseAbide(await Bun.file(`${COMPONENTS}${path}`).text()),
             belowRoot: `lib/${path}`,
-            key: `${COMPONENTS}${path.slice(0, -'.abide'.length)}`,
         })
     // 32.17 — which components another one invokes decides whether a module carries its own
     // markup for a row built in the browser. THE APP'S RESOLVER, not `Bun.resolveSync`: that asks
     // every plugin again, and a compilation an earlier file in this process served answers it from
     // the directory read as a file — `InvoiceDocument.abide` is then looked for one level up.
     const graph = componentGraph(files, resolverIn())
-    const { answers } = await session.readsFor(files.slice(0, own))
-    const shipped = await TypeSession.open(ABIDE_TSCONFIG)
-    try {
-        answers.push(...(await shipped.readsFor(files.slice(own))).answers)
-    } finally {
-        await shipped.close()
-    }
+    const { answers } = await session.readsFor(files)
     const compilation: Compilation = {
         files: {},
         handlers: {},
@@ -138,9 +121,12 @@ async function appTree(session: TypeSession): Promise<{
             path: absolute,
             file,
             belowRoot,
-            key: stem,
         } = files[at] as (typeof files)[number]
         const names = answers[at]
+        // Keyed by its path below the app, or by its own where it lies outside it (`addCompilation`).
+        const stem = absolute.startsWith(APP)
+            ? absolute.slice(APP.length, -'.abide'.length)
+            : absolute.slice(0, -'.abide'.length)
         // 37.1 — a server block files its hooks at its route, or under a `lib` at its directory's.
         const server = emitComponent(
             file,
@@ -194,7 +180,7 @@ const UNPAIRED = JSON.stringify({
 })
 
 test('every example renders on the server and mounts on the client', async () => {
-    const session = await TypeSession.open(TSCONFIG)
+    const session = await TypeSession.open(TSCONFIG, APP)
     const broken: string[] = []
     let painting = ''
 

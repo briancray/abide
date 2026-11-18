@@ -385,15 +385,15 @@ export const SITE: readonly SiteGroup[] = [
             },
             {
                 route: '/helpers/guards',
-                title: 'Guards',
+                title: 'Let only some callers through',
                 nav: 'Guards',
                 description:
-                    'Let a handler answer only a signed-in caller, or one with a role, in one rung.',
+                    'Let a handler answer only a signed-in caller or one with a role, and close a route to writes, a rung each.',
                 registry: 'Guards — rungs that let a caller through',
             },
             {
                 route: '/helpers/fetch',
-                title: 'Fetching other services',
+                title: 'Call a service that may fail',
                 nav: 'Fetching',
                 description:
                     'Call another service with a deadline, retries on a failure worth retrying, and a cache.',
@@ -401,7 +401,7 @@ export const SITE: readonly SiteGroup[] = [
             },
             {
                 route: '/helpers/job',
-                title: 'Scheduled jobs',
+                title: 'Run work on a schedule',
                 nav: 'Jobs',
                 description:
                     'Run work every interval on the server, one run at a time, with when it last ran.',
