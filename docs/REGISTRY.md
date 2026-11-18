@@ -641,9 +641,35 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 ## `Dialog` — dialogs, confirm and alert
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Dialog` | `{ open?: boolean; dismissible?: boolean; onclose?: (returnValue: string) => void } & Omit<Attributes<'dialog'>, 'open' \| 'onclose'>` | A native modal `<dialog>` whose children are its content, imported from `@abide/abide/Dialog.abide`. | 50.1, 50.2, 50.3, 50.4, 49.1, 49.2, 49.3, 49.5, 49.7 |
+| `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question asked in the app's `Prompts`. | 50.5, 50.7, 50.8, 50.11, 11.32 |
+| `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown in the app's `Prompts` until it is closed. | 50.5, 50.7, 50.9, 50.11, 11.32 |
+| `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string }` | What a prompt shows, and what its buttons say. | 50.7, 50.10 |
+| `Prompts` | `Omit<Attributes<'dialog'>, 'open' \| 'onclose' \| 'role'>` | The `Dialog` the queued prompts show in, rendered once and imported from `@abide/abide/Prompts.abide`. | 50.6, 50.8, 50.10, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+
 ## `Toasts` — notices that dismiss themselves
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16 |
+| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown } }` | A notice's tone, how long it stays, and the one action it offers. | 50.13, 50.14, 50.18 |
+| `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
+| `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
+| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined }` | One notice `toasts.list` holds. | 50.12 |
+| `Toasts` | `{ label?: string } & Omit<Attributes<'div'>, 'role'>` | The live region the notices are listed in, rendered once and imported from `@abide/abide/Toasts.abide`. | 50.17, 50.18, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+
 ## `Tooltip` and `Menu` — placed against an anchor
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `place` | `(anchor: Element, floating: Element, options?: PlaceOptions) => Placement` | Where a floating element sits beside its anchor, in viewport pixels. | 50.19, 50.20, 50.21, 50.22 |
+| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number }` | The side tried first, the edge lined up with, the gap to the anchor and the gap kept to the viewport. | 50.19, 50.20, 50.21 |
+| `Placement` | `{ x: number; y: number; side: Side; arrow: number }` | The left and top edges `place` chose, the side it took, and where along the facing edge the anchor's middle falls. | 50.19, 50.27 |
+| `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
+| `Tooltip` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; delay?: number } & Omit<Attributes<'span'>, 'popover' \| 'role'>` | A hint for the element written just before it, whose children are the hint, imported from `@abide/abide/Tooltip.abide`. | 50.23, 50.24, 50.25, 50.26, 50.27, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+| `Menu` | `{ label: string; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number } & Attributes<'div'>` | A button opening a list of actions, whose children are the menu items, imported from `@abide/abide/Menu.abide`. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7 |
 
 ## `Combobox` — a list filtered as you type
 

@@ -1,0 +1,37 @@
+<script>
+// 50.17, 50.18 — WHERE `toasts.notify` SHOWS: rendered once, in the root layout, as the live region
+// every notice is read out from as it lands.
+import type { Attributes } from '#shared/Attributes.ts'
+import { props } from '#shared/props.ts'
+import { dismiss } from '#shared/toasts/dismiss.ts'
+import { list, type Toast } from '#shared/toasts/list.ts'
+
+const { label = 'Notices', ...rest } = props<
+    {
+        /** The region's accessible name. Default `'Notices'`. */
+        label?: string
+    } & Omit<Attributes<'div'>, 'role'>
+>()
+
+function act(toast: Toast) {
+    dismiss(toast.id)
+    toast.action?.run()
+}
+</script>
+
+<div {...rest} role="status" aria-live="polite" aria-label={label}>
+    {#for toast of list by toast.id}
+        <div data-part="toast" data-tone={toast.tone}>
+            <span data-part="text">{toast.text}</span>
+            {#if toast.action}
+                <button type="button" data-part="action" onclick={() => act(toast)}>{toast.action.label}</button>
+            {/if}
+            <button
+                type="button"
+                data-part="close"
+                aria-label="Dismiss"
+                onclick={() => dismiss(toast.id)}
+            >×</button>
+        </div>
+    {/for}
+</div>

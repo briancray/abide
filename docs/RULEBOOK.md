@@ -4868,6 +4868,94 @@ the states that pattern names.
 
 # 50. Dialogs, toasts and popovers
 
+50.1 `Dialog` MUST hold its `<dialog>` open with `showModal` while `open` is true, and closed while
+`open` is false.
+
+50.2 Every close of a `Dialog`, whatever closed it, MUST write `false` to `open` and then call
+`onclose` with the `returnValue` that close set, and `''` where it set none.
+
+50.3 Escape and a click on a `Dialog`'s backdrop MUST close it where `dismissible` is true, and MUST
+NOT where it is false.
+
+50.4 A `Dialog` MUST focus the element inside it carrying `autofocus` as it opens.
+
+50.5 `prompts.confirm` and `prompts.alert` MUST queue their prompt behind every prompt not yet
+answered.
+
+50.6 `Prompts` MUST show the first prompt of the queue in a `Dialog` whose role is `alertdialog`,
+and the next once that one is answered.
+
+50.7 A string handed to `prompts.confirm` or `prompts.alert` MUST be the prompt's `body`.
+
+50.8 `prompts.confirm` MUST settle `true` where its prompt closed by the confirming button, and
+`false` where it closed any other way.
+
+50.9 `prompts.alert` MUST settle once its prompt closes, however it closed.
+
+50.10 `Prompts` MUST keep the confirming button of a prompt carrying `mustType` disabled until the
+text typed, trimmed, matches `mustType`, trimmed, ignoring case.
+
+50.11 `prompts.confirm` and `prompts.alert` MUST throw where `isServer` is true.
+
+50.12 `toasts.notify` MUST add its notice to the end of `toasts.list` under an id no other notice
+holds, and hand back that id.
+
+50.13 A notice MUST leave `toasts.list` once its `timeout` has passed, and a `timeout` of `Infinity`
+MUST keep it there.
+
+50.14 A notice's `timeout` MUST default to 3000 milliseconds, and to 10000 where its tone is
+`error`.
+
+50.15 `toasts.dismiss` MUST take the notice holding its id out of `toasts.list`, and MUST NOT write
+`toasts.list` where no notice holds it.
+
+50.16 `toasts.notify` MUST throw where `isServer` is true.
+
+50.17 `Toasts` MUST render `toasts.list` in order, keyed by each notice's id, inside an element whose
+role is `status`.
+
+50.18 A notice's action MUST take the notice out of `toasts.list` and then call its `run`.
+
+50.19 `place` MUST put the floating element on `side`, `offset` pixels from its anchor, lined up
+along it as `align` names.
+
+50.20 `place` MUST take the side opposite `side` where `side` leaves less room than the floating
+element needs and the opposite side leaves more.
+
+50.21 `place` MUST keep the floating element at least `margin` pixels inside the viewport on both
+axes, its start edge kept where it does not fit.
+
+50.22 `place` MUST read layout alone, and MUST NOT write to the document.
+
+50.23 A `Tooltip` MUST describe the element written immediately before it, through that element's
+`aria-describedby`.
+
+50.24 A `Tooltip` MUST open once a pointer has rested on its anchor for `delay` milliseconds, and
+at once when its anchor takes focus.
+
+50.25 A `Tooltip` MUST close when the pointer leaves its anchor, when its anchor loses focus, and
+on Escape.
+
+50.26 A `Tooltip` and a `Menu` MUST open in the top layer as a popover placed by `place` against
+their anchor, and MUST be placed again while open whenever anything scrolls or the window resizes.
+
+50.27 A `Tooltip` and a `Menu` MUST write the side `place` took as `data-side`, and the `arrow` of
+its `Placement` as the `--arrow-offset` custom property.
+
+50.28 A `Menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
+opened it.
+
+50.29 The menu items of a `Menu` MUST be the descendants of its menu carrying `role="menuitem"` that
+are not disabled.
+
+50.30 In an open `Menu`, ArrowDown and ArrowUp MUST move focus to the next and the previous menu
+item, wrapping, and Home and End to the first and the last.
+
+50.31 Escape in an open `Menu`, and a click on one of its menu items, MUST close it and return
+focus to its trigger.
+
+50.32 A press on the trigger of an open `Menu` MUST close it, and MUST NOT open it again.
+
 # 51. Lists and tables
 
 # 52. Formatting, markdown and charts
