@@ -369,7 +369,7 @@ export const SITE: readonly SiteGroup[] = [
             },
             {
                 route: '/helpers/hotkeys',
-                title: 'Keyboard shortcuts',
+                title: 'Run a command from a key press',
                 nav: 'Shortcuts',
                 description:
                     'Bind a key to a command across the page, skipped while someone types in a field.',
@@ -377,7 +377,7 @@ export const SITE: readonly SiteGroup[] = [
             },
             {
                 route: '/helpers/elements',
-                title: 'Dismiss, drop and copy',
+                title: 'Close a panel, take dropped files, copy a value',
                 nav: 'Element behaviors',
                 description:
                     'Close a panel on a click outside it, take files dropped on it, or copy its text.',
@@ -472,10 +472,10 @@ export const SITE: readonly SiteGroup[] = [
             },
             {
                 route: '/components/chat',
-                title: 'A chat over the assistant',
+                title: 'Chat with an assistant as it answers',
                 nav: 'Chat',
                 description:
-                    'Show an assistant conversation as it streams, with a composer that sends on Enter.',
+                    "Show an assistant conversation as it streams, with a composer that sends on Enter, and pair the visitor's Claude Code before it.",
                 registry: '`Chat` — a chat over an assistant handler',
             },
         ],

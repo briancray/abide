@@ -626,7 +626,20 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 ## `hotkeys` — keyboard shortcuts
 
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `hotkeys` | `(bindings: Record<string, Hotkey>) => (event: KeyboardEvent) => void` | A `keydown` listener running the binding a key press matches, each binding written as its modifiers and its key joined by `+`. | 53.1, 53.2, 53.3, 53.4, 53.5, 53.6, 53.7, 53.8, 53.9 |
+| `Hotkey` | `((event: KeyboardEvent) => void) \| { run: (event: KeyboardEvent) => void; editable?: boolean }` | What a binding runs, alone or with whether it also runs while the visitor types. | 53.7 |
+| `isEditableTarget` | `(target: EventTarget \| null) => boolean` | Whether a key event's target is somewhere the visitor types. | 53.10 |
+| `keyLabel` | `(binding: string) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.11 |
+
 ## Element behaviors — dismiss, drop and copy
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: { escape?: boolean; outside?: boolean; inside?: readonly (Element \| null \| undefined)[] }) => (element: Element) => Disposer` | The `bind:element` adaptor closing an element on a press outside it or on Escape. | 32.9, 53.12, 53.13, 53.14, 53.15, 53.16 |
+| `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20 |
+| `copyText` | `(text: string \| (() => string), options?: { copiedFor?: number }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text to the clipboard on a click of an element. | 32.9, 53.21, 53.22, 53.23 |
 
 ## Guards — rungs that let a caller through
 
@@ -702,6 +715,16 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 ## `LineChart` and `Sparkline` — charts
 
 ## `Chat` — a chat over an assistant handler
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Chat` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; Text?: (props: { text: string }) => Component; placeholder?: string; label?: string; disabled?: boolean } & Attributes<'section'>` | The shipped component showing a conversation with an assistant handler as it streams, above a composer. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.41 |
+| `Pairing` | `Attributes<'section'>` | The shipped component pairing the visitor's Claude Code with the page, around what it renders once paired. | 44.69, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.42, 53.43 |
+| `AssistantTurn` | `{ role: 'user' \| 'assistant'; parts: AssistantTurnPart[]; stop: string \| undefined; failed: string \| undefined }` | One turn of a conversation as a chat holds it. | 53.27, 53.30, 53.35, 53.36 |
+| `AssistantTurnPart` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string } \| { type: 'tool'; id: string; name: string; input: unknown; result: string \| undefined; failed: boolean; value: unknown } \| { type: 'permission'; id: string; name: string; input: unknown; allowed: boolean \| undefined }` | One piece of a turn: words, an image, a tool call, or a permission prompt. | 53.24, 53.25, 53.26 |
+| `transcript.turn` | `(role: 'user' \| 'assistant', parts?: AssistantTurnPart[]) => AssistantTurn` | A turn holding the parts it is handed, or none. | 53.30 |
+| `transcript.fold` | `(answering: AssistantTurn, event: AssistantEvent) => void` | One event of an answer, folded into the answering turn in place. | 53.24, 53.25, 53.26, 53.27 |
+| `transcript.messages` | `(turns: readonly AssistantTurn[]) => AssistantMessage[]` | A conversation as an assistant handler takes it. | 53.28, 53.29 |
 
 # `.abide` files
 

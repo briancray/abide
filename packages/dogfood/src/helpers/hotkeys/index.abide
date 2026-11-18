@@ -1,0 +1,93 @@
+<script>
+import DealShortcuts from 'crm/src/deals/lib/DealShortcuts.abide'
+import dealShortcutsSource from 'crm/src/deals/lib/DealShortcuts.abide' with { type: 'text' }
+import dealShortcutsTestSource from 'crm/src/deals/lib/DealShortcuts.test.ts' with { type: 'text' }
+import SaveShortcut from 'crm/src/deals/lib/SaveShortcut.abide'
+import saveShortcutSource from 'crm/src/deals/lib/SaveShortcut.abide' with { type: 'text' }
+import saveShortcutTestSource from 'crm/src/deals/lib/SaveShortcut.test.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+</script>
+
+<Doc>
+    <Section title="A shortcut stands aside while someone types">
+        <Example
+            id="hotkeys-shortcuts"
+            title="`hotkeys(bindings)` — a key to a command, across the page"
+            summary="A rep presses n to start a deal, then types its name into the field it opened, every n in it included. ? lists the keys, and Escape closes either, from the field too."
+            files={{
+                'src/deals/lib/DealShortcuts.abide': dealShortcutsSource,
+                'src/deals/lib/DealShortcuts.test.ts': dealShortcutsTestSource,
+            }}
+        >
+            <DealShortcuts />
+        </Example>
+
+        <p><code>hotkeys</code> hands back one <code>keydown</code> listener for every binding.
+            Put it on <code>{'<window onkeydown>'}</code> and it hears the whole page, and it
+            leaves with the component that put it there. Put it on an element and it hears only
+            the keys pressed inside that element.</p>
+
+        <Snippet source={dealShortcutsSource} path="src/deals/lib/DealShortcuts.abide"
+            from={['const keys = hotkeys(']} />
+
+        <p>A press in a text field, a textarea, a select or an editable element is the visitor's,
+            so a bare <code>n</code> never runs there. A binding written as
+            <code>{'{ run, editable: true }'}</code> runs there too, the way Escape closes the
+            field it was pressed in. <code>isEditableTarget</code> is the same test, for a
+            listener of your own.</p>
+
+        <p>The binding that runs calls <code>preventDefault</code>, so the <code>/</code> that
+            focuses a search box is not typed into it. A press another handler already took is
+            skipped: a menu that closes on Escape and calls <code>preventDefault</code> keeps the
+            page's Escape from closing what is under it. A key an input method is composing with
+            is never a shortcut.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What it matches</th></tr></thead>
+            <tbody>
+                <tr><td><code>'n'</code></td><td>the n key with no modifier, and not shift+n</td></tr>
+                <tr><td><code>'shift+n'</code></td><td>N, typed with shift</td></tr>
+                <tr><td><code>'?'</code></td><td>whatever types <code>?</code>, shift included, since a symbol is matched by what it types</td></tr>
+                <tr><td><code>'ctrl+k'</code>, <code>'meta+k'</code>, <code>'alt+k'</code></td><td>that modifier alone, on every platform</td></tr>
+                <tr><td><code>'Escape'</code>, <code>'ArrowUp'</code>, <code>'space'</code></td><td>a named key as <code>KeyboardEvent.key</code> names it, matched case-blind</td></tr>
+            </tbody>
+        </table>
+
+        <p>A binding is matched by the character it types, so it follows the visitor's keyboard
+            layout. Alt composes a letter into another character on a Mac, so
+            <code>alt+k</code> is matched by where the key sits instead. A binding naming a
+            modifier that is not one of the five throws as <code>hotkeys</code> reads it.</p>
+    </Section>
+
+    <Section title="`mod` is ⌘ on a Mac and Ctrl elsewhere, in the key and in its label">
+        <Example
+            id="hotkeys-mod"
+            title="`'mod+Enter'` and `keyLabel('mod+Enter')` — one binding, two platforms"
+            summary="A rep writes a note on the Ledger audit deal and saves it without leaving the textarea. The button's hint reads ⌘Enter on their Mac and Ctrl+Enter on a colleague's Windows laptop."
+            files={{
+                'src/deals/lib/SaveShortcut.abide': saveShortcutSource,
+                'src/deals/lib/SaveShortcut.test.ts': saveShortcutTestSource,
+            }}
+        >
+            <SaveShortcut />
+        </Example>
+
+        <p><code>mod</code> is the modifier a platform saves and copies with: ⌘ on a Mac, an
+            iPhone or an iPad, and Ctrl anywhere else. <code>keyLabel</code> writes a binding the
+            way that platform writes it, so a hint never names a key the binding does not take.</p>
+
+        <Snippet source={saveShortcutSource} path="src/deals/lib/SaveShortcut.abide"
+            from={['const keys = hotkeys(', '<kbd']} />
+
+        <p>Both read the platform off the user agent: the request's on the server and the
+            browser's on the page. The label the server renders is the one the page hydrates, so
+            nothing swaps after load.</p>
+    </Section>
+
+    <Registry />
+</Doc>

@@ -1,0 +1,13 @@
+<script>
+import { copyText } from '@abide/abide'
+
+const EMAIL = 'grace@hopper.example'
+</script>
+
+<ul class="fields">
+    <li><span>Grace Hopper</span><strong>{EMAIL}</strong>
+        <button class="group" bind:element={copyText(EMAIL)}>
+            <span class="group-data-copied:hidden">Copy</span>
+            <span class="hidden group-data-copied:inline">Copied</span>
+        </button></li>
+</ul>

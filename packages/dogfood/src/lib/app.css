@@ -442,6 +442,25 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply overflow-x-auto rounded-md border border-rule bg-raised p-3 text-chrome;
     }
 
+    /* `Pairing` (`@abide/abide/Pairing.abide`) styled by what it writes: its step on the root and
+       a `data-part` on each piece. Until paired, the command and its buttons sit as one row under
+       the message; paired, it is the conversation, with Reconnect as quiet as the header's buttons. */
+    .pairing {
+        @apply flex flex-wrap items-center gap-snug;
+    }
+
+    .pairing > :not(button) {
+        @apply basis-full;
+    }
+
+    .pairing[data-step="paired"] {
+        @apply flex-col flex-nowrap items-stretch gap-section;
+    }
+
+    .pairing[data-step="paired"] > [data-part="pair"] {
+        @apply self-end border-0 bg-transparent px-2 py-1 text-chrome text-muted shadow-none hover:text-ink;
+    }
+
     .turn {
         @apply flex flex-col gap-flow;
     }

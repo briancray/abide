@@ -1,0 +1,38 @@
+<script>
+import { hotkeys, reactive } from '@abide/abide'
+
+let adding = reactive(false)
+let listing = reactive(false)
+let name = reactive('')
+
+const keys = hotkeys({
+    n: () => (adding = true),
+    '?': () => (listing = !listing),
+    // Escape is taken in the field too, so it closes the field it is typed in.
+    Escape: {
+        run: () => {
+            adding = false
+            listing = false
+        },
+        editable: true,
+    },
+})
+</script>
+
+<window onkeydown={keys} />
+
+{#if adding}
+    <label>new deal
+        <input bind:value={name} placeholder="press n in here"
+            bind:element={(field: HTMLElement) => field.focus()}></label>
+{:else}
+    <p class="status">Press n for a new deal, ? for every key.</p>
+{/if}
+
+{#if listing}
+    <ul class="fields">
+        <li><span>n</span>a new deal</li>
+        <li><span>?</span>these keys</li>
+        <li><span>esc</span>close</li>
+    </ul>
+{/if}

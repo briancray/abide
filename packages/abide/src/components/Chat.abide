@@ -1,0 +1,233 @@
+<script>
+// A conversation over an assistant handler: the transcript as it streams, and a composer that sends
+// on Enter. 53.32 — every event is folded into the answering turn once, through `patch`, so a chunk
+// rewrites the part it lands in and nothing before it.
+//
+// STYLED BY WHAT IT WRITES (49.2, 49.4): the root carries `data-streaming`; its `data-part`s are
+// `transcript`, `turn` (`data-speaker`, `data-streaming`, `data-stop`, `data-failed`), `speaker`,
+// `text`, `image`, `tool` (`data-status`) holding `tool-name`, `tool-input` and `tool-result`,
+// `permission` (`data-answer`) holding `permission-name`, `permission-input`, `allow` and `deny`,
+// `failure`, and `composer` (`data-dragging`) holding `attachments`, `attachment`, `remove`, `input`,
+// `send` and `stop`.
+import type { Component } from '#server/render.ts'
+import type {
+    AssistantEvent,
+    AssistantMessage,
+} from '#shared/AssistantEvent.ts'
+import type { AssistantTurn, AssistantTurnPart } from '#shared/AssistantTurn.ts'
+import type { Attributes } from '#shared/Attributes.ts'
+import { dropzone } from '#shared/dropzone.ts'
+import { followBottom } from '#shared/followBottom.ts'
+import { hotkeys } from '#shared/hotkeys.ts'
+import { imageFiles, imagePiece } from '#shared/imagePiece.ts'
+import { props } from '#shared/props.ts'
+import { reactive } from '#shared/reactive/index.ts'
+import { fold } from '#shared/transcript/fold.ts'
+import { messages } from '#shared/transcript/messages.ts'
+import { turn as turnOf } from '#shared/transcript/turn.ts'
+
+type Image = Extract<AssistantTurnPart, { type: 'image' }>
+type Tool = Extract<AssistantTurnPart, { type: 'tool' }>
+type Permission = Extract<AssistantTurnPart, { type: 'permission' }>
+
+const {
+    ask,
+    permit,
+    Text,
+    placeholder = 'Ask anything',
+    label = 'Message',
+    disabled = false,
+    ...rest
+} = props<
+    {
+        /**
+         * The app's assistant handler, a `POST` yielding `assistant`'s events, called with the
+         * conversation so far and a `signal` that Stop aborts.
+         */
+        ask: (
+            args: { messages: AssistantMessage[] },
+            options: { signal: AbortSignal },
+        ) => AsyncIterable<AssistantEvent>
+        /**
+         * Answers a `permission` prompt: the app's handler calling `provider.claudeCode.permit`.
+         * Without it a prompt shows with its buttons disabled.
+         */
+        permit?: (answer: { id: string; allow: boolean }) => unknown
+        /**
+         * Renders the assistant's words, handed `text` as it grows: a markdown component, say. Plain
+         * text without it.
+         */
+        Text?: (props: { text: string }) => Component
+        /** The composer's placeholder. `Ask anything` by default. */
+        placeholder?: string
+        /** The composer's accessible name. `Message` by default. */
+        label?: string
+        /** Whether the composer refuses to send: a provider not yet paired, say. */
+        disabled?: boolean
+    } & Attributes<'section'>
+>()
+
+let turns = reactive<AssistantTurn[]>([])
+let draft = reactive('')
+let attached = reactive<Image[]>([])
+let streaming = reactive(false)
+// The answer in flight, which Stop aborts.
+let asking: AbortController | undefined
+
+async function send() {
+    const text = draft.trim()
+    if (streaming || disabled || (text === '' && attached.length === 0)) return
+    const parts: AssistantTurnPart[] = [...attached]
+    if (text !== '') parts.push({ type: 'text', text })
+    draft = ''
+    attached = []
+    turns.patch((all) => {
+        all.push(turnOf('user', parts), turnOf('assistant'))
+    })
+    const controller = new AbortController()
+    asking = controller
+    streaming = true
+    try {
+        const events = ask(
+            { messages: messages(turns) },
+            { signal: controller.signal },
+        )
+        for await (const event of events) {
+            if (controller.signal.aborted) break
+            turns.patch((all) => {
+                const answering = all[all.length - 1]
+                if (answering !== undefined) fold(answering, event)
+            })
+        }
+        if (controller.signal.aborted) ended(controller, undefined)
+    } catch (error) {
+        ended(controller, error)
+    } finally {
+        streaming = false
+        asking = undefined
+    }
+}
+
+// 53.35, 53.36 — an answer Stop ended is `stopped`; one that threw carries the failure's message.
+function ended(controller: AbortController, error: unknown) {
+    turns.patch((all) => {
+        const answering = all[all.length - 1]
+        if (answering === undefined) return
+        if (controller.signal.aborted) answering.stop = 'stopped'
+        else
+            answering.failed =
+                error instanceof Error ? error.message : String(error)
+    })
+}
+
+function stop() {
+    asking?.abort()
+}
+
+// 53.33 — Enter sends and Shift+Enter breaks the line; `hotkeys` leaves an input method's Enter be.
+const keys = hotkeys({ Enter: { run: () => send(), editable: true } })
+
+function submit(event: SubmitEvent) {
+    event.preventDefault()
+    send()
+}
+
+async function attach(files: File[]) {
+    for (const file of files)
+        try {
+            attached.push(await imagePiece(file))
+        } catch {
+            // An image this browser cannot draw is left out.
+        }
+}
+
+async function answer(id: string, allow: boolean) {
+    turns.patch((all) => {
+        for (const each of all)
+            for (const part of each.parts)
+                if (part.type === 'permission' && part.id === id)
+                    part.allowed = allow
+    })
+    await permit?.({ id, allow })
+}
+
+const statusOf = (part: Tool) =>
+    part.result === undefined ? 'running' : part.failed ? 'failed' : 'done'
+const answerOf = (part: Permission) =>
+    part.allowed === undefined ? 'waiting' : part.allowed ? 'allowed' : 'denied'
+const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
+</script>
+
+<section {...rest} data-streaming={streaming ? '' : undefined}>
+    <ol data-part="transcript" role="log" aria-live="polite"
+        bind:element={followBottom}>
+        {#for turn, index of turns by turn}
+            <li data-part="turn"
+                data-speaker={turn.role === 'user' ? 'you' : 'assistant'}
+                data-streaming={streaming && index === turns.length - 1 ? '' : undefined}
+                data-stop={turn.stop}
+                data-failed={turn.failed === undefined ? undefined : ''}>
+                <span data-part="speaker">{turn.role === 'user' ? 'you' : 'assistant'}</span>
+                {#for part of turn.parts by part}
+                    {#if part.type === 'text'}
+                        {#if Text && turn.role === 'assistant'}
+                            <div data-part="text"><Text text={part.text} /></div>
+                        {:else}
+                            <p data-part="text">{part.text}</p>
+                        {/if}
+                    {:else if part.type === 'image'}
+                        <img data-part="image" src={sourceOf(part)} alt="an image you sent">
+                    {:else if part.type === 'tool'}
+                        <details data-part="tool" data-status={statusOf(part)}>
+                            <summary data-part="tool-name">{part.name}</summary>
+                            <pre data-part="tool-input">{JSON.stringify(part.input) ?? ''}</pre>
+                            {#if part.result !== undefined}
+                                <pre data-part="tool-result">{part.result}</pre>
+                            {/if}
+                        </details>
+                    {:else if part.type === 'permission'}
+                        <div data-part="permission" data-answer={answerOf(part)}>
+                            <span data-part="permission-name">{part.name}</span>
+                            <pre data-part="permission-input">{JSON.stringify(part.input, null, 2) ?? ''}</pre>
+                            <button type="button" data-part="allow"
+                                disabled={!permit || part.allowed !== undefined}
+                                onclick={() => answer(part.id, true)}>Allow</button>
+                            <button type="button" data-part="deny"
+                                disabled={!permit || part.allowed !== undefined}
+                                onclick={() => answer(part.id, false)}>Deny</button>
+                        </div>
+                    {/if}
+                {/for}
+                {#if turn.failed !== undefined}
+                    <p data-part="failure" role="alert">{turn.failed}</p>
+                {/if}
+            </li>
+        {/for}
+    </ol>
+
+    <form data-part="composer" onsubmit={submit}
+        bind:element={dropzone(attach, { accept: imageFiles, paste: true })}>
+        {#if attached.length > 0}
+            <div data-part="attachments">
+                {#for image, at of attached}
+                    <span data-part="attachment">
+                        <img src={sourceOf(image)} alt="an image to send">
+                        <button type="button" data-part="remove"
+                            aria-label="Remove this image"
+                            onclick={() => attached.splice(at, 1)}>×</button>
+                    </span>
+                {/for}
+            </div>
+        {/if}
+        <textarea data-part="input" aria-label={label}
+            placeholder={placeholder} disabled={disabled} bind:value={draft}
+            onkeydown={keys}></textarea>
+        {#if streaming}
+            <button type="button" data-part="stop" onclick={stop}>Stop</button>
+        {:else}
+            <button type="submit" data-part="send"
+                disabled={disabled || (draft.trim() === '' && attached.length === 0)}>
+                Send</button>
+        {/if}
+    </form>
+</section>
