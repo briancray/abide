@@ -289,12 +289,16 @@ export async function compiledSources(
     let emittable = placed
     if (checking) {
         // THE APP'S OWN FILES ARE REPORTED ON: a dependency's is compiled with them (34.23), and
-        // what is wrong inside a package is the package's to report.
-        const reported: typeof read = []
+        // what is wrong inside a package is the package's to report. 34.25 — it is still LOWERED,
+        // quietly, or its checked module is never written and an importer reads its props as `any`.
+        const diagnosing: typeof read = []
         for (const source of read)
-            if (source.quiet || !(source as Partial<PlacedSource>).dependency)
-                reported.push(source)
-        const diagnosed = await session.diagnose(reported, layout, scripts)
+            diagnosing.push(
+                (source as Partial<PlacedSource>).dependency
+                    ? { ...source, quiet: true }
+                    : source,
+            )
+        const diagnosed = await session.diagnose(diagnosing, layout, scripts)
         diagnostics.check(diagnosed.diagnoses)
         // A FILE WHOSE LOWERING REFUSED is reported already, at its line, and is not emitted.
         emittable = []

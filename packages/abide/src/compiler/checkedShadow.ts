@@ -232,6 +232,11 @@ export function moduleConfigShadow(text: string): string | undefined {
     return `${out}${text.slice(from)}\n${configInterface(bound)}`
 }
 
+/** A specifier resolved through a package's `exports`: neither relative, absolute, nor `#`. */
+function isPackageSpecifier(specifier: string): boolean {
+    return !/^[./#]/.test(specifier)
+}
+
 /**
  * Points each `.abide` import in the script blocks at its checked module, and moves `origins` to
  * match.
@@ -248,7 +253,11 @@ function pointAtCheckedModules(
 ): { text: string; origins: Origin[] } {
     const insertions: number[] = []
     for (const found of abideImports(text.slice(0, scriptsEnd)))
-        insertions.push(found.closingQuote)
+        // 34.25 — A PACKAGE'S `.abide` IS LEFT TO ITS `exports`: the checker follows the map to the
+        // file and asks for its declaration (`ShadowHost`'s `.d.abide.ts`), where a suffixed
+        // specifier names an entry no map that lists its files one by one carries.
+        if (!isPackageSpecifier(found.specifier))
+            insertions.push(found.closingQuote)
     if (insertions.length === 0) return { text, origins }
 
     let out = ''

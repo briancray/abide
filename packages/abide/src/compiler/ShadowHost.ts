@@ -103,7 +103,7 @@ export class ShadowHost {
      * editor checking one page resolves the components it imports without lowering each of them.
      * Remembered, so the lowering that replaces a stand-in is reported as a change to it.
      */
-    private stoodIn = new Set<string>()
+    private stoodIn = new Map<string, string>()
 
     /** The app's root, real. */
     readonly root: string
@@ -136,13 +136,17 @@ export class ShadowHost {
             !(name.endsWith(SHADOW_SUFFIX) || name.endsWith(CHECKED_SUFFIX))
         )
             return found
-        let real: string
+        return this.shadows.get(this.keyOf(this.throughLink(name)))
+    }
+
+    /** `name` in its package's real directory, where it is under a `node_modules` link. */
+    private throughLink(name: string): string {
+        if (!name.includes('/node_modules/')) return name
         try {
-            real = realpathSync(dirname(name))
+            return `${realpathSync(dirname(name))}/${basename(name)}`
         } catch {
-            return undefined
+            return name
         }
-        return this.shadows.get(this.keyOf(`${real}/${basename(name)}`))
     }
 
     private standIn(name: string): string | undefined {
@@ -177,7 +181,9 @@ export class ShadowHost {
                 : undefined
         if (!name.endsWith(`.abide${CHECKED_SUFFIX}`)) return undefined
         if (!isFile(name.slice(0, -CHECKED_SUFFIX.length))) return undefined
-        this.stoodIn.add(this.keyOf(name))
+        // 34.25 — KEYED BY WHERE IT WILL BE WRITTEN, a linked package's real directory, and holding
+        // the name the checker asked by, which is the one its cache is told moved.
+        this.stoodIn.set(this.keyOf(this.throughLink(name)), name)
         return COMPONENT_MODULE
     }
 
@@ -598,10 +604,15 @@ export class ShadowHost {
     write(path: string, text: string, edit: ShadowEdit): void {
         const key = this.keyOf(path)
         const previous = this.shadows.get(key)
-        const stoodIn = this.stoodIn.delete(key)
+        const asked = this.stoodIn.get(key)
+        this.stoodIn.delete(key)
         if (previous === undefined) edit.created.push(path)
-        if (stoodIn || (previous !== undefined && previous.text !== text))
+        if (
+            asked !== undefined ||
+            (previous !== undefined && previous.text !== text)
+        )
             edit.changed.push(path)
+        if (asked !== undefined && asked !== path) edit.changed.push(asked)
         this.shadows.set(key, { path, text })
     }
 
