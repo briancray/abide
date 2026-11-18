@@ -9,7 +9,7 @@ const cells = () =>
     [...document.querySelectorAll('td')].map((cell) => cell.textContent)
 
 // With the formatters built per call instead, adding the lead builds 2.
-test('a lead with no amount yet reads as a dash, and builds no formatter', async () => {
+test('a lead with no amount reads as a dash, and builds nothing', async () => {
     using _figures = await mount(DealFigures({}))
     expect(cells()).toEqual([
         'Analytical Engines renewal',

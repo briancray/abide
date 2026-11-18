@@ -13,4 +13,8 @@ const summary = reactive(() => (asked ? summarizeDeal() : []))
         Summarize the renewal
     </button>
 </div>
-<Markdown source={summary.join('')} aria-label="Summary" class="flex flex-col gap-tight" />
+<Markdown
+    source={summary.join('')}
+    aria-label="Summary"
+    class="flex flex-col gap-tight"
+ />

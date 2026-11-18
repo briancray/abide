@@ -11,7 +11,7 @@ const trends = () =>
         line.getAttribute('data-trend'),
     )
 
-test("each rep's sparkline carries its trend, and redraws in place", async () => {
+test("a rep's sparkline carries its trend, and redraws in place", async () => {
     using _trends = await mount(RepTrends({}))
     expect(trends()).toEqual(['up', 'down', 'flat'])
     const grace = document.querySelectorAll('svg')[1]

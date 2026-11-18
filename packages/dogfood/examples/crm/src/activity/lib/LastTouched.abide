@@ -11,7 +11,10 @@ let touches = reactive([
 
 function logCall() {
     now = Date.now()
-    touches = [{ contact: 'Katherine Johnson', kind: 'Call', at: now }, ...touches]
+    touches = [
+        { contact: 'Katherine Johnson', kind: 'Call', at: now },
+        ...touches,
+    ]
 }
 </script>
 

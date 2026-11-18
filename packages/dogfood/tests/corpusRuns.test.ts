@@ -51,6 +51,12 @@ for (const manifest of new Bun.Glob('examples/*/package.json').scanSync({
 }))
     EXAMPLE_APPS.push(`${manifest.slice(0, -'package.json'.length)}src`)
 const TSCONFIG = `${APP}tsconfig.json`
+const COMPONENTS = Bun.fileURLToPath(
+    new URL('../../abide/src/components/', import.meta.url),
+)
+const ABIDE_TSCONFIG = Bun.fileURLToPath(
+    new URL('../../abide/tsconfig.json', import.meta.url),
+)
 
 // A file that is an app's page rather than a component a card renders.
 function isRoute(path: string): boolean {
@@ -69,7 +75,12 @@ async function appTree(session: TypeSession): Promise<{
     compilation: Compilation
 }> {
     const tree: Record<string, string> = {}
-    const files: { path: string; file: AbideFile; belowRoot: string }[] = []
+    const files: {
+        path: string
+        file: AbideFile
+        belowRoot: string
+        key: string
+    }[] = []
     for (const root of EXAMPLE_APPS) {
         const manifest = `${root.slice(0, -'src'.length)}package.json`
         tree[manifest] = await Bun.file(`${APP}${manifest}`).text()
@@ -90,15 +101,33 @@ async function appTree(session: TypeSession): Promise<{
                 path: `${APP}${root}/${path}`,
                 file: parseAbide(text),
                 belowRoot: path,
+                key: `${root}/${path.slice(0, -'.abide'.length)}`,
             })
         }
     }
+    // THE COMPONENTS ABIDE SHIPS, which a card imports as `@abide/abide/<Name>.abide`: compiled at
+    // the path they resolve to, outside the copy of the app, as a build compiles them, and typed by
+    // abide's own project, which is the one whose include reaches them.
+    const own = files.length
+    for (const path of new Bun.Glob('*.abide').scanSync({ cwd: COMPONENTS }))
+        files.push({
+            path: `${COMPONENTS}${path}`,
+            file: parseAbide(await Bun.file(`${COMPONENTS}${path}`).text()),
+            belowRoot: `lib/${path}`,
+            key: `${COMPONENTS}${path.slice(0, -'.abide'.length)}`,
+        })
     // 32.17 — which components another one invokes decides whether a module carries its own
     // markup for a row built in the browser. THE APP'S RESOLVER, not `Bun.resolveSync`: that asks
     // every plugin again, and a compilation an earlier file in this process served answers it from
     // the directory read as a file — `InvoiceDocument.abide` is then looked for one level up.
     const graph = componentGraph(files, resolverIn())
-    const { answers } = await session.readsFor(files)
+    const { answers } = await session.readsFor(files.slice(0, own))
+    const shipped = await TypeSession.open(ABIDE_TSCONFIG)
+    try {
+        answers.push(...(await shipped.readsFor(files.slice(own))).answers)
+    } finally {
+        await shipped.close()
+    }
     const compilation: Compilation = {
         files: {},
         handlers: {},
@@ -109,9 +138,9 @@ async function appTree(session: TypeSession): Promise<{
             path: absolute,
             file,
             belowRoot,
+            key: stem,
         } = files[at] as (typeof files)[number]
         const names = answers[at]
-        const stem = absolute.slice(APP.length, -'.abide'.length)
         // 37.1 — a server block files its hooks at its route, or under a `lib` at its directory's.
         const server = emitComponent(
             file,

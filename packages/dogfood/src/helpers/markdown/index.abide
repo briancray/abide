@@ -1,0 +1,104 @@
+<script>
+import NotePreview from 'crm/src/deals/lib/NotePreview.abide'
+import notePreviewSource from 'crm/src/deals/lib/NotePreview.abide' with { type: 'text' }
+import notePreviewTestSource from 'crm/src/deals/lib/NotePreview.test.ts' with { type: 'text' }
+import DealSummary from 'crm/src/pipeline/lib/DealSummary.abide'
+import dealSummarySource from 'crm/src/pipeline/lib/DealSummary.abide' with { type: 'text' }
+import dealSummaryTestSource from 'crm/src/pipeline/lib/DealSummary.test.ts' with { type: 'text' }
+import summarizeDealSource from 'crm/src/pipeline/summarizeDeal.handler.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+</script>
+
+<Doc>
+    <Section title="A note renders its markdown, and its HTML as text">
+        <Example
+            id="markdown-note"
+            title="`Markdown` — a note's markdown, its HTML escaped and its links checked"
+            summary="A deal note someone pasted, with a script tag and a script link in it. Edit it and the preview follows."
+            files={{
+                'src/deals/lib/NotePreview.abide': notePreviewSource,
+                'src/deals/lib/NotePreview.test.ts': notePreviewTestSource,
+            }}
+        >
+            <NotePreview />
+        </Example>
+
+        <p>Import the component as <code>import Markdown from '@abide/abide/Markdown.abide'</code>
+            and hand it <code>source</code>. It renders paragraphs, headings, emphasis, code, fenced
+            code, lists, quotes, rules, tables and links, and every other character of the source
+            as text. A <code>{'<script>'}</code> in a note is a line of the note.</p>
+
+        <Snippet source={notePreviewSource} path="src/deals/lib/NotePreview.abide" from={['<Markdown']} />
+
+        <p>A link keeps its address only on a scheme in <code>schemes</code>, which is
+            <code>http</code>, <code>https</code> and <code>mailto</code> unless you pass your own.
+            Any other renders as the link's text, and an address with no scheme is a path on your
+            own site. An image renders as a link to it, so a note cannot make the page load
+            anything. <code>headingLevel</code> sets the level a <code>#</code> heading renders at,
+            so a note's headings sit under the page's own.</p>
+
+        <p><code>markdown(text)</code> from <code>@abide/abide</code> answers the same markup as a
+            string, for a <code>{'{raw(…)}'}</code> of your own. With <code>inline: true</code> it
+            renders one line of marks with no paragraph around it, for a title or a table cell.
+            <code>href</code> rewrites each address a link keeps, a path under the app's mount,
+            say, and drops the link where it answers <code>undefined</code>.</p>
+    </Section>
+
+    <Section title="A streamed answer renders as it arrives, one section at a time">
+        <Example
+            id="markdown-stream"
+            title="`Markdown` over a stream — only the section still growing renders again"
+            summary="A summary of the renewal, written a chunk at a time by a model. Ask for it and watch the heading, the list and the table land."
+            files={{
+                'src/pipeline/lib/DealSummary.abide': dealSummarySource,
+                'src/pipeline/summarizeDeal.handler.ts': summarizeDealSource,
+                'src/pipeline/lib/DealSummary.test.ts': dealSummaryTestSource,
+            }}
+        >
+            <DealSummary />
+        </Example>
+
+        <p>Hand <code>source</code> the text as it stands, and each chunk renders only the section still
+            being written. A section ends where a blank line is followed by a new block, and the
+            sections before it keep their nodes, so a chunk renders one section however long the
+            answer has grown.</p>
+
+        <p>Text cut anywhere renders what it has: a fence that has not closed is the code it holds, and
+            a <code>**</code> waiting for its pair is two asterisks until the pair arrives.</p>
+    </Section>
+
+    <Section title="Styling rendered markdown by its elements">
+        <p>The component ships no styles and writes no class. Its root is a <code>div</code> that
+            takes every attribute you pass, <code>class</code> included, and what it renders is
+            plain HTML: style it by element, from the root.</p>
+
+        <table>
+            <thead><tr><th>Element</th><th>What it is</th><th>Attributes</th></tr></thead>
+            <tbody>
+                <tr><td>the root <code>div</code></td><td>the component</td><td>everything you pass</td></tr>
+                <tr><td><code>p</code>, <code>h1</code>–<code>h6</code>, <code>blockquote</code>, <code>hr</code></td><td>the blocks</td><td>—</td></tr>
+                <tr><td><code>ul</code>, <code>ol</code>, <code>li</code></td><td>lists</td><td><code>start</code> on an <code>ol</code> that does not start at 1</td></tr>
+                <tr><td><code>pre</code> holding a <code>code</code></td><td>a fenced block</td><td><code>data-language</code> on the <code>code</code>, the fence's language</td></tr>
+                <tr><td><code>table</code>, <code>th</code>, <code>td</code></td><td>a table</td><td><code>data-align</code> on a cell, <code>left</code>, <code>center</code> or <code>right</code></td></tr>
+                <tr><td><code>strong</code>, <code>em</code>, <code>del</code>, <code>code</code>, <code>a</code></td><td>inline marks</td><td><code>href</code> on a link</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th>You write</th><th>It styles</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'class="flex flex-col gap-tight"'}</code></td><td>the space between blocks, on the root</td></tr>
+                <tr><td><code>{'class="[&_a]:underline"'}</code></td><td>every link, as a Tailwind utility on the root</td></tr>
+                <tr><td><code>{'class="[&_[data-language]]:font-mono"'}</code></td><td>fenced code</td></tr>
+                <tr><td><code>{'[data-align=right] { text-align: right }'}</code></td><td>right-aligned table cells, from a stylesheet</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Registry />
+</Doc>

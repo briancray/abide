@@ -356,7 +356,7 @@ export const SITE: readonly SiteGroup[] = [
                 title: 'Formatting numbers, money and time',
                 nav: 'Formatting',
                 description:
-                    'Show money, percents, counts, dates, durations and how long ago, the same on both sides.',
+                    'Show money, percents, counts, dates, durations, sizes and how long ago, the same on both sides.',
                 registry: '`format` — numbers, money and time as words',
             },
             {
@@ -468,7 +468,7 @@ export const SITE: readonly SiteGroup[] = [
                 nav: 'Charts',
                 description:
                     'Draw a series over time as a line, with ticks, a hover readout and gaps where values are missing.',
-                registry: '`LineChart` and `Sparkline` — charts',
+                registry: '`LineChart`, `Sparkline` and `chart` — charts',
             },
             {
                 route: '/components/chat',

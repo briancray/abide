@@ -20,5 +20,5 @@ export default GET(
             yield chunk
         }
     },
-    { description: "Summarizes a deal in markdown, as it is written." },
+    { description: 'Summarizes a deal in markdown, as it is written.' },
 )

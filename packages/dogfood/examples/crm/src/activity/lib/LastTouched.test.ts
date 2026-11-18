@@ -13,7 +13,7 @@ const said = () =>
         line.textContent?.replace(/\s+/g, ' ').trim(),
     )
 
-test('a touch reads how long before now it was, and a call just logged reads now', async () => {
+test('a touch reads how long ago it was, and a new call now', async () => {
     setSystemTime(new Date('2026-11-18T15:04:00Z'))
     using _touched = await mount(LastTouched({}))
     expect(said()).toEqual([

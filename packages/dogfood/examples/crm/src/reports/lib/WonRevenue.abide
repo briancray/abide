@@ -23,4 +23,4 @@ const TARGET = [20_000, 22_000, 24_000, 26_000, 28_000, 30_000]
         [&_[data-series='0']]:stroke-signal
         [&_[data-part=line][data-series='1']]:[stroke-dasharray:4_4]
         [&_[data-part=readout]]:fill-ink"
-/>
+ />

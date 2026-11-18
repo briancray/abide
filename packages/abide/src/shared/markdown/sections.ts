@@ -390,7 +390,11 @@ const PUNCTUATION = /[!-/:-@[-`{-~]/
 const WORD = /[\p{L}\p{N}]/u
 
 /** One line of text's inline markup. `linked` is whether it is already inside a link. */
-export function inline(text: string, settings: Settings, linked: boolean): string {
+export function inline(
+    text: string,
+    settings: Settings,
+    linked: boolean,
+): string {
     let html = ''
     let plain = 0
     // The delimiter runs found to have no closer, which no later opener of the run can find either.

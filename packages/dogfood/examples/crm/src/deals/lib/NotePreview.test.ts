@@ -7,13 +7,13 @@ import NotePreview from './NotePreview.abide'
 
 const preview = () => document.querySelector('[aria-label=Preview]')
 
-test('a note renders its markdown, and its HTML and its script link as text', async () => {
+test('a note renders its markdown, and its HTML as text', async () => {
     using _note = await mount(NotePreview({}))
     expect(preview()?.querySelector('strong')?.textContent).toBe('Ada')
     expect(preview()?.querySelector('em')?.textContent).toBe('Friday')
     const links = [...(preview()?.querySelectorAll('a') ?? [])]
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-        'https://crm.example/b/7',
+        'https://x.co/b7',
     ])
     expect(preview()?.querySelector('li:last-child')?.textContent).toBe(
         'open the quote',

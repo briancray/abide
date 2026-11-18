@@ -12,7 +12,7 @@ test('markdown escapes every character of HTML in its source — 52.8', () => {
         '<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>',
     )
     expect(markdown('`<b>` and "quotes" & \'ticks\'')).toBe(
-        '<p><code>&lt;b&gt;</code> and &quot;quotes&quot; &amp; \'ticks\'</p>',
+        "<p><code>&lt;b&gt;</code> and &quot;quotes&quot; &amp; 'ticks'</p>",
     )
     expect(markdown('```html\n<img src=x onerror=alert(1)>\n```')).toBe(
         '<pre><code data-language="html">&lt;img src=x onerror=alert(1)&gt;</code></pre>',
@@ -155,7 +155,7 @@ test('a closed section ends where it ends in the whole text — 52.18', () => {
         whole.add(sectionEnd(ANSWER, at))
     for (let cut = 0; cut <= ANSWER.length; cut += 1) {
         const prefix = ANSWER.slice(0, cut)
-        for (let at = 0; at < prefix.length; ) {
+        for (let at = 0; at < prefix.length;) {
             const end = sectionEnd(prefix, at)
             if (end < prefix.length)
                 expect({ cut, end, whole: whole.has(end) }).toEqual({
@@ -172,7 +172,7 @@ test('a closed section ends where it ends in the whole text — 52.18', () => {
 // A section renders alone as it does inside the whole, so the sections joined are the whole.
 test('the sections rendered one by one are the whole rendered at once — 52.17', () => {
     let joined = ''
-    for (let at = 0; at < ANSWER.length; ) {
+    for (let at = 0; at < ANSWER.length;) {
         const end = sectionEnd(ANSWER, at)
         joined += markdown(ANSWER.slice(at, end))
         at = end

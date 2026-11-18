@@ -33,10 +33,17 @@ test('won revenue is a line broken where a month has no total', async () => {
         'Oct 2026',
         'Nov 2026',
     ])
-    expect(texts('[data-axis=y]')).toEqual(['$0', '$10K', '$20K', '$30K', '$40K', '$50K'])
+    expect(texts('[data-axis=y]')).toEqual([
+        '$0',
+        '$10K',
+        '$20K',
+        '$30K',
+        '$40K',
+        '$50K',
+    ])
 })
 
-test('the crosshair reads every line out at the month nearest the pointer', async () => {
+test('the crosshair reads each line at the nearest month', async () => {
     using _chart = await mount(WonRevenue({}))
     pointAt(3)
     expect(chart().hasAttribute('data-hovering')).toBe(true)
@@ -46,7 +53,10 @@ test('the crosshair reads every line out at the month nearest the pointer', asyn
         'Target: $26K',
     ])
     pointAt(2)
-    expect(texts('[data-part=readout-value]')).toEqual(['Won: —', 'Target: $24K'])
+    expect(texts('[data-part=readout-value]')).toEqual([
+        'Won: —',
+        'Target: $24K',
+    ])
     pointAt(4)
     // From one month to the next, the readout's nodes are the ones it had.
     const work = measure(() => pointAt(5))

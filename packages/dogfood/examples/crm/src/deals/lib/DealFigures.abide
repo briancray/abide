@@ -9,10 +9,7 @@ let deals = reactive<Deal[]>([
 ])
 
 const weighted = reactive(() =>
-    deals.reduce(
-        (sum, deal) => sum + (deal.amount ?? 0) * deal.probability,
-        0,
-    ),
+    deals.reduce((sum, deal) => sum + (deal.amount ?? 0) * deal.probability, 0),
 )
 
 function addLead() {
@@ -37,5 +34,7 @@ function addLead() {
         <strong>{format.money(weighted, { compact: true })}</strong></li>
 </ul>
 <div class="row">
-    <button disabled={deals.length > 2} onclick={addLead}>Add Babbage & Co</button>
+    <button disabled={deals.length > 2} onclick={addLead}>
+        Add Babbage & Co
+    </button>
 </div>

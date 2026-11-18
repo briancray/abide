@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
 
 import { flushSync, reactive } from '@abide/abide'
+import Markdown from '@abide/abide/Markdown.abide'
 import { measure, mount, settled } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
-import Markdown from '@abide/abide/Markdown.abide'
 
 import summarizeDeal from '../summarizeDeal.handler.ts'
 import DealSummary from './DealSummary.abide'

@@ -4872,6 +4872,84 @@ the states that pattern names.
 
 # 52. Formatting, markdown and charts
 
+52.1 Each formatter of `format` MUST write `—` for a value it cannot format.
+
+52.2 Each formatter of `format` MUST write in the `en-US` locale where its caller names no `locale`.
+
+52.3 `format.date` MUST write a time in `UTC` where its caller names no `timeZone`.
+
+52.4 `format.duration` MUST write a length in the largest unit it fills and the unit after it,
+leaving out a unit at zero.
+
+52.5 `format.relative` MUST measure a time from the `now` its caller passes, and from the current
+time where it passes none.
+
+52.6 A formatter of `format` MUST build at most one `Intl` formatter per set of options in a process.
+
+52.7 `format.bytes` MUST write a size in the largest unit it fills at least one of, each unit 1,000
+of the one below it.
+
+52.8 `markdown` MUST escape every character of its source that HTML reads as markup.
+
+52.9 `markdown` MUST write a link whose address has a scheme outside `schemes` as its text alone.
+
+52.10 `markdown` MUST render an image as a link to its address.
+
+52.11 `markdown` MUST mark the `code` of a fenced block with the fence's language as a
+`data-language` attribute.
+
+52.12 `markdown` MUST render a source that ends inside an unclosed fence, emphasis or link as the text
+it has so far.
+
+52.13 `markdown` MUST write each address a link keeps as what `href` answers for it, where its caller
+passes `href`.
+
+52.14 `markdown` MUST write a link `href` answers `undefined` for as its text alone.
+
+52.15 `markdown` with `inline` MUST render its source as one line's inline marks, with no block
+element around them.
+
+52.16 `markdown` MUST render a heading of one `#` at the level `headingLevel` names, and each further
+`#` one level deeper, no deeper than 6.
+
+52.17 `Markdown` MUST render the markup `markdown` renders for its `source` and the options it is
+passed.
+
+52.18 `Markdown` MUST keep the nodes of every section of its `source` that text appended to the
+`source` leaves unchanged.
+
+52.19 `chart.ticks` MUST answer values a step of 1, 2 or 5 times a power of ten apart, the first at or
+below `min` and the last at or above `max`.
+
+52.20 `chart.scale` MUST map every value to the middle of the range where the domain has no width.
+
+52.21 `chart.path` MUST break the path at each value that is `null`, `undefined` or not finite.
+
+52.22 `chart.path` MUST close each run of values down to `baseline`, where its caller passes one.
+
+52.23 `chart.nearest` MUST answer the index of the position nearest `x`, the earlier of two equally
+near, and `-1` where there are no positions.
+
+52.24 `LineChart` MUST draw each series as a `data-part="line"` path whose `data-series` is the
+series' index.
+
+52.25 `LineChart` MUST draw a `data-part="zero"` line at zero inside its plot, where `zero` is set.
+
+52.26 `LineChart` MUST draw a crosshair at the x position nearest the pointer, and a readout of every
+series' value there, while a pointer is over it.
+
+52.27 `LineChart` MUST place its readout on the side of the crosshair that has more of the plot.
+
+52.28 `LineChart` MUST carry `data-hovering` on its root while its readout is drawn.
+
+52.29 `LineChart` and `Sparkline` MUST carry `role="img"` and take their accessible name from
+`label`.
+
+52.30 `LineChart` and `Sparkline` MUST draw every mark in `currentColor`.
+
+52.31 `Sparkline` MUST carry `data-trend` on its root, `up`, `down` or `flat` by its last present value
+against its first.
+
 # 53. Keys, element behaviors and chat
 
 # 54. Guards, fetches and jobs
