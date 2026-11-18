@@ -200,6 +200,28 @@ affected code saying what it did, and tell the user.
 - Comment only where the reason is not obvious from the code, in a line or two. A comment is not a
   log: no history ("used to…", "now…") and no file paths that go stale.
 
+## What abide ships before you write it
+
+Search this list before writing a dialog, a notice, a picker, a table, a chart, a formatter or a
+server helper. Each has a page in `docs/abide.md` with a working card, every prop, and a styling
+table.
+
+- Components, each imported on its own — `import Dialog from '@abide/abide/Dialog.abide'`:
+  `Dialog`, `Prompts` (the host for `prompts.confirm` / `prompts.alert`), `Toasts` (the host for
+  `toasts.notify`), `Tooltip`, `Menu`, `Combobox`, `Tabs`, `SortableTable`, `Markdown`, `LineChart`,
+  `Sparkline`, `Chat`, `Pairing`.
+- From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
+  on both sides), `markdown`, `chart`, `place`, `listbox`, `sortRows`, `hotkeys` and `keyLabel`, and
+  the `bind:element` adaptors `dismissible`, `dropzone` and `copyText` beside `observe`.
+- From `@abide/abide/server`: the rungs `signedIn`, `requireRole` and `readOnly`, `fetchJson` /
+  `fetchText` (a deadline, retries worth retrying, a cache), and `job` (work on a schedule, one run at
+  a time).
+
+A shipped component brings no stylesheet and writes no class. Pass `class` and any attribute and it
+lands on the root; style its states by the `data-` attributes it writes (`data-open`,
+`data-active`, `data-sort="ascending"`) and its inner pieces by `data-part` — in Tailwind,
+`data-[open]:…` and `[&_[data-part=option]]:…` (RULEBOOK 49.1, 49.2, 49.4).
+
 ## The app's own notes
 
 The app's `AGENTS.md` holds instructions — commands, conventions, where things live — and stays
