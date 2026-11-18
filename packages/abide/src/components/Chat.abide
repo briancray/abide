@@ -2,6 +2,13 @@
 // A conversation over an assistant handler: the transcript as it streams, and a composer that sends
 // on Enter. 53.32 — every event is folded into the answering turn once, through `patch`, so a chunk
 // rewrites the part it lands in and nothing before it.
+//
+// STYLED BY WHAT IT WRITES (49.2, 49.4): the root carries `data-streaming`; its `data-part`s are
+// `transcript`, `turn` (`data-speaker`, `data-streaming`, `data-stop`, `data-failed`), `speaker`,
+// `text`, `image`, `tool` (`data-status`) holding `tool-name`, `tool-input` and `tool-result`,
+// `permission` (`data-answer`) holding `permission-name`, `permission-input`, `allow` and `deny`,
+// `failure`, and `composer` (`data-dragging`) holding `attachments`, `attachment`, `remove`, `input`,
+// `send` and `stop`.
 import type { Component } from '#server/render.ts'
 import type {
     AssistantEvent,

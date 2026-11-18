@@ -2,6 +2,9 @@
 // The visitor's Claude Code paired with this page through `pairing` (44.69): connecting, the command
 // and the click that pair a bridge, the install where no bridge app opened, and once paired, what the
 // caller put inside it. 53.42 — the step is the root's `data-step`.
+//
+// STYLED BY WHAT IT WRITES (49.2, 49.4): `data-step` on the root, and the `data-part`s `message`,
+// `command`, `copy` (`data-copied`), `pair` and `missing`.
 import type { Attributes } from '#shared/Attributes.ts'
 import { copyText } from '#shared/copyText.ts'
 import { pairing } from '#shared/pairing.ts'
