@@ -429,12 +429,14 @@ function declaredTypes(): Set<string> {
     return declared
 }
 
+// A KEY IS NOT A TYPE: a component's render prop is a TitleCase member (`Option?: (props) => …`),
+// read here by the `:` after it. THE REVERT: drop the lookahead, and `Tabs`' `Tab` is named.
 test('every type a signature names is declared somewhere', async () => {
     const declared = declaredTypes()
     const dangling: string[] = []
     for (const { name, signature } of capabilities) {
         for (const match of withoutLiterals(signature ?? '').matchAll(
-            /\b([A-Z][A-Za-z0-9]*)\b/g,
+            /\b([A-Z][A-Za-z0-9]*)\b(?!\??:)/g,
         )) {
             const type = match[1] ?? ''
             if (!BUILTIN_TYPES.has(type) && !declared.has(type))

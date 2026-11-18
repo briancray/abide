@@ -243,13 +243,18 @@ function blocks(element: Element, out: string[]): void {
 function card(figure: Element): string {
     const title = find(figure, (node) => classes(node).includes('ex-title'))
     const summary = find(figure, (node) => classes(node).includes('ex-summary'))
-    const tabs = find(figure, (node) => classes(node).includes('ex-files'))
+    // The files are a `Tabs`: a tab per path, and one panel holding a `pre` per path in the same order.
+    const files = find(figure, (node) => classes(node).includes('ex-files'))
+    const tabs =
+        files && find(files, (node) => node.attributes.role === 'tablist')
+    const panel =
+        files && find(files, (node) => node.attributes.role === 'tabpanel')
     const paths: string[] = []
     for (const tab of tabs?.children ?? [])
         if (typeof tab !== 'string') paths.push(textOf(tab).trim())
     let text = `**${title === undefined ? '' : inline(title).trim()}** — ${summary === undefined ? '' : textOf(summary).trim()}`
     let index = 0
-    for (const node of figure.children) {
+    for (const node of panel?.children ?? []) {
         if (typeof node === 'string' || node.tag !== 'pre') continue
         text += `\n\n${fence(paths[index] ?? '', node)}`
         index += 1

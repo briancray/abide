@@ -1,0 +1,38 @@
+<script>
+import { reactive } from '@abide/abide'
+import Tabs from '@abide/abide/Tabs.abide'
+
+import getDeal from '../getDeal.handler.ts'
+
+type View = { key: string; label: string }
+
+const VIEWS: View[] = [
+    { key: 'details', label: 'Details' },
+    { key: 'value', label: 'Value' },
+    { key: 'stage', label: 'Stage' },
+]
+
+let tab = reactive('details')
+const deal = reactive(() => getDeal({ id: 'd1' }))
+</script>
+
+<Tabs
+    id="deal"
+    tabs={VIEWS}
+    key={(view: View) => view.key}
+    label={(view: View) => view.label}
+    bind:selected={tab}
+    class="flex flex-col gap-snug [&_[data-part=tablist]]:tabs"
+>
+    <ul class="fields">
+        {#if tab === 'details'}
+            <li><span>deal</span><strong>{deal.name}</strong></li>
+            <li><span>company</span><strong>{deal.company}</strong></li>
+        {:else if tab === 'value'}
+            <li><span>amount</span>
+                <strong>${deal.amount.toLocaleString('en-US')}</strong></li>
+        {:else}
+            <li><span>stage</span><strong>{deal.stage}</strong></li>
+        {/if}
+    </ul>
+</Tabs>

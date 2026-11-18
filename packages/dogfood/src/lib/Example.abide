@@ -35,6 +35,7 @@ import {
     type RouteLiteral,
     url,
 } from '@abide/abide'
+import Tabs from '@abide/abide/Tabs.abide'
 
 import { highlight, sideOf } from './highlight.ts'
 import { inline } from './inline.ts'
@@ -79,7 +80,7 @@ const shownSources = reactive(() =>
         ? serverSources({ paths: serverFiles })
         : ({} as Record<string, string>),
 )
-let open = reactive(0)
+let open = reactive(paths[0] ?? '')
 
 const kindOf = (path: string) =>
     path.endsWith('.test.ts')
@@ -89,9 +90,7 @@ const kindOf = (path: string) =>
           : 'file'
 
 // Read only once a test or bench tab is open, so a card nobody inspects never asks.
-const results = reactive(() =>
-    kindOf(paths[open] ?? '') !== 'file' ? resultsOf() : null,
-)
+const results = reactive(() => (kindOf(open) !== 'file' ? resultsOf() : null))
 </script>
 
 <figure class="example" id={id} data-embedded={embedded ? 'true' : 'false'} bind:element={reportHeight}>
@@ -103,32 +102,26 @@ const results = reactive(() =>
         </span>
     </figcaption>
     <div class="ex-render"><slot /></div>
-    <div class="ex-files" role="tablist">
-        {#for path, index of paths}
-            <button
-                role="tab"
-                aria-selected={open === index}
-                data-side={sideOf(path)}
-                data-kind={kindOf(path)}
-                onclick={() => (open = index)}
-            >{path}</button>
+    <Tabs id="{id}-files" class="ex-files" tabs={paths} key={(path: string) => path} bind:selected={open}>
+        {#component Tab({ item }: { item: string })}
+            <span data-side={sideOf(item)} data-kind={kindOf(item)}>{item}</span>
+        {/component}
+        {#for path of paths}
+            {#if open === path && kindOf(path) === 'test'}
+                {#if results?.tests[path]}
+                    <ResultsList reported={{ kind: 'test', cases: results.tests[path].cases }} />
+                {:else}
+                    <p class="ex-results">Not run in this build. Run <code>bun test</code> in the app.</p>
+                {/if}
+            {/if}
+            {#if open === path && kindOf(path) === 'bench'}
+                {#if results?.benches[path]}
+                    <ResultsList reported={{ kind: 'bench', ...results.benches[path] }} />
+                {:else}
+                    <p class="ex-results">Not run in this build. Run <code>bun run examples:results</code>.</p>
+                {/if}
+            {/if}
+            <pre hidden={open !== path}><code>{raw(highlight((files[path] ?? shownSources?.[path] ?? '').trimEnd()))}</code></pre>
         {/for}
-    </div>
-    {#for path, index of paths}
-        {#if open === index && kindOf(path) === 'test'}
-            {#if results?.tests[path]}
-                <ResultsList reported={{ kind: 'test', cases: results.tests[path].cases }} />
-            {:else}
-                <p class="ex-results">Not run in this build. Run <code>bun test</code> in the app.</p>
-            {/if}
-        {/if}
-        {#if open === index && kindOf(path) === 'bench'}
-            {#if results?.benches[path]}
-                <ResultsList reported={{ kind: 'bench', ...results.benches[path] }} />
-            {:else}
-                <p class="ex-results">Not run in this build. Run <code>bun run examples:results</code>.</p>
-            {/if}
-        {/if}
-        <pre hidden={open !== index}><code>{raw(highlight((files[path] ?? shownSources?.[path] ?? '').trimEnd()))}</code></pre>
-    {/for}
+    </Tabs>
 </figure>

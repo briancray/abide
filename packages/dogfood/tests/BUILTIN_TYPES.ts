@@ -44,8 +44,6 @@ export const BUILTIN_TYPES = new Set([
     'KeyboardEvent',
     'PointerEvent',
     'SVGElementTagNameMap',
-    // Also the name `Chat` gives its render prop for words, which a signature reads as a type.
-    'Text',
     'ReadableStream',
     'Request',
     'RequestInit',

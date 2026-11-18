@@ -25,6 +25,8 @@ export type {
 export type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 // 33.23 — an element's attributes, typed as a component's props.
 export type { Attributes } from './Attributes.ts'
+// 51.31-51.43 — a sortable table's columns, its sort, and the order its rows are in.
+export type { Column } from './Column.ts'
 export { type Cookies, cookies } from './cookies.ts'
 // 53.21-53.23 — the `bind:element` adaptor copying text on a click.
 export { copyText } from './copyText.ts'
@@ -48,10 +50,14 @@ export { type Health, health } from './health.ts'
 export { imageFiles, imagePiece } from './imagePiece.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
+// 51.1-51.8 — the keyboard over a list of keyed options, the one `Combobox.abide` runs on.
+export { type Listbox, type ListboxOptions, listbox } from './listbox.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log, type Span } from './log.ts'
 export { type Report, ReportDraft, report } from './report.ts'
+export type { Sort } from './Sort.ts'
+export { sortRows } from './sortRows.ts'
 export type { Middleware } from './Middleware.ts'
 export type { Params } from './matchRoute.ts'
 // 38.88 — a native app's menu items, and the hook a route's layouts and page file them with.

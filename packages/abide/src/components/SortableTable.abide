@@ -1,0 +1,73 @@
+<script generics="Row">
+import type { Attributes } from '#shared/Attributes.ts'
+import type { Column } from '#shared/Column.ts'
+import { props } from '#shared/props.ts'
+import { reactive } from '#shared/reactive/index.ts'
+import type { Sort } from '#shared/Sort.ts'
+import { cellText, sortRows } from '#shared/sortRows.ts'
+
+const { rows, columns, key, sort, Cell, ...rest } = props<
+    {
+        /** The rows, in the order they show while no column is sorted. */
+        rows: readonly Row[]
+        /** The columns, left to right: what each header says, sorts by and shows. */
+        columns: readonly Column<Row>[]
+        /** What tells one row from another, so a re-sort moves each row rather than rewriting it. */
+        key(row: Row): string
+        /** The column sorted by and its direction, or none; bind it to read and set the sort. */
+        sort?: Sort | undefined
+        /** Renders a cell's content in place of its text, handed the row, the column and the text. */
+        Cell?(props: { row: Row; column: Column<Row>; text: string }): unknown
+    } & Attributes<'table'>
+>()
+
+const sorted = reactive(() => sortRows(rows, columns, sort))
+
+// A header pressed again turns its direction round; a new one sorts ascending.
+function sortBy(column: Column<Row>) {
+    sort =
+        sort?.key === column.key && sort.direction === 'ascending'
+            ? { key: column.key, direction: 'descending' }
+            : { key: column.key, direction: 'ascending' }
+}
+
+const directionOf = (column: Column<Row>) =>
+    sort?.key === column.key ? sort.direction : undefined
+</script>
+
+<table {...rest}>
+    <thead>
+        <tr>
+            {#for column of columns by column.key}
+                <th
+                    scope="col"
+                    aria-sort={directionOf(column)}
+                    data-part="header"
+                    data-sort={directionOf(column)}
+                    data-align={column.align}
+                >
+                    {#if column.sortable === false}
+                        {column.label}
+                    {:else}
+                        <button type="button" data-part="sort" onclick={() => sortBy(column)}>{column.label}</button>
+                    {/if}
+                </th>
+            {/for}
+        </tr>
+    </thead>
+    <tbody>
+        {#for row of sorted by key(row)}
+            <tr data-part="row">
+                {#for column of columns by column.key}
+                    <td data-part="cell" data-align={column.align}>
+                        {#if Cell}
+                            <Cell row={row} column={column} text={cellText(row, column)} />
+                        {:else}
+                            {cellText(row, column)}
+                        {/if}
+                    </td>
+                {/for}
+            </tr>
+        {/for}
+    </tbody>
+</table>

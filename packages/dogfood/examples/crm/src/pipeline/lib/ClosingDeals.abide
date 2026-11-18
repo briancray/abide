@@ -1,0 +1,40 @@
+<script>
+import { type Column, reactive, type Sort } from '@abide/abide'
+import SortableTable from '@abide/abide/SortableTable.abide'
+
+import listClosing from '../listClosing.handler.ts'
+import { STAGES } from './STAGES.ts'
+
+type Deal = { id: string; name: string; stage: string; amount: number }
+
+const COLUMNS: Column<Deal>[] = [
+    { key: 'name', label: 'Deal', sortable: false },
+    {
+        key: 'stage',
+        label: 'Stage',
+        value: (deal) => STAGES.indexOf(deal.stage),
+        format: (_, deal) => deal.stage,
+    },
+    {
+        key: 'amount',
+        label: 'Amount',
+        align: 'end',
+        format: (amount) => `$${Number(amount).toLocaleString('en-US')}`,
+    },
+    { key: 'closes', label: 'Closes', format: (date) => String(date ?? '—') },
+]
+
+const deals = reactive(() => listClosing())
+let sort = reactive<Sort | undefined>({ key: 'closes', direction: 'ascending' })
+</script>
+
+<SortableTable
+    rows={deals}
+    columns={COLUMNS}
+    key={(deal: Deal) => deal.id}
+    bind:sort={sort}
+    class="[&_[data-align=end]]:text-right [&_[data-sort]_button]:text-signal
+        [&_th_button]:bg-transparent [&_th_button]:p-0 [&_th_button]:text-muted
+        [&_[data-sort=ascending]_button]:after:content-['_↑']
+        [&_[data-sort=descending]_button]:after:content-['_↓']"
+ />
