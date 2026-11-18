@@ -1,0 +1,152 @@
+<script generics="Item">
+import type { Attributes } from '#shared/Attributes.ts'
+import { listbox } from '#shared/listbox.ts'
+import { props } from '#shared/props.ts'
+import { busy, type Reactive, reactive } from '#shared/reactive/index.ts'
+
+const {
+    id,
+    options = [],
+    search,
+    debounce,
+    key,
+    label,
+    value,
+    Option,
+    placeholder,
+    ...rest
+} = props<
+    {
+        /** The input's id, for a `<label for>`; the popup's and each option's ids are derived from it. */
+        id: string
+        /** The items to pick from, narrowed to those whose label holds what was typed. */
+        options?: readonly Item[]
+        /** Finds the items for what was typed, in place of narrowing `options`: a handler call, or any async function. */
+        search?(
+            query: string,
+        ):
+            | readonly Item[]
+            | PromiseLike<readonly Item[]>
+            | Reactive<readonly Item[], unknown, unknown, unknown>
+        /** Milliseconds typing has to pause before `search` runs again. */
+        debounce?: number
+        /** What tells one item from another; unique among the items. */
+        key(item: Item): string
+        /** An item's text: what an option shows by default, and what the input holds once it is picked. */
+        label(item: Item): string
+        /** The item picked; bind it to read and set the pick. */
+        value?: Item | undefined
+        /** Renders an option's content in place of its label, handed the item. */
+        Option?(props: { item: Item }): unknown
+        /** The input's placeholder. */
+        placeholder?: string
+    } & Omit<Attributes<'div'>, 'id'>
+>()
+
+// What was typed since the last pick; the input shows the pick's label while nothing has been.
+let typed = reactive<string | undefined>(undefined)
+const query = reactive(() => typed ?? (value === undefined ? '' : label(value)))
+let open = reactive(false)
+
+const NOTHING: readonly Item[] = []
+
+// Nothing is searched while the list is shut, and a search in flight keeps the last results listed.
+const found = reactive(
+    () => {
+        if (!open) return NOTHING
+        const text = query
+        if (search !== undefined) return search(text)
+        const lowered = text.toLowerCase()
+        const kept: Item[] = []
+        for (const item of options)
+            if (label(item).toLowerCase().includes(lowered)) kept.push(item)
+        return kept
+    },
+    debounce === undefined ? {} : { debounce },
+)
+
+const list = listbox({
+    id,
+    options: () => found,
+    key,
+    onpick: pick,
+    onescape: dismiss,
+})
+
+function write(text: string) {
+    typed = text
+    open = true
+}
+
+function pick(item: Item) {
+    value = item
+    typed = undefined
+    open = false
+}
+
+function dismiss() {
+    if (open) open = false
+    else {
+        typed = undefined
+        value = undefined
+    }
+}
+
+function keydown(event: KeyboardEvent) {
+    // Home and End move the caret in the text, not the active option.
+    if (event.key === 'Home' || event.key === 'End') return
+    if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault()
+        open = true
+        return
+    }
+    list.keydown(event)
+}
+
+const pickedKey = reactive(() => (value === undefined ? undefined : key(value)))
+</script>
+
+<div {...rest} data-open={open ? '' : undefined} data-busy={open && busy(found) ? '' : undefined}>
+    <input
+        id={id}
+        type="text"
+        role="combobox"
+        autocomplete="off"
+        aria-autocomplete="list"
+        aria-expanded={open ? 'true' : 'false'}
+        aria-controls={`${id}-listbox`}
+        aria-activedescendant={open ? list.activeId() : undefined}
+        placeholder={placeholder}
+        data-part="input"
+        bind:value={{ get: () => query, set: write }}
+        onkeydown={keydown}
+        onblur={() => {
+            open = false
+        }}
+    >
+    {#if open}
+        <ul id={`${id}-listbox`} role="listbox" data-part="listbox" onmousedown={(event) => event.preventDefault()}>
+            {#for item of found by key(item)}
+                <li
+                    id={list.idOf(key(item))}
+                    role="option"
+                    aria-selected={list.active() === key(item) ? 'true' : 'false'}
+                    data-part="option"
+                    data-active={list.active() === key(item) ? '' : undefined}
+                    data-selected={pickedKey === key(item) ? '' : undefined}
+                    onpointermove={() => list.activate(key(item))}
+                    onclick={() => pick(item)}
+                >
+                    {#if Option}
+                        <Option item={item} />
+                    {:else}
+                        {label(item)}
+                    {/if}
+                </li>
+            {/for}
+        </ul>
+        {#if !busy(found) && found.length === 0}
+            <div role="status" data-part="empty"><slot /></div>
+        {/if}
+    {/if}
+</div>

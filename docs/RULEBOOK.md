@@ -4870,6 +4870,150 @@ the states that pattern names.
 
 # 51. Lists and tables
 
+51.1 `listbox` MUST keep active the option whose key it last moved to, for as long as the options
+hold that key.
+
+51.2 `listbox` MUST make the first option active where the options do not hold the key it last moved
+to.
+
+51.3 `listbox` MUST make no option active where the options are empty.
+
+51.4 `listbox` MUST make the next option active on ArrowDown, and the previous on ArrowUp.
+
+51.5 `listbox` MUST make the first option active on Home, and the last on End.
+
+51.6 `listbox` MUST go from the last option to the first on ArrowDown, and from the first to the
+last on ArrowUp, save where `wrap` is `false`.
+
+51.7 `listbox` MUST cancel the default of each key it acts on.
+
+51.8 `listbox` MUST call `onpick` with the active option on Enter.
+
+51.9 `listbox` MUST call `onescape` on Escape.
+
+51.10 `Listbox`'s `idOf` MUST derive an option's id from `id` and the option's key, a different id
+for each key.
+
+51.11 `Listbox`'s `activeId` MUST be the id `idOf` derives for the active option's key, and
+`undefined` where no option is active.
+
+51.12 `listbox` MUST scroll an option its keys make active into view.
+
+51.13 `Combobox` MUST open its list when its input is typed in.
+
+51.14 `Combobox` MUST open its list on ArrowDown or ArrowUp in its input while the list is shut.
+
+51.15 `Combobox` MUST list the items `search` answers for its input's text, where `search` is given.
+
+51.16 `Combobox` MUST list each of `options` whose `label` holds its input's text, ignoring case,
+where `search` is not given.
+
+51.17 `Combobox` MUST NOT call `search` while its list is shut.
+
+51.18 `Combobox` MUST hold a call of `search` back until its input's text has stopped changing for
+`debounce` milliseconds, where `debounce` is given.
+
+51.19 `Combobox` MUST keep listing the items it last listed while a call of `search` is in flight.
+
+51.20 `Combobox` MUST keep and move its active item as a `listbox` over the items it lists does, save
+on Home and End.
+
+51.21 `Combobox` MUST leave Home and End to its input's caret.
+
+51.22 `Combobox` MUST pick the active item on Enter.
+
+51.23 `Combobox` MUST pick an item whose option is clicked.
+
+51.24 A pick in a `Combobox` MUST set `value` to the item picked.
+
+51.25 A pick in a `Combobox` MUST shut its list.
+
+51.26 `Combobox`'s input MUST hold the text typed in it since the last pick, and the `label` of
+`value` where none has been typed.
+
+51.27 `Combobox` MUST shut its list on Escape where the list is open.
+
+51.28 `Combobox` MUST clear `value` and the typed text on Escape where its list is shut.
+
+51.29 `Combobox` MUST shut its list when its input loses focus.
+
+51.30 `Combobox` MUST render an option's content through `Option` where it is given, and as the
+item's `label` otherwise.
+
+51.31 `Combobox` MUST render its children where its list is open, lists no item and waits on no call
+of `search`.
+
+51.32 `Combobox` MUST write `data-open` on its root while its list is open.
+
+51.33 `Combobox` MUST write `data-busy` on its root while its open list waits on a call of `search`.
+
+51.34 `Combobox` MUST write `data-active` on the active item's option.
+
+51.35 `Combobox` MUST write `data-selected` on the option of `value`.
+
+51.36 `Tabs` MUST select the first of `tabs` where `selected` names none of them.
+
+51.37 `Tabs` MUST select a tab that is clicked.
+
+51.38 `Tabs` MUST select the next tab on ArrowRight and the previous on ArrowLeft, going round the
+ends.
+
+51.39 `Tabs` MUST select the first tab on Home, and the last on End.
+
+51.40 `Tabs` MUST move focus to a tab a key selects.
+
+51.41 `Tabs` MUST give the selected tab a `tabindex` of `0`, and every other tab a `tabindex` of
+`-1`.
+
+51.42 `Tabs` MUST render its children in one panel, labelled by the selected tab.
+
+51.43 `Tabs` MUST render a tab's content through `Tab` where it is given, as the tab's `label` where
+`label` is given, and as the tab's key otherwise.
+
+51.44 `Tabs` MUST write `data-selected` on the selected tab.
+
+51.45 `sortRows` MUST order `rows` by each row's value for the column `sort` names, in the direction
+`sort` names.
+
+51.46 `sortRows` MUST keep rows of equal value in the order `rows` holds them, in either direction.
+
+51.47 `sortRows` MUST put a row whose value is blank — `undefined`, `null`, `''`, `NaN` or an
+invalid `Date` — after every row whose value is not, in either direction.
+
+51.48 `sortRows` MUST compare two numbers, two bigints or two booleans by value, two dates by time,
+and any other pair as text, the numerals in it compared by value.
+
+51.49 `sortRows` MUST read a row's value for a `Column` through its `value` where it has one, and as
+the row's field its `key` names otherwise.
+
+51.50 `sortRows` MUST hand back `rows` itself where `sort` is `undefined` or names no column.
+
+51.51 `SortableTable` MUST render its rows in the order `sortRows` hands back for its `rows`,
+`columns` and `sort`.
+
+51.52 `SortableTable` MUST render each header's `label` in a button that sorts by its column, save a
+`Column` whose `sortable` is `false`.
+
+51.53 `SortableTable` MUST sort descending by a column whose button is pressed while it is sorted
+ascending by that column, and ascending otherwise.
+
+51.54 `SortableTable` MUST write the direction of `sort` as `aria-sort` on the sorted column's
+header, and on no other header.
+
+51.55 `SortableTable` MUST write the direction of `sort` as `data-sort` on the sorted column's
+header, and on no other header.
+
+51.56 `SortableTable` MUST keep each row's element across a change of `sort`, keyed by `key`.
+
+51.57 `SortableTable` MUST render a cell's content through `Cell` where it is given, and as the
+cell's text otherwise.
+
+51.58 `SortableTable` MUST give a cell as its text what the column's `format` hands back where the
+column has one, and otherwise the value's own text, or none for a blank value.
+
+51.59 `SortableTable` MUST write a `Column`'s `align` as `data-align` on its header and on each of
+its cells.
+
 # 52. Formatting, markdown and charts
 
 # 53. Keys, element behaviors and chat

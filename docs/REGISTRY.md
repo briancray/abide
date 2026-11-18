@@ -645,11 +645,29 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 ## `Tooltip` and `Menu` — placed against an anchor
 
-## `Combobox` — a list filtered as you type
+## `Combobox` and `listbox` — a list filtered as you type, picked with the arrow keys
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item; Option?: (props: { item: Item }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35 |
+| `listbox` | `<Option>(options: ListboxOptions<Option>) => Listbox<Option>` | A keyboard controller over a list of keyed options, for markup the app writes itself. | 51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7, 51.8, 51.9, 51.10, 51.11, 51.12 |
+| `ListboxOptions` | `ListboxOptions<Option> = { id: string; options: () => readonly Option[]; key: (option: Option) => string; wrap?: boolean; onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10 |
+| `Listbox` | `Listbox<Option> = { active: () => string \| undefined; activeOption: () => Option \| undefined; activeId: () => string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; keydown: (event: KeyboardEvent) => void }` | What `listbox` hands back: the active key and option, and the ids and the listener the markup takes. | 51.1, 51.2, 51.3, 51.10, 51.11 |
 
 ## `Tabs` — tabs
 
-## `SortableTable` — a table sorted by its headers
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Tabs` | `<Item>{ id: string; tabs: readonly Item[]; key: (item: Item) => string; label?: (item: Item) => string; selected?: string; Tab?: (props: { item: Item }) => unknown } & Attributes<'div'>` | A row of tabs over one panel holding the selected tab's content, the component `@abide/abide/Tabs.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44 |
+
+## `SortableTable` and `sortRows` — a table sorted by its headers
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59 |
+| `sortRows` | `<Row>(rows: readonly Row[], columns: readonly Column<Row>[], sort: Sort \| undefined) => readonly Row[]` | The rows in the order a `Sort` names. | 51.45, 51.46, 51.47, 51.48, 51.49, 51.50 |
+| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.49, 51.52, 51.58, 51.59 |
+| `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.45, 51.53, 51.54, 51.55 |
 
 ## `LineChart` and `Sparkline` — charts
 
