@@ -959,23 +959,25 @@ const rows = await Promise.resolve(1)
     }
 })
 
-// 34.17 — A `.abide` CANNOT EXPORT, IN ANY BLOCK: its component is its one export. A `<script>` runs
-// once per instance, so no one instance is there for an importer to read; a `<script module>`'s or
-// a `<script server>`'s export would be a second public face beside the handler files and lib
-// modules that already are one. Every spelling, `export default` and a re-export among them.
+// 34.17, 34.33, 34.34, 34.35 — WHAT EACH BLOCK MAY EXPORT, every spelling in every block. A
+// `<script>` and a `<script server>` export nothing (34.17); a `<script module>` exports by name
+// (34.33), never the default (34.34) and never a re-export (34.35). Each row is the clause its
+// refusal cites, or `''` where it compiles.
 //
-// THE REVERT: drop the three `refuseExport` calls in `projectShadow`; each row then compiles, or
-// fails in the bundler or at the missing `./elsewhere.ts`, naming neither the page nor the clause —
-// 0 of the 12 citing 34.17, against 12.
-test('an export in any script block is a compile error — 34.17', async () => {
-    const cited: string[] = []
+// THE REVERT: hand `refuseExport` `'<script>'` for the module block in `projectShadow`; the six
+// module rows cite 34.17 as well, where two are due to compile and four to cite 34.34 or 34.35.
+test('what each script block may export — 34.17, 34.33, 34.34, 34.35', async () => {
+    const SPELLINGS = [
+        'export const rows = 1',
+        'const rows = 1\nexport { rows }',
+        'export default 1',
+        "export * from './elsewhere.ts'",
+        "export { rows } from './elsewhere.ts'",
+        "export type { Row } from './elsewhere.ts'",
+    ]
+    const cited: Record<string, string> = {}
     for (const block of ['<script>', '<script module>', '<script server>'])
-        for (const spelled of [
-            'export const rows = 1',
-            'const rows = 1\nexport { rows }',
-            'export default 1',
-            "export * from './elsewhere.ts'",
-        ]) {
+        for (const spelled of SPELLINGS) {
             let thrown = ''
             try {
                 await renderPage(`${block}
@@ -986,10 +988,22 @@ ${spelled}
             } catch (error) {
                 thrown = String(error)
             }
-            if (thrown.includes('RULEBOOK 34.17'))
-                cited.push(`${block} ${spelled}`)
+            cited[`${block} ${spelled}`] =
+                /RULEBOOK (34\.\d+)/.exec(thrown)?.[1] ?? ''
         }
-    expect(cited).toHaveLength(12)
+    const expected: Record<string, string> = {}
+    for (const spelled of SPELLINGS) {
+        expected[`<script> ${spelled}`] = '34.17'
+        expected[`<script server> ${spelled}`] = '34.17'
+    }
+    expected['<script module> export const rows = 1'] = ''
+    expected['<script module> const rows = 1\nexport { rows }'] = ''
+    expected['<script module> export default 1'] = '34.34'
+    expected["<script module> export * from './elsewhere.ts'"] = '34.35'
+    expected["<script module> export { rows } from './elsewhere.ts'"] = '34.35'
+    expected["<script module> export type { Row } from './elsewhere.ts'"] =
+        '34.35'
+    expect(cited).toEqual(expected)
 })
 
 // 32.57 — A TEMPLATE EXPRESSION CANNOT AWAIT EITHER, and for its own reason: each is lowered into

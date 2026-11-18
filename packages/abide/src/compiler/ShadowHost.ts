@@ -155,10 +155,12 @@ export class ShadowHost {
             return isFile(name.slice(0, -`${SOURCE_SUFFIX}.d.ts`.length))
                 ? 'declare const text: string\nexport default text\n'
                 : undefined
-        // 34.17 — WHAT A `.abide` EXPORTS, to anything importing it: the component its checked
-        // module declares, as a direct call takes it (38.208), and nothing else. The checker resolves `./x.abide` by trying
-        // `./x.abide.d.ts`; the bindings the projection re-exports for the build (16.70) are not
-        // the importer's to read.
+        // 34.33 — WHAT A `.abide` EXPORTS, to anything importing it: the component its checked
+        // module declares, as a direct call takes it (38.208), and what its `<script module>`
+        // exports by name. The checker resolves `./x.abide` by trying `./x.abide.d.ts`. A STAR
+        // rather than the names, so this text is the path's alone and never stale beside an edit —
+        // which also carries the scaffolding's own exports (`DIRECT_CALL`, 16.70's), each under a
+        // `__` name no author writes.
         //
         // 34.25 — AND THROUGH A PACKAGE'S `exports`, which the checker follows to the exact file and
         // so asks for the arbitrary extension's declaration, `./x.d.abide.ts`, instead.
@@ -169,8 +171,9 @@ export class ShadowHost {
               : undefined
         if (abide !== undefined) {
             if (!isFile(abide)) return undefined
-            const own = `./${basename(abide)}`
-            return `export { ${DIRECT_CALL} as default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
+            const checked = `./${basename(abide)}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}`
+            return `export { ${DIRECT_CALL} as default } from '${checked}'
+export * from '${checked}'
 `
         }
         // A projection not registered — a file with nothing to read, or one this host has not

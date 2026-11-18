@@ -82,8 +82,12 @@ affected code saying what it did, and tell the user.
 - A `<name>.handler.ts` beside the pages is a handler: `src/invoices/getInvoice.handler.ts` holds
   `export default GET(…)` and answers `/invoices/getInvoice`. It is the app's public API, for pages,
   scripts, the CLI and MCP alike.
-- A `.abide` cannot export. A `<script server>` in one holds that file's private handlers
-  (`const save = POST(…)`), callable by that file alone, and its hooks (`onStart`, `middleware`, …).
+- A `.abide` exports its component as its default, and by name whatever its `<script module>`
+  exports — a function that drives the component, or a value its instances share:
+  `import Counter, { reset } from './Counter.abide'`. A `<script>` and a `<script server>` export
+  nothing (RULEBOOK 34.17).
+- A `<script server>` holds that file's private handlers (`const save = POST(…)`), callable by that
+  file alone, and its hooks (`onStart`, `middleware`, …).
 - A rung shared between handlers or layouts is typed `Middleware` and nothing else:
   `export const signedIn: Middleware = async (next) => (await principal.authenticated) ? next() : refuse(401)`
   fits a handler's `middleware: […]` and a layout's `middleware(…)` alike (RULEBOOK 37.14). No

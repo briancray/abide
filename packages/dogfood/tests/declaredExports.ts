@@ -63,9 +63,10 @@ async function resolvedFrom(
  * `export * as` as the one name. */
 async function exportsOf(file: string): Promise<Map<string, boolean>> {
     const names = new Map<string, boolean>()
-    // A `.abide` entry is one component, named for its file (34.17).
+    // A `.abide` entry is its component, named for its file, and what its `<script module>` exports
+    // by name (34.33), read as a `.ts`'s are below.
     if (file.endsWith('.abide'))
-        return names.set(file.slice(file.lastIndexOf('/') + 1, -6), false)
+        names.set(file.slice(file.lastIndexOf('/') + 1, -6), false)
     const source = (await Bun.file(file).text()).replace(/\/\/[^\n]*/g, '')
     for (const [, star] of source.matchAll(/export \* from '([^']+)'/g)) {
         const target = await resolvedFrom(file, star as string)

@@ -31,7 +31,7 @@ import type {
     Setup,
     TemplateNode,
 } from './TemplateNode.ts'
-import { nesting, tokenize } from './tokenize.ts'
+import { nesting, type Token, tokenize } from './tokenize.ts'
 
 export type Span = { start: number; end: number }
 
@@ -605,9 +605,9 @@ function project(file: AbideFile): Projection {
     refuseTopLevelAwait(scriptsText, '<script>')
     // A kind at a time: a token at the end of one kind's text would decide how the next one's first
     // reads.
-    refuseExport(modulesText)
-    refuseExport(serversText)
-    refuseExport(scriptsText)
+    refuseExport(modulesText, '<script module>')
+    refuseExport(serversText, '<script server>')
+    refuseExport(scriptsText, '<script>')
     // 16.70 — what the server block binds, re-exported under a name no author writes, so the
     // checker reads each one's declaring call as it reads a handler file's default.
     text += privateExports(serversText)
@@ -799,28 +799,72 @@ function refuseTopLevelAwait(source: string, block: string): void {
 }
 
 /**
- * Throws where a script block exports.
+ * Throws where a script block exports what its block may not.
  *
- * 34.17 — A `.abide`'S ONE EXPORT IS ITS COMPONENT. A handler another file calls is a handler file
- * (16.2), a value two files share is a module under a lib directory, and what the framework reads
- * off a file is a hook it calls (37.1). Refused rather than emitted, as 34.3's `await` is: the
- * bundler's own error names neither the file nor the fix.
+ * 34.17 — ONLY THE MODULE SCOPE EXPORTS. A `<script>` runs once per instance, so no one instance is
+ * there for an importer to read, and a `<script server>` is a module the browser's never carries.
+ * 34.33 — a `<script module>`'s named export is the file's, beside the component; 34.34 — the
+ * default is the component, so the block cannot claim it; 34.35 — and a re-export names a module
+ * whose face (`facedSpecifier`) would be the importer's lane's rather than this file's. Refused
+ * rather than emitted, as 34.3's `await` is: the bundler's own error names neither the file nor the
+ * fix.
  */
-function refuseExport(source: string): void {
+function refuseExport(
+    source: string,
+    block: '<script>' | '<script module>' | '<script server>',
+): void {
     if (!source.includes(EXPORT)) return
+    const tokens = tokenize(source)
     let depth = 0
-    let previous = ''
-    for (const token of tokenize(source)) {
-        const text = token.text
+    for (let index = 0; index < tokens.length; index++) {
+        const token = tokens[index] as Token
         const moved = nesting(token.kind)
-        if (moved !== 0) depth += moved
-        else if (depth === 0 && text === EXPORT && previous !== '.')
+        if (moved !== 0) {
+            depth += moved
+            continue
+        }
+        if (
+            depth !== 0 ||
+            token.text !== EXPORT ||
+            tokens[index - 1]?.text === '.'
+        )
+            continue
+        if (block !== '<script module>')
             throw new Error(
-                'abide: a .abide cannot export — its component is its one export. A handler another file calls is a handler file (a <name>.handler.ts beside the page, `export default GET(…)`); a value files share is a module under a lib directory. RULEBOOK 34.17.',
+                `abide: a ${block} cannot export — ${block === '<script>' ? 'it runs once per instance, so there is no one instance an importer could read' : 'it is the server’s alone, and the browser’s module never carries it'}. Export from the file’s <script module>; a handler another file calls is a handler file (a <name>.handler.ts beside the page, \`export default GET(…)\`). RULEBOOK 34.17.`,
             )
-        previous = text
+        const refused = refusedModuleExport(tokens, index + 1)
+        if (refused !== undefined) throw new Error(refused)
     }
 }
+
+/** Why the `<script module>` export whose tokens begin at `from` is refused, or `undefined`. */
+function refusedModuleExport(
+    tokens: readonly Token[],
+    from: number,
+): string | undefined {
+    let at = from
+    // `export type { … } from` and `export type * from` are re-exports too.
+    if (
+        tokens[at]?.text === 'type' &&
+        (tokens[at + 1]?.text === '{' || tokens[at + 1]?.text === '*')
+    )
+        at += 1
+    const head = tokens[at]?.text
+    if (head === 'default' || head === '=')
+        return 'abide: a <script module> cannot export a default — the component is the file’s default export. Export it by name. RULEBOOK 34.34.'
+    if (head === '*') return REEXPORT_REFUSAL
+    if (head !== '{') return undefined
+    let depth = 0
+    for (; at < tokens.length; at++) {
+        depth += nesting((tokens[at] as Token).kind)
+        if (depth === 0) break
+    }
+    return tokens[at + 1]?.text === 'from' ? REEXPORT_REFUSAL : undefined
+}
+
+const REEXPORT_REFUSAL =
+    'abide: a <script module> cannot re-export — import the name, then export it. RULEBOOK 34.35.'
 
 /**
  * 16.70 — the `export { … }` re-exporting each name the server blocks bind under `PRIVATE_EXPORT`,

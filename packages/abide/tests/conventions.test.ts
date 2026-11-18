@@ -259,10 +259,11 @@ test('a file exporting one thing is named after what it exports', async () => {
     expect(misnamed).toEqual([])
 })
 
-// The same rule for a component: a `.abide` file's one export is its default, the component (34.17),
-// and it is TitleCase. A `.abide` directly in an address directory is a page, named for its address
-// (23.14, 23.21) — `index`, `[id]`, `getting-started` — and a component is one under a `lib` or a
-// `tests` directory, or a package's outside every app's `src`.
+// The same rule for a component: a `.abide` file is named for its default, the component — whatever
+// its `<script module>` exports beside it (34.33) — and it is TitleCase. A `.abide` directly in an
+// address directory is a page, named for its address (23.14, 23.21) — `index`, `[id]`,
+// `getting-started` — and a component is one under a `lib` or a `tests` directory, or a package's
+// outside every app's `src`.
 // THE REVERT: a `lowerCase.abide` under a lib directory is named here.
 const ROUTED = new Set(['layout', 'error', 'launcher'])
 

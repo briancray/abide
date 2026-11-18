@@ -577,26 +577,6 @@ import X from './lib/x.ts'
     expect(server).toMatch(/import \{ y \} from '\.\/lib\/x\.ts'/)
 })
 
-// 34.17 — A `<script module>` EXPORTS NOTHING EITHER: a value two files share is a module under
-// `lib`. THE REVERT: skip the `<script module>` in `projectShadow`'s `refuseExport`; the build
-// succeeds and `settingsStore` is exported beside the component.
-test('a <script module> export is refused — 34.17', async () => {
-    const refused = await refusal(
-        compileApp(
-            appFixture({
-                'index.abide': `<script module>
-export function settingsStore(name: string) {
-    return () => name
-}
-</script>
-
-<p>home</p>`,
-            }),
-        ),
-    )
-    expect(refused).toContain('34.17')
-})
-
 // 16.74 — A HANDLER IMPORTED FROM A HANDLER FILE IS TYPED, so what its call answers reads by name as
 // any `.ts` module's would. THE REVERT: type a handler file's import through the wildcard
 // declaration rather than the file itself; the read is refused.

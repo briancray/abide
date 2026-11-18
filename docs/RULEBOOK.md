@@ -2748,8 +2748,8 @@ compiles to, as a static import of it does.
 34.16 A `.abide` file a server module imports MUST resolve to a function that binds its props and
 answers a `Component`, under `abide dev`, `abide start` and `abide compile` alike.
 
-34.17 An `export` in any script block of a `.abide`, however the language spells it, MUST be a compile
-error.
+34.17 An `export` in a `<script>` or a `<script server>`, however the language spells it, MUST be a
+compile error.
 
 34.18 A write a `<script>` makes outside any function to a `let` or `var` its file's
 `<script module>` declares, holding no `Reactive`, MUST be warned on.
@@ -2796,6 +2796,15 @@ of it MUST NOT carry the scope token.
 
 34.32 A `NotLanded` a component `<script>` setup or a branch-local `<script>` throws MUST reach its
 caller as an error naming the setup's read, and MUST NOT reach it as a `NotLanded`.
+
+34.33 A name a `<script module>` exports MUST be a named export of its `.abide`, holding the binding
+the file's component reads, to a `.abide` and a `.ts` importing it, on a server as in a browser and
+to `abide check`.
+
+34.34 An `export default` in a `<script module>`, however the language spells it, MUST be a compile
+error.
+
+34.35 An `export … from` in a `<script module>`, `export *` among them, MUST be a compile error.
 
 # 35. Pages, rendering and sinks
 

@@ -45,7 +45,7 @@ import Section from '#src/lib/Section.abide'
 
         <p>A <code>&lt;script server&gt;</code> runs on the server alone. It declares
             <code>getNotes</code> as a <code>const</code>, and the same file's script and markup call it
-            by name. A <code>.abide</code> exports nothing, so no other file can import it.</p>
+            by name. A <code>&lt;script server&gt;</code> exports nothing, so no other file can import it.</p>
 
         <p>It still answers over http, below <code>/__abide/handlers</code> at its file's path and
             then its name. That address is listed on no surface, and the test calls it to show it is

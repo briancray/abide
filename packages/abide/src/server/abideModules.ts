@@ -504,12 +504,14 @@ function compiledAt(served: Held, path: string): CompiledFile {
 
 // 34.16 — BOUND, NOT RAW. The compiled module is a function of accessors answering its markup (33.4);
 // what an app's own module calls is a function of plain props answering a `Component` (35.4), which
-// `render` invokes with nothing. The component is the module's one export (34.17).
+// `render` invokes with nothing. 34.33 — what its `<script module>` exports by name is re-exported
+// as the module holds it: one evaluation, which the component face shares.
 // 38.119 — and it carries what `mount` hydrates it with: the same accessors, and its browser module.
 // 38.134 — a prop written as a getter is read through it on every read, as a parent's would be.
 // 38.207 — and one handed as a `Reactive` is bound to it, as a tag's `bind:` would be.
 function boundModule(path: string): string {
     return `import component from ${JSON.stringify(path)}
+export * from ${JSON.stringify(path)}
 import { passedProp } from '${SERVER_RUNTIME_SPECIFIER}'
 export default (props = {}) => {
     const accessors = {}
