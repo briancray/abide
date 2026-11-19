@@ -28,7 +28,7 @@ export type DiagnosedSource = Omit<ReadSource, 'quiet'> &
  * 38.3 — WHAT THE CHECKER SAYS ABOUT EACH FILE AS IT RUNS, placed on the `.abide` line. Each
  * source is checked as its lowered program (`checkedShadow`), which is registered for the life
  * of the host beside its shadow for the reason a shadow is; and every `.ts` root of the
- * project under the app's root is checked as it stands, where `scripts` asks for them — an editor
+ * project in the app's package is checked as it stands (38.209), where `scripts` asks for them — an editor
  * asking about one page does not want the whole app. `sources` carry their text, which is what
  * a position is a line of. A `quiet` source is lowered and not reported on: a component an
  * editor's page imports, which is there for the props the page is held to (33.4).
@@ -165,7 +165,7 @@ export async function diagnoseSources(
                     ),
                 )
             }
-            const standing = scripts ? host.rootsUnder(project, within) : []
+            const standing = scripts ? host.packageRoots(project, within) : []
             for (const path of standing)
                 if (!host.holds(path))
                     reports.push(

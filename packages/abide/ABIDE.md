@@ -18,8 +18,10 @@ affected code saying what it did, and tell the user.
 
 ## Checking your work
 
-- `bun run check` — runs `abide check`, the type checker over `.abide` files. `tsc` and an editor's
-  TypeScript service do not read `.abide` files, so a clean `tsc` says nothing about them. Run
+- `bun run check` — runs `abide check`, the type checker over the app's whole package: its `.abide`
+  files and every `.ts` its `tsconfig.json` includes, tests and scripts as well as `src`. `tsc` and
+  an editor's TypeScript service do not read `.abide` files, so a clean `tsc` says nothing about
+  them. Run
   `bun run check` after every change, and treat its warnings as bugs: several of them name a read
   that will not update when its value changes.
   Where the read is meant, `// abide-ignore` and the clause the warning cites, on the line above

@@ -14,7 +14,7 @@ import { compileApp } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/Diagnostics.ts'
 
 import { appFixture, BIN } from './builtApp.ts'
-import { removeTemporaryModules } from './temporaryModule.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const TYPO = `<script>
 import { props } from '@abide/abide'
@@ -1655,4 +1655,36 @@ import { raw } from '@abide/abide'
             relative(realpathSync(strict), diagnosis.path),
         ),
     ).toEqual(['unused/index.abide'])
+}, 60_000)
+
+// 38.209, 38.210 — EVERY FILE OF THE APP'S PACKAGE IS CHECKED, its tests, scripts and browser specs as well as
+// its `src`: `bun check` runs an app's `check` script in place of `tsc`, so what `abide check` skips
+// nothing checks. A package nested inside it is its own check's. THE REVERTS: hand
+// `diagnoseSources` `rootsUnder` in place of `packageRoots`; `tests/planted.ts` goes unreported, 0
+// findings where 1 is due. Drop the nested-package test in `packageRoots`; `nested/planted.ts` is
+// reported too, 2 where 1 is due.
+test('a check reports every file of the app’s package, and none of a package nested in it — 38.209, 38.210', async () => {
+    const planted = 'export const planted: string = 5\n'
+    const root = temporaryModule({
+        'package.json': JSON.stringify({ name: 'fixture', type: 'module' }),
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                types: ['bun'],
+            },
+            include: ['src', 'tests', 'nested'],
+        }),
+        'src/index.abide': '<p>home</p>',
+        'tests/planted.ts': planted,
+        'nested/package.json': JSON.stringify({ name: 'nested' }),
+        'nested/planted.ts': planted,
+    })
+    const found = await checkApp(`${root}/src`)
+    expect(
+        found.map((diagnosis) => relative(realpathSync(root), diagnosis.path)),
+    ).toEqual(['tests/planted.ts'])
 }, 60_000)

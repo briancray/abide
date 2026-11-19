@@ -3722,6 +3722,11 @@ as 32.6 has a `bind:` hand it over.
 38.208 `abide check` MUST hold a prop a `.ts` file calls a `.abide` file's component with to the
 type its `props` call declares for it, or to a `Reactive` holding and taking that type.
 
+38.209 `abide check` MUST report what the checker says of every file the app's `tsconfig.json`
+includes inside the app's package, its source or not.
+
+38.210 `abide check` MUST NOT report a file inside a package nested in the app's package.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

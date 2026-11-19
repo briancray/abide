@@ -8,6 +8,7 @@ import { placeOf } from '#server/placement.ts'
 
 import { COMPONENT_MODULE, DIRECT_CALL } from './checkedShadow.ts'
 import type { LoweredFile } from './LoweredFile.ts'
+import { nearest } from './nearest.ts'
 import { CHECKED_SUFFIX, SHADOW_SUFFIX, ShadowMap } from './ShadowMap.ts'
 import { SOURCE_SUFFIX } from './splitImports.ts'
 
@@ -555,8 +556,8 @@ export * from '${checked}'
     }
 
     /**
-     * THE APP'S OWN FILES the checker holds as roots: under `within`, and neither a dependency nor a
-     * declaration file. Resolved against the tsconfig's directory; a caller asking `holds` keys it.
+     * THE APP'S SOURCE the checker holds as roots: under `within`, and neither a dependency nor a
+     * declaration file — what the build serves, and so what its lints walk (`appLints`).
      */
     rootsUnder(project: Project, within: string): string[] {
         const root = `${this.canonical(within)}/`
@@ -569,6 +570,40 @@ export * from '${checked}'
                 !path.endsWith('.d.ts')
             )
                 roots.push(canonical)
+        }
+        return roots
+    }
+
+    /**
+     * 38.209, 38.210 — THE APP'S OWN FILES the checker holds as roots: every one in the package the app at
+     * `appRoot` is part of — its tests, its scripts and its browser specs as well as its source —
+     * and neither in a package nested inside it, a dependency, nor a declaration file. THE PACKAGE,
+     * NOT THE TSCONFIG'S DIRECTORY, which may be a whole workspace's. Resolved against the
+     * tsconfig's directory; a caller asking `holds` keys it.
+     */
+    packageRoots(project: Project, appRoot: string): string[] {
+        const found = nearest(this.canonical(appRoot), 'package.json')
+        const own =
+            found === undefined ? this.canonical(appRoot) : dirname(found)
+        const roots: string[] = []
+        // A directory's nearest package, asked once per directory.
+        const owners = new Map<string, string | undefined>()
+        for (const path of project.rootFiles) {
+            const canonical = this.canonical(path)
+            if (
+                !canonical.startsWith(`${own}/`) ||
+                path.includes('/node_modules/') ||
+                path.endsWith('.d.ts')
+            )
+                continue
+            const directory = dirname(canonical)
+            let owner = owners.get(directory)
+            if (!owners.has(directory)) {
+                const manifest = nearest(directory, 'package.json')
+                owner = manifest === undefined ? undefined : dirname(manifest)
+                owners.set(directory, owner)
+            }
+            if (owner === own) roots.push(canonical)
         }
         return roots
     }

@@ -15,6 +15,7 @@
         "compile": "abide compile",
         "start": "abide start --port 3131",
         "dev": "abide dev",
+        "check": "abide check",
         "typecheck": "bun check",
         "bundle": "abide native"
     },

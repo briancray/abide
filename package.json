@@ -7,7 +7,7 @@
         "packages/dogfood/examples/*"
     ],
     "scripts": {
-        "typecheck": "bun check -p packages/abide && bun check -p packages/harness && bun check -p packages/dogfood && bun check -p packages/bridge",
+        "typecheck": "bun check -p packages/abide && bun check -p packages/harness && bun run --cwd packages/dogfood check && bun check -p packages/bridge",
         "test": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json",
         "test:timings": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json --update-timings",
         "test:serial": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests",
