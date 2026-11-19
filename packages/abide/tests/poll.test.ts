@@ -531,3 +531,39 @@ test('a refresh after the app stops runs no job, nor does the next stop, and a r
     await Bun.sleep(40)
     expect(`runs after the read: ${held}`).toBe('runs after the read: 1')
 })
+
+// 7.43 AND 7.44: A HIDDEN DOCUMENT IS NOT POLLED, and owes one refresh to its showing. Counted as body
+// runs, since a value refreshed while nobody could see it reads the same once they can.
+//
+// THE REVERT: have `tick` refresh whatever the document's visibility — `while hidden: 6` where `0`
+// is due.
+test('a poll does not refresh while the document is hidden, and refreshes once on showing — 7.43, 7.44', async () => {
+    let visibility: DocumentVisibilityState = 'visible'
+    Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => visibility,
+    })
+    try {
+        let runs = 0
+        const end = inSetup(() => {
+            reactive(
+                () => {
+                    runs += 1
+                    return runs
+                },
+                { poll: 15 },
+            )
+        })
+        visibility = 'hidden'
+        const atHiding = runs
+        await Bun.sleep(100)
+        expect(`while hidden: ${runs - atHiding}`).toBe('while hidden: 0')
+        visibility = 'visible'
+        document.dispatchEvent(new Event('visibilitychange'))
+        expect(`once shown: ${runs - atHiding}`).toBe('once shown: 1')
+        end()
+    } finally {
+        // The prototype's getter, which happy-dom answers `visible` from, back in front.
+        delete (document as { visibilityState?: unknown }).visibilityState
+    }
+})

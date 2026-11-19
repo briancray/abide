@@ -65,6 +65,10 @@ class Clock {
 
 const UNOWNED = new Set<Clock>()
 
+/** 7.44 — every clock a hidden document kept from refreshing, for the document's showing to run. */
+const OWED = new Set<Clock>()
+let listeningForShown = false
+
 /** 7.29 — each record whose first run is held back, to its clock. */
 const HELD = new WeakMap<Cell, Clock>()
 
@@ -238,11 +242,8 @@ function start(clock: Clock): void {
         afterSettle(clock)
         return
     }
-    const values = clock.values
     clock.timer = setInterval(
-        () => {
-            for (const value of values()) refreshIdle(value)
-        },
+        () => tick(clock),
         Math.min(clock.every, LONGEST_DELAY),
     )
     unrefTimer(clock.timer)
@@ -250,6 +251,7 @@ function start(clock: Clock): void {
 
 function halt(clock: Clock): void {
     clock.running = false
+    OWED.delete(clock)
     clock.turn += 1
     if (clock.timer !== null) clearTimeout(clock.timer)
     clock.timer = null
@@ -276,8 +278,32 @@ function afterSettle(clock: Clock): void {
 function armOnce(clock: Clock): void {
     armTimer(clock, clock.every, () => {
         clock.timer = null
-        for (const value of clock.values()) refreshIdle(value)
+        tick(clock)
         afterSettle(clock)
+    })
+}
+
+/**
+ * One tick of `clock`: its values refreshed, or — 7.43, in a document a visitor cannot see — the
+ * refresh owed to the document's showing (7.44). A server has no document, and every tick refreshes.
+ */
+function tick(clock: Clock): void {
+    if (
+        typeof document === 'undefined' ||
+        document.visibilityState !== 'hidden'
+    ) {
+        for (const value of clock.values()) refreshIdle(value)
+        return
+    }
+    OWED.add(clock)
+    if (listeningForShown) return
+    listeningForShown = true
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') return
+        const owing = [...OWED]
+        OWED.clear()
+        for (const clock of owing)
+            for (const value of clock.values()) refreshIdle(value)
     })
 }
 

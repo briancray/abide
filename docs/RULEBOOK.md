@@ -512,6 +512,11 @@ value 7.29 holds back MUST NOT start its `poll`.
 7.42 `App.stop` MUST NOT run a value 7.29 holds back that a read has not run since 7.40 invalidated
 it.
 
+7.43 `poll` MUST NOT refresh a value while the document's `visibilityState` is `hidden`.
+
+7.44 A `poll` that 7.43 kept from refreshing a value MUST refresh it once the document's
+`visibilityState` is no longer `hidden`, and once only however many refreshes 7.43 kept from it.
+
 # 8. Stores
 
 8.1 A `Store` MUST provide both `get` and `set`.
