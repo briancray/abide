@@ -5403,7 +5403,7 @@ under a minute, and every minute otherwise, from a first look made as 7.30 makes
 first run, and MUST stop looking where 7.26 stops a poll.
 
 54.19 A look MUST start a run of a `job` where no run has ended, or where `every` milliseconds have
-passed since the last one ended.
+passed since the last one ended, or since it started under 54.29.
 
 54.20 `runNow`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second.
 
@@ -5429,6 +5429,9 @@ run, from a look or from `runNow`, and MUST hold `nextRun` null.
 
 54.28 `requireRole` given `status: 404` MUST answer an authenticated caller it does not admit with
 the refusal 15.7 answers an address nothing serves, naming the path and method of the request.
+
+54.29 A `job` given `from: 'start'` MUST measure `every` from when its last run started, and its
+looks MUST be spaced from when each started rather than from the end of the run it started.
 
 # 55. Worker files
 
