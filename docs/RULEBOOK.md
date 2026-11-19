@@ -5028,7 +5028,9 @@ on Home and End.
 
 51.27 `Combobox` MUST shut its list on Escape where the list is open.
 
-51.28 `Combobox` MUST clear `value` and the typed text on Escape where its list is shut.
+51.28 `Combobox` MUST clear `value` and the typed text on Escape where its list is shut and its
+input holds text, and MUST NOT prevent the default of an Escape where its list is shut and its
+input is empty.
 
 51.29 `Combobox` MUST shut its list when its input loses focus.
 

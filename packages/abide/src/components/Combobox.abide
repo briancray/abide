@@ -95,6 +95,9 @@ function dismiss() {
 function keydown(event: KeyboardEvent) {
     // Home and End move the caret in the text, not the active option.
     if (event.key === 'Home' || event.key === 'End') return
+    // 51.28 — an Escape with nothing to shut or clear is left to whatever holds the input: a
+    // `<dialog>` cancels only on an Escape no one prevented.
+    if (event.key === 'Escape' && !open && query === '') return
     if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
         event.preventDefault()
         open = true
