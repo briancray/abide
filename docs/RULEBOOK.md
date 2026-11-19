@@ -2020,6 +2020,9 @@ the new one lands per 7.4.
 
 26.25 `Principal` MUST admit a field an app declares on it, of any type.
 
+26.26 `principal.resolved` MUST hold the claims `principal.set` sealed where no `onPrincipal` is
+filed, and where one is, MUST hold what the resolvers answered and no claim they left out.
+
 # 27. Configuration
 
 27.1 `config` MUST throw what `onConfig` threw.
@@ -2982,8 +2985,9 @@ through `App.stop`, and the process MUST then exit with 0.
 file MUST be a build error naming the module and the hook.
 
 37.14 A `Failed` a `middleware` rung returns MUST be answered in the lane the rung is filed over: by
-the nearest `error.abide` per 35.2 over a page, as 15.21 states over a handler, and as 15.22 paints
-a 405 for a rung filed at the root route.
+the nearest `error.abide` per 35.2 over a page, as 15.21 states over a handler, and, for a rung filed
+at the root route, painted as a page's failure where the request prefers `text/html` over
+`application/json` and as 15.21 states otherwise, the way 15.22 paints its 405.
 
 37.15 A `middleware` rung outside one that returned a `Failed` MUST be handed 37.14's answer from
 `next`, and MUST NOT be handed the `Failed`.
@@ -3730,6 +3734,12 @@ type its `props` call declares for it, or to a `Reactive` holding and taking tha
 includes inside the app's package, its source or not.
 
 38.210 `abide check` MUST NOT report a file inside a package nested in the app's package.
+
+38.211 `abide run` MUST import a `.abide` file as the compilation of the app's sources as they stand,
+served before the script loads.
+
+38.212 `abide check` MUST refuse, at its line, a `declare module` of an `@abide/` entry in a file of
+the app's package that imports and exports nothing.
 
 # 39. Head and view transitions
 

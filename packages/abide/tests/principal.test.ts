@@ -9,7 +9,7 @@ const HANDLERS = `import { GET, POST, principal } from '@abide/abide/server'
 import { RESOLVED } from '#src/lib/RESOLVED.server.ts'
 
 export const signIn = POST(async ({ name }: { name: string }) => {
-    await principal.set({ name })
+    await principal.set({ name, ticket: 'sealed' })
     return principal.authenticated()
 })
 
@@ -50,7 +50,7 @@ beforeAll(async () => {
         'lib/RESOLVED.server.ts': RESOLVED,
         // 26.4 — an app answer that tries to claim the baseline's fields.
         'layout.abide': `<script server>
-import { onPrincipal } from '@abide/abide/server'\nimport { RESOLVED } from '#src/lib/RESOLVED.server.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { ...(claims as object), role: 'admin', authenticated: 'spoofed' }\n})\n</script>
+import { onPrincipal } from '@abide/abide/server'\nimport { RESOLVED } from '#src/lib/RESOLVED.server.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { name: (claims as { name: string }).name, role: 'admin', authenticated: 'spoofed' }\n})\n</script>
 `,
     }))
 }, 30_000)
@@ -93,7 +93,8 @@ test('an anonymous caller is authenticated false — 26.10', async () => {
 
 // 26.4, 26.6, 26.8 — SIGNED IN, the app's resolver over the claims and the baseline over both, with
 // the caller the browser already had. THE REVERT: spread the baseline before the resolved fields in
-// `documentOf`; `authenticated` reads "spoofed".
+// `documentOf`; `authenticated` reads "spoofed". 26.26 — the claim the resolver left out is not
+// there: spread the claims under the resolved fields, and `ticket` reads "sealed".
 test('set authenticates, the baseline wins, and the caller survives — 26.4, 26.6', async () => {
     const { principal, caller } = await signedIn()
     const answer = await Bun.fetch(`${base}${RPC}/whoami`, {
@@ -108,6 +109,7 @@ test('set authenticates, the baseline wins, and the caller survives — 26.4, 26
     expect(body.resolved.name).toBe('ada')
     expect(body.resolved.role).toBe('admin')
     expect(body.resolved.authenticated).toBe(true)
+    expect(body.resolved.ticket).toBeUndefined()
     expect(`abide-caller=${body.caller}`).toBe(caller)
 })
 

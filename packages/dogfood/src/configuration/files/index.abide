@@ -99,13 +99,15 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Build Tailwind with the client and import pages in tests">
         <p><code>bunfig.toml</code> names the plugins the client is built with, and the test
-            preload that lets a test import a <code>.abide</code>.</p>
+            preload that lets a test import a <code>.abide</code>. A new app preloads the
+            harness's, which is a DOM to mount in and then <code>@abide/abide/test</code>. Preload
+            <code>@abide/abide/test</code> alone where your tests bring their own DOM.</p>
         <Code code={`
             [serve.static]
             plugins = ["bun-plugin-tailwind"]
 
             [test]
-            preload = ["@abide/abide/test"]
+            preload = ["@abide/harness/abide/preload"]
         `} />
     </Section>
 </Doc>

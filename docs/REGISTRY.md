@@ -588,7 +588,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `principal.authenticated` | `Reactive<boolean>` | Whether this caller presented something the server accepted. | 26.1, 26.2 |
 | `principal.expiresAt` | `Reactive<string \| undefined>` | When the seal lapses. | 26.1, 26.2 |
 | `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver, or a browser's load of the document, having failed. | 26.1, 26.3, 26.23 |
-| `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4, 26.25 |
+| `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4, 26.25, 26.26 |
 | `principal.caller` | `Reactive<string>` | Which browser, as against who they are. | 22.10, 26.5, 26.6, 26.7, 26.19, 26.22 |
 | `principal.set` | `(claims: Record<string, unknown>) => Promise<void>` | Authenticates this caller. | 18.25, 26.8, 26.12, 26.16, 26.17, 26.18, 26.20, 26.21, 26.24 |
 | `principal.clear` | `() => void` | Signs this caller out. | 18.25, 26.7, 26.9, 26.24 |
@@ -1146,7 +1146,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route, or in the browser below the calling component. | 37.5, 37.8, 37.13, 37.16, 37.17, 37.18, 37.21, 37.28, 12.6 |
+| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route, or in the browser while the calling component stands. | 37.5, 37.8, 37.13, 37.16, 37.17, 37.18, 37.21, 37.28, 12.6 |
 
 ## `onRefusal`
 
@@ -1170,7 +1170,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7, 37.13 |
+| `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns the sealed claims into the fields `principal.resolved` holds in their place. | 26.4, 26.26, 37.7, 37.13 |
 
 ## `onPairing`
 
@@ -1476,8 +1476,8 @@ rows a runner prints, and an adapter for an abide app.
 | Command | Meaning | Rules |
 | --- | --- | --- |
 | `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122, 38.124, 38.131, 38.132, 38.195 |
-| `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
-| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123, 38.138, 38.196, 38.197, 38.209, 38.210 |
+| `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57, 38.211 |
+| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123, 38.138, 38.196, 38.197, 38.209, 38.210, 38.212 |
 | `abide format [--check] [path…]` | The formatter over a `.abide` tree. | 38.25, 38.125, 38.126, 38.127, 38.128, 38.129, 38.137 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, what each matcher takes, the rungs each handler names, and where each hook is filed. | 38.108, 38.123, 38.135 |
 | `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 7.30 |
