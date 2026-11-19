@@ -1,0 +1,49 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/server/retained',
+        '/harness/server/closures',
+        '/harness/gate/in-a-fresh-process',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/server.test.ts',
+            from: [
+                "test('retainedPerRun() comes back tagged, with its rep count and its growth'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Find what each run of a lookup keeps">
+        <p>The body runs <code>reps</code> times, 1000 by default, and <code>perRep</code> is
+            the mean, by engine type, of what each run leaves reachable after a full
+            collection. What a run builds and drops is not counted.</p>
+        <Code language="ts" caption="server" code={`
+            import { retainedPerRun } from '@abide/harness/server'
+
+            const cache = new Map<string, URL>()
+            const answer = retainedPerRun(() => {
+                const link = \`https://crm.test/invoices/\${cache.size}\`
+                cache.set(link, new URL(link))
+            }, 400)
+            answer.tagged // 'batch mean'
+            answer.perRep // what each run left in the cache, by type
+        `} />
+    </Section>
+
+    <Section level={3} title="Check a cache stops growing across the batch">
+        <p>The batch is split in two, and <code>growth</code> is the second half's mean minus
+            the first's. A type left out of it was kept at the same rate in both halves.</p>
+        <Code language="ts" caption="server" code={`
+            const answer = retainedPerRun(() => lookup('acme'))
+            answer.growth // {} when every run keeps the same
+        `} />
+        <p>Gate an exact count on <code>retained</code>. A mean is not a count to compare
+            with <code>toBe</code>.</p>
+    </Section>
+</Doc>

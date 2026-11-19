@@ -1,5 +1,5 @@
 // Live objects by JSC type, and the change between two readings — what `retained()` and
-// `allocated()` both diff. Not on the lane's entry: each of the two says what its reading means.
+// `retainedPerRun()` both diff. Not on the lane's entry: each of the two says what its reading means.
 
 import { fullGC, heapStats } from 'bun:jsc'
 

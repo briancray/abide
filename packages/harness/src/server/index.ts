@@ -6,7 +6,7 @@
 // with `mockRestore` for the teardown — and a second spelling would be a rename with
 // a worse restore story.
 
-export { allocated } from './allocated.ts'
+export { retainedPerRun } from './retainedPerRun.ts'
 export { bytes } from './bytes.ts'
 export { closures } from './closures.ts'
 export { retained } from './retained.ts'

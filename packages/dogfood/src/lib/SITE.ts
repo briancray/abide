@@ -1151,12 +1151,12 @@ export const SITE: readonly SiteGroup[] = [
                 registry: '`retained` — `@abide/harness/server`',
             },
             {
-                route: '/harness/server/allocated',
-                title: '`allocated`',
-                nav: '`allocated`',
+                route: '/harness/server/retained-per-run',
+                title: '`retainedPerRun`',
+                nav: '`retainedPerRun`',
                 description:
-                    "Price what a call allocates per run as a batch mean, with the growth between the batch's halves.",
-                registry: '`allocated` — `@abide/harness/server`',
+                    'Find what each run of a call keeps reachable, as a batch mean, and whether that grows across the batch.',
+                registry: '`retainedPerRun` — `@abide/harness/server`',
             },
             {
                 route: '/harness/server/closures',

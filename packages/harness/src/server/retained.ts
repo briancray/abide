@@ -9,8 +9,8 @@
 // collected it before the `after` read. So whether a gate observes what it gates
 // would depend on the optimizer's liveness analysis of a case body, invisible at the
 // call site and flipping when the body is edited for an unrelated reason. This
-// function answers the question that is stable; `allocated()` answers the other one
-// and is tagged so it cannot be gated on.
+// function answers the question that is stable; `retainedPerRun()` answers it as a batch mean
+// and is tagged so it cannot be gated on. Neither sees what an op allocated and dropped.
 
 import { countsMoved, liveCounts } from './liveCounts.ts'
 

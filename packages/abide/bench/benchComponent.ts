@@ -16,7 +16,7 @@ import {
     ratio,
     type Sample,
 } from '@abide/harness/report'
-import { allocated, closures } from '@abide/harness/server'
+import { closures, retainedPerRun } from '@abide/harness/server'
 
 import { microseconds } from './milliseconds.ts'
 import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
             )
             if (size === SIZES[SIZES.length - 1]) {
                 bytes(inline.render().body, nested.render().body, size)
-                allocations(inline.render, nested.render, size)
+                keptByRender(inline.render, nested.render, size)
             }
         }
     } finally {
@@ -133,27 +133,28 @@ function bytes(flat: string, nested: string, size: number): void {
 }
 
 /**
- * Prints the closures and objects a component row allocates over the same row inline.
+ * Prints the closures and objects a component row leaves reachable, over the same row inline.
  *
- * 33.4's accessor per key, in allocations. A prop is a closure the CALLER builds per row, and a
- * record to hold them — so this is the number that says whether one shape per prop (33.10) is paid
- * for by the list or by the author.
+ * KEPT, NOT ALLOCATED: `bun:jsc` counts what survives a full collection and has no allocation
+ * counter, so a closure or a record a render builds and drops reads 0 here. What this says is
+ * whether a component row holds more than an inline one once the render is done — not 33.4's
+ * accessor per key in allocations, which nothing in this engine can count.
  */
-function allocations(flat: Render, nested: Render, size: number): void {
-    // `closures` and `allocated` both take a `() => unknown`, which a `Render` already is — a
+function keptByRender(flat: Render, nested: Render, size: number): void {
+    // `closures` and `retainedPerRun` both take a `() => unknown`, which a `Render` already is — a
     // wrapper here would only put another frame inside the body being measured.
     const flatClosures = closures(flat).Function
     const nestedClosures = closures(nested).Function
-    const flatObjects = allocated(flat, 20).perRep.Object ?? 0
-    const nestedObjects = allocated(nested, 20).perRep.Object ?? 0
+    const flatObjects = retainedPerRun(flat, 20).perRep.Object ?? 0
+    const nestedObjects = retainedPerRun(nested, 20).perRep.Object ?? 0
     console.log(
-        `  CLOSURES — inline ${flatClosures}, component ${nestedClosures} (${(
+        `  CLOSURES KEPT — inline ${flatClosures}, component ${nestedClosures} (${(
             (nestedClosures - flatClosures) /
             size
         ).toFixed(2)} a row)`,
     )
     console.log(
-        `  OBJECTS — inline ${flatObjects.toFixed(1)}, component ${nestedObjects.toFixed(1)} a render (${(
+        `  OBJECTS KEPT — inline ${flatObjects.toFixed(1)}, component ${nestedObjects.toFixed(1)} a render (${(
             (nestedObjects - flatObjects) /
             size
         ).toFixed(2)} a row)`,
