@@ -1,5 +1,6 @@
 <script>
 import Chat from '@abide/abide/Chat.abide'
+import Markdown from '@abide/abide/Markdown.abide'
 
 import askAssistant from '../askAssistant.handler.ts'
 </script>
@@ -7,4 +8,8 @@ import askAssistant from '../askAssistant.handler.ts'
 <Chat ask={askAssistant} placeholder="Which company is Ada at?"
     class="chat [&_[data-part=transcript]]:flex
         [&_[data-part=transcript]]:flex-col [&_[data-part=transcript]]:gap-snug
-        [&_[data-part=transcript]]:p-0 [&_[data-part=composer]]:row" />
+        [&_[data-part=transcript]]:p-0 [&_[data-part=composer]]:row">
+    {#component Text({ text }: { text: string })}
+        <Markdown source={text} />
+    {/component}
+</Chat>

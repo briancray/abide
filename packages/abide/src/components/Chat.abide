@@ -9,7 +9,6 @@
 // `permission` (`data-answer`) holding `permission-name`, `permission-input`, `allow` and `deny`,
 // `failure`, and `composer` (`data-dragging`) holding `attachments`, `attachment`, `remove`, `input`,
 // `send` and `stop`.
-import type { Component } from '#server/render.ts'
 import type {
     AssistantEvent,
     AssistantMessage,
@@ -57,7 +56,7 @@ const {
          * Renders the assistant's words, handed `text` as it grows: a markdown component, say. Plain
          * text without it.
          */
-        Text?: (props: { text: string }) => Component
+        Text?(props: { text: string }): unknown
         /** The composer's placeholder. `Ask anything` by default. */
         placeholder?: string
         /** The composer's accessible name. `Message` by default. */
