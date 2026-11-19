@@ -34,6 +34,8 @@ import Section from '#src/lib/Section.abide'
         <p>An input that takes no text, such as a checkbox or a button, is not editable.
             <code>null</code> and the window are not either.</p>
         <Code language="ts" caption="browser" code={`
+            import { isEditableTarget } from '@abide/abide'
+
             isEditableTarget(document.createElement('textarea')) // true
             isEditableTarget(Object.assign(document.createElement('input'),
                 { type: 'checkbox' })) // false

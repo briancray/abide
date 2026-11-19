@@ -52,10 +52,12 @@ import Section from '#src/lib/Section.abide'
             <code>markdown</code>, then call <code>send()</code>. A send retried after a refusal
             lands under the same <code>id</code>.</p>
         <Code language="ts" caption="shared" code={`
-            const draft = report({ trace })
+            import { report } from '@abide/abide'
+
+            const draft = report()
             draft.summary.set('Statement email fails')
             draft.description.set('Clicked Email Grace her statement.')
-            preview.set(draft.markdown())
+            const preview = draft.markdown()
             const id = await draft.send()
         `} />
     </Section>
@@ -63,13 +65,16 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="File each report with your tracker">
         <p>The server says where a report goes. With no <code>onReport</code> filed, a send is
             refused.</p>
-        <Code language="ts" caption="server" code={`
+        <Code language="abide" caption="abide" code={`
+            <script server>
             import { onReport } from '@abide/abide/server'
+            import { tracker } from './lib/tracker.server.ts'
 
             onReport(async (report) => {
                 await tracker.create({ id: report.id, title: report.summary,
                     body: report.markdown })
             })
+            </script>
         `} />
     </Section>
 </Doc>

@@ -35,13 +35,18 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Read the server only where a socket is bound">
         <p><code>App.listen</code> binds the socket, as <code>abide start</code> and
-            <code>abide dev</code> do. A call answered in process, under <code>App.fetch</code> in a
-            test, has no server, and <code>server()</code> throws there.</p>
+            <code>abide dev</code> do. Under <code>App.fetch</code> on an app nothing called
+            <code>listen</code> on, as in a test, <code>server()</code> throws. Outside a request it
+            throws too, as <code>request()</code> does.</p>
         <Code language="ts" caption="server" code={`
+            import { createApp, server } from '@abide/abide/server'
+
             const app = await createApp()
-            await app.run(() => server()) // throws: no socket bound
+            const asked = { request: new Request('http://localhost/') }
+            await app.run(() => server(), asked) // throws: no socket bound
             await app.listen({ port: 0 })
-            await app.run(() => server()) // the Bun.Server
+            await app.run(() => server(), asked) // the Bun.Server
+            await app.run(() => server()) // throws: no request
         `} />
     </Section>
 </Doc>

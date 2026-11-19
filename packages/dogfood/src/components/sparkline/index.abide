@@ -21,6 +21,11 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import Sparkline from '@abide/abide/Sparkline.abide'
+
+            const REPS = [
+                { name: 'Ada', won: [12_000, 18_000, null, 24_000] },
+                { name: 'Grace', won: [30_000, 22_000, 19_000, 15_000] },
+            ]
             </script>
 
             {#for rep of REPS by rep.name}
@@ -44,6 +49,10 @@ import Section from '#src/lib/Section.abide'
             <code>flat</code>, the last value against the first. The line draws in
             <code>currentColor</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Sparkline from '@abide/abide/Sparkline.abide'
+            </script>
+
             <Sparkline
                 values={rep.won}
                 label="{rep.name}'s won revenue"
@@ -56,6 +65,10 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Fill the area under a trend">
         <p><code>area</code> fills under the line as <code>data-part="area"</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Sparkline from '@abide/abide/Sparkline.abide'
+            </script>
+
             <Sparkline values={pipeline} label="Open pipeline" area class="h-8 w-32" />
         `} />
     </Section>

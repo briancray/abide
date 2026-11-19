@@ -54,6 +54,10 @@ import Section from '#src/lib/Section.abide'
         <p>The element carries <code>data-dragging</code> while files are dragged over it, its
             children included. Style that attribute.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import { dropzone } from '@abide/abide'
+            </script>
+
             <div class="border border-dashed data-dragging:border-signal
                 data-dragging:bg-signal/10"
                 bind:element={dropzone(attach, { accept: '.pdf' })}>…</div>
@@ -64,6 +68,10 @@ import Section from '#src/lib/Section.abide'
         <p>With <code>paste: true</code> a paste of files is a drop, and words pasted alone paste
             as usual. <code>multiple: false</code> takes the first file alone.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import { dropzone } from '@abide/abide'
+            </script>
+
             <textarea bind:value={note} bind:element={dropzone(attachImage, {
                 accept: 'image/*',
                 paste: true,

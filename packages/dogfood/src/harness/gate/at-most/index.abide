@@ -48,6 +48,8 @@ import Section from '#src/lib/Section.abide'
         <p>A counter no source published is <code>null</code>. A ceiling on it throws rather
             than passing against nothing.</p>
         <Code language="ts" caption="shared" code={`
+            import { atMost } from '@abide/harness/gate'
+
             atMost({ wakes: null }, { wakes: 9 })
             // atMost: wakes has a ceiling of 9 and the record carries it as absent
         `} />

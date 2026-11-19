@@ -70,6 +70,8 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>Schema</code> is a function returning what it accepts, or a Standard Schema
             such as zod's. The function throws what it refuses.</p>
         <Code language="ts" caption="server" code={`
+            import { POST } from '@abide/abide/server'
+
             export default POST(({ amount }) => recordPayment(amount), {
                 args: (value: unknown) => {
                     const { amount } = value as { amount: number }

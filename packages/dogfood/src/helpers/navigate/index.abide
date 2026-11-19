@@ -42,7 +42,9 @@ import Section from '#src/lib/Section.abide'
         <p><code>replace</code> rewrites the current entry, and <code>keepScroll</code> leaves
             the page where the reader scrolled it.</p>
         <Code language="ts" caption="browser" code={`
-            await navigate(url('/companies', {}, { city }), {
+            import { navigate, url } from '@abide/abide'
+
+            await navigate(url('/companies', {}, { city: 'London' }), {
                 replace: true,
                 keepScroll: true,
             })
@@ -53,6 +55,8 @@ import Section from '#src/lib/Section.abide'
         <p>Given a number, <code>navigate</code> steps that many entries and settles once the
             page it arrives at is mounted.</p>
         <Code language="ts" caption="browser" code={`
+            import { navigate } from '@abide/abide'
+
             await navigate(-1)
         `} />
     </Section>

@@ -51,7 +51,9 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { fetchText, isFailed, log } from '@abide/abide/server'
 
-            const filing = await fetchText(url, { timeout: 2_000 })
+            const filing = await fetchText('https://registry.example/filings/ada.txt', {
+                timeout: 2_000,
+            })
             if (isFailed(filing))
                 log.warning('registry gave up', filing.data)
         `} />
@@ -62,9 +64,11 @@ import Section from '#src/lib/Section.abide'
             <code>retries</code> where the service takes the same write twice safely, and send the
             body as a string.</p>
         <Code language="ts" caption="server" code={`
+            import { fetchText } from '@abide/abide/server'
+
             await fetchText('https://mail.example/send', {
                 method: 'POST',
-                body: JSON.stringify({ to, subject, idempotencyKey }),
+                body: JSON.stringify(email),
                 retries: 2,
             })
         `} />

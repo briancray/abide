@@ -54,6 +54,10 @@ import Section from '#src/lib/Section.abide'
         <p>Pass <code>search</code> in place of <code>options</code>. A search in flight keeps
             the last results listed, and <code>debounce</code> waits for typing to pause.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Combobox from '@abide/abide/Combobox.abide'
+            </script>
+
             <Combobox
                 id="works-at"
                 search={(q: string) => searchCompanies({ q })}
@@ -68,6 +72,10 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Show a company's city beside its name in each option">
         <p>An <code>Option</code> component renders each option's content, handed the item.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Combobox from '@abide/abide/Combobox.abide'
+            </script>
+
             <Combobox id="works-at" search={find} key={keyOf} label={nameOf}>
                 {#component Option({ item }: { item: Company })}
                     {item.name} · {item.city}
@@ -81,6 +89,10 @@ import Section from '#src/lib/Section.abide'
         <p>The active option carries <code>data-active</code>, and the picked one
             <code>data-selected</code>. The list is <code>data-part="listbox"</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Combobox from '@abide/abide/Combobox.abide'
+            </script>
+
             <Combobox
                 class="[&_[data-part=listbox]]:list-none [&_[data-active]]:bg-signal/10"
                 …

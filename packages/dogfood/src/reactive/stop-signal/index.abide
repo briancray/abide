@@ -44,6 +44,8 @@ import Section from '#src/lib/Section.abide'
         <p>The signal is an <code>AbortSignal</code>, so hand it to <code>fetch</code> and the
             stop cancels the request too.</p>
         <Code language="ts" caption="server" code={`
+            import { stopSignal } from '@abide/abide'
+
             const reply = await fetch(INBOX_URL, { signal: stopSignal() })
         `} />
     </Section>

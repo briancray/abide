@@ -47,6 +47,8 @@ import Section from '#src/lib/Section.abide'
             <code>measure</code> case is open. Hand the counts in as <code>work</code>
             instead.</p>
         <Code language="ts" caption="shared" code={`
+            import { measure, time } from '@abide/harness/measure'
+
             measure(() => time({ case: 'nested', arms: { one: () => {} } }))
             // throws: counting and timing are mutually exclusive passes
         `} />
@@ -56,6 +58,8 @@ import Section from '#src/lib/Section.abide'
         <p>Under bun with a DOM preloaded, <code>time</code> throws. Time a DOM op in a browser,
             where the lane runs too.</p>
         <Code language="ts" caption="shared" code={`
+            import { time } from '@abide/harness/measure'
+
             time({ case: 'render', arms: { one: () => {} } })
             // throws: happy-dom can produce a count, not a millisecond
         `} />

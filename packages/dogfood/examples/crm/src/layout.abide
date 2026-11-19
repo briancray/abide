@@ -1,5 +1,6 @@
 <script server>
-import { csp, middleware } from '@abide/abide/server'
+import { csp } from '@abide/abide'
+import { middleware } from '@abide/abide/server'
 
 // The build's own scripts load, and only this site may frame a page.
 middleware(csp({ 'frame-ancestors': ["'self'"] }))

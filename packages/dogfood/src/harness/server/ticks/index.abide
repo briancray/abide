@@ -44,6 +44,8 @@ import Section from '#src/lib/Section.abide'
         <p>The probe yields to the event loop as it counts, so a body that settles on a timer or
             on I/O still finishes.</p>
         <Code language="ts" caption="server" code={`
+            import { ticks } from '@abide/harness/server'
+
             const turns = await ticks(
                 () => new Promise((resolve) => setTimeout(resolve, 10)),
             )

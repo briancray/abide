@@ -65,7 +65,9 @@ import Section from '#src/lib/Section.abide'
             const error = () => commission.error()
             </script>
 
-            {#if getTeamCommission.isError(error(), 'Forbidden')}
+            {#if getTeamCommission.isError(error(), 'SignedOut')}
+                <a href="/sign-in">Sign in to see the team's figure</a>
+            {:else if getTeamCommission.isError(error(), 'Forbidden')}
                 <p>Admins see the team's figure.</p>
             {:else if commission.ready()}
                 <strong>{commission.total}</strong>

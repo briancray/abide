@@ -67,9 +67,12 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Reload every tab showing the stages a write changed">
-        <p>List the tags the write changes in <code>refreshes</code>. The server reloads the
-            entries carrying them once the write answers, in every tab following them.</p>
+        <p>List the tags the write changes in <code>refreshes</code>. Before the write answers,
+            the server reloads the entries carrying them, in every tab following them.</p>
         <Code language="ts" caption="server" code={`
+            import { POST } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
             export default POST(
                 () => {
                     const deal = DEALS.find((each) => each.stage === 'lead')

@@ -21,6 +21,7 @@ import Section from '#src/lib/Section.abide'
         <p>Await <code>settled()</code> after the click. It resolves once no value the test
             started is loading and no effect is pending.</p>
         <Code language="ts" caption="browser" code={`
+            import { expect, test } from 'bun:test'
             import { mount, settled } from '@abide/abide/test'
             import TargetLog from './TargetLog.abide'
 
@@ -37,6 +38,8 @@ import Section from '#src/lib/Section.abide'
         <p>Past its timeout, 2000 ms by default, <code>settled</code> throws naming each value
             still loading.</p>
         <Code language="ts" caption="browser" code={`
+            import { settled } from '@abide/abide/test'
+
             await settled({ timeout: 200 })
             // abide: settled() waited 200 ms and 1 still loading (POST /pipeline/setTarget)
         `} />

@@ -18,11 +18,12 @@ import Section from '#src/lib/Section.abide'
     ]}
 >
     <Section level={3} title="Close the database pool after the last request">
-        <p><code>await stop()</code> first, then close what you opened, so the pool outlives
-            every request still being answered. The hook runs on <code>SIGTERM</code>,
-            <code>Ctrl-C</code> and quitting the native app, where a
-            <code>process.on('SIGTERM')</code> never runs.</p>
-        <Code language="ts" caption="server" code={`
+        <p>The hook runs once the app stops taking requests and those in flight have drained,
+            so the pool outlives every one of them. <code>await stop()</code> runs the hooks
+            filed after yours first. The hook runs on <code>SIGTERM</code>, <code>Ctrl-C</code>
+            and quitting the native app, where a <code>process.on('SIGTERM')</code> never runs.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
             import { onStop } from '@abide/abide/server'
             import { pool } from './lib/pool.server.ts'
 
@@ -30,6 +31,7 @@ import Section from '#src/lib/Section.abide'
                 await stop()
                 await pool.close()
             })
+            </script>
         `} />
     </Section>
 
@@ -38,6 +40,7 @@ import Section from '#src/lib/Section.abide'
             <code>App.stop</code>, a failed test included, and the suite does not hang on an
             open pool.</p>
         <Code language="ts" caption="server" code={`
+            import { expect, test } from 'bun:test'
             import { createApp } from '@abide/abide/server'
 
             test('the pool answers', async () => {

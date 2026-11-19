@@ -51,7 +51,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Keep a deal's notes on the server beside the markup">
         <p>A <code>&lt;script server&gt;</code> never reaches the browser. A handler it declares
-            without exporting is private to the file, and the browser gets a call in its place.</p>
+            is private to the file, and the browser gets a call in its place.</p>
         <Code language="abide" caption="abide" code={`
             <script server>
             import { GET } from '@abide/abide/server'
@@ -71,7 +71,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Style a badge without the class leaking to other components">
         <p>A <code>&lt;style&gt;</code> block reaches only its own component's markup.
-            <code>:global(…)</code> exempts one selector.</p>
+            <code>:global(…)</code> exempts the part of a selector it wraps.</p>
         <Code language="abide" caption="abide" code={`
             <span class="badge">lead</span>
 

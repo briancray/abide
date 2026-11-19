@@ -41,6 +41,9 @@ import Section from '#src/lib/Section.abide'
             <code>App.run</code>, even in a test process that has a DOM. Checking
             <code>typeof document</code> answers wrong there.</p>
         <Code language="ts" caption="shared" code={`
+            import { isServer } from '@abide/abide'
+            import { createApp } from '@abide/abide/server'
+
             const app = await createApp()
             isServer() // false in a test body
             await app.run(() => isServer()) // true

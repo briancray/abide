@@ -15,6 +15,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/harness/tests/measure.test.ts',
             from: ["test('time() under bun refuses on the emulated DOM'"],
         },
+        {
+            path: 'packages/harness/tests/report.test.ts',
+            from: [
+                "test('the batcher throws on a duration whose op touched an emulated DOM'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Mark a timed op that touches the DOM">

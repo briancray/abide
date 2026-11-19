@@ -47,7 +47,9 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Send signed-out visitors to the sign-in page, and no one else">
         <p>A rung in the root <code>src/layout.abide</code> runs before routing, over every
-            request, abide's own addresses included. Test <code>lane</code> to gate pages alone.</p>
+            request, abide's own addresses included. Test <code>lane</code> to gate pages alone.
+            The request's path is read below the mount, and <code>url</code> puts the mount back
+            on the redirect.</p>
         <Code language="abide" caption="abide" code={`
             <script server>
             import { principal, url } from '@abide/abide'
@@ -56,10 +58,12 @@ import Section from '#src/lib/Section.abide'
             middleware(async (next, { request, lane }) => {
                 if (lane !== 'page') return next()
                 if ((await principal.resolved).authenticated) return next()
-                if (new URL(request.url).pathname === '/sign-in') return next()
-                return Response.redirect(new URL(url('/sign-in'), request.url))
+                if (new URL(request.url).pathname === '/account') return next()
+                return Response.redirect(url('/account'))
             })
             </script>
+
+            <slot />
         `} />
     </Section>
 </Doc>

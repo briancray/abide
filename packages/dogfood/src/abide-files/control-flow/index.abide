@@ -64,7 +64,8 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Hold a placeholder until the forecast first lands">
         <p><code>&#123;:pending&#125;</code> stands in for the body until its first load, and
             <code>&#123;:catch&#125;</code> replaces the body when rendering it throws.
-            <code>&#123;:finally&#125;</code> renders after either.</p>
+            <code>&#123;:finally&#125;</code> stands after whichever arm shows, the placeholder
+            included.</p>
         <Code language="abide" caption="abide" code={`
             {#try}
                 <strong>{dollars(forecast)}</strong>

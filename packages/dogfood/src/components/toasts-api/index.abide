@@ -55,9 +55,11 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Keep a notice up until the import finishes">
-        <p>A <code>timeout</code> of <code>Infinity</code> keeps the notice until you pass its id
-            to <code>toasts.dismiss</code>.</p>
+        <p>A <code>timeout</code> of <code>Infinity</code> keeps the notice until its close button
+            is pressed or you pass its id to <code>toasts.dismiss</code>.</p>
         <Code language="ts" caption="browser" code={`
+            import { toasts } from '@abide/abide/Toasts.abide'
+
             const id = toasts.notify('Importing contacts…', { timeout: Infinity })
             await importContacts({ file })
             toasts.dismiss(id)

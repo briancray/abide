@@ -43,6 +43,9 @@ import Section from '#src/lib/Section.abide'
         <p>An update lands on the next flush. Call <code>flushSync</code> inside the body so
             the work is counted.</p>
         <Code language="ts" caption="shared" code={`
+            import { flushSync } from '@abide/abide'
+            import { measure } from '@abide/harness/abide'
+
             const work = measure(() => {
                 document.querySelector('button')?.click()
                 flushSync()

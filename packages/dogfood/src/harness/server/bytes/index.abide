@@ -46,9 +46,11 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>Response</code> is read from a clone, so the body is still there to
             send.</p>
         <Code language="ts" caption="server" code={`
+            import { bytes } from '@abide/harness/server'
+
             const response = new Response(csv)
             const size = await bytes(response)
-            return response // body unread
+            response.bodyUsed // false, so the response can still be sent
         `} />
     </Section>
 
@@ -56,6 +58,8 @@ import Section from '#src/lib/Section.abide'
         <p>A string counts its UTF-8 bytes, and a buffer its length. Any other value reads as
             the engine's shallow estimate of its memory.</p>
         <Code language="ts" caption="server" code={`
+            import { bytes } from '@abide/harness/server'
+
             await bytes('héllo') // 6
             await bytes(new Uint8Array(12)) // 12
             await bytes({ name: 'Ada', stage: 'won' }) // the engine's estimate

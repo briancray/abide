@@ -43,6 +43,10 @@ import Section from '#src/lib/Section.abide'
             <code>title</code>, <code>body</code>, <code>field</code>, <code>input</code>,
             <code>actions</code>, <code>confirm</code> and <code>cancel</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Prompts from '@abide/abide/Prompts.abide'
+            </script>
+
             <Prompts
                 class="[&_[data-part=form]]:flex [&_[data-part=form]]:flex-col
                 [&_[data-part=actions]]:flex [&_[data-part=actions]]:gap-2"
@@ -54,6 +58,10 @@ import Section from '#src/lib/Section.abide'
         <p>A prompt asked with <code>danger</code> writes <code>data-danger</code> on the dialog.
             Combine that state with the <code>confirm</code> part.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Prompts from '@abide/abide/Prompts.abide'
+            </script>
+
             <Prompts class="data-[danger]:[&_[data-part=confirm]]:bg-bad" />
         `} />
     </Section>

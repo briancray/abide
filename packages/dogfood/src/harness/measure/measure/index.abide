@@ -53,6 +53,8 @@ import Section from '#src/lib/Section.abide'
         <p>Elements, comments and text land in separate fields. Only a moved element costs a
             reflow, so the counts are never summed.</p>
         <Code language="ts" caption="shared" code={`
+            import { measure } from '@abide/harness/measure'
+
             const work = measure(() => {
                 feed.appendChild(document.createComment('anchor'))
                 feed.appendChild(document.createElement('article'))
@@ -66,6 +68,8 @@ import Section from '#src/lib/Section.abide'
         <p>A write of the value a text node already holds counts in
             <code>redundantDataWrites</code> as well as <code>dataWrites</code>.</p>
         <Code language="ts" caption="shared" code={`
+            import { measure } from '@abide/harness/measure'
+
             const total = document.createTextNode('$4,400')
             const work = measure(() => {
                 total.data = '$4,400'

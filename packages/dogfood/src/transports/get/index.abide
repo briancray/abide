@@ -29,6 +29,12 @@ import Section from '#src/lib/Section.abide'
                 "test('a generator handler streams, and the value is its chunks'",
             ],
         },
+        {
+            path: 'packages/abide/tests/url.test.ts',
+            from: [
+                "test('a record or a list of records rides the query as its canonical JSON — 30.28'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Read one deal by its id">
@@ -91,6 +97,22 @@ import Section from '#src/lib/Section.abide'
             </script>
 
             <a href={exportDeals.url()} download="deals.csv">Download deals</a>
+        `} />
+    </Section>
+
+    <Section level={3} title="Filter the deals by a record">
+        <p>Give an arg a record, or a list of records, and it rides the URL as JSON with its keys
+            sorted, so one filter is one address. A list of plain values repeats its name. The
+            handler reads both back as its <code>Args</code> declares them.</p>
+        <Code language="ts" caption="browser" code={`
+            import searchDeals from './searchDeals.handler.ts'
+
+            const address = searchDeals.url({
+                filter: { stage: 'won', owner: 'ada' },
+                ids: [1, 2],
+            })
+            decodeURIComponent(address)
+            // /deals/searchDeals?filter={"owner":"ada","stage":"won"}&ids=1&ids=2
         `} />
     </Section>
 

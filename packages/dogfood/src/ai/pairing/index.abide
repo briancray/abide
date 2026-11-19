@@ -56,6 +56,11 @@ import Section from '#src/lib/Section.abide'
         <p>A click that opens no app sets <code>step</code> to <code>install</code>. Show the
             command that installs what opens the link, and a copy button.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import { pairing } from '@abide/abide'
+            const { status, step, copied, copyInstall } = pairing()
+            </script>
+
             {#if step === 'install'}
                 <pre>{status?.install}</pre>
                 <button onclick={copyInstall}>{copied ? 'Copied' : 'Copy'}</button>
@@ -67,6 +72,8 @@ import Section from '#src/lib/Section.abide'
         <p>A pairing in a component stops with the component. One built anywhere else runs until
             its <code>stop</code>, which <code>using</code> calls too.</p>
         <Code language="ts" caption="browser" code={`
+            import { pairing } from '@abide/abide'
+
             using connection = pairing()
             await connection.status
             console.log(connection.status()?.paired)

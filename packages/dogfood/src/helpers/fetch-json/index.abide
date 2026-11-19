@@ -53,6 +53,8 @@ import Section from '#src/lib/Section.abide'
             its URL and headers. Two asks at once are one request, and a failure is never
             held.</p>
         <Code language="ts" caption="server" code={`
+            import { fetchJson } from '@abide/abide/server'
+
             fetchJson<Registration>(\`https://registry.example/companies/\${id}\`, {
                 ttl: 60_000,
             })
@@ -63,7 +65,10 @@ import Section from '#src/lib/Section.abide'
         <p>Without a <code>schema</code>, the type you name is a promise nothing checks. With one, a
             body it refuses is a <code>FetchFailed</code> whose reason is <code>shape</code>.</p>
         <Code language="ts" caption="server" code={`
-            const registration = await fetchJson(url, {
+            import { fetchJson } from '@abide/abide/server'
+
+            const registry = 'https://registry.example/companies/ada'
+            const registration = await fetchJson(registry, {
                 schema: (value) => {
                     const { employees } = value as { employees: unknown }
                     if (typeof employees !== 'number') throw new Error('no count')
@@ -79,7 +84,10 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { fetchJson, request } from '@abide/abide/server'
 
-            fetchJson(url, { signal: request().signal, timeout: 5_000 })
+            fetchJson('https://registry.example/companies/ada', {
+                signal: request().signal,
+                timeout: 5_000,
+            })
         `} />
     </Section>
 </Doc>

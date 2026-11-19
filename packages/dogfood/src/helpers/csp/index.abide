@@ -32,7 +32,9 @@ import Section from '#src/lib/Section.abide'
             and a support widget pasted from another origin is refused.</p>
         <Code language="abide" caption="abide" code={`
             <script server>
-            import { csp, middleware } from '@abide/abide/server'
+            import { csp } from '@abide/abide'
+            import { middleware } from '@abide/abide/server'
+
             middleware(csp())
             </script>
 
@@ -43,8 +45,13 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Let a partner site frame the CRM's pages">
         <p>A directive you name replaces the baseline's, and the rest stay. An empty list drops
             the directive.</p>
-        <Code language="ts" caption="server" code={`
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { csp } from '@abide/abide'
+            import { middleware } from '@abide/abide/server'
+
             middleware(csp({ 'frame-ancestors': ["'self'", 'https://docs.example'] }))
+            </script>
         `} />
     </Section>
 

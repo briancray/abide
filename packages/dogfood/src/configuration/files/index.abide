@@ -66,6 +66,11 @@ import Section from '#src/lib/Section.abide'
             renders at its <code>&lt;slot/&gt;</code>. Moving between those pages keeps the
             layout.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive, url } from '@abide/abide'
+            let note = reactive('')
+            </script>
+
             <header>
                 <a href={url('/companies')}>All companies</a>
                 <input bind:value={note} placeholder="Note for the call">

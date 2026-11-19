@@ -45,6 +45,10 @@ import Section from '#src/lib/Section.abide'
             <code>unavailable</code>. Inside are the <code>message</code>, <code>command</code>,
             <code>copy</code>, <code>pair</code> and <code>missing</code> parts.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Pairing from '@abide/abide/Pairing.abide'
+            </script>
+
             <Pairing
                 class="flex flex-col gap-2 [&_[data-part=command]]:font-mono
                 data-[step=waiting]:opacity-70"

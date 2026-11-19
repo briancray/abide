@@ -48,6 +48,8 @@ import Section from '#src/lib/Section.abide'
         <p>A layout read after a write forces the layout the write invalidated.
             <code>forcedLayout</code> counts those, apart from the layouts the frame does.</p>
         <Code language="ts" caption="server" code={`
+            import { traceOp } from '@abide/harness/engine'
+
             const trace = await traceOp(page, 'widen columns', async () => {
                 await page.evaluate(() => {
                     for (const cell of document.querySelectorAll('td')) {

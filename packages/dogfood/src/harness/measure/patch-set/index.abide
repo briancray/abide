@@ -36,6 +36,8 @@ import Section from '#src/lib/Section.abide'
         <p>Some listed members mutate without a counter. Inside a case they throw rather than
             report zero, and outside one they run as usual.</p>
         <Code language="ts" caption="shared" code={`
+            import { measure } from '@abide/harness/measure'
+
             measure(() => contactCard.normalize())
             // throws: normalize() is a DOM mutation harness/measure does not count
         `} />

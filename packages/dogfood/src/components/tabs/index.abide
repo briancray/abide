@@ -25,7 +25,7 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
-    <Section level={3} title="Switch a deal between its details, value and stage">
+    <Section level={3} title="Switch a deal between its details and its stage">
         <p>Bind <code>selected</code> to the key of the tab showing, and branch on it in the
             children: they are the one panel.</p>
         <Code language="abide" caption="abide" code={`
@@ -33,7 +33,9 @@ import Section from '#src/lib/Section.abide'
             import { reactive } from '@abide/abide'
             import Tabs from '@abide/abide/Tabs.abide'
 
-            const VIEWS = [
+            type View = { key: string; label: string }
+
+            const VIEWS: View[] = [
                 { key: 'details', label: 'Details' },
                 { key: 'stage', label: 'Stage' },
             ]
@@ -43,8 +45,8 @@ import Section from '#src/lib/Section.abide'
             <Tabs
                 id="deal"
                 tabs={VIEWS}
-                key={(view) => view.key}
-                label={(view) => view.label}
+                key={(view: View) => view.key}
+                label={(view: View) => view.label}
                 bind:selected={tab}
             >
                 {#if tab === 'details'}<DealDetails />{:else}<DealStage />{/if}
@@ -55,10 +57,14 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Put a count beside each tab's name">
         <p>A <code>Tab</code> component renders each tab's content, handed its item.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Tabs from '@abide/abide/Tabs.abide'
+            </script>
+
             <Tabs
                 id="company"
                 tabs={VIEWS}
-                key={(view) => view.key}
+                key={(view: View) => view.key}
                 bind:selected={tab}
             >
                 {#component Tab({ item }: { item: View })}
@@ -73,6 +79,10 @@ import Section from '#src/lib/Section.abide'
         <p>The row is <code>data-part="tablist"</code>, each tab <code>data-part="tab"</code>,
             and the selected one carries <code>data-selected</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Tabs from '@abide/abide/Tabs.abide'
+            </script>
+
             <Tabs
                 class="[&_[data-part=tablist]]:flex [&_[data-selected]]:border-b-2"
                 …

@@ -79,6 +79,8 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>Provider</code> is one method, <code>run</code>, yielding events. Write one
             with fixed lines, and the tool call it makes still runs the real handler.</p>
         <Code language="ts" caption="server" code={`
+            import type { Provider } from '@abide/abide/server'
+
             const recorded: Provider = {
                 async *run(_messages, tools) {
                     const name = 'get_assistant_searchContacts'

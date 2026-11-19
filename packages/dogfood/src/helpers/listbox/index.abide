@@ -68,6 +68,8 @@ import Section from '#src/lib/Section.abide'
         <p>The active option is a key, so it stays on its lead while the list changes around it. Once
             the list no longer holds it, the first option is active.</p>
         <Code language="ts" caption="shared" code={`
+            import { listbox, reactive } from '@abide/abide'
+
             const leads = reactive([ada, grace, linus])
             const queue = listbox({ id: 'leads', options: leads, key: (lead) => lead.id })
             queue.activate('grace')

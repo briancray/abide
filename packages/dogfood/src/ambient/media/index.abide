@@ -35,6 +35,8 @@ import Section from '#src/lib/Section.abide'
             before taking the browser's. Where only styling changes, a CSS media query applies
             before the first paint.</p>
         <Code language="ts" caption="shared" code={`
+            import { media } from '@abide/abide'
+
             const still = media('(prefers-reduced-motion: reduce)')
             card.animate(KEYFRAMES, { duration: still() ? 0 : 200 })
         `} />

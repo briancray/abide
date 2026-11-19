@@ -47,6 +47,8 @@ import Section from '#src/lib/Section.abide'
         <p>Measure the whole click the same way, from the click to the frame that shows it. A
             faster sort saves at most <code>ceilingCpu</code> of it.</p>
         <Code language="ts" caption="server" code={`
+            import { shares, traceOp } from '@abide/harness/engine'
+
             const trace = await traceOp(page, 'rank by idle', async () => {
                 await page.evaluate(async () => {
                     performance.mark('click:start')

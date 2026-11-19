@@ -12,15 +12,13 @@ import Section from '#src/lib/Section.abide'
     ]}
     tests={[
         {
-            path: 'packages/harness/tests/server.test.ts',
-            from: [
-                "test('ticks() terminates on a body that settles on a macrotask'",
-            ],
+            path: 'packages/harness/tests/report.test.ts',
+            from: ["test('the batcher throws on a sample under 100x the clock'"],
         },
         {
-            path: 'packages/abide/tests/raw.test.ts',
+            path: 'packages/harness/tests/report.test.ts',
             from: [
-                "test('the first raw render in a process creates what every later one does — 32.93'",
+                "test('the batcher throws in a parallel worker, and not outside one'",
             ],
         },
     ]}
@@ -43,6 +41,8 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Run the source as a parallel worker would">
         <p>Pass a <code>workerId</code> to mark the child as that worker.</p>
         <Code language="ts" caption="server" code={`
+            import { inAFreshProcess } from '@abide/harness/gate'
+
             const marked = await inAFreshProcess(source, '3')
             expect(marked.output).toContain('parallel worker 3')
         `} />

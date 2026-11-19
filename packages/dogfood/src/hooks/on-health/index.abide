@@ -22,17 +22,21 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Report the database connection in the health check">
         <p>What the reporter returns is merged over abide's baseline at
             <code>/__abide/health</code>, and your field wins a collision.</p>
-        <Code language="ts" caption="server" code={`
+        <Code language="abide" caption="abide" code={`
+            <script server>
             import { onHealth } from '@abide/abide/server'
             import { pool } from './lib/pool.server.ts'
 
             onHealth(() => ({ database: pool.connected ? 'connected' : 'closed' }))
+            </script>
         `} />
     </Section>
 
     <Section level={3} title="Type the field a page reads off the health check">
         <p>Declare the field on <code>Health</code> and <code>health()</code> reads it typed.</p>
         <Code language="ts" caption="server" code={`
+            import '@abide/abide'
+
             declare module '@abide/abide' {
                 interface Health {
                     database: string

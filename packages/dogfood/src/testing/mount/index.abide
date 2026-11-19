@@ -47,6 +47,10 @@ import Section from '#src/lib/Section.abide'
         <p>Hand a prop as a <code>Reactive</code> and the component is bound to it: a write in the
             test reaches the component, and a write in the component reaches the test.</p>
         <Code language="ts" caption="browser" code={`
+            import { flushSync, reactive } from '@abide/abide'
+            import { mount } from '@abide/abide/test'
+            import StageBadge from './StageBadge.abide'
+
             const stage = reactive('lead')
             using _badge = await mount(StageBadge({ stage }))
             stage.set('won')

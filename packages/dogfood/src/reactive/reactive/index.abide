@@ -84,6 +84,8 @@ import Section from '#src/lib/Section.abide'
         <p>A body that declares a parameter is keyed. Each set of args is one entry, held and
             reloaded on its own.</p>
         <Code language="ts" caption="shared" code={`
+            import { reactive } from '@abide/abide'
+
             const stageTotals = reactive(({ stage }: { stage: string }) =>
                 getStage({ stage }),
             )
@@ -97,6 +99,8 @@ import Section from '#src/lib/Section.abide'
         <p>A generator body streams. The value is every name yielded until now: ready from the first,
             busy until the generator ends.</p>
         <Code language="ts" caption="shared" code={`
+            import { reactive } from '@abide/abide'
+
             const waiting = reactive(async function* () {
                 for (const deal of await listDeals())
                     if (deal.stage === 'lead') yield deal.name

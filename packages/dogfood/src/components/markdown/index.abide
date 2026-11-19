@@ -43,6 +43,10 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>#</code> heading renders at <code>headingLevel</code>, and each deeper one a level
             under the last.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Markdown from '@abide/abide/Markdown.abide'
+            </script>
+
             <h2>Notes</h2>
             <Markdown source={note} headingLevel={3} />
         `} />
@@ -53,6 +57,9 @@ import Section from '#src/lib/Section.abide'
             its nodes, so a chunk renders only the section still growing.</p>
         <Code language="abide" caption="abide" code={`
             <script>
+            import { reactive } from '@abide/abide'
+            import Markdown from '@abide/abide/Markdown.abide'
+
             const summary = reactive(() => summarizeDeal())
             </script>
 
@@ -65,6 +72,8 @@ import Section from '#src/lib/Section.abide'
             <code>undefined</code> for renders as its text.</p>
         <Code language="abide" caption="abide" code={`
             <script>
+            import Markdown from '@abide/abide/Markdown.abide'
+
             const inside = (address: string) =>
                 address.startsWith('https://crm.example.com/') ? address : undefined
             </script>

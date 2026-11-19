@@ -36,6 +36,8 @@ import Section from '#src/lib/Section.abide'
         <p>A set of <code>tags</code> reaches every value carrying one. With no selection,
             <code>invalidate</code> marks every load in this scope.</p>
         <Code language="ts" caption="browser" code={`
+            import { invalidate } from '@abide/abide'
+
             invalidate({ tags: ['stage:won'] })
             invalidate()
         `} />

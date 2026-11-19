@@ -42,7 +42,7 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>Store</code> is a <code>get</code> and a <code>set</code>. Write your own to keep
             a value behind two handlers, so every visitor reads the one target.</p>
         <Code language="ts" caption="shared" code={`
-            import type { Store } from '@abide/abide'
+            import { reactive, type Store } from '@abide/abide'
 
             export const targetStore: Store<number | undefined> = {
                 get: async () => (await getTarget()) ?? undefined,
@@ -65,7 +65,7 @@ import Section from '#src/lib/Section.abide'
 
             export const lastDigest = reactive(0, {
                 global: true,
-                store: store.sqlite('crm', 'lastDigest'),
+                store: store.sqlite<number>('crm', 'lastDigest'),
             })
         `} />
     </Section>

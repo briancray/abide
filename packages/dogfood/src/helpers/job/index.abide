@@ -71,6 +71,8 @@ import Section from '#src/lib/Section.abide'
         <p>A job never run is due at once. <code>lastRun</code> says when the last run ended, in
             epoch milliseconds, so a restart waits out the rest of the night.</p>
         <Code language="ts" caption="server" code={`
+            import { job } from '@abide/abide/server'
+
             job('digest', {
                 every: 24 * 60 * 60_000,
                 run: mailDigest,

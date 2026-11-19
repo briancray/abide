@@ -59,13 +59,15 @@ import Section from '#src/lib/Section.abide'
         <p>Filed in a layout, the refusal is not one of the handler's typed failures. Check it
             with <code>isFailed</code>.</p>
         <Code language="ts" caption="browser" code={`
-            import { isFailed } from '@abide/abide'
+            import { isFailed, reactive } from '@abide/abide'
+            import reopenDeal from './reopenDeal.handler.ts'
 
+            const notice = reactive('')
             try {
                 await reopenDeal()
             } catch (refusal) {
                 if (!isFailed(refusal)) throw refusal
-                status.set(\`\${refusal.status} \${refusal.message}\`)
+                notice.set(\`\${refusal.status} \${refusal.message}\`)
             }
         `} />
     </Section>

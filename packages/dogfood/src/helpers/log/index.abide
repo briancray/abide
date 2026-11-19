@@ -56,9 +56,10 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Show the newest log lines on an admin page">
-        <p><code>log.records</code> is a reactive list of the lines kept, so a page reading it
-            follows each line as it is written.</p>
+    <Section level={3} title="Show the newest lines a page has logged">
+        <p><code>log.records</code> is a reactive list of the lines kept, the page's own in a
+            browser and the process's on a server, so a page reading it follows each line as it
+            is written.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { log } from '@abide/abide'

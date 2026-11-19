@@ -40,6 +40,8 @@ import Section from '#src/lib/Section.abide'
         <p>The batch is split in two, and <code>growth</code> is the second half's mean minus
             the first's. A type left out of it was kept at the same rate in both halves.</p>
         <Code language="ts" caption="server" code={`
+            import { retainedPerRun } from '@abide/harness/server'
+
             const answer = retainedPerRun(() => lookup('acme'))
             answer.growth // {} when every run keeps the same
         `} />

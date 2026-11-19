@@ -46,6 +46,9 @@ import Section from '#src/lib/Section.abide'
         <p>A pattern narrows a keyed handler to the entries it matches. A set of
             <code>tags</code> asks across every value carrying one.</p>
         <Code language="ts" caption="shared" code={`
+            import { busy } from '@abide/abide'
+            import getStage from './getStage.handler.ts'
+
             busy(getStage, { stage: 'won' })
             busy({ tags: ['stage:won'] })
             busy() // every load in this scope

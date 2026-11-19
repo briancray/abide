@@ -37,7 +37,7 @@ import Section from '#src/lib/Section.abide'
             let note = reactive('')
             watch(() => {
                 const text = note
-                const timer = setTimeout(() => saveNote({ text }), 500)
+                const timer = setTimeout(() => saveNote({ id: 'd2', note: text }), 500)
                 return () => clearTimeout(timer)
             })
             </script>
@@ -50,6 +50,8 @@ import Section from '#src/lib/Section.abide'
         <p>Given its sources, a watch reruns when one of them changes and on nothing else it
             reads.</p>
         <Code language="ts" caption="shared" code={`
+            import { log, reactive, watch } from '@abide/abide'
+
             const stage = reactive('lead')
             const owner = reactive('ada')
             watch(stage, () => log.info('stage', { stage: stage(), owner: owner() }))
@@ -61,6 +63,9 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Stop a watch">
         <p><code>watch</code> returns its stop. A watch in a component stops with the component.</p>
         <Code language="ts" caption="shared" code={`
+            import { reactive, watch } from '@abide/abide'
+
+            const count = reactive(0)
             const stop = watch(() => console.log(count()))
             stop()
         `} />

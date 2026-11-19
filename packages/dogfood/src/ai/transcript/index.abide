@@ -27,20 +27,23 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Fold a streamed answer into the assistant's turn">
         <p>Open the question and the answer with <code>transcript.turn</code>, then fold each
             event into the answer as it arrives. Fold inside <code>patch</code>, once per event, so
-            a long answer costs one pass.</p>
+            a long answer is walked once rather than again for every piece.</p>
         <Code language="ts" caption="browser" code={`
-            import { transcript } from '@abide/abide'
+            import { type AssistantTurn, reactive, transcript } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
 
-            turns.patch((all) => {
-                all.push(transcript.turn('user', [{ type: 'text', text }]))
-                all.push(transcript.turn('assistant'))
-            })
-            const messages = transcript.messages(turns())
-            for await (const event of askAssistant({ messages })) {
+            const turns = reactive<AssistantTurn[]>([])
+            async function ask(text: string) {
                 turns.patch((all) => {
-                    const answering = all[all.length - 1]
-                    if (answering) transcript.fold(answering, event)
+                    all.push(transcript.turn('user', [{ type: 'text', text }]))
+                    all.push(transcript.turn('assistant'))
                 })
+                const messages = transcript.messages(turns())
+                for await (const event of askAssistant({ messages }))
+                    turns.patch((all) => {
+                        const answering = all[all.length - 1]
+                        if (answering) transcript.fold(answering, event)
+                    })
             }
         `} />
     </Section>
@@ -49,6 +52,11 @@ import Section from '#src/lib/Section.abide'
         <p>A folded turn's <code>parts</code> keep the order they arrived in. A tool part holds
             its input and, once answered, its result.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import { type AssistantTurn, props } from '@abide/abide'
+            const { turn } = props<{ turn: AssistantTurn }>()
+            </script>
+
             {#for part of turn.parts}
                 {#if part.type === 'text'}
                     <p>{part.text}</p>

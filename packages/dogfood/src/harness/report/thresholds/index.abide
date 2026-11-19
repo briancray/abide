@@ -15,12 +15,6 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/harness/tests/engine.test.ts',
             from: ["test('an op over the threshold reports both ceilings'"],
         },
-        {
-            path: 'packages/harness/tests/report.test.ts',
-            from: [
-                "test('the clock reports a measured resolution, not an assumed one'",
-            ],
-        },
     ]}
 >
     <Section level={3} title="Find the pipeline size where advancing a deal costs a frame">
@@ -39,6 +33,8 @@ import Section from '#src/lib/Section.abide'
         <p><code>interaction</code> is 100 ms, where a wait becomes the thing the user is
             doing.</p>
         <Code language="ts" caption="shared" code={`
+            import { THRESHOLDS } from '@abide/harness/report'
+
             const took = run.samples['among 1,000'].nanoseconds
             if (took > THRESHOLDS.interaction)
                 throw new Error('advancing a deal outlasts an interaction')

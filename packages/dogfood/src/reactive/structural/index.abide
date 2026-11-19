@@ -42,6 +42,8 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Ignore a filter written again with the same contents">
         <p>A write of an equal object changes nothing, so a watch over it does not run.</p>
         <Code language="ts" caption="shared" code={`
+            import { reactive, structural, watch } from '@abide/abide'
+
             const filter = reactive({ stage: 'won' }, { identity: structural })
             watch(filter, () => console.log('filter', filter()))
             filter.set({ stage: 'won' }) // no run

@@ -38,7 +38,7 @@ import Section from '#src/lib/Section.abide'
             </script>
 
             <button onclick={() => (deal = { ...deal, stage: 'won' })}>Win</button>
-            {#if !synced()}<p class="status">Not saved yet</p>{/if}
+            {#if !synced(deal)}<p class="status">Not saved yet</p>{/if}
         `} />
     </Section>
 
@@ -46,6 +46,9 @@ import Section from '#src/lib/Section.abide'
         <p>Over a keyed value, <code>synced</code> is true only where every matching entry
             holds what its body made.</p>
         <Code language="ts" caption="shared" code={`
+            import { synced } from '@abide/abide'
+            import getStage from './getStage.handler.ts'
+
             synced(getStage, { stage: 'won' })
             synced(getStage) // every entry
         `} />

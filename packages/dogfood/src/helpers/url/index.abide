@@ -42,6 +42,8 @@ import Section from '#src/lib/Section.abide'
         <p>The query follows the params. A member equal to its default in the fourth argument is
             left out of the address.</p>
         <Code language="ts" caption="shared" code={`
+            import { url } from '@abide/abide'
+
             url('/companies', {}, { city: 'London', page: 1 }, { page: 1 })
             // '/companies?city=London'
         `} />
@@ -51,6 +53,8 @@ import Section from '#src/lib/Section.abide'
         <p>An address <code>url</code> builds carries the path the app is mounted under, so a
             fetch reaches the app wherever it is served.</p>
         <Code language="ts" caption="browser" code={`
+            import { url } from '@abide/abide'
+
             const answer = await fetch(url('/__abide/openapi.json'))
         `} />
     </Section>

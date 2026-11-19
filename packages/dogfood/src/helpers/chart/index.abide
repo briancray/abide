@@ -49,6 +49,8 @@ import Section from '#src/lib/Section.abide'
         <p><code>chart.ticks</code> answers values a step of 1, 2 or 5 times a power of ten apart,
             the first and last enclosing the range, so they double as the axis's ends.</p>
         <Code language="ts" caption="shared" code={`
+            import { chart } from '@abide/abide'
+
             chart.ticks(3, 97, 5) // [0, 20, 40, 60, 80, 100]
             chart.ticks(0, 1000, 2) // [0, 500, 1000]
         `} />
@@ -58,6 +60,8 @@ import Section from '#src/lib/Section.abide'
         <p>Given a <code>baseline</code>, <code>chart.path</code> closes each run down to it, as a
             shape to fill.</p>
         <Code language="ts" caption="shared" code={`
+            import { chart } from '@abide/abide'
+
             chart.path([0, 10], [1, 2], 50) // 'M0,1L10,2L10,50L0,50Z'
         `} />
     </Section>
@@ -66,6 +70,8 @@ import Section from '#src/lib/Section.abide'
         <p><code>chart.nearest</code> answers the index of the position nearest <code>x</code>,
             the earlier of two equally near, and <code>-1</code> where there are none.</p>
         <Code language="ts" caption="browser" code={`
+            import { chart } from '@abide/abide'
+
             svg.addEventListener('pointermove', (event) => {
                 const x = event.clientX - svg.getBoundingClientRect().left
                 hovered.set(chart.nearest(xs, x))

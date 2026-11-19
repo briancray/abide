@@ -48,6 +48,8 @@ import Section from '#src/lib/Section.abide'
         <p>A column's <code>value</code> is what it sorts by, in place of the row's field its
             <code>key</code> names.</p>
         <Code language="ts" caption="shared" code={`
+            import { type Column } from '@abide/abide'
+
             const STAGES = ['lead', 'qualified', 'proposal', 'won']
 
             const stage: Column<Deal> = {
@@ -61,6 +63,8 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Sort deal names with numbers in the order people read">
         <p>Text sorts by its words, with the numerals in it read as numbers.</p>
         <Code language="ts" caption="shared" code={`
+            import { sortRows } from '@abide/abide'
+
             const names = [{ name: 'deal 10' }, { name: 'Deal 9' }]
             sortRows(names, [{ key: 'name', label: 'Name' }], {
                 key: 'name',

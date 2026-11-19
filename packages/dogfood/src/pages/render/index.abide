@@ -55,17 +55,20 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Save rendered invoices to disk from a script">
-        <p><code>render</code> runs anywhere on the server, a script under <code>abide run</code>
-            included.</p>
+    <Section level={3} title="Check a sheet's bytes from a test">
+        <p><code>render</code> needs no request and no running app, so a test can render the
+            component and read the document it makes.</p>
         <Code language="ts" caption="server" code={`
+            import { expect, test } from 'bun:test'
             import { render } from '@abide/abide/server'
-            import InvoiceSheet from '../src/invoices/lib/InvoiceSheet.abide'
-            import { INVOICES } from '../src/invoices/lib/INVOICES.server.ts'
+            import CompanySheet from './CompanySheet.abide'
 
-            for (const invoice of INVOICES)
-                await Bun.write(\`out/\${invoice.id}.html\`,
-                    await render(InvoiceSheet({ invoice })))
+            test('the sheet names the company', async () => {
+                const company = { name: 'Hopper & Co' }
+                const page = await render(CompanySheet({ company }))
+                const html = new TextDecoder().decode(page)
+                expect(html).toContain('Hopper &amp; Co')
+            })
         `} />
     </Section>
 </Doc>

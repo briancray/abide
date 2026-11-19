@@ -39,12 +39,16 @@ import Section from '#src/lib/Section.abide'
         <p>Tag the handler's entries, then refresh the tag. It reaches every value carrying it,
             whichever handler it came from.</p>
         <Code language="ts" caption="server" code={`
+            import { GET } from '@abide/abide/server'
+
             export default GET(
                 async ({ stage }: { stage: string }) => countStage(stage),
                 { tags: ({ stage }) => [\`stage:\${stage}\`] },
             )
         `} />
         <Code language="ts" caption="browser" code={`
+            import { refresh } from '@abide/abide'
+
             refresh({ tags: ['stage:won'] })
         `} />
     </Section>

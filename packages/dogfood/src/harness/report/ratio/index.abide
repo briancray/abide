@@ -29,11 +29,16 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Divide the time among 1,000 deals by the time among 100">
         <p>Pass two samples from one <code>batch</code> and the floor it measured. Both need the
-            same case, substrate and batch size, or <code>ratio</code> throws.</p>
+            same case, substrate and batch size, and two arm names, or <code>ratio</code>
+            throws.</p>
         <Code language="ts" caption="shared" code={`
             import { batch, ratio } from '@abide/harness/report'
 
-            const run = batch({ case: 'advance a deal', emulated: null, arms })
+            const run = batch({
+                case: 'advance a deal',
+                emulated: null,
+                arms: { 'among 100': pipeline(100), 'among 1,000': pipeline(1000) },
+            })
             const growth = ratio(
                 run.samples['among 1,000'],
                 run.samples['among 100'],
@@ -44,11 +49,11 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Tell a real difference from noise">
         <p>Only a <code>ratio</code> result carries a <code>value</code>. A difference inside the
-            floor, or two samples under one frame, comes back as a tag with no number.</p>
+            floor, or either sample under one frame, comes back as a tag with no number.</p>
         <Code language="ts" caption="shared" code={`
             if (growth.kind === 'ratio') console.log(\`\${growth.value}x\`)
             else if (growth.kind === 'underTheFloor') console.log('noise')
-            else console.log('both under one frame')
+            else console.log('under one frame')
         `} />
     </Section>
 
@@ -57,7 +62,10 @@ import Section from '#src/lib/Section.abide'
             <code>workDisagreement</code> lists every counter the arms differ on by more than
             <code>workFactor</code>, which defaults to 1.05.</p>
         <Code language="ts" caption="shared" code={`
-            const verdict = ratio(abide, vanilla, { floor, workFactor: 1 })
+            import { ratio } from '@abide/harness/report'
+
+            const { abide, vanilla } = run.samples
+            const verdict = ratio(abide, vanilla, { floor: run.floor, workFactor: 1 })
             for (const line of verdict.workDisagreement) console.warn(line)
             // recalcStyleCount: abide 0, vanilla 9
         `} />

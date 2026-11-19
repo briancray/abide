@@ -27,6 +27,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { flushSync } from '@abide/abide'
             import { mount, settled } from '@abide/harness/abide'
+            import DealPicker from './DealPicker.abide'
 
             test('picking a deal shows it in the panel', async () => {
                 using _picker = await mount(DealPicker({}))
@@ -42,6 +43,8 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Scroll to a note the moment it renders">
         <p>Flush before a layout read, so the measurement sees the row the write added.</p>
         <Code language="ts" caption="browser" code={`
+            import { flushSync } from '@abide/abide'
+
             notes.patch((all) => all.push(note))
             flushSync()
             list.scrollTop = list.scrollHeight

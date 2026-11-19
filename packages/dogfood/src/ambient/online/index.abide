@@ -47,8 +47,13 @@ import Section from '#src/lib/Section.abide'
             <script>
             import { online, refresh, watch } from '@abide/abide'
 
+            let wentOffline = false
             watch(() => {
-                if (online) refresh()
+                if (!online) wentOffline = true
+                else if (wentOffline) {
+                    wentOffline = false
+                    refresh()
+                }
             })
             </script>
         `} />

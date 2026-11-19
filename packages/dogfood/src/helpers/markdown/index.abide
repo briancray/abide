@@ -37,9 +37,11 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Keep a pasted script tag and a javascript link inert">
-        <p>A tag in the note is a line of the note, and the link keeps only its text. An image
+        <p>A tag in the note is escaped to text, and the link keeps only its text. An image
             renders as a link to it, so a note never makes the page load anything.</p>
         <Code language="ts" caption="shared" code={`
+            import { markdown } from '@abide/abide'
+
             markdown('**Ada** [quote](javascript:alert(1)) <b>')
             // '<p><strong>Ada</strong> quote &lt;b&gt;</p>'
         `} />
@@ -49,6 +51,8 @@ import Section from '#src/lib/Section.abide'
         <p><code>inline</code> renders the marks of one line with no paragraph around them, for
             a title or a table cell.</p>
         <Code language="ts" caption="shared" code={`
+            import { markdown } from '@abide/abide'
+
             markdown('Q3 *renewal*', { inline: true }) // 'Q3 <em>renewal</em>'
         `} />
     </Section>
@@ -57,6 +61,8 @@ import Section from '#src/lib/Section.abide'
         <p><code>href</code> rewrites each address a link keeps. Answer
             <code>undefined</code> to drop the link and keep its text.</p>
         <Code language="ts" caption="shared" code={`
+            import { markdown, type RouteLiteral, url } from '@abide/abide'
+
             markdown(note, {
                 href: (address) =>
                     address.startsWith('/') ? url(address as RouteLiteral) : address,

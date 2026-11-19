@@ -63,12 +63,19 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Read every value a body follows before its first await">
         <p>Tracking is synchronous. A read after an <code>await</code> follows nothing, and the
             compiler warns on it.</p>
-        <Code language="ts" caption="shared" code={`
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import getDeal from './getDeal.handler.ts'
+
+            let owner = reactive('ada')
+            let dealId = reactive('d2')
             const deal = reactive(async () => {
-                const who = owner() // before the await: followed
-                const found = await getDeal({ id: dealId() })
+                const who = owner // before the await: followed
+                const found = await getDeal({ id: dealId }) // awaited: followed
                 return { ...found, owner: who }
             })
+            </script>
         `} />
     </Section>
 </Doc>

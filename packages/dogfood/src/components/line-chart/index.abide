@@ -56,6 +56,10 @@ import Section from '#src/lib/Section.abide'
         <p>Each line, point and readout value carries <code>data-series</code>, the index of its
             series. Lines and labels draw in <code>currentColor</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import LineChart from '@abide/abide/LineChart.abide'
+            </script>
+
             <LineChart
                 class="text-muted [&_[data-part=line]]:stroke-2
                 [&_[data-series='0']]:stroke-signal

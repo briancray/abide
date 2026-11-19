@@ -25,14 +25,16 @@ import Section from '#src/lib/Section.abide'
         <p>Await the assistant handler for every event, then hand them to <code>resultsOf</code>
             with the handler whose answers you want. Each value is typed as that handler's.</p>
         <Code language="ts" caption="browser" code={`
-            import { resultsOf } from '@abide/abide'
+            import { type ReportDraft, resultsOf } from '@abide/abide'
             import askReport from './askReport.handler.ts'
             import draftReport from './draftReport.handler.ts'
 
-            const events = await askReport({ draft: report.markdown() })
-            for (const written of resultsOf(events, draftReport)) {
-                report.summary.set(written.summary)
-                report.description.set(written.description)
+            async function fill(draft: ReportDraft) {
+                const events = await askReport({ draft: draft.markdown() })
+                for (const written of resultsOf(events, draftReport)) {
+                    draft.summary.set(written.summary)
+                    draft.description.set(written.description)
+                }
             }
         `} />
     </Section>

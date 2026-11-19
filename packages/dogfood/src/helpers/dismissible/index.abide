@@ -72,6 +72,10 @@ import Section from '#src/lib/Section.abide'
         <p>Turn the outside press off with <code>outside: false</code>, or Escape off with
             <code>escape: false</code>. Bind it beside another adaptor as a list.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import { dismissible, dropzone } from '@abide/abide'
+            </script>
+
             <aside bind:element={[
                 dismissible(close, { outside: false }),
                 dropzone(attach),

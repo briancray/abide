@@ -55,6 +55,8 @@ import Section from '#src/lib/Section.abide'
         <p>A column's <code>value</code> is what it sorts by, and <code>format</code> is what its
             cells show.</p>
         <Code language="ts" caption="shared" code={`
+            import { type Column, format } from '@abide/abide'
+
             const COLUMNS: Column<Deal>[] = [
                 { key: 'name', label: 'Deal', sortable: false },
                 {
@@ -78,6 +80,9 @@ import Section from '#src/lib/Section.abide'
             since.</p>
         <Code language="abide" caption="abide" code={`
             <script>
+            import { reactive, type Sort } from '@abide/abide'
+            import SortableTable from '@abide/abide/SortableTable.abide'
+
             let sort = reactive<Sort | undefined>({
                 key: 'closes',
                 direction: 'ascending',
@@ -92,6 +97,10 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>Cell</code> component renders a cell's content, handed the row, the column and
             the formatted text.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import SortableTable from '@abide/abide/SortableTable.abide'
+            </script>
+
             <SortableTable rows={companies} columns={COLUMNS} key={keyOf}>
                 {#component Cell({ row, column, text }: CellProps)}
                     {#if column.key === 'name'}
@@ -109,6 +118,10 @@ import Section from '#src/lib/Section.abide'
             <code>descending</code>, and a column's <code>align</code> is
             <code>data-align</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import SortableTable from '@abide/abide/SortableTable.abide'
+            </script>
+
             <SortableTable
                 class="[&_[data-align=end]]:text-right
                 [&_[data-sort=ascending]_button]:after:content-['_↑']

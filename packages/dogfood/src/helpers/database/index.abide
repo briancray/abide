@@ -50,12 +50,19 @@ import Section from '#src/lib/Section.abide'
         <p>Append to the list and never edit a migration already shipped. A function seeds rows
             on the boot that runs it.</p>
         <Code language="ts" caption="server" code={`
-            migrations: [
-                \`CREATE TABLE targets (id INTEGER PRIMARY KEY, target INTEGER)\`,
-                'CREATE TABLE digests (sentAt INTEGER NOT NULL)',
-                'ALTER TABLE targets ADD COLUMN quarter TEXT',
-                (db) => db.run("INSERT INTO targets (target) VALUES (100000)"),
-            ],
+            import { database } from '@abide/abide/server'
+
+            export const crmDatabase = database('crm', {
+                migrations: [
+                    \`CREATE TABLE targets (
+                        id INTEGER PRIMARY KEY,
+                        target INTEGER NOT NULL
+                    )\`,
+                    'CREATE TABLE digests (sentAt INTEGER NOT NULL)',
+                    'ALTER TABLE targets ADD COLUMN quarter TEXT',
+                    (db) => db.run('INSERT INTO targets (target) VALUES (100000)'),
+                ],
+            })
         `} />
     </Section>
 
@@ -63,7 +70,9 @@ import Section from '#src/lib/Section.abide'
         <p>A function names the file as it opens, so it reads the config of that moment. A name
             holding a <code>/</code> or a <code>.</code> is a path.</p>
         <Code language="ts" caption="server" code={`
-            export const notes = database(() => config().NOTES_DB, {
+            import { config, database } from '@abide/abide/server'
+
+            export const notes = database(() => config().NOTES_DB as string, {
                 migrations: ['CREATE TABLE notes (id TEXT PRIMARY KEY, body TEXT)'],
             })
         `} />
@@ -71,7 +80,9 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Refresh pages when a script writes the database file">
         <p><code>changed</code> counts commits from other connections, such as the
-            <code>sqlite3</code> shell or a second server. Follow it and reload.</p>
+            <code>sqlite3</code> shell or a second server, and never the opener's own. On the
+            server a bare <code>refresh</code> reloads every <code>global</code> value and every
+            value a browser follows.</p>
         <Code language="ts" caption="server" code={`
             import { refresh, watch } from '@abide/abide'
 

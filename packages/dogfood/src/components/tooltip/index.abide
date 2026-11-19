@@ -35,6 +35,10 @@ import Section from '#src/lib/Section.abide'
         <p><code>side</code> is where the hint goes, flipped where there is no room.
             <code>delay</code> is how long a pointer rests before it opens.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Tooltip from '@abide/abide/Tooltip.abide'
+            </script>
+
             <button aria-label="Star">★</button>
             <Tooltip side="bottom" delay={0}>Star this contact</Tooltip>
         `} />
@@ -44,6 +48,10 @@ import Section from '#src/lib/Section.abide'
         <p>The hint carries the side it took as <code>data-side</code>, and
             <code>--arrow-offset</code> is where along that edge the anchor's middle falls.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Tooltip from '@abide/abide/Tooltip.abide'
+            </script>
+
             <Tooltip
                 class="m-0 overflow-visible rounded-md px-3 py-2
                 before:absolute before:left-(--arrow-offset) before:size-2

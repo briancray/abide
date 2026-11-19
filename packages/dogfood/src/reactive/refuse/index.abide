@@ -47,6 +47,8 @@ import Section from '#src/lib/Section.abide'
         <p>A refused call throws. <code>isError</code> narrows by name, so
             <code>error.data</code> has the type the handler declared.</p>
         <Code language="ts" caption="browser" code={`
+            import moveDeal from './moveDeal.handler.ts'
+
             let notice = ''
             try {
                 await moveDeal({ id: 'd3', stage: 'lead' })
@@ -61,6 +63,9 @@ import Section from '#src/lib/Section.abide'
         <p><code>refuse(status)</code> is for where the status is the whole answer. Every one is
             named <code>HttpError</code>.</p>
         <Code language="ts" caption="server" code={`
+            import { refuse } from '@abide/abide'
+            import { GET } from '@abide/abide/server'
+
             export default GET(async ({ id }: { id: string }) =>
                 DEALS.find((deal) => deal.id === id) ?? refuse(404),
             )

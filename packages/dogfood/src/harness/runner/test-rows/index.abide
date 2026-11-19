@@ -36,7 +36,7 @@ import Section from '#src/lib/Section.abide'
         `} />
         <Code code={`
             bun scripts/testRows.ts --list
-            bun scripts/testRows.ts --scope all --filter reports
+            bun scripts/testRows.ts --scope all --filter pipeline
         `} />
     </Section>
 
@@ -44,6 +44,8 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>playwright</code> suite runs every <code>*.spec.ts</code> in its root, one at
             a time, in the projects you name.</p>
         <Code language="ts" caption="server" code={`
+            import { testRows } from '@abide/harness/runner'
+
             await testRows(
                 [
                     { section: 'unit', root: 'src', runner: 'bun' },

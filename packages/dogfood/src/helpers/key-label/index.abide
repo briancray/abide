@@ -42,6 +42,8 @@ import Section from '#src/lib/Section.abide'
         <p>The server reads the platform off the request's user agent and the browser off its
             own, so the label the server renders is the one the page hydrates.</p>
         <Code language="ts" caption="shared" code={`
+            import { keyLabel } from '@abide/abide'
+
             keyLabel('mod+k') // '⌘K' on a Mac, 'Ctrl+K' elsewhere
             keyLabel('shift+n') // '⇧N' on a Mac, 'Shift+N' elsewhere
         `} />

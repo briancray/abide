@@ -26,12 +26,12 @@ import Section from '#src/lib/Section.abide'
             import { inScope } from '@abide/harness/rows'
 
             const row = {
-                id: 'src/reports/lib/Forecast.test.ts',
-                section: 'reports',
-                name: 'Forecast.test.ts',
+                id: 'src/pipeline/lib/Forecast.test.ts',
+                section: 'unit',
+                name: 'pipeline/lib/Forecast.test.ts',
             }
             inScope(row, 'all') // true
-            inScope(row, 'section:reports') // true
+            inScope(row, 'section:unit') // true
             inScope(row, 'item:src/deals/lib/DealTabs.test.ts') // false
             inScope(row, '') // false
         `} />

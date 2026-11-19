@@ -47,6 +47,9 @@ import Section from '#src/lib/Section.abide'
             <code>principal</code> claims you give it. <code>app.fetch</code> takes the same
             option.</p>
         <Code language="ts" caption="server" code={`
+            import { createApp } from '@abide/abide/server'
+            import getCommission from '../getCommission.handler.ts'
+
             await using app = await createApp()
             const commission = await app.run(async () => await getCommission(), {
                 principal: { id: 'theo' },
@@ -59,6 +62,8 @@ import Section from '#src/lib/Section.abide'
         <p><code>createApp</code> binds no socket. <code>app.listen</code> binds one when a host
             or a test needs a real port.</p>
         <Code language="ts" caption="server" code={`
+            import { createApp } from '@abide/abide/server'
+
             const app = await createApp()
             await app.listen({ port: 8080 })
             process.on('SIGTERM', () => app.stop())

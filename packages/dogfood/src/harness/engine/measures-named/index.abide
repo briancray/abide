@@ -14,13 +14,13 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/harness/tests/engine.test.ts',
             from: [
-                "test('a layer running outside the op is a throw, not a smaller fraction'",
+                "test('a name is every measure carrying it, in order, and its duration their sum'",
             ],
         },
         {
             path: 'packages/harness/tests/engine.test.ts',
             from: [
-                "test('shares() refuses a denominator the trace does not name once'",
+                "test('a layer running outside the op is a throw, not a smaller fraction'",
             ],
         },
     ]}
@@ -43,6 +43,8 @@ import Section from '#src/lib/Section.abide'
         <p>Compare each run's end with the op's. An idle pass or a second flush shows up past
             it.</p>
         <Code language="ts" caption="server" code={`
+            import { measuresNamed } from '@abide/harness/engine'
+
             const [click] = measuresNamed(trace, 'click')
             const late = measuresNamed(trace, 'filter').filter(
                 (run) => run.endNanoseconds > click.endNanoseconds,

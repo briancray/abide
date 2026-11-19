@@ -56,6 +56,10 @@ import Section from '#src/lib/Section.abide'
         <p>Set <code>dismissible</code> to <code>false</code> and Escape and a backdrop click
             leave the dialog showing.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Dialog from '@abide/abide/Dialog.abide'
+            </script>
+
             <Dialog bind:open={signing} dismissible={false}>
                 <form method="dialog">
                     <button value="sign">Sign the contract</button>
@@ -69,6 +73,10 @@ import Section from '#src/lib/Section.abide'
             <code>backdrop:</code> variant reaches the veil, and <code>data-open</code> is present
             while it shows.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import Dialog from '@abide/abide/Dialog.abide'
+            </script>
+
             <Dialog
                 bind:open={logging}
                 class="m-auto w-96 rounded-xl p-5 backdrop:bg-paper/70"

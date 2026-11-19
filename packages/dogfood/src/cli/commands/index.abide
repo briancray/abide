@@ -32,8 +32,8 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Start a new app and serve it while you work">
         <p><code>abide scaffold</code> writes a starter app with a page, a handler, their tests
-            and a Dockerfile. <code>abide dev</code> serves it on port 3000 and restarts on every
-            save.</p>
+            and a Dockerfile. <code>abide dev</code> serves it on port 3000, or the next free one,
+            and reloads on every save.</p>
         <Code code={`
             bunx @abide/abide scaffold crm
             cd crm

@@ -40,7 +40,10 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Let the platform perform reload and full screen">
         <p>An item with a <code>role</code> needs no code of yours: the platform performs
             it. <code>'separator'</code> draws a line between items.</p>
-        <Code language="ts" caption="browser" code={`
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { onMenu } from '@abide/abide'
+
             onMenu(() => [
                 {
                     label: 'View',
@@ -51,6 +54,7 @@ import Section from '#src/lib/Section.abide'
                     ],
                 },
             ])
+            </script>
         `} />
     </Section>
 </Doc>

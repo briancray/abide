@@ -70,6 +70,8 @@ import Section from '#src/lib/Section.abide'
         <p><code>config.invalidate()</code> has the next read take the environment again and rerun
             every <code>onConfig</code>.</p>
         <Code language="ts" caption="server" code={`
+            import { config } from '@abide/abide/server'
+
             Bun.env.BILLING_KEY = await vault.read('billing')
             config.invalidate()
         `} />

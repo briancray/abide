@@ -51,6 +51,8 @@ import Section from '#src/lib/Section.abide'
         <p>Every formatter writes <code>en-US</code> unless you pass a <code>locale</code>, so
             the server and the browser write the same text.</p>
         <Code language="ts" caption="shared" code={`
+            import { format } from '@abide/abide'
+
             format.money(1_250_000, { compact: true }) // '$1.3M'
             format.plural(2, 'open deal') // '2 open deals'
             format.plural(3, 'company', 'companies') // '3 companies'
@@ -64,6 +66,16 @@ import Section from '#src/lib/Section.abide'
         <p>Pass <code>now</code> from a reactive value so the words follow it.
             <code>format.date</code> writes UTC unless you pass a <code>timeZone</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import { format, reactive, watch } from '@abide/abide'
+
+            let now = reactive(Date.now())
+            watch(() => {
+                const timer = setInterval(() => (now = Date.now()), 60_000)
+                return () => clearInterval(timer)
+            })
+            </script>
+
             <strong title={format.date(touch.at, { style: 'dateTime' })}>
                 {touch.contact}, {format.relative(touch.at, { now })}
             </strong>

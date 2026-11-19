@@ -48,7 +48,8 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Show the sign-in button that fits the caller">
         <p>Each member of <code>principal</code> is a reactive value. A sign-in or a sign-out
-            refreshes what every tab reads, so the button flips with nothing passed to it.</p>
+            refreshes what every tab reads, so the button flips with nothing passed to it. The
+            <code>name</code> is what your <code>onPrincipal</code> resolved the sealed id to.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { principal } from '@abide/abide'
@@ -68,6 +69,9 @@ import Section from '#src/lib/Section.abide'
         <p>Decide in the handler and leave the field out. Hiding it in the template would still
             send it to anyone opening the network panel.</p>
         <Code language="ts" caption="server" code={`
+            import { principal } from '@abide/abide'
+            import { GET } from '@abide/abide/server'
+
             export default GET(async (): Promise<Contact> => {
                 const { dealValue, ...rest } = CONTACT
                 const { role } = await principal.resolved
@@ -80,8 +84,14 @@ import Section from '#src/lib/Section.abide'
         <p><code>principal.caller</code> names the browser, not the person. It survives a sign-in
             and is rotated by a sign-out. It is a key, never an identity, and a server read.</p>
         <Code language="ts" caption="server" code={`
-            const key = \`exports:\${principal.caller()}\`
-            if (await limiter.exceeded(key)) return refuse(429, 'Try again shortly.')
+            import { principal, refuse } from '@abide/abide'
+            import { GET } from '@abide/abide/server'
+
+            export default GET(async () => {
+                const key = \`exports:\${principal.caller()}\`
+                if (await limiter.exceeded(key)) return refuse(429, 'Try again shortly.')
+                return exportContacts()
+            })
         `} />
     </Section>
 </Doc>

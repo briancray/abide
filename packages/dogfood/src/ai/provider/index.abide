@@ -36,13 +36,14 @@ import Section from '#src/lib/Section.abide'
             adds <code>messages</code> and <code>stream</code>, and sends every other field as
             written.</p>
         <Code language="ts" caption="server" code={`
+            import { provider } from '@abide/abide/server'
+
             const claude = provider.claudeApi({
                 apiKey: Bun.env.ANTHROPIC_API_KEY ?? '',
                 model: 'claude-opus-5',
                 max_tokens: 1024,
                 system: 'Answer questions about contacts.',
             })
-            yield* assistant(messages, claude, { mcp: true })
         `} />
     </Section>
 
@@ -50,14 +51,12 @@ import Section from '#src/lib/Section.abide'
         <p>With <code>provider.claudeCode</code>, the conversation runs on the asker's machine,
             on their own plan. Asking with no bridge paired is refused 409.</p>
         <Code language="ts" caption="server" code={`
-            yield* assistant(
-                messages,
-                provider.claudeCode({
-                    systemPrompt: 'Answer in one sentence.',
-                    tools: ['WebSearch'],
-                }),
-                { mcp: true },
-            )
+            import { provider } from '@abide/abide/server'
+
+            const claudeCode = provider.claudeCode({
+                systemPrompt: 'Answer in one sentence.',
+                tools: ['WebSearch'],
+            })
         `} />
     </Section>
 
@@ -77,8 +76,11 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Read the visitor's calendar with no model">
         <p>Where the server already knows the call, <code>provider.claudeCode.callTool</code> runs
-            one MCP tool of the visitor's machine: no turn and no tokens.</p>
+            one MCP tool of the visitor's machine. A bridge that can make the call itself asks no
+            model.</p>
         <Code language="ts" caption="server" code={`
+            import { provider } from '@abide/abide/server'
+
             const { content, failed } = await provider.claudeCode.callTool(
                 'mcp__calendar__meetings',
                 { day: 'today' },

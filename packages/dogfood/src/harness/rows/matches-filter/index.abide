@@ -42,6 +42,13 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Keep every row with an empty filter">
         <p>An empty or blank filter matches everything.</p>
         <Code language="ts" caption="shared" code={`
+            import { matchesFilter } from '@abide/harness/rows'
+
+            const row = {
+                id: 'src/pipeline/lib/Forecast.test.ts',
+                section: 'unit',
+                name: 'pipeline/lib/Forecast.test.ts',
+            }
             matchesFilter(row, '') // true
             matchesFilter(row, '  FORECAST ') // true
             matchesFilter(row, 'deals') // false

@@ -25,9 +25,10 @@ import Section from '#src/lib/Section.abide'
     ]}
 >
     <Section level={3} title="Pair your Claude Code with the site you are on">
-        <p>Run the command the site shows. Your Claude Code answers the site's assistant in an
-            empty directory, with only the tools the site asked for.</p>
-        <Code code={`bunx @abide/bridge@0.8.3 https://crm.example kV3x9QpL2mZt8aRw`} />
+        <p>Run the command the site shows, which names the bridge release the site was built
+            with. Your Claude Code answers the site's assistant in an empty directory, with only
+            the tools the site asked for.</p>
+        <Code code={`bunx @abide/bridge https://crm.example kV3x9QpL2mZt8aRw`} />
     </Section>
 
     <Section level={3} title="Run Claude Code with your own options and variables">
@@ -35,7 +36,7 @@ import Section from '#src/lib/Section.abide'
             path, each <code>--env</code> sets a variable, and what follows <code>--</code> is laid
             over the site's options.</p>
         <Code code={`
-            bunx @abide/bridge@0.8.3 https://crm.example kV3x9QpL2mZt8aRw \\
+            bunx @abide/bridge https://crm.example kV3x9QpL2mZt8aRw \\
               --claude ~/.local/bin/claude --env ANTHROPIC_BASE_URL=$PROXY \\
               -- --model sonnet
         `} />
@@ -45,16 +46,16 @@ import Section from '#src/lib/Section.abide'
         <p><code>install</code> registers what opens a site's <code>abide-bridge:</code> links,
             under your home alone, and keeps the options it is given for every link.</p>
         <Code code={`
-            bunx @abide/bridge@0.8.3 install -- --model sonnet
-            bunx @abide/bridge@0.8.3 uninstall
+            bunx @abide/bridge install -- --model sonnet
+            bunx @abide/bridge uninstall
         `} />
     </Section>
 
     <Section level={3} title="Make a site ask again before it pairs">
         <p><code>forget</code> stops always allowing the site it names, or every site.</p>
         <Code code={`
-            bunx @abide/bridge@0.8.3 forget https://crm.example
-            bunx @abide/bridge@0.8.3 forget
+            bunx @abide/bridge forget https://crm.example
+            bunx @abide/bridge forget
         `} />
     </Section>
 </Doc>
