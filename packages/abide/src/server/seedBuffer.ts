@@ -4,7 +4,10 @@
 // — the value itself, so a call arriving while the render's load is still in flight joins it.
 //
 // KEYED BY WHO, WHAT AND WITH WHICH ARGS (41.18): the caller's cookie, the one thing the browser's
-// call carries that the render also saw, and the handler and the `Args` key 11.24 takes. A GET's
+// call carries that the render also saw, and the handler and the `Args` key 11.24 takes. AND MATCHED
+// ON EVERY COOKIE THE RENDER READ: the caller outlives a sign-in (26.6), so a render made signed
+// out would otherwise answer the call the same browser makes signed in. The jar's versions are the
+// names it read (22.4), so nothing is recorded for it here. A GET's
 // query arrives as text until 19.7 coerces it, so a render that passed a number misses here and
 // the handler runs — the answer is right and the saving is lost.
 //
@@ -22,6 +25,7 @@
 // past its life, or one past the transcript bound. A call for args an entry already answered is a
 // refresh, and says nothing.
 
+import { type Cookies, cookies } from '#shared/cookies.ts'
 import { namedLogger } from '#shared/log.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { isReactive, STREAMING } from '#shared/reactive/index.ts'
@@ -74,6 +78,8 @@ type Entry = {
     letGo: () => void
     // Whether a call took it, which then answers from what the render reached until that settles.
     taken: boolean
+    // 41.18 — the render's cookies, whose every name it read a call must carry with the same value.
+    jar: Cookies
 }
 
 // INDEXED BY THE THREE THINGS 41.18 MATCHES ON — caller, handler, args key — so a call finds its entry
@@ -119,6 +125,7 @@ export function callsOnly(): SeedSink {
  */
 export function seedFor(caller: string): SeedSink {
     const firstReport = reportsOnce()
+    const jar = cookies()
     return (rpc, args, reached) => {
         const key = firstReport(rpc, args)
         if (key === undefined) return false
@@ -134,6 +141,7 @@ export function seedFor(caller: string): SeedSink {
             unhold: NOTHING_HELD,
             letGo: NOTHING_HELD,
             taken: false,
+            jar,
         }
         // 41.13 — THE RENDER'S SCOPE IS HELD WHILE WHAT IT REACHED IS IN FLIGHT: the page is answered
         // before a slow value lands, and letting the scope go stops that value's run — a stream the
@@ -244,24 +252,41 @@ export function takeSeed(
         )
         return undefined
     }
-    const entry = entries[0]
-    if (entry === undefined) return undefined
-    entry.taken = true
-    // And no longer than the call that took it: a stream that never closes ends with its reader.
-    currentRequestScope()?.stops.push(entry.letGo)
-    drop(caller, entry)
-    // READ AS WELL AS SWEPT: a timer can fire late, and an entry past its life answers nothing.
-    if (entry.expires <= Date.now()) {
-        missed(
-            rpc,
-            key,
-            `its entry outlived its ${SEED_LIFE_MS / 1000} seconds`,
-        )
-        return undefined
+    const carried = cookies()
+    for (;;) {
+        const entry = entries[0]
+        if (entry === undefined) return undefined
+        entry.taken = true
+        // And no longer than the call that took it: a stream that never closes ends with its reader.
+        currentRequestScope()?.stops.push(entry.letGo)
+        drop(caller, entry)
+        // READ AS WELL AS SWEPT: a timer can fire late, and an entry past its life answers nothing.
+        if (entry.expires <= Date.now()) {
+            missed(
+                rpc,
+                key,
+                `its entry outlived its ${SEED_LIFE_MS / 1000} seconds`,
+            )
+            return undefined
+        }
+        // 41.18 — an entry left for this caller as it was before a sign-in, or a sign-out, answers
+        // nothing; one left after it may stand behind it.
+        if (!sameCookiesRead(entry.jar, carried)) continue
+        if (entry.outcome === undefined)
+            missed(
+                rpc,
+                key,
+                'its transcript passed ABIDE_MAX_STREAM_BUFFER_SIZE',
+            )
+        return entry.outcome
     }
-    if (entry.outcome === undefined)
-        missed(rpc, key, 'its transcript passed ABIDE_MAX_STREAM_BUFFER_SIZE')
-    return entry.outcome
+}
+
+/** Whether `carried` holds every cookie the render read from `rendered` with the value it read. */
+function sameCookiesRead(rendered: Cookies, carried: Cookies): boolean {
+    for (const name of rendered.versions.keys())
+        if (rendered.held.get(name) !== carried.held.get(name)) return false
+    return true
 }
 
 /** 41.12 — the warning a call the buffer was expected to answer, and did not, is logged with. */

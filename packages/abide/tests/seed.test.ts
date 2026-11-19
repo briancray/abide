@@ -132,6 +132,28 @@ const shelved = reactive(() => books())
 
 <main><p>{shelved()}</p></main>`
 
+// 41.18 — A HANDLER WHOSE ANSWER IS DECIDED BY A COOKIE the app signs in with, not abide's principal.
+const ACCOUNT = `import { GET, cookies, refuse } from '@abide/abide/server'
+
+let runs = 0
+
+export const getAccount = GET(() => {
+    runs += 1
+    const session = cookies().get('session')
+    if (session === null) throw refuse(401, 'Sign in first.')
+    return { session, run: runs }
+})
+`
+
+const ACCOUNT_PAGE = `<script>
+import { reactive } from '@abide/abide'
+import getAccount from '#src/account/getAccount.handler.ts'
+
+const account = reactive(() => getAccount())
+</script>
+
+<main><p>{account.busy()}</p></main>`
+
 let stop = (): void => {}
 let base = ''
 
@@ -141,6 +163,8 @@ beforeAll(async () => {
         'painted/index.abide': PAINTED,
         'shelf/index.abide': SHELF_PAGE,
         'feeds/index.abide': FEED_PAGE,
+        'accounts/index.abide': ACCOUNT_PAGE,
+        ...handlerFiles('account', ACCOUNT),
         ...handlerFiles('feed', FEED),
         ...handlerFiles('shelf', SHELF),
         ...handlerFiles('covers', COVERS),
@@ -241,6 +265,34 @@ test('a caller signed out earlier in the request is not answered from its render
     const cookie = await render()
     const signedOut = await call(cookie, { 'x-sign-out': '1' })
     expect(signedOut.run).toBe(anchor.run + 2)
+})
+
+// 41.18 — MATCHED ON THE COOKIES THE RENDER READ: the caller outlives a sign-in (26.6), so a render
+// made signed out, its entry never taken, must not answer the call the same browser makes signed in.
+// THE REVERT: drop the `sameCookiesRead` check in `takeSeed`; the signed-in call answers 401, the
+// signed-out render's refusal.
+test('a render made signed out does not answer the call made signed in — 41.18', async () => {
+    const page = await Bun.fetch(`${base}/accounts`)
+    await page.text()
+    const caller = (page.headers.get('set-cookie') ?? '').split(
+        ';',
+    )[0] as string
+    const signedIn = `${caller}; session=grace`
+    const answer = await Bun.fetch(`${base}/account/getAccount`, {
+        headers: { cookie: signedIn },
+    })
+    expect(answer.status).toBe(200)
+    expect(((await answer.json()) as { session: string }).session).toBe('grace')
+    // And signed in throughout, the render's run is the one that answers.
+    const again = await Bun.fetch(`${base}/accounts`, {
+        headers: { cookie: signedIn },
+    })
+    await again.text()
+    const seeded = await Bun.fetch(`${base}/account/getAccount`, {
+        headers: { cookie: signedIn },
+    })
+    expect(seeded.headers.get('server-timing')).toContain('Seeded')
+    await seeded.text()
 })
 
 // THE BUFFER ITSELF, IN PROCESS: matched by handler and args (41.18), taken once (41.16), and gone

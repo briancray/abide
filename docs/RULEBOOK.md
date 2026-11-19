@@ -3967,7 +3967,8 @@ remove every row it shadows.
 filled it.
 
 41.18 A seed buffer entry MUST be matched by `principal.caller`, the handler and the call's `Args`
-key.
+key, and MUST NOT answer a call that carries a different value for any cookie its render read through
+`cookies`.
 
 41.19 A `render` MUST set up a page and every layout around it, and let the turn's queued microtasks
 run, before it builds any of their markup.
