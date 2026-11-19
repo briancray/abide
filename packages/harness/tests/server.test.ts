@@ -65,13 +65,15 @@ console.log(JSON.stringify(pair))`)
 
 // A batch mean can never be compared with an exact integer, and the tag is what makes
 // that structural rather than a convention. Reverted — return the record bare — the
-// fractional `Object:3.09` reads as a count and gets `toBe(3)`d.
+// fractional `Object:3.09` reads as a count and gets `toBe(3)`d. An odd `reps` runs that many:
+// reverted to two equal halves, 401 runs 400.
 test('retainedPerRun() comes back tagged, with its rep count and its growth', async () => {
     const run = await inAFreshProcess(`
 import { retainedPerRun } from '${SERVER}'
-const answer = retainedPerRun(() => new URL('https://example.test/a'), 400)
+let ran = 0
+const answer = retainedPerRun(() => { ran += 1; return new URL('https://example.test/a') }, 401)
 if (answer.tagged !== 'batch mean') throw new Error('untagged')
-if (answer.reps !== 400) throw new Error('rep count not reported: ' + answer.reps)
+if (answer.reps !== 401 || ran !== 401) throw new Error('ran ' + ran + ', reported ' + answer.reps)
 console.log(JSON.stringify({ tagged: answer.tagged, reps: answer.reps, growth: answer.growth }))`)
     expect(run.ok).toBe(true)
     expect(run.output).toContain('"tagged":"batch mean"')

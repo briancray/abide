@@ -40,19 +40,22 @@ export function retainedPerRun(
      */
     growth: Record<string, number>
 } {
-    const half = Math.max(1, Math.floor(reps / 2))
+    // EXACTLY `reps` RUNS, the second half taking an odd one — halved to equal halves, 401 ran 400.
+    const runs = Math.max(2, Math.floor(reps))
+    const firstHalf = Math.floor(runs / 2)
+    const secondHalf = runs - firstHalf
     const start = liveCounts('retainedPerRun')
-    for (let rep = 0; rep < half; rep += 1) body()
+    for (let rep = 0; rep < firstHalf; rep += 1) body()
     const middle = liveCounts('retainedPerRun')
-    for (let rep = 0; rep < half; rep += 1) body()
+    for (let rep = 0; rep < secondHalf; rep += 1) body()
     const end = liveCounts('retainedPerRun')
 
-    const first = countsMoved(start, middle, half)
-    const second = countsMoved(middle, end, half)
+    const first = countsMoved(start, middle, firstHalf)
+    const second = countsMoved(middle, end, secondHalf)
     return {
         tagged: 'batch mean',
-        reps: half * 2,
-        perRep: countsMoved(start, end, half * 2),
+        reps: runs,
+        perRep: countsMoved(start, end, runs),
         growth: countsMoved(first, second, 1),
     }
 }
