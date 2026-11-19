@@ -44,6 +44,9 @@ const MODIFIERS: Record<string, number> = {
     option: 1 << 19,
     cmd: 1 << 20,
     command: 1 << 20,
+    // 53.9 — `hotkeys`' spellings: a menu bar is AppKit's alone, so `mod` is ⌘ here.
+    meta: 1 << 20,
+    mod: 1 << 20,
 }
 
 const NAMED_KEYS: Record<string, string> = {
