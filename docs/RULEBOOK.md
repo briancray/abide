@@ -5191,6 +5191,9 @@ series' value there, while a pointer is over it.
 52.31 `Sparkline` MUST carry `data-trend` on its root, `up`, `down` or `flat` by its last present value
 against its first.
 
+52.32 `format.relative` MUST write in the `style` its caller passes, and in `long` where it passes
+none.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are
