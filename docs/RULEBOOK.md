@@ -5329,6 +5329,9 @@ nothing for a click on no such element.
 53.45 `copyText` MUST call `oncopied` once a click's copy has landed or failed, with whether it
 landed and the element clicked.
 
+53.46 `dropzone` MUST hand `onreject` the files a drop or a paste carries that it does not take,
+`accept` refusing them or `multiple` being `false`, and MUST NOT call it where it takes every one.
+
 # 54. Guards, fetches and jobs
 
 ## Rungs

@@ -148,6 +148,26 @@ test('a drop takes what accept takes, by type, extension or function — 53.18, 
     for (const stop of stops) stop()
 })
 
+// THE REVERT: call `onreject` only where nothing was taken, and the photo past `multiple` and the
+// contract beside an accepted photo are turned away unheard.
+test('the files a drop carries and does not take are handed to onreject — 53.46', () => {
+    const zone = element()
+    const turnedAway: string[][] = []
+    const reject = (files: File[]) =>
+        turnedAway.push(files.map((file) => file.name))
+    const stops = [
+        dropzone(() => {}, {
+            accept: 'image/*',
+            multiple: false,
+            onreject: reject,
+        })(zone),
+        dropzone(() => {}, { onreject: reject })(zone),
+    ]
+    drag(zone, 'drop', [CONTRACT, PHOTO, PHOTO])
+    expect(turnedAway).toEqual([['ledger-audit.pdf', 'signing.png']])
+    for (const stop of stops) stop()
+})
+
 test('a paste of files is a drop, and words pasted alone paste — 53.20', () => {
     const zone = element('textarea')
     const taken: File[][] = []
@@ -200,11 +220,15 @@ test('with a selector, a click on a button inside copies from that button, and n
         '<pre><code>bun run dev</code><button data-copy>Copy</button></pre><p>prose</p>'
     const heard: [boolean, string][] = []
     const stop = copyText(
-        (clicked) => clicked.closest('pre')?.querySelector('code')?.textContent ?? '',
+        (clicked) =>
+            clicked.closest('pre')?.querySelector('code')?.textContent ?? '',
         {
             selector: '[data-copy]',
             oncopied: (landed, clicked) =>
-                heard.push([landed, clicked.previousElementSibling?.textContent ?? '']),
+                heard.push([
+                    landed,
+                    clicked.previousElementSibling?.textContent ?? '',
+                ]),
         },
     )(block)
     const [first, second] = block.querySelectorAll('button')

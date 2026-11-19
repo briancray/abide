@@ -745,7 +745,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20 |
+| `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean; onreject?: (files: File[], event: DragEvent \| ClipboardEvent) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20, 53.46 |
 
 ## `copyText`
 

@@ -1,4 +1,4 @@
-// 53.17-53.20 — FILES DROPPED ON AN ELEMENT, or pasted into it, filtered as a file input filters.
+// 53.17-53.20, 53.46 — FILES DROPPED ON AN ELEMENT, or pasted into it, filtered as a file input filters.
 
 import type { Disposer } from './reactive/watch.ts'
 
@@ -8,7 +8,7 @@ import type { Disposer } from './reactive/watch.ts'
  *
  * @param onFiles what takes the accepted files, handed the `drop` or `paste` that carried them; not
  *   called where none was accepted
- * @param options which files are taken, and whether a paste is a drop
+ * @param options which files are taken, whether a paste is a drop, and what hears the files turned away
  */
 export function dropzone(
     onFiles: (files: File[], event: DragEvent | ClipboardEvent) => void,
@@ -24,14 +24,32 @@ export function dropzone(
         paste?: boolean
         /** Whether more than the first accepted file is taken. `true` by default. */
         multiple?: boolean
+        /** 53.46 — handed the files a drop or a paste carried that were not taken, where there are any. */
+        onreject?: (files: File[], event: DragEvent | ClipboardEvent) => void
     } = {},
 ): (element: Element) => Disposer {
-    const { accept = '', paste = false, multiple = true } = options
+    const { accept = '', paste = false, multiple = true, onreject } = options
     const select =
         typeof accept === 'function' ? accept : acceptedBy(acceptOf(accept))
     const taken = (data: DataTransfer | null): File[] => {
         const files = select(data)
         return multiple || files.length < 2 ? files : files.slice(0, 1)
+    }
+    const rejected = (
+        data: DataTransfer | null,
+        files: File[],
+        event: DragEvent | ClipboardEvent,
+    ): void => {
+        if (onreject === undefined || data === null) return
+        // Matched one for one, so the second of two identical files is turned away where one was taken.
+        const unmatched = [...files]
+        const turnedAway: File[] = []
+        for (const file of data.files) {
+            const at = unmatched.indexOf(file)
+            if (at === -1) turnedAway.push(file)
+            else unmatched.splice(at, 1)
+        }
+        if (turnedAway.length > 0) onreject(turnedAway, event)
     }
     return (element) => {
         // A drag crossing into a child enters it before it leaves the parent: entries count, so the
@@ -61,11 +79,15 @@ export function dropzone(
             event.preventDefault()
             entered = 0
             element.removeAttribute('data-dragging')
-            const files = taken((event as DragEvent).dataTransfer)
+            const transfer = (event as DragEvent).dataTransfer
+            const files = taken(transfer)
             if (files.length > 0) onFiles(files, event as DragEvent)
+            rejected(transfer, files, event as DragEvent)
         }
         const pasted = (event: Event): void => {
-            const files = taken((event as ClipboardEvent).clipboardData)
+            const transfer = (event as ClipboardEvent).clipboardData
+            const files = taken(transfer)
+            rejected(transfer, files, event as ClipboardEvent)
             // Words pasted alone paste as they always do.
             if (files.length === 0) return
             event.preventDefault()
