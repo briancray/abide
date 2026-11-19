@@ -1688,3 +1688,42 @@ test('a check reports every file of the app’s package, and none of a package n
         found.map((diagnosis) => relative(realpathSync(root), diagnosis.path)),
     ).toEqual(['tests/planted.ts'])
 }, 60_000)
+
+// 38.212 — AN AUGMENTATION IN A FILE THAT IMPORTS NOTHING REPLACES THE MODULE: every import of
+// `@abide/abide` in the app reads as missing, and the checker's own errors point at those imports and
+// never at the file that did it. So the file is named, at its `declare module`, and the same
+// augmentation under an `import` is not. THE REVERT: drop `replacedModules` from `diagnoseSources`;
+// the shadowing file goes unnamed, and only the imports it broke are reported.
+test('a declare module of abide in a file importing nothing is named at its line — 38.212', async () => {
+    const augment = `declare module '@abide/abide' {
+    interface Health {
+        database: string
+    }
+}
+`
+    const root = temporaryModule({
+        'package.json': JSON.stringify({ name: 'fixture', type: 'module' }),
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                types: ['bun'],
+            },
+            include: ['src', 'types'],
+        }),
+        'src/index.abide': '<p>home</p>',
+        'types/health.d.ts': augment,
+        'types/typed.d.ts': `import '@abide/abide'\n\n${augment}`,
+    })
+    const found = await checkApp(`${root}/src`)
+    const named: string[] = []
+    for (const diagnosis of found)
+        if (diagnosis.message.includes('38.212'))
+            named.push(
+                `${relative(realpathSync(root), diagnosis.path)}:${diagnosis.line}`,
+            )
+    expect(named).toEqual(['types/health.d.ts:1'])
+}, 60_000)

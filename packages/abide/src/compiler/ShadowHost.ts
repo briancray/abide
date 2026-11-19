@@ -577,11 +577,16 @@ export * from '${checked}'
     /**
      * 38.209, 38.210 — THE APP'S OWN FILES the checker holds as roots: every one in the package the app at
      * `appRoot` is part of — its tests, its scripts and its browser specs as well as its source —
-     * and neither in a package nested inside it, a dependency, nor a declaration file. THE PACKAGE,
+     * and neither in a package nested inside it, a dependency, nor — save where `declarations` asks —
+     * a declaration file. THE PACKAGE,
      * NOT THE TSCONFIG'S DIRECTORY, which may be a whole workspace's. Resolved against the
      * tsconfig's directory; a caller asking `holds` keys it.
      */
-    packageRoots(project: Project, appRoot: string): string[] {
+    packageRoots(
+        project: Project,
+        appRoot: string,
+        declarations = false,
+    ): string[] {
         const found = nearest(this.canonical(appRoot), 'package.json')
         const own =
             found === undefined ? this.canonical(appRoot) : dirname(found)
@@ -593,7 +598,7 @@ export * from '${checked}'
             if (
                 !canonical.startsWith(`${own}/`) ||
                 path.includes('/node_modules/') ||
-                path.endsWith('.d.ts')
+                (!declarations && path.endsWith('.d.ts'))
             )
                 continue
             const directory = dirname(canonical)

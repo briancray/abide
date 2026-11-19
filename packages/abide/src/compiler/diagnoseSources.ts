@@ -177,6 +177,15 @@ export async function diagnoseSources(
                                 ),
                             ),
                     )
+            // 38.212 — over its declaration files too, which is where an augmentation is written.
+            if (scripts)
+                for (const path of host.packageRoots(project, within, true))
+                    if (!host.holds(path))
+                        reports.push(
+                            Bun.file(path)
+                                .text()
+                                .then((text) => replacedModules(path, text)),
+                        )
             const reported = [
                 ...refusing,
                 ...(await Promise.all(reports)).flat(),
@@ -229,4 +238,30 @@ function flatten(diagnostic: {
     for (const link of chain)
         message += `\n  ${flatten(link as Parameters<typeof flatten>[0]).replaceAll('\n', '\n  ')}`
     return message
+}
+
+const DECLARED_MODULE = /^declare module ['"](@abide\/[^'"]+)['"]/gm
+const MODULE_SYNTAX = /^(import|export)\b/m
+
+/**
+ * 38.212 — A `declare module` OF ABIDE'S IN A FILE THAT IMPORTS AND EXPORTS NOTHING declares the
+ * module rather than adding to it: the file is a script, so the declaration is an ambient module of
+ * that name, which the whole program then reads in place of the package — every name the app
+ * imports from it reads as missing, at every import, and none of them points here.
+ */
+function replacedModules(path: string, text: string): Diagnosis[] {
+    if (MODULE_SYNTAX.test(text)) return []
+    const found: Diagnosis[] = []
+    for (const match of text.matchAll(DECLARED_MODULE)) {
+        const line = text.slice(0, match.index).split('\n').length
+        found.push({
+            path,
+            line,
+            column: 1,
+            code: 0,
+            category: 'error',
+            message: `abide: this file imports and exports nothing, so \`declare module '${match[1]}'\` declares the module in place of the package rather than adding to it, and every name the app imports from it reads as missing. Add \`import '${match[1]}'\` above it. RULEBOOK 38.212.`,
+        })
+    }
+    return found
 }
