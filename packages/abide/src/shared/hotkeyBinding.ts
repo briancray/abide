@@ -1,6 +1,18 @@
 // A binding as `hotkeys` and `keyLabel` both read it: its modifiers, then its key, joined by `+`.
 
-const MODIFIERS = new Set(['ctrl', 'meta', 'alt', 'shift', 'mod'])
+// 53.9 — the spellings a native menu's `key` is written in too, read as the five they name, so one
+// shortcut string labels, matches and fills the menu bar alike.
+const MODIFIERS: Record<string, 'ctrl' | 'meta' | 'alt' | 'shift' | 'mod'> = {
+    ctrl: 'ctrl',
+    control: 'ctrl',
+    meta: 'meta',
+    cmd: 'meta',
+    command: 'meta',
+    alt: 'alt',
+    option: 'alt',
+    shift: 'shift',
+    mod: 'mod',
+}
 
 // What a binding may name a key by besides `KeyboardEvent.key` itself.
 const KEY_NAMES: Record<string, string> = { space: ' ', esc: 'escape' }
@@ -16,7 +28,7 @@ export type HotkeyBinding = {
     shift: boolean | undefined
 }
 
-/** 53.9 — a binding as written, parsed; throws for a modifier that is not one of the five. */
+/** 53.9 — a binding as written, parsed; throws for a modifier that is not one of the five or a spelling of one. */
 export function hotkeyBinding(written: string): HotkeyBinding {
     const tokens = written.split('+')
     // `'+'` and `'mod++'` name the plus key: the last split leaves an empty token behind it.
@@ -28,12 +40,14 @@ export function hotkeyBinding(written: string): HotkeyBinding {
     key = key.toLowerCase()
     key = KEY_NAMES[key] ?? key
     const held = new Set<string>()
-    for (const token of tokens) held.add(token.toLowerCase())
-    for (const modifier of held)
-        if (!MODIFIERS.has(modifier))
+    for (const token of tokens) {
+        const modifier = MODIFIERS[token.toLowerCase()]
+        if (modifier === undefined)
             throw new TypeError(
-                `abide: hotkey "${written}" holds "${modifier}", which is not one of ${[...MODIFIERS].join(', ')}. RULEBOOK 53.9.`,
+                `abide: hotkey "${written}" holds "${token}", which is not one of ${Object.keys(MODIFIERS).join(', ')}. RULEBOOK 53.9.`,
             )
+        held.add(modifier)
+    }
     return {
         key,
         ctrl: held.has('ctrl'),

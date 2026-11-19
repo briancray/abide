@@ -5225,8 +5225,9 @@ a binding whose `editable` is `true`.
 53.8 `hotkeys` MUST NOT run a binding for a `keydown` already `defaultPrevented`, or one an input
 method is composing.
 
-53.9 `hotkeys` MUST throw where a binding holds a modifier other than `ctrl`, `meta`, `alt`, `shift`
-and `mod`.
+53.9 `hotkeys` and `keyLabel` MUST read `control` as `ctrl`, `cmd` and `command` as `meta`, and
+`option` as `alt`, MUST throw where a binding holds a modifier other than those and `ctrl`, `meta`,
+`alt`, `shift` and `mod`, and a `MenuItem`'s `key` MUST read the same modifiers, `mod` as `cmd`.
 
 53.10 `isEditableTarget` MUST hold for a textarea, a select, an input that takes text and an element
 `contenteditable` makes writable, and MUST NOT hold for any other target.

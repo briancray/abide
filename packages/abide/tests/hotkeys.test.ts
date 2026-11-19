@@ -3,6 +3,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
+import { hotkeyBinding } from '#shared/hotkeyBinding.ts'
 import { hotkeys } from '#shared/hotkeys.ts'
 import { isEditableTarget } from '#shared/isEditableTarget.ts'
 import { keyLabel } from '#shared/keyLabel.ts'
@@ -97,7 +98,15 @@ test('a letter alt composed into another character is matched by where it sits �
 })
 
 test('a binding naming no modifier abide knows is refused as it is written — 53.9', () => {
-    expect(() => hotkeys({ 'cmd+k': () => {} })).toThrow(/"cmd"/)
+    expect(() => hotkeys({ 'Hyper+k': () => {} })).toThrow(/"Hyper"/)
+})
+
+// THE REVERT: drop the spellings, and the menu bar's `cmd+shift+r` throws where it is labelled.
+test("a native menu's spellings read as the modifiers they name — 53.9", () => {
+    expect(hotkeyBinding('cmd+shift+r')).toEqual(hotkeyBinding('meta+shift+r'))
+    expect(hotkeyBinding('Command+Option+Control+k')).toEqual(
+        hotkeyBinding('meta+alt+ctrl+k'),
+    )
 })
 
 // THE REVERT: drop the `defaultPrevented` check, and Escape closes the page's panel as well as the
