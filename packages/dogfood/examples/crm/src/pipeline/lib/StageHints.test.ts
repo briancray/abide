@@ -20,7 +20,10 @@ test('focus opens the hint at once and Escape closes it', async () => {
     expect(tip(proposal).textContent).toBe(
         'A quote is out, waiting on an answer.',
     )
+    // A `focusin` that left focus elsewhere is not focus the browser shows (50.24).
     proposal.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(tip(proposal).matches(':popover-open')).toBe(false)
+    proposal.focus()
     flushSync()
     expect(tip(proposal).matches(':popover-open')).toBe(true)
     expect(tip(proposal).hasAttribute('data-open')).toBe(true)

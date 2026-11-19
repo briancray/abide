@@ -4931,7 +4931,8 @@ axes, its start edge kept where it does not fit.
 `aria-describedby`.
 
 50.24 A `Tooltip` MUST open once a pointer has rested on its anchor for `delay` milliseconds, and
-at once when its anchor takes focus.
+at once when its anchor takes focus that matches `:focus-visible`, and MUST NOT open for focus that
+does not.
 
 50.25 A `Tooltip` MUST close when the pointer leaves its anchor, when its anchor loses focus, and
 on Escape.

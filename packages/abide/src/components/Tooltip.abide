@@ -21,7 +21,7 @@ const {
         align?: 'start' | 'center' | 'end'
         /** Pixels between the anchor and the hint. Default `8`. */
         offset?: number
-        /** Milliseconds a pointer rests on the anchor before the hint opens. Focus opens it at once. Default `300`. */
+        /** Milliseconds a pointer rests on the anchor before the hint opens. Focus the browser shows (`:focus-visible`) opens it at once. Default `300`. */
         delay?: number
     } & Omit<Attributes<'span'>, 'popover' | 'role'>
 >()
@@ -66,6 +66,10 @@ function attach(tip: HTMLElement) {
         open = false
         document.removeEventListener('keydown', escape)
     }
+    // 50.24 — a click focuses a button too, and a hint opened by it would stand until focus moved.
+    const focused = (event: FocusEvent) => {
+        if ((event.target as Element).matches(':focus-visible')) show()
+    }
     const linger = () => {
         clearTimeout(timer)
         timer = setTimeout(show, delay)
@@ -73,13 +77,13 @@ function attach(tip: HTMLElement) {
 
     anchor.addEventListener('mouseenter', linger)
     anchor.addEventListener('mouseleave', hide)
-    anchor.addEventListener('focusin', show)
+    anchor.addEventListener('focusin', focused)
     anchor.addEventListener('focusout', hide)
     return () => {
         hide()
         anchor.removeEventListener('mouseenter', linger)
         anchor.removeEventListener('mouseleave', hide)
-        anchor.removeEventListener('focusin', show)
+        anchor.removeEventListener('focusin', focused)
         anchor.removeEventListener('focusout', hide)
         if (described === null) anchor.removeAttribute('aria-describedby')
         else anchor.setAttribute('aria-describedby', described)

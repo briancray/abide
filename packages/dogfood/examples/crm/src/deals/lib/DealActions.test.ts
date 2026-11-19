@@ -16,6 +16,7 @@ const key = (target: Element, name: string) =>
 
 test('the arrow keys skip the stage the deal is in', async () => {
     using _actions = await mount(DealActions({}))
+    expect(trigger().getAttribute('aria-controls')).toBe(menu().id)
     key(trigger(), 'ArrowDown')
     flushSync()
     expect(trigger().getAttribute('aria-expanded')).toBe('true')
