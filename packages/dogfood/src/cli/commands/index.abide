@@ -43,9 +43,10 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Check, build and serve the CRM in CI">
-        <p><code>abide check</code> type-checks the <code>.abide</code> files with the
-            TypeScript and reports on the line you wrote. <code>abide start</code> serves what
-            <code>abide build</code> wrote.</p>
+        <p><code>abide check</code> type-checks the whole package, its <code>.abide</code> files
+            and every <code>.ts</code> its <code>tsconfig.json</code> includes, and reports on the
+            line you wrote. <code>abide start</code> serves what <code>abide build</code>
+            wrote.</p>
         <Code code={`
             abide check && abide format --check && abide build && bun test
             abide start --port 8080
