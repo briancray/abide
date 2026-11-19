@@ -4073,6 +4073,9 @@ a request where `request` is not given.
 cookie the request carries, MUST NOT write the caller cookie, and on `App.run` MUST give the scope a
 request where `request` is not given.
 
+42.22 Under `bun test`, `createApp` MUST keep no more of the app's builds than the four whose states of
+its sources were most recently asked for, the one it boots among them.
+
 # 43. The measurement harness
 
 43.1 `@abide/harness/measure`, `@abide/harness/engine` and `@abide/harness/server` MUST each be

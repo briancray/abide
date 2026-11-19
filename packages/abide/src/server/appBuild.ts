@@ -43,8 +43,9 @@ export type BuildFiles = {
 // The CLI, spawned rather than imported: the compiler is not reachable from the server seam.
 const ABIDE_BIN = `${ABIDE_DIRECTORY}bin/abide.ts`
 const POLL_MS = 50
-// A test build no process has reused for this long is swept by the next one that builds.
-const UNUSED_FOR_MS = 24 * 60 * 60 * 1000
+// 42.22 — the test builds kept, by when a process last asked for one. More than one, so a suite
+// still running on the sources as they were keeps its build while an edit makes the next.
+const KEPT_BUILDS = 4
 
 // One lookup per app per test process, however many files in it call `createApp`.
 const TEST_BUILDS = new Map<string, Promise<string>>()
@@ -216,6 +217,7 @@ export async function sharedBuild(
         if (await isDirectory(out)) {
             const now = new Date()
             await utimes(out, now, now)
+            await sweep(builds, key)
             return out
         }
         if (await claim(lock)) {
@@ -323,13 +325,15 @@ async function holderEnded(lock: string): Promise<boolean> {
     return text !== '' && !isRunning(Number(text))
 }
 
-/** Removes builds unused for a day, and what an ended process left half-made. */
+/** Removes every build but `kept` and the most recently used after it, and what an ended process left half-made. */
 async function sweep(builds: string, kept: string): Promise<void> {
-    const names = new Bun.Glob('*').scanSync({ cwd: builds, onlyFiles: false })
     const removals: Promise<void>[] = []
-    const now = Date.now()
-    for (const name of names) {
-        if (name === kept) continue
+    const finished: { name: string; usedAt: number }[] = []
+    for (const name of new Bun.Glob('*').scanSync({
+        cwd: builds,
+        onlyFiles: false,
+    })) {
+        if (name === kept || name.endsWith('.lock')) continue
         const staged = /\.tmp-(\d+)$/.exec(name)
         if (staged !== null) {
             if (!isRunning(Number(staged[1])))
@@ -338,21 +342,19 @@ async function sweep(builds: string, kept: string): Promise<void> {
                 )
             continue
         }
-        if (name.endsWith('.lock')) continue
-        removals.push(
-            Bun.file(`${builds}/${name}`)
-                .stat()
-                .then((found) =>
-                    now - found.mtimeMs > UNUSED_FOR_MS
-                        ? rm(`${builds}/${name}`, {
-                              recursive: true,
-                              force: true,
-                          })
-                        : undefined,
-                )
-                .catch(() => undefined),
-        )
+        const found = await Bun.file(`${builds}/${name}`)
+            .stat()
+            .catch(() => undefined)
+        if (found !== undefined) finished.push({ name, usedAt: found.mtimeMs })
     }
+    finished.sort((left, right) => right.usedAt - left.usedAt)
+    for (let at = KEPT_BUILDS - 1; at < finished.length; at++)
+        removals.push(
+            rm(`${builds}/${(finished[at] as { name: string }).name}`, {
+                recursive: true,
+                force: true,
+            }),
+        )
     await Promise.all(removals)
 }
 

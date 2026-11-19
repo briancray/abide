@@ -1234,7 +1234,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 42.16, 37.4, 37.6, 38.100 |
+| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 42.16, 42.22, 37.4, 37.6, 38.100 |
 | `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
 | `App.fetch` | `(request: Request, options?: { principal?: Record<string, unknown>; caller?: string }) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6, 42.20, 42.21 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request; principal?: Record<string, unknown>; caller?: string }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 42.19, 42.21, 11.38 |

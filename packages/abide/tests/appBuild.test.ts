@@ -3,7 +3,7 @@
 // directory.
 
 import { afterAll, expect, test } from 'bun:test'
-import { readdir } from 'node:fs/promises' // bun exposes no directory listing of its own
+import { readdir, utimes } from 'node:fs/promises' // bun exposes no directory listing or mtime write of its own
 
 import { spawned } from '@abide/harness/gate'
 
@@ -54,4 +54,23 @@ test("an edit to the app's source is a new build, and no edit is the same one �
     expect(await sourceHash(app)).toBe(first)
     await Bun.write(`${app}/index.abide`, '<main>after</main>')
     expect(await sourceHash(app)).not.toBe(first)
+})
+
+// THE REVERT: sweep only after a build, as it once did — a reused build leaves all seven standing.
+test('reusing a build keeps only the four most recently asked for — 42.22', async () => {
+    const builds = temporaryModule({})
+    for (let at = 0; at < 7; at++) {
+        await Bun.write(`${builds}/build-${at}/built.txt`, 'built')
+        const usedAt = new Date(Date.now() - (7 - at) * 60_000)
+        await utimes(`${builds}/build-${at}`, usedAt, usedAt)
+    }
+    await sharedBuild(builds, 'build-0', async () => {
+        throw new Error('a build that exists is reused, not made')
+    })
+    expect((await readdir(builds)).sort()).toEqual([
+        'build-0',
+        'build-4',
+        'build-5',
+        'build-6',
+    ])
 })
