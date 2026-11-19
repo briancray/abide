@@ -5,5 +5,9 @@
             "#src/*": ["./src/*", "./src/*.ts"]
         }
     },
-    "include": ["src", "e2e", "tests", "scripts", "examples"]
+    "include": ["src", "e2e", "tests", "scripts", "examples"],
+    // An example app's source is checked by its own `abide check` (`examples.test.ts`), which reads
+    // what a `.abide` exports by name (RULEBOOK 34.33); the `*.abide` wildcard here knows its default
+    // alone.
+    "exclude": ["examples/*/src"]
 }

@@ -33,6 +33,9 @@ import Snippet from '#src/lib/Snippet.abide'
             seconds, and an error's after ten, long enough to reach its action. Pass
             <code>toasts.dismiss</code> the id to take one down sooner.</p>
 
+        <p><code>toasts</code> is imported beside the component it shows in:
+            <code>import Toasts, &#123; toasts &#125; from '@abide/abide/Toasts.abide'</code>.</p>
+
         <p>The card renders <code>Toasts</code> beside the form. An app renders it once, in its
             root layout, and every <code>toasts.notify</code> on every page lands there. Render it
             twice and every notice shows twice. Style its root <code>fixed</code> where the

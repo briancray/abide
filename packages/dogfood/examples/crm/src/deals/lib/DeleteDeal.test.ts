@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 
-import { flushSync, prompts } from '@abide/abide'
+import { flushSync } from '@abide/abide'
+import { prompts } from '@abide/abide/Prompts.abide'
 import { mount, settled } from '@abide/harness/abide'
 
 import DeleteDeal from './DeleteDeal.abide'

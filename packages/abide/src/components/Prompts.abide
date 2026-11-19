@@ -1,3 +1,12 @@
+<script module>
+// 50.5, 34.33 — THE CALLS THAT QUEUE WHAT THIS COMPONENT SHOWS, imported beside it from its own entry.
+import * as prompts from '#shared/prompts/index.ts'
+import type { PromptOptions } from '#shared/prompts/queue.ts'
+
+export { prompts }
+export type { PromptOptions }
+</script>
+
 <script>
 // 50.6, 50.8-50.10, 50.34 — WHERE `prompts.confirm`, `prompts.alert` AND `prompts.prompt` SHOW: rendered once, in the root
 // layout, and showing the queue's first prompt in a `Dialog` until it is answered.

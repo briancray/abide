@@ -7,8 +7,10 @@ import { afterEach, expect, test } from 'bun:test'
 
 import { installServer } from '#server/installServer.ts'
 import { inScope } from '#server/requestScope.ts'
-import { place, prompts, toasts } from '#shared'
+import { place } from '#shared'
+import * as prompts from '#shared/prompts/index.ts'
 import { queue } from '#shared/prompts/queue.ts'
+import * as toasts from '#shared/toasts/index.ts'
 
 installServer()
 

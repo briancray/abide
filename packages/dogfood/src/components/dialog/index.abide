@@ -63,8 +63,9 @@ import Snippet from '#src/lib/Snippet.abide'
             <code>false</code>, so <code>if (await prompts.confirm(…))</code> is the whole of the
             branch. <code>prompts.alert</code> takes the same options and settles once it closes, and
             <code>prompts.prompt</code> asks for text, below.
-            A string in place of the options is the body. Both live on the <code>prompts</code>
-            namespace, so none shadows the browser's own blocking <code>confirm</code>,
+            A string in place of the options is the body. All three live on the <code>prompts</code>
+            namespace, imported beside the component it shows in —
+            <code>import Prompts, &#123; prompts &#125; from '@abide/abide/Prompts.abide'</code> — so none shadows the browser's own blocking <code>confirm</code>,
             <code>alert</code> and <code>prompt</code>, and a call missing its import fails to compile.</p>
 
         <p>Both show in <code>Prompts</code>, a <code>Dialog</code> you render once. The card

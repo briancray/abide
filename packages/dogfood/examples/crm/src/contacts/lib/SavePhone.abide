@@ -1,6 +1,6 @@
 <script>
-import { reactive, report, toasts } from '@abide/abide'
-import Toasts from '@abide/abide/Toasts.abide'
+import { reactive, report } from '@abide/abide'
+import Toasts, { toasts } from '@abide/abide/Toasts.abide'
 
 import savePhone from '../savePhone.handler.ts'
 

@@ -211,8 +211,9 @@ server helper. Each has a page in `docs/abide.md` with a working card, every pro
 table.
 
 - Components, each imported on its own — `import Dialog from '@abide/abide/Dialog.abide'`:
-  `Dialog`, `Prompts` (the host for `prompts.confirm` / `prompts.alert` / `prompts.prompt`), `Toasts` (the host for
-  `toasts.notify`), `Tooltip`, `Menu`, `Combobox`, `Tabs`, `SortableTable`, `Markdown`, `LineChart`,
+  `Dialog`, `Prompts` (and `prompts.confirm` / `prompts.alert` / `prompts.prompt` beside it:
+  `import Prompts, { prompts } from '@abide/abide/Prompts.abide'`), `Toasts` (and `toasts.notify`
+  beside it), `Tooltip`, `Menu`, `Combobox`, `Tabs`, `SortableTable`, `Markdown`, `LineChart`,
   `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `markdown`, `chart`, `place`, `listbox`, `sortRows`, `hotkeys` and `keyLabel`, and

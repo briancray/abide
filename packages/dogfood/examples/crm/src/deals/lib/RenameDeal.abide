@@ -1,6 +1,6 @@
 <script>
-import { prompts, reactive } from '@abide/abide'
-import Prompts from '@abide/abide/Prompts.abide'
+import { reactive } from '@abide/abide'
+import Prompts, { prompts } from '@abide/abide/Prompts.abide'
 
 let deal = reactive('Engine renewal')
 

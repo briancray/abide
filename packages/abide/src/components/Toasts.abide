@@ -1,3 +1,13 @@
+<script module>
+// 50.12, 34.33 — THE CALLS THAT RAISE WHAT THIS COMPONENT SHOWS, imported beside it from its own entry.
+import * as toasts from '#shared/toasts/index.ts'
+import type { Toast } from '#shared/toasts/list.ts'
+import type { NotifyOptions } from '#shared/toasts/notify.ts'
+
+export { toasts }
+export type { NotifyOptions, Toast }
+</script>
+
 <script>
 // 50.17, 50.18 — WHERE `toasts.notify` SHOWS: rendered once, in the root layout, as the live region
 // every notice is read out from as it lands.
