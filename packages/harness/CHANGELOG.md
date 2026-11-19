@@ -1,5 +1,33 @@
 # @abide/harness
 
+## 0.6.0
+
+### Minor Changes
+
+- 8094722: `allocated` is renamed `retainedPerRun`, for what it measures: the objects each run leaves reachable after a full collection, as a batch mean. `bun:jsc` counts survivors only, so it never saw what a run allocated and dropped (RULEBOOK 43.17)
+
+### Patch Changes
+
+- f858700: server() and THRESHOLDS get the clauses and gates they lacked ([`f2f381e`](https://github.com/briancray/abide/commit/f2f381ef945e1a0939746a7e2493fb8d6a26848b))
+- 43d5e4e: `retainedPerRun` runs exactly `reps` times, the second half taking an odd one; 401 ran 400
+- Updated dependencies [f858700]
+- Updated dependencies [f858700]
+- Updated dependencies [f858700]
+- Updated dependencies [f858700]
+- Updated dependencies [f858700]
+- Updated dependencies [f858700]
+- Updated dependencies [f858700]
+- Updated dependencies [e3b6c23]
+- Updated dependencies [8267683]
+- Updated dependencies [6997b4d]
+- Updated dependencies [6337033]
+- Updated dependencies [cc1c697]
+- Updated dependencies [89fb91f]
+- Updated dependencies [9ead0c8]
+- Updated dependencies [a42b597]
+- Updated dependencies [699a533]
+  - @abide/abide@0.142.0
+
 ## 0.5.0
 
 ### Minor Changes
