@@ -1,5 +1,29 @@
 # @abide/abide
 
+## 0.142.0
+
+### Minor Changes
+
+- f858700: guards, resilient fetches and scheduled jobs in @abide/abide/server ([`1447e2f`](https://github.com/briancray/abide/commit/1447e2fa40d67d03c7a6217e51b751fe5f5764c0))
+- f858700: Dialog, Prompts, Toasts, Tooltip, Menu and the prompts, toasts and place helpers in core ([`3a04d07`](https://github.com/briancray/abide/commit/3a04d077c19d7c5e2ba12b09ec38fa163941bfb1))
+- f858700: format, markdown and chart helpers, and the Markdown, LineChart and Sparkline components ([`59e407d`](https://github.com/briancray/abide/commit/59e407da96f97a732d7d685442756a65877763e0))
+- f858700: listbox, Combobox, Tabs, SortableTable and sortRows in core ([`69fd6c9`](https://github.com/briancray/abide/commit/69fd6c9e840cd446d60d21dd6a326258deba146b))
+- f858700: hotkeys, element behaviors, the transcript fold, Chat and Pairing in abide core ([`90760be`](https://github.com/briancray/abide/commit/90760bea1b59e5ca2becddf191d25bd81b833425))
+- 6997b4d: `abide check` reports on every file the app's `tsconfig.json` includes inside the app's package — its tests, scripts and browser specs as well as `src` — and on nothing inside a package nested in it (RULEBOOK 38.209, 38.210). `bun check` runs an app's `check` script in place of `tsc`, so those files were checked by nothing
+- 6337033: a `.abide` exports by name what its `<script module>` exports, beside its component — to a page and a `.ts`, on a server and in the browser, and typed by `abide check` (RULEBOOK 34.33). `export default` and re-exports stay refused there (34.34, 34.35), and a `<script>` or `<script server>` still exports nothing (34.17)
+- 89fb91f: `prompts.prompt` asks for a line of text in the app's `Prompts`, settling with what was typed or `undefined`. `PromptOptions` gains `value` and `placeholder`.
+- a42b597: abide ships headless components and the helpers beside them. Components, each its own entry (`@abide/abide/<Name>.abide`): `Dialog`, `Prompts`, `Toasts`, `Tooltip`, `Menu`, `Combobox`, `Tabs`, `SortableTable`, `Markdown`, `LineChart`, `Sparkline`, `Chat`, `Pairing` — no stylesheet, styled by the `data-` attributes and `data-part`s they write (RULEBOOK 49). `prompts` and `toasts` come from their components' own entries (`import Toasts, { toasts } from '@abide/abide/Toasts.abide'`). From `@abide/abide`: `format`, `markdown`, `chart`, `place`, `listbox`, `sortRows`, `hotkeys`, `keyLabel`, `isEditableTarget`, `dismissible`, `dropzone`, `copyText`, `transcript`. From `@abide/abide/server`: `signedIn`, `requireRole`, `readOnly`, `fetchJson`, `fetchText`, `job`
+
+### Patch Changes
+
+- f858700: RULEBOOK 52, the format, markdown and chart registry rows, and their pages ([`a4218a1`](https://github.com/briancray/abide/commit/a4218a16a3d6ec98f813b0acf16ba40c43f167eb))
+- f858700: name what Chat and Pairing write for a caller to style ([`f75fac2`](https://github.com/briancray/abide/commit/f75fac28b8b70838c9449d98d3e0213aafe7d3ac))
+- e3b6c23: `Chat`'s `Text` render prop takes an inline `{#component Text(…)}` the way `Combobox`'s `Option`, `Tabs`' `Tab` and `SortableTable`'s `Cell` do: it was typed to return a `Component`, so the spelling its own docs showed did not compile (RULEBOOK 53.39)
+- 8267683: `abide check` names a file that `declare module`s an `@abide/` entry while importing and exporting nothing: such a file replaces the module for the whole program, and every import of it read as missing with nothing pointing at the cause (RULEBOOK 38.212)
+- cc1c697: a package's `.abide` component is held to its props where an app imports it: through an explicit `exports` entry, and through a workspace link (RULEBOOK 34.25)
+- 9ead0c8: `abide run` imports a `.abide` file as the app compiles it — the build of its sources as they stand, which `bun test` shares — so a script can `render` a component (RULEBOOK 38.211)
+- 699a533: a `GET` or `DELETE` arg that is a record, or a list holding a record or a list, rides the URL as its canonical JSON rather than `[object Object]` — so two different records are two addresses and two cache entries — and the server reads it back where the schema declares one (RULEBOOK 30.28, 19.27). A list of primitives is still its member repeated
+
 ## 0.141.0
 
 ### Minor Changes
