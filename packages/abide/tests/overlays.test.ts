@@ -8,6 +8,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { installServer } from '#server/installServer.ts'
 import { inScope } from '#server/requestScope.ts'
 import { place } from '#shared'
+import { follow } from '#shared/follow.ts'
 import * as prompts from '#shared/prompts/index.ts'
 import { queue } from '#shared/prompts/queue.ts'
 import * as toasts from '#shared/toasts/index.ts'
@@ -80,6 +81,54 @@ test('the floating element is kept inside the viewport — 50.21', () => {
 test('an element wider than the viewport keeps its start edge in — 50.21', () => {
     const anchor = box(100, 100, 20, 20)
     expect(place(anchor, box(0, 0, 500, 40)).x).toBe(8)
+})
+
+// THE REVERT: drop the clamp, and an anchor by the menu's start edge points the arrow from 2, the
+// rounded corner.
+test('the arrow keeps arrowInset from the corners, and an edge too short for both centers it — 50.35', () => {
+    const anchor = box(0, 100, 4, 20)
+    const floating = box(0, 0, 100, 40)
+    expect(place(anchor, floating, { align: 'start', margin: 0 }).arrow).toBe(2)
+    expect(
+        place(anchor, floating, { align: 'start', margin: 0, arrowInset: 12 })
+            .arrow,
+    ).toBe(12)
+    expect(
+        place(anchor, box(0, 0, 20, 40), { align: 'start', arrowInset: 12 })
+            .arrow,
+    ).toBe(10)
+})
+
+// THE REVERT: drop the observer, and a hint whose text grew after it opened stays where it opened.
+test('a floating element that changes size is placed again — 50.26', async () => {
+    const heard: ResizeObserverCallback[] = []
+    const Observer = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+        constructor(callback: ResizeObserverCallback) {
+            heard.push(callback)
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    }
+    try {
+        const anchor = box(100, 100, 40, 20)
+        let height = 30
+        const floating = box(0, 0, 60, 30)
+        floating.getBoundingClientRect = () =>
+            DOMRect.fromRect({ x: 0, y: 0, width: 60, height })
+        const tops: number[] = []
+        const stop = follow(anchor, floating, { side: 'top' }, (placement) =>
+            tops.push(placement.y),
+        )
+        height = 50
+        for (const callback of heard) callback([], {} as ResizeObserver)
+        await Bun.sleep(50)
+        stop()
+        expect(tops).toEqual([62, 42])
+    } finally {
+        globalThis.ResizeObserver = Observer
+    }
 })
 
 // THE REVERT: write the `inset` inside `place`, and the document records the write.

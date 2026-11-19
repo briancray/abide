@@ -4938,7 +4938,8 @@ does not.
 on Escape.
 
 50.26 A `Tooltip` and a `Menu` MUST open in the top layer as a popover placed by `place` against
-their anchor, and MUST be placed again while open whenever anything scrolls or the window resizes.
+their anchor, and MUST be placed again while open whenever anything scrolls, the window resizes,
+or the anchor or the popover changes size.
 
 50.27 A `Tooltip` and a `Menu` MUST write the side `place` took as `data-side`, and the `arrow` of
 its `Placement` as the `--arrow-offset` custom property.
@@ -4962,6 +4963,9 @@ confirming button, and `undefined` where it closed any other way.
 
 50.34 `Prompts` MUST show an input for a prompt asked by `prompts.prompt`, starting from its
 `value`, and `''` where it has none.
+
+50.35 `place` MUST keep `arrow` at least `arrowInset` pixels from each end of the floating
+element's facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
 
 # 51. Lists and tables
 

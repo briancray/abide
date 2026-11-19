@@ -15,6 +15,8 @@ export type PlaceOptions = {
     offset?: number
     /** Pixels the floating element keeps from the viewport's edges. Default `8`. */
     margin?: number
+    /** 50.35 — pixels `arrow` keeps from each end of the floating element's facing edge, so an arrow clears its rounded corners. Default `0`. */
+    arrowInset?: number
 }
 
 /** Where `place` puts a floating element, in viewport pixels. */
@@ -45,7 +47,7 @@ export function place(
     floating: Element,
     options: PlaceOptions = {},
 ): Placement {
-    const { align = 'center', offset = 8, margin = 8 } = options
+    const { align = 'center', offset = 8, margin = 8, arrowInset = 0 } = options
     const at = anchor.getBoundingClientRect()
     const size = floating.getBoundingClientRect()
     const viewport = document.documentElement
@@ -95,7 +97,15 @@ export function place(
         x,
         y,
         side,
-        arrow: start + length / 2 - (vertical ? x : y),
+        // An edge shorter than both insets puts the arrow at its middle.
+        arrow:
+            extent < 2 * arrowInset
+                ? extent / 2
+                : clamp(
+                      start + length / 2 - (vertical ? x : y),
+                      arrowInset,
+                      extent - arrowInset,
+                  ),
     }
 }
 

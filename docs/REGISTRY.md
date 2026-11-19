@@ -801,7 +801,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `place` | `(anchor: Element, floating: Element, options?: PlaceOptions) => Placement` | Where a floating element sits beside its anchor, in viewport pixels. | 50.19, 50.20, 50.21, 50.22 |
-| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number }` | The side tried first, the edge lined up with, the gap to the anchor and the gap kept to the viewport. | 50.19, 50.20, 50.21 |
+| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number; arrowInset?: number }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners. | 50.19, 50.20, 50.21, 50.35 |
 | `Placement` | `{ x: number; y: number; side: Side; arrow: number }` | The left and top edges `place` chose, the side it took, and where along the facing edge the anchor's middle falls. | 50.19, 50.27 |
 | `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
@@ -878,13 +878,13 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Tooltip` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; delay?: number } & Omit<Attributes<'span'>, 'popover' \| 'role'>` | A hint for the element written just before it, whose children are the hint, imported from `@abide/abide/Tooltip.abide`. | 50.23, 50.24, 50.25, 50.26, 50.27, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+| `Tooltip` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number } & Omit<Attributes<'span'>, 'popover' \| 'role'>` | A hint for the element written just before it, whose children are the hint, imported from `@abide/abide/Tooltip.abide`. | 50.23, 50.24, 50.25, 50.26, 50.27, 50.35, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
 
 ## `Menu`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Menu` | `{ label: string; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number } & Attributes<'div'>` | A button opening a list of actions, whose children are the menu items, imported from `@abide/abide/Menu.abide`. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7 |
+| `Menu` | `{ label: string; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number } & Attributes<'div'>` | A button opening a list of actions, whose children are the menu items, imported from `@abide/abide/Menu.abide`. | 50.26, 50.27, 50.35, 50.28, 50.29, 50.30, 50.31, 50.32, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7 |
 
 ## `Combobox`
 

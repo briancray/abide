@@ -11,6 +11,7 @@ const {
     side = 'top',
     align = 'center',
     offset = 8,
+    arrowInset = 0,
     delay = 300,
     ...rest
 } = props<
@@ -21,6 +22,8 @@ const {
         align?: 'start' | 'center' | 'end'
         /** Pixels between the anchor and the hint. Default `8`. */
         offset?: number
+        /** Pixels the arrow's `--arrow-offset` keeps from each end of the hint's facing edge, clear of its rounded corners. Default `0`. */
+        arrowInset?: number
         /** Milliseconds a pointer rests on the anchor before the hint opens. Focus the browser shows (`:focus-visible`) opens it at once. Default `300`. */
         delay?: number
     } & Omit<Attributes<'span'>, 'popover' | 'role'>
@@ -52,9 +55,14 @@ function attach(tip: HTMLElement) {
         if (stop !== undefined) return
         tip.showPopover()
         open = true
-        stop = follow(anchor, tip, { side, align, offset }, (placement) => {
-            placed = placement.side
-        })
+        stop = follow(
+            anchor,
+            tip,
+            { side, align, offset, arrowInset },
+            (placement) => {
+                placed = placement.side
+            },
+        )
         document.addEventListener('keydown', escape)
     }
     function hide() {

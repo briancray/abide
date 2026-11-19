@@ -12,6 +12,7 @@ const {
     side = 'bottom',
     align = 'start',
     offset = 4,
+    arrowInset = 0,
     ...rest
 } = props<
     {
@@ -23,6 +24,8 @@ const {
         align?: 'start' | 'center' | 'end'
         /** Pixels between the trigger and the menu. Default `4`. */
         offset?: number
+        /** Pixels the arrow's `--arrow-offset` keeps from each end of the menu's facing edge, clear of its rounded corners. Default `0`. */
+        arrowInset?: number
     } & Attributes<'div'>
 >()
 
@@ -49,9 +52,14 @@ function show(focused: 'first' | 'last') {
     if (trigger === undefined || menu === undefined) return
     menu.showPopover()
     open = true
-    stop = follow(trigger, menu, { side, align, offset }, (placement) => {
-        placed = placement.side
-    })
+    stop = follow(
+        trigger,
+        menu,
+        { side, align, offset, arrowInset },
+        (placement) => {
+            placed = placement.side
+        },
+    )
     const listed = items()
     listed[focused === 'first' ? 0 : listed.length - 1]?.focus()
 }
