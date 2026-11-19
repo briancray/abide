@@ -179,3 +179,42 @@ test('the value is typed by its defaults — 30.41', () => {
     }
     expect(typeof typed).toBe('function')
 })
+
+// 30.48 — a router whose navigation arrives only when it is let go, as a real one's load does.
+// THE REVERT: rewrite `current.peek()` in `queryWrite` and read `address()` alone in `get` — the
+// second navigation goes to `?tab=mine` and drops `watch=4`, and the spread reads `watch: 3`.
+test('writes in one turn build on each other, through any defaults — 30.48', async () => {
+    const address = reactive(new URL('https://crm.invalid/deals?watch=3'))
+    const went: string[] = []
+    const arrivals: (() => void)[] = []
+    CURRENT_ROUTER.current = {
+        go: (to) => {
+            went.push(String(to))
+            return new Promise<void>((resolve) =>
+                arrivals.push(() => {
+                    address.set(new URL(to))
+                    resolve()
+                }),
+            )
+        },
+        step: async () => {},
+    }
+    const watching = routeQuery(address, { watch: 0 })
+    const tabs = routeQuery(address, { tab: 'all' })
+    watching.set({ watch: 4 })
+    expect(watching().watch).toBe(4)
+    tabs.set({ tab: 'mine' })
+    expect(went).toEqual([
+        'https://crm.invalid/deals?watch=4',
+        'https://crm.invalid/deals?watch=4&tab=mine',
+    ])
+    const query = routeQuery(address, DEFAULTS)
+    query.set({ ...query(), open: true })
+    expect(went.at(-1)).toBe(
+        'https://crm.invalid/deals?watch=4&tab=mine&open=true',
+    )
+    for (const arrive of arrivals) arrive()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(query()).toEqual({ ...DEFAULTS, watch: 4, tab: 'mine', open: true })
+})

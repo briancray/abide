@@ -2247,15 +2247,20 @@ MUST read as its default.
 write carries, and a member the write leaves out or leaves `undefined` to its default.
 
 30.44 A write to the value `route.query` answers MUST be one `navigate`, with `replace` and
-`keepScroll`, to `route.url` with its query rewritten, each member at its default left out per 30.40.
+`keepScroll`, to the address 30.48 names with its query rewritten, each member at its default left
+out per 30.40.
 
-30.45 A write to the value `route.query` answers MUST leave every member of `route.url`'s query its
-defaults do not name as it stands.
+30.45 A write to the value `route.query` answers MUST leave every member of the query of the address
+30.48 names that its defaults do not name as it stands.
 
 30.46 A write to the value `route.query` answers where `navigate` has no router MUST throw.
 
 30.47 A change to `route.url` that leaves every member the defaults name reading as it did MUST NOT
 wake a reader of the value `route.query` answers.
+
+30.48 Until the `navigate` the last write to a value `route.query` answers made has settled, every
+value `route.query` answers MUST read under 30.41, and a write to one MUST rewrite under 30.44, the
+address that `navigate` goes to, and `route.url` otherwise.
 
 # 31. Reading and writing by name
 

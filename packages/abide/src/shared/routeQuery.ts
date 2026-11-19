@@ -8,6 +8,7 @@ import { CURRENT_ROUTER } from './CURRENT_ROUTER.ts'
 import { navigate, noRouter } from './navigate.ts'
 import { numberFromText } from './numberFromText.ts'
 import { bareName, queryText } from './queryText.ts'
+import { reactive } from './reactive/index.ts'
 import { pairReactive } from './reactive/pairReactive.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { structural } from './reactive/structural.ts'
@@ -29,6 +30,11 @@ export type QueryOf<Defaults extends QueryDefaults> = {
             : string[]
 }
 
+// 30.48 — WHERE THE LAST WRITE TO AN ADDRESS IS STILL NAVIGATING, one per address and shared by
+// every `route.query` of it, so a second write in the same turn — through another set of defaults
+// or a spread of the first's value — builds on the first rather than on the address it left.
+const NAVIGATING = new WeakMap<Reactive<URL>, Reactive<URL | undefined>>()
+
 /**
  * The query of `address` — `route.url` — as a `Reactive` of the defaults' shape: each member read
  * off it, and a write navigating to the address that carries it.
@@ -37,12 +43,22 @@ export function routeQuery<Defaults extends QueryDefaults>(
     address: Reactive<URL>,
     defaults: Defaults,
 ): Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>> {
+    let navigating = NAVIGATING.get(address)
+    if (navigating === undefined) {
+        navigating = reactive<URL | undefined>(undefined)
+        NAVIGATING.set(address, navigating)
+    }
+    const going = navigating
     return pairReactive(
         {
-            get: () => queryRead(address(), defaults),
+            get: () => {
+                const standing = address()
+                return queryRead(going() ?? standing, defaults)
+            },
             set: (value) =>
                 queryWrite(
-                    address.peek() as URL,
+                    address,
+                    going,
                     defaults,
                     value as Record<string, unknown>,
                 ),
@@ -93,15 +109,17 @@ function parsed(text: string, fallback: unknown): unknown {
 }
 
 /**
- * 30.43, 30.44, 30.45, 30.46 — navigates once, in place, to the standing address with the members
- * the defaults name rewritten from `value`, and every other member left where it stands.
+ * 30.43, 30.44, 30.45, 30.46, 30.48 — navigates once, in place, to the standing address with the
+ * members the defaults name rewritten from `value`, and every other member left where it stands.
  */
 function queryWrite(
-    standing: URL,
+    current: Reactive<URL>,
+    navigating: Reactive<URL | undefined>,
     defaults: QueryDefaults,
     value: Record<string, unknown>,
 ): void {
     if (CURRENT_ROUTER.current === null) throw noRouter('A route.query write')
+    const standing = navigating.peek() ?? (current.peek() as URL)
     const members: Record<string, unknown> = {}
     for (const name in defaults)
         members[name] = value[name] === undefined ? defaults[name] : value[name]
@@ -115,5 +133,13 @@ function queryWrite(
     const own = queryText(members, defaults)
     if (own !== '') search += `&${own}`
     address.search = search.slice(1)
-    void navigate(address, { replace: true, keepScroll: true })
+    navigating.set(address)
+    const arrived = (): void => {
+        // A later write's navigation is still going, and stands until it arrives.
+        if (navigating.peek() === address) navigating.set(undefined)
+    }
+    navigate(address, { replace: true, keepScroll: true }).then(
+        arrived,
+        arrived,
+    )
 }
