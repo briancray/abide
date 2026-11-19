@@ -13,6 +13,12 @@ import Section from '#src/lib/Section.abide'
     ]}
     tests={[
         {
+            path: 'packages/abide/tests/cliCommands.test.ts',
+            from: [
+                "test('run imports a .abide, so a script renders a component — 38.211'",
+            ],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/companies/lib/SheetPreview.test.ts',
             from: ["test('the sheet is a document of its own'"],
         },
@@ -70,5 +76,18 @@ import Section from '#src/lib/Section.abide'
                 expect(html).toContain('Hopper &amp; Co')
             })
         `} />
+    </Section>
+
+    <Section level={3} title="Save each company's sheet from a script">
+        <p>Under <code>abide run</code> a script imports a <code>.abide</code> as the app
+            compiles it, so <code>render</code> writes the sheets to disk.</p>
+        <Code language="ts" caption="server" code={`
+            import { render } from '@abide/abide/server'
+            import CompanySheet from './src/companies/lib/CompanySheet.abide'
+
+            const company = { name: 'Hopper & Co' }
+            await Bun.write('hopper.html', await render(CompanySheet({ company })))
+        `} />
+        <Code code={`abide run scripts/sheets.ts`} />
     </Section>
 </Doc>

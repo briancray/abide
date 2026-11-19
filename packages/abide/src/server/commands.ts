@@ -9,8 +9,9 @@ import { parseArgs } from 'node:util' // bun exposes no argv parser of its own y
 import { MCP_ADDRESS, OPENAPI_ADDRESS } from '#shared/ADDRESSES.ts'
 import { IN_PROCESS_ORIGIN } from '#shared/IN_PROCESS_ORIGIN.ts'
 
+import { processBuild, servedBuild, spawnedBuild } from './appBuild.ts'
 import { banner } from './banner.ts'
-import { type App, type AppHandle, enterApp } from './createApp.ts'
+import { type App, type AppHandle, appRoot, enterApp } from './createApp.ts'
 import { stopOnSignalOrFault } from './faultPolicy.ts'
 import {
     appUrl,
@@ -449,6 +450,12 @@ async function run(
     }
     const path = resolve(file)
     process.argv = [process.argv[0] as string, path, ...rest]
+    // 38.211 — A SCRIPT IMPORTS A `.abide` AS A TEST DOES: the compilation of the app's sources as
+    // they stand, served before the script loads — the build `bun test`'s preload serves (38.109),
+    // shared with it by the sources' hash. An executable carries no sources, and finds no root.
+    const root = appRoot(undefined)
+    if (root !== undefined)
+        await servedBuild(root, await processBuild(root, true), spawnedBuild)
     // 38.57 — entered as `bootApp` enters it, its server blocks aside: a script is run against the
     // app's source, which nothing built.
     await enterApp({ hooks: undefined, package: app.package })

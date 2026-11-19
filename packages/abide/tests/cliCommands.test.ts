@@ -265,6 +265,32 @@ console.log('top level done')
     expect(ran.exitCode).toBe(3)
 })
 
+// 38.211 — A SCRIPT IMPORTS A `.abide` as a test does, so `render` turns a component into its bytes
+// from `abide run`. THE REVERT: drop the served build from `run`; the import is the file's path, and
+// `render` throws that the component is not a function.
+test('run imports a .abide, so a script renders a component — 38.211', async () => {
+    const dir = temporaryModule({
+        'package.json': '{ "name": "sheets", "type": "module" }',
+        'src/index.abide': '<p>home</p>',
+        'src/lib/Sheet.abide': `<script>
+import { props } from '@abide/abide'
+const { name } = props<{ name: string }>()
+</script>
+
+<h1>{name}</h1>`,
+        'script.ts': `import { render } from '@abide/abide/server'
+import Sheet from './src/lib/Sheet.abide'
+const html = new TextDecoder().decode(await render(Sheet({ name: 'Hopper & Co' })))
+console.log(html.includes('<h1>Hopper &amp; Co</h1>') ? 'rendered' : html)
+`,
+    })
+    const ran = await spawned(['bun', BIN, 'run', 'script.ts'], { cwd: dir })
+    expect({ out: ran.stdout.trim(), err: ran.stderr.trim() }).toEqual({
+        out: 'rendered',
+        err: '',
+    })
+}, 60_000)
+
 // 38.8 — ONE CALL, AND ITS EXIT CODE SAYS HOW IT WENT: 0 answered, 7 refused, 8 faulted.
 test('call answers with the value, and exits 7 on a refusal and 8 on a fault — 38.8', async () => {
     const call = (...args: string[]) =>
