@@ -5322,6 +5322,13 @@ scrolled up from it.
 53.43 `Pairing` MUST render its children once `pairing` reports the bridge paired, and MUST NOT
 before.
 
+53.44 `copyText` given `selector` MUST copy on a click inside its element on an element matching
+`selector`, handing that element to its function and writing `data-copied` on it, and MUST copy
+nothing for a click on no such element.
+
+53.45 `copyText` MUST call `oncopied` once a click's copy has landed or failed, with whether it
+landed and the element clicked.
+
 # 54. Guards, fetches and jobs
 
 ## Rungs

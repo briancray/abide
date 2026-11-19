@@ -751,7 +751,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copyText` | `(text: string \| (() => string), options?: { copiedFor?: number }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text to the clipboard on a click of an element. | 32.9, 53.21, 53.22, 53.23 |
+| `copyText` | `(text: string \| ((clicked: Element) => string), options?: { copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45 |
 
 ## `signedIn`
 
