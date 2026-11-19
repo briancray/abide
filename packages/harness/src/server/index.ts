@@ -1,4 +1,4 @@
-// Lane 3 of 3 — bytes, microtask turns and allocations, on bun.
+// Lane 3 of 3 — bytes, microtask turns and what a run leaves reachable, on bun.
 // The lane that prices what ships and what the server spends getting it there.
 //
 // There is no `calls()` here. `bun:test` already ships one —

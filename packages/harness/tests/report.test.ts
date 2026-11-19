@@ -201,3 +201,17 @@ test('ratio() flags two arms whose work counters disagree', () => {
         'recalcStyleCount: abide 0, vanilla 9',
     ])
 })
+
+// 43.46 — ONE FRAME, READ FROM `THRESHOLDS`: a lane holding its own 16.7 ms is a second copy of the
+// line perception is judged at, and only one of the two gets moved. THE REVERT: compare `batch`'s
+// minimum against a `16_700_000` of its own, and `batch.ts` is named.
+test('no lane holds a frame of its own — 43.46', async () => {
+    const holders: string[] = []
+    const source = new URL('../src/', import.meta.url).pathname
+    for (const file of new Bun.Glob('**/*.ts').scanSync({ cwd: source })) {
+        if (file.endsWith('THRESHOLDS.ts')) continue
+        if (/\b16_?700_?000\b/.test(await Bun.file(`${source}${file}`).text()))
+            holders.push(file)
+    }
+    expect(holders).toEqual([])
+})

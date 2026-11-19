@@ -563,7 +563,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `server` | `<WebSocketData>() => Server<WebSocketData>` | The listening server. | 22.1 |
+| `server` | `<WebSocketData>() => Server<WebSocketData>` | The listening server. | 22.1, 42.9 |
 
 ## `isServer`
 
@@ -926,7 +926,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Chat` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; Text?: (props: { text: string }) => Component; placeholder?: string; label?: string; disabled?: boolean } & Attributes<'section'>` | The shipped component showing a conversation with an assistant handler as it streams, above a composer. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.41 |
+| `Chat` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; Text?: (props: { text: string }) => unknown; placeholder?: string; label?: string; disabled?: boolean } & Attributes<'section'>` | The shipped component showing a conversation with an assistant handler as it streams, above a composer. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.41 |
 
 ## `Pairing`
 
@@ -1389,7 +1389,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `THRESHOLDS` | `{ readonly frame: 16700000; readonly interaction: 100000000 }` | Where a cost crosses perception, in nanoseconds. | 43.14 |
+| `THRESHOLDS` | `{ readonly frame: 16700000; readonly interaction: 100000000 }` | Where a cost crosses perception, in nanoseconds. | 43.14, 43.46 |
 
 ## `gate` — `@abide/harness/gate`
 

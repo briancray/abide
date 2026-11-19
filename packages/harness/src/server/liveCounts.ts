@@ -11,12 +11,12 @@ import { fullGC, heapStats } from 'bun:jsc'
 export function liveCounts(caller: string): Record<string, number> {
     // happy-dom's own implementation objects land in the same untyped `Object` bucket as the
     // framework's, so a total taken in a preloaded process is worthless for any op that touches
-    // the DOM. `bunfig.toml` preloads a DOM into every `bun test` process, so the allocation gates
+    // the DOM. `bunfig.toml` preloads a DOM into every `bun test` process, so the reachability gates
     // get their own preload-free invocation and this converts the silent contamination into a
     // failure.
     if (typeof document !== 'undefined')
         throw new Error(
-            `${caller}() ran in a process with a DOM. happy-dom buckets as \`Object\` exactly where the framework does, so the totals would move with the emulator. Run the allocation gates in a preload-free process.`,
+            `${caller}() ran in a process with a DOM. happy-dom buckets as \`Object\` exactly where the framework does, so the totals would move with the emulator. Run the reachability gates in a preload-free process.`,
         )
     fullGC()
     return heapStats().objectTypeCounts as Record<string, number>

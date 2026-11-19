@@ -4190,6 +4190,9 @@ name.
 
 43.45 `durationOf` MUST throw where no measure of the trace carries the name.
 
+43.46 `shares` and `batch` MUST read one frame from `THRESHOLDS`, and MUST NOT hold a frame of
+their own.
+
 # 44. The assistant
 
 44.1 `assistant` MUST answer only through a handler that yields it, and MUST NOT mount an address
