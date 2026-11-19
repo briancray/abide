@@ -763,7 +763,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.9, 54.2, 54.3, 54.4 |
+| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.7, 15.9, 54.2, 54.3, 54.4, 54.28 |
 
 ## `readOnly`
 

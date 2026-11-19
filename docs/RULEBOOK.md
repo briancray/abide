@@ -5409,6 +5409,9 @@ throwing.
 54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
 run, from a look or from `runNow`, and MUST hold `nextRun` null.
 
+54.28 `requireRole` given `status: 404` MUST answer an authenticated caller it does not admit with
+the refusal 15.7 answers an address nothing serves, naming the path and method of the request.
+
 # 55. Worker files
 
 55.1 An import of a worker file MUST answer each export with a function running that export in the

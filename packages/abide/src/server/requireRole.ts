@@ -3,22 +3,51 @@ import type { Middleware } from '#shared/Middleware.ts'
 import { type Principal, principal } from '#shared/principal.ts'
 import { refuse } from '#shared/refuse.ts'
 
+import { currentRequestScope } from './requestScope.ts'
 import { signedOut } from './signedIn.ts'
+
+type Role = string | ((principal: Principal) => boolean | Promise<boolean>)
 
 /**
  * A rung admitting a signed-in caller whose `principal.resolved` carries `role`, or whom `role`
- * passes where it is a function: 54.2, 54.3, 54.4.
+ * passes where it is a function: 54.2, 54.3, 54.4, 54.28.
  */
 export function requireRole(
-    role: string | ((principal: Principal) => boolean | Promise<boolean>),
+    role: Role,
     options: {
         /** What the `Forbidden` refusal says, in place of one naming the role. */
         message?: string
-    } = {},
+        /** 403, the default, refuses `Forbidden`; 404 answers as an address nothing serves (54.28). */
+        status: 404
+    },
+): Middleware<
+    never,
+    object,
+    | Failed<'SignedOut', undefined>
+    | Failed<'NotFound', { path: string; method: string }>
+>
+export function requireRole(
+    role: Role,
+    options?: {
+        /** What the `Forbidden` refusal says, in place of one naming the role. */
+        message?: string
+        /** 403, the default, refuses `Forbidden`; 404 answers as an address nothing serves (54.28). */
+        status?: 403
+    },
 ): Middleware<
     never,
     object,
     Failed<'SignedOut', undefined> | Failed<'Forbidden', undefined>
+>
+export function requireRole(
+    role: Role,
+    options: { message?: string; status?: 403 | 404 } = {},
+): Middleware<
+    never,
+    object,
+    | Failed<'SignedOut', undefined>
+    | Failed<'Forbidden', undefined>
+    | Failed<'NotFound', { path: string; method: string }>
 > {
     const forbidden = refuse.named(
         'Forbidden',
@@ -28,6 +57,7 @@ export function requireRole(
                 ? `Only ${role}s may do this.`
                 : undefined),
     )
+    const refused = options.status === 404 ? hidden : forbidden
     const admits =
         typeof role === 'string'
             ? (resolved: Principal) => resolved.role === role
@@ -35,6 +65,17 @@ export function requireRole(
     return async (next) => {
         const resolved = await principal.resolved
         if (!resolved.authenticated) return signedOut()
-        return (await admits(resolved)) ? next() : forbidden()
+        return (await admits(resolved)) ? next() : refused()
     }
+}
+
+// 54.28 — the refusal 15.7 answers an address nothing serves, word for word, so the two cannot be
+// told apart. An in-process call has no request, and names no path.
+function hidden(): Failed<'NotFound', { path: string; method: string }> {
+    const scope = currentRequestScope()
+    const asked = scope?.received ?? scope?.request
+    return refuse.notFound({
+        path: asked === undefined ? '' : new URL(asked.url).pathname,
+        method: asked?.method ?? '',
+    })
 }
