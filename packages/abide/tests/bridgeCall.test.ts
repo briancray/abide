@@ -324,7 +324,8 @@ test('a caller hanging up ends the call — 44.98', async () => {
 // 44.95 — A SERVER AT AN HTTP ADDRESS is sent the headers its configuration names and nothing of the
 // page's, its session carried, and its answer read out of an event stream; a call it answers 401 is
 // made by a turn (44.99). THE REVERT: read the answer as JSON whatever its type, and the first call
-// is made by the turn, answering `called {"lane":2}`.
+// is made by the turn, answering `called {"lane":2}`; drop `helpedHeaders`, and the helped one
+// answers `called {"lane":3}`.
 test('a call reaches an http server with its own headers alone — 44.95', async () => {
     const seen: Record<string, string | null>[] = []
     const server = Bun.serve({
@@ -381,12 +382,18 @@ test('a call reaches an http server with its own headers alone — 44.95', async
         const { config } = await visitorServers({
             board: { type: 'http', url, headers: { 'x-key': 'visitor-key' } },
             locked: { type: 'http', url },
+            helped: {
+                type: 'http',
+                url,
+                headers: { 'x-key': 'stale-key' },
+                headersHelper: `printf '{"x-key":"visitor-key"}'`,
+            },
         })
         await pairBridge('http', [
             '--mcp-config',
             config,
             '--tools',
-            'mcp__board,mcp__locked',
+            'mcp__board,mcp__locked,mcp__helped',
         ])
         const answer = await call('http', 'mcp__board__cards', { lane: 2 })
         expect(answer.status).toBe(200)
@@ -411,6 +418,13 @@ test('a call reaches an http server with its own headers alone — 44.95', async
         expect(locked.status).toBe(200)
         expect(await locked.json()).toEqual({
             content: [{ type: 'text', text: 'called {}' }],
+            failed: false,
+        })
+        // What its `headersHelper` writes is sent over what its `headers` name, so the call is
+        // made rather than refused 401 and handed to a turn.
+        const helped = await call('http', 'mcp__helped__cards', { lane: 3 })
+        expect(await helped.json()).toEqual({
+            content: [{ type: 'text', text: '{"lane":3}' }],
             failed: false,
         })
     } finally {

@@ -10,6 +10,8 @@ import type { AssistantContent, ToolAnswer } from '@abide/abide/server'
 import { readLines } from './readLines.ts'
 
 const PROTOCOL_VERSION = '2025-06-18'
+/** How long a `headersHelper` has to write its headers, as Claude Code gives one. */
+const HEADERS_HELPER_MS = 10_000
 
 /** A server as an MCP config's `mcpServers` holds it: a command run over stdio, or an http address. */
 type ServerConfiguration = {
@@ -19,6 +21,8 @@ type ServerConfiguration = {
     env?: Record<string, string>
     url?: string
     headers?: Record<string, string>
+    /** A shell command writing a JSON object of headers, run for every call, over `headers`. */
+    headersHelper?: string
 }
 
 type RpcMessage = {
@@ -66,7 +70,15 @@ export async function callTool(
     if (type === 'stdio' && configuration.command !== undefined)
         session = await stdioSession(name, configuration, signal)
     else if (type === 'http' && configuration.url !== undefined)
-        session = httpSession(name, configuration, signal)
+        session = httpSession(
+            name,
+            configuration.url,
+            {
+                ...configuration.headers,
+                ...(await helpedHeaders(name, configuration, signal)),
+            },
+            signal,
+        )
     else
         throw new Error(
             `The ${name} MCP server is reached over ${type ?? 'nothing this bridge knows'}, and a call reaches a server over stdio or http.`,
@@ -231,23 +243,72 @@ async function stdioSession(
     }
 }
 
+/**
+ * 44.95 — the headers a server's `headersHelper` writes, run as Claude Code runs it: in a shell, told
+ * the server's name and address, given ten seconds, its stdout a JSON object of text.
+ */
+async function helpedHeaders(
+    name: string,
+    configuration: ServerConfiguration,
+    signal: AbortSignal,
+): Promise<Record<string, string>> {
+    if (configuration.headersHelper === undefined) return {}
+    const child = Bun.spawn(['sh', '-c', configuration.headersHelper], {
+        env: {
+            ...process.env,
+            CLAUDE_CODE_MCP_SERVER_NAME: name,
+            CLAUDE_CODE_MCP_SERVER_URL: configuration.url as string,
+        },
+        stdout: 'pipe',
+        stderr: 'pipe',
+        timeout: HEADERS_HELPER_MS,
+        signal,
+    })
+    const [written, said, exited] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+    ])
+    if (exited !== 0)
+        throw new Error(
+            `The ${name} MCP server's headersHelper exited ${exited}: ${said.slice(-2000)}`,
+        )
+    let headers: unknown
+    try {
+        headers = JSON.parse(written)
+    } catch {
+        headers = undefined
+    }
+    if (
+        headers === null ||
+        typeof headers !== 'object' ||
+        Array.isArray(headers) ||
+        Object.values(headers).some((value) => typeof value !== 'string')
+    )
+        throw new Error(
+            `The ${name} MCP server's headersHelper wrote no JSON object of text headers.`,
+        )
+    return headers as Record<string, string>
+}
+
 /** A server at an http address, each message posted, its answer read as JSON or from an event stream. */
 function httpSession(
     name: string,
-    configuration: ServerConfiguration,
+    url: string,
+    sent: Record<string, string>,
     signal: AbortSignal,
 ): Session {
     let sessionId: string | null = null
     return {
         async send(message) {
             const headers: Record<string, string> = {
-                ...configuration.headers,
+                ...sent,
                 'content-type': 'application/json',
                 accept: 'application/json, text/event-stream',
                 'mcp-protocol-version': PROTOCOL_VERSION,
             }
             if (sessionId !== null) headers['mcp-session-id'] = sessionId
-            const answer = await fetch(configuration.url as string, {
+            const answer = await fetch(url, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({ jsonrpc: '2.0', ...message }),
@@ -256,7 +317,7 @@ function httpSession(
             sessionId = answer.headers.get('mcp-session-id') ?? sessionId
             if (answer.status === 401 || answer.status === 403)
                 throw new Error(
-                    `The ${name} MCP server asks for a sign-in (${answer.status}): a call carries only the headers its configuration names, and none Claude Code signed in with.`,
+                    `The ${name} MCP server asks for a sign-in (${answer.status}): a call carries only the headers its configuration names and its headersHelper writes, and none Claude Code signed in with.`,
                 )
             if (!answer.ok)
                 throw new Error(
@@ -290,10 +351,10 @@ function httpSession(
         },
         async close() {
             if (sessionId === null) return
-            await fetch(configuration.url as string, {
+            await fetch(url, {
                 method: 'DELETE',
                 headers: {
-                    ...configuration.headers,
+                    ...sent,
                     'mcp-session-id': sessionId,
                 },
             })

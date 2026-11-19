@@ -4560,7 +4560,8 @@ names that tool alone, and only where the visitor's `--disallowedTools` names no
 
 44.95 A bridge MUST make a call on the server 44.58 finds for its tool, started for that call alone —
 its command run in an empty directory removed when the call ends, or its http address sent the
-headers its configuration names and no other credential — and ended with the call, and MUST report
+headers its configuration names, overridden by those its `headersHelper` writes for that call, and no
+other credential — and ended with the call, and MUST report
 to `provider.claudeCode.callTool` a call it could not make, for 44.99 to make.
 
 44.96 A bridge MUST say, as it pairs with `/__abide/bridge`, that it makes calls, and
