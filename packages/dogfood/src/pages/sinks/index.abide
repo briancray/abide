@@ -1,47 +1,60 @@
 <script>
-import idPageSource from 'crm/src/companies/[id=SLUG].abide' with { type: 'text' }
-import getCompanySource from 'crm/src/companies/getCompany.handler.ts' with { type: 'text' }
-import SlowCompany from 'crm/src/companies/lib/SlowCompany.abide'
-import slowCompanySource from 'crm/src/companies/lib/SlowCompany.abide' with { type: 'text' }
-import streamingTestSource from 'crm/src/companies/Streaming.test.ts' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Section title="The page goes out before the company lands">
-        <Example
-            id="streaming"
-            title="A hole per value in flight — the page first, the company after"
-            summary="The company database takes over a second. Load the page again: the labels arrive at once, and each value fills its own hole when the company lands."
-            files={{
-                'src/companies/lib/SlowCompany.abide': slowCompanySource,
-                'src/companies/[id=SLUG].abide': idPageSource,
-                'src/companies/getCompany.handler.ts': getCompanySource,
-                'src/companies/Streaming.test.ts': streamingTestSource,
-            }}
-        >
-            <SlowCompany />
-        </Example>
+<Doc
+    seeAlso={[
+        '/pages/render',
+        '/abide-files/control-flow',
+        '/abide-files/expressions',
+        '/reactive/ready',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/Streaming.test.ts',
+            from: ["test('the page goes out without the company, and asks for it'"],
+        },
+        {
+            path: 'packages/abide/tests/hydrate.test.ts',
+            from: ["test('a render continues past a value still in flight"],
+        },
+        {
+            path: 'packages/abide/tests/hydrate.test.ts',
+            from: ["test('a render continues past an unlanded attribute and style"],
+        },
+    ]}
+>
+    <Section level={3} title="Send the company page before the company lands">
+        <p>Nothing holds the document for a value. A value still in flight leaves a hole, and the
+            browser's own call fills it, with no loading branch in the file.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive, route } from '@abide/abide'
+            import getCompany from './getCompany.handler.ts'
 
-        <p>Nothing holds the document for a value. The page gets one turn to start its loads, and
-            a value that answers in that turn is painted. A value still in flight leaves a hole, and
-            the browser's own call fills it, so the document carries no copy of the answer.</p>
+            const company = reactive(() => getCompany({ id: route.params.id }))
+            </script>
 
-        <table>
-            <thead><tr><th>The hole</th><th>What fills</th></tr></thead>
-            <tbody>
-                <tr><td><code>&#123;text&#125;</code> in markup</td><td>the text</td></tr>
-                <tr><td><code>href=&#123;x&#125;</code>, any attribute</td><td>the attribute, on the element itself</td></tr>
-                <tr><td><code>class:</code>, <code>style:</code>, <code>bind:</code></td><td>the class, the style property, the bound property</td></tr>
-                <tr><td><code>&lt;title&gt;&#123;name&#125;&lt;/title&gt;</code></td><td>the element's <code>textContent</code>, so the tab title fills too</td></tr>
-                <tr><td><code>&lt;textarea&gt;&#123;v&#125;&lt;/textarea&gt;</code></td><td>its <code>defaultValue</code>, so a reader's typing is kept</td></tr>
-            </tbody>
-        </table>
+            <h2>{company.name}</h2>
+            <strong title={company.contact}>{company.pipeline}</strong>
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="Fill the tab title once the name arrives">
+        <p>A hole inside <code>&lt;title&gt;</code> fills the element's <code>textContent</code>,
+            so the tab follows.</p>
+        <Code language="abide" caption="abide" code={`
+            <head><title>{company.name} — CRM</title></head>
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep what a rep typed while a saved note loads">
+        <p>A hole inside <code>&lt;textarea&gt;</code> fills its <code>defaultValue</code>, so
+            typing that started first is kept.</p>
+        <Code language="abide" caption="abide" code={`
+            <textarea name="note">{deal.note}</textarea>
+        `} />
+    </Section>
 </Doc>

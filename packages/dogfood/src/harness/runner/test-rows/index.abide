@@ -1,0 +1,66 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/runner/rows-command',
+        '/harness/rows/in-scope',
+        '/harness/gate/gate',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/runSuite.test.ts',
+            from: ["test('a failure comes back with the number it reported'"],
+        },
+        {
+            path: 'packages/harness/tests/runSuite.test.ts',
+            from: [
+                "test('a suite past its deadline is stopped and reported, not waited on — 43.27'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Report the CRM's test results one file at a time">
+        <p>Name each directory of test files and its runner. Each file runs in a process of its
+            own, and its <code>TestRow</code> prints the moment it finishes.</p>
+        <Code language="ts" caption="server" code={`
+            import { testRows } from '@abide/harness/runner'
+
+            await testRows(
+                [{ section: 'tests', root: 'src', runner: 'bun' }],
+                Bun.fileURLToPath(new URL('..', import.meta.url)),
+            )
+        `} />
+        <Code code={`
+            bun scripts/testRows.ts --list
+            bun scripts/testRows.ts --scope all --filter reports
+        `} />
+    </Section>
+
+    <Section level={3} title="Run browser specs beside the unit tests">
+        <p>A <code>playwright</code> suite runs every <code>*.spec.ts</code> in its root, one at
+            a time, in the projects you name.</p>
+        <Code language="ts" caption="server" code={`
+            await testRows(
+                [
+                    { section: 'unit', root: 'src', runner: 'bun' },
+                    {
+                        section: 'browser',
+                        root: 'e2e',
+                        runner: 'playwright',
+                        projects: ['chromium', 'webkit'],
+                    },
+                ],
+                process.cwd(),
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Check every gate's revert in the same run">
+        <p><code>--gates</code> runs each file with <code>HARNESS_VERIFY_GATES=1</code>.</p>
+        <Code code={`bun scripts/testRows.ts --scope all --gates`} />
+    </Section>
+</Doc>

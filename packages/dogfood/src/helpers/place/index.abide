@@ -1,0 +1,68 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/components/tooltip',
+        '/components/menu',
+        '/helpers/dismissible',
+        '/helpers/observe',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: [
+                "test('a hint goes on the side asked for, centered on its anchor",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: ["test('a side with no room flips to the opposite one"],
+        },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: ["test('place reads layout and writes nothing"],
+        },
+    ]}
+>
+    <Section level={3} title="Open a deal's quick-view popover under its row">
+        <p><code>place</code> answers the top-left corner for an element positioned
+            <code>fixed</code>, as a popover is in the top layer. Write it as
+            <code>inset</code>.</p>
+        <Code language="ts" caption="browser" code={`
+            import { place } from '@abide/abide'
+
+            preview.showPopover()
+            const { x, y } = place(row, preview, { side: 'bottom', align: 'start' })
+            preview.style.inset = \`\${y}px auto auto \${x}px\`
+        `} />
+    </Section>
+
+    <Section level={3} title="Point an arrow at the anchor after a flip">
+        <p>Where the side asked for has no room and the opposite has more, <code>place</code>
+            takes the opposite. <code>side</code> is the one it took, and <code>arrow</code> is
+            how far along the facing edge the anchor's middle falls.</p>
+        <Code language="ts" caption="browser" code={`
+            const placement = place(stage, hint, { side: 'top', offset: 6 })
+            hint.dataset.side = placement.side
+            hint.style.setProperty('--arrow-offset', \`\${placement.arrow}px\`)
+        `} />
+    </Section>
+
+    <Section level={3} title="Place several overlays with one layout read">
+        <p><code>place</code> reads layout and writes nothing. Read every placement before writing
+            any, and the frame lays out once.</p>
+        <Code language="ts" caption="browser" code={`
+            const placements = []
+            for (const [anchor, badge] of badges)
+                placements.push(place(anchor, badge, { side: 'right' }))
+            for (let index = 0; index < badges.length; index += 1) {
+                const { x, y } = placements[index]
+                badges[index][1].style.inset = \`\${y}px auto auto \${x}px\`
+            }
+        `} />
+    </Section>
+</Doc>

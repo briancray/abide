@@ -1,0 +1,59 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/helpers/require-role',
+        '/helpers/read-only',
+        '/ambient/principal',
+        '/hooks/middleware',
+        '/hooks/on-refusal',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/guards.test.ts',
+            from: [
+                "test('signedIn refuses nobody SignedOut at 401, and lets a member through",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/guards.test.ts',
+            from: [
+                "test('a rung refuses an in-process call as it refuses one over the wire",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Answer a member's own commission to members alone">
+        <p>Name <code>signedIn</code> in the handler's <code>middleware</code>. Nobody signed in
+            is refused <code>SignedOut</code> at 401, and the body runs for everyone else.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, signedIn } from '@abide/abide/server'
+
+            export default GET(() => ({ amount: '$6,200' }), {
+                middleware: [signedIn],
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask for a sign-in on a SignedOut refusal">
+        <p>The refusal is typed on the handler's failures, so the page narrows it by name.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import getCommission from './getCommission.handler.ts'
+
+            const commission = reactive(() => getCommission())
+            </script>
+
+            {#if getCommission.isError(commission.error(), 'SignedOut')}
+                <a href="/sign-in">Sign in to see your commission</a>
+            {:else if commission.ready()}
+                <strong>{commission.amount}</strong>
+            {/if}
+        `} />
+    </Section>
+</Doc>

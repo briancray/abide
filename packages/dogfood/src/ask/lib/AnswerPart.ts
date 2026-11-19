@@ -1,9 +1,8 @@
 /**
  * What the answer bar renders in place of a `<show …/>` line Claude writes: one kind of rendering and
- * what it renders. `from` narrows a `code` to the construct a line prefix opens (40.7).
+ * what it renders. `from` narrows a `code` to the construct a line prefix opens (40.15).
  */
 export type Show =
-    | { kind: 'example'; value: string }
     | { kind: 'code'; value: string; from: string | undefined }
     | { kind: 'name'; value: string }
     | { kind: 'clause'; value: string }

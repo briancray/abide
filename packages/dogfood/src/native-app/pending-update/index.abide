@@ -1,0 +1,52 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/hooks/on-launcher', '/native-app/native', '/cli/commands']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/UpdateNotice.test.ts',
+            from: [
+                "test('an update waits for quit, and a required one for nothing'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/pendingUpdate.test.ts',
+            from: ["test('install asks the window to restart into the update"],
+        },
+    ]}
+>
+    <Section level={3} title="Tell people an update installs when they quit">
+        <p>The value is <code>undefined</code> until the window stages an update, and always in a
+            browser. <code>install()</code> restarts into it now.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { pendingUpdate } from '@abide/abide'
+            </script>
+
+            {#if pendingUpdate}
+                <p class="status">
+                    CRM {pendingUpdate.version} installs when you quit.
+                    <button onclick={() => pendingUpdate?.install()}>Restart now</button>
+                </p>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Block the CRM until a required update is installed">
+        <p>An update bundled with <code>--required</code> reads <code>required: true</code>.
+            Prevent the dialog's <code>cancel</code> event so Escape cannot close it.</p>
+        <Code language="abide" caption="abide" code={`
+            {#if pendingUpdate?.required}
+                <dialog open oncancel={(event) => event.preventDefault()}>
+                    <p>CRM {pendingUpdate.version} has to be installed to go on.</p>
+                    <p>{pendingUpdate.notes}</p>
+                    <button onclick={() => pendingUpdate?.install()}>Restart now</button>
+                </dialog>
+            {/if}
+        `} />
+    </Section>
+</Doc>

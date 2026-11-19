@@ -1,8 +1,74 @@
 <script>
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Registry />
+<Doc
+    seeAlso={['/reactive/reactive', '/reactive/watch', '/reactive/is-reactive']}
+    tests={[
+        {
+            path: 'packages/abide/tests/props.test.ts',
+            from: [
+                "test('a child setup in an arm does not wake the arm choice — 14.7'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('a keyed entry does not recompute when a value its body read changes'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/trackingAwait.test.ts',
+            from: [
+                "test('a read inside what is awaited tracks, and one after it warns — 14.14'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Read a stage once at setup, and follow it in the template">
+        <p>A component's <code>&lt;script&gt;</code> runs once and follows nothing. The template
+            follows every value it reads, so a click moves <code>stage</code> and leaves
+            <code>openedAs</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+
+            let stage = reactive('lead')
+            const openedAs = stage
+            </script>
+
+            <p>{stage}, opened as {openedAs}</p>
+            <button onclick={() => (stage = 'won')}>Win</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Read an owner without rerunning when the owner changes">
+        <p><code>peek()</code> reads what is held and subscribes to nothing. The label reruns for
+            a new stage, and keeps the owner it last read.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+
+            let stage = reactive('lead')
+            let owner = reactive('ada')
+            const label = reactive(() => \`\${stage} (\${owner.peek()})\`)
+            </script>
+
+            <p>{label}</p>
+        `} />
+    </Section>
+
+    <Section level={3} title="Read every value a body follows before its first await">
+        <p>Tracking is synchronous. A read after an <code>await</code> follows nothing, and the
+            compiler warns on it.</p>
+        <Code language="ts" caption="shared" code={`
+            const deal = reactive(async () => {
+                const who = owner() // before the await: followed
+                const found = await getDeal({ id: dealId() })
+                return { ...found, owner: who }
+            })
+        `} />
+    </Section>
 </Doc>

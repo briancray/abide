@@ -1,0 +1,67 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/components/sparkline', '/helpers/chart', '/helpers/format']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: [
+                "test('won revenue is a line broken where a month has no total'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: ["test('the crosshair reads each line at the nearest month'"],
+        },
+    ]}
+>
+    <Section level={3} title="Plot won revenue against target by month">
+        <p>Each series is a label and one value per x. A pointer over the chart moves a
+            crosshair to the nearest month and reads every series out there.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { format } from '@abide/abide'
+            import LineChart from '@abide/abide/LineChart.abide'
+
+            const MONTHS = [5, 6, 7, 8].map((month) => Date.UTC(2026, month, 1))
+            </script>
+
+            <LineChart
+                series={[
+                    { label: 'Won', values: [18_000, 24_500, 31_000, 27_000] },
+                    { label: 'Target', values: [20_000, 22_000, 24_000, 26_000] },
+                ]}
+                x={MONTHS}
+                label="Won revenue against target"
+                xFormat={(month) => format.date(month, { style: 'month' })}
+                yFormat={(amount) => format.money(amount, { compact: true })}
+                zero
+                class="h-60 w-full"
+            />
+        `} />
+    </Section>
+
+    <Section level={3} title="Leave a gap for a month whose books are open">
+        <p>A <code>null</code> value breaks the line there rather than drawing it to zero.</p>
+        <Code language="ts" caption="shared" code={`
+            const WON = [18_000, 24_500, null, 31_000]
+        `} />
+    </Section>
+
+    <Section level={3} title="Draw the target as a dashed line">
+        <p>Each line, point and readout value carries <code>data-series</code>, the index of its
+            series. Lines and labels draw in <code>currentColor</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <LineChart
+                class="text-muted [&_[data-part=line]]:stroke-2
+                [&_[data-series='0']]:stroke-signal
+                [&_[data-part=line][data-series='1']]:[stroke-dasharray:4_4]"
+                …
+            />
+        `} />
+    </Section>
+</Doc>

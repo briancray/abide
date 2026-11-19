@@ -1,158 +1,90 @@
 <script>
-import CompanyPicker from 'crm/src/companies/lib/CompanyPicker.abide'
-import companyPickerSource from 'crm/src/companies/lib/CompanyPicker.abide' with { type: 'text' }
-import companyPickerTestSource from 'crm/src/companies/lib/CompanyPicker.test.ts' with { type: 'text' }
-import searchCompaniesSource from 'crm/src/companies/searchCompanies.handler.ts' with { type: 'text' }
-import ContactPicker from 'crm/src/contacts/lib/ContactPicker.abide'
-import contactPickerSource from 'crm/src/contacts/lib/ContactPicker.abide' with { type: 'text' }
-import contactPickerTestSource from 'crm/src/contacts/lib/ContactPicker.test.ts' with { type: 'text' }
-import CallQueue from 'crm/src/pipeline/lib/CallQueue.abide'
-import callQueueSource from 'crm/src/pipeline/lib/CallQueue.abide' with { type: 'text' }
-import callQueueTestSource from 'crm/src/pipeline/lib/CallQueue.test.ts' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Section title="A combobox searches a handler as you type">
-        <Example
-            id="combobox-search"
-            title="`Combobox` — an input over the items a search answers"
-            summary="A contact's record says where they work. Type part of a company's name or city, move with the arrow keys, and press Enter or click to pick one."
-            files={{
-                'src/companies/lib/CompanyPicker.abide': companyPickerSource,
-                'src/companies/searchCompanies.handler.ts': searchCompaniesSource,
-                'src/companies/lib/CompanyPicker.test.ts': companyPickerTestSource,
-            }}
-        >
-            <CompanyPicker />
-        </Example>
+<Doc
+    seeAlso={[
+        '/helpers/listbox',
+        '/reactive/reactive',
+        '/components/menu',
+        '/abide-files/components',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
+            from: ["test('typing narrows the contacts, ignoring case'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyPicker.test.ts',
+            from: ["test('typing searches, and Enter picks the active company'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyPicker.test.ts',
+            from: ["test('a search in flight keeps the last companies listed'"],
+        },
+    ]}
+>
+    <Section level={3} title="Pick a contact from a list narrowed by typing">
+        <p>Given <code>options</code>, the list keeps the items whose label holds what was typed,
+            ignoring case. The children show when nothing matches.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import Combobox from '@abide/abide/Combobox.abide'
+            import listContacts from '../listContacts.handler.ts'
 
-        <p>Import it as <code>import Combobox from '@abide/abide/Combobox.abide'</code>. Hand it
-            <code>search</code>, a function of what was typed, and it lists what the function
-            answers. A handler call is one. The list is shut until someone types or presses an
-            arrow key, and nothing is searched while it is shut. Set <code>debounce</code> to
-            wait for the typing to pause before each search.</p>
+            const contacts = reactive(() => listContacts())
+            let contact = reactive<Contact | undefined>(undefined)
+            </script>
 
-        <table>
-            <thead><tr><th>Prop</th><th>What it is</th></tr></thead>
-            <tbody>
-                <tr><td><code>id</code></td><td>the input's id, for a <code>{'<label for>'}</code>; the list's and each option's ids are built from it</td></tr>
-                <tr><td><code>search</code></td><td>a function of the typed text answering the items, or a promise or reactive value of them</td></tr>
-                <tr><td><code>options</code></td><td>the items to narrow by their label, where there is no <code>search</code></td></tr>
-                <tr><td><code>key</code></td><td>what tells one item from another</td></tr>
-                <tr><td><code>label</code></td><td>an item's text, shown as its option and put in the input once it is picked</td></tr>
-                <tr><td><code>bind:value</code></td><td>the item picked, read and set</td></tr>
-                <tr><td><code>debounce</code></td><td>milliseconds the typing has to pause before <code>search</code> runs again</td></tr>
-                <tr><td><code>placeholder</code></td><td>the input's placeholder</td></tr>
-                <tr><td><code>Option</code></td><td>an inline component rendering an option's content, handed <code>item</code></td></tr>
-                <tr><td>children</td><td>what shows while nothing matches</td></tr>
-            </tbody>
-        </table>
-
-        <p>Enter picks the active item, and so does a click. Escape shuts the list, and a second
-            Escape clears the pick. Moving focus away shuts it too. While a search is in flight the
-            last items stay listed. The active item stays active while it is still listed, so a
-            narrowing search keeps the arrow keys' place.</p>
-
-        <p>Write the item's type on the parameters of <code>key</code>, <code>label</code> and
-            <code>Option</code>, as the card does. An <code>id</code> is required. The ids the
-            input's <code>aria-activedescendant</code> and <code>aria-controls</code> point at are
-            built from it, and two comboboxes on one page each need their own.</p>
+            <label for="deal-contact">Contact</label>
+            <Combobox
+                id="deal-contact"
+                options={contacts}
+                key={(each: Contact) => each.id}
+                label={(each: Contact) => each.name}
+                bind:value={contact}
+            >No contact matches</Combobox>
+        `} />
     </Section>
 
-    <Section title="A combobox narrows a list it already has">
-        <Example
-            id="combobox-options"
-            title="`Combobox` with `options` — the items whose label holds what was typed"
-            summary="A deal is with one of a handful of contacts, all of them already loaded. Type part of a name to narrow the list, and pick one."
-            files={{
-                'src/contacts/lib/ContactPicker.abide': contactPickerSource,
-                'src/contacts/lib/ContactPicker.test.ts': contactPickerTestSource,
-            }}
-        >
-            <ContactPicker />
-        </Example>
-
-        <p>Hand it <code>options</code> in place of <code>search</code>, and it lists each item
-            whose <code>label</code> holds the typed text, ignoring case. The options can be a
-            reactive value still loading. A narrowed list keeps the rows that are still in it and
-            removes the rest, so an option is never built twice while someone types.</p>
+    <Section level={3} title="Search companies on the server as someone types">
+        <p>Pass <code>search</code> in place of <code>options</code>. A search in flight keeps
+            the last results listed, and <code>debounce</code> waits for typing to pause.</p>
+        <Code language="abide" caption="abide" code={`
+            <Combobox
+                id="works-at"
+                search={(q: string) => searchCompanies({ q })}
+                debounce={200}
+                key={(found: Company) => found.id}
+                label={(found: Company) => found.name}
+                bind:value={company}
+            />
+        `} />
     </Section>
 
-    <Section title="`listbox` puts the keyboard on a list you render">
-        <Example
-            id="listbox-queue"
-            title="`listbox(options)` — the active option, the keys and the ids"
-            summary="The morning's leads, called one after another. Focus the list, step through it with the arrow keys, and press Enter to call the active lead."
-            files={{
-                'src/pipeline/lib/CallQueue.abide': callQueueSource,
-                'src/pipeline/lib/CallQueue.test.ts': callQueueTestSource,
-            }}
-        >
-            <CallQueue />
-        </Example>
-
-        <p><code>listbox</code> is the keyboard <code>Combobox</code> runs on, for markup you
-            write yourself. Import it from <code>@abide/abide</code>. Hand it the options as a
-            function, so a reactive list is read as it changes, and the key each is told apart by.
-            Hand the element that holds focus its <code>keydown</code>.</p>
-
-        <table>
-            <thead><tr><th>Key</th><th>What it does</th></tr></thead>
-            <tbody>
-                <tr><td>ArrowDown · ArrowUp</td><td>the next or the previous option, round the ends unless <code>wrap</code> is <code>false</code></td></tr>
-                <tr><td>Home · End</td><td>the first or the last option</td></tr>
-                <tr><td>Enter</td><td>calls <code>onpick</code> with the active option</td></tr>
-                <tr><td>Escape</td><td>calls <code>onescape</code></td></tr>
-            </tbody>
-        </table>
-
-        <p>The active option is a key. It stays on that option while the list changes around it,
-            and falls back to the first option once the list no longer holds it. Read it with
-            <code>active()</code> to mark an option, and set it with <code>activate(key)</code>
-            from a click or a pointer. <code>idOf(key)</code> is the id an option renders with, and
-            <code>activeId()</code> is the active one's, for the list's
-            <code>aria-activedescendant</code>. The roles are yours to write:
-            <code>role="listbox"</code> on the list, and <code>role="option"</code> with
-            <code>aria-selected</code> on each option.</p>
-
-        <p>Each option reads <code>active()</code> to mark itself, so a step wakes every option's
-            mark and writes two of them. A list of a few dozen options does not notice. For
-            thousands, render only the options in view.</p>
+    <Section level={3} title="Show a company's city beside its name in each option">
+        <p>An <code>Option</code> component renders each option's content, handed the item.</p>
+        <Code language="abide" caption="abide" code={`
+            <Combobox id="works-at" search={find} key={keyOf} label={nameOf}>
+                {#component Option({ item }: { item: Company })}
+                    {item.name} · {item.city}
+                {/component}
+                No company matches
+            </Combobox>
+        `} />
     </Section>
 
-    <Section title="Styling a combobox by its parts and states">
-        <p>The combobox ships no styles and writes no class. Every element you can style carries
-            a <code>data-part</code>, and every state is a <code>data-</code> attribute present
-            while it holds. Any attribute you pass, <code>class</code> included, lands on the
-            root.</p>
-
-        <table>
-            <thead><tr><th>Element</th><th>Part</th><th>States</th></tr></thead>
-            <tbody>
-                <tr><td>the root <code>div</code></td><td>—</td><td><code>data-open</code> while the list is open, <code>data-busy</code> while a search it waits on is in flight</td></tr>
-                <tr><td>the <code>input</code></td><td><code>input</code></td><td>—</td></tr>
-                <tr><td>the <code>ul</code> of options</td><td><code>listbox</code></td><td>—</td></tr>
-                <tr><td>each <code>li</code></td><td><code>option</code></td><td><code>data-active</code> on the active option, <code>data-selected</code> on the picked one</td></tr>
-                <tr><td>the message when nothing matches</td><td><code>empty</code></td><td>—</td></tr>
-            </tbody>
-        </table>
-
-        <table>
-            <thead><tr><th>You write</th><th>It styles</th></tr></thead>
-            <tbody>
-                <tr><td><code>{'[data-part=option][data-active] { … }'}</code></td><td>the active option, from a stylesheet</td></tr>
-                <tr><td><code>{'class="[&_[data-active]]:bg-signal/10"'}</code></td><td>the same, as a Tailwind utility on the root</td></tr>
-                <tr><td><code>{'class="[&_[data-part=listbox]]:list-none"'}</code></td><td>a part, from the root</td></tr>
-                <tr><td><code>{'class="data-[open]:shadow"'}</code></td><td>the root while its list is open</td></tr>
-                <tr><td><code>{'class="data-[busy]:opacity-60"'}</code></td><td>the root while a search is in flight</td></tr>
-            </tbody>
-        </table>
+    <Section level={3} title="Highlight the option the arrow keys are on">
+        <p>The active option carries <code>data-active</code>, and the picked one
+            <code>data-selected</code>. The list is <code>data-part="listbox"</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <Combobox
+                class="[&_[data-part=listbox]]:list-none [&_[data-active]]:bg-signal/10"
+                …
+            />
+        `} />
     </Section>
-
-    <Registry />
 </Doc>

@@ -1,8 +1,60 @@
 <script>
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Registry />
+<Doc
+    seeAlso={[
+        '/ai/pairing',
+        '/ai/provider',
+        '/components/pairing',
+        '/hooks/on-pairing',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/bridgeLink.test.ts',
+            from: [
+                "test('a link runs with the options install kept, ahead of its tools",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/bridgeLink.test.ts',
+            from: ["test('a site is allowed per holder, and forgotten"],
+        },
+    ]}
+>
+    <Section level={3} title="Pair your Claude Code with the site you are on">
+        <p>Run the command the site shows. Your Claude Code answers the site's assistant in an
+            empty directory, with only the tools the site asked for.</p>
+        <Code code={`bunx @abide/bridge@0.8.3 https://crm.example kV3x9QpL2mZt8aRw`} />
+    </Section>
+
+    <Section level={3} title="Run Claude Code with your own options and variables">
+        <p><code>--claude</code> names the executable where <code>claude</code> is not on your
+            path, each <code>--env</code> sets a variable, and what follows <code>--</code> is laid
+            over the site's options.</p>
+        <Code code={`
+            bunx @abide/bridge@0.8.3 https://crm.example kV3x9QpL2mZt8aRw \\
+              --claude ~/.local/bin/claude --env ANTHROPIC_BASE_URL=$PROXY \\
+              -- --model sonnet
+        `} />
+    </Section>
+
+    <Section level={3} title="Open pairing links from the browser with one click">
+        <p><code>install</code> registers what opens a site's <code>abide-bridge:</code> links,
+            under your home alone, and keeps the options it is given for every link.</p>
+        <Code code={`
+            bunx @abide/bridge@0.8.3 install -- --model sonnet
+            bunx @abide/bridge@0.8.3 uninstall
+        `} />
+    </Section>
+
+    <Section level={3} title="Make a site ask again before it pairs">
+        <p><code>forget</code> stops always allowing the site it names, or every site.</p>
+        <Code code={`
+            bunx @abide/bridge@0.8.3 forget https://crm.example
+            bunx @abide/bridge@0.8.3 forget
+        `} />
+    </Section>
 </Doc>

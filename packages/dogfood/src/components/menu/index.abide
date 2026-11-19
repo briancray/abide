@@ -1,0 +1,58 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/components/tooltip', '/helpers/place', '/helpers/hotkeys']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
+            from: ["test('the arrow keys skip the stage the deal is in'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
+            from: ["test('a pick moves the deal and hands focus back'"],
+        },
+    ]}
+>
+    <Section level={3} title="Move a deal to another stage from a menu">
+        <p>Each child carrying <code>role="menuitem"</code> is an item. A disabled one is passed
+            over by the arrow keys, and a pick runs its own <code>onclick</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import Menu from '@abide/abide/Menu.abide'
+
+            const STAGES = ['lead', 'qualified', 'proposal', 'won']
+            let stage = reactive('proposal')
+            </script>
+
+            <Menu label="Move to…">
+                {#for next of STAGES}
+                    <button
+                        role="menuitem"
+                        disabled={next === stage}
+                        onclick={() => (stage = next)}
+                    >{next}</button>
+                {/for}
+            </Menu>
+        `} />
+    </Section>
+
+    <Section level={3} title="Lay out an open menu while a closed menu stays hidden">
+        <p>The list is <code>data-part="menu"</code>, a popover. A <code>display</code> class
+            beats the browser's hiding of a closed popover, so set it behind
+            <code>open:</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <Menu
+                label="Move to…"
+                class="[&_[data-part=menu]]:m-0 [&_[data-part=menu]]:open:flex
+                [&_[data-part=menu]]:flex-col [&_[data-part=menu]]:rounded-lg"
+            >
+                …
+            </Menu>
+        `} />
+    </Section>
+</Doc>

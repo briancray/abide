@@ -1,0 +1,47 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/refuse', '/reactive/reactive']}
+    tests={[
+        {
+            path: 'packages/abide/tests/refuse.test.ts',
+            from: ["test('a refusal that crossed a wire is still one'"],
+        },
+        {
+            path: 'packages/abide/tests/refuse.test.ts',
+            from: ["test('constructing a Failed is inert'"],
+        },
+    ]}
+>
+    <Section level={3} title="Show a refusal and rethrow anything else">
+        <p>A refusal is the answer a handler declared. Anything else that reaches the
+            <code>catch</code> went wrong, so let it go on.</p>
+        <Code language="ts" caption="browser" code={`
+            import { isFailed } from '@abide/abide'
+
+            let notice = ''
+            try {
+                await createDeal(draft)
+            } catch (error) {
+                if (!isFailed(error)) throw error
+                notice = \`\${error.status}: \${error.message}\`
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Recognize a refusal read back from JSON">
+        <p>A <code>Failed</code> is known by its shape, not by its class. A refusal parsed from a
+            log line or a queue is still one.</p>
+        <Code language="ts" caption="shared" code={`
+            const parsed: unknown = JSON.parse(
+                '{"name":"NotFound","status":404,"message":"Not Found","data":null}',
+            )
+            isFailed(parsed) // true
+            parsed instanceof Error // false
+        `} />
+    </Section>
+</Doc>

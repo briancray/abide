@@ -1,0 +1,72 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/reactive', '/reactive/invalidate']}
+    tests={[
+        {
+            path: 'packages/abide/tests/stores.test.ts',
+            from: [
+                "test('store.web keeps a value in localStorage and a new value restores it — 8.22, 8.28'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/stores.test.ts',
+            from: [
+                "test('the shipped stores answer a miss past the ttl a value was written with — 8.26'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Keep a pipeline filter between visits">
+        <p>Give the value a <code>store</code>. The next visit opens on what was last written, and
+            the reads and writes stay as they were.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive, store } from '@abide/abide'
+
+            let stage = reactive('lead', { store: store.web<string>('stage') })
+            </script>
+
+            <select bind:value={stage}>
+                <option>lead</option>
+                <option>won</option>
+            </select>
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep the team's target on the server">
+        <p>A <code>Store</code> is a <code>get</code> and a <code>set</code>. Write your own to keep
+            a value behind two handlers, so every visitor reads the one target.</p>
+        <Code language="ts" caption="shared" code={`
+            import type { Store } from '@abide/abide'
+
+            export const targetStore: Store<number | undefined> = {
+                get: async () => (await getTarget()) ?? undefined,
+                set: async (target) => {
+                    if (target === undefined) return
+                    await setTarget({ target })
+                },
+            }
+
+            const target = reactive<number | undefined>(500_000, { store: targetStore })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a job's last run in SQLite">
+        <p>The server's <code>store</code> adds <code>sqlite</code> and <code>redis</code>. A string
+            names the database file.</p>
+        <Code language="ts" caption="server" code={`
+            import { reactive } from '@abide/abide'
+            import { store } from '@abide/abide/server'
+
+            export const lastDigest = reactive(0, {
+                global: true,
+                store: store.sqlite('crm', 'lastDigest'),
+            })
+        `} />
+    </Section>
+</Doc>

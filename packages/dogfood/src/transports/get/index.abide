@@ -1,0 +1,106 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/transports/post',
+        '/transports/mount-paths',
+        '/transports/validate-json',
+        '/reactive/refresh',
+        '/surfaces/clients',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/rpc.test.ts',
+            from: [
+                "test('a plain handler is the reactive of itself, and a repeated call joins it — 16.6'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealDetail.test.ts',
+            from: ["test('picking a deal loads the one its args name'"],
+        },
+        {
+            path: 'packages/abide/tests/rpc.test.ts',
+            from: [
+                "test('a generator handler streams, and the value is its chunks'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Read one deal by its id">
+        <p>Write the read in a handler file. The parameter's annotation is its <code>Args</code>,
+            checked on every call, and <code>description</code> is the sentence every surface
+            shows.</p>
+        <Code language="ts" caption="server" code={`
+            import { refuse } from '@abide/abide'
+            import { GET } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export default GET(
+                ({ id }: { id: string }) =>
+                    DEALS.find((deal) => deal.id === id) ?? refuse(404),
+                { description: 'One deal, by id.' },
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Show the deal a page picks">
+        <p>Import the handler file and call it. The call hands back a reactive value, so the page
+            reads <code>deal.name</code> by name and loads again when <code>id</code> changes.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import getDeal from './getDeal.handler.ts'
+
+            let id = reactive('d1')
+            const deal = reactive(() => getDeal({ id }))
+            </script>
+
+            <button onclick={() => (id = 'd2')}>Next deal</button>
+            <h2>{deal.name}</h2>
+        `} />
+    </Section>
+
+    <Section level={3} title="Send the activity archive an entry at a time">
+        <p>Write the handler as an async generator and it streams. A page reading it holds every
+            entry that has arrived, and <code>busy()</code> stays true until the stream closes.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET } from '@abide/abide/server'
+            import { ARCHIVE } from './lib/ARCHIVE.server.ts'
+
+            export default GET(async function* () {
+                for (const entry of ARCHIVE) {
+                    await Bun.sleep(600) // a slow archive
+                    yield entry
+                }
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Link to the deals export as a download">
+        <p>A link cannot call a handler, so give it <code>url()</code>: the address from the
+            file's path and the mount. A handler returning a <code>Blob</code> answers with the
+            blob's own type.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import exportDeals from './exportDeals.handler.ts'
+            </script>
+
+            <a href={exportDeals.url()} download="deals.csv">Download deals</a>
+        `} />
+    </Section>
+
+    <Section level={3} title="Reload only the pipeline stages a win changed">
+        <p>Pass <code>refresh</code> a pattern of the handler's args, and the entries matching it
+            load again while every other stage stays as it is.</p>
+        <Code language="ts" caption="browser" code={`
+            await winDeal()
+            getStage.refresh({ stage: 'lead' })
+            getStage.refresh({ stage: 'won' })
+        `} />
+    </Section>
+</Doc>

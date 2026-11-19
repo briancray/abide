@@ -1,7 +1,9 @@
 <script>
-// A docs page: its header from `SITE` — the group it is in, its title and what it is for — what the
-// page writes, the thread to the pages either side, and the rail: the page's own headings, and its
-// two markdown downloads.
+// A docs page: its header from `SITE` — the group it is in, its title and what it is for — then,
+// for a page documenting a REGISTRY section, the parts every such page has in one order (40.9): its
+// Syntax and the headings under it, the examples the page writes, its See also, its Tests and its
+// Rules. Then the thread to the pages either side, and the rail: the page's own headings, and its two
+// markdown downloads.
 //
 // WHICH PAGE COMES FROM THE ROUTE, so a page names nothing about itself: its words are `SITE`'s,
 // keyed by where it is served. A document — a page read off a file in `docs/` — is not in `SITE`,
@@ -18,13 +20,30 @@ import {
     url,
 } from '@abide/abide'
 
+import type { Heading } from './Heading.ts'
 import { inline } from './inline.ts'
 import { installDocs } from './installDocs.ts'
+import Registry, { clausesOf } from './Registry.abide'
+import Rules from './Rules.abide'
+import Section from './Section.abide'
+import SeeAlso from './SeeAlso.abide'
 import type { SitePage } from './SITE.ts'
 import { groupOf, markdownAddressOf, neighborsOf, pageAt } from './sitePages.ts'
+import Tests from './Tests.abide'
 
-const { documentPage } = props<{ documentPage?: SitePage }>()
+const {
+    documentPage,
+    seeAlso = [],
+    tests = [],
+} = props<{
+    documentPage?: SitePage
+    /** The routes of the pages a reader of this one goes to next (40.19). */
+    seeAlso?: readonly string[]
+    /** The test cases that exercise what the page documents, each a file and its anchors (40.15). */
+    tests?: readonly { path: string; from: readonly string[] }[]
+}>()
 const page = documentPage ?? pageAt(route.name())
+const documents = documentPage === undefined && page.registry !== ''
 const { previous, next } =
     documentPage === undefined
         ? neighborsOf(page.route)
@@ -37,6 +56,17 @@ const markdown =
         : undefined
 
 const headings = reactive.share('docHeadings', () => reactive([]))
+
+// THE TRAILING PARTS ARE FILED HERE, known before the page renders, rather than by their own
+// `<Section>`: Tests and Rules wait on their calls, so a render streams them in after the rail
+// (41.4), and a rail they filed themselves would hold fewer rows on the server than on the client.
+const rules = documents ? clausesOf(page.registry) : []
+const trailing: Heading[] = []
+if (documents && seeAlso.length > 0)
+    trailing.push({ id: 'see-also', title: 'See also', level: 2 })
+if (documents && tests.length > 0)
+    trailing.push({ id: 'tests', title: 'Tests', level: 2 })
+if (rules.length > 0) trailing.push({ id: 'rules', title: 'Rules', level: 2 })
 </script>
 
 <head>
@@ -56,9 +86,19 @@ const headings = reactive.share('docHeadings', () => reactive([]))
             <p class="intent">{raw(inline(page.description))}</p>
         {/if}
     </header>
-    <div class="flow">
-        <slot />
-    </div>
+    {#if documents}
+        <Registry />
+        <Section title="Examples">
+            <slot />
+        </Section>
+        <SeeAlso routes={seeAlso} />
+        <Tests tests={tests} />
+        <Rules ids={rules} />
+    {:else}
+        <div class="flow">
+            <slot />
+        </div>
+    {/if}
     {#if previous || next}
         <footer>
             {#if previous}
@@ -71,11 +111,11 @@ const headings = reactive.share('docHeadings', () => reactive([]))
     {/if}
 </main>
 <aside class="toc" bind:element={installDocs}>
-    {#if headings.length > 1}
+    {#if headings.length + trailing.length > 1}
         <section>
             <h2 id="toc-title">On this page</h2>
             <ul aria-labelledby="toc-title">
-                {#for heading of headings}
+                {#for heading of [...headings, ...trailing]}
                     <li class="lvl-{heading.level}"><a href="#{heading.id}">{raw(inline(heading.title))}</a></li>
                 {/for}
             </ul>

@@ -1,0 +1,55 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/abide/measure',
+        '/harness/measure/measure',
+        '/harness/gate/gate',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/profile/lib/ProfileSummary.test.ts',
+            from: ["test('a phone edit reruns the count, not the initials'"],
+        },
+        {
+            path: 'packages/harness/tests/gate.test.ts',
+            from: [
+                "test('atMost passes at and under a ceiling, and names each field over one — 43.40'",
+            ],
+        },
+        {
+            path: 'packages/harness/tests/gate.test.ts',
+            from: [
+                "test('atMost refuses a ceiling on a field carried as absent — 43.41'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Hold opening a deal's menu to the work it may do">
+        <p>Name a ceiling for each counter you can be blamed for. The failure names every field
+            over its ceiling, with what it reported.</p>
+        <Code language="ts" caption="shared" code={`
+            import { measure, mount } from '@abide/harness/abide'
+            import { atMost } from '@abide/harness/gate'
+
+            test('moving focus in the menu writes nothing', async () => {
+                using _actions = await mount(DealActions({}))
+                const work = measure(() => key(menu(), 'ArrowDown'))
+                atMost(work, { attributesSet: 0, nodesCreated: 0 })
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Fail on a ceiling for a counter nothing published">
+        <p>A counter no source published is <code>null</code>. A ceiling on it throws rather
+            than passing against nothing.</p>
+        <Code language="ts" caption="shared" code={`
+            atMost({ wakes: null }, { wakes: 9 })
+            // atMost: wakes has a ceiling of 9 and the record carries it as absent
+        `} />
+    </Section>
+</Doc>

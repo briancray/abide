@@ -6,12 +6,12 @@ import type { AnswerPart, Show } from './AnswerPart.ts'
 
 // A `<show …/>` line: the kind, its value, and a `code` line's optional `from`.
 const SHOW =
-    /^<show\s+(example|code|name|clause|results|page|open)="([^"]*)"(?:\s+from="([^"]*)")?\s*\/?>\s*$/
+    /^<show\s+(code|name|clause|results|page|open)="([^"]*)"(?:\s+from="([^"]*)")?\s*\/?>\s*$/
 const FENCE = /^(`{3,}|~{3,})\s*([\w+-]*)/
 const SCHEMED = /^[a-zA-Z][a-zA-Z\d+.-]*:/
 
 /**
- * 40.49 — where a link the model wrote goes: a page of the site below its mount, an anchor, or an
+ * 40.29 — where a link the model wrote goes: a page of the site below its mount, an anchor, or an
  * address on a scheme `markdown` already let through. A path relative to nothing is no link.
  */
 function answerHref(address: string): string | undefined {

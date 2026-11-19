@@ -1,0 +1,39 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/rows/matches-filter',
+        '/harness/runner/rows-command',
+        '/harness/runner/test-rows',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/rows.test.ts',
+            from: [
+                "test('a scope selects everything, a section, one item, or nothing'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Select every row, one section, or one row">
+        <p>A scope is <code>all</code>, <code>section:</code> and a section's name, or
+            <code>item:</code> and an id. Anything else selects nothing.</p>
+        <Code language="ts" caption="shared" code={`
+            import { inScope } from '@abide/harness/rows'
+
+            const row = {
+                id: 'src/reports/lib/Forecast.test.ts',
+                section: 'reports',
+                name: 'Forecast.test.ts',
+            }
+            inScope(row, 'all') // true
+            inScope(row, 'section:reports') // true
+            inScope(row, 'item:src/deals/lib/DealTabs.test.ts') // false
+            inScope(row, '') // false
+        `} />
+    </Section>
+</Doc>

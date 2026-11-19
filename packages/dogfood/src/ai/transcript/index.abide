@@ -1,0 +1,61 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/components/chat',
+        '/ai/assistant',
+        '/ai/results-of',
+        '/reactive/reactive',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/transcript.test.ts',
+            from: [
+                "test('an answer folds into one turn: words joined, each call paired with its input and result — 53.24-53.27'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/transcript.test.ts',
+            from: ["test('a turn sets every field it declares — 53.30'"],
+        },
+    ]}
+>
+    <Section level={3} title="Fold a streamed answer into the assistant's turn">
+        <p>Open the question and the answer with <code>transcript.turn</code>, then fold each
+            event into the answer as it arrives. Fold inside <code>patch</code>, once per event, so
+            a long answer costs one pass.</p>
+        <Code language="ts" caption="browser" code={`
+            import { transcript } from '@abide/abide'
+
+            turns.patch((all) => {
+                all.push(transcript.turn('user', [{ type: 'text', text }]))
+                all.push(transcript.turn('assistant'))
+            })
+            const messages = transcript.messages(turns())
+            for await (const event of askAssistant({ messages })) {
+                turns.patch((all) => {
+                    const answering = all[all.length - 1]
+                    if (answering) transcript.fold(answering, event)
+                })
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Show each tool call among the assistant's words">
+        <p>A folded turn's <code>parts</code> keep the order they arrived in. A tool part holds
+            its input and, once answered, its result.</p>
+        <Code language="abide" caption="abide" code={`
+            {#for part of turn.parts}
+                {#if part.type === 'text'}
+                    <p>{part.text}</p>
+                {:else if part.type === 'tool'}
+                    <p>{part.name}: {part.result === undefined ? 'running' : 'done'}</p>
+                {/if}
+            {/for}
+        `} />
+    </Section>
+</Doc>

@@ -3803,135 +3803,92 @@ written in mounts, and MUST be removed when that page, layout or component leave
 # 40. Documentation
 
 *Free-standing: these clauses govern the documentation system, which REGISTRY does not name — a
-`<Snippet>` is not something an app writes.*
+page's See also is not something an app writes.*
 
 40.1 The documentation site MUST be the package at `packages/dogfood`.
 
-40.2 Every name REGISTRY carries MUST be documented against real `.abide` and `.ts` files.
+40.2 The documentation site MUST give every REGISTRY `##` section a page of its own, listed under that
+section's `#` group.
 
-40.3 Every `<Example>` MUST show a test file of the example app that exercises the component it renders.
+40.3 Every REGISTRY `##` section MUST document one export an app imports, one family of exports
+sharing one signature, or one construct an app writes, and every function and constant a public
+entry point exports MUST head a section of its own, save a class an app reads but never constructs,
+which MAY be a row of the section of what hands it back.
 
-40.4 A file an `<Example>` names that is not part of the problem its summary names MUST NOT be
-one of its files.
+40.4 A page MUST name in its `SITE` entry's `registry` the REGISTRY section it documents.
 
-40.5 `<Example>` MUST render the example's component inline, above a tab per file it is made
-of, and the render MUST NOT be one of those tabs.
+40.5 Every REGISTRY section MUST be named by exactly one page's `registry`.
 
-40.6 `<Snippet>` MUST be how a page shows code from an example, in place of pasting it into a
-fence.
+40.6 Every row of `docs/REGISTRY.md` MUST be on exactly one page.
 
-40.7 A `<Snippet>` anchor MUST be a line prefix matching exactly once, and the slice MUST run to the end
-of the construct it opens.
-
-40.8 Several `<Snippet>` anchors separated by an elision MUST render as one fence in file
-order, with the gap marked rather than closed.
-
-40.9 A `<Snippet>`'s caption, language and spine MUST be derived from its address.
-
-40.10 A `<Snippet>` anchor matching none or matching two MUST fail the page it is on as it renders.
-
-40.11 A page MUST name in its `SITE` entry's `registry` the REGISTRY section whose rows it carries.
-
-40.12 Every REGISTRY section MUST be named by exactly one page's `registry`.
-
-40.13 The voice, the vocabulary and the register of a title against a nav label MUST be
-`docs/BRAND.md`'s, and MUST NOT be stated here.
-
-40.14 An `<Example>` MUST run the component it names in the docs app, and MUST NOT run a
-stand-in for it.
-
-40.15 A request an `<Example>` makes MUST be answered by the docs app's own handlers, and MUST
-NOT be answered by a fixture.
-
-40.16 Instrumentation the documentation adds to an `<Example>` MUST sit outside the render.
-
-40.17 A page MUST embed one `<Example>` per behavior it teaches, save a page or a section 40.35
-exempts.
-
-40.18 An `<Example>` MUST demonstrate exactly one behavior.
-
-40.19 An `<Example>` MUST be embedded by exactly one page.
-
-40.20 An `<Example>` MUST model a pattern from the app `docs/BRAND.md` names.
-
-40.21 Every `<Example>` MUST name the example app.
-
-40.22 A control an `<Example>` renders MUST sit with the value it changes.
-
-40.23 An `<Example>` MUST prove the heading it sits under.
-
-40.24 An `<Example>` MUST NOT carry code its proof does not need.
-
-40.25 The capability an `<Example>` proves MUST be one the app it is drawn from would reach
-for.
-
-40.26 A heading that carries an `<Example>` MUST be followed by it, with nothing between
-them.
-
-40.27 An `<Example>`'s summary MUST state the situation it is in, and MUST NOT restate the
-heading.
-
-40.28 A comment in an `<Example>`'s own source MUST fit on one line, and a reason longer than
-that MUST go in the copy after the card.
-
-40.29 A page's description MUST read standalone, being what the home page's index lists under it, and MUST
-NOT carry a relative link.
-
-40.30 A page MUST render the rows its `registry` names after everything else it writes.
-
-40.31 A documentation page MUST be an `index.abide` written by hand at its route, and its title, nav
+40.7 A documentation page MUST be an `index.abide` written by hand at its route, and its title, nav
 label, description and `registry` MUST be its `SITE` entry's alone.
 
-40.32 An `<Example>` MUST render a component in a `lib` directory of the example app, and that
-component's handlers, hooks and data MUST be in its own file, save a file the example is about.
+40.8 A page documenting an export MUST carry the export's name as its `SITE` entry's `title`.
 
-40.33 A page's `.md` twin MUST be derived from what the page renders.
+40.9 A page MUST render, in this order, its Syntax, being the rows directly under its section; a
+heading per `###` of its section, holding that heading's rows; its Examples; its See also; its Tests;
+and its Rules.
 
-40.34 The documentation site MUST serve `docs/RULEBOOK.md` at `/rulebook`, read from the file as the
+40.10 A page's rows MUST be read from REGISTRY as the page renders.
+
+40.11 A page's Rules MUST list every clause its rows cite, once each in rulebook order, with the
+clause's text, linked to the clause's anchor on `/rulebook`.
+
+40.12 A page MUST carry at least one example, each a `<Section>` of its own holding one `<Code>`,
+and an example MUST demonstrate exactly one behavior.
+
+40.13 An example's `<Code>` MUST NOT carry code its proof does not need.
+
+40.14 An example MUST be a fence written on its page, captioned with the side its code runs on, and
+MUST NOT be captioned with an address.
+
+40.15 A slice of a file the site shows, an entry of a page's `tests` or a `<show code/>` line, MUST
+be named by a line prefix matching exactly once, and MUST run to the end of the construct that line
+opens.
+
+40.16 Several slice prefixes separated by an elision MUST render as one fence in file order, with the
+gap marked rather than closed.
+
+40.17 A slice's caption, language and spine MUST be derived from its `path`.
+
+40.18 A prefix in a page's `tests` matching none or matching two MUST fail the page as it renders.
+
+40.19 A page's `seeAlso` MUST name only routes of the site, and each MUST render as that page's nav
+label and its description.
+
+40.20 A page's description MUST read standalone, being what the home page's index lists under it, and
+MUST NOT carry a relative link.
+
+40.21 The voice, the vocabulary and the register of a title against a nav label MUST be
+`docs/BRAND.md`'s, and MUST NOT be stated here.
+
+40.22 A page's `.md` twin MUST be derived from what the page renders.
+
+40.23 The documentation site MUST serve `docs/RULEBOOK.md` at `/rulebook`, read from the file as the
 site builds, with each clause and each group anchored by its own number.
 
-40.35 A page, or a section of one, whose every behavior is performed by a command, or decided by the
-deployment an app is served from, MAY embed no `<Example>`.
+40.24 The documentation site MUST serve each feature directory of the example app at the address the
+example app serves it at, with none of the site's chrome around its pages, and a request one of
+those pages makes MUST be answered by the example app's own handlers.
 
-40.36 A page embedding no `<Example>` MUST be on the documentation gates' list of such pages, and that
-list MUST NOT gain a page.
+40.25 The example app MUST be a package directly under the documentation site's `examples`, and MUST
+pass its own tests and its own `abide check` run from its own directory.
 
-40.37 The documentation site MUST serve each feature directory of the example app at the address the
-example app serves it at, with none of the site's chrome around its pages.
-
-40.38 The example app MUST be a package directly under the documentation site's `examples`, and MUST pass
-its own tests and its own `abide check` run from its own directory.
-
-40.39 An `<Example>` MUST render, above the source of each test or bench file it shows, what that file
-last reported in the results the site keeps for the example app.
-
-40.40 An `<Example>` whose results were never kept MUST say so where the results would render.
-
-40.41 The documentation site MUST serve the example app as a gzipped tarball at
+40.26 The documentation site MUST serve the example app as a gzipped tarball at
 `/examples/<app>.tar.gz`, holding every file of the app save its `node_modules` and `.abide`, with
 each workspace dependency naming the published version it stands for.
 
-40.42 The documentation site MUST give every REGISTRY `##` section, and the rows a `#` group holds
-outside one, a page of its own, listed under that `#` group.
-
-40.43 Every row of `docs/REGISTRY.md` MUST be on exactly one page.
-
-40.44 The documentation site MUST put above every page a prompt that asks the visitor's Claude Code
+40.27 The documentation site MUST put above every page a prompt that asks the visitor's Claude Code
 through `provider.claudeCode`, with the site's own documentation tools as its only tools.
 
-40.45 A page MUST link each clause its rows cite to that clause's anchor on `/rulebook`.
-
-40.46 A `<show/>` line in an answer MUST render from the documentation tool that answers the model the
+40.28 A `<show/>` line in an answer MUST render from the documentation tool that answers the model the
 same thing.
 
-40.47 A page's rows MUST be read from REGISTRY as the page renders.
+40.29 An answer MUST render the markup the model writes outside a `<show/>` line as text, and MUST NOT
+link to an address other than a page of the site, an anchor, a web address or a mail address.
 
-40.48 A `<show example/>` in an answer MUST run the card at the page that embeds it, shown alone.
-
-40.49 An answer MUST render the markup the model writes outside a `<show/>` line as text, and MUST NOT link to an address
-other than a page of the site, an anchor, a web address or a mail address.
-
-40.50 The documentation site's native app MUST file every page in its menu bar through `onMenu`,
+40.30 The documentation site's native app MUST file every page in its menu bar through `onMenu`,
 grouped as the sidebar groups them.
 
 # 41. Rendering and hydration
@@ -4221,6 +4178,13 @@ otherwise MUST fail naming each field over its ceiling with the value the record
 43.41 `atMost` MUST fail where a field it is given a ceiling for is absent from the record.
 
 43.42 `atMost` MUST report its failure at the line that called it.
+
+43.43 `measuresNamed` MUST hand back every measure of the trace carrying the name, in trace order.
+
+43.44 `durationOf` MUST hand back the summed nanoseconds of every measure of the trace carrying the
+name.
+
+43.45 `durationOf` MUST throw where no measure of the trace carries the name.
 
 # 44. The assistant
 

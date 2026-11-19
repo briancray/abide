@@ -1,4 +1,4 @@
-// EVERY EXAMPLE, RENDERED AND MOUNTED, the way its card does it: the component the card renders,
+// EVERY COMPONENT OF THE EXAMPLE APP, RENDERED AND MOUNTED: each `.abide` in a `lib` of the CRM,
 // painted on the server and adopted on the client. `abide build` asks whether each one COMPILES,
 // which is a weak bar: a module that compiles can still walk to a node that is not there or throw
 // on its first read. This one runs them.
@@ -42,9 +42,9 @@ import {
     removeTemporaryModules,
     temporaryModule,
 } from '../../abide/tests/temporaryModule.ts'
-import { allCards, DOGFOOD as APP } from './docsPages.ts'
+import { DOGFOOD as APP } from './docsPages.ts'
 
-// THE EXAMPLE APP'S `src`, from the docs app's root: every card renders a component from it (40.32).
+// THE EXAMPLE APP'S `src`, from the docs app's root.
 const EXAMPLE_APPS: string[] = []
 for (const manifest of new Bun.Glob('examples/*/package.json').scanSync({
     cwd: APP,
@@ -56,9 +56,33 @@ const COMPONENTS = Bun.fileURLToPath(
     new URL('../../abide/src/components/', import.meta.url),
 )
 
-// A file that is an app's page rather than a component a card renders.
+// A file that is an app's page rather than a component of a `lib`.
 function isRoute(path: string): boolean {
     return /(^|\/)(index|layout|error|launcher)\.abide$/.test(path)
+}
+
+// THE COMPONENTS A PAGE MOUNTS: each `.abide` in a `lib` of the CRM that no other file of it but a
+// page imports. One another component or a handler imports is mounted through it, with the props it
+// is handed there — mounted alone it has none.
+async function topLevelComponents(): Promise<string[]> {
+    const components: string[] = []
+    const imported = new Set<string>()
+    for (const root of EXAMPLE_APPS)
+        for (const path of new Bun.Glob('**/*.{ts,abide}').scanSync({
+            cwd: `${APP}${root}`,
+        })) {
+            if (/\/lib\/[^/]+\.abide$/.test(`/${path}`))
+                components.push(`${root}/${path}`)
+            if (isRoute(path) || path.endsWith('.test.ts')) continue
+            const source = await Bun.file(`${APP}${root}/${path}`).text()
+            for (const [, name] of source.matchAll(/(\w+)\.abide'/g))
+                imported.add(name as string)
+        }
+    const topLevel: string[] = []
+    for (const component of components)
+        if (!imported.has(component.slice(component.lastIndexOf('/') + 1, -6)))
+            topLevel.push(component)
+    return topLevel.sort()
 }
 
 // The handlers a `<script server>` declares, by the call that declares them — what the build's
@@ -67,7 +91,7 @@ const HANDLER = /^const (\w+) = (?:GET|POST|PUT|PATCH|DELETE)\(/gm
 
 // THE EXAMPLE APP, COMPILED WHOLE: its `package.json`, every `.ts` and `.abide` under its `src`,
 // and every component compiled to the pair it becomes, served at its own path as a build serves it
-// (`abideModules`). The pages are left out: what is under test is what each card invokes.
+// (`abideModules`). The pages are left out: what is under test is each component of a `lib`.
 async function appTree(session: TypeSession): Promise<{
     tree: Record<string, string>
     compilation: Compilation
@@ -277,10 +301,10 @@ test('every example renders on the server and mounts on the client', async () =>
                 ),
             { preconnect: () => {} },
         ) as typeof fetch
-        for (const card of await allCards()) {
-            const example = card.id
+        for (const component of await topLevelComponents()) {
+            const example = component
             painting = example
-            const stem = card.component.slice(0, -'.abide'.length)
+            const stem = component.slice(0, -'.abide'.length)
             try {
                 const { default: Component } = await import(
                     `${dir}/${stem}.abide?component`
@@ -298,7 +322,7 @@ test('every example renders on the server and mounts on the client', async () =>
                 // root for the next leaves the previous component's readers holding nodes that
                 // have been deleted, and a value that lands 200 ms later — `memo-await` has one —
                 // then walks a tree nobody emptied on purpose and reports against whichever
-                // example happened to be mounting. A root per card is what the docs page gives it.
+                // example happened to be mounting. A root per component is what a page gives it.
                 const host = document.createElement('div')
                 host.innerHTML = html.slice(
                     html.indexOf('<body>') + '<body>'.length,

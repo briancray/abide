@@ -1,0 +1,47 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/report/batch',
+        '/harness/engine/shares',
+        '/harness/report/ratio',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/engine.test.ts',
+            from: ["test('an op over the threshold reports both ceilings'"],
+        },
+        {
+            path: 'packages/harness/tests/report.test.ts',
+            from: [
+                "test('the clock reports a measured resolution, not an assumed one'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Find the pipeline size where advancing a deal costs a frame">
+        <p>Divide a frame by the time per deal. Past that many deals the op is one a reader
+            sees.</p>
+        <Code language="ts" caption="shared" code={`
+            import { THRESHOLDS } from '@abide/harness/report'
+
+            const run = priced()
+            const perDeal = run.samples['among 1,000'].nanoseconds / 1000
+            const dealsInAFrame = Math.floor(THRESHOLDS.frame / perDeal)
+        `} />
+    </Section>
+
+    <Section level={3} title="Fail a check past the interaction budget">
+        <p><code>interaction</code> is 100 ms, where a wait becomes the thing the user is
+            doing.</p>
+        <Code language="ts" caption="shared" code={`
+            const took = run.samples['among 1,000'].nanoseconds
+            if (took > THRESHOLDS.interaction)
+                throw new Error('advancing a deal outlasts an interaction')
+        `} />
+    </Section>
+</Doc>

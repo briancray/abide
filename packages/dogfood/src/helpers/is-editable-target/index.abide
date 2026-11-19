@@ -1,0 +1,43 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/helpers/hotkeys', '/helpers/key-label', '/helpers/listbox']}
+    tests={[
+        {
+            path: 'packages/abide/tests/hotkeys.test.ts',
+            from: ["test('a field is the visitor"],
+        },
+    ]}
+>
+    <Section level={3} title="Leave a key to the field the visitor types in">
+        <p>A listener of your own asks first, so <code>j</code> moves through the activity feed
+            everywhere but a text field, a textarea, a select or an editable element.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { isEditableTarget } from '@abide/abide'
+
+            function moveThroughFeed(event: KeyboardEvent) {
+                if (isEditableTarget(event.target)) return
+                if (event.key === 'j') selectNextActivity()
+            }
+            </script>
+
+            <window onkeydown={moveThroughFeed} />
+        `} />
+    </Section>
+
+    <Section level={3} title="Tell a checkbox from a text input">
+        <p>An input that takes no text, such as a checkbox or a button, is not editable.
+            <code>null</code> and the window are not either.</p>
+        <Code language="ts" caption="browser" code={`
+            isEditableTarget(document.createElement('textarea')) // true
+            isEditableTarget(Object.assign(document.createElement('input'),
+                { type: 'checkbox' })) // false
+            isEditableTarget(window) // false
+        `} />
+    </Section>
+</Doc>

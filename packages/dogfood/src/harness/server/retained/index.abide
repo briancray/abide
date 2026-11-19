@@ -1,0 +1,58 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/server/closures',
+        '/harness/server/allocated',
+        '/harness/gate/in-a-fresh-process',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/server.test.ts',
+            from: [
+                "test('a class instance is bucketed as Object, and Scope is never a key'",
+            ],
+        },
+        {
+            path: 'packages/harness/tests/server.test.ts',
+            from: ["test('retained() throws in a process with a DOM'"],
+        },
+    ]}
+>
+    <Section level={3} title="Find what loading the contacts keeps alive">
+        <p>The diff is the live objects by engine type, taken after a full collection. What the
+            body returns is held across the reading. A class instance counts under
+            <code>Object</code>.</p>
+        <Code language="ts" caption="server" code={`
+            import { retained } from '@abide/harness/server'
+
+            class Contact {
+                constructor(public name: string) {}
+            }
+            const diff = retained(() => {
+                const contacts = []
+                for (let at = 0; at < 500; at += 1) contacts.push(new Contact(\`c\${at}\`))
+                return contacts
+            })
+            diff.Object // at least 500
+        `} />
+    </Section>
+
+    <Section level={3} title="Read the heap where no DOM is preloaded">
+        <p>The emulated DOM's own objects land in the same buckets, so <code>retained</code>
+            throws where one is registered. Run it in a child process.</p>
+        <Code language="ts" caption="server" code={`
+            import { inAFreshProcess } from '@abide/harness/gate'
+
+            const run = await inAFreshProcess(\`
+            import { retained } from '@abide/harness/server'
+            const diff = retained(() => Array.from({ length: 500 }, () => ({})))
+            console.log(diff.Object)\`)
+            expect(run.ok).toBe(true)
+        `} />
+    </Section>
+</Doc>

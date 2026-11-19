@@ -11,6 +11,6 @@ export default GET(
     },
     {
         description:
-            "One abide docs page as markdown: its prose, its example cards' files, and its REGISTRY rows. `route` is a page's route, e.g. /reactive/watch.",
+            "One abide docs page as markdown: its syntax rows, its examples, its see-also links, its test cases and its rules. `route` is a page's route, e.g. /reactive/watch.",
     },
 )

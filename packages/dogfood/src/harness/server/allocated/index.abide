@@ -1,0 +1,45 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/server/retained',
+        '/harness/server/closures',
+        '/harness/gate/in-a-fresh-process',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/server.test.ts',
+            from: [
+                "test('allocated() comes back tagged, with its rep count and its growth'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Price what parsing an invoice link allocates">
+        <p>The body runs <code>reps</code> times, 1000 by default, and <code>perRep</code> is
+            the mean by engine type. A fraction means the allocation is conditional or
+            amortized.</p>
+        <Code language="ts" caption="server" code={`
+            import { allocated } from '@abide/harness/server'
+
+            const answer = allocated(() => new URL('https://crm.test/invoices/42'), 400)
+            answer.tagged // 'batch mean'
+            answer.perRep // objects per run, by type
+        `} />
+    </Section>
+
+    <Section level={3} title="Check the cost per run holds across the batch">
+        <p>The batch is split in two, and <code>growth</code> is the second half's mean minus
+            the first's. A type left out of it cost the same in both halves.</p>
+        <Code language="ts" caption="server" code={`
+            const answer = allocated(() => new URL('https://crm.test/invoices/42'))
+            answer.growth // {} when every run costs the same
+        `} />
+        <p>Gate an exact count on <code>retained</code>. A mean is not a count to compare
+            with <code>toBe</code>.</p>
+    </Section>
+</Doc>

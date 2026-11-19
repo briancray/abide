@@ -1,0 +1,53 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/abide/preload',
+        '/harness/gate/at-most',
+        '/harness/measure/measure',
+        '/harness/gate/gate',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/profile/lib/ProfileSummary.test.ts',
+            from: ["test('a phone edit reruns the count, not the initials'"],
+        },
+        {
+            path: 'packages/abide/tests/testPreload.test.ts',
+            from: [
+                "test('a test mounts a component, clicks it and reads the work the click did — 38.119'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Count what a phone edit did to the profile">
+        <p>Mount the component, then wrap the op. The record carries the DOM work and abide's
+            <code>wakes</code>, <code>bindingRuns</code> and <code>descents</code>.</p>
+        <Code language="ts" caption="shared" code={`
+            import { measure, mount } from '@abide/harness/abide'
+            import { atMost } from '@abide/harness/gate'
+
+            test('a phone edit reruns the count, not the initials', async () => {
+                using _summary = await mount(ProfileSummary({}))
+                const work = measure(() => type(1, '4155550132'))
+                atMost(work, { descents: 4 })
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Flush a click inside the measured op">
+        <p>An update lands on the next flush. Call <code>flushSync</code> inside the body so
+            the work is counted.</p>
+        <Code language="ts" caption="shared" code={`
+            const work = measure(() => {
+                document.querySelector('button')?.click()
+                flushSync()
+            })
+            expect(work.wakes).toBe(1)
+        `} />
+    </Section>
+</Doc>

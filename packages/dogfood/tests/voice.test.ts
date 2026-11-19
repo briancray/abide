@@ -17,7 +17,11 @@
 
 import { beforeAll, expect, test } from 'bun:test'
 
-import { docsPages, renderedMarkdown } from './docsPages.ts'
+import {
+    docsPages,
+    renderedMarkdown,
+    written as ownWords,
+} from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
 // for the whole load against the other suites, inside its own five seconds.
@@ -35,7 +39,7 @@ async function written(): Promise<
             route: page.route,
             title: page.title,
             nav: page.nav,
-            body: bodies.get(page.route) ?? '',
+            body: ownWords(bodies.get(page.route) ?? ''),
         })
     return pages
 }

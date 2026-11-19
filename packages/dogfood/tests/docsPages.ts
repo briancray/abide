@@ -1,10 +1,9 @@
-// THE DOCS AS THE GATES READ THEM: every page `SITE` lists, its `index.abide`, the example cards it
-// embeds, and the markdown the built app serves for it — what a reader with no browser reads, and so
+// THE DOCS AS THE GATES READ THEM: every page `SITE` lists, its `index.abide`, and the markdown the
+// built app serves for it — what a reader with no browser reads, and so
 // what the voice and coverage gates hold the words to.
 
 import { addressOf, BIN } from '../../abide/tests/builtApp.ts'
 import { attributeOf } from '../src/lib/attributeOf.ts'
-import { exampleCardsIn } from '../src/lib/exampleCardsIn.ts'
 import type { SitePage } from '../src/lib/SITE.ts'
 import { groupOf, markdownAddressOf, PAGES } from '../src/lib/sitePages.ts'
 
@@ -18,17 +17,6 @@ export type DocsPage = SitePage & {
     file: string
     /** Its text. */
     source: string
-}
-
-/** One `<Example>` card on a page. */
-export type Card = {
-    id: string
-    /** The page embedding it. */
-    route: string
-    /** The component it renders, from the docs app's root. */
-    component: string
-    /** Each file the card shows, by the path a reader is shown, to the file from the docs app's root. */
-    files: Map<string, string>
 }
 
 /** A page's `index.abide`, from the docs app's root. */
@@ -54,57 +42,6 @@ export function docsPages(): Promise<DocsPage[]> {
         return read
     })()
     return pages
-}
-
-// Where a page's import lands, from the docs app's root.
-function resolvedFrom(file: string, specifier: string): string {
-    if (specifier.startsWith('#src/'))
-        return `src/${specifier.slice('#src/'.length)}`
-    // The CRM, imported by its package name.
-    if (specifier.startsWith('crm/')) return `examples/${specifier}`
-    return new URL(specifier, `file://${DOGFOOD}${file}`).pathname.slice(
-        DOGFOOD.length,
-    )
-}
-
-const IMPORT = /^import (\w+) from '([^']+)'(?: with \{ type: 'text' \})?$/gm
-const FILE_ENTRY = /'([^']+)':\s*(\w+)/g
-
-/** The cards `page` embeds, in the order it embeds them. */
-export function cardsOf(page: DocsPage): Card[] {
-    const imported = new Map<string, string>()
-    for (const [, name, specifier] of page.source.matchAll(IMPORT))
-        imported.set(
-            name as string,
-            resolvedFrom(page.file, specifier as string),
-        )
-    const cards: Card[] = []
-    for (const { opening, component, serverFiles } of exampleCardsIn(
-        page.source,
-    )) {
-        const id = attributeOf(opening, 'id') ?? ''
-        const files = new Map<string, string>()
-        const listed = /files=\{\{([\s\S]*?)\}\}/.exec(opening)?.[1] ?? ''
-        // A server file's text is read by the card on the server, by its path in the CRM.
-        for (const shown of serverFiles)
-            files.set(shown, `examples/crm/${shown}`)
-        for (const [, shown, source] of listed.matchAll(FILE_ENTRY))
-            files.set(shown as string, imported.get(source as string) ?? '')
-        cards.push({
-            id,
-            route: page.route,
-            component: imported.get(component) ?? '',
-            files,
-        })
-    }
-    return cards
-}
-
-/** Every card in the docs, in reading order. */
-export async function allCards(): Promise<Card[]> {
-    const cards: Card[] = []
-    for (const page of await docsPages()) cards.push(...cardsOf(page))
-    return cards
 }
 
 let served: Promise<{ base: string; stop: () => void }> | undefined
@@ -185,6 +122,20 @@ async function rendered(
     return bodies
 }
 
+/**
+ * What a page WRITES, off its markdown: everything before its Tests and its Rules, which are QUOTED
+ * — a test case at its file's width, a clause in the rulebook's keywords — and answer to the file
+ * and the rulebook rather than to the voice and the column a page's own words are held to.
+ */
+export function written(body: string): string {
+    let end = body.length
+    for (const part of ['\n## Tests\n', '\n## Rules\n']) {
+        const at = body.indexOf(part)
+        if (at !== -1 && at < end) end = at
+    }
+    return body.slice(0, end)
+}
+
 /** Each page's markdown, as the built app serves it at the page's address with `.md` on the end. */
 export function renderedMarkdown(): Promise<Map<string, string>> {
     markdown ??= rendered(markdownAddressOf)
@@ -204,7 +155,7 @@ export type Fence = {
  * Where the tag opening at `from` ends — past its `>`, or its `/>` where `closed` — stepping over
  * quotes and braces, so a `>` inside an attribute's value does not end it.
  */
-export function tagEnd(source: string, from: number, closed = true): number {
+function tagEnd(source: string, from: number, closed = true): number {
     let depth = 0
     let quote = ''
     for (let at = from; at < source.length; at += 1) {
@@ -226,7 +177,7 @@ export function tagEnd(source: string, from: number, closed = true): number {
 }
 
 /** The title of the `<Section>` whose tag opens at `index` in `source`. */
-export function sectionTitleAt(source: string, index: number): string {
+function sectionTitleAt(source: string, index: number): string {
     return (
         attributeOf(
             source.slice(index, tagEnd(source, index, false)),

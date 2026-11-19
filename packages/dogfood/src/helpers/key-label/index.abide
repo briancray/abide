@@ -1,0 +1,49 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/helpers/hotkeys',
+        '/helpers/is-editable-target',
+        '/components/tooltip',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/hotkeys.test.ts',
+            from: ["test('a label writes a binding as the platform reads it"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/SaveShortcut.test.ts',
+            from: ["test('anywhere else the label and the key are Ctrl+Enter'"],
+        },
+    ]}
+>
+    <Section level={3} title="Show the save shortcut a visitor's keyboard takes">
+        <p>Write the hint from the same binding <code>hotkeys</code> matches, so it never names a
+            key the binding does not take. The label reads ⌘Enter on a Mac and Ctrl+Enter on
+            Windows.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { hotkeys, keyLabel } from '@abide/abide'
+
+            const SAVE = 'mod+Enter'
+            const keys = hotkeys({ [SAVE]: { run: save, editable: true } })
+            </script>
+
+            <textarea bind:value={note} onkeydown={keys}></textarea>
+            <kbd>{keyLabel(SAVE)}</kbd>
+        `} />
+    </Section>
+
+    <Section level={3} title="Render the same label on the server and in the browser">
+        <p>The server reads the platform off the request's user agent and the browser off its
+            own, so the label the server renders is the one the page hydrates.</p>
+        <Code language="ts" caption="shared" code={`
+            keyLabel('mod+k') // '⌘K' on a Mac, 'Ctrl+K' elsewhere
+            keyLabel('shift+n') // '⇧N' on a Mac, 'Shift+N' elsewhere
+        `} />
+    </Section>
+</Doc>

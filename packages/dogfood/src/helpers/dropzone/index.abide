@@ -1,0 +1,74 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/helpers/observe',
+        '/ai/image-files',
+        '/ai/image-piece',
+        '/helpers/dismissible',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a drop takes what accept takes, by type, extension or function",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: ["test('data-dragging stays while a drag crosses into a child"],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a paste of files is a drop, and words pasted alone paste",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Attach a signed contract dropped on a deal">
+        <p><code>accept</code> reads as an <code>&lt;input type="file"&gt;</code>'s does. Your
+            callback gets the files it takes, and is not called where it takes none.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { dropzone, reactive } from '@abide/abide'
+
+            let contracts = reactive<string[]>([])
+
+            function attach(files: File[]) {
+                for (const file of files) contracts.push(file.name)
+            }
+            </script>
+
+            <div bind:element={dropzone(attach, { accept: '.pdf' })}>
+                Drop the signed contract here, as a PDF.
+            </div>
+        `} />
+    </Section>
+
+    <Section level={3} title="Light up the drop target while files hover">
+        <p>The element carries <code>data-dragging</code> while files are dragged over it, its
+            children included. Style that attribute.</p>
+        <Code language="abide" caption="abide" code={`
+            <div class="border border-dashed data-dragging:border-signal
+                data-dragging:bg-signal/10"
+                bind:element={dropzone(attach, { accept: '.pdf' })}>…</div>
+        `} />
+    </Section>
+
+    <Section level={3} title="Take a screenshot pasted into a note">
+        <p>With <code>paste: true</code> a paste of files is a drop, and words pasted alone paste
+            as usual. <code>multiple: false</code> takes the first file alone.</p>
+        <Code language="abide" caption="abide" code={`
+            <textarea bind:value={note} bind:element={dropzone(attachImage, {
+                accept: 'image/*',
+                paste: true,
+                multiple: false,
+            })}></textarea>
+        `} />
+    </Section>
+</Doc>

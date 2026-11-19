@@ -1,4 +1,4 @@
 <script module>
-// The CRM's ops, mounted where the CRM serves it, so an example's requests reach it here (23.19, 40.15).
+// The CRM's ops, mounted where the CRM serves it, so an example's requests reach it here (23.19, 40.24).
 import 'crm/src/ops' with { type: 'routes' }
 </script>

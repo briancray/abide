@@ -50,7 +50,7 @@ export default defineConfig({
         },
         // THE CRM'S OWN BROWSER SPECS, under its root `e2e`, which its bunfig's test root
         // keeps `bun test` out of. They drive
-        // the app where the docs serve it (40.15), and their addresses are relative so the same spec
+        // the app where the docs serve it (40.24), and their addresses are relative so the same spec
         // runs against the app served on its own. Chromium: the engine lane is CDP.
         {
             name: 'cards',

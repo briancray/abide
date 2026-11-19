@@ -1,46 +1,81 @@
 <script>
-import addContactSource from 'crm/src/account/addContact.handler.ts' with { type: 'text' }
-import AddContact from 'crm/src/account/lib/AddContact.abide'
-import addContactComponentSource from 'crm/src/account/lib/AddContact.abide' with { type: 'text' }
-import addContactTestSource from 'crm/src/account/lib/AddContact.test.ts' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Section title="`response()` sets the status a handler answers with">
-        <Example
-            id="created"
-            title="`response()` — a status the handler decides"
-            summary="An integration adds contacts through the API, and expects 201 and the address of the new record."
-            files={{
-                'src/account/lib/AddContact.abide': addContactComponentSource,
-                'src/account/addContact.handler.ts': addContactSource,
-                'src/account/lib/AddContact.test.ts': addContactTestSource,
-            }}
-        >
-            <AddContact />
-        </Example>
+<Doc
+    seeAlso={[
+        '/ambient/request',
+        '/transports/post',
+        '/transports/get',
+        '/transports/headers',
+        '/pages/render',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/account/lib/AddContact.test.ts',
+            from: ["test('adding a contact answers 201, and where it lives'"],
+        },
+        {
+            path: 'packages/abide/tests/transport.test.ts',
+            from: [
+                "test('response.page answers a document and response.redirect a navigation",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/transport.test.ts',
+            from: [
+                "test('a framing fixed by a helper is kept whatever Accept asks",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Answer 201 with the address of the new contact">
+        <p>Write the status and headers through <code>response()</code>, then go on returning the
+            value. The body stays the handler's return.</p>
+        <Code language="ts" caption="server" code={`
+            import { POST, response } from '@abide/abide/server'
 
-        <p><code>response()</code> is the status and headers of the answer being built, before
-            the body is decided. A handler or a rung writes to it and goes on returning a value.</p>
-
-        <table>
-            <thead><tr><th>Name</th><th>What it is, on the server, for the request being answered</th></tr></thead>
-            <tbody>
-                <tr><td><code>request()</code></td><td>the platform's <code>Request</code>: headers, URL, method, signal</td></tr>
-                <tr><td><code>response()</code></td><td>the status and headers being sent back</td></tr>
-                <tr><td><code>request.ip()</code></td><td>the address the request came from, the same under <code>abide dev</code> and <code>abide start</code>, or <code>'in-process'</code> for a call the app made of itself</td></tr>
-                <tr><td><code>server()</code></td><td>the listening <code>Bun.Server</code>, for what abide does not carry</td></tr>
-            </tbody>
-        </table>
-
-        <p>On an rpc route the body is <code>ctx.args()</code>'s. A body reads once, so a rung that
-            reads <code>request().json()</code> leaves nothing for the handler.</p>
+            export default POST(async ({ name }: { name: string }) => {
+                const contact = await contacts.add({ name })
+                response().status = 201
+                response().headers.set('location', \`/contacts/\${contact.id}\`)
+                return contact
+            })
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="Send a form post on to the deal it created">
+        <p><code>response.redirect</code> sets the status and <code>location</code> and returns
+            <code>undefined</code>. The status is 302 unless you name another.</p>
+        <Code language="ts" caption="server" code={`
+            export default POST(async ({ title }: { title: string }) => {
+                const deal = await deals.add({ title })
+                return response.redirect(\`/deals/\${deal.id}\`, 303)
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Stream an export as JSON lines whatever the caller asks">
+        <p>An iterable answer streams, framed by the request's <code>Accept</code>. Wrap it in
+            <code>response.jsonl</code>, <code>response.sse</code> or <code>response.bytes</code>
+            to fix the framing.</p>
+        <Code language="ts" caption="server" code={`
+            export default GET(() => response.jsonl(deals.all()))
+        `} />
+    </Section>
+
+    <Section level={3} title="Serve a rendered document from a handler">
+        <p><code>response.page</code> marks what <code>render</code> produced as
+            <code>text/html</code>. It renders nothing itself.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, render, response } from '@abide/abide/server'
+            import Statement from './lib/Statement.abide'
+
+            export default GET(async ({ id }: { id: string }) =>
+                response.page(await render(Statement({ id }))),
+            )
+        `} />
+    </Section>
 </Doc>

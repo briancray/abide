@@ -341,7 +341,7 @@ test('every clause the working notes cite exists', async () => {
         [...body(rulebook).matchAll(/^# (\d+)\./gm)].map((group) => group[1]),
     )
     const dangling: string[] = []
-    // A citation is a list of clauses, ranges (`40.6-40.10`, both ends read) and whole groups
+    // A citation is a list of clauses, ranges (`40.15-40.18`, both ends read) and whole groups
     // (`RULEBOOK 40`), joined by commas and `and`.
     for (const match of notes.matchAll(
         /RULEBOOK ((?:\d+(?:\.\d+)?(?:-\d+\.\d+)?(?:,? (?:and )?)?)+)/g,
@@ -368,7 +368,7 @@ test('every clause the shipped agent instructions cite exists', async () => {
     expect(danglingClauses(instructions)).toEqual([])
 })
 
-// The check above reads only what follows the word RULEBOOK, so a bare `(40.17, 40.18)` in the
+// The check above reads only what follows the word RULEBOOK, so a bare `(40.9, 40.12)` in the
 // notes resolves or dangles with nothing looking. A parenthesized clause number is a citation, and
 // one written without its document is one the check cannot see.
 test('every clause the working notes cite names its document', async () => {

@@ -1,0 +1,94 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/transports/get',
+        '/transports/json-schema',
+        '/reactive/refuse',
+        '/ambient/outbox',
+        '/hooks/middleware',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/rpc.test.ts',
+            from: [
+                "test('a mutation runs again on a later call, where a read serves what it holds — 16.7'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/refreshes.test.ts',
+            from: [
+                "test('a call that answers refreshes its tags, and one refused refreshes nothing — 16.89'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Move a deal to another stage">
+        <p>Declare a write with <code>POST</code>, <code>PUT</code>, <code>PATCH</code> or
+            <code>DELETE</code>. Each takes what <code>GET</code> takes, and the page never names
+            the method.</p>
+        <Code language="ts" caption="server" code={`
+            import { refuse } from '@abide/abide'
+            import { PATCH } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export default PATCH(
+                ({ id, stage }: { id: string; stage: string }) => {
+                    const deal = DEALS.find((each) => each.id === id)
+                    if (deal === undefined) return refuse(404)
+                    deal.stage = stage
+                    return { ...deal }
+                },
+                { description: 'Moves a deal to another stage.' },
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Run the write again on every click">
+        <p>A mutation keeps nothing, so each call runs the handler. Await the call for its answer,
+            or catch its refusal.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import moveDeal from './moveDeal.handler.ts'
+
+            let stage = reactive('proposal')
+            async function win() {
+                stage = (await moveDeal({ id: 'd2', stage: 'won' })).stage
+            }
+            </script>
+
+            <button onclick={win}>Mark won</button> {stage}
+        `} />
+    </Section>
+
+    <Section level={3} title="Reload every tab showing the stages a write changed">
+        <p>List the tags the write changes in <code>refreshes</code>. The server reloads the
+            entries carrying them once the write answers, in every tab following them.</p>
+        <Code language="ts" caption="server" code={`
+            export default POST(
+                () => {
+                    const deal = DEALS.find((each) => each.stage === 'lead')
+                    if (deal) deal.stage = 'qualified'
+                    return deal?.id ?? null
+                },
+                { refreshes: ['stage:lead', 'stage:qualified'] },
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Log a call with no network">
+        <p>Give the call <code>offline</code>. Where the network fails, the call settles to what
+            it returns and the write waits in <code>outbox</code> to be sent.</p>
+        <Code language="ts" caption="browser" code={`
+            const call = { id: crypto.randomUUID(), note: 'Wants a demo' }
+            logCall(call, {
+                offline: () => calls.patch((held) => held.push(call)),
+            })
+        `} />
+    </Section>
+</Doc>

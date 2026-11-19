@@ -1,0 +1,85 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/helpers/fetch-text',
+        '/reactive/refuse',
+        '/reactive/is-failed',
+        '/transports/get',
+        '/ambient/request',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/fetchText.test.ts',
+            from: [
+                "test('a 503 is asked again, and the answer after it is the body",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/fetchText.test.ts',
+            from: [
+                "test('identical asks under a ttl are one request, and a held answer asks nothing",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/fetchText.test.ts',
+            from: [
+                "test('a body that is not JSON, or that the schema refuses, is a FetchFailed",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Fill in a company from a registry that fails now and then">
+        <p>A thrown attempt, a timeout or a 408, 425, 429 or 5xx is asked again, twice by default.
+            A service that gives up is a <code>FetchFailed</code> at 502, and returning it from the
+            handler refuses.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchJson, GET } from '@abide/abide/server'
+
+            type Registration = { founded: number; employees: number }
+
+            export default GET(({ id }: { id: string }) =>
+                fetchJson<Registration>(\`https://registry.example/companies/\${id}\`),
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Hold a registry answer for a minute">
+        <p><code>ttl</code> holds a <code>GET</code>'s answer for that many milliseconds, keyed by
+            its URL and headers. Two asks at once are one request, and a failure is never
+            held.</p>
+        <Code language="ts" caption="server" code={`
+            fetchJson<Registration>(\`https://registry.example/companies/\${id}\`, {
+                ttl: 60_000,
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Check the body's shape before trusting the body">
+        <p>Without a <code>schema</code>, the type you name is a promise nothing checks. With one, a
+            body it refuses is a <code>FetchFailed</code> whose reason is <code>shape</code>.</p>
+        <Code language="ts" caption="server" code={`
+            const registration = await fetchJson(url, {
+                schema: (value) => {
+                    const { employees } = value as { employees: unknown }
+                    if (typeof employees !== 'number') throw new Error('no count')
+                    return { employees }
+                },
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Stop asking once the caller leaves">
+        <p>Pass the request's <code>signal</code>. Its abort is thrown, the one thing either
+            fetch throws, and nothing is asked again.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchJson, request } from '@abide/abide/server'
+
+            fetchJson(url, { signal: request().signal, timeout: 5_000 })
+        `} />
+    </Section>
+</Doc>

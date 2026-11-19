@@ -1,0 +1,22 @@
+<script>
+// 40.19 — A PAGE'S SEE ALSO: the pages a reader of this one goes to next, each by its nav label and
+// its description. A route `SITE` does not list throws as the page renders.
+import { props, raw, type RouteLiteral, url } from '@abide/abide'
+
+import { inline } from './inline.ts'
+import Section from './Section.abide'
+import { pageAt } from './sitePages.ts'
+
+const { routes } = props<{ routes: readonly string[] }>()
+const pages = routes.map((route) => pageAt(route))
+</script>
+
+{#if pages.length > 0}
+    <Section title="See also" filed={false}>
+        <ul class="see-also">
+            {#for page of pages}
+                <li><a href={url(page.route as RouteLiteral)}>{raw(inline(page.nav))}</a> — {raw(inline(page.description))}</li>
+            {/for}
+        </ul>
+    </Section>
+{/if}

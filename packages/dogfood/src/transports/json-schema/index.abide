@@ -1,0 +1,64 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/transports/validate-json',
+        '/transports/post',
+        '/surfaces/openapi',
+        '/reactive/refuse',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/validateJson.test.ts',
+            from: [
+                "test('a bare JSON Schema document refuses, naming the wrapper'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/validateJson.test.ts',
+            from: ["test('a wrapped document refuses at the path that failed'"],
+        },
+    ]}
+>
+    <Section level={3} title="Refuse a new deal that breaks the schema">
+        <p>Wrap the document in <code>jsonSchema</code> and pass it as <code>args</code>. A call
+            that fails it is refused before the handler runs, and OpenAPI and MCP publish the
+            document as written.</p>
+        <Code language="ts" caption="server" code={`
+            import { jsonSchema } from '@abide/abide'
+            import { POST } from '@abide/abide/server'
+
+            type NewDeal = { name: string; amount: number }
+            const NEW_DEAL = jsonSchema<NewDeal>({
+                type: 'object',
+                required: ['name', 'amount'],
+                properties: {
+                    name: { type: 'string', minLength: 2 },
+                    amount: { type: 'number', minimum: 1 },
+                },
+            })
+
+            export default POST(({ name, amount }) => addDeal(name, amount), {
+                args: NEW_DEAL,
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Type the data a named refusal carries">
+        <p>A <code>jsonSchema</code> is a <code>Schema</code> anywhere one is taken. Given to
+            <code>refuse.named</code>, its type argument types the refusal's data on the
+            page that catches it.</p>
+        <Code language="ts" caption="server" code={`
+            const dealClosed = refuse.named(
+                'DealClosed',
+                409,
+                'A closed deal does not move.',
+                { schema: jsonSchema<{ stage: string }>({ type: 'object' }) },
+            )
+        `} />
+    </Section>
+</Doc>

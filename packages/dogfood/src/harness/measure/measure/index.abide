@@ -1,0 +1,77 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/measure/published-by',
+        '/harness/measure/time',
+        '/harness/preload',
+        '/harness/abide/measure',
+        '/harness/gate/gate',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: ["test('a known-n mutation counts exactly n'"],
+        },
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: [
+                "test('moving a comment and moving an element land in different fields'",
+            ],
+        },
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: ["test('a .data write that changes nothing is counted apart'"],
+        },
+    ]}
+>
+    <Section level={3} title="Assert the rows a reorder moved">
+        <p>Wrap the op in <code>measure</code> and assert the count. A rebuild would pass a test
+            on the output and fail this one.</p>
+        <Code language="ts" caption="shared" code={`
+            import { expect, test } from 'bun:test'
+            import { measure } from '@abide/harness/measure'
+
+            test('moving the last deal to the top moves one row', () => {
+                const list = document.createElement('ul')
+                for (const stage of ['lead', 'won', 'lost'])
+                    list.appendChild(document.createElement('li')).textContent = stage
+                const work = measure(() => {
+                    list.insertBefore(list.lastChild!, list.firstChild)
+                })
+                expect(work.elementsMoved).toBe(1)
+                expect(work.nodesCreated).toBe(0)
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Tell a moved element from a moved marker">
+        <p>Elements, comments and text land in separate fields. Only a moved element costs a
+            reflow, so the counts are never summed.</p>
+        <Code language="ts" caption="shared" code={`
+            const work = measure(() => {
+                feed.appendChild(document.createComment('anchor'))
+                feed.appendChild(document.createElement('article'))
+            })
+            work.elementsMoved // 1
+            work.markersMoved // 1
+        `} />
+    </Section>
+
+    <Section level={3} title="Catch a text write that changed nothing">
+        <p>A write of the value a text node already holds counts in
+            <code>redundantDataWrites</code> as well as <code>dataWrites</code>.</p>
+        <Code language="ts" caption="shared" code={`
+            const total = document.createTextNode('$4,400')
+            const work = measure(() => {
+                total.data = '$4,400'
+            })
+            work.dataWrites // 1
+            work.redundantDataWrites // 1
+        `} />
+    </Section>
+</Doc>

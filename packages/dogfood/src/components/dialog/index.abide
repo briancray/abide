@@ -1,153 +1,80 @@
 <script>
-import LogCallDialog from 'crm/src/contacts/lib/LogCallDialog.abide'
-import logCallDialogSource from 'crm/src/contacts/lib/LogCallDialog.abide' with { type: 'text' }
-import logCallDialogTestSource from 'crm/src/contacts/lib/LogCallDialog.test.ts' with { type: 'text' }
-import DeleteDeal from 'crm/src/deals/lib/DeleteDeal.abide'
-import deleteDealSource from 'crm/src/deals/lib/DeleteDeal.abide' with { type: 'text' }
-import deleteDealTestSource from 'crm/src/deals/lib/DeleteDeal.test.ts' with { type: 'text' }
-import RenameDeal from 'crm/src/deals/lib/RenameDeal.abide'
-import renameDealSource from 'crm/src/deals/lib/RenameDeal.abide' with { type: 'text' }
-import renameDealTestSource from 'crm/src/deals/lib/RenameDeal.test.ts' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
-import Snippet from '#src/lib/Snippet.abide'
 </script>
 
-<Doc>
-    <Section title="A form over the page in a native modal">
-        <Example
-            id="dialog-log-call"
-            title={'`<Dialog bind:open>` — a native modal you style'}
-            summary="A call with Ada is logged from a form over the contact page. Log call keeps the note; Cancel, Escape or a click beside the form drops it."
-            files={{
-                'src/contacts/lib/LogCallDialog.abide': logCallDialogSource,
-                'src/contacts/lib/LogCallDialog.test.ts': logCallDialogTestSource,
-            }}
-        >
-            <LogCallDialog />
-        </Example>
+<Doc
+    seeAlso={[
+        '/components/prompts-api',
+        '/components/prompts',
+        '/helpers/dismissible',
+        '/abide-files/props',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/LogCallDialog.test.ts',
+            from: ["test('Log call keeps the note, and Cancel drops it'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/LogCallDialog.test.ts',
+            from: ["test('a dialog not dismissible stays open on Escape'"],
+        },
+    ]}
+>
+    <Section level={3} title="Log a call from a form over the contact page">
+        <p>Bind <code>open</code> to a value of yours. A <code>&lt;form method="dialog"&gt;</code>
+            closes it, and <code>onclose</code> gets the <code>value</code> of the button that
+            submitted it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import Dialog from '@abide/abide/Dialog.abide'
+            import logCall from './logCall.handler.ts'
 
-        <p><code>Dialog</code> renders a <code>&lt;dialog&gt;</code> and opens it with
-            <code>showModal</code>. The browser puts it in the top layer, makes the page behind it
-            inert, keeps focus inside it and closes it on Escape, so none of that is code in the
-            component. Bind <code>open</code> to a value of yours: setting it opens the dialog, and
-            every way it closes writes <code>false</code> back.</p>
+            let logging = reactive(false)
+            let note = reactive('')
 
-        <p>A <code>&lt;form method="dialog"&gt;</code> inside closes it on submit, and
-            <code>onclose</code> is handed the <code>value</code> of the button that submitted it.
-            That is how the card tells Log call from Cancel without a handler on either button.
-            Escape and a click on the backdrop close it with <code>''</code>. Set
-            <code>dismissible={'{false}'}</code> to keep it open until the form submits or
-            <code>open</code> turns false. The element carrying <code>autofocus</code> takes focus
-            as it opens.</p>
+            function closed(returnValue: string) {
+                if (returnValue === 'log') logCall({ note })
+                note = ''
+            }
+            </script>
+
+            <button onclick={() => (logging = true)}>Log a call</button>
+            <Dialog bind:open={logging} onclose={closed}>
+                <form method="dialog">
+                    <textarea bind:value={note} autofocus></textarea>
+                    <button value="log">Log call</button>
+                    <button value="cancel">Cancel</button>
+                </form>
+            </Dialog>
+        `} />
     </Section>
 
-    <Section title="`prompts.confirm` before a change you cannot take back">
-        <Example
-            id="confirm-delete-deal"
-            title={'`await prompts.confirm({ title, danger })` — a question that settles true or false'}
-            summary="Deleting a deal takes its notes and its stage history with it, so the CRM asks first, and only Delete goes ahead."
-            files={{
-                'src/deals/lib/DeleteDeal.abide': deleteDealSource,
-                'src/deals/lib/DeleteDeal.test.ts': deleteDealTestSource,
-            }}
-        >
-            <DeleteDeal />
-        </Example>
-
-        <p><code>prompts.confirm</code> queues a question and settles <code>true</code> only
-            when the confirming button closed it. Cancel, Escape and the backdrop settle
-            <code>false</code>, so <code>if (await prompts.confirm(…))</code> is the whole of the
-            branch. <code>prompts.alert</code> takes the same options and settles once it closes, and
-            <code>prompts.prompt</code> asks for text, below.
-            A string in place of the options is the body. All three live on the <code>prompts</code>
-            namespace, imported beside the component it shows in —
-            <code>import Prompts, &#123; prompts &#125; from '@abide/abide/Prompts.abide'</code> — so none shadows the browser's own blocking <code>confirm</code>,
-            <code>alert</code> and <code>prompt</code>, and a call missing its import fails to compile.</p>
-
-        <p>Both show in <code>Prompts</code>, a <code>Dialog</code> you render once. The card
-            renders it beside the list. An app renders it once, in its root layout, and every
-            prompt on every page shows there, one at a time, in the order they were asked. Render
-            it twice and both answer the same queue. Its role is <code>alertdialog</code>, and its
-            cancel button takes focus, so Enter on a question declines it.</p>
-
-        <p>A server has nobody to ask, so both throw there rather than wait forever. Call them
-            from an event handler. The queue is a reactive value without <code>global</code>, so on
-            a server each request has its own, and one visitor's prompt never renders into another
-            visitor's page.</p>
+    <Section level={3} title="Keep a dialog open until its form submits">
+        <p>Set <code>dismissible</code> to <code>false</code> and Escape and a backdrop click
+            leave the dialog showing.</p>
+        <Code language="abide" caption="abide" code={`
+            <Dialog bind:open={signing} dismissible={false}>
+                <form method="dialog">
+                    <button value="sign">Sign the contract</button>
+                </form>
+            </Dialog>
+        `} />
     </Section>
 
-    <Section title="`prompts.prompt` for a line of text">
-        <Example
-            id="prompt-rename-deal"
-            title={'`await prompts.prompt({ title, value })` — a line of text, or `undefined`'}
-            summary="Renaming a deal asks for the new name in a dialog that starts from the old one. Rename keeps what was typed; Cancel keeps the old name."
-            files={{
-                'src/deals/lib/RenameDeal.abide': renameDealSource,
-                'src/deals/lib/RenameDeal.test.ts': renameDealTestSource,
-            }}
-        >
-            <RenameDeal />
-        </Example>
-
-        <p><code>prompts.prompt</code> shows an input in the same <code>Prompts</code> and settles
-            with the text in it when the confirming button closed it, Enter included. Cancel,
-            Escape and the backdrop settle <code>undefined</code>, so an empty string still means
-            the person cleared the field and confirmed. The input starts from <code>value</code>,
-            and takes focus as it opens.</p>
+    <Section level={3} title="Style the dialog box and the veil behind the dialog">
+        <p>Your <code>class</code> lands on the <code>&lt;dialog&gt;</code>. The
+            <code>backdrop:</code> variant reaches the veil, and <code>data-open</code> is present
+            while it shows.</p>
+        <Code language="abide" caption="abide" code={`
+            <Dialog
+                bind:open={logging}
+                class="m-auto w-96 rounded-xl p-5 backdrop:bg-paper/70"
+            >
+                …
+            </Dialog>
+        `} />
     </Section>
-
-    <Section title="Prompt options: `title`, `body`, `confirm`, `cancel`, `danger`, `mustType`, `value`, `placeholder`">
-        <table>
-            <thead><tr><th>Option</th><th>What it does</th></tr></thead>
-            <tbody>
-                <tr><td><code>title</code></td><td>the heading, and the dialog's accessible name</td></tr>
-                <tr><td><code>body</code></td><td>the question or the message under it</td></tr>
-                <tr><td><code>confirm</code></td><td>the confirming button's text, <code>'OK'</code> by default</td></tr>
-                <tr><td><code>cancel</code></td><td>the declining button's text, <code>'Cancel'</code> by default; an alert has none</td></tr>
-                <tr><td><code>danger</code></td><td>writes <code>data-danger</code> on the dialog, for a warning's colors</td></tr>
-                <tr><td><code>mustType</code></td><td>a word the person types before the confirming button enables, matched ignoring case</td></tr>
-                <tr><td><code>value</code></td><td>the text a <code>prompts.prompt</code> input starts from, <code>''</code> by default</td></tr>
-                <tr><td><code>placeholder</code></td><td>that input's placeholder</td></tr>
-            </tbody>
-        </table>
-
-        <p>Reach for <code>mustType</code> where a slip would lose a lot: the name of a company with
-            forty deals under it, typed back before the delete goes through.</p>
-    </Section>
-
-    <Section title="Styling a dialog by its parts and states">
-        <p>abide ships no styles for it. Your <code>class</code> lands on the
-            <code>&lt;dialog&gt;</code>, and everything inside <code>Prompts</code> is reached by
-            its <code>data-part</code>.</p>
-
-        <table>
-            <thead><tr><th>Element</th><th>What it is</th><th>Target it with</th></tr></thead>
-            <tbody>
-                <tr><td><code>&lt;dialog&gt;</code></td><td>the root of <code>Dialog</code> and of <code>Prompts</code></td><td><code>class</code> on the component</td></tr>
-                <tr><td><code>::backdrop</code></td><td>the veil over the page</td><td><code>backdrop:bg-paper/70</code></td></tr>
-                <tr><td><code>data-open</code></td><td>on the root while it is open</td><td><code>data-[open]:…</code>, or <code>[data-open]</code> in CSS</td></tr>
-                <tr><td><code>data-danger</code></td><td>on <code>Prompts</code> while the prompt showing has <code>danger</code></td><td><code>data-[danger]:…</code></td></tr>
-                <tr><td><code>data-part="form"</code></td><td>the <code>&lt;form method="dialog"&gt;</code> inside <code>Prompts</code></td><td><code>[&amp;_[data-part=form]]:…</code></td></tr>
-                <tr><td><code>data-part="title"</code></td><td>its <code>&lt;h2&gt;</code></td><td><code>[&amp;_[data-part=title]]:…</code></td></tr>
-                <tr><td><code>data-part="body"</code></td><td>its <code>&lt;p&gt;</code></td><td><code>[&amp;_[data-part=body]]:…</code></td></tr>
-                <tr><td><code>data-part="field"</code></td><td>the <code>&lt;label&gt;</code> around the input of a <code>prompts.prompt</code> or a <code>mustType</code></td><td><code>[&amp;_[data-part=field]]:…</code></td></tr>
-                <tr><td><code>data-part="input"</code></td><td>that <code>&lt;input&gt;</code></td><td><code>[&amp;_[data-part=input]]:…</code></td></tr>
-                <tr><td><code>data-part="actions"</code></td><td>the <code>&lt;div&gt;</code> holding the buttons</td><td><code>[&amp;_[data-part=actions]]:…</code></td></tr>
-                <tr><td><code>data-part="confirm"</code></td><td>the confirming button, <code>disabled</code> until <code>mustType</code> matches</td><td><code>[&amp;_[data-part=confirm]]:…</code></td></tr>
-                <tr><td><code>data-part="cancel"</code></td><td>the declining button</td><td><code>[&amp;_[data-part=cancel]]:…</code></td></tr>
-            </tbody>
-        </table>
-
-        <Snippet source={deleteDealSource} path="src/deals/lib/DeleteDeal.abide" from={['<Prompts']} />
-
-        <p>A state combines with a part: <code>data-[danger]:[&amp;_[data-part=confirm]]:bg-bad</code>
-            turns the Delete button red only on a dangerous question. Written in a stylesheet, the
-            same rule is <code>[data-danger] [data-part=confirm]</code>.</p>
-    </Section>
-
-    <Registry />
 </Doc>

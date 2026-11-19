@@ -1,52 +1,64 @@
 <script>
-import accountPageSource from 'crm/src/account/index.abide' with { type: 'text' }
-import Widget from 'crm/src/account/lib/Widget.abide'
-import widgetSource from 'crm/src/account/lib/Widget.abide' with { type: 'text' }
-import widgetTestSource from 'crm/src/account/lib/Widget.test.ts' with { type: 'text' }
-import rootLayoutSource from 'crm/src/layout.abide' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
-import Snippet from '#src/lib/Snippet.abide'
 </script>
 
-<Doc>
-    <Section title="`csp()` lets the app's own scripts run, and nothing else">
-        <Example
-            id="csp"
-            title="`csp()` — your own scripts run, a stranger's do not"
-            summary="A support widget somebody pasted into the CRM from another origin. Add it, and the page's policy refuses it."
-            files={{
-                'src/account/lib/Widget.abide': widgetSource,
-                'src/layout.abide': rootLayoutSource,
-                'src/account/lib/Widget.test.ts': widgetTestSource,
-            }}
-        >
-            <Widget />
-        </Example>
+<Doc
+    seeAlso={['/hooks/middleware', '/pages/pages', '/ambient/response']}
+    tests={[
+        {
+            path: 'packages/abide/tests/csp.test.ts',
+            from: [
+                "test('sources replace, drop and add directives over the baseline",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/csp.test.ts',
+            from: [
+                "test('csp.nonce is the nonce in the header, and a non-document carries no policy",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/account/lib/Widget.test.ts',
+            from: [
+                'test("a page admits the app\'s own scripts, and no other origin\'s"',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Run the app's own scripts on every page and nobody else's">
+        <p>File the rung in the root layout. The policy admits the build's scripts and styles,
+            and a support widget pasted from another origin is refused.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { csp, middleware } from '@abide/abide/server'
+            middleware(csp())
+            </script>
 
-        <p><code>csp()</code> is a rung, filed in the root layout so it covers every page. Its
-            policy admits the build's own scripts and styles, and the inline script the render writes
-            by a hash taken at build time. The widget's origin is not the app's, so the browser
-            refuses it before a request is made. The docs app serves this page under the same
-            baseline.</p>
-
-        <p>Name a directive to replace it, and the rest stay the baseline's. The companies pages
-            frame the CRM's own pages, so the layout lets this site, and no other, frame them:</p>
-
-        <Snippet source={rootLayoutSource} path="src/layout.abide" from={['middleware(csp(']} />
-
-        <p>An inline script of your own reads <code>csp.nonce()</code>, the nonce this response
-            carries. The account page starts an analytics queue that way:</p>
-
-        <Snippet source={accountPageSource} path="src/account/index.abide" from={['<head>']} />
-
-        <p>Without <code>csp()</code>, a page is still served
-            <code>content-security-policy: frame-ancestors 'none'</code>, so no other site can frame
-            it and steer a click.</p>
+            <slot />
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="Let a partner site frame the CRM's pages">
+        <p>A directive you name replaces the baseline's, and the rest stay. An empty list drops
+            the directive.</p>
+        <Code language="ts" caption="server" code={`
+            middleware(csp({ 'frame-ancestors': ["'self'", 'https://docs.example'] }))
+        `} />
+    </Section>
+
+    <Section level={3} title="Start an analytics queue in an inline script">
+        <p>An inline script of your own carries <code>csp.nonce()</code>, the nonce this
+            response was served with.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { csp } from '@abide/abide'
+            </script>
+
+            <head>
+                <script nonce={csp.nonce()}>window.dataLayer = []</script>
+            </head>
+        `} />
+    </Section>
 </Doc>

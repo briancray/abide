@@ -1,0 +1,88 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/components/sortable-table',
+        '/helpers/format',
+        '/abide-files/control-flow',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/sortRows.test.ts',
+            from: ["test('a blank value sorts last in both directions"],
+        },
+        {
+            path: 'packages/abide/tests/sortRows.test.ts',
+            from: [
+                "test('numbers sort as numbers, dates by time and text by its words",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/sortRows.test.ts',
+            from: ["test('rows of equal value keep the order they came in"],
+        },
+    ]}
+>
+    <Section level={3} title="Order the open deals by when each is expected to close">
+        <p>Numbers sort as numbers and dates by time. A deal with no close date sorts last in
+            either direction, and deals that close the same day keep the order they came in.</p>
+        <Code language="ts" caption="shared" code={`
+            import { type Column, sortRows } from '@abide/abide'
+
+            type Deal = { name: string; amount: number; closes?: Date }
+
+            const COLUMNS: Column<Deal>[] = [
+                { key: 'name', label: 'Deal' },
+                { key: 'closes', label: 'Closes' },
+            ]
+
+            sortRows(deals, COLUMNS, { key: 'closes', direction: 'ascending' })
+        `} />
+    </Section>
+
+    <Section level={3} title="Sort stages by their place in the pipeline">
+        <p>A column's <code>value</code> is what it sorts by, in place of the row's field its
+            <code>key</code> names.</p>
+        <Code language="ts" caption="shared" code={`
+            const STAGES = ['lead', 'qualified', 'proposal', 'won']
+
+            const stage: Column<Deal> = {
+                key: 'stage',
+                label: 'Stage',
+                value: (deal) => STAGES.indexOf(deal.stage),
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Sort deal names with numbers in the order people read">
+        <p>Text sorts by its words, with the numerals in it read as numbers.</p>
+        <Code language="ts" caption="shared" code={`
+            const names = [{ name: 'deal 10' }, { name: 'Deal 9' }]
+            sortRows(names, [{ key: 'name', label: 'Name' }], {
+                key: 'name',
+                direction: 'ascending',
+            }) // Deal 9, deal 10
+        `} />
+    </Section>
+
+    <Section level={3} title="Render a list in the order a sort names">
+        <p>With no <code>sort</code>, or one naming no column, the rows come back as they are, the
+            same array.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive, type Sort, sortRows } from '@abide/abide'
+
+            let sort = reactive<Sort | undefined>(undefined)
+            const sorted = reactive(() => sortRows(deals, COLUMNS, sort))
+            </script>
+
+            <button onclick={() => (sort = { key: 'amount', direction: 'descending' })}>
+                Largest first</button>
+            <ol>{#for deal of sorted by deal.name}<li>{deal.name}</li>{/for}</ol>
+        `} />
+    </Section>
+</Doc>

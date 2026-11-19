@@ -1,8 +1,0 @@
-<script>
-import Doc from '#src/lib/Doc.abide'
-import Registry from '#src/lib/Registry.abide'
-</script>
-
-<Doc>
-    <Registry />
-</Doc>

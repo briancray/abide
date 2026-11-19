@@ -1,0 +1,59 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/measure/published-by',
+        '/harness/measure/measure',
+        '/harness/abide/measure',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: ['gate('],
+        },
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: ["test('a published record missing a field throws naming it'"],
+        },
+    ]}
+>
+    <Section level={3} title="Publish a count from the module that does the work">
+        <p>A recomputation writes nothing to the DOM, so the module counts its own passes. The
+            key is the string <code>__HARNESS_WORK__</code>, so app code publishes without
+            importing the harness.</p>
+        <Code language="ts" caption="shared" code={`
+            const counted = { summaries: 0 }
+            const globals = globalThis as { __HARNESS_WORK__?: Record<string, object> }
+            globals.__HARNESS_WORK__ ??= {}
+            globals.__HARNESS_WORK__.reports = counted
+
+            export function summarizeStage(stage: string) {
+                counted.summaries += 1
+                // ...
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Seed a published source from a test">
+        <p>A test reaches the same record through <code>PUBLISHED_WORK_KEY</code>.
+            <code>measure</code> zeroes every numeric field as the case opens.</p>
+        <Code language="ts" caption="shared" code={`
+            import {
+                measure,
+                PUBLISHED_WORK_KEY,
+                publishedBy,
+            } from '@abide/harness/measure'
+
+            const records = ((globalThis as any)[PUBLISHED_WORK_KEY] ??= {})
+            records.pipeline = { moves: 5 }
+            const work = measure(() => {
+                records.pipeline.moves += 2
+            })
+            publishedBy(work, 'pipeline', ['moves']) // { moves: 2 }
+        `} />
+    </Section>
+</Doc>

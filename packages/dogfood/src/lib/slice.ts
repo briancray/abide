@@ -1,6 +1,6 @@
-// A SNIPPET is a slice of a real example file, addressed by an ANCHOR: what a page shows instead of
-// pasting code into a fence, so a sample cannot drift from the file it quotes and a stale one throws
-// where the page renders (40.10).
+// A SLICE of a real file, addressed by an ANCHOR: how a page shows its Tests and an answer shows a
+// file of the CRM, so a case cannot drift from the file it quotes and a stale anchor throws where the
+// page renders (40.18).
 //
 // The anchor is a line PREFIX that must match exactly once. From that line the slice runs to the
 // end of the construct it opens — which is the whole rule, applied by two balancers because markup
@@ -32,29 +32,61 @@ function tagDepthOf(line: string): number {
 }
 
 /**
- * Depth after one line of code, skipping brackets that are inside a string or a comment.
+ * Where a scan of code stands at the end of a line: the bracket depth, the template literals and
+ * their `${…}` interpolations open around it, and whether a block comment is.
  *
- * A template literal's `${…}` nests, so the quote arm counts brackets rather than swallowing to
- * the closing backtick.
+ * CARRIED ACROSS LINES, because a template literal and a block comment both span them: read line by
+ * line, a backtick on one line closed nothing the line before opened, and a `}` in a literal's text
+ * read as code ended the construct early.
  */
-function bracketDepthOf(line: string, depth: number): number {
+type CodeScan = {
+    depth: number
+    /** Innermost last: a template literal, or an interpolation counting its own open braces. */
+    open: ({ kind: 'template' } | { kind: 'interpolation'; braces: number })[]
+    comment: boolean
+}
+
+/** Advances `scan` over one line of code, skipping what is inside a string or a comment. */
+function scanCode(line: string, scan: CodeScan): void {
     let quote = ''
     for (let index = 0; index < line.length; index += 1) {
         const char = line[index]
+        if (scan.comment) {
+            if (char === '*' && line[index + 1] === '/') {
+                scan.comment = false
+                index += 1
+            }
+            continue
+        }
+        const inner = scan.open.at(-1)
+        if (inner?.kind === 'template') {
+            if (char === '\\') index += 1
+            else if (char === '`') scan.open.pop()
+            else if (char === '$' && line[index + 1] === '{') {
+                scan.open.push({ kind: 'interpolation', braces: 0 })
+                index += 1
+            }
+            continue
+        }
         if (quote) {
             if (char === '\\') index += 1
             else if (char === quote) quote = ''
-            else if (quote === '`' && char === '{' && line[index - 1] === '$')
-                depth += 1
-            else if (quote === '`' && char === '}') depth -= 1
             continue
         }
         if (char === '/' && line[index + 1] === '/') break
-        if (char === "'" || char === '"' || char === '`') quote = char
-        else if (char === '(' || char === '[' || char === '{') depth += 1
-        else if (char === ')' || char === ']' || char === '}') depth -= 1
+        if (char === '/' && line[index + 1] === '*') {
+            scan.comment = true
+            index += 1
+        } else if (char === "'" || char === '"') quote = char
+        else if (char === '`') scan.open.push({ kind: 'template' })
+        else if (inner?.kind === 'interpolation' && char === '{')
+            inner.braces += 1
+        else if (inner?.kind === 'interpolation' && char === '}') {
+            if (inner.braces === 0) scan.open.pop()
+            else inner.braces -= 1
+        } else if (char === '(' || char === '[' || char === '{') scan.depth += 1
+        else if (char === ')' || char === ']' || char === '}') scan.depth -= 1
     }
-    return depth
 }
 
 function dedent(lines: string[]): string {
@@ -96,11 +128,16 @@ function runOf(
     const start = starts[0] ?? 0
     const markup = (lines[start] ?? '').trimStart().startsWith('<')
     let depth = 0
+    const scan: CodeScan = { depth: 0, open: [], comment: false }
     let end = start
     for (; end < lines.length; end += 1) {
         const line = lines[end] ?? ''
-        depth = markup ? depth + tagDepthOf(line) : bracketDepthOf(line, depth)
-        if (depth <= 0) break
+        if (markup) depth += tagDepthOf(line)
+        else {
+            scanCode(line, scan)
+            depth = scan.depth
+        }
+        if (depth <= 0 && scan.open.length === 0 && !scan.comment) break
     }
     return [start, Math.min(end, lines.length - 1)]
 }

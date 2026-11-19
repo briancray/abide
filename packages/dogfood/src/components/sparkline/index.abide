@@ -1,0 +1,62 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/components/line-chart', '/helpers/chart', '/helpers/format']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/RepTrends.test.ts',
+            from: [
+                'test("a rep\'s sparkline carries its trend, and redraws in place"',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Show each rep's trend in a table cell">
+        <p>The drawing stretches to the box your class gives it. <code>dot</code> marks the last
+            value, and a <code>null</code> leaves a gap.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Sparkline from '@abide/abide/Sparkline.abide'
+            </script>
+
+            {#for rep of REPS by rep.name}
+                <tr>
+                    <td>{rep.name}</td>
+                    <td>
+                        <Sparkline
+                            values={rep.won}
+                            label="{rep.name}'s won revenue"
+                            dot
+                            class="h-6 w-24"
+                        />
+                    </td>
+                </tr>
+            {/for}
+        `} />
+    </Section>
+
+    <Section level={3} title="Color a trend green going up and red going down">
+        <p>The root carries <code>data-trend</code>: <code>up</code>, <code>down</code> or
+            <code>flat</code>, the last value against the first. The line draws in
+            <code>currentColor</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <Sparkline
+                values={rep.won}
+                label="{rep.name}'s won revenue"
+                class="h-6 w-24 text-muted data-[trend=up]:text-good
+                data-[trend=down]:text-bad"
+            />
+        `} />
+    </Section>
+
+    <Section level={3} title="Fill the area under a trend">
+        <p><code>area</code> fills under the line as <code>data-part="area"</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <Sparkline values={pipeline} label="Open pipeline" area class="h-8 w-32" />
+        `} />
+    </Section>
+</Doc>

@@ -1,0 +1,79 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/native-app/menu-item', '/native-app/native', '/hooks/on-launcher']}
+    tests={[
+        {
+            path: 'packages/abide/tests/onMenu.test.ts',
+            from: [
+                "test('a mount tells the window once, its menus outermost first",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/onMenu.test.ts',
+            from: [
+                "test('a write to what onMenu read tells the window again, once a turn",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Add a Reports menu while the reports page shows">
+        <p>Call the hook in a page or a layout. The menu stands in the native app's menu bar for
+            as long as the page does. In a browser nothing reads it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { onMenu } from '@abide/abide'
+
+            onMenu(() => [
+                {
+                    label: 'Reports',
+                    items: [
+                        { label: 'Pipeline', href: '/reports' },
+                        'separator',
+                        { label: 'Contacts', href: '/contacts' },
+                    ],
+                },
+            ])
+            </script>
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a menu label in step with the deal on screen">
+        <p>The function is read the way markup is, so the menu bar follows the values it
+            reads.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { onMenu, reactive } from '@abide/abide'
+
+            let stage = reactive('lead')
+            onMenu(() => [
+                {
+                    label: 'Deal',
+                    items: [{ label: \`Stage: \${stage}\`, href: '/pipeline' }],
+                },
+            ])
+            </script>
+        `} />
+    </Section>
+
+    <Section level={3} title="Put Settings… under About in the app menu">
+        <p>A menu labelled like one already in the bar adds to it. Label one with the app's
+            own name and its items land under About.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { native, onMenu } from '@abide/abide'
+
+            onMenu(() => [
+                {
+                    label: native()?.name ?? 'CRM',
+                    items: [{ label: 'Settings…', key: 'cmd+,', href: '/settings' }],
+                },
+            ])
+            </script>
+        `} />
+    </Section>
+</Doc>

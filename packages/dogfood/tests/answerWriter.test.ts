@@ -11,7 +11,7 @@ const ANSWER = `Use \`watch\` for a side effect.
 watch(() => console.log(count))
 \`\`\`
 
-<show example="star"/>
+<show name="watch"/>
 <show code="src/activity/lib/QuickLog.abide" from="<script"/>
 
 It reruns when **count** changes.`
@@ -32,15 +32,15 @@ test('an answer is cut into prose, code and shows, in order', () => {
         'show',
         'html',
     ])
-    const [, code, example, source] = written([ANSWER])
+    const [, code, named, source] = written([ANSWER])
     expect(code).toEqual({
         kind: 'code',
         language: 'ts',
         code: 'watch(() => console.log(count))',
     })
-    expect(example).toEqual({
+    expect(named).toEqual({
         kind: 'show',
-        show: { kind: 'example', value: 'star' },
+        show: { kind: 'name', value: 'watch' },
     })
     expect(source).toEqual({
         kind: 'show',

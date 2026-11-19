@@ -1,0 +1,73 @@
+<script server>
+// `node:fs` for its synchronous read, which bun has no api for: `Bun.file().text()` is a promise, and
+// a render sends its first byte once the microtasks of setup have run (41.19) — an async read here
+// would stream in after it, and miss the page's markdown twin, which reads that first answer.
+import { existsSync, readFileSync } from 'node:fs'
+
+import { GET } from '@abide/abide/server'
+
+import { slice } from './slice.ts'
+
+// A test file of the workspace, by its path from the repo's root — never a path off it.
+const TEST_FILE = /^packages\/(?:[\w.-]+\/)*[\w.-]+\.(?:test|spec|bench)\.ts$/
+
+let root: string | undefined
+
+/** The workspace's root: the nearest directory above this module holding `docs/RULEBOOK.md`. */
+function repositoryRoot(): string {
+    let directory = import.meta.dir
+    while (!existsSync(`${directory}/docs/RULEBOOK.md`)) {
+        const parent = directory.slice(0, directory.lastIndexOf('/'))
+        if (parent === '' || parent === directory)
+            throw new Error('docs: no workspace above the docs app')
+        directory = parent
+    }
+    return directory
+}
+
+// Read on the server (40.15): a test file is hundreds of lines, and a page shows a case or two of it.
+// Each entry is one JSON string: a GET's args ride the query, which holds a list of strings.
+const testCases = GET(({ tests }: { tests: string[] }) => {
+    root ??= repositoryRoot()
+    const sliced: { path: string; code: string }[] = []
+    for (const entry of tests) {
+        const { path, from } = JSON.parse(entry) as {
+            path: string
+            from: string[]
+        }
+        if (!TEST_FILE.test(path) || path.includes('..'))
+            throw new Error(`docs: ${path} is not a test file of the workspace`)
+        const source = readFileSync(`${root}/${path}`, 'utf8')
+        sliced.push({ path, code: slice(source, from, `tests ${path}`) })
+    }
+    return sliced
+})
+</script>
+
+<script>
+// A PAGE'S TESTS: the cases of the workspace's own test files that exercise what the page documents,
+// each sliced by the line prefix its `from` names (40.15), and failing the page where one matches
+// none or two (40.18).
+import { props, reactive } from '@abide/abide'
+
+import Code from './Code.abide'
+import { EXCERPT, languageOf } from './highlight.ts'
+import Section from './Section.abide'
+
+const { tests } = props<{
+    tests: readonly { path: string; from: readonly string[] }[]
+}>()
+const cases = reactive(() =>
+    testCases({
+        tests: tests.map((one) => JSON.stringify(one)),
+    }),
+)
+</script>
+
+{#if tests.length > 0}
+    <Section title="Tests" filed={false}>
+        {#for one of cases by one.code}
+            <Code code={one.code} language={languageOf(one.path)} caption="{one.path}{EXCERPT}" />
+        {/for}
+    </Section>
+{/if}

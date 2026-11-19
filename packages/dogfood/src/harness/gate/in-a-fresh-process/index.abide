@@ -1,0 +1,50 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/gate/spawned',
+        '/harness/report/batch',
+        '/harness/server/retained',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/server.test.ts',
+            from: [
+                "test('ticks() terminates on a body that settles on a macrotask'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/raw.test.ts',
+            from: [
+                "test('the first raw render in a process creates what every later one does — 32.93'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Check a refusal the test process would hide">
+        <p><code>batch</code> throws inside a parallel worker, so a test about its other
+            refusals runs the call in a child bun with no DOM and no worker mark.</p>
+        <Code language="ts" caption="server" code={`
+            import { inAFreshProcess } from '@abide/harness/gate'
+
+            const run = await inAFreshProcess(\`
+                import { batch } from '@abide/harness/report'
+                batch({ case: 'empty', arms: { one: () => {} }, emulated: null, n: 1 })
+            \`)
+            expect(run.ok).toBe(false)
+            expect(run.output).toContain('under 100x the clock')
+        `} />
+    </Section>
+
+    <Section level={3} title="Run the source as a parallel worker would">
+        <p>Pass a <code>workerId</code> to mark the child as that worker.</p>
+        <Code language="ts" caption="server" code={`
+            const marked = await inAFreshProcess(source, '3')
+            expect(marked.output).toContain('parallel worker 3')
+        `} />
+    </Section>
+</Doc>

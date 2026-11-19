@@ -1,0 +1,41 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+import { rulebookClauses } from '#src/rulebook/lib/rulebookClauses.ts'
+
+import RULEBOOK from '../../../../docs/RULEBOOK.md' with { type: 'text' }
+
+const CLAUSES = new Map<string, string>()
+for (const clause of rulebookClauses(RULEBOOK))
+    CLAUSES.set(clause.id, clause.text)
+
+// Read on the server: the rulebook is a quarter of a megabyte, and a page shows a dozen clauses of it.
+const clauseTexts = GET(({ ids }: { ids: string[] }) => {
+    const texts: { id: string; text: string }[] = []
+    for (const id of ids) texts.push({ id, text: CLAUSES.get(id) ?? '' })
+    return texts
+})
+</script>
+
+<script>
+// 40.11 — A PAGE'S RULES: every clause its REGISTRY rows cite, in rulebook order, each quoted and
+// linked to its anchor on `/rulebook`.
+import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
+
+import { inline } from './inline.ts'
+import Section from './Section.abide'
+
+const { ids } = props<{ ids: readonly string[] }>()
+const rulebook = url('/rulebook' as RouteLiteral)
+const clauses = reactive(() => clauseTexts({ ids: [...ids] }))
+</script>
+
+{#if ids.length > 0}
+    <Section title="Rules" filed={false}>
+        <ul class="rules">
+            {#for clause of clauses by clause.id}
+                <li><a href="{rulebook}#{clause.id}">{clause.id}</a> {raw(inline(clause.text))}</li>
+            {/for}
+        </ul>
+    </Section>
+{/if}

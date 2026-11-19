@@ -1,0 +1,37 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/ai/pairing',
+        '/components/pairing',
+        '/cli/bridge',
+        '/ambient/principal',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/pairing.test.ts',
+            from: [
+                "test('onPairing’s arguments follow -- in the command and the install, per principal",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Give each person's Claude Code the MCP servers of their role">
+        <p>The function runs in the scope of the request asking for the pairing, so it reads who
+            is asking. What it returns follows <code>--</code> in the command and the install,
+            quoted for a shell.</p>
+        <Code language="ts" caption="server" code={`
+            import { principal } from '@abide/abide'
+            import { onPairing } from '@abide/abide/server'
+
+            onPairing(() => {
+                const { role } = principal.resolved()
+                return ['--mcp-config', \`/mcp/\${role ?? 'guest'}.json\`]
+            })
+        `} />
+    </Section>
+</Doc>

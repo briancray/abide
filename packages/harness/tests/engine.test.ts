@@ -5,7 +5,12 @@
 
 import { expect, test } from 'bun:test'
 
-import { shares, type Trace } from '@abide/harness/engine'
+import {
+    durationOf,
+    measuresNamed,
+    shares,
+    type Trace,
+} from '@abide/harness/engine'
 import { THRESHOLDS } from '@abide/harness/report'
 
 function traceOf(
@@ -99,4 +104,21 @@ test('shares() refuses a denominator the trace does not name once', () => {
             threshold: 'frame',
         }),
     ).toThrow(/found no measure named "reconcile"/)
+})
+
+// 43.43, 43.44, 43.45 — a layer that ran several times is every measure of its name, summed, and a
+// name the trace never measured is a mistake in the case rather than a zero.
+test('a name is every measure carrying it, in order, and its duration their sum', () => {
+    const trace = traceOf([
+        ['layer', 0, 10],
+        ['op', 0, 100],
+        ['layer', 40, 45],
+    ])
+    expect(
+        measuresNamed(trace, 'layer').map((one) => one.startNanoseconds),
+    ).toEqual([0, 40])
+    expect(durationOf(trace, 'layer')).toBe(15)
+    expect(() => durationOf(trace, 'absent')).toThrow(
+        'no measure named "absent"',
+    )
 })

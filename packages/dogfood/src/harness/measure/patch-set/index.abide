@@ -1,0 +1,43 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/harness/measure/measure', '/harness/preload']}
+    tests={[
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: [
+                "test('the patch set is the declared list, by interface and member'",
+            ],
+        },
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: ["test('an uncounted mutator throws rather than reporting 0'"],
+        },
+    ]}
+>
+    <Section level={3} title="Check which DOM members a count covers">
+        <p>Each entry names one patched member as <code>Interface.member</code>. The list is the
+            same in bun's DOM and in a browser, so a count means the same thing in both.</p>
+        <Code language="ts" caption="shared" code={`
+            import { patchSet } from '@abide/harness/measure'
+
+            const members = patchSet()
+            members.includes('Node.cloneNode') // true
+            members.includes('DOMTokenList.toggle') // true
+            members.includes('Node.normalize') // true, and refused
+        `} />
+    </Section>
+
+    <Section level={3} title="Refuse a mutator the lane does not count">
+        <p>Some listed members mutate without a counter. Inside a case they throw rather than
+            report zero, and outside one they run as usual.</p>
+        <Code language="ts" caption="shared" code={`
+            measure(() => contactCard.normalize())
+            // throws: normalize() is a DOM mutation harness/measure does not count
+        `} />
+    </Section>
+</Doc>

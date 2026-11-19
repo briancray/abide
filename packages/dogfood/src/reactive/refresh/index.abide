@@ -1,0 +1,63 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/invalidate', '/reactive/busy', '/reactive/reactive']}
+    tests={[
+        {
+            path: 'packages/abide/tests/rpc.test.ts',
+            from: [
+                "test('a pattern narrows an rpc to the entries it matches, in each spelling — 13.12'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/bareSelection.test.ts',
+            from: [
+                "test('refreshing on reconnect reloads what is read and marks the rest'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Reload the two stages a won deal moved between">
+        <p>Winning a lead changes <code>lead</code> and <code>won</code>. Refresh those two
+            entries and leave every other stage alone.</p>
+        <Code language="ts" caption="browser" code={`
+            import { refresh } from '@abide/abide'
+
+            async function win() {
+                await winDeal()
+                refresh(getStage, { stage: 'lead' })
+                refresh(getStage, { stage: 'won' })
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Reload every value about one stage by tag">
+        <p>Tag the handler's entries, then refresh the tag. It reaches every value carrying it,
+            whichever handler it came from.</p>
+        <Code language="ts" caption="server" code={`
+            export default GET(
+                async ({ stage }: { stage: string }) => countStage(stage),
+                { tags: ({ stage }) => [\`stage:\${stage}\`] },
+            )
+        `} />
+        <Code language="ts" caption="browser" code={`
+            refresh({ tags: ['stage:won'] })
+        `} />
+    </Section>
+
+    <Section level={3} title="Reload everything when the connection comes back">
+        <p>With no selection, <code>refresh</code> reloads every load this scope has that
+            something reads, and marks the rest stale.</p>
+        <Code language="ts" caption="browser" code={`
+            import { online, refresh, watch } from '@abide/abide'
+
+            watch(() => {
+                if (online()) refresh()
+            })
+        `} />
+    </Section>
+</Doc>

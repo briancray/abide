@@ -5,11 +5,20 @@ import { props, raw, reactive } from '@abide/abide'
 
 import { inline, slugify } from './inline.ts'
 
-const { title, level = 2 } = props<{ title: string; level?: 2 | 3 }>()
+const {
+    title,
+    level = 2,
+    filed = true,
+} = props<{
+    title: string
+    level?: 2 | 3
+    /** Whether it files its own heading in the rail; `Doc` files a page's trailing parts itself. */
+    filed?: boolean
+}>()
 const id = slugify(title)
 
 const headings = reactive.share('docHeadings', () => reactive([]))
-headings = [...headings, { id, title, level }]
+if (filed) headings = [...headings, { id, title, level }]
 </script>
 
 <section>

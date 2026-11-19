@@ -1,105 +1,72 @@
 <script>
-import LastTouched from 'crm/src/activity/lib/LastTouched.abide'
-import lastTouchedSource from 'crm/src/activity/lib/LastTouched.abide' with { type: 'text' }
-import lastTouchedTestSource from 'crm/src/activity/lib/LastTouched.test.ts' with { type: 'text' }
-import DealFigures from 'crm/src/deals/lib/DealFigures.abide'
-import dealFiguresSource from 'crm/src/deals/lib/DealFigures.abide' with { type: 'text' }
-import dealFiguresBenchSource from 'crm/src/deals/lib/DealFigures.bench.ts' with { type: 'text' }
-import dealFiguresTestSource from 'crm/src/deals/lib/DealFigures.test.ts' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
-import Snippet from '#src/lib/Snippet.abide'
 </script>
 
-<Doc>
-    <Section title="Money, percents and counts in a column, with a dash for what is missing">
-        <Example
-            id="format-figures"
-            title="`format.money`, `format.percent`, `format.plural` — figures as words"
-            summary="The open deals, each with its amount and its chance of closing, and a tile weighing them up. Add a lead that has no amount yet."
-            files={{
-                'src/deals/lib/DealFigures.abide': dealFiguresSource,
-                'src/deals/lib/DealFigures.test.ts': dealFiguresTestSource,
-                'src/deals/lib/DealFigures.bench.ts': dealFiguresBenchSource,
-            }}
-        >
-            <DealFigures />
-        </Example>
+<Doc
+    seeAlso={[
+        '/components/sortable-table',
+        '/helpers/chart',
+        '/ambient/is-server',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/format.test.ts',
+            from: [
+                "test('a formatter writes an em dash for a value it cannot format",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealFigures.test.ts',
+            from: [
+                "test('a lead with no amount reads as a dash, and builds nothing'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/format.test.ts',
+            from: ["test('a relative time is measured from the now it is handed"],
+        },
+    ]}
+>
+    <Section level={3} title="Write deal amounts and chances in a table column">
+        <p>Each formatter takes <code>unknown</code>, so a lead with no amount yet reads as
+            <code>—</code> rather than <code>$NaN</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { format } from '@abide/abide'
+            </script>
 
-        <p>The bench writes every row's amount and chance for a pipeline of 100 deals, and of 1,000.
-            Its ratio is what a column costs as it grows: each formatter is built once for a set of
-            options and kept, so a row pays for the writing and never for the building.</p>
-
-        <p>Import <code>format</code> from <code>@abide/abide</code> and call a formatter in the
-            slot. Each takes <code>unknown</code>, so a column drops in as it is: a
-            <code>null</code>, a <code>NaN</code> or a string it cannot read is written as an em
-            dash rather than as <code>$NaN</code>.</p>
-
-        <Snippet source={dealFiguresSource} path="src/deals/lib/DealFigures.abide" from={['{#for deal of deals']} />
-
-        <p>Every formatter writes <code>en-US</code> unless you pass a <code>locale</code>, on the
-            server and in the browser alike. A page rendered on the server reads the same once the
-            browser takes it over, which the visitor's own locale would not promise.</p>
-
-        <table>
-            <thead><tr><th>You write</th><th>It reads</th></tr></thead>
-            <tbody>
-                <tr><td><code>{'format.money(12500)'}</code></td><td>$12,500.00</td></tr>
-                <tr><td><code>{'format.money(1_250_000, { compact: true })'}</code></td><td>$1.3M</td></tr>
-                <tr><td><code>{'format.percent(0.125)'}</code></td><td>12.5%</td></tr>
-                <tr><td><code>{'format.number(1200)'}</code></td><td>1,200</td></tr>
-                <tr><td><code>{"format.plural(2, 'company', 'companies')"}</code></td><td>2 companies</td></tr>
-                <tr><td><code>{"format.list(['Ada', 'Grace', 'Alan'])"}</code></td><td>Ada, Grace, and Alan</td></tr>
-                <tr><td><code>{'format.bytes(1_500_000)'}</code></td><td>1.5 MB</td></tr>
-            </tbody>
-        </table>
-
-        <p><code>digits</code> fixes the digits after the point. <code>signed</code> puts a
-            <code>+</code> on a positive change, and <code>currency</code> names the currency an
-            amount is in.</p>
+            {#for deal of deals by deal.name}
+                <tr>
+                    <td>{deal.name}</td>
+                    <td>{format.money(deal.amount, { digits: 0 })}</td>
+                    <td>{format.percent(deal.probability)}</td>
+                </tr>
+            {/for}
+        `} />
     </Section>
 
-    <Section title="Dates and how long ago, in a fixed time zone">
-        <Example
-            id="format-time"
-            title="`format.relative`, `format.date` — a time as words"
-            summary="The last touch with each contact, and when it was. Log a call and the new touch reads now, with the exact time on hover."
-            files={{
-                'src/activity/lib/LastTouched.abide': lastTouchedSource,
-                'src/activity/lib/LastTouched.test.ts': lastTouchedTestSource,
-            }}
-        >
-            <LastTouched />
-        </Example>
-
-        <p><code>format.relative</code> says how far a time is from <code>now</code>, in the
-            largest unit it fills: <code>3 hours ago</code>, <code>yesterday</code>,
-            <code>in 2 days</code>. Pass <code>now</code> from a reactive value to have the words
-            follow it, as the card does when a call is logged. Left out, it is the time of the
-            call.</p>
-
-        <p><code>format.date</code> takes a <code>Date</code>, epoch milliseconds or an ISO string,
-            and writes it in UTC unless you pass a <code>timeZone</code>. A server has no visitor's
-            zone to read, so a date written in the visitor's zone would change as the page
-            hydrates.</p>
-
-        <table>
-            <thead><tr><th><code>style</code></th><th>It reads</th></tr></thead>
-            <tbody>
-                <tr><td><code>'day'</code>, the default</td><td>Nov 18, 2026</td></tr>
-                <tr><td><code>'monthDay'</code></td><td>Nov 18</td></tr>
-                <tr><td><code>'month'</code></td><td>Nov 2026</td></tr>
-                <tr><td><code>'time'</code></td><td>3:04 PM</td></tr>
-                <tr><td><code>'dateTime'</code></td><td>Nov 18, 2026, 3:04 PM</td></tr>
-            </tbody>
-        </table>
-
-        <p><code>format.duration</code> writes a length of time in milliseconds in its two largest
-            units: <code>1h 5m</code>, <code>1d 1h</code>, <code>45s</code>.</p>
+    <Section level={3} title="Summarize a pipeline in a tile">
+        <p>Every formatter writes <code>en-US</code> unless you pass a <code>locale</code>, so
+            the server and the browser write the same text.</p>
+        <Code language="ts" caption="shared" code={`
+            format.money(1_250_000, { compact: true }) // '$1.3M'
+            format.plural(2, 'open deal') // '2 open deals'
+            format.plural(3, 'company', 'companies') // '3 companies'
+            format.list(['Ada', 'Grace', 'Alan']) // 'Ada, Grace, and Alan'
+            format.percent(0.04, { signed: true }) // '+4%'
+            format.bytes(1_500_000) // '1.5 MB'
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="Say how long ago a contact was last touched">
+        <p>Pass <code>now</code> from a reactive value so the words follow it.
+            <code>format.date</code> writes UTC unless you pass a <code>timeZone</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <strong title={format.date(touch.at, { style: 'dateTime' })}>
+                {touch.contact}, {format.relative(touch.at, { now })}
+            </strong>
+        `} />
+    </Section>
 </Doc>

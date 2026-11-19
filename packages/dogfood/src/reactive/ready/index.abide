@@ -1,0 +1,49 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/busy', '/reactive/synced', '/reactive/reactive']}
+    tests={[
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('busy and ready over tags answer ANY and EVERY across the values carrying them'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/rpc.test.ts',
+            from: [
+                "test('a pattern is checked against Args on every one of the four — 13.12'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Enable an export once both lists have loaded">
+        <p>Tag the values the export needs. <code>ready</code> over the tag is true once every one
+            of them has a value to serve.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive, ready } from '@abide/abide'
+            import listContacts from './listContacts.handler.ts'
+            import listDeals from './listDeals.handler.ts'
+
+            const contacts = reactive(() => listContacts(), { tags: ['export'] })
+            const deals = reactive(() => listDeals(), { tags: ['export'] })
+            </script>
+
+            <p>{contacts.length} contacts, {deals.length} deals</p>
+            <button disabled={!ready({ tags: ['export'] })}>Export both</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask about one stage of a keyed handler">
+        <p>A pattern narrows a keyed handler to the entries whose args match it.</p>
+        <Code language="ts" caption="shared" code={`
+            ready(getStage, { stage: 'won' })
+            ready(getStage) // every stage this scope has called
+        `} />
+    </Section>
+</Doc>

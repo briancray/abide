@@ -1,55 +1,69 @@
 <script module>
 import REGISTRY from '../../../../docs/REGISTRY.md' with { type: 'text' }
-// A PAGE'S REGISTRY ROWS, read off docs/REGISTRY.md as it renders (40.47): the rows of the section
-// the page's `SITE` entry names, under the headings REGISTRY writes them under, each clause a row
-// cites linked to its anchor on the rulebook (40.45).
-import { registryRows } from './registryRows.ts'
+// A PAGE'S SYNTAX, read off docs/REGISTRY.md as it renders (40.10): the rows directly under the
+// page's `##` as its Syntax, then each `###` under it as a heading of its own. The clause column is
+// left out: the clauses the rows cite are the page's Rules, at its foot (40.11).
+import { registryRows, sectionsOf } from './registryRows.ts'
 
 const ROWS = registryRows(REGISTRY)
+
+/** Every clause the rows of the REGISTRY section `registry` cite, once each, in rulebook order. */
+export function clausesOf(registry: string): string[] {
+    const cited = new Set<string>()
+    for (const row of ROWS)
+        if (row.section === registry)
+            for (const id of (row.cells.at(-1) ?? '').split(','))
+                if (/^\d+\.\d+$/.test(id.trim())) cited.add(id.trim())
+    const order = (id: string) => id.split('.').map(Number) as [number, number]
+    return [...cited].sort((a, b) => {
+        const [ag, an] = order(a)
+        const [bg, bn] = order(b)
+        return ag - bg || an - bn
+    })
+}
+
+/** The rows of the REGISTRY section `registry`, under the `###` headings they sit under. */
+export function sectionOf(registry: string) {
+    return sectionsOf(ROWS, registry)
+}
 </script>
 
 <script>
-import { raw, reactive, route, type RouteLiteral, url } from '@abide/abide'
+import { raw, reactive, route } from '@abide/abide'
 
 import type { Heading } from './Heading.ts'
 import { inline, slugify } from './inline.ts'
-import { sectionsOf } from './registryRows.ts'
 import { pageAt } from './sitePages.ts'
 
 const page = pageAt(route.name())
-const sections = sectionsOf(ROWS, page.registry)
-const rulebook = url('/rulebook' as RouteLiteral)
-const TITLE = 'Reference'
+const sections = sectionOf(page.registry)
+const SYNTAX = 'Syntax'
 
-// THE RAIL'S HEADINGS, filed here rather than by a `<Section>` per heading: the sections are a
-// loop, and the reference is always the last thing on the page.
 const headings = reactive.share('docHeadings', () => reactive([]))
-const filed: Heading[] = [{ id: 'reference', title: TITLE, level: 2 }]
-for (const section of sections)
-    if (section.heading !== page.registry)
-        filed.push({
-            id: slugify(section.heading),
-            title: section.heading,
-            level: 3,
-        })
+const filed: Heading[] = []
+for (const section of sections) {
+    const title = section.heading === page.registry ? SYNTAX : section.heading
+    filed.push({ id: slugify(title), title, level: 2 })
+}
 headings = [...headings, ...filed]
 </script>
 
-<section class="registry"><div class="flow">
-        <h2 id="reference">{TITLE}</h2>
-        {#for section of sections}
-            {#if section.heading !== page.registry}
-                <h3 id={slugify(section.heading)}>{raw(inline(section.heading))}</h3>
+{#for section of sections}
+    <section><div class="flow">
+            {#if section.heading === page.registry}
+                <h2 id={slugify(SYNTAX)}>{SYNTAX}</h2>
+            {:else}
+                <h2 id={slugify(section.heading)}>{raw(inline(section.heading))}</h2>
             {/if}
             {#for table of section.tables}
                 <table>
-                    <thead><tr>{#for cell of table.header}<th>{cell}</th>{/for}</tr></thead>
+                    <thead><tr>{#for cell of table.header.slice(0, -1)}<th>{cell}</th>{/for}</tr></thead>
                     <tbody>
                         {#for row of table.rows}
-                            <tr>{#for cell, index of row.cells}<td>{#if table.header[index] === 'Rules' && cell !== '—'}{#for clause, at of cell.split(/,\s*/)}{at > 0 ? ', ' : ''}<a href="{rulebook}#{clause}">{clause}</a>{/for}{:else}{raw(inline(cell))}{/if}</td>{/for}</tr>
+                            <tr>{#for cell of row.cells.slice(0, -1)}<td>{raw(inline(cell))}</td>{/for}</tr>
                         {/for}
                     </tbody>
                 </table>
             {/for}
-        {/for}
-    </div></section>
+        </div></section>
+{/for}

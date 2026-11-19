@@ -1,0 +1,81 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/helpers/observe',
+        '/helpers/hotkeys',
+        '/helpers/place',
+        '/components/dialog',
+        '/components/menu',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a press outside closes, a press inside or on what `inside` holds does not",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: ["test('Escape closes the top panel alone and is prevented"],
+        },
+    ]}
+>
+    <Section level={3} title="Close a quick-edit panel on a press outside it or on Escape">
+        <p>Bind the panel to <code>dismissible</code>, and your callback runs on a press anywhere
+            else or on Escape. Under <code>&#123;#if&#125;</code> it listens only while the panel
+            is open.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { dismissible, reactive } from '@abide/abide'
+
+            let open = reactive(false)
+            let company = reactive('Analytical Engines')
+            </script>
+
+            <button onclick={() => (open = true)}>Quick edit</button>
+            {#if open}
+                <form bind:element={dismissible(() => (open = false))}>
+                    <input bind:value={company}>
+                </form>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Count the opening button as part of the panel">
+        <p>A press on the button that toggles the panel lands outside it, closes it, and the click
+            opens it again. List the button in <code>inside</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { dismissible, reactive } from '@abide/abide'
+
+            let open = reactive(false)
+            let opener = reactive<HTMLButtonElement | undefined>(undefined)
+            const close = () => (open = false)
+            </script>
+
+            <button bind:element={opener} onclick={() => (open = !open)}>
+                {open ? 'Done' : 'Quick edit'}</button>
+            {#if open}
+                <form bind:element={dismissible(close, { inside: [opener] })}>
+                    …
+                </form>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Close a panel on Escape alone">
+        <p>Turn the outside press off with <code>outside: false</code>, or Escape off with
+            <code>escape: false</code>. Bind it beside another adaptor as a list.</p>
+        <Code language="abide" caption="abide" code={`
+            <aside bind:element={[
+                dismissible(close, { outside: false }),
+                dropzone(attach),
+            ]}>…</aside>
+        `} />
+    </Section>
+</Doc>

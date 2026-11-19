@@ -1,0 +1,51 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/abide/measure',
+        '/harness/preload',
+        '/harness/gate/at-most',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/testPreload.test.ts',
+            from: [
+                "test('a test under the preload imports a .abide and a handler file of the app, and signs in — 38.109, 38.120'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/testPreload.test.ts',
+            from: [
+                "test('a test mounts a component, clicks it and reads the work the click did — 38.119'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Mount and measure components in the app's tests">
+        <p>Add the line to the app's <code>bunfig.toml</code>. It registers a DOM with the
+            counters installed, then builds the app so a test imports its <code>.abide</code>
+            files as modules.</p>
+        <Code language="toml" caption="server" code={`
+            [test]
+            root = "src"
+            preload = ["@abide/harness/abide/preload"]
+        `} />
+    </Section>
+
+    <Section level={3} title="Import a component straight into a test">
+        <p>Under the preload a <code>.abide</code> file imports like any module.</p>
+        <Code language="ts" caption="shared" code={`
+            import { mount } from '@abide/harness/abide'
+            import ProfileSummary from './ProfileSummary.abide'
+
+            test('the initials show', async () => {
+                using _summary = await mount(ProfileSummary({}))
+                expect(document.querySelector('strong')?.textContent).toBe('AL')
+            })
+        `} />
+    </Section>
+</Doc>

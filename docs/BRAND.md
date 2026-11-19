@@ -80,7 +80,7 @@ claims to fit everything is read as fitting nothing.
 
 # Load-bearing claims
 
-Every claim below runs in the published `@abide/abide`, and a card in the docs reruns most of them —
+Every claim below runs in the published `@abide/abide`, and the tests a docs page shows rerun most of them —
 see Status. The right-hand
 column is the CLAUSE each claim rests on, which makes it a design commitment rather than copy: if
 the rule changes, the claim goes with it. `docs/RULEBOOK.md` is the source and this column cites
@@ -114,16 +114,16 @@ lets the claims above be short. Breaking it once makes every other claim a guess
 | "Deletes", "kills", "no more X" | Never as the HEADLINE. Offer first and contrast second — "Call a server function from a page. No route, no fetch, no client." An absence is evidence for something already offered, never the offer itself |
 
 **Today the honest frame is an EARLY PRODUCT.** Everything the claims above describe runs, in a
-package anyone can install, and the docs' cards rerun it. What is not there yet is anybody's
+package anyone can install, and the tests the docs show rerun it. What is not there yet is anybody's
 production — so the rows above that wait on one still wait. Say so; being early in public is only
 a liability if the copy pretends otherwise.
 
-# The app an example is drawn from
+# The world an example is set in
 
 An example is a tiny product, and a product needs a world. The docs have ONE: a CRM, the example
-app every card is drawn from, so a card is a piece of an app the reader can open whole rather than a
-situation invented at the moment of writing. The reader can download it and run it, and every card is
-a file from it.
+app at `packages/dogfood/examples/crm`, which a reader can download and run whole. An example on a
+page is a few lines of it — a contact loaded per id, a deal saved, a feed that grows — rather than a
+situation invented at the moment of writing.
 
 A CRM is the ordinary case, and that is the point: records loaded per id, forms over them, saves
 that can fail, fields not everyone may see. What a CRM does not obviously have, it grows a feature
@@ -131,8 +131,8 @@ for — an activity feed is its live channel, a pipeline is its cached and patch
 is its surface for machines.
 
 **A pattern is a problem the app has, not a name the framework has.** "The record you are editing
-gets reloaded under you" is a pattern. "A write to a derived value stands until the next recompute" is the
-clause it lands on, and the clause is the page's title rather than the card's.
+gets reloaded under you" is a pattern, and it is an example's heading. "A write to a derived value
+stands until the next recompute" is the clause it lands on, and the clause is in the page's Rules.
 
 | CRM feature | Patterns it has | Where they land |
 | --- | --- | --- |
@@ -141,67 +141,65 @@ clause it lands on, and the clause is the page's title rather than the card's.
 | The activity feed | A feed that grows without being rebuilt · one update every open tab sees · a summary streamed as it is written | a channel, `patch`, an async generator handler |
 | Companies, accounts and operations | A page per company · a field only some users see · a server an operator has to watch | routes and layouts, `principal`, `log`, `health` |
 
-**Why one app.** Cards drawn from several worlds make the reader enter a new world per card while
-the thing being taught is the same one throughout, and cards from one app read as one app however
-the reader moves between pages.
-
-**Why 40.22 seats a control with its value.** Held apart from it a button has to name its own
-subject — "add one" of what — and that name is longer and vaguer than the arrow it replaced. This
-is the same economy the readouts are under: what the layout can say, the words do not have to.
+**Why one world.** Examples drawn from several worlds make the reader enter a new world per example
+while the thing being taught is the same one throughout, and examples from one app read as one app
+however the reader moves between pages.
 
 # What an example has to prove
 
-40.23, 40.24 and 40.25 are one rule rather than three, because dropping any one is a distinct way
-for a card to go wrong: a card that proves nothing is
-decoration, a card that proves it in forty lines has buried the proof under the setup, and a card
-that proves it in a world nobody has is proving it to nobody.
+40.12 and 40.13 are one rule rather than two, because each is a distinct way for an example to go
+wrong: an example that proves nothing is decoration, one that proves two things teaches neither,
+and one that proves it in forty lines has buried the proof under the setup. The third way is the
+world: an example that proves it somewhere nobody works is proving it to nobody.
 
-**A CARD THAT DOES NOT LAND IS A DIAGNOSIS, not a writing problem**, and reaching for a rewrite is
-how one gets polished through several drafts while staying wrong.
+**AN EXAMPLE THAT DOES NOT LAND IS A DIAGNOSIS, not a writing problem**, and reaching for a rewrite
+is how one gets polished through several drafts while staying wrong.
 
-**Both halves answer to the situation.** A capability is worth proving where the app would reach
-for it, so "the reshaped record can still be refreshed" earns a card and "the reshape runs once per
-production" does not — the second is true, and no CRM has ever wanted it stated. The test is what the app would
-put on the screen: a number nobody in the situation would look at is a capability nobody in the
-situation needs, and a count kept only to prove a point is code the proof did not need.
+**Both halves answer to the situation.** A capability is worth an example where the app would reach
+for it, so "the reshaped record can still be refreshed" earns one and "the reshape runs once per
+production" does not — the second is true, no CRM has ever wanted it stated, and it is in the page's
+Rules already.
 
 # Documentation structure
 
-One part, looked up rather than read in order: a page per primitive, grouped by what it is for, and
-a prompt above every page that answers from them.
+One part, looked up rather than read in order: a page per export an app imports, or per construct
+it writes, grouped as REGISTRY groups them, and a prompt above every page that answers from them.
 
 | | |
 | --- | --- |
-| A primitive's page | what the primitive is for, its cards from the CRM, and every row REGISTRY gives it, last |
-| A group | the primitives that answer one kind of problem, listed on the home page with each page's description |
-| The prompt | the visitor's own Claude Code, answering from the pages, rendering the cards it names live in the answer |
+| A page | the name, what you use it for, then its Syntax, its examples, its See also, its Tests and its Rules, always in that order (40.9) |
+| A group | the pages that answer one kind of problem, listed on the home page with each page's description |
+| The prompt | the visitor's own Claude Code, answering from the pages, rendering the files, rows and clauses it names in the answer |
 
 The home page lists every group and every page's description from `SITE`; the constraint on a
-description is 40.29's. SOME OF WHAT IS BELOW IS GATED as well, in
-`packages/dogfood/tests/coverage.test.ts` and `voice.test.ts` — the tests are the list, an
-enumeration here being a second copy of them that nothing reruns. A rule here that turns out to be
-checkable belongs in a test rather than in prose; what stays is what only a reader can decide.
+description is 40.20's. SOME OF WHAT IS BELOW IS GATED as well, in
+`packages/dogfood/tests/coverage.test.ts`, `fences.test.ts` and `voice.test.ts` — the tests are the
+list, an enumeration here being a second copy of them that nothing reruns. A rule here that turns
+out to be checkable belongs in a test rather than in prose; what stays is what only a reader can
+decide.
 
-* **A page is one primitive; it does not survey a topic.** Its sections are the behaviors that
-  primitive takes, each where the CRM would reach for it. A behavior that matters to the CRM gets a
-  card; one that does not gets a row in a table, and the REGISTRY rows at the foot carry the rest.
-* **A page's DESCRIPTION is what the home page says about it.** 40.29 is the constraint and also
-  the test: the description is about the whole primitive rather than about whatever the first
-  heading happens to be, and one that describes the first card advertises the page as that card.
+* **A page is one name; it does not survey a topic.** Its examples are the behaviors that name
+  takes, each where the CRM would reach for it. A behavior that matters gets an example; the rest
+  are the Syntax rows and the Rules, which the page renders from REGISTRY and RULEBOOK without a
+  word written for them.
+* **The page is the reference; the example is the one thing written for it.** A reader who wants
+  the signature has the Syntax, one who wants the guarantee has the Rules, and one who wants to see
+  the guarantee kept has the Tests. Prose that restates any of the three is a second copy.
+* **A page's DESCRIPTION is what the home page says about it.** 40.20 is the constraint and also
+  the test: the description is what a reader uses the name FOR, rather than what its first example
+  happens to show.
 * **A page reads on its own.** A reader arrives from the index, a search or an answer, so nothing on
-  a page leans on another page having been read first: a term another page defines is linked, and
-  "above", "earlier" and "next" name nothing.
+  a page leans on another page having been read first: a name another page documents is in See
+  also, and "above", "earlier" and "next" name nothing.
 * **An answer is the docs, not a second voice.** The prompt answers from the pages and renders what
-  they already hold — a card, a file, a row, a clause — rather than describing it again, so what a
-  reader is shown in an answer is what a page shows and its tests rerun.
+  they already hold — a file, a row, a clause — rather than describing it again, so what a reader is
+  shown in an answer is what a page shows and its tests rerun.
 
-* **A nav label and a title are two registers.** The label is what a reader scans a sidebar
-  for — one or two words, and words they ALREADY OWN rather than ours or another framework's.
-  "Effects" was advertising the concept the pitch opens by refusing. "Watching values" is not
-  that trade: `watch` is a callable an app imports and types, so the label names a primitive
-  rather than a mental model — naming what we ship is only a cost where the pitch declines the
-  thing. The title is the problem they are solving, and it is a sentence: "Watching values" and
-  "Do something when a value changes" are the same page.
+* **A page's title is its name.** A reader looks `keyLabel` up by `keyLabel`, so a page documenting
+  an export is titled with it (40.8) and its nav label is the same name. A construct page is titled
+  for the construct — "`{#if}`, `{#for}` and `{#try}`" — and its nav label is the one or two words
+  a reader scans a sidebar for, words they ALREADY OWN rather than ours or another framework's:
+  "Control flow". The problem the reader is solving is the description, and each example's heading.
 * **A label stands alone.** A nav label, a panel name and a heading are read with no sentence
   around them, so each carries its own subject. "By name" and "On change" are fragments waiting
   for a noun the reader does not have; "Values by name" and "On value change" are not. This is
@@ -247,26 +245,16 @@ three pages later.
   takes, then go straight into code that solves a real problem with as few concepts as it can.
   A reader who can check a claim in two seconds holds it; one who is asked to follow an
   argument is still deciding. This is the strongest form of "claim, then evidence" and the
-  default — reach for prose evidence only where no example fits. Every example is a real `.abide` or
-  `.ts` file of the example app, running on the page that teaches it, and 40.3 asks it to show the
-  test its app reruns, which is what keeps it evidence rather than illustration.
-* **Four layers reach a card, and each says a thing the others cannot.** The HEADING is the
-  claim, in the reader's words, and 40.23 is what binds the card to it. The card's TITLE is the
-  signature and a gloss, which is the address in the API the claim is about. The card's SUMMARY
-  is the situation and what to do in it, one or two sentences. And the copy AFTER the card is
-  everything none of those can carry: the reason, the refusal, the thing the running page cannot
-  show. 40.26 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
-  written and is always a fourth voice restating one of the other three — a card had a heading
-  saying a derived value reruns when what it read changes, then a paragraph saying reading is what
-  subscribes, then a title saying auto-tracked derivation, then a summary saying the total
-  follows the seats. Four ways to say it before anything had been shown.
-* **The opening card is the one to price.** The line after it says what it cost, from the card's
-  own bench — a ratio between two sizes of the same structure, never a figure in prose. A page's opening card
-  carries the claim the title made; the cards after it are already inside an argument the reader
-  has accepted, and pricing each of them turns the device into furniture. A card whose behavior
-  happens inside a request, or is one setting, has no two sizes to price, and carries no price line:
-  a bench written to have one prices nothing, and the line after it would be a claim with nothing
-  measured behind it.
+  default — reach for prose evidence only where no example fits. The page's Tests are the
+  workspace's own test cases for the same behavior, which is what keeps an example evidence
+  rather than illustration.
+* **Three layers reach an example, and each says a thing the others cannot.** The HEADING is the
+  claim, in the reader's words — the problem, not the API. The one or two sentences under it are
+  the situation and the reason: what the reader would otherwise get wrong. The CODE is the proof.
+  A fourth voice restating any of them is the layer that keeps getting written: a heading saying a
+  derived value reruns when what it read changes, then a sentence saying reading is what
+  subscribes, then code whose comment says the total follows the seats — three ways to say it
+  before anything had been shown.
 * **Second person, imperative.** What *you* write, what *it* does. "You write one instead", not
   "an author writes one instead".
 * **Say it plainly. The instruction is the shortest a claim comes in.** "Set `ttl` to keep it
@@ -304,9 +292,8 @@ three pages later.
   heading a claim and let the table be the list.
 * **The code under a heading answers that heading.** A section about `.abide` sugar showing a
   `.ts` file, or a section about the shape of a keyed value showing its `tags` option too, reads
-  as two subjects and teaches neither. `<Snippet>` takes several anchors for this reason —
-  pull the lines the heading is about, and if they are not one construct, say so with the
-  elision rather than widening until they fit.
+  as two subjects and teaches neither. Write the lines the heading is about, and give the
+  second subject a heading of its own.
 * **A heading names what an author WRITES, not a type they have not met.** "A `Transformer`
   normalizes a value" is the type of an option spelled `transform`, so the reader scans for a
   word that is not in their file. Name the property, then introduce the type under it. `Reactive`
@@ -364,17 +351,7 @@ for prose, and 1.25rem and up for headings and stat values.
 
 **A TIP is the documentation's own voice.** Teal-washed, with a mark on it, and it means the same
 thing wherever it appears: an aside in prose, written `> [!TIP]`, and an annotation the
-documentation adds beside something a reader is looking at. A reader is entitled to read every
-pixel of a render as the app's output, which is why the documentation's own instrumentation sits
-OUTSIDE the render rather than inside it wearing a tip (40.16).
-
-**An example leads with the running component, and the component is really running.** The render
-sits above the tabs and stays there, and what it runs is the example's own component, inline in the
-docs app (40.14), answered by its app's own handlers the docs app mounts (40.15) — the code in a file
-tab is the code on screen, with nothing standing in for either half, and a test or bench tab is what
-that file last reported. The tabs are what a reader consults ABOUT it.
-The thing an example is for is the thing that runs, and a reader who has to find a tab before
-seeing one has been handed source to read instead of something to try.
+documentation adds beside something a reader is looking at.
 
 A stub marker takes `--color-muted`. It marks an ABSENCE, so it takes the ground's own recessive
 tone rather than a reserved color, and it goes when its page is written — which is why it has
@@ -393,11 +370,11 @@ a reader cannot open is a claim, and one that contradicts the same address on an
 claim that has already broken. It is the framework's central idea made visible, and it is the one
 device to keep wherever the brand appears.
 
-NONE OF THAT IS TYPED ANY MORE, on a page that has been converted. `<Snippet>` names an
-example's file and a line in it, and the caption, the language, the `— excerpt` and the color are
-all DERIVED from the address — so a snippet cannot claim a seam its path contradicts, and a sample
-that drifts from the file fails the page as it renders rather than the reader. The four bare words are what a
-page still carries until its example exists; they are a stage, not a second spelling.
+An example is written on its page, so it carries a bare side word and never an address (40.14): a
+path on code nobody can open is a claim. A page's Tests name a real file and a line in it, and their
+caption, language, `— excerpt` and color are all DERIVED from the address (40.17) — so a test case
+cannot claim a seam its path contradicts, and one that drifts from its file fails the page as it
+renders rather than the reader (40.18).
 
 # Status
 
@@ -405,4 +382,4 @@ page still carries until its example exists; they are a stage, not a second spel
 | --- | --- |
 | Real today | `@abide/abide` on npm — the compiler, the rendering runtime, the server, the transports and the `abide` CLI — beside `@abide/harness` and `@abide/bridge`; `docs/REGISTRY.md`, `docs/RULEBOOK.md`; and the documentation site, whose example app passes its own tests |
 | Not yet | Anybody's production, and a comparison to a named framework run on the same input in the same engine |
-| Therefore | A claim above is phrased as something a reader can run, and the card under it is the proof. The rows of What we do not say that wait on production or on a comparison still wait |
+| Therefore | A claim above is phrased as something a reader can run, and the example and the test beside it are the proof. The rows of What we do not say that wait on production or on a comparison still wait |

@@ -1,0 +1,61 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/hooks/on-error', '/helpers/report', '/ambient/principal']}
+    tests={[
+        {
+            path: 'packages/abide/tests/onRefusal.test.ts',
+            from: [
+                "test('a call refused at 401 reaches every onRefusal standing once",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/account/lib/SignInAgain.test.ts',
+            from: ["test('a caller whose session ended is refused 401'"],
+        },
+    ]}
+>
+    <Section level={3} title="Ask for a sign-in when any call is refused 401">
+        <p>A refused call does not throw, so <code>onError</code> never hears it. One
+            <code>onRefusal</code> hears every call the page makes, whoever made it. The call
+            still refuses where it was made.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { onRefusal, reactive } from '@abide/abide'
+
+            let signedOut = reactive(false)
+            onRefusal((refusal) => {
+                if (refusal.status === 401) signedOut = true
+            })
+            </script>
+
+            {#if signedOut}
+                <p class="status">Your session ended. Sign in again.</p>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Start a problem report from the trace of the failed call">
+        <p>The second argument names the call: its method, its URL and the trace id the
+            answer carried.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { onRefusal, reactive, report } from '@abide/abide'
+
+            let failed = reactive<string | undefined>(undefined)
+            onRefusal((_refusal, call) => {
+                failed = call.trace
+            })
+            </script>
+
+            <button
+                onclick={() => report({ trace: failed }).open()}
+                disabled={failed === undefined}
+            >Report this</button>
+        `} />
+    </Section>
+</Doc>

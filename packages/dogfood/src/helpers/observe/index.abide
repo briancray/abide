@@ -1,54 +1,73 @@
 <script>
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Section title="`observe` — size, visibility and position as values">
-        <p>An element's size, whether it is in view and where it sits are not values a field
-            writes, so they are not binds. <code>observe</code> measures them, and
-            <code>bind:element</code> takes what it hands back, one adaptor or a list of them.
-            Each writes a reactive value you hand it, or calls a function you hand it instead.</p>
-
-        <table>
-            <thead><tr><th>You write</th><th>What it measures</th></tr></thead>
-            <tbody>
-                <tr><td><code>{'bind:element={observe.size(box)}'}</code></td><td>the element's content box, as <code>{'{ width, height }'}</code></td></tr>
-                <tr><td><code>{"observe.size(box, { box: 'border' })"}</code></td><td>the border box instead, padding and border in</td></tr>
-                <tr><td><code>{'bind:element={observe.visible(seen)}'}</code></td><td>whether the element is in the viewport</td></tr>
-                <tr><td><code>{'observe.visible(seen, { in: scroller })'}</code></td><td>whether it is in view inside an element you hold, such as a scroller</td></tr>
-                <tr><td><code>{'bind:element={observe.rect(placed)}'}</code></td><td>its rectangle in the viewport, as <code>getBoundingClientRect</code> reports it</td></tr>
-                <tr><td><code>{'bind:element={[observe.rect(placed), observe.size(box)]}'}</code></td><td>both, on one element</td></tr>
-                <tr><td><code>{'return observe.size(refresh)(node)'}</code></td><td>the size, from inside a <code>bind:element</code> function of your own</td></tr>
-            </tbody>
-        </table>
-
-        <p>A measurement runs one way. The browser measures and writes the value, and nothing you
-            write reaches the element. The first measurement lands after the first layout, so until
-            then the value holds what you gave it. Every observed element shares one observer, and
-            an element that leaves is no longer observed. The server has no layout and runs none of
+<Doc
+    seeAlso={[
+        '/abide-files/by-name',
+        '/helpers/place',
+        '/components/line-chart',
+        '/reactive/reactive',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/observe.test.ts',
+            from: ["test('a delivery writes the value, and nothing before it does"],
+        },
+        {
+            path: 'packages/abide/tests/observe.test.ts',
+            from: ["test('fifty observed elements share one observer of each kind"],
+        },
+    ]}
+>
+    <Section level={3} title="Size a pipeline chart to its panel">
+        <p>Hand <code>bind:element</code> the adaptor and a reactive value. The browser writes
+            the size after each layout, and until the first one the value holds what you gave
             it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { observe, reactive } from '@abide/abide'
 
-        <p>An adaptor is a function of the element that hands back what stops it, so a
-            <code>bind:element</code> function of your own can call one on the node it is handed,
-            beside the listeners it adds, and stop it with them. It shares the same one observer.</p>
+            let box = reactive({ width: 0, height: 0 })
+            </script>
 
-        <p><code>in</code> takes an element, usually one <code>bind:element</code> gave you. Until
-            it holds one, nothing is observed. The elements measured against one root share an
-            observer, and that observer stops when the last of them leaves. <code>box</code> is
-            <code>"content"</code> or <code>"border"</code>, and either box is written as
-            <code>width</code> and <code>height</code> on screen, whatever the writing mode. Hand
-            either option a reactive value and the element is measured again when it changes.</p>
-
-        <p><code>observe.rect</code> reads again in the frame after the element resizes, the page or
-            anything in it scrolls, the window resizes, or the element moves for any other reason,
-            such as a sibling above growing: one read per element per frame, however many events
-            arrived. Each observed element has an <code>IntersectionObserver</code> of its own, fitted
-            to its last rectangle, which costs nothing while it stays put and is made again after
-            each move. For a crosshair or a hover that follows the pointer, call
-            <code>getBoundingClientRect()</code> in the event handler instead.</p>
+            <section bind:element={observe.size(box)}>
+                <PipelineChart width={box.width} height={box.height} />
+            </section>
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="Load more activity when the end of the feed scrolls into view">
+        <p><code>observe.visible</code> writes whether the element is in the viewport, or inside
+            the element <code>in</code> names. A function in place of the value is called with
+            each reading.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { observe } from '@abide/abide'
+            </script>
+
+            <ol>{#for item of activity by item.id}<li>{item.text}</li>{/for}</ol>
+            <div bind:element={observe.visible((seen) => seen && loadMore())}></div>
+        `} />
+    </Section>
+
+    <Section level={3} title="Measure the size and the position of one card">
+        <p>A list in <code>bind:element</code> applies each adaptor. <code>observe.rect</code>
+            writes the rectangle <code>getBoundingClientRect</code> reports, read again at most
+            once a frame as the page scrolls or the card moves.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { observe, reactive } from '@abide/abide'
+
+            let placed = reactive({ top: 0, left: 0, width: 0, height: 0 })
+            let box = reactive({ width: 0, height: 0 })
+            </script>
+
+            <article bind:element={[observe.rect(placed), observe.size(box)]}>
+                {placed.top}px from the top, {box.width}px wide
+            </article>
+        `} />
+    </Section>
 </Doc>

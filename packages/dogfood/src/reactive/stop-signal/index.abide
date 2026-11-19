@@ -1,0 +1,50 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/reactive', '/reactive/refresh']}
+    tests={[
+        {
+            path: 'packages/abide/tests/stopSignal.test.ts',
+            from: [
+                "test('stopSignal is aborted from the stop through its drain, and fresh once the stop resolves — 7.38, 7.39'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/stopSignal.test.ts',
+            from: [
+                "test('a job giving up on stopSignal is not warned on, and a failing one still is — 4.12, 7.28, 37.28'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="End a follow-up sweep when the app stops">
+        <p>A job on a clock can run for a while. Read <code>stopSignal()</code> in its run and
+            stop early, rather than holding the shutdown until the sweep ends.</p>
+        <Code language="ts" caption="server" code={`
+            import { reactive, stopSignal } from '@abide/abide'
+
+            export const followUps = reactive(
+                async function* () {
+                    const stopping = stopSignal()
+                    for (const deal of DEALS) {
+                        if (stopping.aborted) return
+                        if (await awaitingReply(deal)) yield deal.name
+                    }
+                },
+                { global: true, poll: 300_000 },
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Cancel a request the job has in flight">
+        <p>The signal is an <code>AbortSignal</code>, so hand it to <code>fetch</code> and the
+            stop cancels the request too.</p>
+        <Code language="ts" caption="server" code={`
+            const reply = await fetch(INBOX_URL, { signal: stopSignal() })
+        `} />
+    </Section>
+</Doc>

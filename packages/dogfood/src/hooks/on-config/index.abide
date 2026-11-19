@@ -1,0 +1,52 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/ambient/config', '/configuration/environment', '/hooks/on-start']}
+    tests={[
+        {
+            path: 'packages/abide/tests/routeHooks.test.ts',
+            from: ["test('every onConfig composes, the deeper route over the root"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/ops/ConfigSchema.test.ts',
+            from: [
+                "test('a deployment whose RETRIES is out of range does not start'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Give a setting a default a deployment overrides">
+        <p>The function returns defaults. A deployment's <code>RETRIES</code> in the environment
+            wins over the <code>3</code>, and <code>config()</code> reads the result.</p>
+        <Code language="ts" caption="server" code={`
+            import { config, GET, onConfig } from '@abide/abide/server'
+
+            onConfig(() => ({ RETRIES: 3 }))
+
+            export default GET(() => ({ retries: config().RETRIES }))
+        `} />
+    </Section>
+
+    <Section level={3} title="Refuse to start on a setting out of range">
+        <p>Pass <code>null</code> for no defaults and a <code>schema</code> to check the whole
+            document. A schema that throws keeps the app from starting.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { onConfig } from '@abide/abide/server'
+
+            onConfig(null, {
+                schema: (document) => {
+                    const { RETRIES } = document as { RETRIES: number }
+                    if (!Number.isInteger(RETRIES) || RETRIES < 0 || RETRIES > 10)
+                        throw new Error('RETRIES is a whole number from 0 to 10.')
+                    return { RETRIES }
+                },
+            })
+            </script>
+        `} />
+    </Section>
+</Doc>

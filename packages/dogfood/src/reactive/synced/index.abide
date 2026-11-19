@@ -1,0 +1,53 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/reactive/busy',
+        '/reactive/ready',
+        '/reactive/refresh',
+        '/reactive/reactive',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/synced.test.ts',
+            from: [
+                "test('a write over a value with a body is not synced until the body produces again — 3.10, 3.11'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/synced.test.ts',
+            from: [
+                "test('synced over a keyed value is true only where every matching entry is — 13.18'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Flag a deal changed here and not yet reloaded">
+        <p>A write over a loaded deal stands until the handler answers again. Until then
+            <code>synced</code> is false, so the page can say the change is only local.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive, synced } from '@abide/abide'
+            import getDeal from './getDeal.handler.ts'
+
+            let deal = reactive(() => getDeal({ id: 'd2' }))
+            </script>
+
+            <button onclick={() => (deal = { ...deal, stage: 'won' })}>Win</button>
+            {#if !synced()}<p class="status">Not saved yet</p>{/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask about one entry of a keyed value">
+        <p>Over a keyed value, <code>synced</code> is true only where every matching entry
+            holds what its body made.</p>
+        <Code language="ts" caption="shared" code={`
+            synced(getStage, { stage: 'won' })
+            synced(getStage) // every entry
+        `} />
+    </Section>
+</Doc>

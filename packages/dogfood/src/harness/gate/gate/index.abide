@@ -1,0 +1,55 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/gate/at-most',
+        '/harness/abide/measure',
+        '/harness/runner/test-rows',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonDeals.test.ts',
+            from: ['gate('],
+        },
+        {
+            path: 'packages/harness/tests/gate.test.ts',
+            from: ["test('a gate stating no worth is refused'"],
+        },
+    ]}
+>
+    <Section level={3} title="Prove a test about work can tell the fix from the old version">
+        <p>Every won deal's amount goes through one shared formatter. <code>revert</code> puts
+            back the formatter-per-amount version and returns the undo. <code>worth</code> is
+            what that version reports.</p>
+        <Code language="ts" caption="server" code={`
+            import { gate } from '@abide/harness/gate'
+
+            gate(
+                'a won deal is formatted without building a formatter',
+                {
+                    revert: () => {
+                        const shared = money.format
+                        money.format = (amount) =>
+                            new Intl.NumberFormat('en-US').format(amount)
+                        return () => (money.format = shared)
+                    },
+                    worth: { formatters: 1 },
+                },
+                async () => {
+                    // mount, click, count the formatters built
+                    expect(\`formatters: \${formatters}\`).toBe('formatters: 0')
+                },
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Run every gate with its revert installed">
+        <p>With the variable set, each gate runs a second time with the revert in. That run
+            passes only when the body fails reporting every value in <code>worth</code>.</p>
+        <Code code={`HARNESS_VERIFY_GATES=1 bun test`} />
+    </Section>
+</Doc>

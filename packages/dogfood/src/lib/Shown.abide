@@ -1,15 +1,10 @@
 <script>
 // ONE `<show/>` OF AN ANSWER, rendered from the same docs tool Claude read it with, so what the
 // reader sees is what the model was answered — never a description of it.
-//
-// AN EXAMPLE IS ITS OWN PAGE, FRAMED: the card runs where it is embedded on the site, with its
-// handlers, its tests and its bench, and `?card=` shows that card alone (`Example.abide`). Running it
-// in the answer instead would put every example of the CRM into the bar's bundle on every page.
 import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
 
 import type { Show } from '#src/ask/lib/AnswerPart.ts'
 import clause from '#src/ask/tools/clause.handler.ts'
-import examples from '#src/ask/tools/examples.handler.ts'
 import name from '#src/ask/tools/name.handler.ts'
 import results from '#src/ask/tools/results.handler.ts'
 import source from '#src/ask/tools/source.handler.ts'
@@ -23,11 +18,6 @@ import { slice } from './slice.ts'
 
 const { show } = props<{ show: Show }>()
 
-const card = reactive(() =>
-    show.kind === 'example'
-        ? examples().then((all) => all.find((one) => one.id === show.value))
-        : undefined,
-)
 const code = reactive(() =>
     show.kind === 'code' ? source({ path: show.value }) : '',
 )
@@ -47,20 +37,6 @@ const page =
             : undefined
         : undefined
 
-// The framed card reports its own height, so the frame is as tall as the card and never scrolls.
-let height = reactive(320)
-function follow(frame: Element) {
-    const listen = (event: MessageEvent) => {
-        if (
-            event.source === (frame as HTMLIFrameElement).contentWindow &&
-            typeof event.data?.cardHeight === 'number'
-        )
-            height = event.data.cardHeight
-    }
-    addEventListener('message', listen)
-    return () => removeEventListener('message', listen)
-}
-
 // A `from` the model wrote that no line opens shows the whole file rather than failing the answer.
 function excerpt(text: string, from: string | undefined): string {
     if (from === undefined) return text.trimEnd()
@@ -72,21 +48,7 @@ function excerpt(text: string, from: string | undefined): string {
 }
 </script>
 
-{#if show.kind === 'example'}
-    {#if card.error()}
-        <p class="shown-missing">No example named <code>{show.value}</code>.</p>
-    {:else if card}
-        <iframe
-            class="shown-card"
-            title={card.title.replaceAll('`', '')}
-            src="{url(card.route as RouteLiteral)}?card={card.id}"
-            style:height="{height}px"
-            bind:element={follow}
-        ></iframe>
-    {:else if card.ready()}
-        <p class="shown-missing">No example named <code>{show.value}</code>.</p>
-    {/if}
-{:else if show.kind === 'code'}
+{#if show.kind === 'code'}
     {#if code.error()}
         <p class="shown-missing">No file of the CRM at <code>{show.value}</code>.</p>
     {:else if code}

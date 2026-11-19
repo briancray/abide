@@ -1,0 +1,44 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/report/ratio',
+        '/harness/report/batch',
+        '/harness/runner/run-benches',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/runBenches.test.ts',
+            from: ["test('the arms are the arms a bench names'"],
+        },
+        {
+            path: 'packages/harness/tests/report.test.ts',
+            from: [
+                "test('a ratio inside the measured floor comes back tagged rather than numeric'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Print a forecast bench's verdict as one line">
+        <p>A <code>ratio</code> prints with two decimals. A tag prints the reason there is no
+            number.</p>
+        <Code language="ts" caption="shared" code={`
+            import { claimOf, ratio } from '@abide/harness/report'
+
+            const run = priced()
+            const verdict = ratio(
+                run.samples['among 1,000'],
+                run.samples['among 100'],
+                { floor: run.floor },
+            )
+            console.log(claimOf(verdict))
+            // 9.84x
+            // under the floor (3.1%)
+            // under one frame — not resolvable by a wall clock
+        `} />
+    </Section>
+</Doc>

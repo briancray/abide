@@ -1,100 +1,75 @@
 <script>
-import askReportSource from 'crm/src/ops/askReport.handler.ts' with { type: 'text' }
-import draftReportSource from 'crm/src/ops/draftReport.handler.ts' with { type: 'text' }
-import AssistedReport from 'crm/src/ops/lib/AssistedReport.abide'
-import assistedReportSource from 'crm/src/ops/lib/AssistedReport.abide' with { type: 'text' }
-import assistedReportTestSource from 'crm/src/ops/lib/AssistedReport.test.ts' with { type: 'text' }
-import ReportProblem from 'crm/src/ops/lib/ReportProblem.abide'
-import reportProblemSource from 'crm/src/ops/lib/ReportProblem.abide' with { type: 'text' }
-import reportProblemTestSource from 'crm/src/ops/lib/ReportProblem.test.ts' with { type: 'text' }
-import listReportsSource from 'crm/src/ops/listReports.handler.ts' with { type: 'text' }
-import sendStatementSource from 'crm/src/ops/sendStatement.handler.ts' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
-import Snippet from '#src/lib/Snippet.abide'
 </script>
 
-<Doc>
-    <Section title="A failed call is reported from its trace, in words the person reads first">
-        <Example
-            id="report"
-            title="`report` — a draft of what failed, sent to `onReport`"
-            summary="Emailing a statement fails, and the page keeps the failed call's trace. Report this opens the draft on it: write what went wrong, read everything that will be sent, and send it."
-            files={{
-                'src/ops/lib/ReportProblem.abide': reportProblemSource,
-                'src/ops/sendStatement.handler.ts': sendStatementSource,
-                'src/ops/listReports.handler.ts': listReportsSource,
-                'src/ops/lib/ReportProblem.test.ts': reportProblemTestSource,
-            }}
-        >
-            <ReportProblem />
-        </Example>
+<Doc
+    seeAlso={[
+        '/hooks/on-report',
+        '/hooks/on-refusal',
+        '/helpers/log',
+        '/ambient/trace',
+        '/ai/results-of',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/report.test.ts',
+            from: [
+                "test('a draft made on a server holds its lines and sends in process",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/ReportProblem.test.ts',
+            from: [
+                "test('a report of the failed call is listed by its browser alone'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Report the call that failed from its trace">
+        <p><code>onRefusal</code> hands the page each failed call's trace.
+            <code>open()</code> shows the draft in abide's dialog, every word to be sent in view,
+            and settles <code>true</code> once the person sends it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { onRefusal, reactive, report } from '@abide/abide'
 
-        <p><code>onRefusal</code> hands the page the trace of every call that failed, and
-            <code>report</code> starts a draft from it. <code>open()</code> shows it in abide's own
-            dialog, with every word that will be sent above the Send button, and settles
-            <code>true</code> once it is sent. A page that draws its own binds
-            <code>summary</code> and <code>description</code>, shows <code>markdown</code>, and
-            calls <code>send()</code>.</p>
+            let failed = reactive<string | undefined>(undefined)
+            onRefusal((_refusal, call) => {
+                failed = call.trace
+            })
+            </script>
 
-        <p>A draft has its <code>id</code> from the moment it is made, and <code>send()</code>
-            settles to it. Every <code>Report</code> sent from the draft carries that id, so a
-            send retried after a refusal lands under the same one. Once sent, the draft settles
-            the same id again and sends nothing more. An <code>onReport</code> files the report
-            under its id, and the person can quote it back.</p>
-
-        <p>Where a report goes is the server's to say, in <code>onReport</code>. The CRM keeps
-            each one for the browser that sent it; an app posts it to its tracker, its inbox or its
-            support desk:</p>
-
-        <Snippet source={listReportsSource} path="src/ops/listReports.handler.ts" from={['onReport(']} />
-
-        <table>
-            <thead><tr><th>What a draft holds</th><th>Where</th></tr></thead>
-            <tbody>
-                <tr><td>the page's newest log lines</td><td>in every browser</td></tr>
-                <tr><td>the server's lines for its trace</td><td>in the native app's window, and on a server</td></tr>
-                <tr><td>the app's version, the user agent and the route</td><td>everywhere</td></tr>
-            </tbody>
-        </table>
-
-        <p>Anywhere else the trace is enough: the server's lines are already the app's, in its
-            logs or its tracing, under the same id. The principal secret and every
-            <code>password</code> field of the config are taken out of every line before it leaves
-            the server, and out of every report before <code>onReport</code> sees it. With no
-            <code>onReport</code> filed, a send is refused.</p>
+            <button disabled={failed === undefined}
+                onclick={() => report({ trace: failed }).open()}>
+                Report this</button>
+        `} />
     </Section>
 
-    <Section title="An assistant fills in a draft that only the person sends">
-        <Example
-            id="report-assistant"
-            title="`resultsOf` — what the assistant wrote, put in the draft"
-            summary="Emailing a statement fails, and the page drafts a report on it. Ask the assistant: it reads the draft and fills in the summary and description. Review and send opens it, written, with nothing sent yet."
-            files={{
-                'src/ops/lib/AssistedReport.abide': assistedReportSource,
-                'src/ops/draftReport.handler.ts': draftReportSource,
-                'src/ops/askReport.handler.ts': askReportSource,
-                'src/ops/lib/AssistedReport.test.ts': assistedReportTestSource,
-            }}
-        >
-            <AssistedReport />
-        </Example>
-
-        <p>The assistant is handed the draft's <code>markdown</code>: what the person will read
-            before sending, secrets already taken out, and nothing more. In the native app's window
-            that holds the server's lines for the trace too, which is what it reads to say what went
-            wrong. Its one tool is <code>draftReport</code>, a handler that hands back what it was
-            given, and the page puts each answer in the draft:</p>
-
-        <Snippet source={assistedReportSource} path="src/ops/lib/AssistedReport.abide" from={['async function ask(']} />
-
-        <p>No tool sends a report, so the person always does. The CRM's model is recorded, so the
-            card answers the same way every time; <code>provider.claudeCode()</code> in its place is
-            the visitor's own Claude Code.</p>
+    <Section level={3} title="Fill and send a problem report from a form of your own">
+        <p>Write <code>summary</code> and <code>description</code>, show the person
+            <code>markdown</code>, then call <code>send()</code>. A send retried after a refusal
+            lands under the same <code>id</code>.</p>
+        <Code language="ts" caption="shared" code={`
+            const draft = report({ trace })
+            draft.summary.set('Statement email fails')
+            draft.description.set('Clicked Email Grace her statement.')
+            preview.set(draft.markdown())
+            const id = await draft.send()
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="File each report with your tracker">
+        <p>The server says where a report goes. With no <code>onReport</code> filed, a send is
+            refused.</p>
+        <Code language="ts" caption="server" code={`
+            import { onReport } from '@abide/abide/server'
+
+            onReport(async (report) => {
+                await tracker.create({ id: report.id, title: report.summary,
+                    body: report.markdown })
+            })
+        `} />
+    </Section>
 </Doc>

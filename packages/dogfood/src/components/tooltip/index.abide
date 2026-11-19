@@ -1,0 +1,56 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/components/menu', '/helpers/place', '/components/dialog']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageHints.test.ts',
+            from: ["test('focus opens the hint at once and Escape closes it'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageHints.test.ts',
+            from: ["test('a pointer resting on a stage opens its hint'"],
+        },
+    ]}
+>
+    <Section level={3} title="Explain a pipeline stage on hover and on focus">
+        <p>Write <code>Tooltip</code> right after the element it explains. Give that element a
+            <code>tabindex</code> where it is not focusable, or a keyboard never reaches the
+            hint.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Tooltip from '@abide/abide/Tooltip.abide'
+            </script>
+
+            <span tabindex="0">proposal</span>
+            <Tooltip>A quote is out, waiting on an answer.</Tooltip>
+        `} />
+    </Section>
+
+    <Section level={3} title="Open a hint under its anchor, with no wait">
+        <p><code>side</code> is where the hint goes, flipped where there is no room.
+            <code>delay</code> is how long a pointer rests before it opens.</p>
+        <Code language="abide" caption="abide" code={`
+            <button aria-label="Star">★</button>
+            <Tooltip side="bottom" delay={0}>Star this contact</Tooltip>
+        `} />
+    </Section>
+
+    <Section level={3} title="Draw an arrow pointing at the anchor">
+        <p>The hint carries the side it took as <code>data-side</code>, and
+            <code>--arrow-offset</code> is where along that edge the anchor's middle falls.</p>
+        <Code language="abide" caption="abide" code={`
+            <Tooltip
+                class="m-0 overflow-visible rounded-md px-3 py-2
+                before:absolute before:left-(--arrow-offset) before:size-2
+                before:-translate-x-1/2 before:rotate-45 before:bg-raised
+                data-[side=top]:before:-bottom-1
+                data-[side=bottom]:before:-top-1"
+            >Signed. It counts toward the target.</Tooltip>
+        `} />
+    </Section>
+</Doc>

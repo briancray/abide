@@ -1,0 +1,56 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/helpers/markdown',
+        '/abide-files/expressions',
+        '/helpers/csp',
+        '/pages/sinks',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/raw.test.ts',
+            from: ["test('a live {raw(html)} writes its next value as markup'"],
+        },
+        {
+            path: 'packages/abide/tests/raw.test.ts',
+            from: [
+                "test('a slot holding a string and then a raw value renders each as itself'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Render a deal note written in markdown">
+        <p><code>markdown</code> hands back HTML that is safe to brand, and <code>raw</code> renders
+            it as markup. Without <code>raw</code> the same string shows as text.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { markdown } from '@abide/abide'
+            </script>
+
+            <article>{raw(markdown(note.body))}</article>
+        `} />
+    </Section>
+
+    <Section level={3} title="Brand markup once and pass it around">
+        <p>A <code>Raw</code> stays markup wherever it lands, so a component can take an icon as a
+            prop.</p>
+        <Code language="ts" caption="shared" code={`
+            import { raw } from '@abide/abide'
+
+            export const STAR = raw('<svg viewBox="0 0 24 24"><path d="…"/></svg>')
+        `} />
+    </Section>
+
+    <Section level={3} title="Show a model's reply as text, not markup">
+        <p><code>raw</code> writes its markup as given, with nothing removed and no URL checked.
+            Hand it markup you wrote, and put a reply or a fetched page in braces as text.</p>
+        <Code language="abide" caption="abide" code={`
+            <p class="reply">{reply}</p>
+        `} />
+    </Section>
+</Doc>

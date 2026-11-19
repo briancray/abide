@@ -61,28 +61,29 @@ THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/d
     bun run build         abide build
     bun run --filter abide-docs bundle    the docs as a native app (macOS)
 
-- The docs are a REFERENCE: one page per primitive, at `/<group>/<primitive>`, grouped by what it is
-  for. `src/lib/SITE.ts` is the site map: every group, and every page's title, nav label, one-line
-  description and the REGISTRY section whose rows it carries (40.11, 40.42). The home page lists
-  every group with each page's description.
-- Each page is a hand-written `index.abide` wrapped in `<Doc>`, with its headings as `<Section>`s,
-  its code as `<Code>` and `<Snippet>`, its live examples as `<Example>` cards, and its REGISTRY
-  rows last, read from `docs/REGISTRY.md` as it renders (`<Registry />`, 40.30, 40.47).
-- Every card is drawn from ONE EXAMPLE APP, a CRM at `packages/dogfood/examples/crm`, which
-  `/examples/crm.tar.gz` serves as a download (40.41). A card renders a component from the CRM's
-  `lib/` and shows its files, its tests and its bench; a test or bench tab renders what that file
-  last reported (40.39), kept by `bun run examples:results`. The docs app mounts each of the CRM's
-  feature directories at the address the CRM serves it at, so a card's requests reach the CRM's own
-  handlers (40.37).
+- The docs are a REFERENCE: one page per export an app imports, or per construct it writes, at
+  `/<group>/<name>`, grouped as REGISTRY groups them — every REGISTRY `##` section is one page
+  (40.2, 40.3). `src/lib/SITE.ts` is the site map: every group, and every page's title, nav label,
+  one-line description and the REGISTRY section it documents (40.4). The home page lists every
+  group with each page's description.
+- Each page is a hand-written `index.abide` wrapped in `<Doc>`, which renders every page in one
+  order (40.9): its Syntax and the `###` headings under its section, read from `docs/REGISTRY.md`
+  as it renders (40.10); its examples, the one part the page writes, each a `<Section>` and a
+  `<Code>` fence; its See also, from a `seeAlso` list of routes; its Tests, test cases of the
+  workspace sliced by line prefix from a `tests` list (40.15); and its Rules, every clause its rows
+  cite, quoted from `docs/RULEBOOK.md` (40.11).
+- THE EXAMPLE APP is a CRM at `packages/dogfood/examples/crm`, the world the examples are set in,
+  which `/examples/crm.tar.gz` serves as a download (40.26). The docs app mounts each of its feature
+  directories at the address the CRM serves it at, answered by the CRM's own handlers (40.24).
 - THE PROMPT AT THE TOP asks the visitor's own Claude Code, paired through `@abide/bridge` (and
   paired already in the native app), with the docs as its only tools — `src/ask/tools/*` search the
-  pages, REGISTRY and RULEBOOK, read a page, a clause or a CRM file, and list the cards (40.44). Its
+  pages, REGISTRY and RULEBOOK, and read a page, a clause or a CRM file (40.27). Its
   answer streams through `src/ask/answer.handler.ts`, which renders the markdown block by block, and
-  a `<show …/>` line in it renders live: a running example card, a CRM file, a signature, a clause,
-  measured results, a link to a page, or the page under the answer opened (40.46, 40.48).
+  a `<show …/>` line in it renders live: a CRM file, a signature, a clause, measured results, a
+  link to a page, or the page under the answer opened (40.28).
 - Every page is also served as markdown at its address with `.md` on the end, and `/abide.md` is
   every page in reading order — derived from the rendered page by `src/lib/serveDownloads.ts`,
-  so the words have one home (40.33).
+  so the words have one home (40.22).
 
 `bun test` gates the docs against the REGISTRY and against RULEBOOK 40 and BRAND —
 `packages/dogfood/tests/coverage.test.ts`, `markdown.test.ts`, `voice.test.ts`, `fences.test.ts` —

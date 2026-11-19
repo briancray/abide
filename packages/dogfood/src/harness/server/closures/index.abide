@@ -1,0 +1,40 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/server/retained',
+        '/harness/server/allocated',
+        '/harness/gate/in-a-fresh-process',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/server.test.ts',
+            from: [
+                "test('closures() reports the pair, and five closures move it by five'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Count the handlers a deal list keeps alive">
+        <p>The engine reports a closure as a <code>Function</code> and a
+            <code>JSLexicalEnvironment</code>, so the pair comes back together. Five handlers
+            move each by five.</p>
+        <Code language="ts" caption="server" code={`
+            import { closures } from '@abide/harness/server'
+
+            const handlers: (() => void)[] = []
+            const pair = closures(() => {
+                for (const deal of deals.slice(0, 5))
+                    handlers.push(() => openDeal(deal.id))
+                return handlers
+            })
+            pair.Function // 5
+            pair.JSLexicalEnvironment // 5
+        `} />
+        <p>Like <code>retained</code>, it throws where a DOM is preloaded.</p>
+    </Section>
+</Doc>

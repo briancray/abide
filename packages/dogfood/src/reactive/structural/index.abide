@@ -1,0 +1,51 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/reactive', '/reactive/watch']}
+    tests={[
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('the default identity is the reference, so a re-materialized value wakes'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/wireCopy.test.ts',
+            from: [
+                "test('a copy compared structurally wakes nobody for a load that answers the same'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Keep a reload that answers the same from waking the page">
+        <p>Every reload parses a fresh object, which is a new value by reference. Declare
+            <code>structural</code> and an equal answer wakes nobody.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive, structural } from '@abide/abide'
+            import getDeal from './getDeal.handler.ts'
+
+            const deal = reactive(() => getDeal({ id: 'd2' }), {
+                identity: structural,
+            })
+            </script>
+
+            <p>{deal.name}: {deal.stage}</p>
+            <button onclick={() => deal.refresh()}>Reload</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Ignore a filter written again with the same contents">
+        <p>A write of an equal object changes nothing, so a watch over it does not run.</p>
+        <Code language="ts" caption="shared" code={`
+            const filter = reactive({ stage: 'won' }, { identity: structural })
+            watch(filter, () => console.log('filter', filter()))
+            filter.set({ stage: 'won' }) // no run
+            filter.set({ stage: 'lead' }) // runs
+        `} />
+    </Section>
+</Doc>

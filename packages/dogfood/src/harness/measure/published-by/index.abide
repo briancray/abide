@@ -1,0 +1,62 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/measure/published-work-key',
+        '/harness/measure/measure',
+        '/harness/abide/measure',
+        '/harness/gate/gate',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/StageTiles.test.ts',
+            from: [
+                "test('three tiles read one summary, worked out once per switch'",
+            ],
+        },
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: [
+                "test('a source that published nothing reads as absent, not as zero'",
+            ],
+        },
+        {
+            path: 'packages/harness/tests/measure.test.ts',
+            from: ["test('a published record missing a field throws naming it'"],
+        },
+    ]}
+>
+    <Section level={3} title="Assert one stage summary per switch">
+        <p>Three tiles read one derived summary. The summary counts its own passes, and the test
+            reads that count off the <code>Work</code> by source and field.</p>
+        <Code language="ts" caption="shared" code={`
+            import { flushSync } from '@abide/abide'
+            import { mount } from '@abide/harness/abide'
+            import { measure, publishedBy } from '@abide/harness/measure'
+
+            test('three tiles read one summary, worked out once', async () => {
+                using _tiles = await mount(StageTiles({}))
+                const work = measure(() => {
+                    document.querySelectorAll('button')[1]?.click()
+                    flushSync()
+                })
+                expect(publishedBy(work, 'reports', ['summaries'])?.summaries)
+                    .toBe(1)
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Tell an unwired counter from a counter at zero">
+        <p>A source that published nothing reads as <code>null</code>. A field the record lacks
+            throws with its name, so a misspelled counter never passes as zero.</p>
+        <Code language="ts" caption="shared" code={`
+            const work = measure(() => {})
+            publishedBy(work, 'billing', ['invoices']) // null
+            publishedBy(work, 'reports', ['sumaries']) // throws: numeric sumaries
+        `} />
+    </Section>
+</Doc>

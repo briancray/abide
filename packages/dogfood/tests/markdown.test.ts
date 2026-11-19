@@ -7,20 +7,13 @@ import { beforeAll, expect, test } from 'bun:test'
 
 import { withoutExcerpt } from '../src/lib/highlight.ts'
 import { PAGES } from '../src/lib/sitePages.ts'
-import {
-    allCards,
-    cardsOf,
-    docsPages,
-    renderedHtml,
-    renderedMarkdown,
-    servedDocs,
-} from './docsPages.ts'
+import { renderedHtml, renderedMarkdown, servedDocs } from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
 // for the whole load against the other suites, inside its own five seconds.
 beforeAll(() => Promise.all([renderedMarkdown(), renderedHtml()]), 60_000)
 
-/** Every route the site has: its pages, and the rulebook a page links each clause it cites into (40.45). */
+/** Every route the site has: its pages, and the rulebook a page links each clause it cites into (40.11). */
 function routes(): Set<string> {
     const listed = new Set<string>(['/rulebook'])
     for (const page of PAGES) listed.add(page.route)
@@ -47,52 +40,15 @@ test('every internal link in a markdown twin names a page that exists', async ()
     const listed = routes()
     const broken: string[] = []
     for (const [route, body] of await renderedMarkdown())
-        for (const [, target] of body.matchAll(
-            /\]\((\/[^)#]*)(?:#[^)]*)?\)/g,
-        )) {
+        // A link spelled inside a fence is code, not a link.
+        for (const [, target] of body
+            .replaceAll(/```[\s\S]*?```/g, '')
+            .matchAll(/\]\((\/[^)#]*)(?:#[^)]*)?\)/g)) {
             const page = (target as string).replace(/\.md$/, '')
             if (!listed.has(page === '/index' ? '/' : page))
                 broken.push(`${route}: ${target}`)
         }
     expect(broken).toEqual([])
-})
-
-// An example's files are the answer to the page's problem, and a card that renders in HTML and
-// vanishes from the markdown is the silent half of this.
-test('every card brings its files into the markdown', async () => {
-    const bodies = await renderedMarkdown()
-    const missing: string[] = []
-    for (const card of await allCards())
-        for (const shown of card.files.keys())
-            if (
-                !new RegExp(`^\`\`\`\\S* ${RegExp.escape(shown)}$`, 'm').test(
-                    bodies.get(card.route) ?? '',
-                )
-            )
-                missing.push(`${card.route}: ${card.id} ${shown}`)
-    expect(missing).toEqual([])
-})
-
-// A card renders ONE component, invoked inside it once.
-test('every card invokes the component it renders, once', async () => {
-    const wrong: string[] = []
-    for (const page of await docsPages())
-        for (const card of cardsOf(page)) {
-            const tag = /\/(\w+)\.abide$/.exec(card.component)?.[1]
-            const invoked =
-                tag === undefined
-                    ? 0
-                    : (
-                          page.source.match(
-                              new RegExp(`<${tag}[\\s/>]`, 'g'),
-                          ) ?? []
-                      ).length
-            if (invoked !== 1)
-                wrong.push(
-                    `${page.route}: ${card.id} invokes ${tag} ${invoked} times`,
-                )
-        }
-    expect(wrong).toEqual([])
 })
 
 test('the bundle carries every page, in reading order', async () => {

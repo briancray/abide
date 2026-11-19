@@ -1,8 +1,8 @@
 // THE DOCS AGAINST THE REGISTRY, AND AGAINST THEIR OWN RULES (RULEBOOK 40): every REGISTRY section
-// carried by one primitive's page, every example card on exactly one page, and the words held to what
+// one export's or one construct's page, every page in the one order, and the words held to what
 // docs/BRAND.md asks of a heading, a label and a code sample. The pages are read three ways —
-// `SITE.ts` for what a page carries, its `index.abide` for what it embeds, and the markdown the built
-// app serves for what a reader reads (`docsPages.ts`).
+// `SITE.ts` for what a page carries, its `index.abide` for what it writes, and the markdown the
+// built app serves for what a reader reads (`docsPages.ts`).
 
 import { beforeAll, expect, test } from 'bun:test'
 
@@ -12,13 +12,7 @@ import { SITE } from '../src/lib/SITE.ts'
 import { isFramed } from '../src/lib/sitePages.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 import { declaredExports, scopeOf } from './declaredExports.ts'
-import {
-    allCards,
-    cardsOf,
-    docsPages,
-    DOGFOOD,
-    renderedMarkdown,
-} from './docsPages.ts'
+import { docsPages, DOGFOOD, renderedMarkdown, written } from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
 // for the whole load against the other suites, inside its own five seconds.
@@ -61,8 +55,6 @@ for (const row of registryRows(registry)) {
 // The exceptions are listed, because they are the short half: one capability written
 // down in two tables, where a qualified claim would be two claims for one thing.
 const RESTATED = new Set([
-    '`onConfig`',
-    '`onHealth`',
     '`abide openapi [--url <origin>]`',
     '`abide mcp [--url <origin>]`',
     // The reactive primitives carry `Produced` as one of the four type parameters, and `Rpc`
@@ -116,124 +108,6 @@ test('every docs page is in SITE, and every SITE entry has its page', async () =
         if (!(await Bun.file(`${DOGFOOD}${page.file}`).exists()))
             missing.push(page.file)
     expect({ orphans, missing }).toEqual({ orphans: [], missing: [] })
-})
-
-// An example is real files, so a card can name one that is gone and a panel renders empty.
-test('every file a card renders or shows is on disk', async () => {
-    const missing: string[] = []
-    for (const card of await allCards()) {
-        if (!(await Bun.file(`${DOGFOOD}${card.component}`).exists()))
-            missing.push(
-                `${card.id}: renders ${card.component || '(no import)'}`,
-            )
-        for (const [shown, path] of card.files)
-            if (path === '' || !(await Bun.file(`${DOGFOOD}${path}`).exists()))
-                missing.push(`${card.id}: shows ${shown}`)
-    }
-    expect(missing).toEqual([])
-})
-
-// 40.32 — A CARD RENDERS A COMPONENT FROM A `lib` OF THE CRM, so what a reader runs on the page is a
-// file of the app they download, and a `.abide` outside a `lib` would be a page of its own (23.21).
-// THE REVERT: render a component from outside a `lib`, and it is named.
-test('every card renders a component in a lib of the CRM', async () => {
-    const strays: string[] = []
-    for (const card of await allCards())
-        if (
-            !card.component.startsWith('examples/crm/src/') ||
-            !card.component.includes('/lib/')
-        )
-            strays.push(`${card.id}: ${card.component}`)
-    expect(strays).toEqual([])
-})
-
-// 40.3 — A CARD SHOWS ITS TEST: the file of its app that exercises what it renders, so the claim the
-// card makes is one the app reruns. THE REVERT: drop a test tab from a card, and it is named.
-test('every card shows a test of the CRM', async () => {
-    const untested: string[] = []
-    for (const card of await allCards()) {
-        let shown = false
-        for (const path of card.files.keys())
-            if (/\.(test|e2e)\.ts$/.test(path)) shown = true
-        if (!shown) untested.push(card.id)
-    }
-    expect(untested).toEqual([])
-})
-
-// 40.4 — A CARD SHOWS THE FILE IT RENDERS: the component is what the example IS, and a card whose
-// tabs leave it out shows code that is not what runs above them.
-test('every card shows the component it renders', async () => {
-    const hidden: string[] = []
-    for (const card of await allCards())
-        if (![...card.files.values()].includes(card.component))
-            hidden.push(`${card.id}: ${card.component}`)
-    expect(hidden).toEqual([])
-})
-
-// An id names one example: it is the card's anchor and what its hand-written arm is paired by.
-test('every card has an id no other card has', async () => {
-    const seen = new Map<string, string>()
-    const repeated: string[] = []
-    for (const card of await allCards()) {
-        if (card.id === '') repeated.push(`${card.route}: a card with no id`)
-        const first = seen.get(card.id)
-        if (first !== undefined)
-            repeated.push(`${card.id}: ${first} and ${card.route}`)
-        seen.set(card.id, card.route)
-    }
-    expect(repeated).toEqual([])
-})
-
-// 40.19 — ONE PAGE PER EXAMPLE. A component taught from two pages is code one of those readers was
-// never shown running.
-test('an example component is taught by exactly one page', async () => {
-    const pagesFor = new Map<string, string[]>()
-    for (const page of await docsPages()) {
-        for (const card of cardsOf(page))
-            pagesFor.set(card.component, [
-                ...(pagesFor.get(card.component) ?? []),
-                page.route,
-            ])
-    }
-    const shared: string[] = []
-    for (const [component, routes] of pagesFor)
-        if (new Set(routes).size > 1)
-            shared.push(`${component}: ${[...new Set(routes)].join(', ')}`)
-    expect(shared).toEqual([])
-})
-
-// 40.17 — A PAGE RUNS WHAT IT TEACHES. The pages with no card yet are a RATCHET: written down here,
-// asserted exactly, shrinking only — a page that gains a card leaves the list, and one that loses its
-// last card is named. The home page routes rather than teaches. THE REVERT: drop every card from
-// `/reactive/reactive`, and it is named.
-const CARDLESS: string[] = await Bun.file(
-    new URL('./CARDLESS.json', import.meta.url),
-).json()
-
-test('every page embeds an example, or is on the ratchet of pages with none yet', async () => {
-    const cardless: string[] = []
-    for (const page of await docsPages())
-        if (page.route !== '/' && cardsOf(page).length === 0)
-            cardless.push(page.route)
-    expect(cardless).toEqual(CARDLESS)
-})
-
-// 40.26 — a card follows its heading with nothing between them. A paragraph there is a fourth voice
-// restating the heading, the title or the summary, and belongs after the card.
-test('an example follows its heading directly', async () => {
-    const separated: string[] = []
-    for (const page of await docsPages()) {
-        const lines = page.source.split('\n')
-        for (let at = 0; at < lines.length; at += 1) {
-            if (!(lines[at] ?? '').trim().startsWith('<Example')) continue
-            let previous = at - 1
-            while (previous >= 0 && (lines[previous] ?? '').trim() === '')
-                previous -= 1
-            if (!(lines[previous] ?? '').trim().startsWith('<Section'))
-                separated.push(`${page.route}:${at + 1}`)
-        }
-    }
-    expect(separated).toEqual([])
 })
 
 // A heading of the form `Subject: `a`, `b`, `c`` is a GLOSSARY LABEL, and it reads as the whole set —
@@ -446,7 +320,7 @@ test('every type a signature names is declared somewhere', async () => {
     expect([...new Set(dangling)]).toEqual([])
 })
 
-// 40.43 — EVERY REGISTRY SECTION IS ONE PAGE'S: a section no page carries is rows no reader can look
+// 40.5 — EVERY REGISTRY SECTION IS ONE PAGE'S: a section no page carries is rows no reader can look
 // up, and a section two pages name is a second copy. THE REVERT: point `/reactive/watch`'s `registry`
 // at `reactive`'s section, and both are named.
 test('every registry section is carried by exactly one page', async () => {
@@ -527,11 +401,12 @@ const COLUMN: number = (
     ) as { fmt: { printWidth: number } }
 ).fmt.printWidth
 
+// A page's Tests are QUOTED at their file's width: what is held to the column is what it writes.
 test('no code sample is wider than the column it renders in', async () => {
     const wide: string[] = []
     for (const [route, body] of await renderedMarkdown()) {
         let fenced = false
-        for (const line of body.split('\n')) {
+        for (const line of written(body).split('\n')) {
             if (line.startsWith('```')) {
                 fenced = !fenced
                 continue
@@ -541,37 +416,6 @@ test('no code sample is wider than the column it renders in', async () => {
         }
     }
     expect([...new Set(wide)]).toEqual([])
-})
-
-// 40.28: a comment in an example's own source fits on one line, and a longer reason goes in the copy
-// after the card. A run of `//` lines, or a `/*` that does not close on its own line, is two or more.
-function multilineComments(source: string): number[] {
-    const opened: number[] = []
-    const lines = source.split('\n')
-    let previousWasLineComment = false
-    for (let at = 0; at < lines.length; at += 1) {
-        const line = (lines[at] ?? '').trim()
-        const lineComment = line.startsWith('//')
-        if (lineComment && previousWasLineComment) opened.push(at)
-        else if (line.startsWith('/*') && !line.includes('*/'))
-            opened.push(at + 1)
-        previousWasLineComment = lineComment
-    }
-    return opened
-}
-
-test("no comment in an example's own source runs past one line", async () => {
-    const long: string[] = []
-    const shown = new Set<string>()
-    for (const card of await allCards())
-        for (const path of card.files.values()) shown.add(path)
-    for (const path of shown) {
-        if (path === '') continue
-        const source = await Bun.file(`${DOGFOOD}${path}`).text()
-        for (const line of multilineComments(source))
-            long.push(`${path}:${line}`)
-    }
-    expect(long).toEqual([])
 })
 
 // docs/BRAND.md, Visual identity: the code-block spine is the one device to keep, and an uncaptioned
@@ -627,16 +471,18 @@ test('every export of a public entry is a name the registry writes', async () =>
     expect(unnamed).toEqual(UNREGISTERED)
 })
 
-// 40.43 — EVERY REGISTRY ROW IS ON EXACTLY ONE PAGE, read off the markdown each page serves: a row on
+// 40.6 — EVERY REGISTRY ROW IS ON EXACTLY ONE PAGE, read off the markdown each page serves: a row on
 // none is a name a reader cannot look up, and a row on two is a second copy. A row is its cells save
-// the clauses, which a page writes as links. THE REVERT: drop `<Registry />` from a page, and its rows
-// are named.
+// the clauses, which a page lists as its Rules (40.11). THE REVERT: drop `<Registry />` from `Doc`,
+// and every row is named.
 test('every registry row is on exactly one page', async () => {
     const key = (cells: string[]): string =>
-        cells.slice(0, -1).join(' | ').replace(/\s+/g, ' ')
+        cells.join(' | ').replace(/\s+/g, ' ')
     const written = new Map<string, number>()
-    for (const row of registryRows(registry))
-        written.set(key(row.cells), (written.get(key(row.cells)) ?? 0) + 1)
+    for (const row of registryRows(registry)) {
+        const cells = key(row.cells.slice(0, -1))
+        written.set(cells, (written.get(cells) ?? 0) + 1)
+    }
     const found = new Map<string, string[]>()
     for (const [route, body] of await renderedMarkdown()) {
         for (const line of body.split('\n'))
@@ -655,4 +501,125 @@ test('every registry row is on exactly one page', async () => {
             )
     }
     expect(misplaced).toEqual([])
+})
+
+/** A page's `##` headings, in the order its markdown writes them. */
+function partsOf(body: string): string[] {
+    const parts: string[] = []
+    for (const line of body.split('\n'))
+        if (line.startsWith('## ')) parts.push(line.slice(3).trim())
+    return parts
+}
+
+// 40.3 — EVERY FUNCTION AND CONSTANT AN ENTRY EXPORTS HEADS A SECTION OF ITS OWN, so it is the subject
+// of a page rather than a row on another's: every name a section's heading spells before its `—`.
+// A type, and a class an app reads and never constructs — a row whose signature is `class …` or an
+// `Error & …` — is documented on the page of what hands it back. THE REVERT: move `flushSync`'s row
+// under `## \`watch\``, and `flushSync` is named.
+test('every function and constant a public entry exports heads a registry section', async () => {
+    const headed = new Set<string>()
+    const read = new Set<string>()
+    for (const row of registryRows(registry)) {
+        const [names = '', entry] = row.section.split(' — ')
+        const scope =
+            entry === undefined || !entry.includes('@abide/')
+                ? 'abide'
+                : scopeOf(entry.replaceAll('`', ''))
+        for (const [, name] of names.matchAll(/`([^`]+)`/g))
+            headed.add(`${scope}\0${name}`)
+        if (/^`(class |Error & )/.test(row.cells[1] ?? ''))
+            read.add(
+                `${scope}\0${/^`([^`]+)`/.exec(row.cells[0] ?? '')?.[1] ?? ''}`,
+            )
+    }
+    const unheaded: string[] = []
+    for (const { entry, scope, name, typeOnly } of await declaredExports())
+        if (
+            !typeOnly &&
+            !headed.has(`${scope}\0${name}`) &&
+            !read.has(`${scope}\0${name}`)
+        )
+            unheaded.push(`${entry}: ${name}`)
+    expect(unheaded).toEqual([])
+})
+
+// 40.8 — A PAGE DOCUMENTING AN EXPORT IS TITLED WITH ITS NAME: a reader looking `keyLabel` up scans
+// the rail and the index for `keyLabel`. THE REVERT: title `/reactive/watch` "Watching values".
+test('a page documenting an export is titled with its name', () => {
+    const mistitled: string[] = []
+    for (const group of SITE)
+        for (const page of group.pages) {
+            const name = /^`[^`]+`/.exec(page.registry)?.[0]
+            if (name !== undefined && !page.title.startsWith(name))
+                mistitled.push(`${page.route}: ${page.title}`)
+        }
+    expect(mistitled).toEqual([])
+})
+
+// 40.9 — EVERY PAGE IN THE ONE ORDER, read off its markdown: a reader who has found Tests on one
+// page finds it in the same place on the next. THE REVERT: render `<SeeAlso>` after `<Tests>` in
+// `Doc`, and every page with both is named.
+const ORDER = ['Syntax', 'Examples', 'See also', 'Tests', 'Rules']
+
+test('every page renders its parts in the one order', async () => {
+    const disordered: string[] = []
+    for (const [route, body] of await renderedMarkdown()) {
+        if (route === '/') continue
+        const fixed: string[] = []
+        for (const part of partsOf(body))
+            if (ORDER.includes(part)) fixed.push(part)
+        let last = -1
+        for (const part of fixed) {
+            const at = ORDER.indexOf(part)
+            if (at <= last) disordered.push(`${route}: ${fixed.join(', ')}`)
+            last = at
+        }
+    }
+    expect([...new Set(disordered)]).toEqual([])
+})
+
+// 40.12 — EVERY PAGE SHOWS ITS SUBJECT IN USE: an Examples part with at least one example under a
+// heading of its own. THE REVERT: empty `/reactive/watch`'s slot, and it is named.
+test('every page carries at least one example', async () => {
+    const bare: string[] = []
+    for (const [route, body] of await renderedMarkdown()) {
+        if (route === '/') continue
+        const examples =
+            body.split('\n## Examples\n')[1]?.split('\n## ')[0] ?? ''
+        if (!/^### /m.test(examples) || !/^```/m.test(examples))
+            bare.push(route)
+    }
+    expect(bare).toEqual([])
+})
+
+// 40.11 — A PAGE'S RULES ARE EVERY CLAUSE ITS ROWS CITE, read off the markdown against REGISTRY: a
+// clause a row cites and the page leaves out is a rule its reader is never shown.
+// THE REVERT: list only the first clause of each row in `clausesOf`, and pages are named.
+test("a page's rules are every clause its rows cite", async () => {
+    const cited = new Map<string, Set<string>>()
+    for (const row of registryRows(registry)) {
+        const ids = cited.get(row.section) ?? new Set<string>()
+        for (const id of (row.cells.at(-1) ?? '').split(','))
+            if (/^\d+\.\d+$/.test(id.trim())) ids.add(id.trim())
+        cited.set(row.section, ids)
+    }
+    const registryOf = new Map<string, string>()
+    for (const group of SITE)
+        for (const page of group.pages)
+            registryOf.set(page.route, page.registry)
+    const wrong: string[] = []
+    for (const [route, body] of await renderedMarkdown()) {
+        const section = registryOf.get(route)
+        if (section === undefined) continue
+        const rules = body.split('\n## Rules\n')[1] ?? ''
+        const listed = new Set<string>()
+        for (const [, id] of rules.matchAll(/^- \[(\d+\.\d+)\]/gm))
+            listed.add(id as string)
+        const expected = [...(cited.get(section) ?? [])].sort()
+        if ([...listed].sort().join() !== expected.join())
+            wrong.push(
+                `${route}: ${[...listed].length} listed, ${expected.length} cited`,
+            )
+    }
+    expect(wrong).toEqual([])
 })

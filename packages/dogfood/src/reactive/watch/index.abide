@@ -1,70 +1,68 @@
 <script>
-import DealNote from 'crm/src/pipeline/lib/DealNote.abide'
-import dealNoteSource from 'crm/src/pipeline/lib/DealNote.abide' with { type: 'text' }
-import dealNoteTestSource from 'crm/src/pipeline/lib/DealNote.test.ts' with { type: 'text' }
-import saveNoteSource from 'crm/src/pipeline/saveNote.handler.ts' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Section title="`watch` runs something outside the page when a value changes">
-        <Example
-            id="autosave"
-            title="`watch(effect)` — save a note a beat after the typing stops"
-            summary="A note on a deal, saved to the server while you type. Type a sentence quickly, and watch the saved line."
-            files={{
-                'src/pipeline/lib/DealNote.abide': dealNoteSource,
-                'src/pipeline/saveNote.handler.ts': saveNoteSource,
-                'src/pipeline/lib/DealNote.test.ts': dealNoteTestSource,
-            }}
-        >
-            <DealNote />
-        </Example>
+<Doc
+    seeAlso={[
+        '/reactive/reactive',
+        '/reactive/flush-sync',
+        '/reactive/tracking',
+        '/ambient/is-server',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('an effect runs immediately and again on change, and its disposer runs first'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('a watch given sources runs only when those sources change'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Save a note a beat after the typing stops">
+        <p>The effect reads <code>note</code>, so each keystroke reruns it. The disposer clears the
+            timer the run before started, so a burst of typing is one save.</p>
+        <Code language="abide" caption="browser" code={`
+            <script>
+            import { reactive, watch } from '@abide/abide'
+            import saveNote from './saveNote.handler.ts'
 
-        <p><code>watch</code> runs its effect now, and again whenever a value it read changes.
-            The effect returns a <code>Disposer</code>, which runs before the next run and when the
-            component goes. Each keystroke clears the timer the one before it started, so a burst of
-            typing is one save.</p>
+            let note = reactive('')
+            watch(() => {
+                const text = note
+                const timer = setTimeout(() => saveNote({ text }), 500)
+                return () => clearTimeout(timer)
+            })
+            </script>
 
-        <p>The draft is read in the effect, not inside the timer: a read there happens after
-            tracking ends and subscribes to nothing. <code>saved.peek()</code> reads the saved note
-            without subscribing, so saving it does not wake the watch again.</p>
-
-        <table>
-            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
-            <tbody>
-                <tr><td><code>watch</code></td><td><code>watch(effect)</code> wakes on whatever the effect read; <code>watch(sources, effect)</code> wakes only on the values listed</td></tr>
-                <tr><td><code>s.watch</code></td><td><code>watch</code> over one value, handed to the effect</td></tr>
-                <tr><td><code>Effect</code></td><td>the function a watch runs, returning nothing or a <code>Disposer</code></td></tr>
-                <tr><td><code>Disposer</code></td><td>what tears the previous run down</td></tr>
-                <tr><td><code>s.peek</code></td><td>reads what is held without subscribing</td></tr>
-                <tr><td><code>flushSync</code></td><td>runs every effect a write woke before it returns, for a handler that measures or scrolls the page the write left</td></tr>
-                <tr><td><code>isServer</code></td><td>whether the effect is running on the server, for work only a browser can do</td></tr>
-            </tbody>
-        </table>
-
-        <p>A watch runs on the server too, while the page renders. Guard work that needs the
-            browser, such as <code>localStorage</code>, with <code>isServer()</code> rather than
-            <code>typeof window</code>: a test renders the server half beside a DOM, and
-            <code>isServer()</code> still answers for the side the work is on.</p>
-
-        <p>The effect is the one place in this card where a read subscribes. Its
-            <code>Disposer</code> does not, and nor does any function abide calls without rebuilding
-            it:</p>
-
-        <table>
-            <thead><tr><th>A read in</th><th>Subscribes</th></tr></thead>
-            <tbody>
-                <tr><td><code>watch</code> effect, bare</td><td>to everything it reads</td></tr>
-                <tr><td><code>watch</code> effect, over sources</td><td>to the sources alone</td></tr>
-                <tr><td><code>Transformer</code>, <code>Disposer</code>, middleware, lifecycle hooks</td><td>to nothing: none of them is rebuilt</td></tr>
-            </tbody>
-        </table>
+            <textarea bind:value={note}></textarea>
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="Wake only on the sources named">
+        <p>Given its sources, a watch reruns when one of them changes and on nothing else it
+            reads.</p>
+        <Code language="ts" caption="shared" code={`
+            const stage = reactive('lead')
+            const owner = reactive('ada')
+            watch(stage, () => log.info('stage', { stage: stage(), owner: owner() }))
+            owner.set('grace') // no run
+            stage.set('won') // runs
+        `} />
+    </Section>
+
+    <Section level={3} title="Stop a watch">
+        <p><code>watch</code> returns its stop. A watch in a component stops with the component.</p>
+        <Code language="ts" caption="shared" code={`
+            const stop = watch(() => console.log(count()))
+            stop()
+        `} />
+    </Section>
 </Doc>

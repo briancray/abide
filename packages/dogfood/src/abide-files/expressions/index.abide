@@ -1,0 +1,99 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/abide-files/by-name',
+        '/abide-files/raw',
+        '/abide-files/control-flow',
+        '/abide-files/props',
+        '/pages/sinks',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/bind.test.ts',
+            from: [
+                "test('bind:value reads the property and writes it back on input",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/bind.test.ts',
+            from: ["test('bind:group holds the radio chosen, or the boxes checked"],
+        },
+        {
+            path: 'packages/abide/tests/hydrate.test.ts',
+            from: [
+                "test('a class: directive toggles one class and keeps the others",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Show a contact's name, link and call button">
+        <p>An expression in braces fills text, a whole attribute, or part of a quoted one, and
+            follows what it reads. Text is escaped.</p>
+        <Code language="abide" caption="abide" code={`
+            <h2>{contact.name}</h2>
+            <a href={\`mailto:\${contact.email}\`} title="Email {contact.name}">
+                {contact.email}
+            </a>
+            <button onclick={() => logCall(contact.id)}>Log a call</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a form field and its value in step">
+        <p><code>bind:</code> sets the field from the value and writes the value back as the
+            reader types, ticks or picks.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            let email = reactive('ada@example.com')
+            let subscribed = reactive(true)
+            let stage = reactive('lead')
+            </script>
+
+            <input type="email" bind:value={email}>
+            <input type="checkbox" bind:checked={subscribed}>
+            <input type="radio" value="lead" bind:group={stage}>
+            <input type="radio" value="won" bind:group={stage}>
+        `} />
+    </Section>
+
+    <Section level={3} title="Flag an overdue invoice with one class and one style">
+        <p><code>class:name</code> adds the class while its condition holds and leaves the others
+            alone. <code>style:prop</code> sets one property.</p>
+        <Code language="abide" caption="abide" code={`
+            <tr class="invoice" class:overdue={invoice.dueAt < Date.now()}>
+                <td style:width="{invoice.share * 100}%">{invoice.total}</td>
+            </tr>
+        `} />
+    </Section>
+
+    <Section level={3} title="Focus the search box from a button">
+        <p><code>bind:element</code> hands you the node, in a <code>Reactive</code> or to a
+            callback whose returned disposer runs when the node leaves.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            const search = reactive<HTMLInputElement | undefined>(undefined)
+            </script>
+
+            <input type="search" bind:element={search}>
+            <button onclick={() => search?.focus()}>Find a contact</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Pass a set of attributes through at once">
+        <p>A spread writes every key as an attribute, or as a prop on a component, and keeps them
+            in step with the value.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            const field = { name: 'email', type: 'email', required: true }
+            </script>
+
+            <input {...field}>
+        `} />
+    </Section>
+</Doc>

@@ -1,0 +1,55 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/hooks/on-launcher',
+        '/native-app/on-menu',
+        '/native-app/pending-update',
+        '/ambient/is-server',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/native.test.ts',
+            from: ["test('native() answers per request, and nothing outside one"],
+        },
+        {
+            path: 'packages/abide/tests/launcher.test.ts',
+            from: ["test('a press on the titlebar drags and a double press zooms"],
+        },
+    ]}
+>
+    <Section level={3} title="Show a print button in a browser and not in the native window">
+        <p><code>native()</code> answers the window's version and name, and
+            <code>undefined</code> in a browser. The server reads the same answer from the
+            request, so the button is never drawn in the window and taken away.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { native } from '@abide/abide'
+            </script>
+
+            {#if !native()}
+                <button onclick={() => print()}>Print report</button>
+            {/if}
+        `} />
+        <p>Any client can send that user agent, so let it decide what a page shows, never who
+            may do what.</p>
+    </Section>
+
+    <Section level={3} title="Drag the window by a header drawn under its controls">
+        <p>With <code>titlebar: 'inset'</code> in <code>onLauncher</code>, the page is drawn
+            under the window's controls. Mark the element a press drags by, and keep clear of
+            the controls with the two custom properties.</p>
+        <Code language="abide" caption="abide" code={`
+            <header
+                data-abide-titlebar
+                class="h-(--abide-titlebar-height) ps-(--abide-titlebar-inset)"
+            >
+                CRM
+            </header>
+        `} />
+    </Section>
+</Doc>

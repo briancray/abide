@@ -1,0 +1,54 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/reactive/ready',
+        '/reactive/synced',
+        '/reactive/refresh',
+        '/reactive/reactive',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('busy and ready over tags answer ANY and EVERY across the values carrying them'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/outbox.test.ts',
+            from: [
+                "test('busy is true over a handler while the outbox sends its call — 46.11'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Dim the board while any stage reloads">
+        <p>Pass a handler, and <code>busy</code> answers for every entry the tiles called it
+            with.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { busy } from '@abide/abide'
+            import getStage from './getStage.handler.ts'
+            import StageTile from './StageTile.abide'
+            </script>
+
+            <ul class={busy(getStage) ? 'opacity-40' : ''}>
+                {#for stage of ['lead', 'won']}<StageTile stage={stage} />{/for}
+            </ul>
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask about one stage, or one tag">
+        <p>A pattern narrows a keyed handler to the entries it matches. A set of
+            <code>tags</code> asks across every value carrying one.</p>
+        <Code language="ts" caption="shared" code={`
+            busy(getStage, { stage: 'won' })
+            busy({ tags: ['stage:won'] })
+            busy() // every load in this scope
+        `} />
+    </Section>
+</Doc>

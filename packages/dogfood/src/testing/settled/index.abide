@@ -1,0 +1,44 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/testing/mount', '/reactive/flush-sync', '/reactive/busy']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/TargetLog.test.ts',
+            from: ["test('a target set is a row in the file, listed newest first'"],
+        },
+        {
+            path: 'packages/abide/tests/testPreload.test.ts',
+            from: ["test('a call that never answers is named'"],
+        },
+    ]}
+>
+    <Section level={3} title="Wait for the save a click started, not for a fixed sleep">
+        <p>Await <code>settled()</code> after the click. It resolves once no value the test
+            started is loading and no effect is pending.</p>
+        <Code language="ts" caption="browser" code={`
+            import { mount, settled } from '@abide/abide/test'
+            import TargetLog from './TargetLog.abide'
+
+            test('a target set is listed first', async () => {
+                using _log = await mount(TargetLog({}))
+                document.querySelector('button')?.click()
+                await settled()
+                expect(document.querySelector('strong')?.textContent).toBe('$600,000')
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Name the call that never answers">
+        <p>Past its timeout, 2000 ms by default, <code>settled</code> throws naming each value
+            still loading.</p>
+        <Code language="ts" caption="browser" code={`
+            await settled({ timeout: 200 })
+            // abide: settled() waited 200 ms and 1 still loading (POST /pipeline/setTarget)
+        `} />
+    </Section>
+</Doc>

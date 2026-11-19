@@ -1,4 +1,4 @@
-// The snippet mechanism's whole value is that a sample cannot drift from the file it
+// The slice's whole value is that a test case a page shows cannot drift from the file it
 // claims to come from, so what is asserted here is the SLICE and the REFUSALS — the
 // output of a wrong slice is still valid-looking code, which is why the errors matter
 // more than the happy path.
@@ -74,17 +74,6 @@ test('an anchor ignores indentation, and the slice drops its margin', () => {
     expect(slice(SOURCE, ['<label>'], 'x').split('\n')[1]).toBe('    Handle')
 })
 
-// THE RENDER IS NOT A FILE (40.5): the card's component sits above the file tabs and stays there,
-// in the slot inside the card.
-test('the card puts its component above its files', async () => {
-    const card = await Bun.file(
-        new URL('../src/lib/Example.abide', import.meta.url),
-    ).text()
-    const render = card.indexOf('<div class="ex-render"><slot /></div>')
-    expect(render).toBeGreaterThan(-1)
-    expect(render).toBeLessThan(card.indexOf('class="ex-files"'))
-})
-
 // Several anchors are one fence, in FILE order whatever order they were asked for, and a
 // gap between them is marked. Silently closing a gap would print a file that does not
 // exist — two lines shown adjacent that are forty apart.
@@ -111,13 +100,17 @@ test('several anchors join into one slice, and a gap is shown', () => {
     )
 })
 
-// A CLASS THE BUILD EMITS AND THE STYLESHEET DOES NOT CARRY renders as unstyled text in the middle
-// of a designed page, and it reports nowhere: `.ex-meter` shipped that way, the request counts
-// reading as a stray paragraph under the frame.
-test('every example class the build emits resolves in the stylesheet', async () => {
-    const css = await Bun.file(
-        new URL('../src/lib/app.css', import.meta.url),
-    ).text()
+// A CLASS THE DOCS' OWN PARTS WRITE AND THE BUILT STYLESHEET DOES NOT CARRY renders as unstyled text
+// in the middle of a designed page, and it reports nowhere: `.ex-meter` shipped that way, the request
+// counts reading as a stray paragraph under its card. Read against the BUILD, which `bun run test`
+// makes first, so a utility, a CRM `@utility` and a rule of `app.css` all count, and nothing else.
+// THE REVERT: drop `.rules` from `app.css`, and `rules` is named.
+test('every class the docs parts write resolves in the built stylesheet', async () => {
+    const out =
+        process.env.DOCS_OUT ?? new URL('../.abide', import.meta.url).pathname
+    let css = ''
+    for (const file of new Bun.Glob('client/*.css').scanSync({ cwd: out }))
+        css += await Bun.file(`${out}/${file}`).text()
     const emitted = new Set<string>()
     for (const file of new Bun.Glob('*.abide').scanSync({
         cwd: new URL('../src/lib/', import.meta.url).pathname,
@@ -125,21 +118,46 @@ test('every example class the build emits resolves in the stylesheet', async () 
         const source = await Bun.file(
             new URL(`../src/lib/${file}`, import.meta.url),
         ).text()
-        for (const match of source.matchAll(/class="(ex-[a-z-]+)"/g))
-            emitted.add(match[1] ?? '')
+        for (const match of source.matchAll(/class="([a-z0-9 -]+)"/g))
+            for (const name of (match[1] ?? '').split(' '))
+                if (name !== '') emitted.add(name)
     }
     expect(emitted.size).toBeGreaterThan(3)
     const unstyled: string[] = []
     // A WHOLE SELECTOR, not a substring: `.ex-meterX` contains `.ex-meter`, and the first version of
     // this check passed against exactly that rename.
     for (const name of emitted) {
-        if (new RegExp(`\\.${name}(?![\\w-])`).test(css)) continue
+        if (new RegExp(`\\.${RegExp.escape(name)}(?![\\w-])`).test(css))
+            continue
         unstyled.push(name)
     }
     expect(unstyled).toEqual([])
 })
 
-// 40.9 — THE LANGUAGE IS THE FILE NAME'S EXTENSION, and a name with none is its own. THE REVERT:
+// A TEMPLATE LITERAL SPANS LINES, and a `}` in its text closes nothing. Read a line at a time with
+// the quote state reset, a test whose expected output held `{ … }` in a multi-line literal ended at
+// that brace, and one whose literal opened a line ran to the end of the file. THE REVERT: put back the
+// per-line `bracketDepthOf`, and both slices end early.
+test('a slice runs past a template literal and a block comment that span lines', () => {
+    const source = [
+        "test('a', () => {",
+        '    expect(text).toBe(`{ a } { b }`)',
+        '    run()',
+        '})',
+        "test('b', () => {",
+        '    const shown = `',
+        '    } }',
+        '    `',
+        '    /* } }',
+        '    */ run()',
+        '})',
+        'after()',
+    ].join('\n')
+    expect(slice(source, ["test('a'"], 'x').split('\n').length).toBe(4)
+    expect(slice(source, ["test('b'"], 'x').split('\n').length).toBe(7)
+})
+
+// 40.17 — THE LANGUAGE IS THE FILE NAME'S EXTENSION, and a name with none is its own. THE REVERT:
 // the path's last `.` onward — `Dockerfile` is then `Dockerfile`, captioned `.Dockerfile`, and a
 // dot in a directory names a language for the file below it.
 test('a file name with no extension is its own language', () => {

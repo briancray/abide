@@ -27,7 +27,7 @@ export function highlight(code: string): string {
 }
 
 /**
- * The language a file's path names, 40.9: its file name's extension, or where the name has none — a
+ * The language a file's path names, 40.17: its file name's extension, or where the name has none — a
  * `Dockerfile`, a `Makefile` — the name itself, lowercased, as a fence spells either.
  */
 export function languageOf(path: string): string {

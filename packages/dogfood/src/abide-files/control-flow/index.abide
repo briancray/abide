@@ -1,0 +1,90 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/abide-files/expressions',
+        '/abide-files/components',
+        '/reactive/ready',
+        '/reactive/refuse',
+        '/pages/sinks',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/profile/lib/FollowUp.test.ts',
+            from: [
+                "test('the date field is in the page only while the box is ticked'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/profile/lib/Tags.test.ts',
+            from: ["test('removing a tag removes its row and rewrites no other'"],
+        },
+        {
+            path: 'packages/abide/tests/try.test.ts',
+            from: [
+                "test('the server renders the body, or the catch where the body throws",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Ask for a follow-up date only when the box is ticked">
+        <p><code>&#123;#if&#125;</code> builds the arm it takes and nothing of the others.</p>
+        <Code language="abide" caption="abide" code={`
+            <label><input type="checkbox" bind:checked={followUp}> Follow up</label>
+
+            {#if followUp}
+                <label>on <input type="date"></label>
+            {:else if deal.stage === 'won'}
+                <p>Closed, nothing to chase.</p>
+            {:else}
+                <p>No follow-up set.</p>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Remove one deal from a list and leave the other rows alone">
+        <p><code>by</code> says which row is which, so removing a deal removes its row. Without a
+            key, rows match by position.</p>
+        <Code language="abide" caption="abide" code={`
+            <ol>
+                {#for deal, index of deals by deal.id}
+                    <li>{index + 1}. {deal.name}
+                        <button onclick={() => (deals = deals.filter((d) => d !== deal))}>
+                            Remove
+                        </button></li>
+                {/for}
+            </ol>
+        `} />
+    </Section>
+
+    <Section level={3} title="Hold a placeholder until the forecast first lands">
+        <p><code>&#123;:pending&#125;</code> stands in for the body until its first load, and
+            <code>&#123;:catch&#125;</code> replaces the body when rendering it throws.
+            <code>&#123;:finally&#125;</code> renders after either.</p>
+        <Code language="abide" caption="abide" code={`
+            {#try}
+                <strong>{dollars(forecast)}</strong>
+            {:pending}
+                <p>Adding up the pipeline…</p>
+            {:catch problem}
+                <p>{problem.message}</p>
+            {:finally}
+                <small>Weighted by stage.</small>
+            {/try}
+        `} />
+    </Section>
+
+    <Section level={3} title="Build a contact panel fresh for each contact">
+        <p>A one-item list keyed by the contact makes a new row when the key changes, so a fade-in
+            or an uncontrolled field starts over.</p>
+        <Code language="abide" caption="abide" code={`
+            {#for shown of [open] by shown}
+                <p class="transition-opacity starting:opacity-0">{shown}</p>
+            {/for}
+        `} />
+    </Section>
+</Doc>

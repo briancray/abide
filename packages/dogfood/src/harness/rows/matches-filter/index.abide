@@ -1,0 +1,50 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/rows/in-scope',
+        '/harness/runner/rows-command',
+        '/harness/runner/test-rows',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/rows.test.ts',
+            from: [
+                "test('the filter reads the section and the name, whatever the case'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Filter a list of test files as the reader types">
+        <p>The filter is a case-insensitive substring of the section and the name. Filter the
+            page with the function the runner selects with, so a run takes the rows on
+            screen.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { props, reactive } from '@abide/abide'
+            import { matchesFilter, type RowItem } from '@abide/harness/rows'
+
+            const { rows } = props<{ rows: RowItem[] }>()
+            let filter = reactive('')
+            </script>
+
+            <input bind:value={filter} placeholder="Filter" />
+            {#for row of rows by row.id}
+                {#if matchesFilter(row, filter)}<p>{row.section} {row.name}</p>{/if}
+            {/for}
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep every row with an empty filter">
+        <p>An empty or blank filter matches everything.</p>
+        <Code language="ts" caption="shared" code={`
+            matchesFilter(row, '') // true
+            matchesFilter(row, '  FORECAST ') // true
+            matchesFilter(row, 'deals') // false
+        `} />
+    </Section>
+</Doc>

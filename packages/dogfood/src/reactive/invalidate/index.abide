@@ -1,0 +1,43 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/refresh', '/reactive/store', '/reactive/reactive']}
+    tests={[
+        {
+            path: 'packages/abide/tests/bareSelection.test.ts',
+            from: [
+                "test('a bare invalidate marks every load, starts none of them, and skips a value with no producer — 13.6, 7.3'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('invalidate over tags reaches every value carrying any of them, and no other'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Mark the forecast stale without reloading it now">
+        <p><code>invalidate</code> starts nothing. The next read of the forecast loads it again,
+            so a page nobody has open costs no request.</p>
+        <Code language="ts" caption="browser" code={`
+            import { invalidate } from '@abide/abide'
+
+            await importDeals(file)
+            invalidate(getForecast)
+        `} />
+    </Section>
+
+    <Section level={3} title="Mark every value about one stage stale">
+        <p>A set of <code>tags</code> reaches every value carrying one. With no selection,
+            <code>invalidate</code> marks every load in this scope.</p>
+        <Code language="ts" caption="browser" code={`
+            invalidate({ tags: ['stage:won'] })
+            invalidate()
+        `} />
+    </Section>
+</Doc>

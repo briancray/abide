@@ -3,8 +3,7 @@
 // home — the page — and the twin cannot say something the page does not.
 //
 // A READER FOR THE MARKUP `Doc` AND ITS PARTS WRITE, not for HTML at large: headings, prose, lists,
-// tables, code under a caption, and an example card, whose running component is left out and whose
-// files are written as captioned fences.
+// tables, and code under a caption.
 
 import { withoutExcerpt } from './highlight.ts'
 import { markdownAddressOf } from './sitePages.ts'
@@ -158,7 +157,6 @@ function blocks(element: Element, out: string[]): void {
             if (child.trim() !== '') out.push(child.trim())
             continue
         }
-        const kind = classes(child)
         switch (child.tag) {
             case 'h1':
             case 'h2':
@@ -218,17 +216,13 @@ function blocks(element: Element, out: string[]): void {
                 out.push(fence('', child))
                 break
             case 'figure':
-                if (kind.includes('example')) out.push(card(child))
-                else {
-                    // The caption as written — a path or a side word — rather than as shown.
-                    const caption = child.attributes['data-caption'] ?? ''
-                    out.push(
-                        fence(
-                            caption,
-                            find(child, (node) => node.tag === 'pre'),
-                        ),
-                    )
-                }
+                // The caption as written — a path or a side word — rather than as shown.
+                out.push(
+                    fence(
+                        child.attributes['data-caption'] ?? '',
+                        find(child, (node) => node.tag === 'pre'),
+                    ),
+                )
                 break
             case 'header':
             case 'footer':
@@ -237,29 +231,6 @@ function blocks(element: Element, out: string[]): void {
                 blocks(child, out)
         }
     }
-}
-
-/** An example card: its title and summary, then each of its files as a captioned fence. */
-function card(figure: Element): string {
-    const title = find(figure, (node) => classes(node).includes('ex-title'))
-    const summary = find(figure, (node) => classes(node).includes('ex-summary'))
-    // The files are a `Tabs`: a tab per path, and one panel holding a `pre` per path in the same order.
-    const files = find(figure, (node) => classes(node).includes('ex-files'))
-    const tabs =
-        files && find(files, (node) => node.attributes.role === 'tablist')
-    const panel =
-        files && find(files, (node) => node.attributes.role === 'tabpanel')
-    const paths: string[] = []
-    for (const tab of tabs?.children ?? [])
-        if (typeof tab !== 'string') paths.push(textOf(tab).trim())
-    let text = `**${title === undefined ? '' : inline(title).trim()}** — ${summary === undefined ? '' : textOf(summary).trim()}`
-    let index = 0
-    for (const node of panel?.children ?? []) {
-        if (typeof node === 'string' || node.tag !== 'pre') continue
-        text += `\n\n${fence(paths[index] ?? '', node)}`
-        index += 1
-    }
-    return text
 }
 
 /** The page at `html` as markdown: its title, intent, and everything its `main` holds. */

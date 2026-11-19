@@ -1,8 +1,67 @@
 <script>
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Registry from '#src/lib/Registry.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Registry />
+<Doc
+    seeAlso={[
+        '/ambient/response',
+        '/ambient/cookies',
+        '/ambient/server',
+        '/transports/headers',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/scope.test.ts',
+            from: [
+                "test('request and response read the request being served, and throw outside one",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/requestIp.test.ts',
+            from: [
+                "test('request.ip answers in-process for App.fetch with no listener",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Read a header the caller sent">
+        <p>Call <code>request()</code> anywhere the handler reaches. Nothing passes the request
+            down.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, request } from '@abide/abide/server'
+
+            export default GET(({ id }: { id: string }) => {
+                const locale = request().headers.get('accept-language') ?? 'en'
+                return formatDeal(id, locale)
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Record the address a sign-in came from">
+        <p><code>request.ip()</code> is the peer the listener received. A call the app makes of
+            itself, a test's included, reads <code>'in-process'</code>.</p>
+        <Code language="ts" caption="server" code={`
+            import { log } from '@abide/abide'
+            import { request } from '@abide/abide/server'
+
+            const from = request.ip()
+            const address = from === 'in-process' ? from : from?.address
+            log.info('sign-in', { email, address })
+        `} />
+    </Section>
+
+    <Section level={3} title="Stop a slow lookup when the caller leaves">
+        <p>Hand the request's <code>signal</code> to the work it started. A closed tab aborts the
+            fetch rather than leaving it to finish for nobody.</p>
+        <Code language="ts" caption="server" code={`
+            export default GET(async ({ domain }: { domain: string }) => {
+                const lookup = await fetch(\`https://api.example/companies/\${domain}\`, {
+                    signal: request().signal,
+                })
+                return lookup.json()
+            })
+        `} />
+    </Section>
 </Doc>

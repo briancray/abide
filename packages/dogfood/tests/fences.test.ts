@@ -1,100 +1,25 @@
 import { expect, test } from 'bun:test'
 
-import { EXCERPT, withoutExcerpt } from '../src/lib/highlight.ts'
-import {
-    type DocsPage,
-    docsPages,
-    type Fence,
-    fencesOf,
-    sectionTitleAt,
-} from './docsPages.ts'
+import { docsPages, fencesOf } from './docsPages.ts'
 
-/** A label is an ADDRESS when it is a path rather than one of BRAND's four side words. */
-function isAddress(label: string): boolean {
-    return label.startsWith('#') || label.includes('/')
-}
+// 40.14 — AN EXAMPLE IS CAPTIONED WITH ITS SIDE: one of BRAND's four side words, which is what colors
+// the spine. An ADDRESS a reader cannot open is a claim: a page's Tests derive their captions from a
+// file the build reads, and a hand-written fence captioned with a path derives nothing. A fence with
+// no language — a shell command, a tree — has no side, and carries no caption. THE REVERT: caption a
+// `ts` fence of `/reactive/watch` "watch.ts", or "#server/watch.ts", and it is named.
+const SIDES = new Set(['browser', 'server', 'shared', 'abide'])
 
-/** How many of a page's sections teach with a hand-written `<Code>` and embed no example. */
-function fenceOnlySections(page: DocsPage): number {
-    const withExample = new Set<string>()
-    let section = ''
-    for (const match of page.source.matchAll(/<(Section|Example)\b/g)) {
-        if (match[1] === 'Example') withExample.add(section)
-        else section = sectionTitleAt(page.source, match.index)
-    }
-    const teaching = new Set<string>()
-    for (const fence of fencesOf(page))
-        if (fence.section && fence.language && !withExample.has(fence.section))
-            teaching.add(fence.section)
-    return teaching.size
-}
-
-// 40.17 AND 40.6. A section that teaches with a fence it wrote by hand embeds no `<Example>` and
-// quotes nothing that runs, so the code under its heading is a claim no build checks. Revert-verified:
-// one fenced section under a heading with no card names its page. 40.35: a page whose behavior is a
-// command run in a terminal, or a deployment's setting, has nothing a card could run.
-const COMMANDS_AND_DEPLOYMENT = new Set([
-    '/',
-    '/cli/commands',
-    '/cli/bridge',
-    '/configuration/environment',
-    '/configuration/native',
-])
-
-test('no page has a section that teaches with a fence alone', async () => {
-    const fenced: string[] = []
-    for (const page of await docsPages())
-        if (!COMMANDS_AND_DEPLOYMENT.has(page.route) && fenceOnlySections(page))
-            fenced.push(page.route)
-    expect(fenced).toEqual([])
-})
-
-// BRAND's spine: an ADDRESS a reader cannot open is a claim. A `<Snippet>` derives its
-// caption from a file the build reads; a hand-written fence captioned with a path derives nothing,
-// and naming a file that happens to exist in the docs app is no better — every one that did,
-// showed something else. A fence takes a bare side word. Revert-verified: one `ts #server/…`
-// fence names its page.
-test('no page captions a hand-written fence with an address', async () => {
-    const captioned: string[] = []
+test('every example fence is captioned with the side its code runs on', async () => {
+    const unsided: string[] = []
     for (const page of await docsPages())
         for (const fence of fencesOf(page))
-            if (isAddress(fence.caption))
-                captioned.push(`${page.route}: ${fence.caption}`)
-    expect(captioned).toEqual([])
-})
-
-// A caption WITHOUT `— excerpt` claims the whole file, so every other fence of that address,
-// on any page, can only show lines it has. Revert-verified: unmarking an excerpt's caption -> 14 fences carry lines that whole file lacks.
-test('a fence claiming a whole file agrees with every fence of that address', async () => {
-    const byAddress = new Map<string, { where: string; fence: Fence }[]>()
-    for (const page of await docsPages())
-        for (const fence of fencesOf(page)) {
-            if (!isAddress(fence.caption)) continue
-            const address = withoutExcerpt(fence.caption)
-            const list = byAddress.get(address) ?? []
-            list.push({ where: page.route, fence })
-            byAddress.set(address, list)
-        }
-
-    const contradicted: string[] = []
-    for (const [address, fences] of byAddress)
-        for (const whole of fences) {
-            if (whole.fence.caption.endsWith(EXCERPT)) continue
-            const lines = new Set(
-                whole.fence.code.split('\n').map((line) => line.trim()),
+            if (
+                fence.language === ''
+                    ? fence.caption !== ''
+                    : !SIDES.has(fence.caption)
             )
-            for (const other of fences) {
-                if (other === whole) continue
-                for (const line of other.fence.code.split('\n')) {
-                    const trimmed = line.trim()
-                    if (!trimmed || trimmed === '…' || lines.has(trimmed))
-                        continue
-                    contradicted.push(
-                        `${address}: ${whole.where} claims the whole file, ${other.where} shows ${trimmed}`,
-                    )
-                    break
-                }
-            }
-        }
-    expect(contradicted).toEqual([])
+                unsided.push(
+                    `${page.route}: ${fence.language || '(none)'} "${fence.caption}"`,
+                )
+    expect(unsided).toEqual([])
 })

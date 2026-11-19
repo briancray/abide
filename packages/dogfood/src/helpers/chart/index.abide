@@ -1,0 +1,75 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/components/line-chart',
+        '/components/sparkline',
+        '/helpers/format',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/chart.test.ts',
+            from: ["test('ticks are round and enclose the range"],
+        },
+        {
+            path: 'packages/abide/tests/chart.test.ts',
+            from: ["test('path breaks where a value is missing"],
+        },
+        {
+            path: 'packages/abide/tests/chart.test.ts',
+            from: ["test('nearest finds the position nearest x"],
+        },
+    ]}
+>
+    <Section level={3} title="Draw won revenue by month, with a gap for a month not closed">
+        <p><code>chart.scale</code> maps a value onto the drawing, and <code>chart.path</code>
+            breaks the line at a <code>null</code> rather than drawing it down to zero.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { chart } from '@abide/abide'
+
+            const won = [12_000, 18_000, null, 24_000, 31_000]
+            const toX = chart.scale([0, won.length - 1], [0, 200])
+            const toY = chart.scale([0, 40_000], [80, 0])
+            const xs = won.map((_, index) => toX(index))
+            const ys = won.map((value) => (value === null ? null : toY(value)))
+            </script>
+
+            <svg viewBox="0 0 200 80" role="img" aria-label="Won revenue">
+                <path d={chart.path(xs, ys)} fill="none" stroke="currentColor" />
+            </svg>
+        `} />
+    </Section>
+
+    <Section level={3} title="Put gridlines on round values">
+        <p><code>chart.ticks</code> answers values a step of 1, 2 or 5 times a power of ten apart,
+            the first and last enclosing the range, so they double as the axis's ends.</p>
+        <Code language="ts" caption="shared" code={`
+            chart.ticks(3, 97, 5) // [0, 20, 40, 60, 80, 100]
+            chart.ticks(0, 1000, 2) // [0, 500, 1000]
+        `} />
+    </Section>
+
+    <Section level={3} title="Fill the area under a sparkline">
+        <p>Given a <code>baseline</code>, <code>chart.path</code> closes each run down to it, as a
+            shape to fill.</p>
+        <Code language="ts" caption="shared" code={`
+            chart.path([0, 10], [1, 2], 50) // 'M0,1L10,2L10,50L0,50Z'
+        `} />
+    </Section>
+
+    <Section level={3} title="Find the month under the pointer">
+        <p><code>chart.nearest</code> answers the index of the position nearest <code>x</code>,
+            the earlier of two equally near, and <code>-1</code> where there are none.</p>
+        <Code language="ts" caption="browser" code={`
+            svg.addEventListener('pointermove', (event) => {
+                const x = event.clientX - svg.getBoundingClientRect().left
+                hovered.set(chart.nearest(xs, x))
+            })
+        `} />
+    </Section>
+</Doc>

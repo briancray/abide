@@ -1,6 +1,6 @@
 // REGISTRY, READ AS ROWS: every table row of docs/REGISTRY.md with the headings it sits under. A
-// page carries the rows of the REGISTRY section its `SITE` entry names (40.43), read as it renders
-// (40.47), so the rows a page shows are always REGISTRY's own.
+// page carries the rows of the REGISTRY section its `SITE` entry names (40.6), read as it renders
+// (40.10), so the rows a page shows are always REGISTRY's own.
 
 import { cellsOf } from './cellsOf.ts'
 

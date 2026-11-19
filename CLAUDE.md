@@ -12,9 +12,9 @@ IS, and the clauses that govern it. behavior is cited, never described.
 number rather than restating it, because a second copy drifts and only one of them gets fixed.
 * `docs/BRAND.md` — positioning, voice, vocabulary, visual identity.
 
-BEFORE WRITING A DOCUMENTATION PAGE, read RULEBOOK 40 and BRAND. 40 is the docs system — one
-example per BEHAVIOR TAUGHT (RULEBOOK 40.17, 40.18), and what a `<Snippet>` guarantees
-(RULEBOOK 40.6-40.10) —
+BEFORE WRITING A DOCUMENTATION PAGE, read RULEBOOK 40 and BRAND. 40 is the docs system — a page
+per export or construct, in one order (RULEBOOK 40.2, 40.9), one example per BEHAVIOR TAUGHT
+(RULEBOOK 40.12), and what a page's sliced Tests guarantee (RULEBOOK 40.15-40.18) —
 and BRAND is the voice, the vocabulary, and the register of a title against a nav label.
 
 BEFORE DECIDING BEHAVIOR, grep RULEBOOK for a clause rather than inventing one. deciding new
@@ -38,7 +38,7 @@ isolation — nothing it ships reaches abide, the docs app or the bridge — wal
 than by bundling — two earlier spellings each passed with an abide edge planted one module deep, so
 the test now carries a second test that the walk finds abide when abide is there; and
 `packages/dogfood/tests/examples.test.ts` holds the example app to its own tests and its own check —
-a card showing a test its app fails is a claim nothing reruns (RULEBOOK 40.38). WHAT IS NOT GATED IS JUDGMENT, and it is most of the file: whether a name
+an example app failing its own tests is a world nobody can run (RULEBOOK 40.25). WHAT IS NOT GATED IS JUDGMENT, and it is most of the file: whether a name
 is descriptive, whether a comment is load-bearing, whether the share was named before the layer was
 changed. a check produces CANDIDATES and the rule decides; where no check can produce one, the rule
 is all there is.
@@ -67,7 +67,7 @@ not a clause
 
 # seams and imports
 
-* a bun workspace: `packages/abide` is the framework, `packages/harness` is `@abide/harness`, the published measurement harness everything is tested and measured with, `packages/dogfood` (`abide-docs`) is the documentation app abide is dogfooded on — a page per primitive, grouped, with the visitor's Claude Code at the top answering from it, and a native app of the same pages. every card is drawn from ONE example app, the CRM at `packages/dogfood/examples/crm`, a workspace package of its own; `bun run examples:results` for what its cards show — `packages/bridge` is `abide-bridge`, the CLI that connects Claude Code to an abide site — `bun packages/bridge/bin/abideBridge.ts install` makes every pairing link run this checkout's bridge and its handler as edited, rather than the npm release the link names (RULEBOOK 44.89). `editors/` holds the tree-sitter grammar and the zed extension, and is outside the workspace.
+* a bun workspace: `packages/abide` is the framework, `packages/harness` is `@abide/harness`, the published measurement harness everything is tested and measured with, `packages/dogfood` (`abide-docs`) is the documentation app abide is dogfooded on — a page per export, grouped, with the visitor's Claude Code at the top answering from it, and a native app of the same pages. every example is set in ONE example app, the CRM at `packages/dogfood/examples/crm`, a workspace package of its own; `bun run examples:results` for what its tests and benches last reported — `packages/bridge` is `abide-bridge`, the CLI that connects Claude Code to an abide site — `bun packages/bridge/bin/abideBridge.ts install` makes every pairing link run this checkout's bridge and its handler as edited, rather than the npm release the link names (RULEBOOK 44.89). `editors/` holds the tree-sitter grammar and the zed extension, and is outside the workspace.
 * `packages/abide/src/components` holds the SHIPPED components — headless `.abide` files an app imports
 one at a time as `@abide/abide/<Name>.abide`, each an `exports` entry of its own because the app's
 compile follows `.abide` specifiers and no `.ts` barrel can re-export one. RULEBOOK 49 is their

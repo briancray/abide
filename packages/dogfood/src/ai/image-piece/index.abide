@@ -1,0 +1,66 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/ai/image-files',
+        '/ai/assistant',
+        '/helpers/dropzone',
+        '/components/chat',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/imagePiece.test.ts',
+            from: [
+                "test('an image is drawn down to 1568 on its long side, a photo as a JPEG — 44.52, 44.53'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/imagePiece.test.ts',
+            from: [
+                "test('an image nothing can draw goes as it is, or throws where a model is not shown its type — 44.54'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Ask the assistant about a photo of a business card">
+        <p>Turn the picked file into a piece with <code>imagePiece</code> and send it in the
+            turn beside the question. A full-size photo goes as 1568 pixels on its long side, with
+            where it was taken left behind.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { imagePiece } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            async function ask(event: Event) {
+                const [file] = (event.target as HTMLInputElement).files ?? []
+                if (file === undefined) return
+                const card = await imagePiece(file)
+                const question = { type: 'text', text: 'Add this contact.' } as const
+                askAssistant({
+                    messages: [{ role: 'user', content: [card, question] }],
+                })
+            }
+            </script>
+
+            <input type="file" accept="image/*" onchange={ask}>
+        `} />
+    </Section>
+
+    <Section level={3} title="Leave out an image the browser cannot draw">
+        <p>A type no model is shown, which this browser cannot redraw, throws. Catch it and send
+            the rest.</p>
+        <Code language="ts" caption="browser" code={`
+            const pieces = []
+            for (const file of files)
+                try {
+                    pieces.push(await imagePiece(file))
+                } catch {
+                    // a HEIC this browser cannot draw
+                }
+        `} />
+    </Section>
+</Doc>

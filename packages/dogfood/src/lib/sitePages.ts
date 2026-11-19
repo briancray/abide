@@ -62,7 +62,7 @@ export function markdownAddressOf(route: string): string {
 
 /**
  * Whether `pathname` is a page of the CRM, mounted where the CRM serves it so an example's requests
- * reach it here: that app rather than the site, so served with none of the site around it (40.37).
+ * reach it here: that app rather than the site, so served with none of the site around it (40.24).
  */
 export function isFramed(pathname: string): boolean {
     return pathname !== '/rulebook' && !isSitePage(pathname)

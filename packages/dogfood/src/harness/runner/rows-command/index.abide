@@ -1,0 +1,55 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/runner/test-rows',
+        '/harness/rows/in-scope',
+        '/harness/rows/matches-filter',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/rows.test.ts',
+            from: [
+                "test('a scope selects everything, a section, one item, or nothing'",
+            ],
+        },
+        {
+            path: 'packages/harness/tests/rows.test.ts',
+            from: [
+                "test('the filter reads the section and the name, whatever the case'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Write a runner that streams one row per report">
+        <p>Give <code>rowsCommand</code> every item and a function that runs the selected ones.
+            Report each result through <code>emit</code>, never <code>console.log</code>:
+            stdout is the channel.</p>
+        <Code language="ts" caption="server" code={`
+            import { rowsCommand } from '@abide/harness/runner'
+
+            const reports = [
+                { id: 'forecast', section: 'reports', name: 'Forecast' },
+                { id: 'won', section: 'reports', name: 'Won revenue' },
+            ]
+            await rowsCommand(reports, async (selected, emit) => {
+                for (const report of selected)
+                    emit({ id: report.id, rows: await build(report.id) })
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="List the catalog, then run one section of the catalog">
+        <p><code>--list</code> prints every item as one JSON array. Otherwise
+            <code>--scope</code> and <code>--filter</code> select, and each row prints as one
+            JSON line.</p>
+        <Code code={`
+            bun scripts/reportRows.ts --list
+            bun scripts/reportRows.ts --scope section:reports --filter won
+        `} />
+    </Section>
+</Doc>

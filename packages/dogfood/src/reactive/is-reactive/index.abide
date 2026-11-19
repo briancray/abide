@@ -1,0 +1,40 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/reactive', '/reactive/tracking']}
+    tests={[
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('a value stays callable, thenable and branded through its prototype'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Accept a figure or a reactive figure">
+        <p>A helper that takes either reads the reactive one and uses the plain one as it is.</p>
+        <Code language="ts" caption="shared" code={`
+            import { isReactive, type Reactive } from '@abide/abide'
+
+            export function dollars(amount: number | Reactive<number>): string {
+                const value = isReactive(amount) ? amount() : amount
+                return \`$\${value.toLocaleString()}\`
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Tell a reactive value from a promise">
+        <p>A <code>Reactive</code> is thenable, so a check for <code>then</code> passes for both.
+            Ask <code>isReactive</code> first, or a live value gets settled to one snapshot.</p>
+        <Code language="ts" caption="shared" code={`
+            const forecast = reactive(() => getForecast())
+            typeof forecast.then // 'function'
+            isReactive(forecast) // true
+            isReactive(Promise.resolve(1)) // false
+        `} />
+    </Section>
+</Doc>

@@ -1,69 +1,93 @@
 <script>
-import CallLog from 'crm/src/profile/lib/CallLog.abide'
-import callLogSource from 'crm/src/profile/lib/CallLog.abide' with { type: 'text' }
-import callLogTestSource from 'crm/src/profile/lib/CallLog.test.ts' with { type: 'text' }
-import callRowSource from 'crm/src/profile/lib/CallRow.abide' with { type: 'text' }
-import customerBadgeSource from 'crm/src/profile/lib/CustomerBadge.abide' with { type: 'text' }
-import leadBadgeSource from 'crm/src/profile/lib/LeadBadge.abide' with { type: 'text' }
-import StageBadges from 'crm/src/profile/lib/StageBadges.abide'
-import stageBadgesSource from 'crm/src/profile/lib/StageBadges.abide' with { type: 'text' }
-import stageBadgesTestSource from 'crm/src/profile/lib/StageBadges.test.ts' with { type: 'text' }
-
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Section title="A component's styles reach only its own markup">
-        <Example
-            id="scoped-style"
-            title="`<style>` — two components, one class name, two rules"
-            summary="A lead badge and a customer badge, side by side. Each styles its own badge class in its own color."
-            files={{
-                'src/profile/lib/StageBadges.abide': stageBadgesSource,
-                'src/profile/lib/LeadBadge.abide': leadBadgeSource,
-                'src/profile/lib/CustomerBadge.abide': customerBadgeSource,
-                'src/profile/lib/StageBadges.test.ts': stageBadgesTestSource,
-            }}
-        >
-            <StageBadges />
-        </Example>
+<Doc
+    seeAlso={[
+        '/abide-files/props',
+        '/abide-files/components',
+        '/transports/get',
+        '/configuration/files',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/profile/lib/CallLog.test.ts',
+            from: [
+                "test('each row keeps its own count, and the module numbers them'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/profile/lib/StageBadges.test.ts',
+            from: ["test('each badge carries its own scope token, not the other'"],
+        },
+        {
+            path: 'packages/abide/tests/componentExports.test.ts',
+            from: ["test('a page and a handler file call what a component exports"],
+        },
+    ]}
+>
+    <Section level={3} title="Count calls per row and number the rows once">
+        <p>A <code>&lt;script&gt;</code> runs for each instance, so each row has its own
+            <code>calls</code>. A <code>&lt;script module&gt;</code> runs once for the file, and
+            what it exports is a named export of the <code>.abide</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script module>
+            import { reactive } from '@abide/abide'
+            export let opened = reactive(0)
+            </script>
 
-        <p>A <code>&lt;style&gt;</code> block's rules require the component's scope token, and only
-            that component's markup carries it. So <code>.badge</code> in one file never reaches the
-            other's badge, and neither needs a naming convention.</p>
+            <script>
+            opened += 1
+            const position = opened
+            let calls = reactive(0)
+            </script>
 
-        <table>
-            <thead><tr><th>Name</th><th>What it does</th></tr></thead>
-            <tbody>
-                <tr><td><code>:global(…)</code></td><td>exempts one selector from the scope</td></tr>
-                <tr><td><code>import './app.css'</code></td><td>makes the app's stylesheet a dependency of the component that imports it</td></tr>
-                <tr><td><code>bunfig.toml</code></td><td>declares a bun plugin, such as Tailwind, that builds the stylesheet</td></tr>
-            </tbody>
-        </table>
+            <li>#{position} · {calls} logged
+                <button onclick={() => (calls += 1)}>Log a call</button></li>
+        `} />
     </Section>
 
-    <Section title="A script runs per instance, and a module script once">
-        <Example
-            id="script"
-            title="`<script>` and `<script module>` — per row, and once"
-            summary="Two contact rows from one component. Log a call on the first."
-            files={{
-                'src/profile/lib/CallLog.abide': callLogSource,
-                'src/profile/lib/CallRow.abide': callRowSource,
-                'src/profile/lib/CallLog.test.ts': callLogTestSource,
-            }}
-        >
-            <CallLog />
-        </Example>
+    <Section level={3} title="Keep a deal's notes on the server beside the markup">
+        <p>A <code>&lt;script server&gt;</code> never reaches the browser. A handler it declares
+            without exporting is private to the file, and the browser gets a call in its place.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { GET } from '@abide/abide/server'
+            import { NOTES } from './lib/NOTES.server.ts'
 
-        <p>A <code>&lt;script&gt;</code> block runs each time the component is used, top to
-            bottom, so each row has its own <code>calls</code>. A <code>&lt;script module&gt;</code>
-            block runs once for the file, so both rows count up one <code>opened</code>. On a server, a
-            <code>reactive</code> in module scope is still one per request.</p>
+            const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
+            </script>
+
+            <script>
+            import { reactive } from '@abide/abide'
+            const notes = reactive(() => getNotes({ id: 'd1' }))
+            </script>
+
+            {#for note of notes}<p>{note}</p>{/for}
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="Style a badge without the class leaking to other components">
+        <p>A <code>&lt;style&gt;</code> block reaches only its own component's markup.
+            <code>:global(…)</code> exempts one selector.</p>
+        <Code language="abide" caption="abide" code={`
+            <span class="badge">lead</span>
+
+            <style>
+            .badge { background: var(--lead); }
+            :global(.dark) .badge { background: var(--lead-dim); }
+            </style>
+        `} />
+    </Section>
+
+    <Section level={3} title="Load the app's stylesheet with the layout">
+        <p>Import a stylesheet from a script and it ships with the component that imports it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import './lib/app.css'
+            </script>
+        `} />
+    </Section>
 </Doc>

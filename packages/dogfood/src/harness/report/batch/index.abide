@@ -1,0 +1,63 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/harness/report/ratio',
+        '/harness/report/claim-of',
+        '/harness/runner/run-benches',
+        '/harness/measure/time',
+    ]}
+    tests={[
+        {
+            path: 'packages/harness/tests/report.test.ts',
+            from: [
+                "test('the batcher grows n until the sample clears the bar, and records it'",
+            ],
+        },
+        {
+            path: 'packages/harness/tests/report.test.ts',
+            from: [
+                "test('a whole op timed under bun is not tagged as under one frame'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Price advancing a deal at two pipeline sizes">
+        <p>Hand <code>batch</code> both sizes as arms. It interleaves them, runs the first again
+            as its own control, and grows each sample until the clock can resolve it.</p>
+        <Code language="ts" caption="shared" code={`
+            import { batch, type Batched } from '@abide/harness/report'
+
+            export function priced(): Batched {
+                return batch({
+                    case: 'advance one deal, read the forecast',
+                    emulated: null,
+                    arms: {
+                        'among 100': pipeline(100),
+                        'among 1,000': pipeline(1000),
+                    },
+                })
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Read each arm's time per operation and the floor">
+        <p>Each arm's <code>Sample</code> carries its fastest time per operation in nanoseconds.
+            <code>floor</code> is how far the control drifted from the first arm.</p>
+        <Code language="ts" caption="shared" code={`
+            const run = priced()
+            const large = run.samples['among 1,000']
+            console.log(large.nanoseconds, large.n, run.floor)
+        `} />
+    </Section>
+
+    <Section level={3} title="Run the timings outside the parallel test run">
+        <p><code>batch</code> throws in a <code>bun test --parallel</code> worker. Put the
+            timing in a <code>*.bench.ts</code> file and run it with the bench script.</p>
+        <Code code={`bun run bench`} />
+    </Section>
+</Doc>

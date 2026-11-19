@@ -1,0 +1,54 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/ai/assistant', '/ai/transcript', '/transports/get']}
+    tests={[
+        {
+            path: 'packages/abide/tests/assistant.test.ts',
+            from: [
+                "test('a handler that takes args is one resultsOf reads — 44.51'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistant.test.ts',
+            from: [
+                "test('a call carries its handler and its answer its value, whoever ran it — 44.48, 44.49, 44.50, 44.51'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Fill a report from what the assistant drafted">
+        <p>Await the assistant handler for every event, then hand them to <code>resultsOf</code>
+            with the handler whose answers you want. Each value is typed as that handler's.</p>
+        <Code language="ts" caption="browser" code={`
+            import { resultsOf } from '@abide/abide'
+            import askReport from './askReport.handler.ts'
+            import draftReport from './draftReport.handler.ts'
+
+            const events = await askReport({ draft: report.markdown() })
+            for (const written of resultsOf(events, draftReport)) {
+                report.summary.set(written.summary)
+                report.description.set(written.description)
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="List every contact the assistant looked up">
+        <p>A failed call is left out, so each value is one the handler answered.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { type AssistantEvent, props, resultsOf } from '@abide/abide'
+            import searchContacts from './searchContacts.handler.ts'
+
+            const { events } = props<{ events: AssistantEvent[] }>()
+            const found = resultsOf(events, searchContacts).flat()
+            </script>
+
+            {#for contact of found}<p>{contact.name}</p>{/for}
+        `} />
+    </Section>
+</Doc>

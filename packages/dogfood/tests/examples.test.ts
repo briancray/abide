@@ -1,6 +1,6 @@
 // THE CRM PASSES ITS OWN TESTS AND ITS OWN CHECK, run as a reader who downloaded it runs them: from
 // the app's directory, under its own `bunfig.toml`. A card's Tests view shows what these report, so a
-// red one here is a card claiming a test the app fails (40.38).
+// red one here is a card claiming a test the app fails (40.25).
 
 import { expect, test } from 'bun:test'
 

@@ -1,51 +1,65 @@
 <script>
-import OpenApiOperation from 'crm/src/assistant/lib/OpenApiOperation.abide'
-import openApiOperationSource from 'crm/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
-import openApiOperationTestSource from 'crm/src/assistant/lib/OpenApiOperation.test.ts' with { type: 'text' }
-import searchContactsSource from 'crm/src/assistant/searchContacts.handler.ts' with { type: 'text' }
-
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Registry from '#src/lib/Registry.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
-<Doc>
-    <Section title="OpenAPI is generated from the handler files">
-        <Example
-            id="openapi"
-            title="`/__abide/openapi.json` — the operation, from the handler file"
-            summary="A partner's integration wants the CRM's contact search as an OpenAPI operation. Read the app's document: the operation carries the handler's sentence and its typed argument."
-            files={{
-                'src/assistant/lib/OpenApiOperation.abide': openApiOperationSource,
-                'src/assistant/searchContacts.handler.ts': searchContactsSource,
-                'src/assistant/lib/OpenApiOperation.test.ts': openApiOperationTestSource,
-            }}
-        >
-            <OpenApiOperation />
-        </Example>
-
-        <p>Nobody wrote the operation. The parameter is the handler's argument type and the
-            description is its <code>description</code> option, so the document cannot describe a
-            handler that is not there. A handler added is an operation published, with no step to
-            rerun.</p>
-
-        <p>The document is OpenAPI 3.1, whose schema dialect is JSON Schema, so a handler's schema
-            is published as it is. The test reads the same document from <code>createApp</code>, in
-            process.</p>
-
-        <table>
-            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
-            <tbody>
-                <tr><td><code>OpenApiDocument</code></td><td>The type of the document, for code that reads it.</td></tr>
-                <tr><td><code>abide openapi [--url &lt;origin&gt;]</code></td><td>Prints the document from the source, for a spec committed beside the code. <code>--url</code> asks a running deployment instead.</td></tr>
-                <tr><td><code>abide:openapi</code></td><td>The log namespace that warns when a handler's schema has no JSON Schema of its own.</td></tr>
-            </tbody>
-        </table>
-
-        <Code code={`abide openapi > openapi.json`} />
+<Doc
+    seeAlso={[
+        '/surfaces/clients',
+        '/surfaces/mcp',
+        '/transports/json-schema',
+        '/cli/commands',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/OpenApiOperation.test.ts',
+            from: [
+                "test('the handler is an operation, with its sentence and type'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/generated.test.ts',
+            from: [
+                "test('the OpenAPI document publishes what each handler answers — 19.21, 19.22, 19.23, 20.15'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Hand a partner the contact search as an operation">
+        <p>Write the handler. Its argument type is the operation's parameters and its
+            <code>description</code> is the operation's, with no spec to keep in step.</p>
+        <Code language="ts" caption="server" code={`
+            // src/assistant/searchContacts.handler.ts
+            export default GET(
+                ({ name }: { name: string }) =>
+                    CONTACTS.filter((contact) => contact.name.includes(name)),
+                { description: 'The contacts whose name contains \`name\`.' },
+            )
+        `} />
     </Section>
 
-    <Registry />
+    <Section level={3} title="Read the operation the handler became">
+        <p>Fetch <code>/__abide/openapi.json</code> from the running app. The operation's id is
+            its method and its route.</p>
+        <Code code={`
+            $ curl -s localhost:3000/__abide/openapi.json \\
+                | jq '.paths["/assistant/searchContacts"].get'
+            {
+              "operationId": "get_assistant_searchContacts",
+              "description": "The contacts whose name contains \`name\`.",
+              "parameters": [
+                { "name": "name", "in": "query", "required": true,
+                  "schema": { "type": "string" } }
+              ],
+              ...
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Commit the spec beside the code">
+        <p>Print the document from the source, with no server running. Pass
+            <code>--url</code> to ask a deployment instead.</p>
+        <Code code={`abide openapi > openapi.json`} />
+    </Section>
 </Doc>
