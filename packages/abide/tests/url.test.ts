@@ -54,6 +54,36 @@ test("url's query spells an empty list as an rpc's args do — 30.28", () => {
     expect(search.url({ tags: [], q: 'ink' })).toBe('/search?q=ink&tags')
 })
 
+// 30.28 — A STRUCTURED MEMBER IS ITS CANONICAL JSON, and a list of primitives still its member
+// repeated: two records are two addresses — the call's key — and one record spelled in either key
+// order is one. THE REVERT: drop the JSON arm from `queryText`; both filters write
+// `filter=[object Object]` and the second search answers with the first's deals.
+test('a record or a list of records rides the query as its canonical JSON — 30.28', () => {
+    const search = GET(
+        (_args: {
+            filter: { stage: string; owner?: string }
+            ids?: number[]
+        }) => 1,
+    )
+    ;(search as { address?: string }).address = '/search'
+    const won = search.url({
+        filter: { stage: 'won', owner: 'ada' },
+        ids: [1, 2],
+    })
+    expect(decodeURIComponent(won)).toBe(
+        '/search?filter={"owner":"ada","stage":"won"}&ids=1&ids=2',
+    )
+    expect(
+        search.url({ filter: { owner: 'ada', stage: 'won' }, ids: [1, 2] }),
+    ).toBe(won)
+    expect(search.url({ filter: { stage: 'lost' } })).not.toBe(
+        search.url({ filter: { stage: 'won' } }),
+    )
+    expect(decodeURIComponent(url('/deals', {}, { picks: [{ id: 1 }] }))).toBe(
+        '/deals?picks=[{"id":1}]',
+    )
+})
+
 // 30.2 — THE LITERAL DECIDES THE ARITY, at compile time. The `@ts-expect-error` lines are the gate:
 // `bun run typecheck` fails where one of them stops being an error.
 test('a required segment makes the params argument required — 30.2', () => {

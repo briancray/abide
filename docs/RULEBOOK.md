@@ -1643,6 +1643,9 @@ MUST NOT change that type.
 
 19.26 An `Issues<T>` over an `Rpc` MUST be the `Issues` of that `Rpc`'s `Args`.
 
+19.27 A `GET` or `DELETE`'s text arg the `JsonSchema` declares a record, or a list of records or
+lists, MUST be read from its JSON text, and text that is not that JSON MUST be left as text.
+
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
@@ -2189,8 +2192,9 @@ no public file of the app is served at, and that is none of the four addresses 2
 to the document, save where 30.32 holds.
 
 30.28 A `Query` record and the args an `Rpc` carries in its URL MUST be written in one spelling: a
-member left `undefined` omitted, a list its member repeated, an empty list its name with no `=`, and
-anything else its text.
+member left `undefined` omitted, a list of primitives its member repeated, an empty list its name with
+no `=`, a record or a list holding a record or a list its canonical JSON per 11.24, and anything else
+its text.
 
 30.29 A back or forward history step `navigate` answers MUST restore the scroll the entry it arrives
 at was left at, once that entry's page is mounted.
@@ -4104,7 +4108,7 @@ where the layer runs outside the denominator.
 
 43.16 `retained` MUST throw in a process with a DOM.
 
-43.17 `allocated` MUST report a batch mean, and MUST NOT report a count an exact integer can be
+43.17 `retainedPerRun` MUST report a batch mean, and MUST NOT report a count an exact integer can be
 compared against.
 
 43.18 `batch` MUST throw in a parallel worker.

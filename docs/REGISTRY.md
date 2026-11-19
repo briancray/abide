@@ -278,7 +278,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `offline` | `(args: Args) => Value` | What a call settles to where a browser could not get its answer. | 16.81, 16.82, 16.83, 16.84 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What the handler yields per production, per the unit rule. | 1.2, 16.3 |
-| `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15 |
+| `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15, 19.27, 30.28 |
 | `Middleware` | `Middleware<Answer = never, Extra extends object = object, Refused extends Failed<string, unknown> = Failed<string, unknown>> = <Given extends { request: Request } & Extra, Result extends {} \| null \| undefined>(next: (ctx?: Given) => Promise<Result>, ctx: Given) => Result \| Answer \| Refused \| Promise<Result \| Answer \| Refused>` | One rung, written once for every lane whose context carries `Extra`. | 16.8, 16.14, 16.15, 16.16, 16.21, 16.86, 37.14, 37.15 |
 | `GET` | `<Stored, Accepted, Failures, Produced, Answers extends readonly unknown[] = unknown[]>(handler: Reactive<Stored, Accepted, Failures, Produced>, options?: Omit<RpcOptions<undefined, Answers>, 'refreshes'>) => Rpc<Stored, undefined, Failures \| RungRefusals<Answers>, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.105, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 12.17, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27, 16.92, 16.93, 16.94, 16.95, 16.96, 16.97, 16.98, 16.99, 16.100 |
 | `GET` | `<Stored, Args, Accepted, Failures, Produced, Answers extends readonly unknown[] = unknown[]>(handler: Keyed<Stored, Args, Accepted, Failures, Produced>, options?: Omit<RpcOptions<Args, Answers>, 'refreshes'>) => Rpc<Stored, Args, Failures \| RungRefusals<Answers>, Produced>` | The keyed overload, for a `Keyed` given an address. | 11.2, 16.1, 16.3, 16.6 |
@@ -1344,11 +1344,11 @@ rows a runner prints, and an adapter for an abide app.
 | --- | --- | --- | --- |
 | `retained` | `(body: () => unknown) => Record<string, number>` | The live objects `body` left behind, by type. | 43.16 |
 
-## `allocated` — `@abide/harness/server`
+## `retainedPerRun` — `@abide/harness/server`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `allocated` | `(body: () => unknown, reps?: number) => { tagged: 'batch mean'; reps: number; perRep: Record<string, number>; growth: Record<string, number> }` | The objects `body` allocates per run, as a batch mean. | 43.17 |
+| `retainedPerRun` | `(body: () => unknown, reps?: number) => { tagged: 'batch mean'; reps: number; perRep: Record<string, number>; growth: Record<string, number> }` | The objects each run of `body` leaves reachable, as a batch mean. | 43.17 |
 
 ## `closures` — `@abide/harness/server`
 

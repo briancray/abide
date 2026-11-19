@@ -52,6 +52,40 @@ test('text args are coerced and JSON args are not — 19.7', () => {
     expect(argsFor(found, { id: 4 }, undefined)).toEqual({ id: 4 })
 })
 
+// 19.27 — A RECORD, OR A LIST OF RECORDS, IS READ FROM ITS JSON TEXT where the schema declares one,
+// and a text member that looks like JSON stays text. THE REVERT: drop the JSON arm from
+// `coerceMember`; `filter` reaches the schema as text and is refused.
+test('a declared record or list of records is read from its JSON text — 19.27', () => {
+    const search = GET(
+        (_args: {
+            filter: { stage: string }
+            picks: { id: number }[]
+            note: string
+        }) => 1,
+    ) as Mounted['handler']
+    derivedArgs(search, {
+        type: 'object',
+        properties: {
+            filter: {
+                type: 'object',
+                properties: { stage: { type: 'string' } },
+            },
+            picks: { type: 'array', items: { type: 'object' } },
+            note: { type: 'string' },
+        },
+    })
+    const query = new URLSearchParams({
+        filter: '{"stage":"won"}',
+        picks: '[{"id":1}]',
+        note: '{"not":"parsed"}',
+    })
+    expect(argsFor(search, collapsed(query), `?${query}`)).toEqual({
+        filter: { stage: 'won' },
+        picks: [{ id: 1 }],
+        note: '{"not":"parsed"}',
+    })
+})
+
 // 19.9 — ARGS THAT DO NOT HOLD TO THE ANNOTATION ARE REFUSED, thrown as the refusal answered. THE
 // REVERT: drop the `DERIVED_ARGS` check; the text id is handed to the handler.
 test('args that do not hold to the annotation are refused — 19.9', () => {

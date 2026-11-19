@@ -173,6 +173,23 @@ function typesOf(member: Document): string[] {
 
 function coerceMember(text: string | string[], member: Document): unknown {
     const types = typesOf(member)
+    // 19.27 — a record, or a list of records or lists, came as one JSON text (30.28).
+    if (typeof text === 'string') {
+        if (types.includes('object')) {
+            const parsed = parsedJson(text)
+            if (isRecord(parsed)) return parsed
+        }
+        // A list whose items are undeclared came as JSON only where it held a structure.
+        const undeclared = member.items === undefined
+        if (types.includes('array') && (undeclared || holdsStructure(member))) {
+            const parsed = parsedJson(text)
+            if (
+                Array.isArray(parsed) &&
+                (!undeclared || parsed.some(isStructure))
+            )
+                return parsed
+        }
+    }
     // A list is its member repeated, and one given once still answers a declared array.
     if (types.includes('array')) {
         const items = Array.isArray(text) ? text : [text]
@@ -183,6 +200,26 @@ function coerceMember(text: string | string[], member: Document): unknown {
     }
     if (Array.isArray(text)) return text
     return coerceScalar(text, member)
+}
+
+/** Whether a declared list holds records or lists, and so came as one JSON text rather than repeated. */
+function holdsStructure(member: Document): boolean {
+    const types = typesOf(member.items as Document)
+    return types.includes('object') || types.includes('array')
+}
+
+/** Whether a list's element made the list one JSON text: a record or a list. */
+function isStructure(element: unknown): boolean {
+    return Array.isArray(element) || isRecord(element)
+}
+
+/** The JSON `text` holds, or `undefined` where it holds none — left as text, for the schema to refuse. */
+function parsedJson(text: string): unknown {
+    try {
+        return JSON.parse(text)
+    } catch {
+        return undefined
+    }
 }
 
 /**
