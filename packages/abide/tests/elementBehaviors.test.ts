@@ -1,4 +1,4 @@
-// 53.12-53.23 — THE `bind:element` ADAPTORS that close, take files and copy, each bound to a bare
+// 53.12-53.23, 53.44 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
 // element the way `bind:element` binds one: called with the node, and stopped by what it hands back.
 
 import { afterEach, expect, test } from 'bun:test'
@@ -6,6 +6,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { copyText } from '#shared/copyText.ts'
 import { dismissible } from '#shared/dismissible.ts'
 import { dropzone } from '#shared/dropzone.ts'
+import { followBottom } from '#shared/followBottom.ts'
 import { imageFiles } from '#shared/imagePiece.ts'
 
 afterEach(() => {
@@ -210,4 +211,33 @@ test('a page with no clipboard copies through a selected textarea — 53.22', as
     } finally {
         document.execCommand = execCommand
     }
+})
+
+// THE REVERT: drop the `following` check in `followBottom` — the reader scrolled up to 0 is pulled
+// back to 180 by the next line.
+test('a scrolling element follows its bottom until the reader scrolls up, and again once back — 53.44', async () => {
+    const log = element()
+    // The emulator lays nothing out: the element is 100px tall and grows 40px a line.
+    let height = 100
+    Object.defineProperty(log, 'clientHeight', { get: () => 100 })
+    Object.defineProperty(log, 'scrollHeight', { get: () => height })
+    const stop = followBottom(log)
+    const line = async (): Promise<void> => {
+        height += 40
+        log.append(document.createElement('p'))
+        await Bun.sleep(0)
+    }
+    await line()
+    expect(log.scrollTop).toBe(140)
+    log.scrollTop = 0
+    log.dispatchEvent(new Event('scroll'))
+    await line()
+    expect(log.scrollTop).toBe(0)
+    log.scrollTop = height - 100
+    log.dispatchEvent(new Event('scroll'))
+    await line()
+    expect(log.scrollTop).toBe(height)
+    stop()
+    await line()
+    expect(log.scrollTop).toBe(height - 40)
 })

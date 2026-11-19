@@ -528,6 +528,14 @@ export const SITE: readonly SiteGroup[] = [
                 registry: '`dismissible`',
             },
             {
+                route: '/helpers/follow-bottom',
+                title: '`followBottom`',
+                nav: '`followBottom`',
+                description:
+                    'Keep a scrolling log or transcript at its newest line as lines arrive, until the reader scrolls up to an earlier one.',
+                registry: '`followBottom`',
+            },
+            {
                 route: '/helpers/dropzone',
                 title: '`dropzone`',
                 nav: '`dropzone`',

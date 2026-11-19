@@ -89,6 +89,8 @@ export { type RedirectStatus, response, type Values } from './response.ts'
 export * as store from './stores.ts'
 // 24 — the trace this work belongs to.
 export { trace } from './trace.ts'
+// 38.146 — what an app hosting its native app's updates serves.
+export type { UpdateFeed } from './updateFeed.ts'
 
 // AN APP THAT IMPORTS `@abide/abide/server` IS ON A SERVER, booted or not: its own tests render, call and
 // read `config` through these names without `createApp`.

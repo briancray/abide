@@ -1,4 +1,4 @@
-// 53.40 — `Chat`'s transcript follows its bottom. Not on the barrel: a component's, not an app's.
+// 53.44 — a scrolling element kept at its bottom, as `Chat`'s transcript is (53.40).
 
 import type { Disposer } from './reactive/watch.ts'
 

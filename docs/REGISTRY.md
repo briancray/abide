@@ -741,6 +741,12 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | --- | --- | --- | --- |
 | `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: { escape?: boolean; outside?: boolean; inside?: readonly (Element \| null \| undefined)[] }) => (element: Element) => Disposer` | The `bind:element` adaptor closing an element on a press outside it or on Escape. | 32.9, 53.12, 53.13, 53.14, 53.15, 53.16 |
 
+## `followBottom`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `followBottom` | `(element: Element) => Disposer` | The `bind:element` adaptor keeping a scrolling element at its bottom as what it holds grows. | 32.9, 53.44 |
+
 ## `dropzone`
 
 | Name | Signature | Meaning | Rules |
@@ -1211,6 +1217,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `pendingUpdate` | `Reactive<StagedUpdate \| undefined>` | The update the native app's window has staged, waiting for it to restart. | 38.142, 38.148, 41.32 |
 | `StagedUpdate` | `class StagedUpdate { version: string; required: boolean; notes: string \| undefined }` | What `pendingUpdate` holds. | 38.146, 38.148 |
 | `StagedUpdate.install` | `() => void` | Restarts the native app into the update. | 38.144, 38.145 |
+| `UpdateFeed` | `{ version: string; file: string; sha256: string; required: boolean; notes: string \| null; signature: string }` | The signed feed `abide native` writes beside the zipped `.app`, which a native app reads its update from. | 38.143, 38.146, 38.147 |
 
 ## `onMenu`
 

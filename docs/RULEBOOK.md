@@ -5318,8 +5318,7 @@ answer, and MUST disable the part's buttons where `permit` is absent or the part
 53.39 `Chat` MUST render an assistant's text part through `Text` where one is given, and as text
 where none is.
 
-53.40 `Chat` MUST keep its transcript scrolled to its bottom as it grows, save while the reader has
-scrolled up from it.
+53.40 `Chat`'s transcript MUST be bound to `followBottom`.
 
 53.41 `Chat`'s transcript MUST carry `role="log"` and `aria-live="polite"`.
 
@@ -5328,6 +5327,9 @@ scrolled up from it.
 
 53.43 `Pairing` MUST render its children once `pairing` reports the bridge paired, and MUST NOT
 before.
+
+53.44 `followBottom` MUST keep the element it is bound to scrolled to its bottom as what the element
+holds changes, save while the reader has scrolled up from that bottom.
 
 # 54. Guards, fetches and jobs
 
