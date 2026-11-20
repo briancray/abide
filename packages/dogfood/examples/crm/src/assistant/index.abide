@@ -1,7 +1,7 @@
 <script>
 import AssistantChat from './lib/AssistantChat.abide'
 import ClaudeApiRequest from './lib/ClaudeApiRequest.abide'
-import ClaudeCodeBridge from './lib/ClaudeCodeBridge.abide'
+import ClaudeCodeChat from './lib/ClaudeCodeChat.abide'
 import ModelToolCall from './lib/ModelToolCall.abide'
 import OpenApiOperation from './lib/OpenApiOperation.abide'
 import WithheldExport from './lib/WithheldExport.abide'
@@ -22,5 +22,5 @@ import WithheldExport from './lib/WithheldExport.abide'
     <h2>The request Claude is sent</h2>
     <ClaudeApiRequest />
     <h2>Your own Claude Code</h2>
-    <ClaudeCodeBridge />
+    <ClaudeCodeChat />
 </main>
