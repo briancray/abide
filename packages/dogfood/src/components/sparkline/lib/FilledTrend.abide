@@ -1,0 +1,10 @@
+<script>
+import Sparkline from '@abide/abide/Sparkline.abide'
+</script>
+
+<Sparkline
+    values={[40, 52, 47, 61, 58]}
+    label="Open pipeline"
+    area
+    class="h-8 w-32"
+ />

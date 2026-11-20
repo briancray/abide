@@ -1,0 +1,9 @@
+<script>
+import Chart from '@abide/abide/Chart.abide'
+import Column from '@abide/abide/Column.abide'
+</script>
+
+<Chart label="Deals closed by month" stack>
+    <Column label="Won" values={[4, 6, 5, 8]} />
+    <Column label="Lost" values={[3, 2, 4, 3]} />
+</Chart>

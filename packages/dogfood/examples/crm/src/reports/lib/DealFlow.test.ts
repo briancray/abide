@@ -34,6 +34,18 @@ function pointAt(clientX: number) {
     flushSync()
 }
 
+// 52.69 — THE Y LABELS STAND LEFT OF THE PLOT, and the first month's column starts right of where the
+// gridlines do. THE REVERT: start the plot at 0 — the gridlines run under the labels from 0.
+test('no column is drawn over a y label', async () => {
+    using _flow = await mount(DealFlow({}))
+    const start = Number(
+        chart().querySelector('[data-part=grid]')?.getAttribute('x1'),
+    )
+    expect(start).toBeGreaterThan(0)
+    for (const bar of [...bars(0), ...bars(1)])
+        expect(bar.x).toBeGreaterThanOrEqual(start)
+})
+
 // 52.37 — COLUMNS IN NO STACK STAND SIDE BY SIDE in their month's slot, each up from zero, and a
 // missing month has none. THE REVERT: give every column the first band — Lost stands on Won's x.
 test('won and lost stand side by side in each month', async () => {

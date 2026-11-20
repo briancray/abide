@@ -1,0 +1,16 @@
+<script>
+import Pie from '@abide/abide/Pie.abide'
+
+const STAGES = [
+    { label: 'Lead', value: 66_000 },
+    { label: 'Qualified', value: 34_000 },
+    { label: 'Proposal', value: 30_000 },
+]
+</script>
+
+<Pie
+    label="Open pipeline by stage"
+    slices={STAGES}
+    inner={0.6}
+    class="size-40"
+ />

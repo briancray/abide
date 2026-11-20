@@ -1,0 +1,17 @@
+<script>
+// AN EXAMPLE THAT RUNS: a `.abide` file's text shown as its fence, and the same file mounted under it,
+// so what a reader reads is what the frame below it is running. The page imports the file twice —
+// once as its text (34.21), once as the component — and the frame holds the component.
+import { props } from '@abide/abide'
+
+import Code from './Code.abide'
+
+const { code } = props<{ code: string }>()
+</script>
+
+<div class="example">
+    <Code language="abide" caption="abide" code={code} />
+    <div class="result" data-result>
+        <slot />
+    </div>
+</div>

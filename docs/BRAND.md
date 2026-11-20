@@ -120,8 +120,12 @@ a liability if the copy pretends otherwise.
 
 # The world an example is set in
 
-An example is a tiny product, and a product needs a world. The docs have ONE: a CRM, the example
-app at `packages/dogfood/examples/crm`, which a reader can download and run whole. An example on a
+An example on a page is the smallest file that proves its point, and it RUNS: the file shown is the
+file mounted under it (40.31), so it carries its own data and nothing else, and it is not set in any
+world but its own few lines.
+
+A page's TESTS are a tiny product, and a product needs a world. The docs have ONE: a CRM, the example
+app at `packages/dogfood/examples/crm`, which a reader can download and run whole. A test case on a
 page is a few lines of it — a contact loaded per id, a deal saved, a feed that grows — rather than a
 situation invented at the moment of writing.
 
@@ -370,8 +374,8 @@ a reader cannot open is a claim, and one that contradicts the same address on an
 claim that has already broken. It is the framework's central idea made visible, and it is the one
 device to keep wherever the brand appears.
 
-An example is written on its page, so it carries a bare side word and never an address (40.14): a
-path on code nobody can open is a claim. A page's Tests name a real file and a line in it, and their
+An example is written on its page or beside it, so it carries a bare side word and never an address
+(40.14): a path on code nobody can open is a claim. A page's Tests name a real file and a line in it, and their
 caption, language, `— excerpt` and color are all DERIVED from the address (40.17) — so a test case
 cannot claim a seam its path contradicts, and one that drifts from its file fails the page as it
 renders rather than the reader (40.18).

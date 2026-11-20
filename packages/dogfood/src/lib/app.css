@@ -237,6 +237,51 @@
         @apply rounded-none border-0 bg-transparent;
     }
 
+    /* AN EXAMPLE THAT RUNS: its fence, then the same file mounted in a frame joined to it. */
+    .example .snippet {
+        @apply rounded-b-none;
+    }
+
+    .result {
+        @apply rounded-b-lg border border-t-0 border-rule bg-paper p-5 text-chrome text-muted;
+    }
+
+    /* THE FRAME'S DEFAULTS ARE ZERO-SPECIFICITY, so a class the example writes wins over them: each
+       series a color of its own where a shipped chart draws every one in `currentColor`, an area
+       translucent so what it covers still reads, and a disabled mark faded. */
+    :where(.result) :where([data-series='0']) {
+        color: var(--color-signal);
+    }
+
+    :where(.result) :where([data-series='1']) {
+        color: var(--color-warm);
+    }
+
+    :where(.result) :where([data-series='2']) {
+        color: var(--color-cool);
+    }
+
+    :where(.result) :where([data-series='3']) {
+        color: var(--color-heading);
+    }
+
+    :where(.result) :where([data-part=line][data-series]) {
+        stroke-width: 2;
+    }
+
+    :where(.result) :where([data-part=area][data-series]) {
+        fill-opacity: 0.55;
+    }
+
+    :where(.result) :where([data-disabled]) {
+        opacity: 0.4;
+    }
+
+    :where(.result) :where(svg[role=img]) {
+        overflow: visible;
+        max-width: 100%;
+    }
+
     .t-comment {
         @apply text-syn-comment italic;
     }

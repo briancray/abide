@@ -1,0 +1,10 @@
+<script>
+import Sparkline from '@abide/abide/Sparkline.abide'
+</script>
+
+<Sparkline
+    kind="bar"
+    values={[2, 3, 3, 4, 5, 6]}
+    label="Deals closed, 6 months"
+    class="h-6 w-24"
+ />

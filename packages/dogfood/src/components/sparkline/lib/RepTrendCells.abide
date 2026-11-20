@@ -1,0 +1,26 @@
+<script>
+import Sparkline from '@abide/abide/Sparkline.abide'
+
+const REPS = [
+    { name: 'Ada', won: [12_000, 18_000, null, 24_000] },
+    { name: 'Grace', won: [30_000, 22_000, 19_000, 15_000] },
+]
+</script>
+
+<table>
+    <tbody>
+        {#for rep of REPS by rep.name}
+            <tr>
+                <td>{rep.name}</td>
+                <td>
+                    <Sparkline
+                        values={rep.won}
+                        label="{rep.name}'s won revenue"
+                        dot
+                        class="h-6 w-24"
+                     />
+                </td>
+            </tr>
+        {/for}
+    </tbody>
+</table>

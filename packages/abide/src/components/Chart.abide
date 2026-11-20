@@ -74,6 +74,11 @@ const {
 // Room over the top gridline for its label, and under the plot for the x labels.
 const TOP = 16
 const BOTTOM = 24
+// The room left of the plot per character of the longest y label, and between that label and the plot:
+// a label is laid out before the chart can measure its text, so the room is the width of a character in
+// the small type a chart is set in, and a longer one runs into the plot rather than being cut off.
+const CHARACTER = 7
+const GUTTER = 8
 // The share of an x's slot its columns fill, the rest the gap between one x and the next.
 const BAND = 0.8
 
@@ -125,11 +130,21 @@ const plot = reactive(() => {
     const floor = yBounds?.[0] ?? gridValues[0] ?? low
     const ceiling = yBounds?.[1] ?? gridValues.at(-1) ?? high
     const bottom = size.height - BOTTOM
+    // 52.60 — under `normalize` the axis is shares, whatever the values are written as.
+    const gridLabels: string[] = []
+    let longest = 0
+    for (const value of gridValues) {
+        const label = normalize ? percent(value) : yFormat(value)
+        gridLabels.push(label)
+        longest = Math.max(longest, label.length)
+    }
+    // 52.69 — the plot starts right of the y labels, so no mark is drawn over one.
+    const left = longest === 0 ? 0 : longest * CHARACTER + GUTTER
     // Columns are centered on their x, so the first and last stand a half slot in from the edges.
-    const slot = size.width / Math.max(1, length)
+    const slot = (size.width - left) / Math.max(1, length)
     const inset = columns ? slot / 2 : 0
     const toX = scale(bounds?.x ?? [positions[0] ?? 0, positions.at(-1) ?? 0], [
-        inset,
+        left + inset,
         size.width - inset,
     ])
     const toY = scale([floor, ceiling], [bottom, TOP])
@@ -211,11 +226,10 @@ const plot = reactive(() => {
         marks.push({ series: at, kind, path: drawn, bars, ys })
     }
     const grid: { y: number; label: string }[] = []
-    for (const value of gridValues)
+    for (let index = 0; index < gridValues.length; index += 1)
         grid.push({
-            y: toY(value),
-            // 52.60 — under `normalize` the axis is shares, whatever the values are written as.
-            label: normalize ? percent(value) : yFormat(value),
+            y: toY(gridValues[index] as number),
+            label: gridLabels[index] as string,
         })
     const labeled: { x: number; label: string; anchor: string }[] = []
     const shown = Math.min(length, Math.max(1, xTicks))
@@ -244,6 +258,7 @@ const plot = reactive(() => {
         grid,
         labeled,
         bottom,
+        left,
         zeroY: zero ? toY(0) : undefined,
     }
 })
@@ -330,11 +345,11 @@ function pick(event: MouseEvent) {
 >
     <slot />
     {#for line of plot.grid}
-        <line data-part="grid" x1="0" x2={size.width} y1={line.y} y2={line.y} stroke="currentColor" stroke-opacity="0.2" />
-        <text data-part="tick" data-axis="y" x="0" y={line.y - 4} fill="currentColor">{line.label}</text>
+        <line data-part="grid" x1={plot.left} x2={size.width} y1={line.y} y2={line.y} stroke="currentColor" stroke-opacity="0.2" />
+        <text data-part="tick" data-axis="y" x="0" y={line.y} dominant-baseline="middle" fill="currentColor">{line.label}</text>
     {/for}
     {#if plot.zeroY !== undefined}
-        <line data-part="zero" x1="0" x2={size.width} y1={plot.zeroY} y2={plot.zeroY} stroke="currentColor" />
+        <line data-part="zero" x1={plot.left} x2={size.width} y1={plot.zeroY} y2={plot.zeroY} stroke="currentColor" />
     {/if}
     {#for tick of plot.labeled}
         <text

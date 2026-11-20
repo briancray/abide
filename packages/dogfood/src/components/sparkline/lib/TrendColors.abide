@@ -1,0 +1,19 @@
+<script>
+import Sparkline from '@abide/abide/Sparkline.abide'
+
+const TRENDS = [
+    [12, 18, 24],
+    [30, 22, 15],
+]
+</script>
+
+<div class="flex gap-4">
+    {#for won of TRENDS}
+        <Sparkline
+            values={won}
+            label="Won revenue"
+            class="h-6 w-24 text-muted data-[trend=up]:text-good
+        data-[trend=down]:text-bad"
+         />
+    {/for}
+</div>

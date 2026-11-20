@@ -44,8 +44,9 @@ test('each stage stacks on the one before it, through a month it has no value', 
 test('the target is drawn at its own values, on an axis fixed at $150K', async () => {
     using _trend = await mount(PipelineTrend({}))
     expect(texts('[data-axis=y]')).toEqual(['$0', '$50K', '$100K', '$150K'])
-    // $90K of $150K, up from the floor at 216 to the top at 16.
-    expect(points('[data-part=line]')[0]).toEqual([0, 96])
+    // $90K of $150K, up from the floor at 216 to the top at 16, right of the five characters of
+    // `$150K` at 7 apiece and the 8 between them and the plot (52.69).
+    expect(points('[data-part=line]')[0]).toEqual([43, 96])
 })
 
 // 52.24, 52.53 — A STAGE UNCHECKED IS NO LONGER DRAWN, and checked again it joins in the order it was

@@ -1,0 +1,11 @@
+<script>
+import Area from '@abide/abide/Area.abide'
+import Chart from '@abide/abide/Chart.abide'
+import Line from '@abide/abide/Line.abide'
+</script>
+
+<Chart label="Open pipeline against target" stack>
+    <Area label="Qualified" values={[22_000, 26_000, 31_000]} />
+    <Area label="Leads" values={[40_000, 52_000, 47_000]} />
+    <Line label="Target" values={[70_000, 75_000, 80_000]} stack={false} />
+</Chart>

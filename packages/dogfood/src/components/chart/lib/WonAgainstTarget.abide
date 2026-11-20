@@ -1,0 +1,18 @@
+<script>
+import { format } from '@abide/abide'
+import Chart from '@abide/abide/Chart.abide'
+import Line from '@abide/abide/Line.abide'
+
+const MONTHS = [5, 6, 7, 8].map((month) => Date.UTC(2026, month, 15))
+</script>
+
+<Chart
+    x={MONTHS}
+    label="Won revenue against target"
+    xFormat={(month) => format.date(month, { style: 'month' })}
+    yFormat={(amount) => format.money(amount, { compact: true })}
+    zero
+>
+    <Line label="Won" values={[18_000, 24_500, 31_000, 27_000]} />
+    <Line label="Target" values={[20_000, 22_000, 24_000, 26_000]} />
+</Chart>

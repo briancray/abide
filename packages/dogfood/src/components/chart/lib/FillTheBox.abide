@@ -1,0 +1,10 @@
+<script>
+import Chart from '@abide/abide/Chart.abide'
+import Line from '@abide/abide/Line.abide'
+</script>
+
+<div class="h-48 resize overflow-hidden">
+    <Chart label="Won revenue" class="block h-full w-full">
+        <Line label="Won" values={[18_000, 24_500, 31_000, 27_000]} />
+    </Chart>
+</div>

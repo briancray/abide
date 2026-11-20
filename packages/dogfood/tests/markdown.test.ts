@@ -7,7 +7,12 @@ import { beforeAll, expect, test } from 'bun:test'
 
 import { withoutExcerpt } from '../src/lib/highlight.ts'
 import { PAGES } from '../src/lib/sitePages.ts'
-import { renderedHtml, renderedMarkdown, servedDocs } from './docsPages.ts'
+import {
+    renderedHtml,
+    renderedMarkdown,
+    servedDocs,
+    written,
+} from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
 // for the whole load against the other suites, inside its own five seconds.
@@ -165,4 +170,19 @@ test('every code caption names a syntax or a file', async () => {
             vague.push(`${route}: "${text}"`)
         }
     expect([...new Set(vague)]).toEqual([])
+})
+
+// 40.31 — AN EXAMPLE THAT RUNS IS MOUNTED UNDER ITS FENCE, and its twin is the fence alone: the chart
+// the first example of `/components/chart` draws is in the page, and none of its tick labels is in
+// the twin. THE REVERT: drop the `data-result` skip from `markdownOf`, and `$40K` is in the twin.
+test("an example's file is mounted under its fence, and only the fence is in the twin", async () => {
+    const page = (await renderedHtml()).get('/components/chart') ?? ''
+    const twin = written(
+        (await renderedMarkdown()).get('/components/chart') ?? '',
+    )
+    expect(page).toMatch(
+        /data-result[^>]*>(?:<!--[^>]*-->)*<svg[^>]*aria-label="Won revenue against target"/,
+    )
+    expect(twin).toContain('<Chart\n    x={MONTHS}')
+    expect(twin).not.toContain('$40K')
 })

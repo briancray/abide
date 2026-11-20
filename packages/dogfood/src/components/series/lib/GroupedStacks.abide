@@ -1,0 +1,11 @@
+<script>
+import Chart from '@abide/abide/Chart.abide'
+import Column from '@abide/abide/Column.abide'
+</script>
+
+<Chart label="Deals closed by team">
+    <Column label="East won" values={[4, 6, 5]} stack="east" />
+    <Column label="East lost" values={[3, 2, 4]} stack="east" />
+    <Column label="West won" values={[5, 3, 7]} stack="west" />
+    <Column label="West lost" values={[2, 4, 1]} stack="west" />
+</Chart>

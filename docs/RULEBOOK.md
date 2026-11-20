@@ -3883,8 +3883,8 @@ and an example MUST demonstrate exactly one behavior.
 
 40.13 An example's `<Code>` MUST NOT carry code its proof does not need.
 
-40.14 An example MUST be a fence written on its page, captioned with the side its code runs on, and
-MUST NOT be captioned with an address.
+40.14 An example MUST be a fence written on its page, or a `.abide` file under its page's `lib` shown
+as its fence, captioned with the side its code runs on, and MUST NOT be captioned with an address.
 
 40.15 A slice of a file the site shows, an entry of a page's `tests` or a `show code` block, MUST
 be named by a line prefix matching exactly once, and MUST run to the end of the construct that line
@@ -3933,6 +3933,9 @@ link to an address other than a page of the site, an anchor, a web address or a 
 
 40.30 The documentation site's native app MUST file every page in its menu bar through `onMenu`,
 grouped as the sidebar groups them.
+
+40.31 An example shown from a `.abide` file MUST mount that same file beneath its fence, and the
+page's `.md` twin MUST carry the fence and nothing the file renders.
 
 # 41. Rendering and hydration
 
@@ -5404,6 +5407,9 @@ the slices' values, clockwise from the top in the order given, its index as `dat
 
 52.68 `Pie` MUST open a hint for a slice as `tooltip` does, reading its label, its value and its
 share.
+
+52.69 `Chart` MUST draw its y ticks as `data-part="tick"` labels left of its plot, and no mark over
+one.
 
 # 53. Keys, element behaviors and chat
 

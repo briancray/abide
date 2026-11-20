@@ -1,0 +1,21 @@
+<script>
+import Area from '@abide/abide/Area.abide'
+import Chart from '@abide/abide/Chart.abide'
+</script>
+
+<div class="grid grid-cols-2 gap-4">
+    <Chart
+        label="Open pipeline, east"
+        bounds={{ y: [0, 150_000] }}
+        class="h-40 w-full"
+    >
+        <Area label="East" values={[42_000, 58_000, 51_000, 67_000]} />
+    </Chart>
+    <Chart
+        label="Open pipeline, west"
+        bounds={{ y: [0, 150_000] }}
+        class="h-40 w-full"
+    >
+        <Area label="West" values={[96_000, 120_000, 104_000, 131_000]} />
+    </Chart>
+</div>

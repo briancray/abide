@@ -152,6 +152,8 @@ function blocks(element: Element, out: string[]): void {
             if (child.trim() !== '') out.push(child.trim())
             continue
         }
+        // An example's running result is what its fence above says, drawn: it has no text of its own.
+        if (child.attributes['data-result'] !== undefined) continue
         switch (child.tag) {
             case 'h1':
             case 'h2':

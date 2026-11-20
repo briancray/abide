@@ -46,6 +46,209 @@ second value type wherever the first two did not already carry it, which on `Key
 Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 `Produced`.
 
+## Components
+
+Components abide ships, each an entry of its own an app imports as `@abide/abide/<Name>.abide`,
+with no stylesheet: a caller styles one by the `data-` attributes and the `data-part`s it writes.
+
+# `.abide` files
+
+## Reading and writing by name
+
+| Spelling | Means | Rules |
+| --- | --- | --- |
+| `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.10 |
+| `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, object literal member, return or `bind:` operand | the `Reactive` | 31.3 |
+| `await foo` | the settling of the `Reactive`, which is its value | 1.4, 2.7, 31.3 |
+| `refresh(foo)` / a `Selection`-typed parameter | the `Reactive` | 31.13 |
+| `foo = bar` | a write | 31.4, 11.61, 31.18 |
+| `foo.bar = v` | a write through a path | 31.8, 31.14, 31.16 |
+| `foo.push(v)` | a write through a path, run on a copy of the array | 31.8, 31.9 |
+| `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
+| `const { a, b: c } = bar()` where a member is a `Reactive` | a name bound to that `Reactive` | 31.17 |
+| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one the value does not | 31.5 |
+| `foo.bar(…)` | a call of the value's `bar`, or of the `Reactive`'s own `bar` where it declares one the value does not | 31.6 |
+| `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.11 |
+
+## Expressions
+
+| Spelling | Meaning | Rules |
+| --- | --- | --- |
+| `{expr}` | Reactive text, escaped. | 32.1, 32.23 |
+| formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
+| `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31, 32.70 |
+| `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37, 32.70, 32.71 |
+| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75, 32.95 |
+| `name="…{expr}…"` | An interpolated quoted value. | 32.3, 32.71 |
+| `bind:value` | Two-way bind on an element. | 5.16, 32.5, 32.58, 32.59, 32.60, 32.61, 32.62, 32.72, 32.74, 32.75, 32.76, 32.78 |
+| `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18, 32.76 |
+| `bind:checked` | A boolean bind on an input. | 32.7, 32.72, 32.74, 32.75, 32.76, 32.78 |
+| `bind:open` | A boolean bind on whether a `<details>` is open. | 32.7, 32.72, 32.74, 32.75, 32.76, 32.78 |
+| `bind:group` | Radio or checkbox membership. | 32.8, 32.72, 32.74, 32.75, 32.76 |
+| `bind:files` | A file input's files, as a list. | 32.73, 32.72, 32.74, 32.75, 32.76, 32.78 |
+| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6, 32.78 |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer) \| ((element: Element) => void \| Disposer)[]}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
+| `class:name={cond}` | Toggles a class. | 32.10, 32.71 |
+| `style:prop={value}` | Sets one style property. | 32.10, 32.19, 32.71, 32.94 |
+| `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13 |
+| static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.27, 32.28 |
+
+## `raw`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31, 32.70, 32.77, 32.93 |
+| `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.24 |
+
+## Control flow
+
+| Spelling | Branches | Meaning | Rules |
+| --- | --- | --- | --- |
+| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 12.18, 32.12, 32.21, 32.63, 32.64, 32.65, 32.70, 41.24 |
+| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 41.8, 41.14, 41.15 |
+| `{#try}` | `{:pending}`, `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64, 32.96 |
+
+## Components and slots
+
+| Spelling | Meaning | Rules |
+| --- | --- | --- |
+| `{#component Name(pattern)}` | An inline component. | 32.39, 32.40, 32.41, 32.42, 32.43, 32.44, 32.45, 32.46, 32.47, 32.48, 32.49, 32.50, 32.51, 32.52, 32.53, 32.54, 32.55, 32.63, 32.64 |
+| `<Name/>` | A component invocation. | 32.17, 32.34, 32.35, 32.36, 32.70, 33.19, 33.21, 41.24, 41.28 |
+| `<slot/>` | The position children render into. | 32.18 |
+| `<slot>fallback</slot>` | Renders children, or a fallback. | 32.18 |
+| `<Tag>…</Tag>` | Children passed to a component's slot. | 32.18, 32.70 |
+
+## `props`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `props` | `<Props>() => { [K in keyof Props]: Props[K] }` | One live accessor per prop the component declares. | 33.1, 33.2, 33.3, 33.4, 33.5, 33.6, 33.7, 33.8, 33.9, 33.10, 33.11, 33.14, 33.15, 33.20, 33.22, 33.25, 33.27 |
+| `Attributes<Tag>` | `Attributes<Tag extends keyof HTMLElementTagNameMap \| keyof SVGElementTagNameMap>` | The attributes an HTML or SVG element takes, typed as a component's props. | 33.23, 33.24, 33.26 |
+| `children` | always accepted | What a caller passes between the tags. | 33.16, 32.18 |
+
+## Script and style blocks
+
+| Spelling | Meaning | Rules |
+| --- | --- | --- |
+| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.17, 34.29, 34.30, 34.32 |
+| `<script module>` | Module scope, and what the file exports beside its component. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.18, 34.21, 34.30, 34.33, 34.34, 34.35 |
+| `<script server>` | Module scope on a server alone, declaring its file's private handlers and filing its hooks. | 16.28, 16.70, 34.3, 34.12, 34.17, 34.19, 34.20, 34.22, 34.28, 34.29, 34.30, 37.1 |
+| `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11, 34.31 |
+| `import './app.css'` | A stylesheet the component depends on. | 34.6 |
+| `:global(…)` | The per-selector escape from scoping. | 34.5 |
+
+# Pages and the app
+
+## Pages
+
+| Path | Meaning | Rules |
+| --- | --- | --- |
+| `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16, 39.17, 39.20 |
+| `<window>` · `<document>` | A page's, layout's or component's listeners on the window or the document. | 39.21, 39.22, 39.23 |
+| `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10, 39.18, 39.19 |
+| `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3, 30.34, 30.36 |
+| `[[name]]` | An optional segment. | 23.5, 30.4, 30.34, 30.36 |
+| `[...name]` | A rest segment, terminal. | 23.5, 30.5, 30.34, 30.36 |
+| `[name=NAME]` · `[[name=NAME]]` · `[...name=NAME]` | A dynamic segment a param file's matcher decides. | 19.1, 23.26, 23.27, 30.19, 30.35, 30.36, 30.37 |
+| `/__abide/**` | Every endpoint abide controls. | 20.8, 37.19 |
+
+## `render`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4, 38.208 |
+| `render` | `(component: Component) => Promise<Uint8Array>` | Renders a component bound to its props into a document, as its bytes. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31, 41.34, 41.35 |
+
+## Sinks
+
+| Spelling | Sink | Filled | Rules |
+| --- | --- | --- | --- |
+| `href={x}`, any attribute | the element | the attribute or property | 35.7, 35.8 |
+| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.7 |
+| `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
+| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
+
+## `createApp`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 42.16, 42.22, 37.4, 37.6, 38.100 |
+| `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
+| `App.fetch` | `(request: Request, options?: { principal?: Record<string, unknown>; caller?: string }) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6, 42.20, 42.21 |
+| `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request; principal?: Record<string, unknown>; caller?: string }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 42.19, 42.21, 11.38 |
+| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 7.30 |
+| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.26, 7.27, 7.31, 7.37, 7.38, 7.40, 7.41, 7.42 |
+| `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
+
+## Environment variables
+
+| Name | Type | Meaning | Rules |
+| --- | --- | --- | --- |
+| `PORT` | `number` | The listen port. | 36.1, 38.63, 38.64 |
+| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.17 |
+| `NODE_ENV` | `string` | The environment name, verbatim. | 36.3, 36.16 |
+| `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4, 38.87 |
+| `APP_VERSION` | `string` | The version beside that name. | 27.3 |
+| `APP_DATA_DIR` | `string` | The platform's per-user data directory. | 27.3, 36.4 |
+| `ABIDE_UPDATE_KEY` | `string \| null` | The key `abide native` signs the native app's updates with. | 38.147 |
+| `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.11, 36.5, 38.120, 38.175 |
+| `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.15, 26.16 |
+| `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
+| `ABIDE_APP_URL` | `string \| null` | Names an app somewhere else, for the remote CLI. | 36.6 |
+| `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.22, 16.58 |
+| `ABIDE_BRIDGE_TOOLS` | `string` | The tools of the visitor's machine `/__abide/pairing` asks a bridge for, separated by commas. | 44.67 |
+| `ABIDE_BRIDGE_FULL` | `boolean` | Whether `/__abide/pairing` asks a bridge for full access. | 44.67 |
+| `ABIDE_BRIDGE_NOTE` | `string` | The app's note on why it asks, shown in the question a pairing link asks. | 44.67, 44.91 |
+| `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
+| `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
+| `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
+| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23, 45.24, 45.25, 45.26, 45.27, 45.28, 45.29 |
+| `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
+| `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
+| `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |
+| `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. | 36.8 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `string \| null` | Where the app's lines and spans are sent as OTLP. | 36.19, 36.20, 36.21, 36.23 |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `string \| null` | Where the app's lines are sent, in place of the endpoint's. | 36.19, 36.20 |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `string \| null` | Where the app's spans are sent, in place of the endpoint's. | 36.19, 36.20 |
+| `OTEL_EXPORTER_OTLP_HEADERS` | `string \| null` | The headers every export carries, as `name=value` pairs separated by commas. | 36.20 |
+| `OTEL_SERVICE_NAME` | `string \| null` | The service every export is sent under. | 36.22 |
+| `OTEL_SDK_DISABLED` | `'true' \| null` | Turns every export off. | 36.19 |
+| `DEBUG` | `string \| null` | Log-namespace gating. | 28.6, 28.9, 28.10, 28.11 |
+| `NO_COLOR` | `string \| null` | Refuses ansi anywhere. | 36.9 |
+| `FORCE_COLOR` | `string \| null` | Asks for the readable form off a pipe. | 36.9 |
+
+## Files
+
+| Path | Meaning | Rules |
+| --- | --- | --- |
+| `src/**` | The app's source. | 36.10, 38.25 |
+| `**/lib/**` | The app's code that is no address: components and modules. | 23.15, 23.16, 23.18, 23.22, 37.1 |
+| `**/lib/**/<name>.server.<extension>` | A server file: source the browser never loads. | 16.29, 23.23, 34.20, 36.10 |
+| `**/lib/**/<name>.worker.ts` | A worker file: a module whose exports run in a thread of their own. | 55.1, 55.2, 55.3, 55.4, 55.5, 55.6, 55.7, 55.8, 55.9, 55.10, 55.11, 55.12, 55.13, 55.14 |
+| `**/<name>.test.ts` | A test file: one of the app's tests, wherever it lies. | 23.22, 38.109 |
+| `**/<name>.bench.ts` | A bench file: benches `bun run bench` runs, wherever it lies. | 23.22, 43.29 |
+| `**/<name>.d.ts` | A declaration file: types for the checker, wherever it lies. | 23.22 |
+| `**/public/**` | The files answered as authored, at their path below that directory. | 23.15, 23.16, 23.18, 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.18, 38.19 |
+| `src/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
+| `src/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
+| `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the native app's icon. | 36.11, 38.79, 45.15 |
+| `src/**/` | A directory of the app's, a segment of the route of every file directly in it. | 23.14, 23.17, 23.22 |
+| `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18, 35.19 |
+| `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21, 35.19 |
+| `**/<NAME>.param.ts` | A param file: the matcher a segment naming `NAME` matches by. | 23.22, 23.24, 23.25, 23.26 |
+| `**/<name>.handler.ts` | A handler file: the handler its default export declares, at its directory's route and then `<name>`. | 16.2, 16.28, 16.73, 16.74, 19.1, 23.14, 23.22 |
+| `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
+| `src/native/` | The native app's own pages, which are no routes of the app's. | 23.15, 23.33 |
+| `src/native/launcher.abide` | The native launcher: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
+| `src/native/menubar.abide` | The page the menu bar extra's panel shows. | 38.167, 38.168, 38.169, 38.171, 38.176 |
+| `src/public/icon-menubar.png` | The file answered at `/icon-menubar.png`, and the menu bar extra's icon. | 36.11, 38.166 |
+| `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
+| `**/error.abide` | The page a refusal renders in. | 35.2, 35.3, 35.14, 35.18 |
+| `**/node_modules/**/*.abide` | A component a dependency ships as source, compiled with the app that imports it. | 34.23, 34.24, 34.25, 34.26, 34.27, 38.99 |
+| `import '…' with { type: 'routes' }` | A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handler files answering below it. | 23.19, 23.20 |
+| `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.43 |
+| `preload = ["@abide/abide/test"]` | The `[test]` preload a test imports the app's `.abide` files through. | 38.109 |
+
 # Reactive primitives
 
 ## `reactive`
@@ -268,6 +471,129 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | event handler | Not the flow. | 14.9 |
 | `Transformer`, `Disposer`, middleware, lifecycle hooks | Not the flow. | 14.10 |
 
+# Ambient values
+
+## `request`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `request` | `() => Request` | The request being served. | 18.16, 18.17, 18.18, 22.1 |
+| `request.ip` | `() => ReceivedFrom \| 'in-process'` | Where the request being served came from. | 22.1, 22.12, 22.13 |
+| `ReceivedFrom` | `{ address: string; family: 'IPv4' \| 'IPv6'; port: number } \| null` | The peer a listener received a request from. | 22.12 |
+
+## `response`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
+| `response.page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 16.75, 17.2 |
+| `response.json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. | 17.7, 17.9, 17.10 |
+| `response.redirect` | `(to: string \| URL, status?: RedirectStatus) => undefined` | A navigation. | 16.52, 17.3 |
+| `response.jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.44, 16.75, 17.6, 17.7 |
+| `response.sse` | `<T>(values: Values<T>) => Values<T>` | A stream of values framed as server-sent events, fixed. | 16.45, 16.57, 16.75, 17.6, 17.7 |
+| `response.bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.34, 16.75, 17.6, 17.7 |
+| `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `response.redirect` may carry. | 17.3 |
+| `response` | `() => { status: number; headers: Headers }` | The response being built for the request being served. | 16.13, 16.52, 21.10, 22.1, 22.9, 22.10 |
+
+## `cookies`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `cookies` | `() => Cookies` | The cookies of the request being served, live and mutable. | 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.10 |
+| `Cookies` | `class Cookies implements Iterable<[string, string]> { get(name: string): string \| null; has(name: string): boolean; set(name: string, value: string, options?: CookieInit): void; set(options: CookieInit): void; delete(name: string, options?: Omit<CookieStoreDeleteOptions, 'name'>): void; delete(options: CookieStoreDeleteOptions): void; size: number; toJSON(): Record<string, string>; toSetCookieHeaders(): string[] }` | A cookie jar shaped like Bun's `CookieMap`. | 22.4, 22.5, 22.6 |
+
+## `route`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `route.url` | `Reactive<URL>` | Where we are, fragment included. | 23.1, 23.2, 23.3, 23.4, 30.20, 30.21, 30.23, 30.33, 19.16, 31.15 |
+| `route.params` | `Reactive<Params>` | The matched route's segments — typed by its own route in a page or a layout, and `Params` in any other file. | 23.1, 23.5, 23.9, 30.23, 31.15 |
+| `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. | 23.5 |
+| `route.name` | `Reactive<string>` | The resolution path, the same under any mount path. | 23.1, 23.6, 23.14, 31.15 |
+| `route.index` | `Reactive<number>` | The place of the entry the address bar stands at in the history this app's router wrote. | 23.1, 23.28, 23.29, 31.15 |
+| `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1, 31.15 |
+| `route.query` | `<Defaults extends Record<string, string \| number \| boolean \| readonly string[]>>(defaults: Defaults) => Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>` | The address's query as one value of its defaults' shape. | 30.41, 30.42, 30.43, 30.44, 30.45, 30.46, 30.47, 30.48, 31.8 |
+
+The alias `route.query` widens its defaults through is declared rather than listed, not being a
+name an app writes:
+```ts
+type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends string ? string : Defaults[Name] extends number ? number : Defaults[Name] extends boolean ? boolean : string[] }
+```
+
+## `online`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8, 18.33, 18.34, 41.32 |
+
+## `media`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `media` | `(query: string) => Reactive<boolean>` | Whether the document matches a media query. | 23.30, 23.31, 23.32, 41.32 |
+
+## `outbox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `outbox` | `<Chosen extends Selection>(selection?: Chosen, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 46.20, 46.21, 18.35 |
+| `rpc.outbox` | `(pattern?: Partial<Args>) => QueuedCall[]` | `outbox` narrowed to the handler's calls. | 46.1, 13.12 |
+| `QueuedCall` | `{ id: string; method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string; args: Record<string, JsonValue> \| undefined; queuedAt: number; attempts: number; value: Reactive<Value, Value, Failed<string, unknown>>; retry: () => void; discard: () => void }` | One call `outbox` holds. | 46.1, 46.10 |
+| `call.value` | `Reactive<Value, Value, Failed<string, unknown>>` | The value a queued call settled. | 46.5, 46.7, 46.18, 46.19 |
+| `call.retry` | `() => void` | Sends a queued call again. | 46.6, 46.12 |
+| `call.discard` | `() => void` | Drops a queued call. | 46.13 |
+
+## `reachable`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `reachable` | `(host: string) => Promise<boolean>` | Whether a host answers at all. | 23.10, 23.11, 23.12, 23.13 |
+
+## `server`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `server` | `<WebSocketData>() => Server<WebSocketData>` | The listening server. | 22.1, 42.9 |
+
+## `isServer`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `isServer` | `() => boolean` | Whether the work running is a server's. | 22.11, 12.7, 23.7, 23.8 |
+
+## `principal`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `principal.authenticated` | `Reactive<boolean>` | Whether this caller presented something the server accepted. | 26.1, 26.2 |
+| `principal.expiresAt` | `Reactive<string \| undefined>` | When the seal lapses. | 26.1, 26.2 |
+| `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver, or a browser's load of the document, having failed. | 26.1, 26.3, 26.23 |
+| `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4, 26.25, 26.26 |
+| `principal.caller` | `Reactive<string>` | Which browser, as against who they are. | 22.10, 26.5, 26.6, 26.7, 26.19, 26.22 |
+| `principal.set` | `(claims: Record<string, unknown>) => Promise<void>` | Authenticates this caller. | 18.25, 26.8, 26.12, 26.16, 26.17, 26.18, 26.20, 26.21, 26.24 |
+| `principal.clear` | `() => void` | Signs this caller out. | 18.25, 26.7, 26.9, 26.24 |
+| `Principal` | `interface Principal { [claim: string]: unknown; authenticated: boolean; expiresAt?: string; error?: Failed<string, unknown> }` | The wire document. | 26.4, 26.10, 26.13, 26.14, 26.15, 26.25 |
+| `authenticated` | `boolean` | Whether this caller presented a seal the server accepted. | 26.10 |
+| `expiresAt` | `string \| undefined` | When the seal lapses. | 26.11 |
+| `error` | `Failed<string, unknown> \| undefined` | The app's resolver having failed. | 26.3 |
+
+## `config`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `config` | `Reactive<Config>` | The resolved configuration document. | 27.1, 27.9 |
+| `Config` | `interface Config { [field: string]: unknown; APP_NAME: string; APP_VERSION: string; APP_DATA_DIR: string }` | The resolved document, widened by what each `onConfig`'s defaults return, and by declaration merging. | 27.12, 27.13 |
+| `Env` | `Record<string, string \| undefined>` | The process environment as read, before coercion. | 27.2, 27.8 |
+| `config.invalidate` | `() => void` | The trigger over the resolved configuration. | 7.2, 27.5 |
+| `ConfigDefaults` | `(env: Env) => unknown` | The defaults function, synchronous by contract. | 27.4, 27.11 |
+| `ConfigField` | `{ name: string; label: string; description: string \| undefined; input: 'text' \| 'number' \| 'checkbox' \| 'password' \| 'url' \| 'select'; options: string[] \| undefined; required: boolean; value: string }` | One input the start form asks for. | 38.72 |
+
+### `ConfigOptions`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `schema` | `Schema<Config>` | The gate over the whole configuration document. | 27.7 |
+
 # Transports
 
 ## `GET`
@@ -405,770 +731,6 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 19.21, 19.22, 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 20.14, 20.16, 20.17, 20.19, 20.20, 20.21, 20.22, 20.23, 36.7, 16.78 |
 
-# Assistant
-
-## `assistant`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39, 44.57, 44.100, 44.101 |
-| `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string \| AssistantContent[] }` | One turn of the transcript a caller sends: its words, or its pieces in order. | 44.3, 44.4 |
-| `AssistantContent` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string }` | A piece of a turn: words, or an image as base64 with its type. | 44.5, 44.35, 44.36, 44.37, 44.38, 44.39 |
-| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; handler: { method: string; address: string } \| undefined } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean; handler: { method: string; address: string } \| undefined; value: unknown } \| { type: 'permission'; id: string; name: string; input: unknown } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, a permission prompt, and the end. | 44.2, 44.11, 44.28, 44.48, 44.49, 44.81 |
-| `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number; signal?: AbortSignal }` | What `assistant` takes beside a provider. | 44.6, 44.8, 44.11, 44.57 |
-| `Provider` | `{ run(messages: (AssistantMessage & { content: AssistantContent[] })[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<ProviderEvent> }` | What runs a conversation. | 44.2, 44.28, 44.39, 44.50, 44.57 |
-| `ProviderEvent` | `Exclude<AssistantEvent, { type: 'tool' \| 'result' }> \| { type: 'tool'; id: string; name: string } \| { type: 'result'; id: string; text: string; failed: boolean }` | An `AssistantEvent` as a provider yields it, before `assistant` reads the handler and the value off the app's surface. | 44.28, 44.35, 44.50 |
-| `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<ToolAnswer> }` | The app's MCP tools, called as the asker. | 44.6, 44.7, 44.35 |
-| `ToolAnswer` | `{ content: AssistantContent[]; failed: boolean }` | What a tool call answered: its pieces, and whether it failed. | 20.21, 20.22, 44.35, 44.93 |
-| `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 20.19, 44.6 |
-
-## `resultsOf`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `resultsOf` | `<Value>(events: readonly AssistantEvent[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { method: string; address: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 44.51 |
-
-## `imagePiece`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `imagePiece` | `(image: Blob) => Promise<{ type: 'image'; data: string; mimeType: string }>` | An image as a turn's image piece, drawn down to what a model looks at and redrawn where it is a photo. | 44.52, 44.53, 44.54 |
-
-## `imageFiles`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `imageFiles` | `(data: DataTransfer \| null) => File[]` | The images a paste or a drop carries that a model is shown, or that `imagePiece` draws as one. | 44.55 |
-
-## `provider`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `provider.claudeApi` | `(config: ClaudeApiConfig) => Provider` | The Claude Messages API as a provider. | 44.9, 44.10, 44.12, 44.21, 44.35, 44.38 |
-| `ClaudeApiConfig` | `{ apiKey: string; baseURL?: string; model: string; max_tokens: number; system?: string \| unknown[]; tools?: unknown[]; [field: string]: unknown }` | A Messages API request body, less `messages` and `stream`, with the client's key and origin. | 44.9, 44.10 |
-| `provider.claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.33, 44.77, 44.78, 44.79, 44.81 |
-| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the tools of the visitor's machine it asks for. | 44.15, 44.16, 44.29, 44.58 |
-| `provider.claudeCode.bridgeCommand` | `(options?: { tools?: string[]; full?: boolean; note?: string }) => { command: string; link: string; install: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the tools it is given or asking for full access, with a note on why, and the command that installs what opens the link. | 44.14, 44.32, 44.33, 44.40, 44.56, 44.76, 44.85, 44.91 |
-| `provider.claudeCode.bridge` | `(options?: { tools?: string[]; full?: boolean; note?: string }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40, 44.59, 44.60, 44.76, 44.85, 44.91 |
-| `provider.claudeCode.callTool` | `(tool: string, input: unknown) => Promise<ToolAnswer>` | What one MCP tool of the visitor's machine answered, called through the bridge paired with their browser with no model, or by a turn where the bridge cannot make the call. | 44.93, 44.94, 44.95, 44.96, 44.97, 44.98, 44.99 |
-| `provider.claudeCode.permit` | `(id: string, allow: boolean) => void` | The asking browser's answer to a `permission` event its bridge's turn is waiting on. | 44.83 |
-| `BridgeStatus` | `{ paired: boolean; missing: string[]; command: string; link: string; install: string }` | Whether a bridge is paired, the tools it cannot make available, and the command and the link that pair one, with the command that installs what opens the link. | 44.20, 44.40, 44.56, 44.59, 44.60, 44.78 |
-| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns and calls. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 44.96, 44.97, 16.57, 16.78 |
-| `/__abide/pairing` | `GET` | This browser's pairing, as it changes, for `pairing` to read. | 44.67, 44.68, 44.74, 44.75, 44.76, 18.36 |
-
-## `pairing`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `pairing` | `() => { status: Reactive<BridgeStatus \| undefined, BridgeStatus \| undefined, Failed<'HttpError', undefined>>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; retry: () => void; copyInstall: () => Promise<void>; stop: () => void; [Symbol.dispose]: () => void }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.69, 44.70, 44.71, 44.72, 44.73, 44.102 |
-
-## `transcript`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `AssistantTurn` | `{ role: 'user' \| 'assistant'; parts: AssistantTurnPart[]; stop: string \| undefined; failed: string \| undefined }` | One turn of a conversation as a chat holds it. | 53.27, 53.30, 53.35, 53.36 |
-| `AssistantTurnPart` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string } \| { type: 'tool'; id: string; name: string; input: unknown; result: string \| undefined; failed: boolean; value: unknown } \| { type: 'permission'; id: string; name: string; input: unknown; allowed: boolean \| undefined }` | One piece of a turn: words, an image, a tool call, or a permission prompt. | 53.24, 53.25, 53.26 |
-| `transcript.turn` | `(role: 'user' \| 'assistant', parts?: AssistantTurnPart[]) => AssistantTurn` | A turn holding the parts it is handed, or none. | 53.30 |
-| `transcript.fold` | `(answering: AssistantTurn, event: AssistantEvent) => void` | One event of an answer, folded into the answering turn in place. | 53.24, 53.25, 53.26, 53.27 |
-| `transcript.messages` | `(turns: readonly AssistantTurn[]) => AssistantMessage[]` | A conversation as an assistant handler takes it. | 53.28, 53.29 |
-
-# Ambient values
-
-## `request`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `request` | `() => Request` | The request being served. | 18.16, 18.17, 18.18, 22.1 |
-| `request.ip` | `() => ReceivedFrom \| 'in-process'` | Where the request being served came from. | 22.1, 22.12, 22.13 |
-| `ReceivedFrom` | `{ address: string; family: 'IPv4' \| 'IPv6'; port: number } \| null` | The peer a listener received a request from. | 22.12 |
-
-## `response`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
-| `response.page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 16.75, 17.2 |
-| `response.json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. | 17.7, 17.9, 17.10 |
-| `response.redirect` | `(to: string \| URL, status?: RedirectStatus) => undefined` | A navigation. | 16.52, 17.3 |
-| `response.jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.44, 16.75, 17.6, 17.7 |
-| `response.sse` | `<T>(values: Values<T>) => Values<T>` | A stream of values framed as server-sent events, fixed. | 16.45, 16.57, 16.75, 17.6, 17.7 |
-| `response.bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.34, 16.75, 17.6, 17.7 |
-| `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `response.redirect` may carry. | 17.3 |
-| `response` | `() => { status: number; headers: Headers }` | The response being built for the request being served. | 16.13, 16.52, 21.10, 22.1, 22.9, 22.10 |
-
-## `cookies`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `cookies` | `() => Cookies` | The cookies of the request being served, live and mutable. | 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.10 |
-| `Cookies` | `class Cookies implements Iterable<[string, string]> { get(name: string): string \| null; has(name: string): boolean; set(name: string, value: string, options?: CookieInit): void; set(options: CookieInit): void; delete(name: string, options?: Omit<CookieStoreDeleteOptions, 'name'>): void; delete(options: CookieStoreDeleteOptions): void; size: number; toJSON(): Record<string, string>; toSetCookieHeaders(): string[] }` | A cookie jar shaped like Bun's `CookieMap`. | 22.4, 22.5, 22.6 |
-
-## `route`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `route.url` | `Reactive<URL>` | Where we are, fragment included. | 23.1, 23.2, 23.3, 23.4, 30.20, 30.21, 30.23, 30.33, 19.16, 31.15 |
-| `route.params` | `Reactive<Params>` | The matched route's segments — typed by its own route in a page or a layout, and `Params` in any other file. | 23.1, 23.5, 23.9, 30.23, 31.15 |
-| `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. | 23.5 |
-| `route.name` | `Reactive<string>` | The resolution path, the same under any mount path. | 23.1, 23.6, 23.14, 31.15 |
-| `route.index` | `Reactive<number>` | The place of the entry the address bar stands at in the history this app's router wrote. | 23.1, 23.28, 23.29, 31.15 |
-| `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1, 31.15 |
-| `route.query` | `<Defaults extends Record<string, string \| number \| boolean \| readonly string[]>>(defaults: Defaults) => Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>` | The address's query as one value of its defaults' shape. | 30.41, 30.42, 30.43, 30.44, 30.45, 30.46, 30.47, 30.48, 31.8 |
-
-The alias `route.query` widens its defaults through is declared rather than listed, not being a
-name an app writes:
-```ts
-type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends string ? string : Defaults[Name] extends number ? number : Defaults[Name] extends boolean ? boolean : string[] }
-```
-
-## `online`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8, 18.33, 18.34, 41.32 |
-
-## `media`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `media` | `(query: string) => Reactive<boolean>` | Whether the document matches a media query. | 23.30, 23.31, 23.32, 41.32 |
-
-## `outbox`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `outbox` | `<Chosen extends Selection>(selection?: Chosen, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 46.20, 46.21, 18.35 |
-| `rpc.outbox` | `(pattern?: Partial<Args>) => QueuedCall[]` | `outbox` narrowed to the handler's calls. | 46.1, 13.12 |
-| `QueuedCall` | `{ id: string; method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string; args: Record<string, JsonValue> \| undefined; queuedAt: number; attempts: number; value: Reactive<Value, Value, Failed<string, unknown>>; retry: () => void; discard: () => void }` | One call `outbox` holds. | 46.1, 46.10 |
-| `call.value` | `Reactive<Value, Value, Failed<string, unknown>>` | The value a queued call settled. | 46.5, 46.7, 46.18, 46.19 |
-| `call.retry` | `() => void` | Sends a queued call again. | 46.6, 46.12 |
-| `call.discard` | `() => void` | Drops a queued call. | 46.13 |
-
-## `reachable`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `reachable` | `(host: string) => Promise<boolean>` | Whether a host answers at all. | 23.10, 23.11, 23.12, 23.13 |
-
-## `trace`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `trace` | `() => string` | The trace id of the operation this work belongs to. | 24.1 |
-| `trace.sampled` | `() => boolean` | The caller's sampling decision, carried through verbatim. | 24.2 |
-| `trace.span` | `<T>(name: string, body: () => T, options?: { timing?: boolean }) => T` | Opens a child span around a body. | 24.3, 24.4, 24.6, 24.7, 24.8, 24.9 |
-| `trace.headers` | `() => Record<string, string>` | What an outbound request carries. | 24.5 |
-
-## `server`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `server` | `<WebSocketData>() => Server<WebSocketData>` | The listening server. | 22.1, 42.9 |
-
-## `isServer`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `isServer` | `() => boolean` | Whether the work running is a server's. | 22.11, 12.7, 23.7, 23.8 |
-
-## `health`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `health` | `Rpc<Health, undefined>` | The account of the app this call is in. | 16.4, 25.1, 25.2, 25.3 |
-| `Health` | `interface Health { version: string; abide: string; startedAt: string }` | The app's health account, which an app widens with what its `onHealth` adds. | 25.4 |
-| `version` | `string` | The app's version. | — |
-| `abide` | `string` | The framework's version. | — |
-| `startedAt` | `string` | When the process started, ISO-8601. | — |
-
-## `principal`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `principal.authenticated` | `Reactive<boolean>` | Whether this caller presented something the server accepted. | 26.1, 26.2 |
-| `principal.expiresAt` | `Reactive<string \| undefined>` | When the seal lapses. | 26.1, 26.2 |
-| `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver, or a browser's load of the document, having failed. | 26.1, 26.3, 26.23 |
-| `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4, 26.25, 26.26 |
-| `principal.caller` | `Reactive<string>` | Which browser, as against who they are. | 22.10, 26.5, 26.6, 26.7, 26.19, 26.22 |
-| `principal.set` | `(claims: Record<string, unknown>) => Promise<void>` | Authenticates this caller. | 18.25, 26.8, 26.12, 26.16, 26.17, 26.18, 26.20, 26.21, 26.24 |
-| `principal.clear` | `() => void` | Signs this caller out. | 18.25, 26.7, 26.9, 26.24 |
-| `Principal` | `interface Principal { [claim: string]: unknown; authenticated: boolean; expiresAt?: string; error?: Failed<string, unknown> }` | The wire document. | 26.4, 26.10, 26.13, 26.14, 26.15, 26.25 |
-| `authenticated` | `boolean` | Whether this caller presented a seal the server accepted. | 26.10 |
-| `expiresAt` | `string \| undefined` | When the seal lapses. | 26.11 |
-| `error` | `Failed<string, unknown> \| undefined` | The app's resolver having failed. | 26.3 |
-
-## `config`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `config` | `Reactive<Config>` | The resolved configuration document. | 27.1, 27.9 |
-| `Config` | `interface Config { [field: string]: unknown; APP_NAME: string; APP_VERSION: string; APP_DATA_DIR: string }` | The resolved document, widened by what each `onConfig`'s defaults return, and by declaration merging. | 27.12, 27.13 |
-| `Env` | `Record<string, string \| undefined>` | The process environment as read, before coercion. | 27.2, 27.8 |
-| `config.invalidate` | `() => void` | The trigger over the resolved configuration. | 7.2, 27.5 |
-| `ConfigDefaults` | `(env: Env) => unknown` | The defaults function, synchronous by contract. | 27.4, 27.11 |
-| `ConfigField` | `{ name: string; label: string; description: string \| undefined; input: 'text' \| 'number' \| 'checkbox' \| 'password' \| 'url' \| 'select'; options: string[] \| undefined; required: boolean; value: string }` | One input the start form asks for. | 38.72 |
-
-### `ConfigOptions`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `schema` | `Schema<Config>` | The gate over the whole configuration document. | 27.7 |
-
-# Helpers
-
-## `log`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `log` | `(...args: unknown[]) => void` | A message under the default namespace. | 28.1, 28.2 |
-| `log.info` / `log.warning` / `log.error` / `log.debug` | `(...args: unknown[]) => void` | A line at one of four levels. | 28.3 |
-| `log.named` | `(name: string) => Logger` | A logger under a named namespace. | 28.4, 28.5, 28.12 |
-| `Logger` | `typeof log` | What `log.named` hands back. | 28.5 |
-| `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. | 28.6, 28.7 |
-| `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string; span: Span \| undefined }` | One line, as a value. | 24.3, 24.9 |
-| `Span` | `{ id: string; parent: string; name: string; kind: 'server' \| 'internal'; duration: number; status: 'ok' \| 'error'; attributes: Record<string, string \| number> }` | A line's place in its trace, and how the work it timed went. | 24.4, 24.9, 24.10 |
-| `log.records` | `Reactive<LogRecord[]>` | The lines kept, appended to as each is written. | 28.1 |
-| `abide:request` | `debug` | One line per request. | 24.10, 28.8, 36.19 |
-| `abide:socket` | `debug` | One line per frame on the socket mux. | 28.8 |
-| `abide:lifecycle` | `debug` `error` | A lifecycle hook that ran or threw. | 28.8 |
-| `abide:principal` | `debug` `warning` | A principal set or cleared. | 28.8 |
-| `abide:health` | `warning` | An `onHealth` that threw or answered a non-object. | 25.2, 28.8 |
-| `abide:mcp` | `debug` `warning` | A handler withheld from MCP, a tool call answered, or a tool published with no description. | 20.3, 20.9, 20.18, 28.8 |
-| `abide:assistant` | `debug` | One line per conversation, once it ends. | 44.31 |
-| `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export. | 20.11, 28.8 |
-| `abide:render` | `warning` | An `error.abide` that itself failed. | 28.8 |
-| `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |
-| `abide:reactive` | `warning` | A failed revalidation over a value still being served, a failed run of a polled one, or a failed `refreshes` after a write. | 4.12, 7.28, 16.102, 28.8 |
-| `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
-| `abide:hydrate` / `abide:navigate` | `warning` | A hydration or a client-side navigation that went wrong in the browser. | 28.8, 41.10, 41.15, 41.24, 45.10 |
-
-## `report`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `report` | `(options?: { trace?: string }) => ReportDraft` | A problem report a person can read, write and send. | 48.1, 48.2, 48.3, 48.4, 48.5 |
-| `ReportDraft` | `class ReportDraft { id: string; summary: Reactive<string>; description: Reactive<string>; traces: string[]; lines: Reactive<LogRecord[]>; markdown: Reactive<string>; open(): Promise<boolean>; send(): Promise<string> }` | A report not yet sent. | 48.6, 48.7, 48.8, 48.9, 48.12, 48.13 |
-| `Report` | `{ id: string; summary: string; description: string; version: string; platform: string; route: string; traces: string[]; lines: LogRecord[]; markdown: string }` | What `onReport` is handed. | 48.7, 48.10, 48.11, 48.12 |
-
-## `database`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `database` | `(file: string \| (() => string), options?: { migrations?: (string \| ((database: Database) => void))[]; openNewer?: boolean; open?: (database: Database) => void; strict?: boolean; readonly?: boolean; safeIntegers?: boolean }) => (() => Database) & { close: (options?: { remove?: boolean }) => void; changed: Reactive<number> }` | The opener of the app's `bun:sqlite` database `file`, from `@abide/abide/server`. | 36.4, 47.1, 47.2, 47.3, 47.4, 47.5, 47.6, 47.7, 47.8, 47.9, 47.10, 47.11, 47.12, 47.13, 47.14, 47.15, 47.16, 47.18, 47.19, 47.20, 47.21 |
-| `opener.close` | `(options?: { remove?: boolean }) => void` | Closes the `Database` an opener holds, and with `remove` deletes the file it last opened. | 47.11, 47.16, 47.17 |
-| `opener.changed` | `Reactive<number>` | How many times the opener has found another connection's commits to its file. | 47.22, 47.23, 47.24 |
-
-## `csp`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `csp` | `(sources?: Record<string, string[]>) => (next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Response \| Promise<Response>` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5, 29.6, 29.7, 29.8 |
-| `csp.nonce` | `() => string` | This response's nonce, for the app's own inline script. | 29.3, 29.4, 29.9, 29.11 |
-
-## `url`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>] : [params?: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>]) => string` | Builds an address from a route literal or a public file's address. | 30.1, 30.2, 30.6, 30.8, 30.19, 30.26, 30.40 |
-| `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
-| `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
-| `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
-| `OptionalNames<P>` | `string` | The optional segment names. | 30.4 |
-| `RestNames<P>` | `string` | The rest segment names. | 30.5 |
-| `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6, 30.28, 30.40 |
-| `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept, narrowed where `abide check` declares a matcher's literals. | 30.3, 30.4, 30.5 |
-| `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as, narrowed where `abide check` declares a matcher's literals. | 23.9 |
-| `Routes` | `interface Routes {}` | The app's route literals and public file addresses, which `abide check` declares. | 30.26 |
-| `RouteLiteral` | `[keyof Routes] extends [never] ? string : Extract<keyof Routes, string>` | What `url` takes. | 30.26 |
-
-## `navigate`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `navigate` | `{ (by: number): Promise<void>; (url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }): Promise<void> }` | Navigates to an address, or steps through the history. | 30.7, 30.38, 30.39, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31, 30.32, 45.12, 45.24 |
-
-## `observe`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `observe.size` | `{ (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): (element: Element) => Disposer; (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: 'content' \| 'border' }): (element: Element) => Disposer; (target: ((size: { width: number; height: number }) => void), options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): (element: Element) => Disposer; (target: ((size: { width: number; height: number }) => void), options?: { box?: 'content' \| 'border' }): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's size. | 32.79, 32.81, 32.82, 32.83, 32.90, 32.91, 32.92, 32.98 |
-| `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown> }): (element: Element) => Disposer; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown> }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Element \| Document }): (element: Element) => Disposer }` | The `bind:element` adaptor writing whether an element is in view. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92, 32.98 |
-| `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): (element: Element) => Disposer; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's rectangle in the viewport. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92, 32.98 |
-
-## `format`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `format` | `{ money; percent; number; plural; list; date; duration; relative; bytes }` | The formatters abide ships, as one namespace. | 52.1, 52.2, 52.6 |
-| `format.money` | `(value: unknown, options?: { currency?: string; compact?: boolean; signed?: boolean; digits?: number; locale?: string }) => string` | An amount of money as it is written. | 52.1, 52.2, 52.6, 52.35 |
-| `format.percent` | `(value: unknown, options?: { digits?: number; signed?: boolean; locale?: string }) => string` | A fraction written as a percent. | 52.1, 52.2, 52.6, 52.35 |
-| `format.number` | `(value: unknown, options?: { compact?: boolean; digits?: number; locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6 |
-| `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
-| `format.list` | `(value: unknown, options?: { conjunction?: 'and' \| 'or'; locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6 |
-| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36 |
-| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36 |
-| `format.timeZone` | `Reactive<string \| undefined>` | The zone the app pins every date to where its caller names none, or `undefined` for the visitor's own. | 52.3, 52.44, 52.45 |
-| `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
-| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
-| `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
-
-## `markdown`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `markdown` | `(text: string, options?: { schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (source: string, info: string) => string>>; inline?: boolean; streaming?: boolean }) => string` | Markdown as HTML safe to hand `raw`. | 52.8, 52.9, 52.10, 52.11, 52.12, 52.13, 52.14, 52.15, 52.16, 52.40, 52.41, 52.42, 52.46, 52.47, 52.48, 52.49, 52.50 |
-| `LinkTarget` | `{ href: string; target?: string; rel?: string }` | Where a link `markdown` writes goes: its address, and the `target` and `rel` it opens with. | 52.40 |
-
-## `hotkeys`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `hotkeys` | `(bindings: Record<string, Hotkey>) => (event: KeyboardEvent) => void` | A `keydown` listener running the binding a key press matches, each binding written as its modifiers and its key joined by `+`. | 53.1, 53.2, 53.3, 53.4, 53.5, 53.6, 53.7, 53.8, 53.9 |
-| `Hotkey` | `((event: KeyboardEvent) => void) \| { run: (event: KeyboardEvent) => void; editable?: boolean; prevent?: boolean }` | What a binding runs, alone or with whether it also runs while the visitor types and whether it takes the key's default. | 53.2, 53.7 |
-
-## `isEditableTarget`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `isEditableTarget` | `(target: EventTarget \| null) => boolean` | Whether a key event's target is somewhere the visitor types. | 53.10 |
-
-## `keyLabel`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `keyLabel` | `(binding: string, options?: { apple?: boolean }) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.9, 53.11, 53.54, 53.56 |
-| `keyLabel.parts` | `(binding: string, options?: { apple?: boolean }) => string[]` | Each key `keyLabel` writes for a binding, apart, for one key cap apiece. | 53.55, 53.56 |
-
-## `dismissible`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: { escape?: boolean; outside?: boolean; inside?: readonly (Element \| null \| undefined)[] }) => (element: Element) => Disposer` | The `bind:element` adaptor closing an element on a press outside it or on Escape. | 32.9, 53.12, 53.13, 53.14, 53.15, 53.16 |
-
-## `followBottom`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `followBottom` | `(element: Element) => Disposer` | The `bind:element` adaptor keeping a scrolling element at its bottom as what it holds grows. | 32.9, 53.53 |
-
-## `dropzone`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean; onreject?: (files: File[], event: DragEvent \| ClipboardEvent) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20, 53.46 |
-
-## `copyText`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `copyText` | `(text: string \| ((clicked: Element) => string), options?: { copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45 |
-
-## `signedIn`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `signedIn` | `Middleware<never, object, Failed<'SignedOut', undefined>>` | A rung admitting a caller the server authenticated, from `@abide/abide/server`. | 15.9, 54.1 |
-
-## `trustedIdentity`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `trustedIdentity` | `(options: { header: string; proxies: readonly string[]; claims: (value: string) => Record<string, unknown> }) => Middleware` | A rung signing in the caller a trusted proxy names in a header, from `@abide/abide/server`. | 54.35, 54.36, 54.37 |
-
-## `requireRole`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.7, 15.9, 54.2, 54.3, 54.4, 54.28 |
-
-## `readOnly`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `readOnly` | `(options?: { allow?: readonly { address: string \| undefined }[]; message?: string }) => Middleware<never, object, Failed<'ReadOnly', undefined>>` | A rung refusing every write but one to a handler it allows, from `@abide/abide/server`. | 15.9, 54.5, 54.6 |
-
-## `fetchJson`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
-| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.12, 54.15, 54.17 |
-| `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up, or a `Response` `handle` read outside 2xx, settles to. | 15.9, 54.14, 54.16, 54.17, 54.31, 54.34 |
-
-## `handle`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `handle` | `(response: Response) => Promise<unknown \| FetchFailed>` | A `Response` the app fetched itself, read as its `content-type` says: `fetch(url).then(handle)`. | 54.30, 54.31, 54.32, 54.33 |
-
-## `fetchText`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `fetchText` | `(url: string \| URL, options?: FetchOptions<string>) => Promise<string \| FetchFailed>` | Another service's answer as text, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
-
-## `job`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29 |
-| `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
-| `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
-| `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
-| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
-| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
-
-## `place`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `place` | `(anchor: Element, floating: Element, options?: PlaceOptions) => Placement` | Where a floating element sits beside its anchor, in viewport pixels. | 50.19, 50.20, 50.21, 50.22 |
-| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number; arrowInset?: number }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners. | 50.19, 50.20, 50.21, 50.35 |
-| `Placement` | `{ x: number; y: number; side: Side; arrow: number }` | The left and top edges `place` chose, the side it took, and where along the facing edge the anchor's middle falls. | 50.19, 50.27 |
-| `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
-
-## `listbox`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `listbox` | `<Option>(options: ListboxOptions<Option>) => Listbox<Option>` | A keyboard controller over a list of keyed options, for markup the app writes itself. | 51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7, 51.8, 51.9, 51.10, 51.11, 51.12 |
-| `ListboxOptions` | `ListboxOptions<Option> = { id: string; options: () => readonly Option[]; key: (option: Option) => string; wrap?: boolean; onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10 |
-| `Listbox` | `Listbox<Option> = { active: () => string \| undefined; activeOption: () => Option \| undefined; activeId: () => string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; keydown: (event: KeyboardEvent) => void }` | What `listbox` hands back: the active key and option, and the ids and the listener the markup takes. | 51.1, 51.2, 51.3, 51.10, 51.11 |
-
-## `sortRows`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `sortRows` | `<Row>(rows: readonly Row[], columns: readonly Column<Row>[], sort: Sort \| undefined) => readonly Row[]` | The rows in the order a `Sort` names. | 51.45, 51.46, 51.47, 51.48, 51.49, 51.50 |
-| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean; firstDirection?: 'ascending' \| 'descending' }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.49, 51.52, 51.53, 51.58, 51.59 |
-| `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.45, 51.53, 51.54, 51.55 |
-
-## `chart`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `chart` | `{ ticks; scale; path; stack; nearest }` | The arithmetic under a chart, as one namespace. | 52.19, 52.20, 52.21, 52.22, 52.23, 52.54 |
-| `chart.ticks` | `(min: number, max: number, count?: number) => number[]` | Round values for an axis from `min` to `max`, about `count` intervals apart. | 52.19 |
-| `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
-| `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], baseline?: number \| readonly number[]) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`. | 52.21, 52.22 |
-| `chart.stack` | `<Each extends { values: readonly (number \| null \| undefined)[]; stack?: string \| false }>(series: readonly Each[], options?: { stack?: boolean; normalize?: boolean }) => { low: (number \| undefined)[]; high: (number \| undefined)[]; stack: string \| undefined }[]` | Where each series stands at each x once its stack is piled, and the stack it joined. | 52.54, 52.55, 52.56, 52.57, 52.58 |
-| `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
-| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false }` | One series of a chart: what it is called, its values in x order, how it is drawn, and the stack it piles into. | 52.21, 52.24, 52.55 |
-
-# Components
-
-Components abide ships, each an entry of its own an app imports as `@abide/abide/<Name>.abide`,
-with no stylesheet: a caller styles one by the `data-` attributes and the `data-part`s it writes.
-
-## `Dialog`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Dialog` | `{ open?: boolean; modal?: boolean; dismissible?: boolean; onclose?: (returnValue: string) => void } & Omit<Attributes<'dialog'>, 'open' \| 'onclose'>` | A native modal `<dialog>` whose children are its content, imported from `@abide/abide/Dialog.abide`. | 50.1, 50.2, 50.3, 50.4, 49.1, 49.2, 49.3, 49.5, 49.7 |
-
-## `Prompts`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Prompts` | `Omit<Attributes<'dialog'>, 'open' \| 'onclose' \| 'role'>` | The `Dialog` the queued prompts show in, rendered once and imported from `@abide/abide/Prompts.abide`. | 50.6, 50.8, 50.10, 50.34, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
-
-## `prompts`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question asked in the app's `Prompts`. | 50.5, 50.7, 50.8, 50.11, 11.32 |
-| `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown in the app's `Prompts` until it is closed. | 50.5, 50.7, 50.9, 50.11, 11.32 |
-| `prompts.prompt` | `(asked: string \| PromptOptions) => Promise<string \| undefined>` | A line of text asked for in the app's `Prompts`. | 50.5, 50.7, 50.11, 50.33, 11.32 |
-| `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string; value?: string; placeholder?: string; signal?: AbortSignal; modal?: boolean; run?: (answer: string) => unknown }` | What a prompt shows, what its buttons say, what withdraws it, whether it is modal, and the call confirming makes. | 50.7, 50.10, 50.34, 50.43, 50.44, 50.45 |
-
-## `Toasts`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Toasts` | `{ label?: string; Toast?: (props: { toast: Toast; dismiss: () => void; act: () => void }) => unknown } & Omit<Attributes<'div'>, 'role'>` | The live region the notices are listed in, rendered once and imported from `@abide/abide/Toasts.abide`. | 50.17, 50.18, 50.46, 32.38, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
-
-## `toasts`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16 |
-| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.41, 50.42 |
-| `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
-| `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
-| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.41 |
-
-## `tooltip`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `tooltip` | `(hint: Hint, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a hint for the element it is bound to, shown by the page's `Tooltips`. | 32.9, 50.23, 50.24, 50.25, 50.36, 50.47 |
-| `Hint` | `string \| ((props: Record<string, never>) => unknown)` | What a hint shows: text, or a component. | 50.23 |
-| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number; trigger?: 'hover' \| 'bound' }` | Where a hint opens against its anchor, and what opens it. | 50.24, 50.25, 50.26, 50.35, 50.47 |
-
-## `Tooltips`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.23, 50.26, 50.27, 50.35, 50.36, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
-
-## `menu`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40 |
-| `MenuOptions` | `{ open?: Reactive<boolean>; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, and what hears it open and close. | 50.35, 50.37 |
-| `Menu` | `{ readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38 |
-
-## `Combobox`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item \| readonly Item[]; Option?: (props: { item: Item }) => unknown; Chip?: (props: { item: Item; remove: () => void }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62 |
-
-## `tabs`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `tabs` | `(options: TabsOptions) => Tabs` | WAI-ARIA's tabs as parts an app spreads onto elements of its own: a tab list, a tab per key, and a panel. | 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44 |
-| `TabsOptions` | `{ keys: readonly string[] \| (() => readonly string[]); selected?: Reactive<string \| undefined> }` | The tabs' keys in order, and the key of the one selected. | 51.36, 51.37 |
-| `Tabs` | `{ readonly list: Record<string, unknown>; tab(key: string): Record<string, unknown>; panel(key?: string): Record<string, unknown>; readonly current: Reactive<string \| undefined> }` | The list's part, a tab's, a panel's, and the key of the tab selected. | 32.11, 51.36, 51.42, 51.43 |
-
-## `SortableTable`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown; rowAttributes?: (row: Row) => Attributes<'tr'> } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60, 51.63 |
-
-## `Markdown`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Markdown` | `{ source: string; schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (props: { source: string; info: string }) => unknown>>; streaming?: boolean } & Attributes<'div'>` | A `div` of the markup `markdown` renders for `source`, the component `@abide/abide/Markdown.abide` exports. | 49.1, 49.3, 49.5, 49.6, 52.17, 52.18, 52.40, 52.41, 52.43, 52.50 |
-
-## `Chart`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64 |
-
-## `Line`, `Column` and `Area`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Line` / `Column` / `Area` | `{ label: string; values: readonly (number \| null \| undefined)[]; stack?: string \| false }` | A series of the `Chart` it is a child of, drawn as a line, a column per value or a filled area, the components `@abide/abide/Line.abide`, `@abide/abide/Column.abide` and `@abide/abide/Area.abide` export. | 52.24, 52.37, 52.51, 52.52, 52.53, 52.55 |
-
-## `Pie`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Pie` | `{ slices: readonly { label: string; value: number \| null \| undefined }[]; label: string; inner?: number; valueFormat?: (value: number) => string; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'values'>` | Shares of a whole as the slices of a ring in an `svg`, a pie or a donut, the component `@abide/abide/Pie.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.29, 52.30, 52.38, 52.39, 52.63, 52.64, 52.65, 52.66, 52.67, 52.68 |
-
-## `Sparkline`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean; kind?: 'line' \| 'bar' } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line, or as bars, with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.33, 52.34 |
-
-## `Chat`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Chat` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; Text?: (props: { text: string; part: AssistantTurnPart; turn: AssistantTurn }) => unknown; Tool?: (props: { part: AssistantTurnPart; turn: AssistantTurn }) => unknown; Actions?: (props: { turn: AssistantTurn; index: number; retry: () => void }) => unknown; turns?: AssistantTurn[]; placeholder?: string; label?: string; disabled?: boolean } & Attributes<'section'>` | The shipped component showing a conversation with an assistant handler as it streams, above a composer. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.41, 53.47, 53.48, 53.49 |
-
-## `Pairing`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Pairing` | `{ slowAfter?: number; Message?: (props: { step: 'connecting' \| 'slow' \| 'offline' \| 'unavailable' \| 'click' \| 'waiting' \| 'install' \| 'paired' }) => unknown } & Attributes<'section'>` | The shipped component pairing the visitor's Claude Code with the page, around what it renders once paired. | 44.69, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.42, 53.43, 53.50, 53.51, 53.52 |
-
-# `.abide` files
-
-## Reading and writing by name
-
-| Spelling | Means | Rules |
-| --- | --- | --- |
-| `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.10 |
-| `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, object literal member, return or `bind:` operand | the `Reactive` | 31.3 |
-| `await foo` | the settling of the `Reactive`, which is its value | 1.4, 2.7, 31.3 |
-| `refresh(foo)` / a `Selection`-typed parameter | the `Reactive` | 31.13 |
-| `foo = bar` | a write | 31.4, 11.61, 31.18 |
-| `foo.bar = v` | a write through a path | 31.8, 31.14, 31.16 |
-| `foo.push(v)` | a write through a path, run on a copy of the array | 31.8, 31.9 |
-| `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
-| `const { a, b: c } = bar()` where a member is a `Reactive` | a name bound to that `Reactive` | 31.17 |
-| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one the value does not | 31.5 |
-| `foo.bar(…)` | a call of the value's `bar`, or of the `Reactive`'s own `bar` where it declares one the value does not | 31.6 |
-| `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.11 |
-
-## Expressions
-
-| Spelling | Meaning | Rules |
-| --- | --- | --- |
-| `{expr}` | Reactive text, escaped. | 32.1, 32.23 |
-| formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
-| `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31, 32.70 |
-| `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37, 32.70, 32.71 |
-| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75, 32.95 |
-| `name="…{expr}…"` | An interpolated quoted value. | 32.3, 32.71 |
-| `bind:value` | Two-way bind on an element. | 5.16, 32.5, 32.58, 32.59, 32.60, 32.61, 32.62, 32.72, 32.74, 32.75, 32.76, 32.78 |
-| `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18, 32.76 |
-| `bind:checked` | A boolean bind on an input. | 32.7, 32.72, 32.74, 32.75, 32.76, 32.78 |
-| `bind:open` | A boolean bind on whether a `<details>` is open. | 32.7, 32.72, 32.74, 32.75, 32.76, 32.78 |
-| `bind:group` | Radio or checkbox membership. | 32.8, 32.72, 32.74, 32.75, 32.76 |
-| `bind:files` | A file input's files, as a list. | 32.73, 32.72, 32.74, 32.75, 32.76, 32.78 |
-| `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6, 32.78 |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer) \| ((element: Element) => void \| Disposer)[]}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
-| `class:name={cond}` | Toggles a class. | 32.10, 32.71 |
-| `style:prop={value}` | Sets one style property. | 32.10, 32.19, 32.71, 32.94 |
-| `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13 |
-| static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.27, 32.28 |
-
-## `raw`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31, 32.70, 32.77, 32.93 |
-| `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.24 |
-
-## Control flow
-
-| Spelling | Branches | Meaning | Rules |
-| --- | --- | --- | --- |
-| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 12.18, 32.12, 32.21, 32.63, 32.64, 32.65, 32.70, 41.24 |
-| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 41.8, 41.14, 41.15 |
-| `{#try}` | `{:pending}`, `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64, 32.96 |
-
-## Components and slots
-
-| Spelling | Meaning | Rules |
-| --- | --- | --- |
-| `{#component Name(pattern)}` | An inline component. | 32.39, 32.40, 32.41, 32.42, 32.43, 32.44, 32.45, 32.46, 32.47, 32.48, 32.49, 32.50, 32.51, 32.52, 32.53, 32.54, 32.55, 32.63, 32.64 |
-| `<Name/>` | A component invocation. | 32.17, 32.34, 32.35, 32.36, 32.70, 33.19, 33.21, 41.24, 41.28 |
-| `<slot/>` | The position children render into. | 32.18 |
-| `<slot>fallback</slot>` | Renders children, or a fallback. | 32.18 |
-| `<Tag>…</Tag>` | Children passed to a component's slot. | 32.18, 32.70 |
-
-## `props`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `props` | `<Props>() => { [K in keyof Props]: Props[K] }` | One live accessor per prop the component declares. | 33.1, 33.2, 33.3, 33.4, 33.5, 33.6, 33.7, 33.8, 33.9, 33.10, 33.11, 33.14, 33.15, 33.20, 33.22, 33.25, 33.27 |
-| `Attributes<Tag>` | `Attributes<Tag extends keyof HTMLElementTagNameMap \| keyof SVGElementTagNameMap>` | The attributes an HTML or SVG element takes, typed as a component's props. | 33.23, 33.24, 33.26 |
-| `children` | always accepted | What a caller passes between the tags. | 33.16, 32.18 |
-
-## Script and style blocks
-
-| Spelling | Meaning | Rules |
-| --- | --- | --- |
-| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.17, 34.29, 34.30, 34.32 |
-| `<script module>` | Module scope, and what the file exports beside its component. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.18, 34.21, 34.30, 34.33, 34.34, 34.35 |
-| `<script server>` | Module scope on a server alone, declaring its file's private handlers and filing its hooks. | 16.28, 16.70, 34.3, 34.12, 34.17, 34.19, 34.20, 34.22, 34.28, 34.29, 34.30, 37.1 |
-| `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11, 34.31 |
-| `import './app.css'` | A stylesheet the component depends on. | 34.6 |
-| `:global(…)` | The per-selector escape from scoping. | 34.5 |
-
-# Pages and routing
-
-## Pages
-
-| Path | Meaning | Rules |
-| --- | --- | --- |
-| `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16, 39.17, 39.20 |
-| `<window>` · `<document>` | A page's, layout's or component's listeners on the window or the document. | 39.21, 39.22, 39.23 |
-| `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10, 39.18, 39.19 |
-| `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3, 30.34, 30.36 |
-| `[[name]]` | An optional segment. | 23.5, 30.4, 30.34, 30.36 |
-| `[...name]` | A rest segment, terminal. | 23.5, 30.5, 30.34, 30.36 |
-| `[name=NAME]` · `[[name=NAME]]` · `[...name=NAME]` | A dynamic segment a param file's matcher decides. | 19.1, 23.26, 23.27, 30.19, 30.35, 30.36, 30.37 |
-| `/__abide/**` | Every endpoint abide controls. | 20.8, 37.19 |
-
-## `render`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4, 38.208 |
-| `render` | `(component: Component) => Promise<Uint8Array>` | Renders a component bound to its props into a document, as its bytes. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31, 41.34, 41.35 |
-
-## Sinks
-
-| Spelling | Sink | Filled | Rules |
-| --- | --- | --- | --- |
-| `href={x}`, any attribute | the element | the attribute or property | 35.7, 35.8 |
-| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.7 |
-| `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
-| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
-
-# Configuration
-
-## Environment variables
-
-| Name | Type | Meaning | Rules |
-| --- | --- | --- | --- |
-| `PORT` | `number` | The listen port. | 36.1, 38.63, 38.64 |
-| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.17 |
-| `NODE_ENV` | `string` | The environment name, verbatim. | 36.3, 36.16 |
-| `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4, 38.87 |
-| `APP_VERSION` | `string` | The version beside that name. | 27.3 |
-| `APP_DATA_DIR` | `string` | The platform's per-user data directory. | 27.3, 36.4 |
-| `ABIDE_UPDATE_KEY` | `string \| null` | The key `abide native` signs the native app's updates with. | 38.147 |
-| `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.11, 36.5, 38.120, 38.175 |
-| `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.15, 26.16 |
-| `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
-| `ABIDE_APP_URL` | `string \| null` | Names an app somewhere else, for the remote CLI. | 36.6 |
-| `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.22, 16.58 |
-| `ABIDE_BRIDGE_TOOLS` | `string` | The tools of the visitor's machine `/__abide/pairing` asks a bridge for, separated by commas. | 44.67 |
-| `ABIDE_BRIDGE_FULL` | `boolean` | Whether `/__abide/pairing` asks a bridge for full access. | 44.67 |
-| `ABIDE_BRIDGE_NOTE` | `string` | The app's note on why it asks, shown in the question a pairing link asks. | 44.67, 44.91 |
-| `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
-| `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
-| `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
-| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23, 45.24, 45.25, 45.26, 45.27, 45.28, 45.29 |
-| `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
-| `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
-| `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |
-| `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. | 36.8 |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `string \| null` | Where the app's lines and spans are sent as OTLP. | 36.19, 36.20, 36.21, 36.23 |
-| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `string \| null` | Where the app's lines are sent, in place of the endpoint's. | 36.19, 36.20 |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `string \| null` | Where the app's spans are sent, in place of the endpoint's. | 36.19, 36.20 |
-| `OTEL_EXPORTER_OTLP_HEADERS` | `string \| null` | The headers every export carries, as `name=value` pairs separated by commas. | 36.20 |
-| `OTEL_SERVICE_NAME` | `string \| null` | The service every export is sent under. | 36.22 |
-| `OTEL_SDK_DISABLED` | `'true' \| null` | Turns every export off. | 36.19 |
-| `DEBUG` | `string \| null` | Log-namespace gating. | 28.6, 28.9, 28.10, 28.11 |
-| `NO_COLOR` | `string \| null` | Refuses ansi anywhere. | 36.9 |
-| `FORCE_COLOR` | `string \| null` | Asks for the readable form off a pipe. | 36.9 |
-
-## Files
-
-| Path | Meaning | Rules |
-| --- | --- | --- |
-| `src/**` | The app's source. | 36.10, 38.25 |
-| `**/lib/**` | The app's code that is no address: components and modules. | 23.15, 23.16, 23.18, 23.22, 37.1 |
-| `**/lib/**/<name>.server.<extension>` | A server file: source the browser never loads. | 16.29, 23.23, 34.20, 36.10 |
-| `**/lib/**/<name>.worker.ts` | A worker file: a module whose exports run in a thread of their own. | 55.1, 55.2, 55.3, 55.4, 55.5, 55.6, 55.7, 55.8, 55.9, 55.10, 55.11, 55.12, 55.13, 55.14 |
-| `**/<name>.test.ts` | A test file: one of the app's tests, wherever it lies. | 23.22, 38.109 |
-| `**/<name>.bench.ts` | A bench file: benches `bun run bench` runs, wherever it lies. | 23.22, 43.29 |
-| `**/<name>.d.ts` | A declaration file: types for the checker, wherever it lies. | 23.22 |
-| `**/public/**` | The files answered as authored, at their path below that directory. | 23.15, 23.16, 23.18, 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.18, 38.19 |
-| `src/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
-| `src/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
-| `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the native app's icon. | 36.11, 38.79, 45.15 |
-| `src/**/` | A directory of the app's, a segment of the route of every file directly in it. | 23.14, 23.17, 23.22 |
-| `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18, 35.19 |
-| `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21, 35.19 |
-| `**/<NAME>.param.ts` | A param file: the matcher a segment naming `NAME` matches by. | 23.22, 23.24, 23.25, 23.26 |
-| `**/<name>.handler.ts` | A handler file: the handler its default export declares, at its directory's route and then `<name>`. | 16.2, 16.28, 16.73, 16.74, 19.1, 23.14, 23.22 |
-| `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
-| `src/native/` | The native app's own pages, which are no routes of the app's. | 23.15, 23.33 |
-| `src/native/launcher.abide` | The native launcher: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
-| `src/native/menubar.abide` | The page the menu bar extra's panel shows. | 38.167, 38.168, 38.169, 38.171, 38.176 |
-| `src/public/icon-menubar.png` | The file answered at `/icon-menubar.png`, and the menu bar extra's icon. | 36.11, 38.166 |
-| `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
-| `**/error.abide` | The page a refusal renders in. | 35.2, 35.3, 35.14, 35.18 |
-| `**/node_modules/**/*.abide` | A component a dependency ships as source, compiled with the app that imports it. | 34.23, 34.24, 34.25, 34.26, 34.27, 38.99 |
-| `import '…' with { type: 'routes' }` | A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handler files answering below it. | 23.19, 23.20 |
-| `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.43 |
-| `preload = ["@abide/abide/test"]` | The `[test]` preload a test imports the app's `.abide` files through. | 38.109 |
-
 # Lifecycle hooks
 
 ## `middleware`
@@ -1240,6 +802,411 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `LauncherOptions` | `{ width?: number; height?: number; minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number; titlebar?: 'standard' \| 'hidden' \| 'inset'; vibrancy?: 'titlebar' \| 'selection' \| 'menu' \| 'popover' \| 'sidebar' \| 'headerView' \| 'sheet' \| 'windowBackground' \| 'hudWindow' \| 'fullScreenUI' \| 'toolTip' \| 'contentBackground' \| 'underWindowBackground' \| 'underPageBackground'; appearance?: 'system' \| 'light' \| 'dark'; resizable?: boolean; fullScreen?: boolean; alwaysOnTop?: boolean; shadow?: boolean; rememberFrame?: boolean; inspector?: boolean; panelWidth?: number; panelHeight?: number; update?: string } & ({ start?: true \| 'immediately'; connect?: boolean } \| { start: false; connect?: true }) & ({ dock?: boolean; menuBarExtra?: boolean } \| { dock: 'window'; menuBarExtra: true })` | What an `onLauncher` may answer. | 38.80, 38.81, 38.142, 38.143, 38.144, 38.150, 38.151, 38.152, 38.154, 38.157, 38.158, 38.159, 38.160, 38.161, 38.162, 38.163, 38.165, 38.166, 38.168, 38.172, 38.173, 38.182, 38.183, 38.184, 38.185, 38.187 |
 | `Launch` | `{ name: string; start: string \| undefined; connect: string \| undefined; fields: ConfigField[]; url: string; failure: { form: 'start' \| 'connect'; message: string; issues: Record<string, string[]> } \| undefined; focus: 'start' \| 'connect' \| undefined; icon: string \| undefined; accent: string \| undefined }` | The props a launch page is rendered with. | 38.82, 38.83, 38.87, 38.101 |
 
+# Overlays
+
+## `Dialog`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Dialog` | `{ open?: boolean; modal?: boolean; dismissible?: boolean; onclose?: (returnValue: string) => void } & Omit<Attributes<'dialog'>, 'open' \| 'onclose'>` | A native modal `<dialog>` whose children are its content, imported from `@abide/abide/Dialog.abide`. | 50.1, 50.2, 50.3, 50.4, 49.1, 49.2, 49.3, 49.5, 49.7 |
+
+## `Prompts`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Prompts` | `Omit<Attributes<'dialog'>, 'open' \| 'onclose' \| 'role'>` | The `Dialog` the queued prompts show in, rendered once and imported from `@abide/abide/Prompts.abide`. | 50.6, 50.8, 50.10, 50.34, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+
+## `prompts`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question asked in the app's `Prompts`. | 50.5, 50.7, 50.8, 50.11, 11.32 |
+| `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown in the app's `Prompts` until it is closed. | 50.5, 50.7, 50.9, 50.11, 11.32 |
+| `prompts.prompt` | `(asked: string \| PromptOptions) => Promise<string \| undefined>` | A line of text asked for in the app's `Prompts`. | 50.5, 50.7, 50.11, 50.33, 11.32 |
+| `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string; value?: string; placeholder?: string; signal?: AbortSignal; modal?: boolean; run?: (answer: string) => unknown }` | What a prompt shows, what its buttons say, what withdraws it, whether it is modal, and the call confirming makes. | 50.7, 50.10, 50.34, 50.43, 50.44, 50.45 |
+
+## `Toasts`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Toasts` | `{ label?: string; Toast?: (props: { toast: Toast; dismiss: () => void; act: () => void }) => unknown } & Omit<Attributes<'div'>, 'role'>` | The live region the notices are listed in, rendered once and imported from `@abide/abide/Toasts.abide`. | 50.17, 50.18, 50.46, 32.38, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+
+## `toasts`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16 |
+| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.41, 50.42 |
+| `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
+| `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
+| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.41 |
+
+## `Tooltips`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.23, 50.26, 50.27, 50.35, 50.36, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+
+## `tooltip`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `tooltip` | `(hint: Hint, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a hint for the element it is bound to, shown by the page's `Tooltips`. | 32.9, 50.23, 50.24, 50.25, 50.36, 50.47 |
+| `Hint` | `string \| ((props: Record<string, never>) => unknown)` | What a hint shows: text, or a component. | 50.23 |
+| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number; trigger?: 'hover' \| 'bound' }` | Where a hint opens against its anchor, and what opens it. | 50.24, 50.25, 50.26, 50.35, 50.47 |
+
+## `menu`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40 |
+| `MenuOptions` | `{ open?: Reactive<boolean>; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, and what hears it open and close. | 50.35, 50.37 |
+| `Menu` | `{ readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38 |
+
+## `dismissible`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: { escape?: boolean; outside?: boolean; inside?: readonly (Element \| null \| undefined)[] }) => (element: Element) => Disposer` | The `bind:element` adaptor closing an element on a press outside it or on Escape. | 32.9, 53.12, 53.13, 53.14, 53.15, 53.16 |
+
+## `place`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `place` | `(anchor: Element, floating: Element, options?: PlaceOptions) => Placement` | Where a floating element sits beside its anchor, in viewport pixels. | 50.19, 50.20, 50.21, 50.22 |
+| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number; arrowInset?: number }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners. | 50.19, 50.20, 50.21, 50.35 |
+| `Placement` | `{ x: number; y: number; side: Side; arrow: number }` | The left and top edges `place` chose, the side it took, and where along the facing edge the anchor's middle falls. | 50.19, 50.27 |
+| `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
+
+# Input and lists
+
+## `Combobox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item \| readonly Item[]; Option?: (props: { item: Item }) => unknown; Chip?: (props: { item: Item; remove: () => void }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62 |
+
+## `tabs`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `tabs` | `(options: TabsOptions) => Tabs` | WAI-ARIA's tabs as parts an app spreads onto elements of its own: a tab list, a tab per key, and a panel. | 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44 |
+| `TabsOptions` | `{ keys: readonly string[] \| (() => readonly string[]); selected?: Reactive<string \| undefined> }` | The tabs' keys in order, and the key of the one selected. | 51.36, 51.37 |
+| `Tabs` | `{ readonly list: Record<string, unknown>; tab(key: string): Record<string, unknown>; panel(key?: string): Record<string, unknown>; readonly current: Reactive<string \| undefined> }` | The list's part, a tab's, a panel's, and the key of the tab selected. | 32.11, 51.36, 51.42, 51.43 |
+
+## `SortableTable`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown; rowAttributes?: (row: Row) => Attributes<'tr'> } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60, 51.63 |
+
+## `listbox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `listbox` | `<Option>(options: ListboxOptions<Option>) => Listbox<Option>` | A keyboard controller over a list of keyed options, for markup the app writes itself. | 51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7, 51.8, 51.9, 51.10, 51.11, 51.12 |
+| `ListboxOptions` | `ListboxOptions<Option> = { id: string; options: () => readonly Option[]; key: (option: Option) => string; wrap?: boolean; onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10 |
+| `Listbox` | `Listbox<Option> = { active: () => string \| undefined; activeOption: () => Option \| undefined; activeId: () => string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; keydown: (event: KeyboardEvent) => void }` | What `listbox` hands back: the active key and option, and the ids and the listener the markup takes. | 51.1, 51.2, 51.3, 51.10, 51.11 |
+
+## `sortRows`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `sortRows` | `<Row>(rows: readonly Row[], columns: readonly Column<Row>[], sort: Sort \| undefined) => readonly Row[]` | The rows in the order a `Sort` names. | 51.45, 51.46, 51.47, 51.48, 51.49, 51.50 |
+| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean; firstDirection?: 'ascending' \| 'descending' }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.49, 51.52, 51.53, 51.58, 51.59 |
+| `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.45, 51.53, 51.54, 51.55 |
+
+## `hotkeys`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `hotkeys` | `(bindings: Record<string, Hotkey>) => (event: KeyboardEvent) => void` | A `keydown` listener running the binding a key press matches, each binding written as its modifiers and its key joined by `+`. | 53.1, 53.2, 53.3, 53.4, 53.5, 53.6, 53.7, 53.8, 53.9 |
+| `Hotkey` | `((event: KeyboardEvent) => void) \| { run: (event: KeyboardEvent) => void; editable?: boolean; prevent?: boolean }` | What a binding runs, alone or with whether it also runs while the visitor types and whether it takes the key's default. | 53.2, 53.7 |
+
+## `keyLabel`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `keyLabel` | `(binding: string, options?: { apple?: boolean }) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.9, 53.11, 53.54, 53.56 |
+| `keyLabel.parts` | `(binding: string, options?: { apple?: boolean }) => string[]` | Each key `keyLabel` writes for a binding, apart, for one key cap apiece. | 53.55, 53.56 |
+
+## `isEditableTarget`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `isEditableTarget` | `(target: EventTarget \| null) => boolean` | Whether a key event's target is somewhere the visitor types. | 53.10 |
+
+## `dropzone`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean; onreject?: (files: File[], event: DragEvent \| ClipboardEvent) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20, 53.46 |
+
+## `copyText`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `copyText` | `(text: string \| ((clicked: Element) => string), options?: { copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45 |
+
+# Charts
+
+## `Chart`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64, 52.69 |
+
+## `Line`, `Column` and `Area`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Line` / `Column` / `Area` | `{ label: string; values: readonly (number \| null \| undefined)[]; stack?: string \| false }` | A series of the `Chart` it is a child of, drawn as a line, a column per value or a filled area, the components `@abide/abide/Line.abide`, `@abide/abide/Column.abide` and `@abide/abide/Area.abide` export. | 52.24, 52.37, 52.51, 52.52, 52.53, 52.55 |
+
+## `Pie`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Pie` | `{ slices: readonly { label: string; value: number \| null \| undefined }[]; label: string; inner?: number; valueFormat?: (value: number) => string; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'values'>` | Shares of a whole as the slices of a ring in an `svg`, a pie or a donut, the component `@abide/abide/Pie.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.29, 52.30, 52.38, 52.39, 52.63, 52.64, 52.65, 52.66, 52.67, 52.68 |
+
+## `Sparkline`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean; kind?: 'line' \| 'bar' } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line, or as bars, with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.33, 52.34 |
+
+## `chart`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `chart` | `{ ticks; scale; path; stack; nearest }` | The arithmetic under a chart, as one namespace. | 52.19, 52.20, 52.21, 52.22, 52.23, 52.54 |
+| `chart.ticks` | `(min: number, max: number, count?: number) => number[]` | Round values for an axis from `min` to `max`, about `count` intervals apart. | 52.19 |
+| `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
+| `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], baseline?: number \| readonly number[]) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`. | 52.21, 52.22 |
+| `chart.stack` | `<Each extends { values: readonly (number \| null \| undefined)[]; stack?: string \| false }>(series: readonly Each[], options?: { stack?: boolean; normalize?: boolean }) => { low: (number \| undefined)[]; high: (number \| undefined)[]; stack: string \| undefined }[]` | Where each series stands at each x once its stack is piled, and the stack it joined. | 52.54, 52.55, 52.56, 52.57, 52.58 |
+| `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
+| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false }` | One series of a chart: what it is called, its values in x order, how it is drawn, and the stack it piles into. | 52.21, 52.24, 52.55 |
+
+# Content
+
+## `Markdown`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Markdown` | `{ source: string; schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (props: { source: string; info: string }) => unknown>>; streaming?: boolean } & Attributes<'div'>` | A `div` of the markup `markdown` renders for `source`, the component `@abide/abide/Markdown.abide` exports. | 49.1, 49.3, 49.5, 49.6, 52.17, 52.18, 52.40, 52.41, 52.43, 52.50 |
+
+## `markdown`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `markdown` | `(text: string, options?: { schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (source: string, info: string) => string>>; inline?: boolean; streaming?: boolean }) => string` | Markdown as HTML safe to hand `raw`. | 52.8, 52.9, 52.10, 52.11, 52.12, 52.13, 52.14, 52.15, 52.16, 52.40, 52.41, 52.42, 52.46, 52.47, 52.48, 52.49, 52.50 |
+| `LinkTarget` | `{ href: string; target?: string; rel?: string }` | Where a link `markdown` writes goes: its address, and the `target` and `rel` it opens with. | 52.40 |
+
+## `Chat`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Chat` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; Text?: (props: { text: string; part: AssistantTurnPart; turn: AssistantTurn }) => unknown; Tool?: (props: { part: AssistantTurnPart; turn: AssistantTurn }) => unknown; Actions?: (props: { turn: AssistantTurn; index: number; retry: () => void }) => unknown; turns?: AssistantTurn[]; placeholder?: string; label?: string; disabled?: boolean } & Attributes<'section'>` | The shipped component showing a conversation with an assistant handler as it streams, above a composer. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.41, 53.47, 53.48, 53.49 |
+
+## `format`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `format` | `{ money; percent; number; plural; list; date; duration; relative; bytes }` | The formatters abide ships, as one namespace. | 52.1, 52.2, 52.6 |
+| `format.money` | `(value: unknown, options?: { currency?: string; compact?: boolean; signed?: boolean; digits?: number; locale?: string }) => string` | An amount of money as it is written. | 52.1, 52.2, 52.6, 52.35 |
+| `format.percent` | `(value: unknown, options?: { digits?: number; signed?: boolean; locale?: string }) => string` | A fraction written as a percent. | 52.1, 52.2, 52.6, 52.35 |
+| `format.number` | `(value: unknown, options?: { compact?: boolean; digits?: number; locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6 |
+| `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
+| `format.list` | `(value: unknown, options?: { conjunction?: 'and' \| 'or'; locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6 |
+| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36 |
+| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36 |
+| `format.timeZone` | `Reactive<string \| undefined>` | The zone the app pins every date to where its caller names none, or `undefined` for the visitor's own. | 52.3, 52.44, 52.45 |
+| `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
+| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
+| `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
+
+## `followBottom`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `followBottom` | `(element: Element) => Disposer` | The `bind:element` adaptor keeping a scrolling element at its bottom as what it holds grows. | 32.9, 53.53 |
+
+## `observe`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `observe.size` | `{ (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): (element: Element) => Disposer; (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: 'content' \| 'border' }): (element: Element) => Disposer; (target: ((size: { width: number; height: number }) => void), options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): (element: Element) => Disposer; (target: ((size: { width: number; height: number }) => void), options?: { box?: 'content' \| 'border' }): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's size. | 32.79, 32.81, 32.82, 32.83, 32.90, 32.91, 32.92, 32.98 |
+| `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown> }): (element: Element) => Disposer; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown> }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Element \| Document }): (element: Element) => Disposer }` | The `bind:element` adaptor writing whether an element is in view. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92, 32.98 |
+| `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): (element: Element) => Disposer; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's rectangle in the viewport. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92, 32.98 |
+
+# Data and I/O
+
+## `database`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `database` | `(file: string \| (() => string), options?: { migrations?: (string \| ((database: Database) => void))[]; openNewer?: boolean; open?: (database: Database) => void; strict?: boolean; readonly?: boolean; safeIntegers?: boolean }) => (() => Database) & { close: (options?: { remove?: boolean }) => void; changed: Reactive<number> }` | The opener of the app's `bun:sqlite` database `file`, from `@abide/abide/server`. | 36.4, 47.1, 47.2, 47.3, 47.4, 47.5, 47.6, 47.7, 47.8, 47.9, 47.10, 47.11, 47.12, 47.13, 47.14, 47.15, 47.16, 47.18, 47.19, 47.20, 47.21 |
+| `opener.close` | `(options?: { remove?: boolean }) => void` | Closes the `Database` an opener holds, and with `remove` deletes the file it last opened. | 47.11, 47.16, 47.17 |
+| `opener.changed` | `Reactive<number>` | How many times the opener has found another connection's commits to its file. | 47.22, 47.23, 47.24 |
+
+## `fetchJson`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
+| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.12, 54.15, 54.17 |
+| `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up, or a `Response` `handle` read outside 2xx, settles to. | 15.9, 54.14, 54.16, 54.17, 54.31, 54.34 |
+
+## `fetchText`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `fetchText` | `(url: string \| URL, options?: FetchOptions<string>) => Promise<string \| FetchFailed>` | Another service's answer as text, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
+
+## `handle`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `handle` | `(response: Response) => Promise<unknown \| FetchFailed>` | A `Response` the app fetched itself, read as its `content-type` says: `fetch(url).then(handle)`. | 54.30, 54.31, 54.32, 54.33 |
+
+## `job`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29 |
+| `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
+| `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
+| `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
+| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
+| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
+
+## `url`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>] : [params?: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>]) => string` | Builds an address from a route literal or a public file's address. | 30.1, 30.2, 30.6, 30.8, 30.19, 30.26, 30.40 |
+| `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
+| `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
+| `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
+| `OptionalNames<P>` | `string` | The optional segment names. | 30.4 |
+| `RestNames<P>` | `string` | The rest segment names. | 30.5 |
+| `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6, 30.28, 30.40 |
+| `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept, narrowed where `abide check` declares a matcher's literals. | 30.3, 30.4, 30.5 |
+| `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as, narrowed where `abide check` declares a matcher's literals. | 23.9 |
+| `Routes` | `interface Routes {}` | The app's route literals and public file addresses, which `abide check` declares. | 30.26 |
+| `RouteLiteral` | `[keyof Routes] extends [never] ? string : Extract<keyof Routes, string>` | What `url` takes. | 30.26 |
+
+## `navigate`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `navigate` | `{ (by: number): Promise<void>; (url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }): Promise<void> }` | Navigates to an address, or steps through the history. | 30.7, 30.38, 30.39, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31, 30.32, 45.12, 45.24 |
+
+# Identity and access
+
+## `signedIn`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `signedIn` | `Middleware<never, object, Failed<'SignedOut', undefined>>` | A rung admitting a caller the server authenticated, from `@abide/abide/server`. | 15.9, 54.1 |
+
+## `requireRole`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.7, 15.9, 54.2, 54.3, 54.4, 54.28 |
+
+## `trustedIdentity`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `trustedIdentity` | `(options: { header: string; proxies: readonly string[]; claims: (value: string) => Record<string, unknown> }) => Middleware` | A rung signing in the caller a trusted proxy names in a header, from `@abide/abide/server`. | 54.35, 54.36, 54.37 |
+
+## `readOnly`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `readOnly` | `(options?: { allow?: readonly { address: string \| undefined }[]; message?: string }) => Middleware<never, object, Failed<'ReadOnly', undefined>>` | A rung refusing every write but one to a handler it allows, from `@abide/abide/server`. | 15.9, 54.5, 54.6 |
+
+## `csp`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `csp` | `(sources?: Record<string, string[]>) => (next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Response \| Promise<Response>` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5, 29.6, 29.7, 29.8 |
+| `csp.nonce` | `() => string` | This response's nonce, for the app's own inline script. | 29.3, 29.4, 29.9, 29.11 |
+
+# Assistant
+
+## `assistant`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21, 44.36, 44.37, 44.39, 44.57, 44.100, 44.101 |
+| `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string \| AssistantContent[] }` | One turn of the transcript a caller sends: its words, or its pieces in order. | 44.3, 44.4 |
+| `AssistantContent` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string }` | A piece of a turn: words, or an image as base64 with its type. | 44.5, 44.35, 44.36, 44.37, 44.38, 44.39 |
+| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; handler: { method: string; address: string } \| undefined } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean; handler: { method: string; address: string } \| undefined; value: unknown } \| { type: 'permission'; id: string; name: string; input: unknown } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, a permission prompt, and the end. | 44.2, 44.11, 44.28, 44.48, 44.49, 44.81 |
+| `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number; signal?: AbortSignal }` | What `assistant` takes beside a provider. | 44.6, 44.8, 44.11, 44.57 |
+| `Provider` | `{ run(messages: (AssistantMessage & { content: AssistantContent[] })[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<ProviderEvent> }` | What runs a conversation. | 44.2, 44.28, 44.39, 44.50, 44.57 |
+| `ProviderEvent` | `Exclude<AssistantEvent, { type: 'tool' \| 'result' }> \| { type: 'tool'; id: string; name: string } \| { type: 'result'; id: string; text: string; failed: boolean }` | An `AssistantEvent` as a provider yields it, before `assistant` reads the handler and the value off the app's surface. | 44.28, 44.35, 44.50 |
+| `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<ToolAnswer> }` | The app's MCP tools, called as the asker. | 44.6, 44.7, 44.35 |
+| `ToolAnswer` | `{ content: AssistantContent[]; failed: boolean }` | What a tool call answered: its pieces, and whether it failed. | 20.21, 20.22, 44.35, 44.93 |
+| `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 20.19, 44.6 |
+
+## `resultsOf`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `resultsOf` | `<Value>(events: readonly AssistantEvent[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { method: string; address: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 44.51 |
+
+## `imagePiece`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `imagePiece` | `(image: Blob) => Promise<{ type: 'image'; data: string; mimeType: string }>` | An image as a turn's image piece, drawn down to what a model looks at and redrawn where it is a photo. | 44.52, 44.53, 44.54 |
+
+## `imageFiles`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `imageFiles` | `(data: DataTransfer \| null) => File[]` | The images a paste or a drop carries that a model is shown, or that `imagePiece` draws as one. | 44.55 |
+
+## `provider`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `provider.claudeApi` | `(config: ClaudeApiConfig) => Provider` | The Claude Messages API as a provider. | 44.9, 44.10, 44.12, 44.21, 44.35, 44.38 |
+| `ClaudeApiConfig` | `{ apiKey: string; baseURL?: string; model: string; max_tokens: number; system?: string \| unknown[]; tools?: unknown[]; [field: string]: unknown }` | A Messages API request body, less `messages` and `stream`, with the client's key and origin. | 44.9, 44.10 |
+| `provider.claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.33, 44.77, 44.78, 44.79, 44.81 |
+| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the tools of the visitor's machine it asks for. | 44.15, 44.16, 44.29, 44.58 |
+| `provider.claudeCode.bridgeCommand` | `(options?: { tools?: string[]; full?: boolean; note?: string }) => { command: string; link: string; install: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the tools it is given or asking for full access, with a note on why, and the command that installs what opens the link. | 44.14, 44.32, 44.33, 44.40, 44.56, 44.76, 44.85, 44.91 |
+| `provider.claudeCode.bridge` | `(options?: { tools?: string[]; full?: boolean; note?: string }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40, 44.59, 44.60, 44.76, 44.85, 44.91 |
+| `provider.claudeCode.callTool` | `(tool: string, input: unknown) => Promise<ToolAnswer>` | What one MCP tool of the visitor's machine answered, called through the bridge paired with their browser with no model, or by a turn where the bridge cannot make the call. | 44.93, 44.94, 44.95, 44.96, 44.97, 44.98, 44.99 |
+| `provider.claudeCode.permit` | `(id: string, allow: boolean) => void` | The asking browser's answer to a `permission` event its bridge's turn is waiting on. | 44.83 |
+| `BridgeStatus` | `{ paired: boolean; missing: string[]; command: string; link: string; install: string }` | Whether a bridge is paired, the tools it cannot make available, and the command and the link that pair one, with the command that installs what opens the link. | 44.20, 44.40, 44.56, 44.59, 44.60, 44.78 |
+| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns and calls. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 44.96, 44.97, 16.57, 16.78 |
+| `/__abide/pairing` | `GET` | This browser's pairing, as it changes, for `pairing` to read. | 44.67, 44.68, 44.74, 44.75, 44.76, 18.36 |
+
+## `pairing`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `pairing` | `() => { status: Reactive<BridgeStatus \| undefined, BridgeStatus \| undefined, Failed<'HttpError', undefined>>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; retry: () => void; copyInstall: () => Promise<void>; stop: () => void; [Symbol.dispose]: () => void }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.69, 44.70, 44.71, 44.72, 44.73, 44.102 |
+
+## `transcript`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `AssistantTurn` | `{ role: 'user' \| 'assistant'; parts: AssistantTurnPart[]; stop: string \| undefined; failed: string \| undefined }` | One turn of a conversation as a chat holds it. | 53.27, 53.30, 53.35, 53.36 |
+| `AssistantTurnPart` | `{ type: 'text'; text: string } \| { type: 'image'; data: string; mimeType: string } \| { type: 'tool'; id: string; name: string; input: unknown; result: string \| undefined; failed: boolean; value: unknown } \| { type: 'permission'; id: string; name: string; input: unknown; allowed: boolean \| undefined }` | One piece of a turn: words, an image, a tool call, or a permission prompt. | 53.24, 53.25, 53.26 |
+| `transcript.turn` | `(role: 'user' \| 'assistant', parts?: AssistantTurnPart[]) => AssistantTurn` | A turn holding the parts it is handed, or none. | 53.30 |
+| `transcript.fold` | `(answering: AssistantTurn, event: AssistantEvent) => void` | One event of an answer, folded into the answering turn in place. | 53.24, 53.25, 53.26, 53.27 |
+| `transcript.messages` | `(turns: readonly AssistantTurn[]) => AssistantMessage[]` | A conversation as an assistant handler takes it. | 53.28, 53.29 |
+
+## `Pairing`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Pairing` | `{ slowAfter?: number; Message?: (props: { step: 'connecting' \| 'slow' \| 'offline' \| 'unavailable' \| 'click' \| 'waiting' \| 'install' \| 'paired' }) => unknown } & Attributes<'section'>` | The shipped component pairing the visitor's Claude Code with the page, around what it renders once paired. | 44.69, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.42, 53.43, 53.50, 53.51, 53.52 |
+
 # The native app
 
 ## `native`
@@ -1276,21 +1243,65 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `MenuEntry` | `class MenuEntry { label: string; key: string \| undefined; href: string \| undefined }` | What `menuItem` makes. | 38.91 |
 | `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.91, 38.213, 38.214 |
 
-# The app object
+# Operating
 
-## `createApp`
+## `log`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 42.16, 42.22, 37.4, 37.6, 38.100 |
-| `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
-| `App.fetch` | `(request: Request, options?: { principal?: Record<string, unknown>; caller?: string }) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6, 42.20, 42.21 |
-| `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request; principal?: Record<string, unknown>; caller?: string }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 42.19, 42.21, 11.38 |
-| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 7.30 |
-| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.26, 7.27, 7.31, 7.37, 7.38, 7.40, 7.41, 7.42 |
-| `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
+| `log` | `(...args: unknown[]) => void` | A message under the default namespace. | 28.1, 28.2 |
+| `log.info` / `log.warning` / `log.error` / `log.debug` | `(...args: unknown[]) => void` | A line at one of four levels. | 28.3 |
+| `log.named` | `(name: string) => Logger` | A logger under a named namespace. | 28.4, 28.5, 28.12 |
+| `Logger` | `typeof log` | What `log.named` hands back. | 28.5 |
+| `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. | 28.6, 28.7 |
+| `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string; span: Span \| undefined }` | One line, as a value. | 24.3, 24.9 |
+| `Span` | `{ id: string; parent: string; name: string; kind: 'server' \| 'internal'; duration: number; status: 'ok' \| 'error'; attributes: Record<string, string \| number> }` | A line's place in its trace, and how the work it timed went. | 24.4, 24.9, 24.10 |
+| `log.records` | `Reactive<LogRecord[]>` | The lines kept, appended to as each is written. | 28.1 |
+| `abide:request` | `debug` | One line per request. | 24.10, 28.8, 36.19 |
+| `abide:socket` | `debug` | One line per frame on the socket mux. | 28.8 |
+| `abide:lifecycle` | `debug` `error` | A lifecycle hook that ran or threw. | 28.8 |
+| `abide:principal` | `debug` `warning` | A principal set or cleared. | 28.8 |
+| `abide:health` | `warning` | An `onHealth` that threw or answered a non-object. | 25.2, 28.8 |
+| `abide:mcp` | `debug` `warning` | A handler withheld from MCP, a tool call answered, or a tool published with no description. | 20.3, 20.9, 20.18, 28.8 |
+| `abide:assistant` | `debug` | One line per conversation, once it ends. | 44.31 |
+| `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export. | 20.11, 28.8 |
+| `abide:render` | `warning` | An `error.abide` that itself failed. | 28.8 |
+| `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |
+| `abide:reactive` | `warning` | A failed revalidation over a value still being served, a failed run of a polled one, or a failed `refreshes` after a write. | 4.12, 7.28, 16.102, 28.8 |
+| `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
+| `abide:hydrate` / `abide:navigate` | `warning` | A hydration or a client-side navigation that went wrong in the browser. | 28.8, 41.10, 41.15, 41.24, 45.10 |
 
-# Tests
+## `report`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `report` | `(options?: { trace?: string }) => ReportDraft` | A problem report a person can read, write and send. | 48.1, 48.2, 48.3, 48.4, 48.5 |
+| `ReportDraft` | `class ReportDraft { id: string; summary: Reactive<string>; description: Reactive<string>; traces: string[]; lines: Reactive<LogRecord[]>; markdown: Reactive<string>; open(): Promise<boolean>; send(): Promise<string> }` | A report not yet sent. | 48.6, 48.7, 48.8, 48.9, 48.12, 48.13 |
+| `Report` | `{ id: string; summary: string; description: string; version: string; platform: string; route: string; traces: string[]; lines: LogRecord[]; markdown: string }` | What `onReport` is handed. | 48.7, 48.10, 48.11, 48.12 |
+
+## `trace`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `trace` | `() => string` | The trace id of the operation this work belongs to. | 24.1 |
+| `trace.sampled` | `() => boolean` | The caller's sampling decision, carried through verbatim. | 24.2 |
+| `trace.span` | `<T>(name: string, body: () => T, options?: { timing?: boolean }) => T` | Opens a child span around a body. | 24.3, 24.4, 24.6, 24.7, 24.8, 24.9 |
+| `trace.headers` | `() => Record<string, string>` | What an outbound request carries. | 24.5 |
+
+## `health`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `health` | `Rpc<Health, undefined>` | The account of the app this call is in. | 16.4, 25.1, 25.2, 25.3 |
+| `Health` | `interface Health { version: string; abide: string; startedAt: string }` | The app's health account, which an app widens with what its `onHealth` adds. | 25.4 |
+| `version` | `string` | The app's version. | — |
+| `abide` | `string` | The framework's version. | — |
+| `startedAt` | `string` | When the process started, ISO-8601. | — |
+
+# Testing and measurement
+
+`@abide/harness`, a package of its own: three lanes, the report and gate vocabulary they share, the
+rows a runner prints, and an adapter for an abide app.
 
 ## `mount`
 
@@ -1304,11 +1315,6 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `settled` | `(options?: { timeout?: number }) => Promise<void>` | A wait until nothing a test started is still loading or pending. | 38.204, 38.205, 38.206 |
-
-# The measurement harness
-
-`@abide/harness`, a package of its own: three lanes, the report and gate vocabulary they share, the
-rows a runner prints, and an adapter for an abide app.
 
 ## `measure` — `@abide/harness/measure`
 

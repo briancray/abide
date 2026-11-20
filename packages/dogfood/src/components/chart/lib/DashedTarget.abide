@@ -1,0 +1,12 @@
+<script>
+import Chart from '@abide/abide/Chart.abide'
+import Line from '@abide/abide/Line.abide'
+</script>
+
+<Chart
+    label="Won revenue against target"
+    class="[&_[data-part=line][data-series='1']]:[stroke-dasharray:4_4]"
+>
+    <Line label="Won" values={[18_000, 24_500, 31_000, 27_000]} />
+    <Line label="Target" values={[20_000, 22_000, 24_000, 26_000]} />
+</Chart>
