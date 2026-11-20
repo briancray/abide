@@ -2645,9 +2645,9 @@ NOT begin again.
 read in it has not landed — `x.ready() ? x : []`, `x || []`, or `x ?? []` where 14.17 does not warn —
 naming 32.22.
 
-32.98 The observers 32.81 shares for `observe.size` and for `observe.rect` MUST each be made by the
-first of its kind bound while it observes no element, from the `ResizeObserver` the document holds
-then.
+32.98 The observers 32.81 shares for `observe.size`, for `observe.rect` and for `observe.visible`
+against the viewport MUST each be made by the first of its kind bound while it observes no element,
+from the `ResizeObserver` or `IntersectionObserver` the document holds then.
 
 # 33. Props
 

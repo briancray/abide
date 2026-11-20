@@ -6,22 +6,23 @@ import { observedTwice } from './observedTwice.ts'
 
 type Root = Element | Document
 
-// 32.81 — ONE OBSERVER FOR EVERY `observe.visible` AGAINST THE VIEWPORT, made by the first and kept,
-// for `size`'s reason. Keyed by the element, so a delivery finds what to write.
-let observer: IntersectionObserver | undefined
 const measuredBy = new WeakMap<Element, Measured>()
-// 32.81, 32.89 — AN OBSERVER'S ROOT IS FIXED AT CONSTRUCTION, so each root is one observer shared by
-// every element observed against it, made by the first and disconnected with the last.
+// 32.81, 32.89, 32.98 — AN OBSERVER'S ROOT IS FIXED AT CONSTRUCTION, so each root — the viewport
+// (`null`) among them — is one observer shared by every element observed against it, made by the
+// first and disconnected with the last, so the next is made by whatever `IntersectionObserver` stands
+// then. Keyed by the element, so a delivery finds what to write.
+let viewport: Rooted | undefined
 const rooted = new WeakMap<Root, Rooted>()
 
 class Rooted {
     observer: IntersectionObserver
     observed = 0
 
-    constructor(root: Root) {
-        this.observer = new IntersectionObserver(deliverIntersections, {
-            root,
-        })
+    constructor(root: Root | null) {
+        this.observer = new IntersectionObserver(
+            deliverIntersections,
+            root === null ? undefined : { root },
+        )
     }
 }
 
@@ -64,19 +65,12 @@ export function visible(
     return (element) => {
         if (measuredBy.has(element)) observedTwice('visible', element)
         measuredBy.set(element, new Measured(target))
-        if (root === undefined || root === null) {
-            observer ??= new IntersectionObserver(deliverIntersections)
-            observer.observe(element)
-            return () => {
-                measuredBy.delete(element)
-                ;(observer as IntersectionObserver).unobserve(element)
-            }
-        }
         if (!isReactive(root)) {
-            observeIn(root as Root, element)
+            const fixed = (root ?? null) as Root | null
+            observeIn(fixed, element)
             return () => {
                 measuredBy.delete(element)
-                release(root as Root, element)
+                release(fixed, element)
             }
         }
         // 32.89 — no root yet is nothing observed: a `bind:element` sets its value after the binds
@@ -100,23 +94,25 @@ export function visible(
     }
 }
 
-function observeIn(root: Root, element: Element): void {
-    let shared = rooted.get(root)
+function observeIn(root: Root | null, element: Element): void {
+    let shared = root === null ? viewport : rooted.get(root)
     if (shared === undefined) {
         shared = new Rooted(root)
-        rooted.set(root, shared)
+        if (root === null) viewport = shared
+        else rooted.set(root, shared)
     }
     shared.observed += 1
     shared.observer.observe(element)
 }
 
-function release(root: Root, element: Element): void {
-    const shared = rooted.get(root) as Rooted
+function release(root: Root | null, element: Element): void {
+    const shared = (root === null ? viewport : rooted.get(root)) as Rooted
     shared.observer.unobserve(element)
     shared.observed -= 1
     if (shared.observed > 0) return
     shared.observer.disconnect()
-    rooted.delete(root)
+    if (root === null) viewport = undefined
+    else rooted.delete(root)
 }
 
 // The same boolean written twice to a `Reactive` is collapsed by its own identity gate.
