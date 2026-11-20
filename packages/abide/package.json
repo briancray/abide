@@ -47,7 +47,7 @@
         "./Dialog.abide": "./src/components/Dialog.abide",
         "./Prompts.abide": "./src/components/Prompts.abide",
         "./Toasts.abide": "./src/components/Toasts.abide",
-        "./Tooltip.abide": "./src/components/Tooltip.abide",
+        "./Tooltips.abide": "./src/components/Tooltips.abide",
         "./Menu.abide": "./src/components/Menu.abide",
         "./Combobox.abide": "./src/components/Combobox.abide",
         "./Tabs.abide": "./src/components/Tabs.abide",

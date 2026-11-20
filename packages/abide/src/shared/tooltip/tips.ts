@@ -1,0 +1,34 @@
+// 50.23, 50.36 — THE ONE HINT SHOWING, which the `Tooltips` standing in the page renders. Written only in a
+// browser — `tooltip` is a `bind:element` adaptor, which a server never runs.
+
+import type { Side } from '../place.ts'
+import { reactive } from '../reactive/index.ts'
+
+/** What a hint shows: text, or a component rendered with no props. */
+export type Hint = string | ((props: Record<string, never>) => unknown)
+
+/** Where a hint opens against its anchor, and how long a pointer rests before it does. */
+export type TooltipOptions = {
+    /** The side of the anchor the hint opens on, flipped to the opposite one where it has no room. Default `'top'`. */
+    side?: Side
+    /** Which edge of the anchor the hint lines up with. Default `'center'`. */
+    align?: 'start' | 'center' | 'end'
+    /** Pixels between the anchor and the hint. Default `8`. */
+    offset?: number
+    /** Pixels the arrow's `--arrow-offset` keeps from each end of the hint's facing edge. Default `0`. */
+    arrowInset?: number
+    /** Milliseconds a pointer rests on the anchor before the hint opens. Default `300`. */
+    delay?: number
+}
+
+/** The hint open, the anchor it is open against, and where it opens. */
+export type OpenTip = {
+    anchor: Element
+    hint: Hint
+    options: TooltipOptions
+}
+
+export const shown = reactive<OpenTip | undefined>(undefined)
+
+// 50.36 — the `Tooltips` standing, in the order they were bound: the last renders the hint.
+export const hosts = reactive<readonly object[]>([])

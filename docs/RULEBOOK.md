@@ -4927,22 +4927,23 @@ axes, its start edge kept where it does not fit.
 
 50.22 `place` MUST read layout alone, and MUST NOT write to the document.
 
-50.23 A `Tooltip` MUST describe the element written immediately before it, through that element's
-`aria-describedby`.
+50.23 `tooltip` MUST describe the element it is bound to by its hint: text through that element's
+`aria-description`, and a component through its `aria-describedby` naming the `Tooltips` showing it,
+for as long as it shows.
 
-50.24 A `Tooltip` MUST open once a pointer has rested on its anchor for `delay` milliseconds, and
-at once when its anchor takes focus that matches `:focus-visible`, and MUST NOT open for focus that
-does not.
+50.24 `tooltip` MUST open its hint once a pointer has rested on its element for `delay`
+milliseconds, and at once when its element takes focus that matches `:focus-visible`, and MUST NOT
+open it for focus that does not.
 
-50.25 A `Tooltip` MUST close when the pointer leaves its anchor, when its anchor loses focus, and
-on Escape.
+50.25 `tooltip` MUST close its hint when the pointer leaves its element, when its element loses
+focus, and on Escape.
 
-50.26 A `Tooltip` and a `Menu` MUST open in the top layer as a popover placed by `place` against
-their anchor, and MUST be placed again while open whenever anything scrolls, the window resizes,
-or the anchor or the popover changes size.
+50.26 A `Tooltips` showing a hint and a `Menu` MUST open in the top layer as a popover placed by
+`place` against their anchor, and MUST be placed again while open whenever anything scrolls, the
+window resizes, or the anchor or the popover changes size.
 
-50.27 A `Tooltip` and a `Menu` MUST write the side `place` took as `data-side`, and the `arrow` of
-its `Placement` as the `--arrow-offset` custom property.
+50.27 A `Tooltips` showing a hint and a `Menu` MUST write the side `place` took as `data-side`, and
+the `arrow` of its `Placement` as the `--arrow-offset` custom property.
 
 50.28 A `Menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
 opened it.
@@ -4966,6 +4967,9 @@ confirming button, and `undefined` where it closed any other way.
 
 50.35 `place` MUST keep `arrow` at least `arrowInset` pixels from each end of the floating
 element's facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
+
+50.36 One hint MUST show at a time, in the last `Tooltips` bound of those standing, and a hint
+opening with none standing MUST warn once on `abide:tooltip`.
 
 # 51. Lists and tables
 

@@ -874,11 +874,19 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
 | `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined }` | One notice `toasts.list` holds. | 50.12 |
 
-## `Tooltip`
+## `tooltip`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Tooltip` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number } & Omit<Attributes<'span'>, 'popover' \| 'role'>` | A hint for the element written just before it, whose children are the hint, imported from `@abide/abide/Tooltip.abide`. | 50.23, 50.24, 50.25, 50.26, 50.27, 50.35, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+| `tooltip` | `(hint: Hint, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a hint for the element it is bound to, shown by the page's `Tooltips`. | 32.9, 50.23, 50.24, 50.25, 50.36 |
+| `Hint` | `string \| ((props: Record<string, never>) => unknown)` | What a hint shows: text, or a component. | 50.23 |
+| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number }` | Where a hint opens against its anchor, and how long a pointer rests first. | 50.24, 50.26, 50.35 |
+
+## `Tooltips`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.23, 50.26, 50.27, 50.35, 50.36, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
 
 ## `Menu`
 

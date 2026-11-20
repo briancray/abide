@@ -126,6 +126,8 @@ export { refuse } from './refuse.ts'
 export { resultsOf } from './resultsOf.ts'
 export { route } from './route.ts'
 export * as transcript from './transcript/index.ts'
+export { type Hint, type TooltipOptions } from './tooltip/tips.ts'
+export { tooltip } from './tooltip/tooltip.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 // 8.22, 8.34, 8.37 — the `Store`s, as one namespace: `store.web`, `store.indexedDB`, `store.cookies`.
 // `@abide/abide/server` exports its own over this one, with the two a server alone has.

@@ -6,22 +6,23 @@ test('a click on a stage leaves its hint to the hover delay, and a key into it o
     page,
 }) => {
     await page.goto('pipeline', { waitUntil: 'networkidle' })
-    const proposal = page.locator('span[aria-describedby]', {
+    const proposal = page.locator('span[aria-description]', {
         hasText: /^proposal$/,
     })
     const opened = () =>
-        proposal.evaluate((anchor) =>
-            document
-                .getElementById(anchor.getAttribute('aria-describedby') ?? '')
-                ?.matches(':popover-open'),
+        page.evaluate(() =>
+            [...document.querySelectorAll('[role=tooltip]:popover-open')].map(
+                (each) => each.textContent,
+            ),
         )
     await proposal.click()
     // Read once, well inside the 300 ms delay: only the click's focus could have opened it.
-    expect(await opened()).toBe(false)
+    expect(await opened()).toEqual([])
     await expect(proposal).toBeFocused()
     await page.mouse.move(0, 0)
     await page.keyboard.press('Shift+Tab')
     await page.keyboard.press('Tab')
     await expect(proposal).toBeFocused()
-    expect(await opened()).toBe(true)
+    // 50.28 — one popover, however many `Tooltips` the page stands: the docs' and the example's.
+    expect(await opened()).toEqual(['A quote is out, waiting on an answer.'])
 })

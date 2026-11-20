@@ -671,12 +671,20 @@ export const SITE: readonly SiteGroup[] = [
                 registry: '`toasts`',
             },
             {
-                route: '/components/tooltip',
-                title: '`Tooltip`',
-                nav: '`Tooltip`',
+                route: '/components/tooltips',
+                title: '`Tooltips`',
+                nav: '`Tooltips`',
                 description:
-                    'Show a hint for the element just before it, on hover and on focus, placed where it fits.',
-                registry: '`Tooltip`',
+                    'Render once in the root layout as the one popover every hint on the page opens in.',
+                registry: '`Tooltips`',
+            },
+            {
+                route: '/components/tooltip',
+                title: '`tooltip`',
+                nav: '`tooltip`',
+                description:
+                    'Show a hint for the element it is bound to, on hover and on focus, placed where it fits.',
+                registry: '`tooltip`',
             },
             {
                 route: '/components/menu',
