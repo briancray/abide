@@ -4583,7 +4583,8 @@ where the turn ended without calling it.
 44.100 `assistant` called outside a request, or in the run of a `global` value, in the app `abide
 native`'s executable starts MUST run its conversation as a request carrying the `cookie` and
 `authorization` headers of the latest request that carried the window's credential (44.79), through
-the app that request reached, where such a request has come.
+the app that request reached, where such a request has come, and otherwise as a request carrying that
+credential and no principal, through the app the executable booted last.
 
 44.101 `assistant` called outside a request, or in the run of a `global` value, where 44.100 does not
 run it, MUST run its conversation carrying no asker's credentials, and MUST throw where given `mcp`.

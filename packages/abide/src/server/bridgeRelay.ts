@@ -144,6 +144,11 @@ export function serveLocally(secret: string): Promise<void> {
     return refreshLocalServers()
 }
 
+/** The native app's window credential, or `undefined` outside the native app. 44.79, 44.100. */
+export function windowCredential(): string | undefined {
+    return LOCAL.secret === '' ? undefined : LOCAL.secret
+}
+
 /** Whether the request being answered is from the native app's window, by its credential. 44.79. */
 export function fromNativeWindow(): boolean {
     return carriesWindowCredential(request())

@@ -16,7 +16,7 @@ import {
 // handed a cookie it never asked for.
 
 // 26.19.
-const CALLER_COOKIE = 'abide-caller'
+export const CALLER_COOKIE = 'abide-caller'
 
 /**
  * `principal.caller` as it stands in this request, or `undefined`; never minted.

@@ -31,7 +31,7 @@ import {
     spawnedBuild,
 } from './appBuild.ts'
 import { holdsApp } from './appTree.ts'
-import { noteWindow } from './assistant.ts'
+import { noteBooted, noteWindow } from './assistant.ts'
 import { presumeCaller } from './callerOf.ts'
 import {
     APP_PACKAGE,
@@ -385,6 +385,7 @@ export async function bootEntered(
         held: new Set(),
         followers: new Followers(),
     }
+    noteBooted(answering)
 
     // 16.42, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
     // request it was made in; only a call made outside every request falls to the app built last.

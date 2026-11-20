@@ -30,8 +30,14 @@ import { mounted } from '#shared/mount.ts'
 import { stopSignal } from '#shared/reactive/poll.ts'
 import { refuse } from '#shared/refuse.ts'
 
-import { carriesWindowCredential } from './bridgeRelay.ts'
+import {
+    carriesWindowCredential,
+    NATIVE_COOKIE,
+    windowCredential,
+} from './bridgeRelay.ts'
+import { CALLER_COOKIE } from './callerOf.ts'
 import { mcpFailure, type McpReply, McpSurface } from './generatedSurfaces.ts'
+import { randomToken } from './randomToken.ts'
 import {
     type AnsweringApp,
     currentRequestScope,
@@ -96,10 +102,17 @@ const ASSISTANT_LOG = namedLogger('abide:assistant')
 const CARRIED_HEADERS = ['cookie', 'authorization']
 
 // 44.100 — the native app's window as its latest request left it: that request as a tool call carries
-// it, and the app it reached.
-const WINDOW: { asker: Request | undefined; app: AnsweringApp | undefined } = {
+// it, and the app it reached — or, before it has made one, the app booted last.
+const WINDOW: {
+    asker: Request | undefined
+    app: AnsweringApp | undefined
+    // The caller a conversation before the window's first request is, minted once: a bridge pairs
+    // with a browser (44.13), and the window has not been handed one yet.
+    caller: string | undefined
+} = {
     asker: undefined,
     app: undefined,
+    caller: undefined,
 }
 
 /** Keeps `given` as the window's latest request, where it carries the window's credential. 44.100. */
@@ -107,6 +120,28 @@ export function noteWindow(given: Request, app: AnsweringApp): void {
     if (!carriesWindowCredential(given)) return
     WINDOW.asker = askerOf(given)
     WINDOW.app = app
+}
+
+/** 44.100 — the app a conversation runs through before the window has made a request of it. */
+export function noteBooted(app: AnsweringApp): void {
+    if (WINDOW.asker === undefined) WINDOW.app = app
+}
+
+/**
+ * The window's latest request, or — 44.100, before it has made one — a request carrying the window's
+ * credential, which the process minted and so holds before the window does, and a caller of its own.
+ * `undefined` outside the native app.
+ */
+function windowAsker(): Request | undefined {
+    if (WINDOW.asker !== undefined) return WINDOW.asker
+    const credential = windowCredential()
+    if (credential === undefined || WINDOW.app === undefined) return undefined
+    WINDOW.caller ??= randomToken(16, 'hex')
+    return new Request('http://localhost/', {
+        headers: {
+            cookie: `${NATIVE_COOKIE}=${credential}; ${CALLER_COOKIE}=${WINDOW.caller}`,
+        },
+    })
 }
 
 /** A conversation over `messages`, run by `provider`, as the events it produces. */
@@ -118,15 +153,16 @@ export async function* assistant(
     // 44.57 — A `global` VALUE'S RUN IS NO REQUEST'S, whichever request reached it first: the reader
     // leaving is not the end of an answer every other reader is reading.
     const asking = inGlobalRun() ? undefined : currentRequestScope()?.request
-    if (asking === undefined && WINDOW.asker !== undefined) {
-        yield* asWindow(messages, provider, options)
+    const window = asking === undefined ? windowAsker() : undefined
+    if (window !== undefined) {
+        yield* asWindow(window, messages, provider, options)
         return
     }
     // 44.101 — NO ONE ASKED: a `global` value's run, a timer's, `onStart`'s. There is no one for a
     // tool to act as, and a `global` value's answer is every caller's.
     if (asking === undefined && options.mcp === true)
         throw new Error(
-            'abide: assistant was asked for tools outside a request, and there is no asker for them to act as — no request is being answered, and none has come from the native app’s window. RULEBOOK 44.101.',
+            'abide: assistant was asked for tools outside a request, and there is no asker for them to act as — no request is being answered, and outside the native app there is no window to ask as. RULEBOOK 44.101.',
         )
     yield* converse(messages, provider, options, asking)
 }
@@ -386,14 +422,14 @@ export function forwardOf(tools: Toolbox): McpForward {
 /**
  * `assistant` in a scope over the window's latest request, each step taken inside it. 44.100.
  *
- * Called only once a request has come from the window — inside the native app, alone.
+ * Called only inside the native app.
  */
 async function* asWindow(
+    asker: Request,
     messages: AssistantMessage[],
     provider: Provider,
     options: AssistantOptions,
 ): AsyncGenerator<AssistantEvent> {
-    const asker = WINDOW.asker as Request
     const app = WINDOW.app as AnsweringApp
     // 44.57 — the asker's own signal never aborts, so the app stopping ends the conversation, or the
     // caller's signal.

@@ -1514,10 +1514,11 @@ process.exit(0)
 
 // 44.100 — A CONVERSATION NOBODY ASKED FOR, from a timer or `onStart`: in the native app it runs as the
 // window's person, on this machine's Claude Code, its tools answered as the window's last request
-// was; before the window has asked anything it throws, a request without the credential does not
-// stand in for the window, and a timer a browser's request set keeps that request, so a browser
-// cannot launder a turn through one. THE REVERT: drop `noteWindow` from `App.fetch`, and `after`
-// throws as `before` does.
+// was; before the window has asked anything it runs as the window signed out, its credential alone, a
+// request without the credential does not stand in for the window, and a timer a browser's request
+// set keeps that request, so a browser cannot launder a turn through one. THE REVERT: drop
+// `noteWindow` from `App.fetch`, and `after` sees `nobody` as `before` does; drop the credential
+// `windowAsker` falls back to, and `before` throws outside a request.
 test('a conversation outside a request runs as the native app’s window — 44.100', async () => {
     const configured = await scratch({})
     const shim = `${configured}/bin/claude`
@@ -1567,7 +1568,7 @@ process.exit(0)
         cwd: app,
         env: { ...environment, CLAUDE_CONFIG_DIR: configured },
     })
-    expect(printed.before).toBe('threw outside')
+    expect(printed.before).toContain('saw "nobody"')
     expect(printed.after).toContain('saw "ada"')
     expect(printed.laundered).toBe('threw 409')
 }, 30_000)
