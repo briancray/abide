@@ -9,7 +9,7 @@ const closed = reactive(() => closedTotals(days))
 
 <div class="tabs">
     {#for choice of [7, 30]}
-        <button aria-selected={days === choice} onclick={() => (days = choice)}>
+        <button aria-pressed={days === choice} onclick={() => (days = choice)}>
             {choice} days
         </button>
     {/for}

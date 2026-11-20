@@ -7,5 +7,5 @@ test('the open tab is read from the address', async () => {
     const answer = await app.fetch(
         new Request('http://crm.invalid/companies/hopper-and-co?tab=notes'),
     )
-    expect(await answer.text()).toContain('aria-selected="true">notes')
+    expect(await answer.text()).toContain('aria-pressed="true">notes')
 })

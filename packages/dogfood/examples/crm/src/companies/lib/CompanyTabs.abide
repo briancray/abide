@@ -9,7 +9,7 @@ let draft = reactive('')
 
 <div class="tabs">
     {#for name of TABS}
-        <button aria-selected={query.tab === name}
+        <button aria-pressed={query.tab === name}
             onclick={() => {
                 query.tab = name
             }}

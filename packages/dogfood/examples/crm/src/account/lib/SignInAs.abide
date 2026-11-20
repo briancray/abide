@@ -15,7 +15,7 @@ const become = (email: string) => (email === '' ? signOut() : signIn({ email }))
 
 <div class="tabs">
     {#for one of PEOPLE}
-        <button aria-selected={(principal.resolved().name ?? 'Nobody') === one.name}
+        <button aria-pressed={(principal.resolved().name ?? 'Nobody') === one.name}
             onclick={() => become(one.email)}>{one.name}</button>
     {/for}
 </div>

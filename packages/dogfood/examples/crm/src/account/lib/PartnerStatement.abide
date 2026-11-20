@@ -26,7 +26,7 @@ const allowed = reactive(() => askAs({ origin }))
 
 <div class="tabs">
     {#for each of ORIGINS}
-        <button aria-selected={origin === each}
+        <button aria-pressed={origin === each}
             onclick={() => (origin = each)}>{each.slice(8)}</button>
     {/for}
 </div>

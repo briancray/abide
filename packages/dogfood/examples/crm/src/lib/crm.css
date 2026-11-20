@@ -501,6 +501,7 @@
             @apply border-rule text-ink;
         }
 
+        &[aria-pressed=true],
         &[aria-selected=true] {
             @apply border-signal bg-signal text-paper;
         }

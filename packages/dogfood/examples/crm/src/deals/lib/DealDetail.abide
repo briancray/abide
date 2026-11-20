@@ -10,7 +10,7 @@ const deal = reactive(() => getDeal({ id }))
 
 <div class="tabs">
     {#for one of ['d1', 'd2']}
-        <button aria-selected={id === one}
+        <button aria-pressed={id === one}
             onclick={() => {
                 id = one
             }}>{one}</button>

@@ -11,10 +11,10 @@ const shown = (deal: { amount: number; idle: number }) =>
 </script>
 
 <div class="tabs">
-    <button aria-selected={by === 'amount'} onclick={() => (by = 'amount')}>
+    <button aria-pressed={by === 'amount'} onclick={() => (by = 'amount')}>
         Largest
     </button>
-    <button aria-selected={by === 'idle'} onclick={() => (by = 'idle')}>
+    <button aria-pressed={by === 'idle'} onclick={() => (by = 'idle')}>
         Most idle
     </button>
 </div>

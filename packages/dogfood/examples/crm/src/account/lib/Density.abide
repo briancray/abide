@@ -8,7 +8,7 @@ const density = reactive(() => cookies().get('density') ?? 'comfortable')
 
 <div class="tabs">
     {#for one of DENSITIES}
-        <button aria-selected={density === one}
+        <button aria-pressed={density === one}
             onclick={() => cookies().set('density', one)}>{one}</button>
     {/for}
 </div>

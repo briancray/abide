@@ -33,7 +33,7 @@ let months = reactive(6)
 <div class="tabs">
     {#for choice of [6, 3]}
         <button
-            aria-selected={months === choice}
+            aria-pressed={months === choice}
             onclick={() => (months = choice)}
         >
             {choice} months

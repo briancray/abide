@@ -10,7 +10,7 @@ const summary = reactive(() => summarizeStage(stage))
 <div class="tabs">
     {#for choice of ['qualified', 'proposal']}
         <button
-            aria-selected={stage === choice}
+            aria-pressed={stage === choice}
             onclick={() => (stage = choice)}
         >
             {choice}

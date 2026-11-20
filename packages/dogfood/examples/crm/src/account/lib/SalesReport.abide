@@ -17,7 +17,7 @@ function refusal() {
 
 <div class="tabs">
     {#for one of REGIONS}
-        <button aria-selected={region === one}
+        <button aria-pressed={region === one}
             onclick={() => {
                 region = one
             }}>{one}</button>

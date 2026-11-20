@@ -9,6 +9,6 @@ test('a tab moves the address, and the draft stays', async ({ page }) => {
     await expect(page).toHaveURL('companies/hopper-and-co?tab=notes')
     await expect(
         page.getByRole('button', { name: 'notes', exact: true }),
-    ).toHaveAttribute('aria-selected', 'true')
+    ).toHaveAttribute('aria-pressed', 'true')
     await expect(draft).toHaveValue('Ask Grace about the renewal')
 })
