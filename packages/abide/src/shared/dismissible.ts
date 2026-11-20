@@ -64,16 +64,16 @@ export function dismissible(
     }
 }
 
-// 53.15 — from the top, until the layer the press lands in. A layer dismissed here may take itself
-// off the stack as it closes, so the walk reads a copy.
+// 53.15 — from the top, until the layer the press lands in. A layer `outside` is off for is passed
+// over rather than ending the walk, as Escape passes a layer `escape` is off for. A layer dismissed
+// here may take itself off the stack as it closes, so the walk reads a copy.
 function pressed(event: PointerEvent): void {
     const target = event.target as Node | null
     const stacked = layers.slice()
     for (let at = stacked.length - 1; at >= 0; at--) {
         const layer = stacked[at] as Layer
         if (target !== null && holds(layer, target)) return
-        if (!layer.outside) return
-        layer.dismiss(event)
+        if (layer.outside) layer.dismiss(event)
     }
 }
 

@@ -55,6 +55,28 @@ test('a press outside closes, a press inside or on what `inside` holds does not 
 
 // THE REVERT: bind on the document in the bubbling phase, from inside the opener's pointerdown, and
 // the press that opened the panel reaches the listener and closes it as it opens.
+// THE REVERT: end the walk at a layer `outside` is off for — `menu closed: false` where `true` is due.
+test('a press passes over a layer outside is off for, to close the one under it — 53.15', () => {
+    const menu = element()
+    const pinned = element()
+    let menuClosed = false
+    let pinnedClosed = false
+    const stopMenu = dismissible(() => {
+        menuClosed = true
+    })(menu)
+    const stopPinned = dismissible(
+        () => {
+            pinnedClosed = true
+        },
+        { outside: false },
+    )(pinned)
+    press(document.body)
+    expect(`menu closed: ${menuClosed}`).toBe('menu closed: true')
+    expect(pinnedClosed).toBe(false)
+    stopPinned()
+    stopMenu()
+})
+
 test('the press that opened the panel closes nothing — 53.13', () => {
     const opener = element('button')
     const closed: string[] = []
