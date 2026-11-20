@@ -7,11 +7,9 @@
 //
 // `bun packages/abide/bench/firstChunkShare.ts <repo> [runs] [first chunk delay ms] [latency ms]`
 
-import { rmSync } from 'node:fs' // bun has no sync rm of its own
-
 import { chromium } from '@playwright/test'
 
-import { writeFixture } from '../e2e/servedFixture.ts'
+import { servedFixture } from '../e2e/servedFixture.ts'
 import { median } from './median.ts'
 
 const REPO = process.argv[2] as string
@@ -41,45 +39,15 @@ const a = reactive(() => ticks({ n: 'a' }))
 
 <main><p id="a">{a.ready() ? a().length : 0}</p></main>`
 
-const app = `${REPO}/.test-modules/first-chunk`
-rmSync(app, { recursive: true, force: true })
-writeFixture(app, {
-    'package.json': JSON.stringify({
-        name: 'first-chunk',
-        type: 'module',
-        imports: { '#src/*': './*' },
-    }),
-    'data/ticks.handler.ts': TICKS,
-    'streams/index.abide': PAGE,
-})
-const CLI = `${REPO}/packages/abide/bin/abide.ts`
-await Bun.$`${process.execPath} ${CLI} build --root ${app} --out ${app}/.abide`
-    .cwd(REPO)
-    .quiet()
-const server = Bun.spawn(
-    [
-        process.execPath,
-        CLI,
-        'start',
-        '--root',
-        app,
-        '--out',
-        `${app}/.abide`,
-        '--port',
-        '0',
-    ],
-    { cwd: REPO, stdout: 'pipe', stderr: 'inherit' },
+const { base, server } = await servedFixture(
+    'first-chunk',
+    {
+        'data/ticks.handler.ts': TICKS,
+        'streams/index.abide': PAGE,
+    },
+    {},
+    REPO,
 )
-const reader = server.stdout.pipeThrough(new TextDecoderStream()).getReader()
-let said = ''
-let base = ''
-while (base === '') {
-    said += (await reader.read()).value ?? ''
-    base = /Local:\s+(http:\/\/\S+?)\/?(?:\s|\u001b)/.exec(said)?.[1] ?? ''
-}
-void (async () => {
-    while (!(await reader.read()).done);
-})()
 
 const browser = await chromium.launch()
 const times: number[] = []
