@@ -58,28 +58,34 @@ let closedSettings: Settings | undefined
 let open: Section | undefined
 
 // The section `source` renders as — the growing one itself where it closed as the last text left it.
-function sectionOf(
-    source: string,
-    settings: Settings,
-    closing: boolean,
-): Section {
-    const found =
-        closing && blocks !== undefined
-            ? blockOf(source, Object.keys(blocks))
-            : undefined
-    const Block = found === undefined ? undefined : blocks?.[found.name]
+// 52.43 — a section is a block once its fence closes, the last one included: `blockOf` answers
+// nothing for a fence still open, so a block still being written renders as code.
+function sectionOf(source: string, settings: Settings): Section {
     // 52.18 — a section closing as it stood keeps the nodes it rendered while open.
-    if (Block === undefined && open?.source === source) return open
+    if (open?.source === source) return open
+    const found =
+        blocks === undefined ? undefined : blockOf(source, Object.keys(blocks))
+    const Block = found === undefined ? undefined : blocks?.[found.name]
+    if (Block === undefined || found === undefined)
+        return {
+            source,
+            html: renderSection(source, settings),
+            block: undefined,
+        }
+    // And a block the text ended on is the same block once text goes on past it, the blank line
+    // after its fence joining the section.
+    const held = open?.block
+    if (
+        held !== undefined &&
+        held.Block === Block &&
+        held.source === found.source &&
+        held.info === found.info
+    )
+        return open as Section
     return {
         source,
-        html:
-            Block === undefined || found === undefined
-                ? renderSection(source, settings)
-                : '',
-        block:
-            Block === undefined || found === undefined
-                ? undefined
-                : { Block, source: found.source, info: found.info },
+        html: '',
+        block: { Block, source: found.source, info: found.info },
     }
 }
 
@@ -109,14 +115,14 @@ const sections = reactive(() => {
     let at = closedSource.length
     let end = sectionEnd(text, at)
     while (end < text.length) {
-        closed.push(sectionOf(text.slice(at, end), settings, true))
+        closed.push(sectionOf(text.slice(at, end), settings))
         at = end
         end = sectionEnd(text, at)
     }
     closedSource = text.slice(0, at)
     const shown = closed.slice()
     if (at < text.length) {
-        open = sectionOf(text.slice(at), settings, false)
+        open = sectionOf(text.slice(at), settings)
         shown.push(open)
     }
     return shown

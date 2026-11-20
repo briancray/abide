@@ -39,7 +39,10 @@ function write(text: string) {
     flushSync()
 }
 
-// THE REVERT: render every fence as code, and the install line has no Copy beside it.
+// THE REVERT: render every fence as code, and the install line has no Copy beside it. And a fence
+// closing the note is closed: try only a section text has moved past as a block, and the note ending
+// on its fence shows no Copy. Reuse only a section that is no block, and the Copy is a new button once
+// the note goes on.
 test('a fenced sh block renders as the code with a Copy beside it, and once closed only', async () => {
     using _note = await mount(NotePreview({}))
     write('Run this first:\n\n```sh\nbun add @abide/abide')
@@ -48,7 +51,13 @@ test('a fenced sh block renders as the code with a Copy beside it, and once clos
     expect(preview()?.querySelector('code')?.textContent).toBe(
         'bun add @abide/abide',
     )
+    // Closed, with nothing after it.
+    write('Run this first:\n\n```sh\nbun add @abide/abide\n```')
+    const copy = preview()?.querySelector('pre button')
+    expect(copy?.textContent).toBe('Copy')
     write('Run this first:\n\n```sh\nbun add @abide/abide\n```\n\nThen pair.')
+    // 52.18 — the block the note ended on is the one still there once the note goes on.
+    expect(preview()?.querySelector('pre button') === copy).toBe(true)
     expect(preview()?.querySelector('pre button')?.textContent).toBe('Copy')
     expect(preview()?.querySelector('pre code')?.textContent).toBe(
         'bun add @abide/abide',
