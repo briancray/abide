@@ -7,6 +7,7 @@
 import { ABIDE_DIRECTORY } from '#server/ABIDE_DIRECTORY.ts'
 
 import { type Diagnosis, diagnosisAt } from './Diagnostics.ts'
+import { lineStarts } from './lineOf.ts'
 
 /** One paragraph of a markdown file, over the lines `[start, end)`, its text whitespace-collapsed. */
 type Paragraph = { start: number; end: number; text: string; heading: boolean }
@@ -114,17 +115,14 @@ export async function agentNoteFindings(
     const lines = text.split('\n')
     const { restated } = await ownedByAbide()
     const found: Diagnosis[] = []
-    let offset = 0
-    let line = 0
+    const starts = lineStarts(text)
     for (const paragraph of paragraphsOf(lines)) {
-        for (; line < paragraph.start; line++)
-            offset += (lines[line] as string).length + 1
         if (!paragraph.heading && restated.has(paragraph.text))
             found.push(
                 diagnosisAt(
                     file.name as string,
                     text,
-                    offset,
+                    starts[paragraph.start] as number,
                     'warning',
                     'this paragraph restates what the installed `@abide/abide/ABIDE.md` holds, and stops being true as abide changes; `abide upgrade` removes it. RULEBOOK 38.196.',
                 ),

@@ -7,6 +7,7 @@ import { guardedSetup } from './guardedSetup.ts'
 import { abideBindings } from './hookCalls.ts'
 import { IDENTIFIER_PART } from './isNamedAlone.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
+import { moduleImports } from './moduleImports.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { privateExports } from './projectShadow.ts'
 import {
@@ -19,7 +20,7 @@ import {
     SERVER_LANE,
 } from './renderMarkup.ts'
 import { insideShare, SETTLED_AT, shareScope } from './shareScope.ts'
-import { splitImports, withoutProps } from './splitImports.ts'
+import { splitImports } from './splitImports.ts'
 
 // The name the body is bound to while a component's head contributions land (`HEADS`).
 const BODY = '__body'
@@ -100,11 +101,9 @@ ${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))
     const setup = splitImports(lowering.scripts())
     const componentBody = setup.body
 
-    // A child invoked inside `<head>` pushes to the same array from the head expression.
-    const heads =
-        head.includes(HEADS) ||
-        declared.includes(HEADS) ||
-        body.some((part) => part.includes(HEADS))
+    // A child invoked inside `<head>` pushes to the same array from the head expression — and a
+    // child invoked anywhere is a `renderComponent` call, the one writer of `HEADS`.
+    const heads = lowering.used.has('renderComponent')
     // 10.5 — around the setup that calls `reactive.share`, and the body whose children are
     // rendered inside it and find it on the way up.
     const { opened, closed } = shareScope(lowering, '    ')
@@ -203,39 +202,4 @@ function heldToAnnotations(
     for (const name in derived)
         out += `${lowering.use('derivedArgs')}(${name}, ${JSON.stringify(derived[name])})\n`
     return out
-}
-
-/**
- * An emitted module's imports: each framework name `lowering` used, from its lane's runtime
- * (`SPECIFIERS.ts`), and the author's own from both script blocks, already pointed where they
- * landed (`splitImports`).
- *
- * ASKED LAST, because `used` fills as the module is emitted.
- */
-export function moduleImports(
-    lowering: Lowering,
-    runtime: string,
-    scripts: readonly { imports: string }[],
-): string {
-    let out =
-        lowering.used.size === 0
-            ? ''
-            : `import { ${importClause([...lowering.used].sort())} } from '${runtime}'\n`
-    for (const script of scripts) out += withoutProps(script.imports)
-    return out
-}
-
-/**
- * The braces of a framework import: each name bound as `name as __name`.
- *
- * EVERY FRAMEWORK NAME IS BOUND UNDER `__`, the namespace an author does not write in: an author may
- * import a name the runtime also has into the same `<script>` —
- * `import { safeUrl } from './mine.ts'` beside one `<a href={u}>` was
- * `Identifier 'safeUrl' has already been declared` — and a `<script module>` declaring `setText` at
- * module scope collides with a runtime import made as written just the same.
- */
-function importClause(names: string[]): string {
-    const written: string[] = []
-    for (const name of names) written.push(`${name} as __${name}`)
-    return written.join(', ')
 }

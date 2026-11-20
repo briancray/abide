@@ -34,7 +34,6 @@ import {
     ROW_ROOT,
 } from './Cursor.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
-import { moduleImports } from './emitComponent.ts'
 import { IN_SETUP, setupRethrow } from './guardedSetup.ts'
 import {
     componentPrelude,
@@ -48,6 +47,7 @@ import {
     Lowering,
     PROPS,
 } from './Lowering.ts'
+import { moduleImports } from './moduleImports.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
     chosenArm,
@@ -75,7 +75,7 @@ import type {
     Setup,
     TemplateNode,
 } from './TemplateNode.ts'
-import { type Token, tokenize } from './tokenize.ts'
+import { nesting, type Token, tokenize } from './tokenize.ts'
 
 // The client half of one `.abide`. WHERE A NODE STANDS IS DECIDED ONCE, by `placeTemplate`, and the
 // server's markup is rendered from the same positions this module walks, builds and fills from. So
@@ -261,7 +261,7 @@ export function emitClient(
     let fills = contributed
     // THE HEAD GOES BEFORE THE FILL, so the guard is written out where there is one to apply.
     if (applied !== '')
-        fills += `${registered}${builds ? buildFunction(page, lowering) : ''}if (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) { ${applied}${builds ? `${lowering.use('fillRegion')}(${REGION_ROOT}, __build)` : ''} }\n`
+        fills += `${registered}${builds ? `${buildFunction('__build', page, lowering)}\n` : ''}if (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) { ${applied}${builds ? `${lowering.use('fillRegion')}(${REGION_ROOT}, __build)` : ''} }\n`
     else if (builds) fills += filledEmpty(page, lowering)
 
     // NOTHING LIVE IS NO MODULE: every unit the page's region pushes is a binding, a listener or a
@@ -423,14 +423,14 @@ return __markup(${REGION_ROOT})`
 }
 
 // The region's nodes made from what was placed (`emitMaker`), as the `__build` a fill calls.
-function buildFunction(sink: Cursor, lowering: Lowering): string {
-    return `function __build(__parent) {\n    ${emitMaker(sink, lowering)}\n}\n`
+function buildFunction(name: string, sink: Cursor, lowering: Lowering): string {
+    return `function ${name}(${PARENT}) {\n    ${emitMaker(sink, lowering)}\n}`
 }
 
 // 32.17 — a region that fills itself where no server painted it, a page's and an inline
 // component's alike.
 function filledEmpty(sink: Cursor, lowering: Lowering): string {
-    return `${buildFunction(sink, lowering)}${lowering.use('fillEmpty')}(${REGION_ROOT}, __build)\n`
+    return `${buildFunction('__build', sink, lowering)}\n${lowering.use('fillEmpty')}(${REGION_ROOT}, __build)\n`
 }
 
 // 10.5 — CAPTURED WHERE A DEFERRED MOUNT CAN NEED IT. A row or an arm mounted after the fact
@@ -909,34 +909,20 @@ function isFunctionLiteral(source: string): boolean {
     let depth = 0
     let closed = -1
     for (let index = at; index < tokens.length && closed === -1; index += 1) {
-        const kind = (tokens[index] as Token).kind
-        if (kind === SyntaxKind.OpenParenToken) depth += 1
-        else if (kind === SyntaxKind.CloseParenToken && --depth === 0)
-            closed = index
+        depth += nesting((tokens[index] as Token).kind)
+        if (depth === 0) closed = index
     }
     const after = tokens[closed + 1]?.kind
     if (after === SyntaxKind.EqualsGreaterThanToken) return true
     if (closed === -1 || after !== SyntaxKind.ColonToken) return false
     for (let index = closed + 2; index < tokens.length; index += 1) {
         const kind = (tokens[index] as Token).kind
-        if (OPENERS.has(kind)) depth += 1
-        else if (CLOSERS.has(kind)) depth -= 1
-        else if (depth === 0 && kind === SyntaxKind.EqualsGreaterThanToken)
+        depth += nesting(kind)
+        if (depth === 0 && kind === SyntaxKind.EqualsGreaterThanToken)
             return true
     }
     return false
 }
-
-const OPENERS: ReadonlySet<SyntaxKind> = new Set([
-    SyntaxKind.OpenParenToken,
-    SyntaxKind.OpenBraceToken,
-    SyntaxKind.OpenBracketToken,
-])
-const CLOSERS: ReadonlySet<SyntaxKind> = new Set([
-    SyntaxKind.CloseParenToken,
-    SyntaxKind.CloseBraceToken,
-    SyntaxKind.CloseBracketToken,
-])
 
 // A region's bindings go through its SCOPE, so what replaced the region can stop them (see
 // `Scope`). In the framework's own `__` namespace because a row binds the AUTHOR's item name as a
@@ -1273,9 +1259,7 @@ function emitFillable(
 ): void {
     const lowering = region.lowering
     const filled = emitRegion(sink, region.nested())
-    region.helpers.push(
-        `function ${name}_build(__parent) {\n    ${emitMaker(sink, lowering)}\n}`,
-    )
+    region.helpers.push(buildFunction(`${name}_build`, sink, lowering))
     region.helpers.push(
         mountFunction(
             name,
@@ -1560,7 +1544,7 @@ function emitArms(
                 : arm === 1 && caught !== undefined
                   ? caught
                   : ''
-        const builders = `const ${own}_build = function (__parent) {\n${emitMaker(sink, lowering)}\n}\n${mountFunction(own, REGION_ROOT, body, `${fillRegion}(${REGION_ROOT}, ${own}_build)`, lowering, sink.defersSetup, setup !== null)}`
+        const builders = `const ${own}_build = function (${PARENT}) {\n${emitMaker(sink, lowering)}\n}\n${mountFunction(own, REGION_ROOT, body, `${fillRegion}(${REGION_ROOT}, ${own}_build)`, lowering, sink.defersSetup, setup !== null)}`
         if (local === '') {
             helpers.push(
                 `${builders}\nconst ${own}_arm = { build: ${own}_build, mount: ${own}_mount }`,
@@ -1646,7 +1630,7 @@ function emitList(
     // MADE FROM THE ITEM'S VALUE: every slot reading the item alone is written before the row is
     // inserted, so making a row writes the document once per node (32.67).
     const valued = `const ${item} = ${ROW_ROOT}.data`
-    const make = `const ${name}_make = (__parent, ${ROW_ROOT}, ${at}) => {\n    ${valued}\n    ${emitMaker(row, lowering, () => rowMarkup(row, !single, lowering, CLIENT_LANE), !single)}\n}`
+    const make = `const ${name}_make = (${PARENT}, ${ROW_ROOT}, ${at}) => {\n    ${valued}\n    ${emitMaker(row, lowering, () => rowMarkup(row, !single, lowering, CLIENT_LANE), !single)}\n}`
     const walk = rowRegion.body()
     // A PATTERN READ OFF THE RECORD is read through one picker a name, the list's rather than the
     // row's, so a row allocates nothing for it.

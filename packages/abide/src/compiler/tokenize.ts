@@ -336,6 +336,14 @@ export function isBlank(text: string): boolean {
 }
 
 /**
+ * Whether a blank run is INDENTED — holds a space or a tab — or is newlines alone: the two kinds
+ * 33.17 and 33.18 tell apart, which the parser drops by and the formatter keeps.
+ */
+export function isIndented(text: string): boolean {
+    return text.includes(' ') || text.includes('\t')
+}
+
+/**
  * The index just past the string opening at `open` (any quote; a `\` escapes the next character),
  * or the source's end where it never closes.
  */

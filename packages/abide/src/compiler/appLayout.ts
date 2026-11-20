@@ -258,14 +258,14 @@ function textsAt(
  * 34.23 — COMPILED WITH THE APP, by the app's checker, so a component a package ships as source is
  * one of the app's in every way but its address: it is never routed (`placeOf`) unless mounted.
  */
-export async function withDependencies(
+async function withDependencies(
     root: string,
     parsed: readonly ParsedSource[],
     own: readonly string[],
     resolve: (specifier: string, from: string) => string | undefined,
     refusals: Diagnostics,
     /** Where what the parser refuses of a file reached here goes, where apart from `refusals`. */
-    unparsed: Diagnostics = refusals,
+    unparsed: Diagnostics,
 ): Promise<{
     sources: ParsedSource[]
     handlers: HandlerFile[]

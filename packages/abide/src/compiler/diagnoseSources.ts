@@ -3,6 +3,7 @@ import { checkedShadow, moduleConfigShadow } from './checkedShadow.ts'
 import {
     byPlace,
     type Diagnosis,
+    diagnosisAt,
     type Finding,
     placedFindings,
 } from './Diagnostics.ts'
@@ -253,15 +254,15 @@ function replacedModules(path: string, text: string): Diagnosis[] {
     if (MODULE_SYNTAX.test(text)) return []
     const found: Diagnosis[] = []
     for (const match of text.matchAll(DECLARED_MODULE)) {
-        const line = text.slice(0, match.index).split('\n').length
-        found.push({
-            path,
-            line,
-            column: 1,
-            code: 0,
-            category: 'error',
-            message: `abide: this file imports and exports nothing, so \`declare module '${match[1]}'\` declares the module in place of the package rather than adding to it, and every name the app imports from it reads as missing. Add \`import '${match[1]}'\` above it. RULEBOOK 38.212.`,
-        })
+        found.push(
+            diagnosisAt(
+                path,
+                text,
+                match.index,
+                'error',
+                `abide: this file imports and exports nothing, so \`declare module '${match[1]}'\` declares the module in place of the package rather than adding to it, and every name the app imports from it reads as missing. Add \`import '${match[1]}'\` above it. RULEBOOK 38.212.`,
+            ),
+        )
     }
     return found
 }

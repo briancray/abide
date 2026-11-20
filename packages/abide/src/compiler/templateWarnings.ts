@@ -52,23 +52,19 @@ export function templateWarnings(
     const warnings: Diagnosis[] = []
     const check = (body: Body): void => {
         for (const node of body.children) {
-            const fallback =
-                node.kind === 'block' && node.block === 'for'
-                    ? fallsBackEmpty(node, lowering)
-                    : undefined
+            if (node.kind !== 'block' || node.block !== 'for') continue
+            const fallback = fallsBackEmpty(node, lowering)
             if (fallback !== undefined) {
                 const at = diagnosisAt(
                     path,
                     text,
                     file.origins.holders.get(node) ?? 0,
                     'warning',
-                    `abide: \`${(node as ForBlock).subject.trim()}\` falls back to an empty list, and a {#for} over a subject that has not landed already iterates zero times. Write {#for ${(node as ForBlock).item} of ${fallback}}. RULEBOOK 32.22, 32.97.`,
+                    `abide: \`${node.subject.trim()}\` falls back to an empty list, and a {#for} over a subject that has not landed already iterates zero times. Write {#for ${node.item} of ${fallback}}. RULEBOOK 32.22, 32.97.`,
                 )
                 if (!citedAt(others, at, '14.17')) warnings.push(at)
             }
             if (
-                node.kind === 'block' &&
-                node.block === 'for' &&
                 node.key === '' &&
                 holdsNode(node.children, holdsState) &&
                 canChange(node, lowering) &&

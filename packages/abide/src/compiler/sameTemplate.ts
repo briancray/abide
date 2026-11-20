@@ -3,7 +3,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import type { AbideFile } from './parseAbide.ts'
 import { importStatements } from './splitImports.ts'
 import type { Body, InlineComponent, TemplateNode } from './TemplateNode.ts'
-import { isBlank, NEWLINE_RUN, tokenize } from './tokenize.ts'
+import { isBlank, isIndented, NEWLINE_RUN, tokenize } from './tokenize.ts'
 
 // 38.127 — WHAT `abide format` MAY CHANGE, and nothing else: the whitespace a browser collapses, a
 // run's indentation where 33.17 and 33.18 read only its kind, and the code `bun fmt` printed, read as
@@ -104,7 +104,7 @@ function componentShape(component: InlineComponent, parts: string[]): void {
  * one carrying indentation — since 33.17 and 33.18 drop the two apart.
  */
 function textShape(text: string): string {
-    if (isBlank(text)) return /[ \t]/.test(text) ? '\n ' : '\n'
+    if (isBlank(text)) return isIndented(text) ? '\n ' : '\n'
     return text.replace(NEWLINE_RUN, '\n')
 }
 

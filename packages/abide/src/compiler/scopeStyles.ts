@@ -17,18 +17,10 @@ import {
 } from './TemplateNode.ts'
 import { isSpace, skipQuoted } from './tokenize.ts'
 
-// What never carries a token: a document-level tag, and the tags a head contributes. The head's
-// own contributions never reach here — `parseAbide` splits them off the template.
-const UNSCOPED = new Set([
-    'html',
-    'body',
-    'script',
-    'style',
-    'title',
-    'meta',
-    'link',
-    'base',
-])
+// What never carries a token: the tags a head contributes, where one stands in the body. The head's
+// own contributions never reach here — `parseAbide` splits them off the template, with the document's
+// `<html>` and `<body>` and every `<style>`.
+const UNSCOPED = new Set(['script', 'title', 'meta', 'link', 'base'])
 
 /** The scope token for the component at `relative`: `a-` and six base-36 characters of its hash. */
 export function scopeToken(relative: string): string {

@@ -23,6 +23,7 @@ import {
 } from './TemplateNode.ts'
 import {
     isBlank,
+    isIndented,
     isSpace,
     nesting,
     skipQuoted,
@@ -678,7 +679,6 @@ export function parseAbide(source: string): AbideFile {
 
     const components = fileComponents(root, declared)
     refuseImported(components, [...modules, ...servers, ...scripts])
-    assertNoNestedHeadIn(components)
     collapseWhitespace(root)
     const head: TemplateNode[] = []
     const template: TemplateNode[] = []
@@ -996,18 +996,8 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
                 : node.kind === 'block'
                   ? `{#${node.block}}`
                   : ''
-        for (const body of bodiesOf(node)) {
+        for (const body of bodiesOf(node))
             assertNoNestedHead(body.children, label)
-            assertNoNestedHeadIn(body.components)
-        }
-    }
-}
-
-/** `assertNoNestedHead` over inline components' bodies, which no node of the template holds. */
-function assertNoNestedHeadIn(components: readonly InlineComponent[]): void {
-    for (const component of components) {
-        assertNoNestedHead(component.children, `{#component ${component.name}}`)
-        assertNoNestedHeadIn(component.components)
     }
 }
 
@@ -1685,7 +1675,7 @@ function collapseWhitespace(children: TemplateNode[]): void {
         for (const body of bodiesOf(node)) collapseWhitespace(body.children)
         if (node.kind !== 'text' || !isBlank(node.text)) continue
         if (!node.text.includes('\n')) continue
-        const indented = /[ \t]/.test(node.text)
+        const indented = isIndented(node.text)
         if (!indented || i === 0 || i === children.length - 1)
             children.splice(i, 1)
     }

@@ -14,7 +14,14 @@ import {
     parseAbide,
 } from './parseAbide.ts'
 import { sameTemplate } from './sameTemplate.ts'
-import { isBlank, isSpace, NEWLINE_RUN, slotEnd, tokenize } from './tokenize.ts'
+import {
+    isBlank,
+    isIndented,
+    isSpace,
+    NEWLINE_RUN,
+    slotEnd,
+    tokenize,
+} from './tokenize.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 // 38.125, 38.126 — A `.abide` IS FORMATTED AS PIECES, and `bun fmt` formats every piece that is code: a
@@ -780,7 +787,7 @@ function emit(
             !pending.alone ||
             opened ||
             closing ||
-            /[ \t]/.test(pending.text) === /[ \t]/.test(written)
+            isIndented(pending.text) === isIndented(written)
         out += keepsKind ? written : pending.text
         pending = undefined
     }

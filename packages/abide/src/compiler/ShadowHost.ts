@@ -457,8 +457,8 @@ export * from '${checked}'
     }
 
     private async currentProject(
-        created: string[] = [],
-        changed: string[] = [],
+        created: string[],
+        changed: string[],
     ): Promise<Project | undefined> {
         return created.length === 0 && changed.length === 0 && this.current
             ? this.latest
