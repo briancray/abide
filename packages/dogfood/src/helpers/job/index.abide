@@ -27,6 +27,18 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/job.test.ts',
             from: ["test('a failed run is logged under job:<name> and kept"],
         },
+        {
+            path: 'packages/abide/tests/job.test.ts',
+            from: [
+                "test('a job measured from the start names its next run an interval after the last run started",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/workerFiles.test.ts',
+            from: [
+                "test('a job whose run is a worker export runs it off the main thread, and stopping it aborts it there",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Mail the team a follow-up digest every night">
@@ -83,6 +95,27 @@ import Section from '#src/lib/Section.abide'
                         )
                         .get()?.sentAt ?? undefined,
             })
+        `} />
+    </Section>
+    <Section level={3} title="Score deals every five minutes from the start of each run">
+        <p><code>from: 'start'</code> measures <code>every</code> from when the last run
+            started. A run due while the last one overran starts at the look after it ends.</p>
+        <Code language="ts" caption="server" code={`
+            import { job } from '@abide/abide/server'
+
+            job('score', { every: 300_000, from: 'start', run: scoreAll })
+        `} />
+    </Section>
+
+    <Section level={3} title="Run the scoring in a thread of its own">
+        <p>A worker file's export is a function a job's <code>run</code> can be: each run is a
+            thread of its own, and stopping the job aborts it there.</p>
+        <Code language="ts" caption="server" code={`
+            import { job } from '@abide/abide/server'
+
+            import { scoreDeals } from './scoreDeals.worker.ts'
+
+            job('score', { every: 300_000, run: (signal) => scoreDeals(signal) })
         `} />
     </Section>
 </Doc>

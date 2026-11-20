@@ -23,6 +23,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/guards.test.ts',
             from: ["test('requireRole given a function admits whom it passes"],
         },
+        {
+            path: 'packages/abide/tests/guards.test.ts',
+            from: [
+                "test('requireRole at 404 answers a member without the role as an address nothing serves",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Show the team's commission to admins alone">
@@ -72,6 +78,17 @@ import Section from '#src/lib/Section.abide'
             {:else if commission.ready()}
                 <strong>{commission.total}</strong>
             {/if}
+        `} />
+    </Section>
+    <Section level={3} title="Hide payroll from everyone but admins">
+        <p><code>status: 404</code> answers a member without the role as an address nothing
+            serves, word for word, so they cannot tell the page exists.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, requireRole } from '@abide/abide/server'
+
+            export default GET(listPayroll, {
+                middleware: [requireRole('admin', { status: 404 })],
+            })
         `} />
     </Section>
 </Doc>

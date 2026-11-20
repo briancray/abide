@@ -28,6 +28,12 @@ import Section from '#src/lib/Section.abide'
                 "test('a paste of files is a drop, and words pasted alone paste",
             ],
         },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('the files a drop carries and does not take are handed to onreject",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Attach a signed contract dropped on a deal">
@@ -77,6 +83,20 @@ import Section from '#src/lib/Section.abide'
                 paste: true,
                 multiple: false,
             })}></textarea>
+        `} />
+    </Section>
+    <Section level={3} title="Say which dropped files a deal turned away">
+        <p><code>onreject</code> is handed the files a drop or a paste carried that
+            <code>accept</code> or <code>multiple</code> did not take.</p>
+        <Code language="ts" caption="browser" code={`
+            import { dropzone } from '@abide/abide'
+            import { toasts } from '@abide/abide/Toasts.abide'
+
+            dropzone(attach, {
+                accept: '.pdf',
+                onreject: (files) =>
+                    toasts.notify(\`\${files.length} not a PDF\`, { tone: 'error' }),
+            })
         `} />
     </Section>
 </Doc>

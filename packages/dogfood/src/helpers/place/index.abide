@@ -26,6 +26,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/overlays.test.ts',
             from: ["test('place reads layout and writes nothing"],
         },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: [
+                "test('the arrow keeps arrowInset from the corners, and an edge too short for both centers it",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Open a deal's quick-view popover under its row">
@@ -67,6 +73,15 @@ import Section from '#src/lib/Section.abide'
                 const { x, y } = placements[index]
                 badges[index][1].style.inset = \`\${y}px auto auto \${x}px\`
             }
+        `} />
+    </Section>
+    <Section level={3} title="Keep an arrow off a popover's rounded corners">
+        <p><code>arrowInset</code> is the pixels <code>arrow</code> keeps from each end of the
+            facing edge; an edge too short for both puts the arrow at its middle.</p>
+        <Code language="ts" caption="browser" code={`
+            import { place } from '@abide/abide'
+
+            const { arrow } = place(row, quickView, { side: 'bottom', arrowInset: 12 })
         `} />
     </Section>
 </Doc>

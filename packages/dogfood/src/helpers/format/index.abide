@@ -43,6 +43,10 @@ import Section from '#src/lib/Section.abide'
                 'test("unpinned, a date is UTC while the page hydrates and the browser\'s zone after',
             ],
         },
+        {
+            path: 'packages/abide/tests/format.test.ts',
+            from: ["test('a relative time is written in the style it is handed"],
+        },
     ]}
 >
     <Section level={3} title="Write deal amounts and chances in a table column">
@@ -137,6 +141,15 @@ import Section from '#src/lib/Section.abide'
 
             format.timeZone.set(rep.timeZone)
             </script>
+        `} />
+    </Section>
+    <Section level={3} title="Fit how long ago into a narrow column">
+        <p><code>style</code> is <code>'short'</code> for <code>12 min. ago</code> or
+            <code>'narrow'</code> for <code>12m ago</code>.</p>
+        <Code language="ts" caption="shared" code={`
+            import { format } from '@abide/abide'
+
+            format.relative(contact.touchedAt, { style: 'narrow' })
         `} />
     </Section>
 </Doc>
