@@ -7,6 +7,7 @@ import { fetchJson, fetchText } from '#server'
 import { answered } from '#server/answerFailure.ts'
 import { type Failed, problemOf } from '#shared/Failed.ts'
 import type { FetchFailed } from '#shared/fetchFailed.ts'
+import { handle } from '#shared/handle.ts'
 
 // Every path the service answers, to how many times it was asked.
 const asked = new Map<string, number>()
@@ -78,13 +79,16 @@ test('a Retry-After is waited, and one past the deadline is not — 54.10', asyn
     expect(asked.get('/slow-down')).toBe(2)
 })
 
-// A HANDLER HANDING ON WHAT A FETCH WAS REFUSED hands on the service's wait with it. THE REVERT: drop
-// the `holdUntil` in `fetchText`; the answer carries `null` where `30` is due.
+// A HANDLER HANDING ON WHAT A FETCH WAS REFUSED hands on the service's wait with it, whether
+// `fetchText` asked or the app's own `fetch` read through `handle`. THE REVERT: drop the `holdUntil` in
+// `refusedBy`; both answers carry `null` where `30` is due.
 test("a refusal's Retry-After is held, and crosses the wire again — 15.23, 15.24", async () => {
-    const answer = await fetchText(at('/limited'))
-    expect(answered(answer as FetchFailed).headers.get('retry-after')).toBe(
-        '30',
-    )
+    const asked = await fetchText(at('/limited'))
+    const read = await fetch(at('/limited')).then(handle)
+    expect([
+        answered(asked as FetchFailed).headers.get('retry-after'),
+        answered(read as FetchFailed).headers.get('retry-after'),
+    ]).toEqual(['30', '30'])
 })
 
 test('an attempt past its timeout is a FetchFailed for the timeout — 54.7', async () => {

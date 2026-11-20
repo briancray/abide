@@ -295,8 +295,8 @@ test('observe.rect follows a move nothing else reports right after a scroll — 
 
 // 41.32 — THE SERVER PAINTS THE WIDE ARM, A NARROW BROWSER HYDRATES IT AND THEN SWAPS IT, and says
 // nothing on `abide:hydrate`: the arm changed because the viewport is the browser's to know, not
-// because the two sides disagreed by mistake. THE REVERT: make `beginHydration` write nothing and
-// `isHydrating` answer false; the console carries the 41.24 warning.
+// because the two sides disagreed by mistake. THE REVERT: make `beginHydration` write nothing, so
+// `HYDRATION.pending` stays false; the console carries the 41.24 warning.
 test('media hydrates the arm the server painted and swaps it without a warning — 41.32', async ({
     page,
 }) => {

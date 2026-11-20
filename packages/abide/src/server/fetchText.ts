@@ -1,7 +1,7 @@
 // ANOTHER SERVICE, ASKED WITH A DEADLINE, RETRIES AND A CACHE: 54.7-54.17. A server's helper — the
 // fetch carries the server's credentials, and the cache is this process's.
 
-import { holdUntil, isFailed, isTransient, retryAtOf } from '#shared/Failed.ts'
+import { isFailed, isTransient, retryAt } from '#shared/Failed.ts'
 import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
 import { refusedBy } from '#shared/handle.ts'
 import { namedLogger } from '#shared/log.ts'
@@ -116,14 +116,10 @@ async function asked(
             })
             if (response.ok) return await response.text()
             failure = await refusedBy(response)
-            // 15.23, 15.24 — the service's own wait goes with the refusal it handed on.
-            const retryAt = retryAtOf(response.headers.get('retry-after'))
-            if (retryAt !== undefined) holdUntil(failure, retryAt)
             if (!isTransient(response.status)) return failure
+            const at = retryAt(failure)
             retryAfter =
-                retryAt === undefined
-                    ? undefined
-                    : Math.max(0, retryAt - Date.now())
+                at === undefined ? undefined : Math.max(0, at - Date.now())
         } catch (thrown) {
             // 54.11 — a caller's abort is theirs, and is never a failure to ask again.
             if (signal?.aborted) throw signal.reason

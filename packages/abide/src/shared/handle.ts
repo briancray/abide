@@ -2,6 +2,7 @@
 // its options, its headers, and whatever it throws, which reaches the caller untouched — so `handle`
 // is only what comes after: `fetch(url).then(handle)`.
 
+import { holdUntil, retryAtOf } from './Failed.ts'
 import { type FetchFailed, fetchFailed } from './fetchFailed.ts'
 import { essenceOf, framedStream, framingOf } from './framing.ts'
 
@@ -44,10 +45,16 @@ export async function handle(
     return response.blob()
 }
 
-/** 54.31 — a `Response` outside 2xx as the `FetchFailed` naming its status, its body let go. */
+/**
+ * 54.31 — a `Response` outside 2xx as the `FetchFailed` naming its status, its body let go. 15.23,
+ * 15.24 — the service's own `Retry-After` is kept with it, so a handler handing it on says it too.
+ */
 export async function refusedBy(response: Response): Promise<FetchFailed> {
     await response.body?.cancel()
-    return fetchFailed({ status: response.status, reason: 'status' })
+    const failure = fetchFailed({ status: response.status, reason: 'status' })
+    const at = retryAtOf(response.headers.get('retry-after'))
+    if (at !== undefined) holdUntil(failure, at)
+    return failure
 }
 
 async function* emptyStream(): AsyncGenerator<never> {}
