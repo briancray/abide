@@ -132,9 +132,9 @@ const VANILLA_BODIES: Record<string, string> = {
         next.push(row)
     }
     list.replaceChildren(...next)`,
-    // EXACTLY WHAT THE EMITTER DOES, with no abide around it: one `innerHTML` parse a row. This
-    // arm is here to attribute the cost rather than to be written by anybody — if it lands near
-    // abide's own number then parsing IS the story and nothing else in `makeRow` needs explaining.
+    // THE PARSE PATH, with no abide around it: one `innerHTML` parse a row — what a row cost while
+    // the emitter parsed it, and what a parser-owned position still pays. Here to attribute the cost
+    // rather than to be written by anybody: it is what row construction is priced against.
     innerHTML: `
     const scratch = document.createElement('template')
     const next = []
@@ -143,96 +143,6 @@ const VANILLA_BODIES: Record<string, string> = {
         next.push(scratch.content.firstChild)
     }
     list.replaceChildren(...next)`,
-    // THE LADDER. The arms below build the hand-written page UP toward what `makeRow` does, one
-    // component at a time, so the ~11 µs a row that parsing does not explain gets attributed
-    // instead of guessed at. Each step adds exactly one thing abide does and nothing else.
-    //
-    // STEP 1 — parse per row, but INSERT EACH NODE INTO THE LIVE LIST rather than batching with
-    // one `replaceChildren`. `makeRow` does `parent.insertBefore(node, before)` against the
-    // document, which is not the same DOM work as handing a finished array over once.
-    ladderInsert: `
-    const scratch = document.createElement('template')
-    list.replaceChildren()
-    for (let at = 0; at < ${ROWS}; at += 1) {
-        scratch.innerHTML = '<li><span>' + ('new ' + at) + '</span></li>'
-        const nodes = []
-        for (let n = scratch.content.firstChild; n !== null; n = n.nextSibling) nodes.push(n)
-        for (const node of nodes) list.insertBefore(node, null)
-    }`,
-    // STEP 2 — and a SCOPE a row, which is what `list.mount` allocates whether or not the row has
-    // a binding in it. The static-row arm above showed the binding is 4-7%; this asks what the
-    // scope alone costs.
-    ladderScope: `
-    class Scope { constructor() { this.stops = []; this.owned = null } }
-    const scratch = document.createElement('template')
-    list.replaceChildren()
-    for (let at = 0; at < ${ROWS}; at += 1) {
-        scratch.innerHTML = '<li><span>' + ('new ' + at) + '</span></li>'
-        const nodes = []
-        for (let n = scratch.content.firstChild; n !== null; n = n.nextSibling) nodes.push(n)
-        for (const node of nodes) list.insertBefore(node, null)
-        const scope = new Scope()
-        if (scope.stops.length !== 0) throw new Error('unreachable')
-    }`,
-    // STEP 3 — and the ROW RECORD `rowOf` mints, plus the keyed bookkeeping the reconcile keeps:
-    // a Map entry a row, and the two per-row arrays the resolve pass fills.
-    ladderKeyed: `
-    class Scope { constructor() { this.stops = []; this.owned = null } }
-    const scratch = document.createElement('template')
-    list.replaceChildren()
-    const held = new Map()
-    const from = new Array(${ROWS})
-    const survivor = new Array(${ROWS})
-    for (let at = 0; at < ${ROWS}; at += 1) {
-        scratch.innerHTML = '<li><span>' + ('new ' + at) + '</span></li>'
-        const nodes = []
-        for (let n = scratch.content.firstChild; n !== null; n = n.nextSibling) nodes.push(n)
-        for (const node of nodes) list.insertBefore(node, null)
-        const row = { key: ${ROWS} + at, data: null, node: nodes[0], scope: new Scope(), at }
-        held.set(row.key, row)
-        from[at] = -1
-        survivor[at] = null
-    }`,
-    // STEP 4 — `ls0_make` AND `rowOf` REPRODUCED FAITHFULLY, in plain JS: the `TEMPLATES` WeakMap
-    // lookup a row, the `firstChild`/`nextSibling` walk `markupNodes` does, `escapeText`'s brand
-    // check and regex scan, and the five-part concat the emitter writes. This is the rung that
-    // splits "the cost is in `make`" from "the cost is in everything around it" — the rungs above
-    // simplify `make`, and if this one lands near them then `make` is not where the gap is.
-    ladderFaithful: `
-    class Scope { constructor() { this.stops = []; this.owned = null } }
-    class Raw { constructor(html) { this.html = html } }
-    const TEMPLATES = new WeakMap()
-    function parseMarkup(near, markup) {
-        const doc = near.ownerDocument ?? near
-        let t = TEMPLATES.get(doc)
-        if (t === undefined) { t = doc.createElement('template'); TEMPLATES.set(doc, t) }
-        t.innerHTML = markup
-        return t.content
-    }
-    function markupNodes(near, markup) {
-        const nodes = []
-        for (let n = parseMarkup(near, markup).firstChild; n !== null; n = n.nextSibling) nodes.push(n)
-        return nodes
-    }
-    const SPECIAL = /[&<>]/
-    function escapeText(value) {
-        if (value instanceof Raw) return value.html
-        const text = value == null ? '' : String(value)
-        return text.search(SPECIAL) === -1 ? text : text
-    }
-    list.replaceChildren()
-    const held = new Map()
-    const from = new Array(${ROWS})
-    const survivor = new Array(${ROWS})
-    for (let at = 0; at < ${ROWS}; at += 1) {
-        const nodes = markupNodes(list, "<li>" + "<span>" + escapeText('new ' + at) + "</span>" + "</li>")
-        for (const node of nodes) list.insertBefore(node, null)
-        const row = { key: ${ROWS} + at, data: null, node: nodes[0], scope: new Scope(), at }
-        held.set(row.key, row)
-        from[at] = -1
-        survivor[at] = null
-    }`,
-    // ONE PARSE FOR THE WHOLE TREE, which is what `fillRegion` does and what a row build does NOT.
     // The row result — construction beats parsing 7x — is a result about a TINY string, where the
     // parser's fixed setup dominates. A region fill hands the parser a whole page at once, the
     // fixed cost amortizes over thousands of bytes, and the per-byte work is C++ against JS doing
@@ -243,71 +153,6 @@ const VANILLA_BODIES: Record<string, string> = {
         markup += '<li><span>' + ('new ' + at) + '</span></li>'
     }
     list.innerHTML = markup`,
-    // A CURSOR/PAINTER, WHICH IS WHAT AXIS 4'S FALLBACK WOULD EMIT: the row is built by CALLING
-    // an interface per node and per position rather than by generating markup. This is the arm
-    // that prices the objection — "every painter call is a property load on a polymorphic site"
-    // — and it is the only thing left unmeasured before that redesign could be argued.
-    painter: `
-    function Painter() { this.current = null; this.stack = [] }
-    Painter.prototype.open = function (tag) {
-        const el = document.createElement(tag)
-        if (this.current !== null) this.current.appendChild(el)
-        this.stack.push(this.current)
-        this.current = el
-    }
-    Painter.prototype.text = function (value) {
-        this.current.appendChild(document.createTextNode(value))
-    }
-    Painter.prototype.close = function () {
-        const done = this.current
-        this.current = this.stack.pop()
-        return done
-    }
-    const only = new Painter()
-    const next = []
-    for (let at = 0; at < ${ROWS}; at += 1) {
-        only.open('li')
-        only.open('span')
-        only.text('new ' + at)
-        only.close()
-        next.push(only.close())
-    }
-    list.replaceChildren(...next)`,
-    // THE SAME, WITH THE CALL SITES GENUINELY POLYMORPHIC. One painter in a page is a monomorphic
-    // site and proves nothing about the objection: the fallback has TWO — a DomPainter building a
-    // row and an AdoptPainter walking the server's — so the sites see two shapes. Alternating per
-    // row is what puts two hidden classes through one site.
-    painterTwo: `
-    function PainterA() { this.current = null; this.stack = [] }
-    function PainterB() { this.stack = []; this.current = null; this.spare = 0 }
-    for (const Shape of [PainterA, PainterB]) {
-        Shape.prototype.open = function (tag) {
-            const el = document.createElement(tag)
-            if (this.current !== null) this.current.appendChild(el)
-            this.stack.push(this.current)
-            this.current = el
-        }
-        Shape.prototype.text = function (value) {
-            this.current.appendChild(document.createTextNode(value))
-        }
-        Shape.prototype.close = function () {
-            const done = this.current
-            this.current = this.stack.pop()
-            return done
-        }
-    }
-    const first = new PainterA()
-    const second = new PainterB()
-    const next = []
-    for (let at = 0; at < ${ROWS}; at += 1) {
-        const p = at % 2 === 0 ? first : second
-        p.open('li')
-        p.open('span')
-        p.text('new ' + at)
-        p.close()
-        next.push(p.close())
-    }
-    list.replaceChildren(...next)`,
     // THE SHAPE PARSED ONCE AND CLONED, which is what the compiler could emit: it already knows
     // the row's static markup and already addresses the hole (the walk's `runHere`).
     clone: `
@@ -367,12 +212,6 @@ for (const [label, body] of [
     ['replace (hand-written)', 'createElement'],
     ['replace (innerHTML a row)', 'innerHTML'],
     ['replace (parse once, clone)', 'clone'],
-    ['replace (painter, one shape)', 'painter'],
-    ['replace (painter, two shapes)', 'painterTwo'],
-    ['ladder: +insert each node', 'ladderInsert'],
-    ['ladder: +a Scope a row', 'ladderScope'],
-    ['ladder: +row record and keyed map', 'ladderKeyed'],
-    ['ladder: abide make reproduced', 'ladderFaithful'],
     ['ONE parse for the whole tree', 'oneParse'],
 ] as const)
     arms.push([
@@ -408,14 +247,8 @@ const HEADINGS: Record<string, string> = {
     'replace (wide row)': `${ROWS} fresh keys, WIDE row — six elements instead of one`,
     'ONE parse for the whole tree': `${ROWS} rows in ONE innerHTML — what a region FILL does`,
     'replace (hand-written)': `${ROWS} fresh keys, HAND-WRITTEN — createElement and one replaceChildren`,
-    'replace (innerHTML a row)': `${ROWS} fresh keys, HAND-WRITTEN — innerHTML a row, which is what the emitter does`,
+    'replace (innerHTML a row)': `${ROWS} fresh keys, HAND-WRITTEN — innerHTML a row, the parse path`,
     'replace (parse once, clone)': `${ROWS} fresh keys, HAND-WRITTEN — parse the shape ONCE, clone and fill`,
-    'replace (painter, one shape)': `${ROWS} fresh keys, HAND-WRITTEN — built through a CURSOR, one painter`,
-    'replace (painter, two shapes)': `${ROWS} fresh keys, HAND-WRITTEN — built through a CURSOR, two painter shapes at each site`,
-    'ladder: +insert each node': `LADDER — parse a row, then insert each node into the LIVE list`,
-    'ladder: +a Scope a row': `LADDER — the above, and a Scope allocated a row`,
-    'ladder: +row record and keyed map': `LADDER — the above, and the row record plus keyed bookkeeping`,
-    'ladder: abide make reproduced': `LADDER — \`markupNodes\` + \`escapeText\` + \`rowOf\` reproduced faithfully`,
 }
 
 console.log(
@@ -501,48 +334,12 @@ console.log(
 // WHERE THE ROW BUILD GOES, attributed by hand-written arms rather than by reading the emitter and
 // guessing. `ls0_make` WAS `markupNodes(root, "<li>…")` and `parseMarkup` sets
 // `template.innerHTML` — one HTML parse a row — and the innerHTML arm is that, alone.
-const painterOne = layerMedian(byCase['replace (painter, one shape)'])
-const painterTwo = layerMedian(byCase['replace (painter, two shapes)'])
 console.log(
     `\n  WHERE THE ${ROWS}-ROW BUILD GOES, per row:\n` +
         `    createElement, inline            ${((handBuild / ROWS) * 1e-3).toFixed(1)} µs\n` +
         `    parse once, clone and fill       ${((clonedOnce / ROWS) * 1e-3).toFixed(1)} µs\n` +
-        `    through a cursor, one shape      ${((painterOne / ROWS) * 1e-3).toFixed(1)} µs\n` +
-        `    through a cursor, two shapes     ${((painterTwo / ROWS) * 1e-3).toFixed(1)} µs\n` +
-        `    innerHTML a row (the emitter)    ${((parsedPerRow / ROWS) * 1e-3).toFixed(1)} µs\n` +
+        `    innerHTML a row (the parse path) ${((parsedPerRow / ROWS) * 1e-3).toFixed(1)} µs\n` +
         `    abide's whole make+mount         ${((abideBuild / ROWS) * 1e-3).toFixed(1)} µs`,
-)
-// THE OBJECTION, PRICED. Axis 4's fallback builds through a cursor, and the standing worry is that
-// dispatch per position eats what the string round trip gave back. These two rows are that worry
-// with a number on it: the gap between inline construction and a two-shape call site is the whole
-// of what the redesign's RUNTIME shape costs.
-const ladder: [string, string][] = [
-    ['parse a row + replaceChildren', 'replace (innerHTML a row)'],
-    ['  + insert each node live', 'ladder: +insert each node'],
-    ['  + a Scope a row', 'ladder: +a Scope a row'],
-    ['  + row record and keyed map', 'ladder: +row record and keyed map'],
-    ['  = abide make, reproduced', 'ladder: abide make reproduced'],
-]
-// THE LADDER, EACH RUNG A DELTA. Attribution by adding one thing at a time to a hand-written arm,
-// which is the only way to reach these without a per-row timer the clock cannot resolve. The last
-// rung against abide's own number is what is STILL unexplained.
-let previous = 0
-console.log(`\n  WHAT THE ${ROWS}-ROW BUILD IS MADE OF, per row:`)
-for (const [label, key] of ladder) {
-    const here = layerMedian(byCase[key])
-    const perRow = (here / ROWS) * 1e-3
-    const delta = previous === 0 ? 0 : ((here - previous) / ROWS) * 1e-3
-    console.log(
-        `    ${label.padEnd(30)} ${perRow.toFixed(1)} µs${previous === 0 ? '' : `   (+${delta.toFixed(1)})`}`,
-    )
-    previous = here
-}
-// ABIDE SITS BELOW THE LADDER NOW, and that is the change having landed rather than a
-// measurement error: the rungs price the PARSE path a row used to take, and a constructed row does
-// not take it. Kept as the comparison it now is — what the client used to pay, against what it
-// pays.
-console.log(
-    `    ${'abide make+mount (built)'.padEnd(30)} ${((abideBuild / ROWS) * 1e-3).toFixed(1)} µs   (${(abideBuild / previous).toFixed(2)}x the parse path it replaced)`,
 )
 const wideBuild = layerMedian(byCase['replace (wide row)'])
 // THE SCALING CHECK, AND ITS SIGNATURE IS THE WHOLE STORY. One element a row against six: the
@@ -554,11 +351,6 @@ const wideBuild = layerMedian(byCase['replace (wide row)'])
 console.log(
     `\n  DOES THE BUILD TRACK THE MARKUP? one element a row ${milliseconds(abideBuild)} ms, ` +
         `six ${milliseconds(wideBuild)} ms — ${(wideBuild / abideBuild).toFixed(2)}x for ~4x the markup bytes.`,
-)
-console.log(
-    `\n  DISPATCH, against inline construction: one shape ${(painterOne / handBuild).toFixed(2)}x, ` +
-        `two shapes ${(painterTwo / handBuild).toFixed(2)}x. The emitter's string round trip is ` +
-        `${(parsedPerRow / handBuild).toFixed(2)}x the same baseline.`,
 )
 // WHAT CONSTRUCTION IS WORTH, against the two arms that bound it: the parse path the emitter used
 // to take, and hand-written `createElement`, which is the floor.
