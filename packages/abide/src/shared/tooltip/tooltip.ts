@@ -2,12 +2,9 @@
 // nothing is added beside the anchor, and one popover serves every hint on the page.
 
 import { stack } from '../dismissible.ts'
-import { namedLogger } from '../log.ts'
 import type { Disposer } from '../reactive/watch.ts'
-import { type Hint, hosts, shown, type TooltipOptions } from './tips.ts'
+import { type Hint, hints, shown, type TooltipOptions } from './tips.ts'
 
-const TOOLTIP_LOG = namedLogger('abide:tooltip')
-let warned = false
 // 50.25 — THE OPEN HINT'S LAYER on `dismissible`'s stack: one, since one hint shows at a time, so a
 // hint another replaces leaves nothing behind to take the next Escape.
 let unstack: Disposer | undefined
@@ -37,12 +34,7 @@ export function tooltip(
         const show = (): void => {
             clearTimeout(timer)
             if (isOpen()) return
-            if (hosts.peek()?.length === 0 && !warned) {
-                warned = true
-                TOOLTIP_LOG.warning(
-                    'a hint opened with no <Tooltips /> rendered to show it — render one in the root layout. RULEBOOK 50.36.',
-                )
-            }
+            hints.asked()
             unstack?.()
             shown.set({ anchor, hint, options })
             // An Escape closes the hint alone, not the panel or the dialog under it; a press passes over it.

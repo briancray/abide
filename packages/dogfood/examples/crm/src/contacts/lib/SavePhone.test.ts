@@ -90,3 +90,16 @@ test('a notice carries its attributes, and its action tells onclose why it left'
     flushSync()
     expect(reasons).toEqual(['action'])
 })
+
+// 50.36 — TWO `Toasts` STANDING SHOW EACH NOTICE ONCE: the last mounted renders the list, and the other
+// renders none rather than a second copy read out twice. THE REVERT: have `Toasts` render the list
+// whether or not it is the last standing, and the notice shows twice.
+test('a notice shows once where two Toasts stand', async () => {
+    using _contact = await mount(SavePhone({}))
+    using _second = await mount(Toasts({}))
+    const id = toasts.notify('Saved')
+    flushSync()
+    expect(notices()).toEqual([['info', 'Saved', null]])
+    toasts.dismiss(id)
+    flushSync()
+})

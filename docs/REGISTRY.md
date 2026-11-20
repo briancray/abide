@@ -814,28 +814,28 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Prompts` | `Omit<Attributes<'dialog'>, 'open' \| 'onclose' \| 'role'>` | The `Dialog` the queued prompts show in, rendered once and imported from `@abide/abide/Prompts.abide`. | 50.6, 50.8, 50.10, 50.34, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+| `Prompts` | `Omit<Attributes<'dialog'>, 'open' \| 'onclose' \| 'role'>` | The `Dialog` the queued prompts show in, rendered once and imported from `@abide/abide/Prompts.abide`. | 50.6, 50.8, 50.10, 50.34, 50.36, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
 
 ## `prompts`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question asked in the app's `Prompts`. | 50.5, 50.7, 50.8, 50.11, 11.32 |
-| `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown in the app's `Prompts` until it is closed. | 50.5, 50.7, 50.9, 50.11, 11.32 |
-| `prompts.prompt` | `(asked: string \| PromptOptions) => Promise<string \| undefined>` | A line of text asked for in the app's `Prompts`. | 50.5, 50.7, 50.11, 50.33, 11.32 |
+| `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question asked in the app's `Prompts`. | 50.5, 50.7, 50.8, 50.11, 50.36, 11.32 |
+| `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown in the app's `Prompts` until it is closed. | 50.5, 50.7, 50.9, 50.11, 50.36, 11.32 |
+| `prompts.prompt` | `(asked: string \| PromptOptions) => Promise<string \| undefined>` | A line of text asked for in the app's `Prompts`. | 50.5, 50.7, 50.11, 50.33, 50.36, 11.32 |
 | `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string; value?: string; placeholder?: string; signal?: AbortSignal; modal?: boolean; run?: (answer: string) => unknown }` | What a prompt shows, what its buttons say, what withdraws it, whether it is modal, and the call confirming makes. | 50.7, 50.10, 50.34, 50.43, 50.44, 50.45 |
 
 ## `Toasts`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Toasts` | `{ label?: string; Toast?: (props: { toast: Toast; dismiss: () => void; act: () => void }) => unknown } & Omit<Attributes<'div'>, 'role'>` | The live region the notices are listed in, rendered once and imported from `@abide/abide/Toasts.abide`. | 50.17, 50.18, 50.46, 32.38, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+| `Toasts` | `{ label?: string; Toast?: (props: { toast: Toast; dismiss: () => void; act: () => void }) => unknown } & Omit<Attributes<'div'>, 'role'>` | The live region the notices are listed in, rendered once and imported from `@abide/abide/Toasts.abide`. | 50.17, 50.18, 50.36, 50.46, 32.38, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
 
 ## `toasts`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16 |
+| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16, 50.36 |
 | `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.41, 50.42 |
 | `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
 | `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |

@@ -15,7 +15,7 @@ import type { Attributes } from '#shared/Attributes.ts'
 import { props } from '#shared/props.ts'
 import { close, dismiss } from '#shared/toasts/dismiss.ts'
 // Named apart from the `Toast` prop: a type annotation naming a prop is read as the prop.
-import { list, type Toast as Notice } from '#shared/toasts/list.ts'
+import { list, notices, type Toast as Notice } from '#shared/toasts/list.ts'
 
 const {
     label = 'Notices',
@@ -38,6 +38,9 @@ const {
     } & Omit<Attributes<'div'>, 'role'>
 >()
 
+// 50.36 — this host, among the ones standing; the last renders the notices.
+const shows = notices.stand()
+
 function act(toast: Notice) {
     close(toast.id, 'action')
     toast.action?.run()
@@ -45,7 +48,7 @@ function act(toast: Notice) {
 </script>
 
 <div {...rest} role="status" aria-live="polite" aria-label={label}>
-    {#for toast of list by toast.id}
+    {#for toast of shows() ? list : [] by toast.id}
         <div {...toast.attributes} data-part="toast" data-tone={toast.tone}>
             {#if Toast}
                 <Toast toast={toast} dismiss={() => dismiss(toast.id)} act={() => act(toast)} />

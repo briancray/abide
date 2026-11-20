@@ -1,6 +1,6 @@
 import { isServer } from '../isServer.ts'
 import { close, type CloseReason, CLOSERS } from './dismiss.ts'
-import { list, type Toast } from './list.ts'
+import { list, notices, type Toast } from './list.ts'
 
 /** How a notice reads, how long it stays, and what it offers. */
 export type NotifyOptions = {
@@ -29,6 +29,7 @@ export function notify(text: string, options: NotifyOptions = {}): number {
         throw new Error(
             'toasts.notify shows a notice to a person, and a server has none to show it to. RULEBOOK 50.16.',
         )
+    notices.asked()
     const tone = options.tone ?? 'info'
     lastId += 1
     const id = lastId

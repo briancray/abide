@@ -2,6 +2,7 @@
 // every `reactive` without `global` is (11.32), and `notify` never writes it there (50.16): one
 // visitor's notice cannot reach another's page by either.
 
+import { outlet } from '../outlet.ts'
 import { reactive } from '../reactive/index.ts'
 
 /** One notice showing: what it says, its tone, and the action it offers, where it offers one. */
@@ -20,3 +21,6 @@ export type Toast = {
 
 /** The notices showing, oldest first. */
 export const list = reactive<Toast[]>([], { by: 'id' })
+
+// 50.36 — the `Toasts` standing: the last renders the notices.
+export const notices = outlet('<Toasts />', 'abide:toasts')

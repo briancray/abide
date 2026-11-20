@@ -5008,8 +5008,10 @@ confirming button, and `undefined` where it closed any other way.
 50.35 `place` MUST keep `arrow` at least `arrowInset` pixels from each end of the floating
 element's facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
 
-50.36 One hint MUST show at a time, in the last `Tooltips` bound of those standing, and a hint
-opening with none standing MUST warn once on `abide:tooltip`.
+50.36 One hint MUST show at a time. The hint, the notices and the prompts MUST each show in the last
+`Tooltips`, `Toasts` and `Prompts` of those standing, the others showing none, and a hint, a notice
+or a prompt asked for with none standing MUST warn once, on `abide:tooltip`, `abide:toasts` and
+`abide:prompts`.
 
 50.37 A `menu` MUST write every opening and every closing of its menu, however it happened, to its
 `open`, calling `onopen` or `onclose` after, and MUST open and close its menu as `open` is written.

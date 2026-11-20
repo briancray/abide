@@ -8,17 +8,16 @@ import type { Side } from '#shared/place.ts'
 import { props } from '#shared/props.ts'
 import { randomToken } from '#shared/randomToken.ts'
 import { reactive, watch } from '#shared/reactive/index.ts'
-import { register } from '#shared/register.ts'
-import { hosts, shown } from '#shared/tooltip/tips.ts'
+import { hints, shown } from '#shared/tooltip/tips.ts'
 
 const { ...rest } = props<Omit<Attributes<'span'>, 'popover' | 'role'>>()
 
 // 50.36 — this host, among the ones standing; the last bound renders the hint.
-const self = {}
+const shows = hints.stand()
 let element = reactive<HTMLElement | undefined>(undefined)
 const tip = reactive(() => {
     const open = shown
-    return hosts.at(-1) === self ? open : undefined
+    return shows() ? open : undefined
 })
 const Hint = reactive(() =>
     typeof tip?.hint === 'function' ? tip.hint : undefined,
@@ -29,9 +28,7 @@ let placed = reactive<Side>('top')
 function attach(host: HTMLElement) {
     element = host
     if (host.id === '') host.id = `tip-${randomToken(4, 'hex')}`
-    const unregister = register(hosts, self)
     return () => {
-        unregister()
         element = undefined
     }
 }

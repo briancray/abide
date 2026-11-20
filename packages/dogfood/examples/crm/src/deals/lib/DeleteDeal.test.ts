@@ -5,6 +5,7 @@ import { prompts } from '@abide/abide/Prompts.abide'
 import { mount, settled } from '@abide/harness/abide'
 
 import DeleteDeal from './DeleteDeal.abide'
+import RenameDeal from './RenameDeal.abide'
 
 const dialog = () => document.querySelector('dialog') as HTMLDialogElement
 const deals = () =>
@@ -175,4 +176,20 @@ test('a prompt that is not modal opens beside the page', async () => {
         HTMLDialogElement.prototype.show = show
         HTMLDialogElement.prototype.showModal = showModal
     }
+})
+
+// 50.36 — TWO `Prompts` STANDING SHOW ONE DIALOG: the last mounted shows the queue, and the other shows
+// nothing rather than a second modal over the first. THE REVERT: have `Prompts` show the queue whether
+// or not it is the last standing, and two dialogs open on one question.
+test('a question shows in one dialog where two Prompts stand', async () => {
+    using _deals = await mount(DeleteDeal({}))
+    using _rename = await mount(RenameDeal({}))
+    const asked = prompts.confirm('Delete Acme?')
+    flushSync()
+    const open = [...document.querySelectorAll('dialog')].filter(
+        (each) => each.open,
+    )
+    expect(open).toHaveLength(1)
+    open[0]?.querySelector<HTMLButtonElement>('[data-part=cancel]')?.click()
+    expect(await asked).toBe(false)
 })

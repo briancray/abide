@@ -1,6 +1,7 @@
 // 50.23, 50.36 — THE ONE HINT SHOWING, which the `Tooltips` standing in the page renders. Written only in a
 // browser — `tooltip` is a `bind:element` adaptor, which a server never runs.
 
+import { outlet } from '../outlet.ts'
 import type { Side } from '../place.ts'
 import { reactive } from '../reactive/index.ts'
 
@@ -32,5 +33,5 @@ export type OpenTip = {
 
 export const shown = reactive<OpenTip | undefined>(undefined)
 
-// 50.36 — the `Tooltips` standing, in the order they were bound: the last renders the hint.
-export const hosts = reactive<readonly object[]>([])
+// 50.36 — the `Tooltips` standing: the last renders the hint.
+export const hints = outlet('<Tooltips />', 'abide:tooltip')

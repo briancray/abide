@@ -5,6 +5,7 @@
 // there: `queued` throws first (50.11). One visitor's prompt cannot reach another's page by either.
 
 import { isServer } from '../isServer.ts'
+import { outlet } from '../outlet.ts'
 import { reactive } from '../reactive/index.ts'
 
 /** What a `prompts.confirm`, `prompts.alert` or `prompts.prompt` shows, and what its buttons say. */
@@ -56,6 +57,9 @@ export type Prompt = {
 /** The prompts waiting, oldest first, the first of them showing in `Prompts`. */
 export const queue = reactive<Prompt[]>([])
 
+// 50.36 — the `Prompts` standing: the last shows the queue.
+export const asking = outlet('<Prompts />', 'abide:prompts')
+
 /** Queues a prompt for `Prompts` to show, settling with the text typed once it is confirmed and `undefined` once it is closed any other way. */
 export function queued(
     asked: string | PromptOptions,
@@ -65,6 +69,7 @@ export function queued(
         throw new Error(
             `prompts.${kind} asks a person, and a server has none to ask. RULEBOOK 50.11.`,
         )
+    asking.asked()
     const options: PromptOptions =
         typeof asked === 'string' ? { body: asked } : asked
     const { promise, resolve: settle } = Promise.withResolvers<
