@@ -16,7 +16,7 @@
 // and prices what it BUYS. Quoting only the first is quoting the bill with no receipt.
 
 import {
-    listAt,
+    List,
     noUpdate,
     REGION_CLOSE,
     REGION_OPEN,
@@ -151,7 +151,7 @@ function listCase(
                 update: noUpdate,
             }
             // HYDRATED from the rows `host` rendered, the way a served page's list is.
-            const list = listAt(
+            const list = new List(
                 a.region as never,
                 false,
                 (row) => (row as Datum).id,

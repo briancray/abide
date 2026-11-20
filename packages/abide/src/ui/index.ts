@@ -8,7 +8,6 @@
 // those two attributes can be written back whole — the CSSOM and `classList` are what touch the one declaration or the one token a binding owns.
 // A `class={expr}` or `style={expr}` beside its directives is the same answer once more
 // (`setClassGroup`, `setStyleGroup`, 32.71): the group writes what it owns, and nothing else.
-// A list is reached through `listAt` and `updateList` alone, so its rows' shape is no caller's.
 // Nothing that finds a node by something added to the document, because a compiler may not invent
 // structure an author's CSS or queries can see.
 
@@ -48,7 +47,7 @@ export { textOf as escapeless } from '#shared/Raw.ts'
 export { invokeLanded } from './invokeLanded.ts'
 // 39.1 — a component's `<head>`, joined to the routed level mounting it.
 export { contributeHead } from './Level.ts'
-export { listAt, updateList } from './List.ts'
+export { List, updateList } from './List.ts'
 // 32.95, 39.23 — an `on<event>` value that may carry its options, and a target's that leaves with it.
 export { listen } from './listen.ts'
 export { warnMismatch } from './Mismatch.ts'

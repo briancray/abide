@@ -13,7 +13,7 @@ import { measure } from '@abide/harness/abide'
 import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { flushSync, reactive } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
-import { List, listAt, updateList } from '#ui/List.ts'
+import { List, updateList } from '#ui/List.ts'
 import { noUpdate } from '#ui/rows.ts'
 import { EMPTY_SCOPE, Scope } from '#ui/Scope.ts'
 
@@ -889,7 +889,7 @@ test('a second call with the same source does not restart the pump', async () =>
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
 
     const builders = { make, mount, update: noUpdate }
-    const list = listAt(region, false, key, () => builders)
+    const list = new List(region, false, key, () => builders)
     updateList(list, source)
     await Bun.sleep(0)
     expect(text()).toEqual(['a', 'b'])
@@ -946,7 +946,7 @@ function reorder(permute: (order: number[]) => number[]): {
     for (let at = 0; at < REORDERS; at += 1) order.push(at)
     const wantedOrder = permute(order)
     const wanted = wantedOrder.map((at) => data[at] as object)
-    const list = listAt(
+    const list = new List(
         region,
         false,
         (item) => (item as { id: number }).id,
@@ -1010,7 +1010,7 @@ test('a full reverse of 200 rows still transposes correctly', () => {
 // is identical and every other test here passes; this reports 200 removals where 0 are due.
 test('emptying a list clears its region in one write', () => {
     const { region, data } = seeded()
-    const list = listAt(
+    const list = new List(
         region,
         false,
         (item) => (item as { id: number }).id,
@@ -1054,7 +1054,7 @@ test('a new async source empties the rows the last one appended in one write', a
     ): AsyncGenerator<string> {
         for (let at = 0; at < many; at += 1) yield `${prefix}${at}`
     }
-    const list = listAt(
+    const list = new List(
         { open, close },
         false,
         (item) => item,
@@ -1105,7 +1105,7 @@ test('emptying a list out of the document stops its rows', () => {
     host.append(open, close)
     const tick = reactive(0)
     let wakes = 0
-    const list = listAt(
+    const list = new List(
         { open, close },
         false,
         (item) => item,
@@ -1202,7 +1202,7 @@ test('a list arriving in place of a stream stops the stream', async () => {
         row.textContent = String(item.data)
         return [row]
     }
-    const list = listAt(
+    const list = new List(
         { open, close },
         false,
         (item) => item,
@@ -1254,7 +1254,7 @@ test('a list stopped while its source is quiet returns the source at once — 12
         row.textContent = String(item.data)
         return [row]
     }
-    const list = listAt(
+    const list = new List(
         { open, close },
         false,
         (item) => item,
@@ -1287,7 +1287,7 @@ test('a value a row read while it was built does not rerun the list', () => {
         row.className = selected() === item.data ? 'danger' : ''
         return [row]
     }
-    const list = listAt(
+    const list = new List(
         { open, close },
         false,
         (item) => item,
@@ -1683,7 +1683,7 @@ test('a row that throws while made leaves no row unrecorded — 41.14', () => {
         mount: (): Scope => new Scope(),
         update: noUpdate,
     }
-    const list = listAt(
+    const list = new List(
         { open, close },
         false,
         (item: unknown) => item,

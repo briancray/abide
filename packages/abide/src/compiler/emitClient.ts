@@ -1693,7 +1693,7 @@ function emitList(
     // whole drops no rows, so `List.stop` is what reaches the ones still standing.
     region.lines.push(
         `const ${name} = ${lowering.use('regionFound')}(${position.name})
-const ${name}_list = ${SCOPE}.own(${lowering.use('listAt')}(${name}, ${single ? 'false' : 'true'}, ${name}_key, ${name}_setUp))
+const ${name}_list = ${SCOPE}.own(new ${lowering.use('List')}(${name}, ${single ? 'false' : 'true'}, ${name}_key, ${name}_setUp))
 ${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject()))`,
     )
 }

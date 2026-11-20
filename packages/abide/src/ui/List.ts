@@ -14,6 +14,13 @@ import { makeRow, paintedRow, type Row, type RowSetUp, rowsIn } from './rows.ts'
  * append of an async subject — have to tell each other: which source is pumping, and whether the
  * repeated-key warning has fired. Each edge between the two modes is a field here rather than a
  * patch to a module-level map keyed on the region.
+ *
+ * Over rows the server wrote, it is hydrated on its first update.
+ * Nothing is wired until the first update, which is the block's watch running once: the subject is
+ * read there and only there, so the rows are hydrated against the same items the watch then
+ * compares against. Read twice — once to hydrate and again on the watch's first run — a subject
+ * that builds fresh items (`rows.map(…)`) matched no row by identity, and every row the server sent
+ * was written again on load, every binding in it rerun (32.67).
  */
 export class List {
     region: Region
@@ -96,24 +103,6 @@ function stopPump(list: List): void {
     list.iterator = null
     // The return is the source's to answer, and an answer that fails is the stream ending anyway.
     void iterator.return?.()?.catch(() => {})
-}
-
-/**
- * A `List` over rows the server wrote, hydrated on its first update.
- *
- * Nothing is wired until the first update, which is the block's watch running once: the subject is
- * read there and only there, so the rows are hydrated against the same items the watch then
- * compares against. Read twice — once to hydrate and again on the watch's first run — a subject
- * that builds fresh items (`rows.map(…)`) matched no row by identity, and every row the server sent
- * was written again on load, every binding in it rerun (32.67).
- */
-export function listAt(
-    region: Region,
-    anchored: boolean,
-    key: (item: unknown, at: number) => unknown,
-    setUp: RowSetUp,
-): List {
-    return new List(region, anchored, key, setUp)
 }
 
 /**
