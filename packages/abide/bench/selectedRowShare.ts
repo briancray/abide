@@ -5,7 +5,7 @@
 // tab bar of three to five buttons, where the difference cannot be seen. This prices it at the n
 // where it could be: a list big enough to cross a frame.
 //
-// `bun packages/abide/bench/selectedRowShare.ts [rows]` — reports how the compiler made and mounted
+// `bun run bench:selected [rows]` — reports how the compiler made and mounted
 // each arm's row, read off the emitted module, beside what it cost.
 
 import { priceRowArms, replacePage } from './priceRowArms.ts'

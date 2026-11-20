@@ -7,7 +7,7 @@
 // origin waits on K/6 of the pool, and at K = 6 it waits forever. So the instrument is a TCP proxy
 // in front of each arm counting the connections open at the peak and the bytes each way — no clock.
 //
-// `bun packages/abide/bench/muxShare.ts [K] [chunks]`
+// `bun run bench:mux [K] [chunks]`
 
 import { countLines } from './countLines.ts'
 import { httpStream, httpStreamServer } from './vanillaHttpStreams.ts'

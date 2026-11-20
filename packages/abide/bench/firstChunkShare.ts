@@ -5,7 +5,7 @@
 // navigation's own time origin to the frame after the chunk's text landed, which is far above the
 // browser clock's 100 µs (43.11). Each repo builds and serves the same fixture with its own CLI.
 //
-// `bun packages/abide/bench/firstChunkShare.ts <repo> [runs] [first chunk delay ms] [latency ms]`
+// `bun run bench:first-chunk <repo> [runs] [first chunk delay ms] [latency ms]`
 
 import { chromium } from '@playwright/test'
 

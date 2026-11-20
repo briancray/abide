@@ -7,7 +7,7 @@
 // so the row's mount is never the shared empty one and the declaration is emitted in each (a region
 // that mounts nothing declares nothing, 32.43).
 //
-// `bun packages/abide/bench/inlineRowShare.ts [rows]`
+// `bun run bench:inline [rows]`
 
 import { priceRowArms, replacePage } from './priceRowArms.ts'
 
