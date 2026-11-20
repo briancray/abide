@@ -6,6 +6,7 @@ import type { Attributes } from '#shared/Attributes.ts'
 import { follow } from '#shared/follow.ts'
 import type { Side } from '#shared/place.ts'
 import { props } from '#shared/props.ts'
+import { randomToken } from '#shared/randomToken.ts'
 import { reactive, watch } from '#shared/reactive/index.ts'
 import { hosts, shown } from '#shared/tooltip/tips.ts'
 
@@ -26,8 +27,7 @@ let placed = reactive<Side>('top')
 
 function attach(host: HTMLElement) {
     element = host
-    if (host.id === '')
-        host.id = `tip-${crypto.getRandomValues(new Uint32Array(1))[0]?.toString(36)}`
+    if (host.id === '') host.id = `tip-${randomToken(4, 'hex')}`
     hosts = [...hosts, self]
     return () => {
         hosts = hosts.filter((each) => each !== self)

@@ -1,6 +1,6 @@
 import { cookies } from '#shared/cookies.ts'
+import { randomToken } from '#shared/randomToken.ts'
 
-import { randomToken } from './randomToken.ts'
 import {
     currentRequestScope,
     type RequestScope,

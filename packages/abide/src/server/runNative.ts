@@ -9,6 +9,7 @@
 // and each message to the window is followed by a wake, since the main thread hears nothing until one.
 
 import { ICON_ADDRESSES, MENU_BAR_ICON_ADDRESS } from '#shared/NATIVE_FILES.ts'
+import { randomToken } from '#shared/randomToken.ts'
 
 import { openWakePort } from './appKitLoop.ts'
 import { NATIVE_COOKIE, serveLocally } from './bridgeRelay.ts'
@@ -38,7 +39,6 @@ import {
 } from './NativeUpdater.ts'
 import { type LauncherThread, openNativeWindow } from './openNativeWindow.ts'
 import { plainAnswer } from './plainAnswer.ts'
-import { randomToken } from './randomToken.ts'
 import { type Component, renderDocument } from './render.ts'
 import { runCompiled } from './runCompiled.ts'
 import { type BuildParts, builtSources } from './servedApp.ts'

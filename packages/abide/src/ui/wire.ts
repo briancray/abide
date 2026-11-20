@@ -32,6 +32,7 @@ import { answerChunks } from '#shared/framing.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { standForLoadCall, startingLoadCall } from '#shared/loadCall.ts'
+import { randomToken } from '#shared/randomToken.ts'
 import { reactive, structural } from '#shared/reactive/index.ts'
 import {
     declareDefaults,
@@ -91,7 +92,7 @@ export function wire(
         // 16.82, 46.10 — a mutation that may be queued carries the key it is sent under every time.
         const queuedId =
             offline !== undefined && method !== 'GET'
-                ? crypto.randomUUID()
+                ? randomToken(16, 'hex')
                 : undefined
         const request = requestOf(args, queuedId)
         // A reload no call started — a refresh, or the one `whenOnline` asks — that gets no answer

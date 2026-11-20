@@ -9,10 +9,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
 
 import { exportSpan, writeSpan } from '#shared/log.ts'
+import { randomToken } from '#shared/randomToken.ts'
 import { isReactive } from '#shared/reactive/isReactive.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
 
-import { randomToken } from './randomToken.ts'
 import {
     currentRequestScope,
     type RequestScope,

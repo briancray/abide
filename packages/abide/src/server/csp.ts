@@ -6,9 +6,9 @@
 // rung writing a document's header — so the two agree, and an answer that is not a document mints none.
 
 import type { Rung } from '#shared/Middleware.ts'
+import { randomToken } from '#shared/randomToken.ts'
 
 import { EARLY_CALL_HASH } from './PageRender.ts'
-import { randomToken } from './randomToken.ts'
 import { within } from './requestScope.ts'
 
 // 29.5.

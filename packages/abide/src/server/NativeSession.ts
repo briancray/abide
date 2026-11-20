@@ -2,6 +2,7 @@
 // connected to elsewhere, or neither — and what the launcher did last, kept across launches.
 
 import { isFailed } from '#shared/Failed.ts'
+import { randomToken } from '#shared/randomToken.ts'
 
 import { configuredMount } from './config.ts'
 import type { App } from './createApp.ts'
@@ -9,7 +10,6 @@ import { reportUnexpected } from './hooks.ts'
 import type { Launcher } from './launcherOptions.ts'
 import type { Launch } from './launcherPage.ts'
 import { LOOPBACK } from './LOOPBACK.ts'
-import { randomToken } from './randomToken.ts'
 import { LISTENING } from './requestScope.ts'
 
 /** What the launcher did last, and what its forms held, kept across launches. 38.73. */

@@ -27,6 +27,7 @@ import type {
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
+import { randomToken } from '#shared/randomToken.ts'
 import { stopSignal } from '#shared/reactive/poll.ts'
 import { refuse } from '#shared/refuse.ts'
 
@@ -37,7 +38,6 @@ import {
 } from './bridgeRelay.ts'
 import { CALLER_COOKIE } from './callerOf.ts'
 import { mcpFailure, type McpReply, McpSurface } from './generatedSurfaces.ts'
-import { randomToken } from './randomToken.ts'
 import {
     type AnsweringApp,
     currentRequestScope,

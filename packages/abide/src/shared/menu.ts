@@ -5,6 +5,7 @@
 
 import { follow } from './follow.ts'
 import type { Side } from './place.ts'
+import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 /** Where a menu opens against its trigger, and what hears it open and close. */
@@ -55,7 +56,7 @@ export function menu(options: MenuOptions = {}): Menu {
     const placed = reactive<Side>(side)
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the two
     // ids are rewritten together.
-    const base = crypto.getRandomValues(new Uint32Array(1))[0]?.toString(36)
+    const base = randomToken(4, 'hex')
     const triggerId = `menu-trigger-${base}`
     const menuId = `menu-${base}`
     const triggerOf = () => document.getElementById(triggerId)

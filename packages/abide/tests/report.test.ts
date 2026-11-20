@@ -172,6 +172,18 @@ test('a draft made on a server holds its lines and sends in process — 48.3, 48
     expect(reports[0]?.markdown).toBe(draft.markdown())
 })
 
+// A PAGE SERVED OVER PLAIN HTTP HAS NO `crypto.randomUUID`, and a draft is still minted an id there.
+// THE REVERT: mint the id with `crypto.randomUUID()` — this throws `randomUUID is not a function`.
+test('a draft is minted an id where crypto.randomUUID is missing — 48.12', () => {
+    const randomUUID = crypto.randomUUID
+    ;(crypto as { randomUUID?: unknown }).randomUUID = undefined
+    try {
+        expect(report().id).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
+    } finally {
+        crypto.randomUUID = randomUUID
+    }
+})
+
 // 36.5 — A ROTATED SECRET IS A LIST, and each of its secrets is taken out on its own. THE REVERT:
 // redact `ABIDE_PRINCIPAL_SECRET` as one value — a line holding just one of the two keeps it.
 test('each secret of a rotated ABIDE_PRINCIPAL_SECRET is taken out of a draft — 48.10, 36.5', async () => {

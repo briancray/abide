@@ -11,11 +11,11 @@
 
 import { PARKED_ADDRESS } from '#shared/ADDRESSES.ts'
 import { PARKED_HEADER } from '#shared/PARKED_HEADER.ts'
+import { randomToken } from '#shared/randomToken.ts'
 
 import { callerCookieOf } from './callerOf.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { signedInBy } from './principal.ts'
-import { randomToken } from './randomToken.ts'
 
 // How long a parked answer waits to be taken before its run is ended.
 const PARKED_FOR_MILLISECONDS = 30_000

@@ -2,6 +2,7 @@
 // tab per key, and a panel — one following the selection, or one per tab, kept while hidden. The
 // server writes every attribute, so the page is the selected tab's before it hydrates.
 
+import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 /** The tabs, and the one selected. */
@@ -38,7 +39,7 @@ export function tabs(options: TabsOptions): Tabs {
     })
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids
     // are rewritten together.
-    const base = `tabs-${crypto.getRandomValues(new Uint32Array(1))[0]?.toString(36)}`
+    const base = `tabs-${randomToken(4, 'hex')}`
     const tabId = (key: string) => `${base}-tab-${encodeURIComponent(key)}`
     const panelId = (key: string) => `${base}-panel-${encodeURIComponent(key)}`
 
