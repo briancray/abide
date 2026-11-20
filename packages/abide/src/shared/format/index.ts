@@ -5,6 +5,9 @@
 // em dash (52.1).
 
 import { cached } from './cached.ts'
+import { timeZone, visitorZone } from './timeZone.ts'
+
+export { timeZone } from './timeZone.ts'
 
 const MISSING = '—'
 const LOCALE = 'en-US'
@@ -186,7 +189,11 @@ type DateOptions = {
      * `Nov 18, 2026, 3:04 PM`. `'day'` by default.
      */
     style?: 'day' | 'monthDay' | 'month' | 'time' | 'hour' | 'dateTime'
-    /** The IANA time zone the time is written in. `'UTC'` by default. */
+    /**
+     * The IANA time zone the time is written in. By default the zone `format.timeZone` pins, and
+     * where none is pinned the visitor's: UTC on a server and while a page hydrates, the browser's
+     * own after (52.44, 52.45).
+     */
     timeZone?: string
     /** The BCP 47 locale the date is written in. `'en-US'` by default. */
     locale?: string
@@ -212,21 +219,25 @@ export function dateParts(
 ): Intl.DateTimeFormatPart[] {
     const time = instant(value)
     if (time === undefined) return [{ type: 'literal', value: MISSING }]
-    const { style = 'day', timeZone = 'UTC', locale = LOCALE } = options
+    const {
+        style = 'day',
+        timeZone: zone = timeZone() ?? visitorZone(),
+        locale = LOCALE,
+    } = options
     // Two formatters joined rather than one asked for both: engines join a date and a time with
     // different words.
     if (style === 'dateTime')
         return [
-            ...dateParts(time, { style: 'day', timeZone, locale }),
+            ...dateParts(time, { style: 'day', timeZone: zone, locale }),
             { type: 'literal', value: ', ' },
-            ...dateParts(time, { style: 'time', timeZone, locale }),
+            ...dateParts(time, { style: 'time', timeZone: zone, locale }),
         ]
     return cached(
-        `date ${locale} ${timeZone} ${style}`,
+        `date ${locale} ${zone} ${style}`,
         () =>
             new Intl.DateTimeFormat(locale, {
                 ...DATE_STYLES[style],
-                timeZone,
+                timeZone: zone,
             }),
     ).formatToParts(time)
 }

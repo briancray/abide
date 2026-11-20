@@ -31,6 +31,18 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/format.test.ts',
             from: ["test('the parts of a date join to what date writes"],
         },
+        {
+            path: 'packages/abide/tests/format.test.ts',
+            from: [
+                "test('a date names the zone the app pins where its caller names none",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/format.test.ts',
+            from: [
+                'test("unpinned, a date is UTC while the page hydrates and the browser\'s zone after',
+            ],
+        },
     ]}
 >
     <Section level={3} title="Write deal amounts and chances in a table column">
@@ -101,6 +113,30 @@ import Section from '#src/lib/Section.abide'
                     {part.value}
                 {/if}
             {/for}
+        `} />
+    </Section>
+    <Section level={3} title="Show a meeting in the visitor's own time">
+        <p>A date with no <code>timeZone</code> is written in the visitor's zone: UTC on the
+            server and while the page hydrates, so the two agree, and the browser's own once it
+            has, every date written again.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { format } from '@abide/abide'
+            </script>
+
+            <time>{format.date(meeting.at, { style: 'dateTime' })}</time>
+        `} />
+    </Section>
+
+    <Section level={3} title="Write every date in the rep's own zone">
+        <p>Set <code>format.timeZone</code> in a layout's setup, which runs on both sides, and
+            every date with no <code>timeZone</code> of its own is written in it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { format } from '@abide/abide'
+
+            format.timeZone.set(rep.timeZone)
+            </script>
         `} />
     </Section>
 </Doc>

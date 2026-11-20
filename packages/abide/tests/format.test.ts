@@ -18,6 +18,8 @@ import {
     plural,
     relative,
 } from '../src/shared/format/index.ts'
+import { timeZone } from '../src/shared/format/timeZone.ts'
+import { beginHydration, endHydration } from '../src/shared/hydrating.ts'
 
 // THE REVERT: return `String(value)` for a non-number from `money`, and `null` reads `null`.
 test('a formatter writes an em dash for a value it cannot format — 52.1', () => {
@@ -161,4 +163,37 @@ test('the parts of a date join to what date writes, and an hour is written alone
         value: '3',
     })
     expect(dateParts('not a date')).toEqual([{ type: 'literal', value: '—' }])
+})
+
+// THE REVERT: default to UTC, and a pinned zone is ignored — Tokyo's morning reads as the night
+// before.
+test('a date names the zone the app pins where its caller names none — 52.44', () => {
+    const at = Date.UTC(2026, 10, 18, 22, 30)
+    try {
+        timeZone.set('Asia/Tokyo')
+        expect(date(at, { style: 'dateTime' })).toBe('Nov 19, 2026, 7:30 AM')
+        // A zone the caller names still wins.
+        expect(date(at, { style: 'time', timeZone: 'UTC' })).toBe('10:30 PM')
+    } finally {
+        timeZone.set(undefined)
+    }
+})
+
+// THE REVERT: drop the stand-in, and the page hydrates in the browser's zone, every date written
+// differently from what the server painted.
+test("unpinned, a date is UTC while the page hydrates and the browser's zone after — 52.45, 41.32", () => {
+    const at = Date.UTC(2026, 10, 18, 22, 30)
+    // `bun test` runs in UTC, which would make the two answers one.
+    const zone = process.env.TZ
+    process.env.TZ = 'Asia/Tokyo'
+    try {
+        beginHydration()
+        expect(date(at, { style: 'time' })).toBe('10:30 PM')
+        endHydration()
+        expect(date(at, { style: 'time' })).toBe('7:30 AM')
+    } finally {
+        if (zone === undefined) Reflect.deleteProperty(process.env, 'TZ')
+        else process.env.TZ = zone
+        endHydration()
+    }
 })

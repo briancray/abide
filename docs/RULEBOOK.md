@@ -4022,9 +4022,9 @@ markup.
 markup is built, and a load a component set up later, one only a pending value places, MAY have it
 choose another arm at hydration under 41.24.
 
-41.32 While a page hydrates, `online`, `media` and `pendingUpdate` MUST answer as the server does,
-and once it has hydrated each MUST be written with the browser's answer, so an arm that answer
-changes is swapped as an update and not under 41.24.
+41.32 While a page hydrates, `online`, `media`, `pendingUpdate` and the visitor's zone (52.45) MUST
+answer as the server does, and once it has hydrated each MUST be written with the browser's answer,
+so an arm that answer changes is swapped as an update and not under 41.24.
 
 41.33 An `Rpc` call answering a stream whose run had closed when `render` built the markup from it
 MUST hold every chunk of that run, its run closed, as hydration adopts the page.
@@ -5205,7 +5205,8 @@ and Backspace in its empty input MUST take out the last item it holds.
 
 52.2 Each formatter of `format` MUST write in the `en-US` locale where its caller names no `locale`.
 
-52.3 `format.date` MUST write a time in `UTC` where its caller names no `timeZone`.
+52.3 `format.date` MUST write a time in the zone `format.timeZone` pins where its caller names no
+`timeZone`, and in the visitor's zone (52.45) where none is pinned.
 
 52.4 `format.duration` MUST write a length in the largest unit it fills and the unit after it,
 leaving out a unit at zero.
@@ -5318,6 +5319,12 @@ function answers for the block's source and the rest of its info, written as it 
 52.43 `Markdown` MUST render a section that is one closed fenced block, and nothing else, whose info
 starts with a name `blocks` holds, as that component, handed the block's `source` and the rest of
 its `info`, and MUST render the block as code while its fence is open.
+
+52.44 `format.timeZone` MUST hold the zone the app pins, `undefined` until it pins one, one value per
+request on a server.
+
+52.45 The visitor's zone MUST be `UTC` on a server and while a page hydrates, and the zone the
+browser resolves once it has.
 
 # 53. Keys, element behaviors and chat
 
