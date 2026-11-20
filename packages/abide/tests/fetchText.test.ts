@@ -75,7 +75,7 @@ test('a 404 is answered at once, as a FetchFailed carrying the status — 54.8, 
 test('a Retry-After is waited, and one past the deadline is not — 54.10', async () => {
     const answer = await fetchText(at('/slow-down'), { timeout: 1_000 })
     expect(answer).toMatchObject({ data: { status: 429, reason: 'status' } })
-    // Asked again at once for `0`, then given up on for an hour.
+    // Asked again after the first step for `0`, then given up on for an hour.
     expect(asked.get('/slow-down')).toBe(2)
 })
 

@@ -5633,8 +5633,8 @@ after an attempt answered at any other status.
 54.9 `retries` MUST default to 2 for a method RFC 9110 defines as idempotent, and to 0 for any
 other.
 
-54.10 A retry under 54.8 MUST wait the time the answer's `Retry-After` names, in seconds or as an
-HTTP date, or 250 milliseconds doubled for each retry before it where none is named, and MUST NOT be
+54.10 A retry under 54.8 MUST wait 250 milliseconds doubled for each retry before it, or the time
+the answer's `Retry-After` names, in seconds or as an HTTP date, where that is later, and MUST NOT be
 made where that wait is longer than `timeout`.
 
 54.11 An abort of the `signal` a caller passes `fetchJson` or `fetchText` MUST be thrown as its

@@ -5,6 +5,7 @@ import { isFailed, isTransient, retryAt } from '#shared/Failed.ts'
 import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
 import { refusedBy } from '#shared/handle.ts'
 import { namedLogger } from '#shared/log.ts'
+import { retryWait } from '#shared/retryWait.ts'
 import { runSchema, type Schema } from '#shared/Schema.ts'
 
 /** `fetch`'s own options, and the deadline, the retries, the cache and the gate beside them. */
@@ -108,7 +109,7 @@ async function asked(
     for (let attempt = 0; ; attempt += 1) {
         const deadline = AbortSignal.timeout(timeout)
         let failure: FetchFailed
-        let retryAfter: number | undefined
+        let notBefore: number | undefined
         try {
             const response = await fetch(url, {
                 ...init,
@@ -117,9 +118,7 @@ async function asked(
             if (response.ok) return await response.text()
             failure = await refusedBy(response)
             if (!isTransient(response.status)) return failure
-            const at = retryAt(failure)
-            retryAfter =
-                at === undefined ? undefined : Math.max(0, at - Date.now())
+            notBefore = retryAt(failure)
         } catch (thrown) {
             // 54.11 — a caller's abort is theirs, and is never a failure to ask again.
             if (signal?.aborted) throw signal.reason
@@ -132,7 +131,8 @@ async function asked(
             failure.cause = thrown
         }
         if (attempt >= retries) return failure
-        const wait = retryAfter ?? FIRST_BACKOFF * 2 ** attempt
+        // 54.10 — bounded by `retries` rather than a ceiling: a step past `timeout` is not waited on.
+        const wait = retryWait(attempt, FIRST_BACKOFF, Infinity, notBefore)
         // 54.10 — a service asking for longer than one attempt may take is not waited on.
         if (wait > timeout) return failure
         FETCH_LOG.debug(

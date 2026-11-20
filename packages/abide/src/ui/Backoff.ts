@@ -1,18 +1,21 @@
+import { retryWait } from '#shared/retryWait.ts'
+
 /**
- * The next attempt at what the network did not answer, waiting from `floor` to `ceiling`, doubling —
- * 18.33's mux and 46.8's outbox, each with its own pair.
+ * The next attempt at what the network did not answer, waited out as `retryWait` times it from
+ * `floor` to `ceiling` — 18.33's mux and 46.8's outbox, each with its own pair.
  */
 export class Backoff {
     floor: number
     ceiling: number
-    wait: number
+    /** The retries made since the last reset: how many times the wait has doubled. */
+    attempt: number
     timer: ReturnType<typeof setTimeout> | undefined
     fire: () => void
 
     constructor(floor: number, ceiling: number, attempt: () => void) {
         this.floor = floor
         this.ceiling = ceiling
-        this.wait = floor
+        this.attempt = 0
         this.timer = undefined
         this.fire = () => {
             this.timer = undefined
@@ -26,12 +29,11 @@ export class Backoff {
      */
     later(notBefore?: number): void {
         clearTimeout(this.timer)
-        const wait =
-            notBefore === undefined
-                ? this.wait
-                : Math.max(this.wait, notBefore - Date.now())
-        this.timer = setTimeout(this.fire, wait)
-        this.wait = Math.min(this.wait * 2, this.ceiling)
+        this.timer = setTimeout(
+            this.fire,
+            retryWait(this.attempt, this.floor, this.ceiling, notBefore),
+        )
+        this.attempt += 1
     }
 
     /**
@@ -39,7 +41,7 @@ export class Backoff {
      * mid-send is behind the line the send read, and only the timer reaches it.
      */
     reset(): void {
-        this.wait = this.floor
+        this.attempt = 0
     }
 
     cancel(): void {
