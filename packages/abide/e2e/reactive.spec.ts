@@ -13,16 +13,13 @@ import { openInjected } from '../../harness/scripts/buildInjectable.ts'
 import { buildBench } from '../bench/buildBench.ts'
 import type { runReactive } from '../bench/reactiveRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
+import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const built = await buildBench('reactive')
 
-// WEBKIT CANNOT PRICE THESE: its clock is 1 ms, so 43.11's bar is 100 ms a sample and `batch()`
-// refuses rather than report the clock — under `bun run bench` too, where "construct a keyed value"
-// spends its 20 s budget at n=21,748,243 after 1 of 10 reps. `list.spec.ts` carries the whole reason.
-test.skip(
-    ({ browserName }) => browserName === 'webkit',
-    'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
-)
+// Under `bun run bench` too, where "construct a keyed value" spends its 20 s budget at
+// n=21,748,243 after 1 of 10 reps.
+skipWebkitClock()
 
 test('the reactive core against the hand-written arm, in this engine', async ({
     page,

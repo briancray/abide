@@ -11,13 +11,17 @@ import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
 import { buildBench, type Report } from '../bench/buildBench.ts'
-import { buildCompiledPage } from '../bench/buildCompiledPage.ts'
+import {
+    buildCompiledPage,
+    loadCompiledPage,
+} from '../bench/buildCompiledPage.ts'
 import {
     abideSource,
     cards,
     vanillaMarkup,
     vanillaWire,
 } from '../bench/renderCases.ts'
+import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const REPORT = await buildBench('report')
 const SIZES = [10, 100, 1000]
@@ -60,12 +64,7 @@ type Measured = {
     workDisagreement: string[]
 }
 
-// WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
-// and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.
-test.skip(
-    ({ browserName }) => browserName === 'webkit',
-    'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
-)
+skipWebkitClock()
 
 test('the client mount, against the page wired by hand', async ({
     page,
@@ -75,9 +74,7 @@ test('the client mount, against the page wired by hand', async ({
     const shapes: { size: number; kind: string; claim: string }[] = []
 
     for (const built of pages) {
-        await page.goto('about:blank')
-        await page.setContent('<!doctype html><html><body></body></html>')
-        await page.addScriptTag({ content: REPORT })
+        await loadCompiledPage(page, { markup: '', script: REPORT })
         await page.addScriptTag({ content: built.script })
 
         const measured = (await page.evaluate(

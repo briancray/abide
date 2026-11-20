@@ -14,6 +14,7 @@ import { buildBench, type Report } from '../bench/buildBench.ts'
 import {
     buildCompiledPage,
     type CompiledPage,
+    loadCompiledPage,
 } from '../bench/buildCompiledPage.ts'
 import { microseconds } from '../bench/milliseconds.ts'
 import {
@@ -23,6 +24,7 @@ import {
     type Card,
     cards,
 } from '../bench/renderCases.ts'
+import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const REPORT = await buildBench('report')
 const SIZES = [100, 1000]
@@ -64,12 +66,7 @@ for (const size of SIZES) {
     })
 }
 
-// WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
-// and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.
-test.skip(
-    ({ browserName }) => browserName === 'webkit',
-    'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
-)
+skipWebkitClock()
 
 type Mounts = {
     mount: (root: Node) => void
@@ -88,9 +85,7 @@ test('the mount of a list of components, against the same rows inline', async ({
         // BOTH ARMS IN ONE PAGE, so `batch()` can interleave them. Each compiled script is an
         // IIFE carrying its own runtime and leaves its mount on the one global, so each is
         // taken off it before the next script lands.
-        await page.goto('about:blank')
-        await page.setContent('<!doctype html><html><body></body></html>')
-        await page.addScriptTag({ content: REPORT })
+        await loadCompiledPage(page, { markup: '', script: REPORT })
         for (const [name, arm] of [
             ['inline', built.inline],
             ['nested', built.nested],

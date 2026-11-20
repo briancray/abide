@@ -13,6 +13,8 @@
 // against one `nextSibling` read per node, and a cursor that names every position is doing work a
 // JIT keeps in registers.
 
+import { markerWalk } from './markerWalk.ts'
+
 export type Scheme = 'structural' | 'cursor' | 'markers'
 
 /** A built tree: its markup, the slot script that binds it under `scope` (the root it is run with), its slots and its depth. */
@@ -107,19 +109,7 @@ export function tree(depth: number, leaves: number, scheme: Scheme): Tree {
 
 /** The script source that finds every slot under `scheme` and leaves them on `__SLOTS__`. */
 function slotScript(scheme: Scheme, paths: number[][]): string {
-    if (scheme === 'markers')
-        return `
-const found = []
-const walker = document.createTreeWalker(scope.querySelector('#r'), NodeFilter.SHOW_COMMENT)
-while (true) {
-    const comment = walker.nextNode()
-    if (comment === null) break
-    const data = comment.data
-    if (data.charCodeAt(0) !== 97 || data.length === 1) continue
-    found[Number(data.slice(1))] = comment.nextSibling
-}
-globalThis.__SLOTS__ = found
-`
+    if (scheme === 'markers') return markerWalk('#r')
     if (scheme === 'cursor') return cursorWalk(paths)
     // The naive emit: one walk from the region root per binding.
     return `

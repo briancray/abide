@@ -8,6 +8,8 @@
 // app really renders — and where "the slot is an element's only child" is true of every cell,
 // which is the case a marker might be elidable in.
 
+import { markerWalk } from './markerWalk.ts'
+
 /** The marker scheme a grid page is built in: two comments per slot, one, or none. */
 export type Variant = 'two-markers' | 'one-marker' | 'no-markers'
 
@@ -109,17 +111,6 @@ for (let r = 0; r < rows.length; r += 1) {
 globalThis.__SLOTS__ = found
 `
     }
-    // One or two markers: the walk is over COMMENTS and the number is read off the marker.
-    return `
-const found = []
-const walker = document.createTreeWalker(scope.querySelector('#g'), NodeFilter.SHOW_COMMENT)
-while (true) {
-    const comment = walker.nextNode()
-    if (comment === null) break
-    const data = comment.data
-    if (data.charCodeAt(0) !== 97 || data.length === 1) continue
-    found[Number(data.slice(1))] = comment.nextSibling
-}
-globalThis.__SLOTS__ = found
-`
+    // One or two markers.
+    return markerWalk('#g')
 }

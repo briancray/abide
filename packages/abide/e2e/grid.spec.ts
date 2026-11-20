@@ -13,7 +13,9 @@ import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
 import { buildBench, type Report } from '../bench/buildBench.ts'
+import { loadCompiledPage } from '../bench/buildCompiledPage.ts'
 import { type Grid, grid } from '../bench/gridPage.ts'
+import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const REPORT = await buildBench('report')
 
@@ -37,12 +39,7 @@ for (const [rows, columns] of SHAPES)
             ...grid(rows, columns, variant, 'dense'),
         })
 
-// WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
-// and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.
-test.skip(
-    ({ browserName }) => browserName === 'webkit',
-    'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
-)
+skipWebkitClock()
 
 test('the hydration walk, per scheme, in this engine', async ({
     page,
@@ -54,11 +51,15 @@ test('the hydration walk, per scheme, in this engine', async ({
         const here = pages.filter(
             (built) => built.rows === rows && built.columns === columns,
         )
-        await page.goto('about:blank')
-        await page.setContent(
-            `<!doctype html><html><body>${here.map((built) => `<div data-variant="${built.variant}">${built.markup}</div>`).join('')}</body></html>`,
-        )
-        await page.addScriptTag({ content: REPORT })
+        await loadCompiledPage(page, {
+            markup: here
+                .map(
+                    (built) =>
+                        `<div data-variant="${built.variant}">${built.markup}</div>`,
+                )
+                .join(''),
+            script: REPORT,
+        })
         const measured = await page.evaluate(
             (variants) => {
                 const { batch, claimOf, emulatedDom, ratio } = (

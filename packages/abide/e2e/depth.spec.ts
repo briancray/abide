@@ -6,7 +6,9 @@ import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
 import { buildBench, type Report } from '../bench/buildBench.ts'
+import { loadCompiledPage } from '../bench/buildCompiledPage.ts'
 import { type Scheme, type Tree, tree, wide } from '../bench/depthTree.ts'
+import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const REPORT = await buildBench('report')
 const CASES: [number, number][] = [
@@ -28,12 +30,7 @@ for (const [depth, leaves] of CASES)
 for (const scheme of SCHEMES)
     trees.push({ scheme, shape: 'wide', ...wide(4, 500, 4, scheme) })
 
-// WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 43.11's bar is 100 ms a sample
-// and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.
-test.skip(
-    ({ browserName }) => browserName === 'webkit',
-    'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
-)
+skipWebkitClock()
 
 test('the walk against tree depth, in this engine', async ({
     page,
@@ -69,11 +66,15 @@ test('the walk against tree depth, in this engine', async ({
                         built.bindings === group.bindings)),
         )
         const bindings = here[0]?.bindings ?? 0
-        await page.goto('about:blank')
-        await page.setContent(
-            `<!doctype html><html><body>${here.map((built) => `<div data-scheme="${built.scheme}">${built.markup}</div>`).join('')}</body></html>`,
-        )
-        await page.addScriptTag({ content: REPORT })
+        await loadCompiledPage(page, {
+            markup: here
+                .map(
+                    (built) =>
+                        `<div data-scheme="${built.scheme}">${built.markup}</div>`,
+                )
+                .join(''),
+            script: REPORT,
+        })
         const measured = await page.evaluate(
             (schemes) => {
                 const { batch, claimOf, emulatedDom, ratio } = (
