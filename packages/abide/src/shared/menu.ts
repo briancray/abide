@@ -7,7 +7,7 @@ import { anchored } from './anchored.ts'
 import type { Side } from './place.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
-import { roving } from './roving.ts'
+import { openingEnd, roving } from './roving.ts'
 
 /** Where a menu opens against its trigger, and what hears it open and close. */
 export type MenuOptions = {
@@ -137,9 +137,10 @@ export function menu(options: MenuOptions = {}): Menu {
             openAtPress = false
         },
         onkeydown: (event: KeyboardEvent) => {
-            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+            const end = openingEnd(event.key, 'vertical')
+            if (end === undefined) return
             event.preventDefault()
-            show(event.key === 'ArrowDown' ? 'first' : 'last')
+            show(end)
         },
     }
 

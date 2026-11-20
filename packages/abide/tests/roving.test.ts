@@ -100,3 +100,61 @@ test('listbox, menu and tabs land on the same item for the same keys — 50.30, 
     expect(walkMenu()).toEqual(expected)
     expect(walkTabs()).toEqual(expected)
 })
+
+// 50.28, 51.14 — THE KEYS THAT OPEN A SHUT LIST ARE THE ARROWS IT ROVES BY: a shut list opened by a key
+// lands where `roving` steps from no item, and Home, End and every other key open nothing. `menu`'s
+// trigger and `Combobox`'s input both ask `openingEnd`.
+//
+// THE REVERT: let `openingEnd` open on Home, and Home's row reads `first` where roving's reads none.
+test('a key opens a shut list exactly where roving steps from no item', async () => {
+    const { openingEnd, roving } = await import('#shared/roving.ts')
+    for (const orientation of ['vertical', 'horizontal'] as const)
+        for (const key of [
+            'ArrowDown',
+            'ArrowUp',
+            'ArrowLeft',
+            'ArrowRight',
+            'Home',
+            'End',
+            'Enter',
+            'a',
+        ]) {
+            const stepped = roving(key, orientation, () => [-1, 3])
+            const opened = openingEnd(key, orientation)
+            const fromNone =
+                stepped === -1 || key === 'Home' || key === 'End'
+                    ? undefined
+                    : stepped === 0
+                      ? 'first'
+                      : 'last'
+            expect([orientation, key, opened]).toEqual([
+                orientation,
+                key,
+                fromNone,
+            ])
+        }
+})
+
+// 50.28 — a menu's trigger opens on ArrowUp at its last item, and on Home not at all.
+test("a menu's trigger opens on the arrows openingEnd names, and at that end", () => {
+    const parts = menu()
+    const list = document.createElement('div')
+    list.id = parts.menu.id as string
+    list.setAttribute('popover', 'auto')
+    list.addEventListener('toggle', parts.menu.ontoggle as EventListener)
+    for (const text of ITEMS) {
+        const item = document.createElement('button')
+        item.setAttribute('role', 'menuitem')
+        item.textContent = text
+        list.append(item)
+    }
+    const button = document.createElement('button')
+    button.id = parts.trigger.id as string
+    document.body.append(button, list)
+    const keydown = parts.trigger.onkeydown as (event: KeyboardEvent) => void
+    press(keydown, 'Home')
+    expect(parts.open()).toBe(false)
+    press(keydown, 'ArrowUp')
+    expect(parts.open()).toBe(true)
+    expect(document.activeElement?.textContent).toBe('c')
+})

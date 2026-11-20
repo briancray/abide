@@ -7,6 +7,27 @@
 // answered before `locate` runs, so a list that is a live search is not read for a keystroke that
 // leaves it alone.
 
+// Which way `key` steps along a list of that orientation: forward, back, or neither.
+function stepOf(key: string, orientation: 'vertical' | 'horizontal'): number {
+    const vertical = orientation === 'vertical'
+    if (key === (vertical ? 'ArrowDown' : 'ArrowRight')) return 1
+    if (key === (vertical ? 'ArrowUp' : 'ArrowLeft')) return -1
+    return 0
+}
+
+/**
+ * 50.28, 51.14 — the end of a SHUT list `key` opens it at: its first item on the forward arrow, its
+ * last on the back arrow, and `undefined` for a key that opens nothing. What a `menu`'s trigger and a
+ * `Combobox`'s input share, from the same arrows `roving` steps by.
+ */
+export function openingEnd(
+    key: string,
+    orientation: 'vertical' | 'horizontal',
+): 'first' | 'last' | undefined {
+    const step = stepOf(key, orientation)
+    return step === 1 ? 'first' : step === -1 ? 'last' : undefined
+}
+
 /**
  * The index `key` moves to, or `-1` where it moves nowhere. `locate` answers where the list is: the
  * index of the item on now, `-1` for none, and how many there are. From none, the forward arrow
@@ -18,10 +39,10 @@ export function roving(
     locate: () => readonly [at: number, length: number],
     wrap = true,
 ): number {
-    const vertical = orientation === 'vertical'
-    const forward = key === (vertical ? 'ArrowDown' : 'ArrowRight')
-    const back = key === (vertical ? 'ArrowUp' : 'ArrowLeft')
-    if (!forward && !back && key !== 'Home' && key !== 'End') return -1
+    const step = stepOf(key, orientation)
+    const forward = step === 1
+    const back = step === -1
+    if (step === 0 && key !== 'Home' && key !== 'End') return -1
     const [at, length] = locate()
     if (length === 0) return -1
     const last = length - 1

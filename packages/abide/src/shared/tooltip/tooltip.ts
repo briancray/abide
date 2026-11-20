@@ -65,6 +65,9 @@ export function tooltip(
         const focused = (event: Event): void => {
             if ((event.target as Element).matches(':focus-visible')) show()
         }
+        // THE TRIGGER IS THE HINT'S OWN: a pointer resting and focus the browser shows open nothing else
+        // abide ships — a `menu` opens on a press the popover toggles and on the arrows `openingEnd`
+        // names, a `Combobox` on those arrows and on typing — so there is no second caller to share it.
         const linger = (): void => {
             clearTimeout(timer)
             timer = setTimeout(show, delay)

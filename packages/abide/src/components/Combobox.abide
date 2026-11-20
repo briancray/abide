@@ -3,6 +3,7 @@ import type { Attributes } from '#shared/Attributes.ts'
 import { listbox } from '#shared/listbox.ts'
 import { props } from '#shared/props.ts'
 import { busy, type Reactive, reactive } from '#shared/reactive/index.ts'
+import { openingEnd } from '#shared/roving.ts'
 
 const {
     id,
@@ -133,7 +134,7 @@ function keydown(event: KeyboardEvent) {
         if (last !== undefined) remove(last)
         return
     }
-    if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    if (!open && openingEnd(event.key, 'vertical') !== undefined) {
         event.preventDefault()
         open = true
         return
