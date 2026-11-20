@@ -5153,6 +5153,9 @@ column has one, and otherwise the value's own text, or none for a blank value.
 51.59 `SortableTable` MUST write a `Column`'s `align` as `data-align` on its header and on each of
 its cells.
 
+51.60 `SortableTable` given `Detail` MUST render, after each row, a row of its own whose
+`data-part` is `detail` and whose one cell spans every column and holds `Detail` handed that row.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

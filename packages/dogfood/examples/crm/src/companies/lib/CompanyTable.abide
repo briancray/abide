@@ -9,7 +9,6 @@ type Company = { id: string; name: string; city: string; contact: string }
 const COLUMNS: Column<Company>[] = [
     { key: 'name', label: 'Company' },
     { key: 'city', label: 'City' },
-    { key: 'contact', label: 'Contact' },
 ]
 
 const companies = reactive(() => listCompanies())
@@ -32,5 +31,8 @@ const companies = reactive(() => listCompanies())
         {:else}
             {text}
         {/if}
+    {/component}
+    {#component Detail({ row }: { row: Company })}
+        <span class="text-muted">Contact: {row.contact}</span>
     {/component}
 </SortableTable>

@@ -910,7 +910,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59 |
+| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60 |
 
 ## `Markdown`
 

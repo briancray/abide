@@ -6,7 +6,7 @@ import { reactive } from '#shared/reactive/index.ts'
 import type { Sort } from '#shared/Sort.ts'
 import { cellText, sortRows } from '#shared/sortRows.ts'
 
-const { rows, columns, key, sort, Cell, ...rest } = props<
+const { rows, columns, key, sort, Cell, Detail, ...rest } = props<
     {
         /** The rows, in the order they show while no column is sorted. */
         rows: readonly Row[]
@@ -18,6 +18,8 @@ const { rows, columns, key, sort, Cell, ...rest } = props<
         sort?: Sort | undefined
         /** Renders a cell's content in place of its text, handed the row, the column and the text. */
         Cell?(props: { row: Row; column: Column<Row>; text: string }): unknown
+        /** Renders a row of its own under each row, spanning every column: what the row expands to. */
+        Detail?(props: { row: Row }): unknown
     } & Attributes<'table'>
 >()
 
@@ -68,6 +70,11 @@ const directionOf = (column: Column<Row>) =>
                     </td>
                 {/for}
             </tr>
+            {#if Detail}
+                <tr data-part="detail">
+                    <td colspan={columns.length}><Detail row={row} /></td>
+                </tr>
+            {/if}
         {/for}
     </tbody>
 </table>

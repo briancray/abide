@@ -24,6 +24,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyTable.test.ts',
             from: ["test('a name links to its company, and sorts with its row'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyTable.test.ts',
+            from: [
+                'test("each company\'s contact sits in a row of its own under it',
+            ],
+        },
     ]}
 >
     <Section level={3} title="Sort the companies by any column">
@@ -108,6 +114,22 @@ import Section from '#src/lib/Section.abide'
                     {:else}
                         {text}
                     {/if}
+                {/component}
+            </SortableTable>
+        `} />
+    </Section>
+
+    <Section level={3} title="Show each company's contact in a row under the company">
+        <p>A <code>Detail</code> component renders a row of its own under each row, one cell
+            spanning every column, and it moves with its row when the table sorts.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import SortableTable from '@abide/abide/SortableTable.abide'
+            </script>
+
+            <SortableTable rows={companies} columns={COLUMNS} key={keyOf}>
+                {#component Detail({ row }: { row: Company })}
+                    <span class="text-muted">Contact: {row.contact}</span>
                 {/component}
             </SortableTable>
         `} />
