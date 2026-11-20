@@ -3759,6 +3759,13 @@ served before the script loads.
 38.212 `abide check` MUST refuse, at its line, a `declare module` of an `@abide/` entry in a file of
 the app's package that imports and exports nothing.
 
+38.213 A `menuItem` whose `key` is set MUST, while a function its `on` filed is filed, run every such
+function on a `keydown` in a browser page that `hotkeys` would match to that key with `cmd` read as
+`mod`, and MUST NOT in the native app's window.
+
+38.214 A function `MenuEntry.on` filed in a component's setup MUST be unfiled once that component is
+disposed.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

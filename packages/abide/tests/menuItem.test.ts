@@ -7,6 +7,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { CURRENT_ROUTER } from '#shared/CURRENT_ROUTER.ts'
 import { menuItem } from '#shared/menuItem.ts'
+import { collectWatches } from '#shared/reactive/watch.ts'
 import { reportMenu } from '#shared/reportMenu.ts'
 
 const navigated: string[] = []
@@ -77,4 +78,68 @@ test('a pick runs every function its item filed, a throw stopping none, and an h
     expect(reported).toHaveLength(1)
     pick('Pipeline')
     expect(navigated).toEqual(['/pipeline'])
+})
+
+function press(init: KeyboardEventInit): void {
+    dispatchEvent(
+        new KeyboardEvent('keydown', {
+            bubbles: true,
+            cancelable: true,
+            ...init,
+        }),
+    )
+}
+
+// 38.213 — THE ITEM'S KEY IS THE PAGE'S WHERE NO MENU BAR TAKES IT, `cmd` read as `mod` (Ctrl off an
+// Apple platform), and only while an answer is filed. THE REVERT: drop `listen()` from `on` — the
+// press runs nothing, `printed: 0` where `1` is due.
+test("a menu item's key runs it in a page with no menu bar, while it is answered — 38.213", () => {
+    const printReport = menuItem({ label: 'Print Report…', key: 'cmd+p' })
+    let printed = 0
+    const unfile = printReport.on(() => {
+        printed += 1
+    })
+    press({ key: 'p', ctrlKey: true })
+    expect(`printed: ${printed}`).toBe('printed: 1')
+    unfile()
+    press({ key: 'p', ctrlKey: true })
+    expect(printed).toBe(1)
+})
+
+// THE REVERT: drop the `native()` check in `listen` — the window's own menu bar and the page both
+// run the item, `printed: 1` where `0` is due from the page.
+test("in the native app's window the key is the menu bar's alone — 38.213", () => {
+    Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        get: () => 'Mozilla/5.0 (Macintosh) abide-native/1.0.0 (Deals)',
+    })
+    try {
+        const printReport = menuItem({ label: 'Print Report…', key: 'cmd+p' })
+        let printed = 0
+        const unfile = printReport.on(() => {
+            printed += 1
+        })
+        press({ key: 'p', metaKey: true })
+        expect(`printed: ${printed}`).toBe('printed: 0')
+        unfile()
+    } finally {
+        Reflect.deleteProperty(navigator, 'userAgent')
+    }
+})
+
+// 38.214 — FILED IN A SETUP, UNFILED WITH IT, so a page needs no `watch` around `on`. THE REVERT:
+// return the bare unfile from `on` rather than `owned(...)` — a pick after the setup ended still runs
+// it, `after: 1` where `0` is due.
+test('an answer filed in a setup is unfiled as the setup ends — 38.214', () => {
+    const refresh = menuItem({ label: 'Refresh' })
+    let ran = 0
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    refresh.on(() => {
+        ran += 1
+    })
+    collectWatches(previous)
+    for (const stop of stops) stop()
+    refresh.pick()
+    expect(`after: ${ran}`).toBe('after: 0')
 })

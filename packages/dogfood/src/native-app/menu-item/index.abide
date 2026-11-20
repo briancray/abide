@@ -8,6 +8,10 @@ import Section from '#src/lib/Section.abide'
     seeAlso={['/native-app/on-menu', '/reactive/watch', '/native-app/native']}
     tests={[
         {
+            path: 'packages/abide/tests/menuItem.test.ts',
+            from: ['test("a menu item\'s key runs it in a page with no menu bar'],
+        },
+        {
             path: 'packages/abide/tests/onMenu.test.ts',
             from: [
                 "test('a mount tells the window once, its menus outermost first",
@@ -23,17 +27,32 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Print the report from the menu bar">
         <p><code>menuItem</code> makes an entry the page answers. <code>on</code> files what
-            runs when it is picked and returns what stops it, which is what
-            <code>watch</code> takes.</p>
+            runs when it is picked, and in a component it stops when the component goes.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { menuItem, onMenu, watch } from '@abide/abide'
+            import { menuItem, onMenu } from '@abide/abide'
 
             const printReport = menuItem({ label: 'Print Report…', key: 'cmd+p' })
 
             onMenu(() => [{ label: 'Reports', items: [printReport] }])
-            watch(() => printReport.on(() => print()))
+            printReport.on(() => print())
             </script>
+        `} />
+    </Section>
+
+    <Section level={3} title="Take the same shortcut in a browser">
+        <p>The item's <code>key</code> runs it in a browser too, where no menu bar takes it.
+            <code>cmd</code> is Ctrl off a Mac, as <code>mod</code> is for
+            <code>hotkeys</code>, so one declaration is the menu entry and the shortcut.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { keyLabel, menuItem } from '@abide/abide'
+
+            const newDeal = menuItem({ label: 'New Deal', key: 'cmd+n' })
+            newDeal.on(() => openNewDeal())
+            </script>
+
+            <kbd>{keyLabel('mod+n')}</kbd>
         `} />
     </Section>
 

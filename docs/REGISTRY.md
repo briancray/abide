@@ -1233,9 +1233,9 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | --- | --- | --- | --- |
 | `MenuItem` | `'separator' \| MenuEntry \| { label: string; key?: string; role?: MenuRole; href?: string; items?: MenuItem[] }` | One entry in the menu bar or in a menu under it. | 38.89, 38.90, 53.9 |
 | `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front' \| 'window' \| 'update'` | What the platform performs for a menu item. | 38.74, 38.89, 38.145, 38.149, 38.170, 38.177 |
-| `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item whose picks the page that filed it answers. | 38.91 |
+| `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item whose picks the page that filed it answers. | 38.91, 38.213 |
 | `MenuEntry` | `class MenuEntry { label: string; key: string \| undefined; href: string \| undefined }` | What `menuItem` makes. | 38.91 |
-| `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.91 |
+| `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.91, 38.213, 38.214 |
 
 # The app object
 

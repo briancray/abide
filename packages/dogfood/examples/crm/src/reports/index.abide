@@ -1,5 +1,5 @@
 <script>
-import { menuItem, native, onMenu, watch } from '@abide/abide'
+import { menuItem, native, onMenu } from '@abide/abide'
 
 import ClosedTiles from './lib/ClosedTiles.abide'
 import DealsExport from './lib/DealsExport.abide'
@@ -23,7 +23,7 @@ onMenu(() => [
     },
 ])
 
-watch(() => printReport.on(() => print()))
+printReport.on(() => print())
 </script>
 
 <head><title>Reports — CRM</title></head>
