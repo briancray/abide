@@ -1,8 +1,10 @@
 import type { Column } from './Column.ts'
+import { LOCALE } from './LOCALE.ts'
 import type { Sort } from './Sort.ts'
 
-// `numeric` orders "deal 9" before "deal 10"; one collator, built once, compares every string.
-const COLLATOR = new Intl.Collator(undefined, { numeric: true })
+// `numeric` orders "deal 9" before "deal 10"; one collator, built once, compares every string — in
+// abide's locale rather than the runtime's, so rows a server sorted are in the order hydration sorts.
+const COLLATOR = new Intl.Collator(LOCALE, { numeric: true })
 
 /** A column's value for `row`: what `value` hands back, or the row's field named by `key`. */
 function valueOf<Row>(row: Row, column: Column<Row>): unknown {

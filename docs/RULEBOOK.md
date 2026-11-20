@@ -5156,7 +5156,7 @@ be labelled by that tab.
 invalid `Date` — after every row whose value is not, in either direction.
 
 51.48 `sortRows` MUST compare two numbers, two bigints or two booleans by value, two dates by time,
-and any other pair as text, the numerals in it compared by value.
+and any other pair as text in the `en-US` locale, the numerals in it compared by value.
 
 51.49 `sortRows` MUST read a row's value for a `Column` through its `value` where it has one, and as
 the row's field its `key` names otherwise.

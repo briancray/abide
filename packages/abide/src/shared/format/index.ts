@@ -4,13 +4,13 @@
 // takes `unknown`, so it drops into a table column as it is, and what it cannot format reads as an
 // em dash (52.1).
 
+import { LOCALE } from '../LOCALE.ts'
 import { cached } from './cached.ts'
 import { timeZone, visitorZone } from './timeZone.ts'
 
 export { timeZone } from './timeZone.ts'
 
 const MISSING = '—'
-const LOCALE = 'en-US'
 // 52.35 — the minus a signed number is written with, the width of the `+` it stands against.
 const MINUS = '\u2212'
 
