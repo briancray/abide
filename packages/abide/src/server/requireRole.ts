@@ -70,10 +70,10 @@ export function requireRole(
 }
 
 // 54.28 — the refusal 15.7 answers an address nothing serves, word for word, so the two cannot be
-// told apart. An in-process call has no request, and names no path.
+// told apart: its path is the one routing reads, below the mount, and not the one bun received. An
+// in-process call has no request, and names no path.
 function hidden(): Failed<'NotFound', { path: string; method: string }> {
-    const scope = currentRequestScope()
-    const asked = scope?.received ?? scope?.request
+    const asked = currentRequestScope()?.request
     return refuse.notFound({
         path: asked === undefined ? '' : new URL(asked.url).pathname,
         method: asked?.method ?? '',

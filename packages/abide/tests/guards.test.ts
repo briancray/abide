@@ -60,6 +60,30 @@ async function answered(
     return `${answer.status} ${body?.type ?? JSON.stringify(body)}${body?.detail ? `: ${body.detail}` : ''}`
 }
 
+// 54.28 UNDER A SUB-PATH: word for word, the path included — the one routing names, below the mount.
+// THE REVERT: name the request bun received, and the hidden 404 says `/docs/team/getPayroll` where
+// the unserved address says `/team/getNothing`.
+test('requireRole at 404 names the path routing names, under a mount — 54.28, 15.7', async () => {
+    const standing = MOUNT.current
+    MOUNT.current = () => '/docs'
+    const body = async (address: string) =>
+        (
+            await app.fetch(
+                new Request(`http://app.invalid/docs/team/${address}`),
+                {
+                    principal: { name: 'theo', role: 'sales' },
+                },
+            )
+        ).text()
+    try {
+        expect(await body('getPayroll')).toBe(
+            (await body('getNothing')).replace('getNothing', 'getPayroll'),
+        )
+    } finally {
+        MOUNT.current = standing
+    }
+})
+
 // THE REVERT: hand `signedIn`'s caller to `next` whatever `principal.authenticated` says, and
 // nobody reads `own` — `200 "own"` where `401 SignedOut` is due.
 test('signedIn refuses nobody SignedOut at 401, and lets a member through — 54.1', async () => {
