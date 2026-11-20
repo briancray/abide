@@ -1,4 +1,5 @@
 import { reactive } from './reactive/index.ts'
+import { roving } from './roving.ts'
 
 /** What `listbox` is handed: the options, how each is told apart, and what Enter and Escape do. */
 export type ListboxOptions<Option> = {
@@ -73,37 +74,26 @@ export function listbox<Option>(
             ?.scrollIntoView?.({ block: 'nearest' })
     }
 
-    function step(by: 1 | -1): void {
-        const list = options()
-        if (list.length === 0) return
-        const current = active.peek()
-        let at = -1
-        for (let index = 0; index < list.length; index += 1)
-            if (key(list[index] as Option) === current) at = index
-        let next = at === -1 ? (by === 1 ? 0 : list.length - 1) : at + by
-        if (next < 0) next = wrap ? list.length - 1 : 0
-        if (next >= list.length) next = wrap ? 0 : list.length - 1
-        moveTo(next)
-    }
-
     function keydown(event: KeyboardEvent): void {
+        const next = roving(
+            event.key,
+            'vertical',
+            () => {
+                const list = options()
+                const current = active.peek()
+                let at = -1
+                for (let index = 0; index < list.length; index += 1)
+                    if (key(list[index] as Option) === current) at = index
+                return [at, list.length]
+            },
+            wrap,
+        )
+        if (next !== -1) {
+            event.preventDefault()
+            moveTo(next)
+            return
+        }
         switch (event.key) {
-            case 'ArrowDown':
-                event.preventDefault()
-                step(1)
-                return
-            case 'ArrowUp':
-                event.preventDefault()
-                step(-1)
-                return
-            case 'Home':
-                event.preventDefault()
-                moveTo(0)
-                return
-            case 'End':
-                event.preventDefault()
-                moveTo(options().length - 1)
-                return
             case 'Enter': {
                 const option = activeOption()
                 if (option === undefined || onpick === undefined) return

@@ -7,6 +7,7 @@ import { follow } from './follow.ts'
 import type { Side } from './place.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
+import { roving } from './roving.ts'
 
 /** Where a menu opens against its trigger, and what hears it open and close. */
 export type MenuOptions = {
@@ -164,16 +165,11 @@ export function menu(options: MenuOptions = {}): Menu {
             if (event.key === 'Tab') return hide()
             const listed = items()
             const at = listed.indexOf(document.activeElement as HTMLElement)
-            const next =
-                event.key === 'ArrowDown'
-                    ? (at + 1) % listed.length
-                    : event.key === 'ArrowUp'
-                      ? (at <= 0 ? listed.length : at) - 1
-                      : event.key === 'Home'
-                        ? 0
-                        : event.key === 'End'
-                          ? listed.length - 1
-                          : typedTo(event, listed, at)
+            const roved = roving(event.key, 'vertical', () => [
+                at,
+                listed.length,
+            ])
+            const next = roved === -1 ? typedTo(event, listed, at) : roved
             if (next === -1) return
             event.preventDefault()
             listed[next]?.focus()

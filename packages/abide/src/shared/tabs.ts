@@ -4,6 +4,7 @@
 
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
+import { roving } from './roving.ts'
 
 /** The tabs, and the one selected. */
 export type TabsOptions = {
@@ -53,23 +54,13 @@ export function tabs(options: TabsOptions): Tabs {
         role: 'tablist',
         onkeydown: (event: KeyboardEvent) => {
             const listed = keysOf()
-            const last = listed.length - 1
-            const at = Math.max(0, listed.indexOf(current() as string))
-            const next =
-                event.key === 'ArrowRight'
-                    ? at === last
-                        ? 0
-                        : at + 1
-                    : event.key === 'ArrowLeft'
-                      ? at === 0
-                          ? last
-                          : at - 1
-                      : event.key === 'Home'
-                        ? 0
-                        : event.key === 'End'
-                          ? last
-                          : -1
-            const key = listed[next]
+            const key =
+                listed[
+                    roving(event.key, 'horizontal', () => [
+                        listed.indexOf(current() as string),
+                        listed.length,
+                    ])
+                ]
             if (key === undefined) return
             event.preventDefault()
             select(key)
