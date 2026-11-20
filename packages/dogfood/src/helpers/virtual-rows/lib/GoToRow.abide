@@ -1,0 +1,24 @@
+<script>
+import { reactive, virtualRows } from '@abide/abide'
+
+const DEALS = Array.from({ length: 10_000 }, (_, id) => ({
+    id,
+    name: `Deal ${id + 1}`,
+}))
+const view = virtualRows({ count: () => DEALS.length, rowHeight: 28 })
+let wanted = reactive<number | undefined>(5000)
+</script>
+
+<label>
+    Deal <input type="number" min="1" max="10000" bind:value={wanted} />
+</label>
+<button onclick={() => view.scrollTo((wanted ?? 1) - 1)}>Show it</button>
+<div class="h-60 overflow-auto" bind:element={view.viewport}>
+    <div style:height="{view.before()}px"></div>
+    {#for deal of DEALS.slice(view.start(), view.end()) by deal.id}
+        <div class="h-7 data-[wanted]:font-semibold"
+            data-wanted={deal.id === (wanted ?? 1) - 1 ? '' : undefined}
+        >{deal.name}</div>
+    {/for}
+    <div style:height="{view.after()}px"></div>
+</div>

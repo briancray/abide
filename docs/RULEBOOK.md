@@ -5268,6 +5268,27 @@ and Backspace in its empty input MUST take out the last item it holds.
 element opened against its input as `popover` opens one, and a press inside that element MUST NOT
 take focus from its input.
 
+51.65 `virtualRows` MUST answer as `start` and `end` the rows of its list from `overscan` rows before
+the first row its viewport shows to `overscan` rows past the last, and as `before` and `after` the
+heights of the rows before `start` and from `end` on.
+
+51.66 `virtualRows` MUST hold `start` and `end` inside the list, so a list its viewport holds whole
+is answered whole.
+
+51.67 `virtualRows` MUST read its viewport's height and scroll position at the first resize delivery
+after it is bound and at each scroll, MUST read neither as it is bound, and MUST answer the range
+`height` fits until then, on a server as in a browser.
+
+51.68 `virtualRows` MUST move its range by whole rows, only when a scroll or a resize brings another
+row into view.
+
+51.69 `virtualRows` MUST stop following a viewport once it is unbound.
+
+51.70 `virtualRows`'s `scrollTo` MUST scroll its viewport only as far as shows the whole row at
+`index`, and MUST answer a range holding that row before the scroll lands.
+
+51.71 `virtualRows` MUST take every row to be `rowHeight` pixels tall.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

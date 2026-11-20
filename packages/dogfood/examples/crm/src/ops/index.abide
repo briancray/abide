@@ -16,6 +16,7 @@ onConfig(null, {
 import { online, refresh, watch } from '@abide/abide'
 
 import AssistedReport from './lib/AssistedReport.abide'
+import AuditTrail from './lib/AuditTrail.abide'
 import CallLog from './lib/CallLog.abide'
 import Console from './lib/Console.abide'
 import DealScores from './lib/DealScores.abide'
@@ -54,6 +55,8 @@ watch(() => {
     <Sync />
     <h2>Log</h2>
     <Console />
+    <h2>Audit trail</h2>
+    <AuditTrail />
     <h2>Problem reports</h2>
     <ReportProblem />
     <AssistedReport />

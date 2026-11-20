@@ -1,0 +1,29 @@
+<script>
+import { virtualRows } from '@abide/abide'
+
+import { AUDIT_TRAIL } from './AUDIT_TRAIL.ts'
+
+// Only the rows in view are made: all 5,000 would cost several frames to mount. A row's place in
+// the trail is its own `id`, so a scroll rewrites no row it keeps.
+const view = virtualRows({
+    count: () => AUDIT_TRAIL.length,
+    rowHeight: 28,
+    height: 320,
+})
+</script>
+
+<div role="list" aria-label="Audit trail" class="h-80 overflow-auto" bind:element={view.viewport}>
+    <div aria-hidden="true" style:height="{view.before()}px"></div>
+    {#for entry of AUDIT_TRAIL.slice(view.start(), view.end()) by entry.id}
+        <div
+            role="listitem"
+            aria-setsize={AUDIT_TRAIL.length}
+            aria-posinset={entry.id + 1}
+            class="flex h-7 items-center gap-4"
+        >
+            <span class="text-muted">{entry.at}</span>
+            <span>{entry.change}</span>
+        </div>
+    {/for}
+    <div aria-hidden="true" style:height="{view.after()}px"></div>
+</div>

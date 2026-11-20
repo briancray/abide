@@ -582,6 +582,12 @@ const WRITTEN: readonly {
                     'Sort table rows by a column and direction, numbers as numbers, dates by time and blanks last.',
             },
             {
+                route: '/helpers/virtual-rows',
+                title: '`virtualRows`',
+                description:
+                    'Render only the rows of a long list that are in view, so ten thousand rows mount as fast as twenty.',
+            },
+            {
                 route: '/helpers/hotkeys',
                 title: '`hotkeys`',
                 description:

@@ -1,0 +1,45 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import GoToRow from './lib/GoToRow.abide'
+import goToRow from './lib/GoToRow.abide' with { type: 'text' }
+import TenThousandDeals from './lib/TenThousandDeals.abide'
+import tenThousandDeals from './lib/TenThousandDeals.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/abide-files/control-flow',
+        '/components/sortable-table',
+        '/helpers/observe',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/AuditTrail.test.ts',
+            from: ["test('only the changes in view, and five past, are rows'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/AuditTrail.test.ts',
+            from: [
+                "test('scrolling by a row makes the row coming into view and keeps the others'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Scroll through ten thousand deals with only a screenful made">
+        <p>Bind the element that scrolls, and render a keyed <code>{'{#for}'}</code> over the
+            rows from <code>start</code> to <code>end</code> between two spacers as tall as
+            the rows left out. A scroll by a row makes the row coming into view and keeps the
+            rest. Give each row its place in the whole list, from the row itself, so a screen
+            reader reads how far down it is.</p>
+        <Example code={tenThousandDeals}><TenThousandDeals /></Example>
+    </Section>
+
+    <Section level={3} title="Bring a deal into view by its number">
+        <p><code>scrollTo</code> scrolls just far enough to show the row, and renders it at
+            once, so a caller can focus it straight after.</p>
+        <Example code={goToRow}><GoToRow /></Example>
+    </Section>
+</Doc>

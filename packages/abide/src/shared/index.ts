@@ -72,6 +72,11 @@ export type { LinkTarget } from './markdown/sections.ts'
 export { type Report, ReportDraft, report } from './report.ts'
 export type { Sort } from './Sort.ts'
 export { sortRows } from './sortRows.ts'
+export {
+    type VirtualRows,
+    type VirtualRowsOptions,
+    virtualRows,
+} from './virtualRows.ts'
 export type { Middleware } from './Middleware.ts'
 export type { Params } from './matchRoute.ts'
 // 38.88 — a native app's menu items, and the hook a route's layouts and page file them with.

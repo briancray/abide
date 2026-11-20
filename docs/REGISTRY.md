@@ -934,6 +934,14 @@ type Reached = { readonly [REACHED]: true }
 | `ListboxOptions` | `ListboxOptions<Option> = { id: string; options: () => readonly Option[]; key: (option: Option) => string; wrap?: boolean; onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10 |
 | `Listbox` | `Listbox<Option> = { active: () => string \| undefined; activeOption: () => Option \| undefined; activeId: () => string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; keydown: (event: KeyboardEvent) => void }` | What `listbox` hands back: the active key and option, and the ids and the listener the markup takes. | 51.1, 51.2, 51.3, 51.10, 51.11 |
 
+## `virtualRows`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `virtualRows` | `(options: VirtualRowsOptions) => VirtualRows` | The range of a long list's rows its scroller shows, for a keyed `{#for}` over just those rows. | 51.65, 51.66, 51.67, 51.68, 51.69, 51.70, 51.71 |
+| `VirtualRowsOptions` | `{ count: () => number; rowHeight: number; overscan?: number; height?: number }` | What `virtualRows` is handed: how many rows there are, how tall each is, and the height drawn at before the scroller is measured. | 51.65, 51.67, 51.71 |
+| `VirtualRows` | `{ viewport: (element: Element) => Disposer; start: () => number; end: () => number; before: () => number; after: () => number; scrollTo: (index: number) => void }` | What `virtualRows` hands back: the adaptor for the scroller, the rows to render, the heights of the spacers around them, and a scroll to a row. | 51.65, 51.69, 51.70 |
+
 ## `sortRows`
 
 | Name | Signature | Meaning | Rules |
