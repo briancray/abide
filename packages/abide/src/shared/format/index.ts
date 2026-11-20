@@ -6,6 +6,8 @@
 
 import { LOCALE } from '../LOCALE.ts'
 import { cached } from './cached.ts'
+import { instant } from './instant.ts'
+import { RELATIVE_UNITS } from './RELATIVE_UNITS.ts'
 import { timeZone, visitorZone } from './timeZone.ts'
 
 export { timeZone } from './timeZone.ts'
@@ -19,19 +21,6 @@ function numeric(value: unknown): number | bigint | undefined {
     if (typeof value === 'number')
         return Number.isNaN(value) ? undefined : value
     return typeof value === 'bigint' ? value : undefined
-}
-
-/** `value` as a time in epoch milliseconds, or `undefined` where it names no time. */
-function instant(value: unknown): number | undefined {
-    const time =
-        value instanceof Date
-            ? value.getTime()
-            : typeof value === 'number'
-              ? value
-              : typeof value === 'string' && value !== ''
-                ? Date.parse(value)
-                : Number.NaN
-    return Number.isFinite(time) ? time : undefined
 }
 
 /** An amount of money: `format.money(12500)` is `$12,500.00`. */
@@ -285,15 +274,6 @@ export function duration(
     ).format(parts)
     return Number(milliseconds) < 0 ? `-${formatted}` : formatted
 }
-
-const RELATIVE_UNITS = [
-    ['year', 31_536_000_000],
-    ['month', 2_592_000_000],
-    ['week', 604_800_000],
-    ['day', 86_400_000],
-    ['hour', 3_600_000],
-    ['minute', 60_000],
-] as const
 
 /** How long before or after now a time is: `3 hours ago`, `yesterday`, `in 2 days`, `now`. */
 export function relative(

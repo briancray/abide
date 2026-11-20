@@ -46,6 +46,7 @@
         "./compiler": "./src/compiler/index.ts",
         "./Dialog.abide": "./src/components/Dialog.abide",
         "./Prompts.abide": "./src/components/Prompts.abide",
+        "./Time.abide": "./src/components/Time.abide",
         "./Toasts.abide": "./src/components/Toasts.abide",
         "./Tooltips.abide": "./src/components/Tooltips.abide",
         "./Announcer.abide": "./src/components/Announcer.abide",

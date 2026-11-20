@@ -1077,6 +1077,12 @@ type Reached = { readonly [REACHED]: true }
 | `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
 | `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
 
+## `Time`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Time` | `{ value: unknown; style?: 'long' \| 'short' \| 'narrow'; locale?: string; timeZone?: string } & Attributes<'time'>` | How long ago or how soon a time is, kept current, the component `@abide/abide/Time.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.1, 52.2, 52.3, 52.5, 52.73, 52.74, 52.75, 52.76, 52.77, 52.78 |
+
 ## `followBottom`
 
 | Name | Signature | Meaning | Rules |

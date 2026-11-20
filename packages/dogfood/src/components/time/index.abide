@@ -1,0 +1,40 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import LoggedCalls from './lib/LoggedCalls.abide'
+import loggedCalls from './lib/LoggedCalls.abide' with { type: 'text' }
+import ShortLabel from './lib/ShortLabel.abide'
+import shortLabel from './lib/ShortLabel.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/helpers/format', '/ambient/media']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/activity/lib/LastTouched.test.ts',
+            from: ["test('a touch reads how long ago it was, and a new call now'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/activity/lib/LastTouched.test.ts',
+            from: [
+                "test('one clock moves every label, writing only those that turned'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Show how long ago each call was, kept current">
+        <p>A <code>Time</code> reads its value as <code>format.relative</code> writes it, in a
+            <code>&lt;time&gt;</code> whose <code>title</code> is the date in full. Log a call:
+            it reads <code>now</code>, and a minute on it reads <code>1 minute ago</code>. One
+            clock ticks every <code>Time</code> on the page, when the soonest label turns.</p>
+        <Example code={loggedCalls}><LoggedCalls /></Example>
+    </Section>
+
+    <Section level={3} title="Write the label short in a narrow column">
+        <p><code>style</code> takes <code>format.relative</code>'s styles, and
+            <code>timeZone</code> the zone its <code>title</code> writes the date in.</p>
+        <Example code={shortLabel}><ShortLabel /></Example>
+    </Section>
+</Doc>

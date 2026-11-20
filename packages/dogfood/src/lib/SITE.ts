@@ -705,6 +705,12 @@ const WRITTEN: readonly {
                     'Write money, percents, counts, lists, dates and durations the same on server and browser, with a dash for missing values.',
             },
             {
+                route: '/components/time',
+                title: '`Time`',
+                description:
+                    'Show how long ago or how soon a time is, kept current by one clock for the whole page.',
+            },
+            {
                 route: '/helpers/follow-bottom',
                 title: '`followBottom`',
                 description:
