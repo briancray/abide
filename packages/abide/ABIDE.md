@@ -219,7 +219,7 @@ table.
   `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `sortRows`, `hotkeys` and `keyLabel`, and
-  the `bind:element` adaptors `dismissible`, `dropzone`, `copyText` and `tooltip` (shown by the root
+  the `bind:element` adaptors `dismissible`, `dropzone`, `copy` and `tooltip` (shown by the root
   layout's `Tooltips`) beside `observe`.
 - From `@abide/abide/server`: the rungs `signedIn`, `requireRole` and `readOnly`, `fetchJson` /
   `fetchText` (a deadline, retries worth retrying, a cache), and `job` (work on a schedule, one run at

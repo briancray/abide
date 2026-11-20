@@ -1,14 +1,24 @@
 <script>
-import { copyText, url } from '@abide/abide'
+import { copy, url } from '@abide/abide'
 
-// The address is read as the click lands, on whichever origin and mount serve the page.
-const copyLink = copyText(() => `${location.origin}${url('/pipeline')}#d1`, {
-    copiedFor: 2_000,
-})
+const DEAL = 'Analytical Engines renewal'
+
+// The address is read as the click lands, on whichever origin and mount serve the page. Pasted
+// into a doc or a chat it is a link named for the deal; into an address bar, the address alone.
+const copyLink = copy(
+    () => {
+        const href = `${location.origin}${url('/pipeline')}#d1`
+        return {
+            'text/html': `<a href="${href}">${DEAL}</a>`,
+            'text/plain': href,
+        }
+    },
+    { copiedFor: 2_000 },
+)
 </script>
 
 <div class="row">
-    <span>Analytical Engines renewal</span>
+    <span>{DEAL}</span>
     <button class="group" bind:element={copyLink}>
         <span class="group-data-copied:hidden">Copy link</span>
         <span class="hidden group-data-copied:inline">Copied</span>

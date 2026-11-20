@@ -14,8 +14,9 @@ test('a click copies the email and marks the button copied', async () => {
     Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
         value: {
-            writeText: async (text: string) => {
-                copied.push(text)
+            write: async (items: ClipboardItem[]) => {
+                for (const item of items)
+                    copied.push(await (await item.getType('text/plain')).text())
             },
         },
     })

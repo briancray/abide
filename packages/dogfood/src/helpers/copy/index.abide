@@ -15,8 +15,18 @@ import Section from '#src/lib/Section.abide'
         },
         {
             path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: ["test('a record copies as one item holding each type it names"],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
             from: [
-                "test('a page with no clipboard copies through a selected textarea",
+                "test('a page with no clipboard copies through a selected textarea, carrying every string type",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a value holding no string reports not copied where there is no clipboard",
             ],
         },
         {
@@ -32,10 +42,10 @@ import Section from '#src/lib/Section.abide'
             milliseconds. The button swaps its word by that attribute alone.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { copyText } from '@abide/abide'
+            import { copy } from '@abide/abide'
             </script>
 
-            <button class="group" bind:element={copyText('grace@hopper.example')}>
+            <button class="group" bind:element={copy('grace@hopper.example')}>
                 <span class="group-data-copied:hidden">Copy</span>
                 <span class="hidden group-data-copied:inline">Copied</span>
             </button>
@@ -43,31 +53,53 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Copy text that changes, read at the click">
-        <p>Hand <code>copyText</code> a function, and it reads the text when the button is
+        <p>Hand <code>copy</code> a function, and it reads what to copy when the button is
             pressed. <code>copiedFor</code> sets how long the mark stays.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { copyText, reactive } from '@abide/abide'
+            import { copy, reactive } from '@abide/abide'
 
             let dealId = reactive('ledger-audit')
             const link = () => \`\${location.origin}/deals/\${dealId}\`
             </script>
 
-            <button bind:element={copyText(link, { copiedFor: 3000 })}>
+            <button bind:element={copy(link, { copiedFor: 3000 })}>
                 Copy link
             </button>
         `} />
     </Section>
+    <Section level={3} title="Copy a link that pastes as the deal's name">
+        <p>Hand <code>copy</code> a record of MIME type to what it holds, and every type lands in
+            one clipboard item. Each place you paste takes the richest type it reads. A doc or a
+            chat takes <code>text/html</code> and shows a link named for the deal. An address
+            bar takes <code>text/plain</code>. A <code>Blob</code> copies an image the same way,
+            as <code>{"{ 'image/png': blob }"}</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { copy, url } from '@abide/abide'
+
+            const copyLink = copy(() => {
+                const href = \`\${location.origin}\${url('/pipeline')}#d1\`
+                return {
+                    'text/html': \`<a href="\${href}">Analytical Engines renewal</a>\`,
+                    'text/plain': href,
+                }
+            })
+            </script>
+
+            <button bind:element={copyLink}>Copy link</button>
+        `} />
+    </Section>
     <Section level={3} title="Copy each code block of a rendered note from one binding">
-        <p>Bind <code>copyText</code> to the element holding the buttons and give it a
+        <p>Bind <code>copy</code> to the element holding the buttons and give it a
             <code>selector</code>: a click on a matching button copies, handed that button, and
             only it is marked. Buttons in a <code>raw</code> block are reached the same way.
             <code>oncopied</code> hears whether each copy landed.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { copyText } from '@abide/abide'
+            import { copy } from '@abide/abide'
 
-            const copyBlock = copyText(
+            const copyBlock = copy(
                 (button) => button.closest('pre')?.querySelector('code')?.textContent ?? '',
                 { selector: '[data-copy]', oncopied: (landed) => console.log(landed) },
             )

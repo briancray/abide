@@ -1,9 +1,9 @@
-// 53.12-53.23, 53.53 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
+// 53.12-53.23, 53.53, 53.57, 53.58 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
 // element the way `bind:element` binds one: called with the node, and stopped by what it hands back.
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { copyText } from '#shared/copyText.ts'
+import { copy } from '#shared/copy.ts'
 import { dismissible } from '#shared/dismissible.ts'
 import { dropzone } from '#shared/dropzone.ts'
 import { followBottom } from '#shared/followBottom.ts'
@@ -242,40 +242,100 @@ test('a paste carrying its files in items alone takes and turns away as a drop d
     stop()
 })
 
-test('a click copies, marks the element copied, and the mark wears off — 53.21, 53.23', async () => {
-    const copied: string[] = []
+/** A clipboard recording each item written to it as `type: text` per type, until the test ends. */
+function clipboardWrites(): string[][] {
+    const written: string[][] = []
     Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
-        value: { writeText: async (text: string) => copied.push(text) },
+        value: {
+            write: async (items: ClipboardItem[]) => {
+                for (const item of items) {
+                    const types: string[] = []
+                    for (const type of item.types)
+                        types.push(
+                            `${type}: ${await (await item.getType(type)).text()}`,
+                        )
+                    written.push(types)
+                }
+            },
+        },
     })
+    return written
+}
+
+/** A page with no clipboard, whose `copy` command fires the `copy` event a browser fires, and reports what landed. */
+function noClipboard(landed: string[]): () => void {
+    Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: undefined,
+    })
+    const execCommand = document.execCommand
+    document.execCommand = ((command: string) => {
+        const data = new DataTransfer()
+        document.dispatchEvent(
+            new ClipboardEvent('copy', {
+                clipboardData: data,
+                cancelable: true,
+            }),
+        )
+        landed.push(
+            `${command} selecting ${document.querySelector('textarea')?.value}`,
+        )
+        for (const type of data.types)
+            landed.push(`${type}: ${data.getData(type)}`)
+        return true
+    }) as typeof document.execCommand
+    return () => {
+        document.execCommand = execCommand
+    }
+}
+
+test('a click copies, marks the element copied, and the mark wears off — 53.21, 53.23', async () => {
+    const written = clipboardWrites()
     let email = 'ada@engines.example'
     const button = element('button')
-    const stop = copyText(() => email, { copiedFor: 5 })(button)
+    const stop = copy(() => email, { copiedFor: 5 })(button)
     email = 'grace@hopper.example'
     button.click()
     await Bun.sleep(0)
-    expect(copied).toEqual(['grace@hopper.example'])
+    expect(written).toEqual([['text/plain: grace@hopper.example']])
     expect(button.hasAttribute('data-copied')).toBe(true)
     await Bun.sleep(20)
     expect(button.hasAttribute('data-copied')).toBe(false)
     stop()
 })
 
+// THE REVERT: write `navigator.clipboard.writeText` with the plain text alone, as `copyText` did —
+// this reports `[["text/plain: Grace Hopper"]]`, and the html never reaches the clipboard.
+test('a record copies as one item holding each type it names — 53.57', async () => {
+    const written = clipboardWrites()
+    const button = element('button')
+    const stop = copy({
+        'text/html': '<a href="mailto:grace@hopper.example">Grace Hopper</a>',
+        'text/plain': 'Grace Hopper',
+    })(button)
+    button.click()
+    await Bun.sleep(0)
+    expect(written).toEqual([
+        [
+            'text/html: <a href="mailto:grace@hopper.example">Grace Hopper</a>',
+            'text/plain: Grace Hopper',
+        ],
+    ])
+    stop()
+})
+
 // THE REVERT: copy from the element bound rather than the button clicked, and every copy is the
 // container's whole text, marked on the container.
 test('with a selector, a click on a button inside copies from that button, and nothing else does — 53.44, 53.45', async () => {
-    const copied: string[] = []
-    Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: { writeText: async (text: string) => copied.push(text) },
-    })
+    const written = clipboardWrites()
     const block = element()
     // Markup no template built, as a `raw` block holds it.
     block.innerHTML =
         '<pre><code>bun add @abide/abide</code><button data-copy>Copy</button></pre>' +
         '<pre><code>bun run dev</code><button data-copy>Copy</button></pre><p>prose</p>'
     const heard: [boolean, string][] = []
-    const stop = copyText(
+    const stop = copy(
         (clicked) =>
             clicked.closest('pre')?.querySelector('code')?.textContent ?? '',
         {
@@ -291,7 +351,7 @@ test('with a selector, a click on a button inside copies from that button, and n
     second?.click()
     block.querySelector('p')?.click()
     await Bun.sleep(0)
-    expect(copied).toEqual(['bun run dev'])
+    expect(written).toEqual([['text/plain: bun run dev']])
     expect(heard).toEqual([[true, 'bun run dev']])
     expect(second?.hasAttribute('data-copied')).toBe(true)
     expect(first?.hasAttribute('data-copied')).toBe(false)
@@ -299,30 +359,55 @@ test('with a selector, a click on a button inside copies from that button, and n
     stop()
 })
 
-// THE REVERT: return `false` where `navigator.clipboard` is absent, and a page served over plain
-// http copies nothing.
-test('a page with no clipboard copies through a selected textarea — 53.22', async () => {
-    Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: undefined,
-    })
-    const copied: string[] = []
-    const execCommand = document.execCommand
-    document.execCommand = ((command: string) => {
-        copied.push(`${command}:${document.querySelector('textarea')?.value}`)
-        return true
-    }) as typeof document.execCommand
+// THE REVERT: drop the `copy` listener `writeClipboard` lays the string types on — the textarea
+// alone copies, and this reports the selection without the html.
+test('a page with no clipboard copies through a selected textarea, carrying every string type — 53.22', async () => {
+    const landed: string[] = []
+    const restore = noClipboard(landed)
     try {
         const button = element('button')
-        const stop = copyText('grace@hopper.example')(button)
+        const stop = copy({
+            'text/html': '<strong>Grace Hopper</strong>',
+            'text/plain': 'Grace Hopper',
+        })(button)
         button.click()
         await Bun.sleep(0)
-        expect(copied).toEqual(['copy:grace@hopper.example'])
+        expect(landed).toEqual([
+            'copy selecting Grace Hopper',
+            'text/html: <strong>Grace Hopper</strong>',
+            'text/plain: Grace Hopper',
+        ])
         expect(button.hasAttribute('data-copied')).toBe(true)
         expect(document.querySelector('textarea')).toBeNull()
         stop()
     } finally {
-        document.execCommand = execCommand
+        restore()
+    }
+})
+
+// THE REVERT: drop the `selected === undefined` return — an empty textarea is selected and copied,
+// and this reports `["copy selecting "]` and `true`.
+test('a value holding no string reports not copied where there is no clipboard — 53.58', async () => {
+    const landed: string[] = []
+    const restore = noClipboard(landed)
+    try {
+        const button = element('button')
+        const heard: boolean[] = []
+        const stop = copy(
+            {
+                'image/png': new Blob([new Uint8Array([137, 80, 78, 71])], {
+                    type: 'image/png',
+                }),
+            },
+            { oncopied: (copied) => heard.push(copied) },
+        )(button)
+        button.click()
+        await Bun.sleep(0)
+        expect({ landed, heard }).toEqual({ landed: [], heard: [false] })
+        expect(button.hasAttribute('data-copied')).toBe(false)
+        stop()
+    } finally {
+        restore()
     }
 })
 

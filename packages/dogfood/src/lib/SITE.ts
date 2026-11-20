@@ -437,10 +437,10 @@ const WRITTEN: readonly {
                     'Take the files dropped on an element, or pasted into it, filtered by type, and highlight the target while files hover.',
             },
             {
-                route: '/helpers/copy-text',
-                title: '`copyText`',
+                route: '/helpers/copy',
+                title: '`copy`',
                 description:
-                    'Copy text to the clipboard when an element is clicked, and mark the element while the copy shows.',
+                    'Copy text, rich text or an image to the clipboard when an element is clicked, and mark the element while the copy shows.',
             },
             {
                 route: '/helpers/signed-in',

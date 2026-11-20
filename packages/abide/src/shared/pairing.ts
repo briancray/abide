@@ -26,7 +26,7 @@ import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { collectWatches, owned, unowned, watch } from './reactive/watch.ts'
 import { rpcRequest } from './rpcRequest.ts'
-import { writeText } from './writeText.ts'
+import { writeClipboard } from './writeClipboard.ts'
 
 /** How long a click waits for the page to blur, or the bridge to pair, before offering the install. */
 const PAIR_WAIT = 2500
@@ -117,7 +117,7 @@ export function pairing(): {
             const install = status.peek()?.install
             if (install === undefined) return
             // 53.22 — a page served over plain http copies too.
-            if ((await writeText(install)) && !disposed) copied.set(true)
+            if ((await writeClipboard(install)) && !disposed) copied.set(true)
         },
         // 44.73.
         stop,

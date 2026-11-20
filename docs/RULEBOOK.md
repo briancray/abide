@@ -4482,7 +4482,7 @@ set `step` to `waiting` and navigate the page to the status's `link`.
 44.71 2500 ms after `pairing`'s `start`, `step` MUST become `click` where the window blurred since,
 or `status` is paired, and `install` otherwise.
 
-44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard as 53.22 copies, and
+44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard as 53.57 and 53.22 copy, and
 once written MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `click`.
 
 44.73 A `pairing` MUST, once its `stop` or its `[Symbol.dispose]` is called, or the component whose
@@ -5395,13 +5395,13 @@ where `multiple` is `false`, and MUST NOT call it where it takes none.
 53.20 `dropzone` with `paste` MUST take a `paste` carrying files `accept` takes as a drop, and MUST
 leave a paste carrying none to the browser.
 
-53.21 `copyText` MUST write its text to the clipboard on a click of its element, calling a function
+53.21 `copy` MUST write its value to the clipboard on a click of its element, calling a function
 it was given at the click.
 
-53.22 `copyText` MUST copy through a selected textarea where `navigator.clipboard` is absent or
-refuses.
+53.22 `copy` MUST copy through a selected textarea where `navigator.clipboard` or `ClipboardItem`
+is absent or refuses, laying every string its value holds on the `copy` event under its type.
 
-53.23 `copyText` MUST write `data-copied` on its element once a copy lands, and MUST remove it
+53.23 `copy` MUST write `data-copied` on its element once a copy lands, and MUST remove it
 `copiedFor` milliseconds after the last.
 
 53.24 `transcript.fold` MUST join a `text` event to the text part ending the turn, in place, and MUST
@@ -5459,11 +5459,11 @@ text, the part and its turn, and as text where none is.
 53.43 `Pairing` MUST render its children once `pairing` reports the bridge paired, and MUST NOT
 before.
 
-53.44 `copyText` given `selector` MUST copy on a click inside its element on an element matching
+53.44 `copy` given `selector` MUST copy on a click inside its element on an element matching
 `selector`, handing that element to its function and writing `data-copied` on it, and MUST copy
 nothing for a click on no such element.
 
-53.45 `copyText` MUST call `oncopied` once a click's copy has landed or failed, with whether it
+53.45 `copy` MUST call `oncopied` once a click's copy has landed or failed, with whether it
 landed and the element clicked.
 
 53.46 `dropzone` MUST hand `onreject` the files a drop or a paste carries that it does not take,
@@ -5500,6 +5500,11 @@ and options, apart and in the order `keyLabel` writes them.
 
 53.56 `keyLabel` and `keyLabel.parts` MUST write for an Apple platform where `apple` is `true`, and
 for any other where it is `false`, whatever 53.3 reads.
+
+53.57 `copy` MUST write a string as `text/plain`, and a record as one clipboard item holding each
+MIME type the record names.
+
+53.58 `copy` MUST report a value holding no string as not copied where 53.22 copies.
 
 # 54. Guards, fetches and jobs
 
