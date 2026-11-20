@@ -210,23 +210,26 @@ const readout = reactive(() => {
     }
 })
 
-function track(event: PointerEvent) {
+// The x position nearest the pointer, or `undefined` where the plot has no width to read it on.
+function indexAt(event: MouseEvent): number | undefined {
     const box = (event.currentTarget as Element).getBoundingClientRect()
-    if (box.width === 0) return
-    const pointer = ((event.clientX - box.left) * size.width) / box.width
-    hovered = nearest(plot.xs, pointer)
+    if (box.width === 0) return undefined
+    return nearest(
+        plot.xs,
+        ((event.clientX - box.left) * size.width) / box.width,
+    )
+}
+
+function track(event: PointerEvent) {
+    const index = indexAt(event)
+    if (index !== undefined) hovered = index
 }
 
 // 52.38 — a click picks the x the crosshair is on, read again from the click's own position.
 function pick(event: MouseEvent) {
     if (onpick === undefined) return
-    const box = (event.currentTarget as Element).getBoundingClientRect()
-    if (box.width === 0) return
-    const index = nearest(
-        plot.xs,
-        ((event.clientX - box.left) * size.width) / box.width,
-    )
-    if (index < 0 || disabled?.(index) === true) return
+    const index = indexAt(event)
+    if (index === undefined || index < 0 || disabled?.(index) === true) return
     onpick(index)
 }
 </script>
