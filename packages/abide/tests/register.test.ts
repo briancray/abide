@@ -5,7 +5,8 @@
 import { expect, test } from 'bun:test'
 
 import { flushSync, reactive, watch } from '#shared'
-import { register } from '#shared/register.ts'
+import { collectWatches, type Disposer } from '#shared/reactive/watch.ts'
+import { join, register } from '#shared/register.ts'
 
 // THE REVERT: have the disposer drop the last entry rather than its own, and `b` leaving takes `c`.
 test('a disposer takes out its own entry, and the rest keep their order', () => {
@@ -40,5 +41,27 @@ test('a watch registering from its body is not run again by the next registratio
     expect(list()).toEqual(['first', 'second'])
     stop()
     next()
+    expect(list()).toEqual([])
+})
+
+// 52.53, 50.36 — A JOINED ENTRY STANDS AS LONG AS THE SETUP THAT JOINED IT: a chart's child removed
+// takes its series off the chart, a `Tooltips` removed stops being a host. THE REVERT: have `join` call
+// `register` bare, with no watch for the setup to own, and the entry outlives its component.
+test('a joined entry leaves with the setup that joined it, and a sibling joining moves nothing', () => {
+    const list = reactive<readonly string[]>([])
+    const setUp = (entry: string): Disposer[] => {
+        const stops: Disposer[] = []
+        const previous = collectWatches(stops)
+        join(list, entry)
+        collectWatches(previous)
+        return stops
+    }
+    const first = setUp('first')
+    const second = setUp('second')
+    flushSync()
+    expect(list()).toEqual(['first', 'second'])
+    for (const stop of first) stop()
+    expect(list()).toEqual(['second'])
+    for (const stop of second) stop()
     expect(list()).toEqual([])
 })

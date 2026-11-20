@@ -6,8 +6,7 @@
 
 import { namedLogger } from './log.ts'
 import { reactive } from './reactive/index.ts'
-import { watch } from './reactive/watch.ts'
-import { register } from './register.ts'
+import { join } from './register.ts'
 
 /**
  * The hosts standing for one kind of component, and the warning it gives once where a request finds
@@ -28,8 +27,7 @@ export function outlet(component: string, logger: string) {
          */
         stand(): () => boolean {
             const host = {}
-            // `register` reads with `peek`, so the watch reads nothing and runs once.
-            watch(() => register(hosts, host))
+            join(hosts, host)
             return () => hosts().at(-1) === host
         },
         /**

@@ -5,7 +5,7 @@
 // entry arriving or leaving and on nothing else.
 
 import type { Reactive } from './reactive/Reactive.ts'
-import type { Disposer } from './reactive/watch.ts'
+import { type Disposer, watch } from './reactive/watch.ts'
 
 /**
  * Appends `entry` to `list`, and hands back what takes exactly that entry out again.
@@ -23,4 +23,19 @@ export function register<Entry>(
         const at = entries.indexOf(entry)
         if (at !== -1) list.set(entries.filter((_, index) => index !== at))
     }
+}
+
+/**
+ * Registers `entry` on `list` for as long as the scope calling this stands — a component's setup, or
+ * a watch's body — and takes it out at that scope's teardown (12.5): how a `Chart`'s child joins its
+ * chart (52.24) and a `Tooltips` joins the hosts standing (50.36).
+ *
+ * `register` reads with `peek`, so the watch reads nothing and runs once: a read of the list would run
+ * it again on every sibling's arrival, taking the entry out and putting it back at the end.
+ */
+export function join<Entry>(
+    list: Reactive<readonly Entry[]>,
+    entry: Entry,
+): void {
+    watch(() => register(list, entry))
 }

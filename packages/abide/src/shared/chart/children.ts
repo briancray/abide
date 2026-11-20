@@ -5,8 +5,7 @@
 
 import { reactive } from '../reactive/index.ts'
 import type { Reactive } from '../reactive/Reactive.ts'
-import { watch } from '../reactive/watch.ts'
-import { register } from '../register.ts'
+import { join } from '../register.ts'
 import type { Series } from './index.ts'
 
 /** A child of a `Chart`, as the chart's list holds it. */
@@ -23,8 +22,5 @@ export function joinChart(series: () => Series): void {
         'abide:chart',
         () => reactive<readonly ChartChild[]>([]),
     )
-    const declared: ChartChild = { series }
-    // `register` reads with `peek`, so the watch reads nothing and runs once: a read of the list would
-    // rerun it on every sibling's arrival, taking this child off and putting it back at the end.
-    watch(() => register(children, declared))
+    join(children, { series })
 }
