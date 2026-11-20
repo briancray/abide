@@ -5139,6 +5139,14 @@ its cells.
 
 51.60 `SortableTable` MUST spread what `rowAttributes` hands back for a row onto that row's `<tr>`.
 
+51.61 A `Combobox` whose `value` is an array MUST add an item picked to it, or take the item out
+where it holds it already, MUST keep its list open and clear the typed text on a pick, MUST write
+`data-selected` on the option of every item it holds, and MUST NOT clear it on Escape.
+
+51.62 A `Combobox` whose `value` is an array MUST render each item it holds through `Chip` where it is
+given, handed the item and what takes it out, and as its `label` beside a remove button otherwise,
+and Backspace in its empty input MUST take out the last item it holds.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

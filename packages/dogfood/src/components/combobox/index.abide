@@ -24,6 +24,22 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyPicker.test.ts',
             from: ["test('a search in flight keeps the last companies listed'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/TeamPicker.test.ts',
+            from: [
+                "test('picking adds a contact, picking it again takes it out, and the list stays open'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/TeamPicker.test.ts',
+            from: [
+                "test('Backspace in an empty input takes out the last contact, and a chip takes out its own'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
+            from: ["test('Escape shuts, then clears, then is left to the page'"],
+        },
     ]}
 >
     <Section level={3} title="Pick a contact from a list narrowed by typing">
@@ -47,6 +63,28 @@ import Section from '#src/lib/Section.abide'
                 label={(each: Contact) => each.name}
                 bind:value={contact}
             >No contact matches</Combobox>
+        `} />
+    </Section>
+
+    <Section level={3} title="Put several contacts on a deal">
+        <p>Bind <code>value</code> to an array, and each pick adds a contact or takes it out
+            again, with the list left open. Each one picked is a <code>chip</code> with a remove
+            button, and Backspace in the empty input takes out the last.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import Combobox from '@abide/abide/Combobox.abide'
+
+            let team = reactive<Contact[]>([])
+            </script>
+
+            <Combobox
+                id="deal-team"
+                options={contacts}
+                key={(each: Contact) => each.id}
+                label={(each: Contact) => each.name}
+                bind:value={team}
+            />
         `} />
     </Section>
 
