@@ -11,7 +11,8 @@
 
 import { flushSync, reactive, structural, watch } from '@abide/abide'
 
-import { carelessSignal, signal } from './signal.ts'
+import { carelessSignal } from './carelessSignal.ts'
+import { signal } from './signal.ts'
 
 // Defeats dead-code elimination without allocating: every read writes here.
 let sink: unknown
