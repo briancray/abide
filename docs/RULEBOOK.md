@@ -4897,7 +4897,8 @@ while it holds where it has two.
 
 49.5 `@abide/abide` MUST NOT ship a stylesheet for a shipped component.
 
-49.6 A shipped component MUST write a `style` property only for a value it computes as it runs.
+49.6 A shipped component MUST write a `style` property only for a value it computes as it runs, or
+one a clause of its own requires.
 
 49.7 A shipped component rendering a widget WAI-ARIA gives a pattern for MUST carry the roles and
 the states that pattern names.
@@ -5043,6 +5044,9 @@ what dismisses it and what runs its action, inside the element carrying the noti
 `data-part="toast"` and `data-tone`, and as its text, action and close button otherwise.
 
 50.47 `tooltip` whose `trigger` is `bound` MUST open its hint at once as it is bound.
+
+50.48 A `Tooltips` MUST NOT be the target of a pointer event, so a hint open over its anchor never
+takes the pointer from it.
 
 # 51. Lists and tables
 

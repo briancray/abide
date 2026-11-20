@@ -845,7 +845,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.23, 50.26, 50.27, 50.35, 50.36, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+| `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.23, 50.26, 50.27, 50.35, 50.36, 50.48, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
 
 ## `tooltip`
 

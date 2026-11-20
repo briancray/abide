@@ -12,6 +12,9 @@ import { hosts, shown } from '#shared/tooltip/tips.ts'
 
 const { ...rest } = props<Omit<Attributes<'span'>, 'popover' | 'role'>>()
 
+// 50.48 — THE HINT IS NEVER THE POINTER'S TARGET: one open over its anchor would take the pointer from
+// it, and the anchor's leave closes the hint that took it — a flicker for as long as the pointer moves.
+
 // 50.36 — this host, among the ones standing; the last bound renders the hint.
 const self = {}
 let element = reactive<HTMLElement | undefined>(undefined)
@@ -77,5 +80,6 @@ watch(() => {
     popover="manual"
     data-open={tip ? '' : undefined}
     data-side={placed}
+    style:pointer-events="none"
     bind:element={attach}
 >{#if typeof tip?.hint === 'string'}{tip.hint}{:else}<Hint />{/if}</span>
