@@ -1,18 +1,26 @@
-// 50.26, 50.27 — AN OPEN POPOVER KEPT AGAINST ITS ANCHOR: what `Tooltip` and `Menu` share. Not an
-// export of the barrel: an app's own overlay calls `place` and writes what it hands back itself.
+// 50.26, 50.27, 50.48 — A POPOVER HELD AGAINST ITS ANCHOR: shown in the top layer, placed by `place`,
+// and placed again whenever anything could have moved it, until it is let go. What `Tooltips` and
+// `menu` are built on. Not an export of the barrel: an app's own overlay calls `place` and writes
+// what it hands back itself.
 
 import { resized } from './observe/resized.ts'
 import { place, type Placement, type PlaceOptions } from './place.ts'
 
+/** Where an anchored popover sits, and whether it takes the pointer. */
+export type AnchoredOptions = PlaceOptions & {
+    /** 50.48 — `false` for a layer the pointer passes through, as a hint is. Default `true`. */
+    interactive?: boolean
+}
+
 /**
- * Places `floating` against `anchor` now, and again in the frame after anything scrolls, the window
- * resizes, or either of the two changes size, until the stop it hands back is called. `placed` is
- * told each placement.
+ * Shows `floating` — a `popover` — and places it against `anchor` now, and again in the frame after
+ * anything scrolls, the window resizes, or either of the two changes size, until the stop it hands
+ * back is called, which hides it if it is still open. `placed` is told each placement.
  */
-export function follow(
+export function anchored(
     anchor: Element,
     floating: HTMLElement,
-    options: PlaceOptions,
+    options: AnchoredOptions,
     placed: (placement: Placement) => void,
 ): () => void {
     let frame = 0
@@ -29,6 +37,12 @@ export function follow(
     const scheduled = (): void => {
         if (frame === 0) frame = requestAnimationFrame(update)
     }
+    // 50.48 — a layer open over its anchor that took the pointer would take it from the anchor, and an
+    // anchor whose leave closes the layer then closes it and opens it again as the pointer moves.
+    const passesThrough = options.interactive === false
+    if (passesThrough) floating.style.pointerEvents = 'none'
+    // A menu's `auto` popover is already open by the time it is anchored: the browser opened it.
+    if (!floating.matches(':popover-open')) floating.showPopover()
     update()
     addEventListener('scroll', scheduled, { capture: true, passive: true })
     addEventListener('resize', scheduled, { passive: true })
@@ -43,5 +57,7 @@ export function follow(
         frame = 0
         removeEventListener('scroll', scheduled, { capture: true })
         removeEventListener('resize', scheduled)
+        if (floating.matches(':popover-open')) floating.hidePopover()
+        if (passesThrough) floating.style.removeProperty('pointer-events')
     }
 }

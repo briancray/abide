@@ -42,22 +42,12 @@ test('no shipped component writes a class — 49.3', async () => {
     expect(writing).toEqual([])
 })
 
-// A fixed style a clause of the component's own requires, each named with its clause: the one place
-// a literal style is not a style an app should have been left to write.
-const REQUIRED_STYLES: Record<string, readonly string[]> = {
-    // 50.48 — the hint is never the pointer's target.
-    'Tooltips.abide': ['style:pointer-events="none"'],
-}
-
-// THE REVERT: write `style="position: fixed"` on the tooltip, and it is named.
-test('a shipped component writes a style only from a computed value, or one its clause requires — 49.6', async () => {
+// THE REVERT: write `style="position: fixed"` on the tooltip, and it is named. A fixed style a
+// clause requires (49.6) is written by the shared module the clause governs — `anchored`'s
+// `pointer-events` for 50.48 — never in a component's markup.
+test('a shipped component writes a style only from a computed value — 49.6', async () => {
     const fixed: string[] = []
-    for (const { path, text } of await files('**/*.abide')) {
-        let markup = template(text)
-        for (const required of REQUIRED_STYLES[path.split('/').at(-1) ?? ''] ??
-            [])
-            markup = markup.replace(required, '')
-        if (/\sstyle(?::[\w-]+)?=["']/.test(markup)) fixed.push(path)
-    }
+    for (const { path, text } of await files('**/*.abide'))
+        if (/\sstyle(?::[\w-]+)?=["']/.test(template(text))) fixed.push(path)
     expect(fixed).toEqual([])
 })

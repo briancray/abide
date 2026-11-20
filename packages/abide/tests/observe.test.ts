@@ -11,7 +11,7 @@ import { afterAll, expect, test } from 'bun:test'
 
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync, observe, reactive } from '#shared'
-import { follow } from '#shared/follow.ts'
+import { anchored } from '#shared/anchored.ts'
 
 import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -239,8 +239,8 @@ let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, seen:
 </div>`
 
 // 32.81 — ONE OBSERVER FOR EVERY RESIZE IN THE DOCUMENT: an `observe.size`, an `observe.rect` and a
-// popover `follow` keeps placed against its anchor are all observed by the one standing, and a
-// delivery for each element reaches only what watches that element. THE REVERT: make `follow` its own
+// popover `anchored` keeps placed against its anchor are all observed by the one standing, and a
+// delivery for each element reaches only what watches that element. THE REVERT: make `anchored` its own
 // `new ResizeObserver(scheduled)` (or `rect` its own), and `made` reads one more.
 test('an observe.size, an observe.rect and a followed popover share one ResizeObserver — 32.81', () => {
     const made = resize.counts.made
@@ -248,18 +248,19 @@ test('an observe.size, an observe.rect and a followed popover share one ResizeOb
     const placed = document.createElement('div')
     const anchor = document.createElement('button')
     const floating = document.createElement('div')
+    floating.popover = 'manual'
     document.body.append(sized, placed, anchor, floating)
     const box = reactive({ width: 0, height: 0 })
     const stops = [
         observe.size(box)(sized),
         observe.rect(reactive())(placed),
-        follow(anchor, floating, {}, () => {}),
+        anchored(anchor, floating, {}, () => {}),
     ]
     try {
         for (const element of [sized, placed, anchor, floating])
             expect(resize.counts.observed.has(element)).toBe(true)
         // At most the one shared observer is made, and it is the one every delivery comes through:
-        // an observer of `follow`'s own, made last, would take the size's delivery and drop it.
+        // an observer of `anchored`'s own, made last, would take the size's delivery and drop it.
         expect(resize.counts.made - made).toBeLessThanOrEqual(1)
         resize.counts.deliver?.([sizeOf(sized, 32, 18)])
         expect(box.peek()).toEqual({ width: 32, height: 18 })

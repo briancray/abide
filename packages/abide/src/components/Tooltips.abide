@@ -1,9 +1,9 @@
 <script>
+import { anchored } from '#shared/anchored.ts'
 // 50.23-50.27, 50.36 — WHERE `tooltip` SHOWS: rendered once, in the root layout, as the one popover every
 // hint on the page opens in — the top layer, so no stacking context covers it and no scroller
 // clips it.
 import type { Attributes } from '#shared/Attributes.ts'
-import { follow } from '#shared/follow.ts'
 import type { Side } from '#shared/place.ts'
 import { props } from '#shared/props.ts'
 import { randomToken } from '#shared/randomToken.ts'
@@ -12,9 +12,6 @@ import { register } from '#shared/register.ts'
 import { hosts, shown } from '#shared/tooltip/tips.ts'
 
 const { ...rest } = props<Omit<Attributes<'span'>, 'popover' | 'role'>>()
-
-// 50.48 — THE HINT IS NEVER THE POINTER'S TARGET: one open over its anchor would take the pointer from
-// it, and the anchor's leave closes the hint that took it — a flicker for as long as the pointer moves.
 
 // 50.36 — this host, among the ones standing; the last bound renders the hint.
 const self = {}
@@ -44,8 +41,7 @@ watch(() => {
     const open = tip
     if (host === undefined || open === undefined) return
     const { anchor, hint, options } = open
-    host.showPopover()
-    const stop = follow(
+    const stop = anchored(
         anchor,
         host,
         {
@@ -53,6 +49,8 @@ watch(() => {
             align: options.align ?? 'center',
             offset: options.offset ?? 8,
             arrowInset: options.arrowInset ?? 0,
+            // 50.48 — a hint is never the pointer's target.
+            interactive: false,
         },
         (placement) => {
             placed = placement.side
@@ -67,7 +65,6 @@ watch(() => {
         )
     return () => {
         stop()
-        if (host.matches(':popover-open')) host.hidePopover()
         if (typeof hint === 'string') return
         if (described === null) anchor.removeAttribute('aria-describedby')
         else anchor.setAttribute('aria-describedby', described)
@@ -81,6 +78,5 @@ watch(() => {
     popover="manual"
     data-open={tip ? '' : undefined}
     data-side={placed}
-    style:pointer-events="none"
     bind:element={attach}
 >{#if typeof tip?.hint === 'string'}{tip.hint}{:else}<Hint />{/if}</span>

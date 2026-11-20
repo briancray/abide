@@ -8,7 +8,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { installServer } from '#server/installServer.ts'
 import { inScope } from '#server/requestScope.ts'
 import { place } from '#shared'
-import { follow } from '#shared/follow.ts'
+import { anchored } from '#shared/anchored.ts'
 import * as prompts from '#shared/prompts/index.ts'
 import { queue } from '#shared/prompts/queue.ts'
 import * as toasts from '#shared/toasts/index.ts'
@@ -115,10 +115,12 @@ test('a floating element that changes size is placed again — 50.26', async () 
         const anchor = box(100, 100, 40, 20)
         let height = 30
         const floating = box(0, 0, 60, 30)
+        floating.popover = 'manual'
+        document.body.append(anchor, floating)
         floating.getBoundingClientRect = () =>
             DOMRect.fromRect({ x: 0, y: 0, width: 60, height })
         const tops: number[] = []
-        const stop = follow(anchor, floating, { side: 'top' }, (placement) =>
+        const stop = anchored(anchor, floating, { side: 'top' }, (placement) =>
             tops.push(placement.y),
         )
         height = 50
@@ -131,6 +133,31 @@ test('a floating element that changes size is placed again — 50.26', async () 
     } finally {
         globalThis.ResizeObserver = Observer
     }
+})
+
+// 50.48 — A LAYER THAT IS NOT INTERACTIVE NEVER TAKES THE POINTER, for as long as it is held, and
+// gives its element back as it was; one that is takes it as any element does. THE REVERT: drop the
+// `pointer-events` write from `anchored`, and the hint's layer reads `''` while open.
+test('an anchored layer that is not interactive lets the pointer through while open — 50.48', () => {
+    const anchor = box(100, 100, 40, 20)
+    const hint = box(0, 0, 60, 30)
+    const list = box(0, 0, 60, 30)
+    hint.popover = 'manual'
+    list.popover = 'manual'
+    document.body.append(anchor, hint, list)
+    const stops = [
+        anchored(anchor, hint, { interactive: false }, () => {}),
+        anchored(anchor, list, {}, () => {}),
+    ]
+    expect(hint.matches(':popover-open')).toBe(true)
+    expect(hint.style.pointerEvents).toBe('none')
+    expect(list.style.pointerEvents).toBe('')
+    for (const stop of stops) stop()
+    expect(hint.matches(':popover-open')).toBe(false)
+    expect(hint.style.pointerEvents).toBe('')
+    anchor.remove()
+    hint.remove()
+    list.remove()
 })
 
 // THE REVERT: write the `inset` inside `place`, and the document records the write.

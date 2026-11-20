@@ -3,7 +3,7 @@
 // else and a second popover opening close it with no listener here; the server writes every
 // attribute, so the menu is shut before the page hydrates.
 
-import { follow } from './follow.ts'
+import { anchored } from './anchored.ts'
 import type { Side } from './place.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -94,7 +94,7 @@ export function menu(options: MenuOptions = {}): Menu {
         if ((event as ToggleEvent).newState === 'open') {
             const button = triggerOf()
             if (button !== null)
-                stop = follow(
+                stop = anchored(
                     button,
                     list,
                     { side, align, offset, arrowInset },
