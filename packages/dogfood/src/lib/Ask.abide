@@ -1,193 +1,101 @@
 <script>
 // THE PROMPT AT THE TOP OF EVERY PAGE: a question to the visitor's own Claude Code, answered from the
-// docs' tools and rendered as it is written — prose, code, and the live things a `<show/>` names.
+// docs' tools and rendered as it is written — prose, code, and the live things a `show` block names.
+// The bar opens the answers, and `Chat` is the conversation: its composer, its turns, its prompts.
 //
 // THE CONVERSATION OUTLIVES A NAVIGATION: the bar is the layout's, and a layout outlives the page it
-// wraps (41.11), so `<show open/>` can move the page under an answer without ending it.
+// wraps (41.11), so a `show open` block can move the page under an answer without ending it. The
+// panel is hidden rather than unmounted, so closing it ends no answer, and the turns are bound here.
 //
 // THE TRANSCRIPT IS THE WORDS, the rendering is not: each turn sends every earlier question and the
 // text Claude wrote for it (44.4), and what was rendered from that text stays here.
-//
-// NOT `Chat`: an answer here is the docs handler's rendered parts and `<show/>` lines, where `Chat`
-// folds `AssistantEvent`s into words, so the composer and the answers are this file's. The pairing
-// is `Pairing`'s, styled in `app.css` by what it writes.
 import {
+    type AssistantTurn,
+    flushSync,
     keyLabel,
     navigate,
     pairing,
-    raw,
     reactive,
     type RouteLiteral,
     url,
     watch,
 } from '@abide/abide'
+import Chat from '@abide/abide/Chat.abide'
 import Pairing from '@abide/abide/Pairing.abide'
 
 import answer from '#src/ask/answer.handler.ts'
-import type { AnswerPart } from '#src/ask/lib/AnswerPart.ts'
 import permit from '#src/ask/permit.handler.ts'
 
-import Code from './Code.abide'
+import AnswerText from './AnswerText.abide'
+import AnswerTool from './AnswerTool.abide'
 import { ASK_ITEM } from './nativeMenus.ts'
-import Shown from './Shown.abide'
+import { openedIn } from './showFence.ts'
 
-type Message = { role: 'user' | 'assistant'; content: string }
-
-// Whether the prompt can ask yet; `Pairing` shows the steps that get it there.
+// Whether the composer can ask yet; `Pairing` shows the steps that get it there.
 const { status } = pairing()
 
-let question = reactive('')
 let open = reactive(false)
-let transcript = reactive<Message[]>([])
-let turns = reactive<{ question: string; parts: AnswerPart[] }[]>([])
-let asking = reactive<Message[] | undefined>(undefined)
-let answered = reactive<string[]>([])
+let turns = reactive<AssistantTurn[]>([])
+let panel: HTMLElement | undefined
 
-const events = reactive(() => (asking ? answer({ messages: asking }) : []))
-
-// The answer so far: its finished blocks, the one being written, and the docs tool it last called.
-const live = reactive(() => {
-    const parts: AnswerPart[] = []
-    let tail: AnswerPart | undefined
-    let tool: string | undefined
-    let waiting: { id: string; name: string; input: string } | undefined
-    for (const event of events) {
-        if (event.type === 'part') parts.push(event.part)
-        else if (event.type === 'tail') tail = event.part
-        else if (event.type === 'tool') tool = event.name
-        else if (event.type === 'permission' && !answered.includes(event.id))
-            waiting = {
-                id: event.id,
-                name: event.name,
-                input: JSON.stringify(event.input, null, 2),
-            }
-    }
-    return { parts, tail, tool, waiting }
-})
-
-// 44.83 — only this browser can answer, once; a prompt left alone is denied after two minutes (44.84).
-async function answerPermission(allow: boolean) {
-    const waiting = live.waiting
-    if (waiting === undefined) return
-    answered = [...answered, waiting.id]
-    await permit({ id: waiting.id, allow })
-}
-
-// `<show open/>` moves the page under the answer once, as the block arrives.
-let opened = 0
+// A `show open` block moves the page under the answer once, as its fence closes: counted per answer,
+// so the same answer read again moves nothing.
+let opened = { turn: -1, count: 0 }
 watch(() => {
-    const parts = live.parts
-    for (; opened < parts.length; opened += 1) {
-        const part = parts[opened]
-        if (part?.kind === 'show' && part.show.kind === 'open')
-            navigate(url(part.show.value as RouteLiteral))
-    }
+    const at = turns.length - 1
+    const turn = turns[at]
+    if (turn?.role !== 'assistant') return
+    let text = ''
+    for (const part of turn.parts)
+        if (part.type === 'text') text += `${part.text}\n`
+    const routes = openedIn(text)
+    if (opened.turn !== at) opened = { turn: at, count: 0 }
+    for (; opened.count < routes.length; opened.count += 1)
+        navigate(url(routes[opened.count] as RouteLiteral))
 })
 
-// An answer that ended is kept as a turn, and the next question is asked over the whole transcript.
-watch(() => {
-    const last = events.at(-1)
-    if (last?.type !== 'done' || asking === undefined) return
-    const asked = asking.at(-1)?.content ?? ''
-    turns = [...turns, { question: asked, parts: live.parts }]
-    transcript = [...asking, { role: 'assistant', content: last.text }]
-    asking = undefined
-    opened = 0
-})
-
-function ask(event: SubmitEvent) {
-    event.preventDefault()
-    const text = question.trim()
-    if (text === '' || (asking !== undefined && !events.error())) return
+// The answers opened, and the composer focused where pairing has put one there.
+function show() {
     open = true
-    opened = 0
-    asking = [...transcript, { role: 'user', content: text }]
-    question = ''
+    flushSync()
+    panel?.querySelector<HTMLElement>('[data-part=input]')?.focus()
 }
 
 function clear() {
-    transcript = []
     turns = []
-    asking = undefined
+    opened = { turn: -1, count: 0 }
 }
 
-// ⌘K (Ctrl+K off a Mac) lands in the prompt: the native app's Ask menu item, whose key a page in a
+// ⌘K (Ctrl+K off a Mac) opens the answers: the native app's Ask menu item, whose key a page in a
 // browser answers itself, from anywhere, a field included (38.213).
-let prompt: HTMLInputElement | undefined
-ASK_ITEM.on(() => prompt?.focus())
+ASK_ITEM.on(show)
 </script>
 
-<form class="ask" onsubmit={ask}>
-    <input
-        id="ask"
-        type="search"
-        autocomplete="off"
-        placeholder="Ask how to do anything in abide…"
-        aria-label="Ask Claude about abide"
-        bind:value={question}
-        bind:element={(input: HTMLInputElement) => {
-            prompt = input
-        }}
-        onfocus={() => (open = turns.length > 0 || asking !== undefined || !status?.paired)}
-     />
+<button type="button" class="ask" id="ask" aria-label="Ask Claude about abide" onclick={show}>
+    <span>Ask how to do anything in abide…</span>
     <kbd>{keyLabel('mod+k')}</kbd>
-    <button type="submit" disabled={(asking !== undefined && !events.error()) || !status?.paired}>Ask</button>
-</form>
+</button>
 
-{#if open}
-    <section class="answers" aria-label="Answers">
-        <header>
-            <span class="eyebrow">Claude Code · answers from these docs</span>
-            {#if turns.length > 0}<button class="quiet" onclick={clear}>New conversation</button>{/if}
-            <button class="quiet" aria-label="Close" onclick={() => (open = false)}>Close</button>
-        </header>
+<section class="answers" aria-label="Answers" hidden={!open}
+    bind:element={(element: HTMLElement) => {
+        panel = element
+    }}>
+    <header>
+        <span class="eyebrow">Claude Code · answers from these docs</span>
+        {#if turns.length > 0}<button class="quiet" onclick={clear}>New conversation</button>{/if}
+        <button class="quiet" aria-label="Close" onclick={() => (open = false)}>Close</button>
+    </header>
 
-        {#if !status?.paired}
-            <p>The answers come from your own Claude Code, run on your machine. This site asks it for
-                full access, so it can also build what you ask for, asking you here before anything
-                risky; you can allow it only these docs instead. Pair it with this browser once; the
-                native app is paired already, with full access.</p>
-        {/if}
+    {#if !status?.paired}
+        <p>The answers come from your own Claude Code, run on your machine. This site asks it for
+            full access, so it can also build what you ask for, asking you here before anything
+            risky; you can allow it only these docs instead. Pair it with this browser once; the
+            native app is paired already, with full access.</p>
+    {/if}
 
-        {#component Part({ part }: { part: AnswerPart })}{#if part.kind === 'html'}<div class="flow">{raw(part.html)}</div>{:else if part.kind === 'code'}<Code code={part.code} language={part.language} />{:else}<Shown show={part.show} />{/if}{/component}
-        <Pairing class="pairing">
-            {#for turn, index of turns by index}
-                <article class="turn">
-                    <p class="asked">{turn.question}</p>
-                    {#for part, at of turn.parts by at}
-                        <Part part={part} />
-                    {/for}
-                </article>
-            {/for}
-
-            {#if asking}
-                <article class="turn">
-                    <p class="asked">{asking.at(-1)?.content}</p>
-                    {#for part, at of live.parts by at}
-                        <Part part={part} />
-                    {/for}
-                    {#if live.tail?.kind === 'html'}
-                        <div class="flow">{raw(live.tail.html)}</div>
-                    {:else if live.tail?.kind === 'code'}
-                        <Code code={live.tail.code} language={live.tail.language} />
-                    {/if}
-                    {#if live.waiting}
-                        <div class="permission">
-                            <p>Claude Code asks to run <code>{live.waiting.name}</code></p>
-                            <pre>{live.waiting.input}</pre>
-                            <div class="row">
-                                <button onclick={() => answerPermission(true)}>Allow</button>
-                                <button class="quiet" onclick={() => answerPermission(false)}>Deny</button>
-                            </div>
-                        </div>
-                    {/if}
-                    {#if events.error()}
-                        <p class="status">{events.error()?.message}</p>
-                    {:else}
-                        <p class="status thinking">{live.tool ? `Reading the docs: ${live.tool}…` : 'Thinking…'}</p>
-                    {/if}
-                </article>
-            {/if}
-        </Pairing>
-    </section>
-{/if}
+    <Pairing class="pairing">
+        <Chat class="conversation" ask={answer} permit={permit} Text={AnswerText} Tool={AnswerTool}
+            bind:turns={turns} placeholder="Ask how to do anything in abide…"
+            label="Ask Claude about abide" disabled={!status?.paired} />
+    </Pairing>
+</section>

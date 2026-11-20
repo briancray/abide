@@ -1,0 +1,15 @@
+<script>
+// A tool an answer called, as one line: the docs tool by its own name, read or still being read.
+import { type AssistantTurnPart, props } from '@abide/abide'
+
+const { part } = props<{
+    part: Extract<AssistantTurnPart, { type: 'tool' }>
+}>()
+
+// The app's MCP surface names a docs tool by its file: `…_ask_tools_page` is `page`.
+const name = part.name.replace(/^.*_ask_tools_/, '')
+</script>
+
+<p class="status">{part.result === undefined
+    ? `Reading the docs: ${name}…`
+    : `Read the docs: ${name}`}</p>

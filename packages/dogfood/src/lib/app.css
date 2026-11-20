@@ -354,18 +354,24 @@ html:has(> body > .site)::view-transition-new(root) {
 }
 
 /* THE PROMPT AND ITS ANSWERS (`Ask.abide`). The answers hang under the bar over the page, so the page a
-   `<show open/>` moved stays where the reader can see it arrive. */
+   `show open` block moved stays where the reader can see it arrive. */
 @layer components {
+    /* The bar is a button that opens the answers, drawn as the field it leads to. */
     .ask {
-        @apply flex items-center gap-snug rounded-lg border border-rule bg-raised px-3 py-1 focus-within:border-signal;
+        @apply flex w-full items-center gap-snug rounded-lg border border-rule bg-raised px-3 py-2 text-left font-sans text-prose font-normal text-muted shadow-none hover:border-signal hover:text-ink;
     }
 
-    .ask input {
-        @apply min-w-0 flex-1 border-0 bg-transparent p-1 text-prose shadow-none outline-none focus:shadow-none;
+    .ask span {
+        @apply min-w-0 flex-1;
     }
 
     .ask kbd {
         @apply font-mono text-micro text-muted max-sm:hidden;
+    }
+
+    /* Hidden rather than unmounted, so closing it ends no answer: `flex` would outrank `[hidden]`. */
+    .answers[hidden] {
+        @apply hidden;
     }
 
     .answers {
@@ -403,20 +409,56 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply self-end border-0 bg-transparent px-2 py-1 text-chrome text-muted shadow-none hover:text-ink;
     }
 
-    .turn {
+    /* `Chat` (`@abide/abide/Chat.abide`) styled by what it writes. The question is the visitor's
+       bubble; the answer is the page's own prose, with no speaker line, and says it is still
+       thinking for as long as it streams. */
+    .conversation {
+        @apply flex flex-col gap-section;
+    }
+
+    .conversation [data-part="transcript"] {
+        @apply m-0 flex list-none flex-col gap-section p-0;
+    }
+
+    .conversation [data-part="turn"] {
         @apply flex flex-col gap-flow;
     }
 
-    .turn .asked {
+    .conversation [data-part="speaker"] {
+        @apply sr-only;
+    }
+
+    .conversation [data-speaker="you"] [data-part="text"] {
         @apply self-end rounded-lg bg-signal/10 px-3 py-2 font-medium;
     }
 
-    .permission {
-        @apply flex flex-col gap-snug rounded-lg border border-signal bg-signal/8 p-4;
+    .conversation [data-part="turn"][data-streaming]::after {
+        @apply animate-board-pulse text-chrome text-muted;
+        content: "Thinking…";
     }
 
-    .thinking {
-        @apply animate-board-pulse;
+    .conversation [data-part="permission"] {
+        @apply flex flex-wrap items-center gap-snug rounded-lg border border-signal bg-signal/8 p-4;
+    }
+
+    .conversation [data-part="permission-name"] {
+        @apply basis-full font-mono;
+    }
+
+    .conversation [data-part="permission-input"] {
+        @apply basis-full;
+    }
+
+    .conversation [data-part="failure"] {
+        @apply text-chrome text-muted;
+    }
+
+    .conversation [data-part="composer"] {
+        @apply flex items-end gap-snug;
+    }
+
+    .conversation [data-part="input"] {
+        @apply min-h-10 min-w-0 flex-1 resize-y rounded-lg border border-rule bg-raised px-3 py-2 text-prose;
     }
 
     button.quiet {
