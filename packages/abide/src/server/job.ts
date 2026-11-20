@@ -4,6 +4,7 @@
 // a time, and when the last run ended.
 
 import { log } from '#shared/log.ts'
+import { messageOf } from '#shared/messageOf.ts'
 import { type Reactive, reactive, stopSignal } from '#shared/reactive/index.ts'
 
 /** 54.22 — where a job stands, as a page reads it through a handler. */
@@ -83,8 +84,7 @@ export function job(
         } catch (error) {
             // 54.24 — a run told to stop has not failed.
             if (!signal.aborted) {
-                lastError =
-                    error instanceof Error ? error.message : String(error)
+                lastError = messageOf(error)
                 logger.error('run failed', error)
             }
         }

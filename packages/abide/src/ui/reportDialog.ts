@@ -2,6 +2,7 @@
 // Plain DOM, loaded only when a draft is opened, so a page that never reports never fetches it.
 
 import { isFailed } from '#shared/Failed.ts'
+import { messageOf } from '#shared/messageOf.ts'
 import { watch } from '#shared/reactive/index.ts'
 import type { ReportDraft } from '#shared/report.ts'
 
@@ -84,7 +85,7 @@ export function reportDialog(draft: ReportDraft): Promise<boolean> {
             (thrown: unknown) => {
                 // 48.8 — the draft stands as it was, to be sent again.
                 send.disabled = false
-                status.textContent = `Not sent: ${isFailed(thrown) || thrown instanceof Error ? thrown.message : String(thrown)}`
+                status.textContent = `Not sent: ${isFailed(thrown) ? thrown.message : messageOf(thrown)}`
             },
         )
     })

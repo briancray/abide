@@ -11,6 +11,7 @@ export type { PromptOptions }
 // 50.6, 50.8-50.10, 50.34 — WHERE `prompts.confirm`, `prompts.alert` AND `prompts.prompt` SHOW: rendered once, in the root
 // layout, and showing the queue's first prompt in a `Dialog` until it is answered.
 import type { Attributes } from '#shared/Attributes.ts'
+import { messageOf } from '#shared/messageOf.ts'
 import { type Prompt, queue } from '#shared/prompts/queue.ts'
 import { props } from '#shared/props.ts'
 import { reactive } from '#shared/reactive/index.ts'
@@ -78,7 +79,7 @@ async function submitted(event: SubmitEvent) {
     } catch (thrown) {
         if (current === asked) {
             busy = false
-            failure = thrown instanceof Error ? thrown.message : String(thrown)
+            failure = messageOf(thrown)
         }
         return
     }

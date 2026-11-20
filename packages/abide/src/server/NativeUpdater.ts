@@ -8,6 +8,7 @@
 import { readdir, rename, rm } from 'node:fs/promises' // bun exposes no directory listing, rename or removal of its own
 
 import { log } from '#shared/log.ts'
+import { messageOf } from '#shared/messageOf.ts'
 
 import { ran } from './ran.ts'
 import { FEED_FILE, verifiedFeed } from './updateFeed.ts'
@@ -97,8 +98,7 @@ export class NativeUpdater {
             // so it is reported (38.143) and the next is still scheduled.
             .catch((thrown: unknown): Checked => ({
                 outcome: 'refused',
-                reason:
-                    thrown instanceof Error ? thrown.message : String(thrown),
+                reason: messageOf(thrown),
             }))
             .then((checked) => {
                 this.checking = undefined

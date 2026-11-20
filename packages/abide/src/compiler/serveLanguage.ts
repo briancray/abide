@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs' // bun exposes no sync existence check of i
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 
 import { realOrAsGiven } from '#server/realOrAsGiven.ts'
+import { messageOf } from '#shared/messageOf.ts'
 
 import { checkSource, lowerApp } from './checkApp.ts'
 import { citedClauses } from './citedClauses.ts'
@@ -179,13 +180,7 @@ export async function serveLanguage(
         } catch (thrown) {
             // The checker's own failure, not the page's: the next check opens another.
             found = [
-                diagnosisAt(
-                    path,
-                    undefined,
-                    0,
-                    'error',
-                    thrown instanceof Error ? thrown.message : String(thrown),
-                ),
+                diagnosisAt(path, undefined, 0, 'error', messageOf(thrown)),
             ]
         }
         // A newer text has arrived while this one was checked, and will be published.

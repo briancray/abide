@@ -24,6 +24,7 @@ import { compilationOf, compileApp } from '#compiler/compileApp.ts'
 import { printDiagnoses } from '#compiler/Diagnostics.ts'
 import { KeptChecker } from '#compiler/KeptChecker.ts'
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
+import { messageOf } from '#shared/messageOf.ts'
 
 import type { Compilation } from './abideModules.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
@@ -144,8 +145,7 @@ export async function serveDev(
                 failure: '',
             }
         } catch (thrown) {
-            const failure =
-                thrown instanceof Error ? thrown.message : String(thrown)
+            const failure = messageOf(thrown)
             console.error(`abide dev: ${failure}`)
             return {
                 compilation: {

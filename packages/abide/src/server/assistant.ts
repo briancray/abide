@@ -26,6 +26,7 @@ import type {
 } from '#shared/AssistantEvent.ts'
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
+import { messageOf } from '#shared/messageOf.ts'
 import { mounted } from '#shared/mount.ts'
 import { randomToken } from '#shared/randomToken.ts'
 import { stopSignal } from '#shared/reactive/poll.ts'
@@ -358,7 +359,7 @@ async function* traced(
             yield event
         }
     } catch (thrown) {
-        failure = thrown instanceof Error ? thrown.message : String(thrown)
+        failure = messageOf(thrown)
         throw thrown
     } finally {
         const ending =

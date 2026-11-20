@@ -2,6 +2,7 @@
 // connected to elsewhere, or neither — and what the launcher did last, kept across launches.
 
 import { isFailed } from '#shared/Failed.ts'
+import { messageOf } from '#shared/messageOf.ts'
 import { randomToken } from '#shared/randomToken.ts'
 
 import { configuredMount } from './config.ts'
@@ -250,7 +251,7 @@ function refused(form: 'start' | 'connect', thrown: unknown): Failure {
         }
     return {
         form,
-        message: thrown instanceof Error ? thrown.message : String(thrown),
+        message: messageOf(thrown),
         issues: {},
     }
 }

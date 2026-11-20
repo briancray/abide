@@ -11,6 +11,7 @@
 // stderr and not through `log` — a line about the exporter fed back into it would be exported in turn.
 
 import { EXPORT, type LogRecord, type Span } from '#shared/log.ts'
+import { messageOf } from '#shared/messageOf.ts'
 
 import { appIdentity } from './config.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
@@ -149,9 +150,7 @@ async function post(
     } catch (thrown) {
         // 36.23 — once per outage, and never through `log`.
         if (!failing)
-            console.error(
-                `abide: OTLP export failed: ${thrown instanceof Error ? thrown.message : String(thrown)}`,
-            )
+            console.error(`abide: OTLP export failed: ${messageOf(thrown)}`)
         failing = true
     }
 }

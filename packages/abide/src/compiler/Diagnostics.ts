@@ -1,5 +1,7 @@
 import { relative, resolve } from 'node:path' // bun exposes no path helpers of its own
 
+import { messageOf } from '#shared/messageOf.ts'
+
 import { BuildRefusal } from './BuildRefusal.ts'
 import { citedClauses } from './citedClauses.ts'
 import { isIgnored } from './isIgnored.ts'
@@ -83,7 +85,7 @@ export class Diagnostics {
             positioned ? text : undefined,
             positioned ? thrown.offset : 0,
             'error',
-            thrown instanceof Error ? thrown.message : String(thrown),
+            messageOf(thrown),
         )
         if (!this.collecting)
             throw new BuildRefusal(formatDiagnosis(diagnosis, process.cwd()))

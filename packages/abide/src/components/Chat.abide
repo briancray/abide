@@ -19,6 +19,7 @@ import { dropzone } from '#shared/dropzone.ts'
 import { followBottom } from '#shared/followBottom.ts'
 import { hotkeys } from '#shared/hotkeys.ts'
 import { imageFiles, imagePiece } from '#shared/imagePiece.ts'
+import { messageOf } from '#shared/messageOf.ts'
 import { props } from '#shared/props.ts'
 import { reactive } from '#shared/reactive/index.ts'
 import { fold } from '#shared/transcript/fold.ts'
@@ -163,9 +164,7 @@ function ended(controller: AbortController, error: unknown) {
         const answering = all[all.length - 1]
         if (answering === undefined) return
         if (controller.signal.aborted) answering.stop = 'stopped'
-        else
-            answering.failed =
-                error instanceof Error ? error.message : String(error)
+        else answering.failed = messageOf(error)
     })
 }
 

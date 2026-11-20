@@ -20,6 +20,7 @@
 
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
+import { messageOf } from '#shared/messageOf.ts'
 
 import type { Compilation } from './abideModules.ts'
 import type { AppSources } from './answerRequest.ts'
@@ -261,7 +262,7 @@ async function open(
         // MCP surface are this app's.
         mux = app.openMux()
     } catch (thrown) {
-        failure = thrown instanceof Error ? thrown.message : String(thrown)
+        failure = messageOf(thrown)
     }
 }
 
