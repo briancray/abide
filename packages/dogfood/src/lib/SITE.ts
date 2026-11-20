@@ -576,6 +576,14 @@ export const SITE: readonly SiteGroup[] = [
                 registry: '`fetchJson`',
             },
             {
+                route: '/helpers/handle',
+                title: '`handle`',
+                nav: '`handle`',
+                description:
+                    'Read a response you fetched yourself as its type says: JSON, a stream of chunks, text or bytes.',
+                registry: '`handle`',
+            },
+            {
                 route: '/helpers/fetch-text',
                 title: '`fetchText`',
                 nav: '`fetchText`',

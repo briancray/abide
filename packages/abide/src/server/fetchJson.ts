@@ -1,6 +1,6 @@
 import { isFailed } from '#shared/Failed.ts'
+import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
 
-import { type FetchFailed, fetchFailed } from './fetchFailed.ts'
 import { bodyOf, checked, type FetchOptions } from './fetchText.ts'
 
 /** A body as JSON, checked against `schema` where one is given: 54.7-54.17. */
@@ -15,8 +15,10 @@ export async function fetchJson<T = unknown>(
     let parsed: unknown
     try {
         parsed = JSON.parse(body)
-    } catch {
-        return fetchFailed({ status: null, reason: 'shape' })
+    } catch (thrown) {
+        const failure = fetchFailed({ status: null, reason: 'shape' })
+        failure.cause = thrown
+        return failure
     }
     return options.schema === undefined
         ? (parsed as T)

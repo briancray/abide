@@ -50,6 +50,8 @@ export { type Menu, type MenuOptions, menu } from './menu.ts'
 // 52.1-52.7 — numbers, money and time as words, the same on both sides.
 export * as format from './format/index.ts'
 // 25 — the account of the app.
+export type { FetchFailed } from './fetchFailed.ts'
+export { handle } from './handle.ts'
 export { type Health, health } from './health.ts'
 // 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.
 export { imageFiles, imagePiece } from './imagePiece.ts'

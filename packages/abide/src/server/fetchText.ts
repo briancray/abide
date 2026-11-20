@@ -2,10 +2,10 @@
 // fetch carries the server's credentials, and the cache is this process's.
 
 import { isFailed, isTransient } from '#shared/Failed.ts'
+import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
+import { refusedBy } from '#shared/handle.ts'
 import { namedLogger } from '#shared/log.ts'
 import { runSchema, type Schema } from '#shared/Schema.ts'
-
-import { type FetchFailed, fetchFailed } from './fetchFailed.ts'
 
 /** `fetch`'s own options, and the deadline, the retries, the cache and the gate beside them. */
 export type FetchOptions<T> = RequestInit & {
@@ -115,17 +115,19 @@ async function asked(
                 signal: signal ? AbortSignal.any([deadline, signal]) : deadline,
             })
             if (response.ok) return await response.text()
-            await response.body?.cancel()
-            failure = fetchFailed({ status: response.status, reason: 'status' })
+            failure = await refusedBy(response)
             if (!isTransient(response.status)) return failure
             retryAfter = retryAfterOf(response.headers.get('retry-after'))
-        } catch {
+        } catch (thrown) {
             // 54.11 — a caller's abort is theirs, and is never a failure to ask again.
             if (signal?.aborted) throw signal.reason
             failure = fetchFailed({
                 status: null,
                 reason: deadline.aborted ? 'timeout' : 'network',
             })
+            // 54.34 — what `fetch` threw — a refused certificate, a name nothing resolves — for the
+            // app to read. `problemOf` sends no `cause`, so it never leaves this server.
+            failure.cause = thrown
         }
         if (attempt >= retries) return failure
         const wait = retryAfter ?? FIRST_BACKOFF * 2 ** attempt

@@ -5487,6 +5487,22 @@ the refusal 15.7 answers an address nothing serves, naming the path and method o
 54.29 A `job` given `from: 'start'` MUST measure `every` from when its last run started, and its
 looks MUST be spaced from when each started rather than from the end of the run it started.
 
+54.30 `handle` MUST answer a 2xx `Response` with its body read as its `content-type` says: JSON, or
+a type ending `+json`, as its parsed value, and a type 54.32 and 54.33 do not name as a `Blob`.
+
+54.31 `handle` MUST answer a `Response` outside 2xx with a `FetchFailed` carrying its status, the
+reason `status`, and its body canceled, and JSON that does not parse with one for the reason
+`shape` whose `cause` is what the parse threw.
+
+54.32 `handle` MUST answer a JSON Lines or event stream `Response` with an async iterable of its
+chunks, each yielded as the frame carrying it completes.
+
+54.33 `handle` MUST answer a `text/` type, and a `Response` naming no type, as its text, and a 204 or
+a `Response` with no body as `undefined`.
+
+54.34 A `FetchFailed` that `fetchJson` or `fetchText` settles to for a thrown attempt MUST carry what
+was thrown as its `cause`, and Problem Details MUST NOT carry a `cause`.
+
 # 55. Worker files
 
 55.1 An import of a worker file MUST answer each export with a function running that export in the
