@@ -87,3 +87,54 @@ test('a series of zeroes is drawn along the bottom of a chart that takes zero in
         texts('[data-part=tick][data-axis=y]').map((text) => text?.trim()),
     ).toEqual(['0', '0.5', '1'])
 })
+
+// 52.35 — A BAR SERIES IS A BAR PER VALUE from zero, and no line. THE REVERT: draw every series as a
+// line — no `bar` parts, `bars: 0` where `3` is due.
+test('a bar series draws a bar per value from zero, in place of a line', async () => {
+    using _chart = await mount(
+        LineChart({
+            series: [
+                { label: 'Deals won', values: [2, 4, null, 1], kind: 'bar' },
+            ],
+            label: 'Deals won by month',
+            zero: true,
+        }),
+    )
+    const bars = [...chart().querySelectorAll('[data-part=bar]')]
+    expect(`bars: ${bars.length}`).toBe('bars: 3')
+    expect(chart().querySelector('[data-part=line]')).toBeNull()
+    const heights = bars.map((bar) => Number(bar.getAttribute('height')))
+    expect(heights[1]).toBeCloseTo((heights[0] as number) * 2)
+    expect(heights[1]).toBeCloseTo((heights[2] as number) * 4)
+})
+
+// 52.36, 52.37 — A CLICK PICKS THE NEAREST X, save one `disabled` holds for, which is marked. THE
+// REVERT: drop the `disabled` check in `pick` — the click on November picks it, `[1, 5]` where `[1]`
+// is due.
+test('a click picks the nearest month, and a disabled one is marked and takes no pick', async () => {
+    const picked: number[] = []
+    using _chart = await mount(
+        LineChart({
+            series: [{ label: 'Won', values: [1, 2, 3, 4, 5, 6] }],
+            label: 'Won revenue',
+            onpick: (index) => picked.push(index),
+            disabled: (index) => index === 5,
+        }),
+    )
+    const click = (month: number) => {
+        chart().getBoundingClientRect = () => new DOMRect(0, 0, 600, 240)
+        chart().dispatchEvent(
+            new MouseEvent('click', { clientX: (month / 5) * 600 }),
+        )
+        flushSync()
+    }
+    click(1)
+    click(5)
+    expect(picked).toEqual([1])
+    pointAt(5)
+    expect(
+        chart()
+            .querySelector('[data-part=readout]')
+            ?.hasAttribute('data-disabled'),
+    ).toBe(true)
+})

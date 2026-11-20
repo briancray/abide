@@ -17,6 +17,14 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
             from: ["test('the crosshair reads each line at the nearest month'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: ["test('a bar series draws a bar per value from zero"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: ["test('a click picks the nearest month"],
+        },
     ]}
 >
     <Section level={3} title="Plot won revenue against target by month">
@@ -65,6 +73,35 @@ import Section from '#src/lib/Section.abide'
                 [&_[data-series='0']]:stroke-signal
                 [&_[data-part=line][data-series='1']]:[stroke-dasharray:4_4]"
                 …
+            />
+        `} />
+    </Section>
+
+    <Section level={3} title="Count deals won as bars under the revenue line">
+        <p>A series with <code>kind: 'bar'</code> draws a bar per value from zero, each a
+            <code>data-part="bar"</code> rect, beside the lines over the same months.</p>
+        <Code language="abide" caption="abide" code={`
+            <LineChart
+                series={[
+                    { label: 'Deals won', values: DEALS_WON, kind: 'bar' },
+                    { label: 'Won', values: WON },
+                ]}
+                label="Deals and revenue won, June to November"
+                zero
+            />
+        `} />
+    </Section>
+
+    <Section level={3} title="Open a month's deals from the chart">
+        <p><code>onpick</code> is called with the month nearest a click. A month
+            <code>disabled</code> holds for takes no pick, and its bars and readout carry
+            <code>data-disabled</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <LineChart
+                series={[{ label: 'Won', values: WON }]}
+                label="Won revenue, June to November"
+                onpick={(month) => navigate(\`/deals?month=\${month}\`)}
+                disabled={(month) => WON[month] === null}
             />
         `} />
     </Section>

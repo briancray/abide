@@ -26,6 +26,8 @@ const {
     zero = false,
     width = 600,
     height = 240,
+    onpick,
+    disabled,
     ...rest
 } = props<
     {
@@ -49,6 +51,10 @@ const {
         width?: number
         /** The height drawn at before the chart is measured, and where nothing sizes it. 240 by default. */
         height?: number
+        /** Called with the x position nearest a click on the plot, where `disabled` does not hold for it (52.36). */
+        onpick?: (index: number) => void
+        /** Whether an x position takes no pick, written as `data-disabled` on its bars and the readout (52.37). */
+        disabled?: (index: number) => boolean
     } & Omit<Attributes<'svg'>, 'x' | 'width' | 'height'>
 >()
 
@@ -95,15 +101,54 @@ const plot = reactive(() => {
     )
     const xs: number[] = []
     for (const position of positions) xs.push(toX(position))
-    const lines: { label: string; path: string; ys: (number | undefined)[] }[] =
-        []
-    for (const line of series) {
+    const lines: {
+        label: string
+        path: string
+        ys: (number | undefined)[]
+        bar: boolean
+    }[] = []
+    // 52.35 — EACH BAR SERIES TAKES A SHARE OF ITS X'S SLOT, side by side, rising from zero where the
+    // range takes it in and from the plot's floor otherwise.
+    let barSeries = 0
+    for (const line of series) if (line.kind === 'bar') barSeries += 1
+    const slot = size.width / Math.max(1, length)
+    const barWidth = barSeries === 0 ? 0 : (slot * 0.8) / barSeries
+    const base = toY(Math.min(Math.max(0, low), high))
+    const bars: {
+        series: number
+        index: number
+        x: number
+        y: number
+        height: number
+    }[] = []
+    let barAt = 0
+    for (let at = 0; at < series.length; at += 1) {
+        const line = series[at] as Series
         const ys: (number | undefined)[] = []
         for (const value of line.values)
             ys.push(
                 value === null || value === undefined ? undefined : toY(value),
             )
-        lines.push({ label: line.label, path: path(xs, ys), ys })
+        const bar = line.kind === 'bar'
+        lines.push({
+            label: line.label,
+            path: bar ? '' : path(xs, ys),
+            ys,
+            bar,
+        })
+        if (!bar) continue
+        for (let index = 0; index < ys.length; index += 1) {
+            const y = ys[index]
+            if (y === undefined || !Number.isFinite(y)) continue
+            bars.push({
+                series: at,
+                index,
+                x: (xs[index] ?? 0) - (slot * 0.8) / 2 + barAt * barWidth,
+                y: Math.min(y, base),
+                height: Math.abs(base - y),
+            })
+        }
+        barAt += 1
     }
     const grid: { y: number; label: string }[] = []
     for (const value of gridValues)
@@ -130,6 +175,8 @@ const plot = reactive(() => {
         positions,
         xs,
         lines,
+        bars,
+        barWidth,
         grid,
         labeled,
         bottom,
@@ -155,6 +202,7 @@ const readout = reactive(() => {
     }
     return {
         at,
+        disabled: disabled?.(index) === true,
         textX: right ? at + 8 : at - 8,
         align: right ? 'start' : 'end',
         x: xFormat(drawn.positions[index] ?? index),
@@ -167,6 +215,19 @@ function track(event: PointerEvent) {
     if (box.width === 0) return
     const pointer = ((event.clientX - box.left) * size.width) / box.width
     hovered = nearest(plot.xs, pointer)
+}
+
+// 52.36 — a click picks the x the crosshair is on, read again from the click's own position.
+function pick(event: MouseEvent) {
+    if (onpick === undefined) return
+    const box = (event.currentTarget as Element).getBoundingClientRect()
+    if (box.width === 0) return
+    const index = nearest(
+        plot.xs,
+        ((event.clientX - box.left) * size.width) / box.width,
+    )
+    if (index < 0 || disabled?.(index) === true) return
+    onpick(index)
 }
 </script>
 
@@ -181,6 +242,7 @@ function track(event: PointerEvent) {
     bind:element={observeSize(size)}
     onpointermove={track}
     onpointerleave={() => (hovered = -1)}
+    onclick={pick}
 >
     {#for line of plot.grid}
         <line data-part="grid" x1="0" x2={size.width} y1={line.y} y2={line.y} stroke="currentColor" stroke-opacity="0.2" />
@@ -200,16 +262,30 @@ function track(event: PointerEvent) {
             fill="currentColor"
         >{tick.label}</text>
     {/for}
-    {#for line, index of plot.lines}
-        <path
-            data-part="line"
-            data-series={index}
-            d={line.path}
-            fill="none"
-            stroke="currentColor"
-            stroke-linejoin="round"
-            stroke-linecap="round"
+    {#for bar of plot.bars}
+        <rect
+            data-part="bar"
+            data-series={bar.series}
+            data-disabled={disabled?.(bar.index) ? '' : undefined}
+            x={bar.x}
+            y={bar.y}
+            width={plot.barWidth}
+            height={bar.height}
+            fill="currentColor"
          />
+    {/for}
+    {#for line, index of plot.lines}
+        {#if !line.bar}
+            <path
+                data-part="line"
+                data-series={index}
+                d={line.path}
+                fill="none"
+                stroke="currentColor"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+             />
+        {/if}
     {/for}
     {#if readout}
         <line data-part="crosshair" x1={readout.at} x2={readout.at} y1={TOP} y2={plot.bottom} stroke="currentColor" />
@@ -218,7 +294,7 @@ function track(event: PointerEvent) {
                 <circle data-part="point" data-series={index} cx={readout.at} cy={point.y} r="3" fill="currentColor" />
             {/if}
         {/for}
-        <text data-part="readout" data-align={readout.align} x={readout.textX} y={TOP} text-anchor={readout.align} dominant-baseline="hanging" fill="currentColor">
+        <text data-part="readout" data-align={readout.align} data-disabled={readout.disabled ? '' : undefined} x={readout.textX} y={TOP} text-anchor={readout.align} dominant-baseline="hanging" fill="currentColor">
             <tspan data-part="readout-x" x={readout.textX}>{readout.x}</tspan>
             {#for point, index of readout.values}
                 <tspan data-part="readout-value" data-series={index} x={readout.textX} dy="1.25em">{point.label}: {point.value}</tspan>

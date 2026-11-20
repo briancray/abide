@@ -838,7 +838,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
 | `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], baseline?: number) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`. | 52.21, 52.22 |
 | `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
-| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[] }` | One line of a chart: what it is called, and its values in x order. | 52.21, 52.24 |
+| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'bar' }` | One series of a chart: what it is called, its values in x order, and whether it is drawn as a line or as bars. | 52.21, 52.24, 52.35 |
 
 # Components
 
@@ -922,7 +922,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `LineChart` | `{ series: readonly { label: string; values: readonly (number \| null \| undefined)[] }[]; label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; width?: number; height?: number } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | One or more series drawn as lines over a shared x in an `svg`, the component `@abide/abide/LineChart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.32 |
+| `LineChart` | `{ series: readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'bar' }[]; label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | One or more series drawn as lines or bars over a shared x in an `svg`, the component `@abide/abide/LineChart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.32, 52.35, 52.36, 52.37 |
 
 ## `Sparkline`
 

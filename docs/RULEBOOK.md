@@ -5245,6 +5245,16 @@ MUST draw a series whose every present value is zero along the bottom of that ra
 52.34 `format.dateParts` MUST answer the pieces whose values joined in order are what `format.date`
 writes for the same value and options.
 
+52.35 `LineChart` MUST draw a series whose `kind` is `bar` as a `data-part="bar"` rect per present
+value, rising from zero where the range takes zero in and from the bottom of the plot otherwise, its
+`data-series` the series' index, and MUST NOT draw it as a line.
+
+52.36 A click on a `LineChart` MUST call `onpick` with the index of the x position nearest it, save
+where `disabled` holds for that index.
+
+52.37 `LineChart` MUST write `data-disabled` on each bar, and on the readout, of an index `disabled`
+holds for.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are
