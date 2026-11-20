@@ -265,7 +265,7 @@ export function serveTurns(options: {
     // A cancel or a signal aborts with no reason of its own, and ends the turn as asked.
     const served = async (
         id: string,
-        work: (signal: AbortSignal) => Promise<TurnReport | undefined>,
+        work: (signal: AbortSignal) => Promise<TurnReport>,
         ended?: () => void,
     ): Promise<void> => {
         const controller = new AbortController()
@@ -277,7 +277,6 @@ export function serveTurns(options: {
         try {
             await options.beforeTurn()
             const settled = await work(controller.signal)
-            if (settled === undefined) return
             const message = missed()
             report(
                 message === undefined
@@ -330,12 +329,11 @@ export function serveTurns(options: {
             )
             if (granted.refused !== undefined) {
                 options.say(granted.refused)
-                report({
+                return {
                     type: 'refused',
                     turn: asked.id,
                     message: granted.refused,
-                })
-                return undefined
+                }
             }
             const answer = await callTool(
                 granted.server,
