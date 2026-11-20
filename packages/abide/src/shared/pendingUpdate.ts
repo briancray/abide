@@ -7,9 +7,7 @@
 //
 // PURE, SO AN APP THAT NEVER NAMES `pendingUpdate` DOES NOT SHIP IT, for `online`'s reason.
 
-import { isHydrating, standIn } from './hydrating.ts'
-import { isServer } from './isServer.ts'
-import { ambient } from './reactive/index.ts'
+import { hydratedValue } from './hydrating.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { windowHandler } from './windowHandler.ts'
 
@@ -40,15 +38,13 @@ export class StagedUpdate {
 /** The update the native app's window has staged, as a `Reactive`; `undefined` where none is. */
 export const pendingUpdate: Reactive<StagedUpdate | undefined> =
     /* @__PURE__ */ (() => {
-        if (typeof window === 'undefined')
-            return ambient<StagedUpdate | undefined>(undefined)
         let told: StagedUpdate | undefined
-        // A BODY, so a server render in the process a test runs reads 38.148's `undefined` (22.11).
-        const value = ambient<StagedUpdate | undefined>(() =>
-            isServer() || isHydrating() ? undefined : told,
+        // 41.32, 38.148 — `undefined` on a server and while a page hydrates.
+        const { value, write } = hydratedValue<StagedUpdate | undefined>(
+            undefined,
+            () => told,
         )
-        // 41.32 — a page hydrating keeps the server's answer until it has hydrated.
-        const write = standIn(value, undefined, () => told)
+        if (typeof window === 'undefined') return value
         window.addEventListener('abide:update', (event) => {
             const detail = (event as CustomEvent).detail
             told = detail === null ? undefined : new StagedUpdate(detail)

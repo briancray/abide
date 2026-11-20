@@ -9,9 +9,7 @@
 // component asking per instance would otherwise add a listener per mount and never remove one.
 // Nothing runs at load, so an app that never names `media` does not ship a listener.
 
-import { isHydrating, standIn } from './hydrating.ts'
-import { isServer } from './isServer.ts'
-import { ambient } from './reactive/index.ts'
+import { hydratedValue } from './hydrating.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 
 const queries = new Map<string, Reactive<boolean>>()
@@ -20,19 +18,11 @@ const queries = new Map<string, Reactive<boolean>>()
 export function media(query: string): Reactive<boolean> {
     const held = queries.get(query)
     if (held !== undefined) return held
-    let value: Reactive<boolean>
-    if (typeof window === 'undefined') value = ambient<boolean>(false)
-    else {
-        const list = matchMedia(query)
-        // 41.32 — the server's answer while the page hydrates, and the browser's after.
-        // 23.30 — first asked inside a request, its home is still built outside it (`scoped.ts`).
-        const followed = ambient<boolean>(
-            () => !isServer() && !isHydrating() && list.matches,
-        )
-        const write = standIn(followed, false, () => list.matches)
-        list.addEventListener('change', (event) => write(event.matches))
-        value = followed
-    }
+    const list = typeof window === 'undefined' ? undefined : matchMedia(query)
+    // 41.32 — the server's answer while the page hydrates, and the browser's after.
+    // 23.30 — first asked inside a request, its home is still built outside it (`scoped.ts`).
+    const { value, write } = hydratedValue(false, () => list?.matches === true)
+    list?.addEventListener('change', (event) => write(event.matches))
     queries.set(query, value)
     return value
 }

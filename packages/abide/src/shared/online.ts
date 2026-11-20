@@ -10,19 +10,15 @@
 // A BODY RATHER THAN A VALUE where there is a window, so each scope's instance asks again: a test
 // process has both a DOM and a server render, and the render's `online` is 23.8's (22.11).
 
-import { isHydrating, standIn } from './hydrating.ts'
-import { isServer } from './isServer.ts'
-import { ambient } from './reactive/index.ts'
+import { hydratedValue } from './hydrating.ts'
 
 /** Whether the caller can reach the app, as a `Reactive<boolean>`. */
 export const online = /* @__PURE__ */ (() => {
-    if (typeof window === 'undefined') return ambient<boolean>(true)
     // 41.32 — the server's answer while the page hydrates, and the browser's after.
-    const value = ambient<boolean>(
-        () => isServer() || isHydrating() || navigator.onLine,
-    )
-    const write = standIn(value, true, () => navigator.onLine)
-    window.addEventListener('online', () => write(true))
-    window.addEventListener('offline', () => write(false))
+    const { value, write } = hydratedValue(true, () => navigator.onLine)
+    if (typeof window !== 'undefined') {
+        window.addEventListener('online', () => write(true))
+        window.addEventListener('offline', () => write(false))
+    }
     return value
 })()
