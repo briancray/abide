@@ -4,12 +4,14 @@ import {
     referencesOf,
     render,
     SCHEMES,
+    settled,
 } from './sections.ts'
 
 /**
  * Markdown as HTML that is safe to render as markup: paragraphs, headings, emphasis, code, fenced
- * code, lists, quotes, rules, tables and links, with every other character escaped. Hand what it
- * answers to `raw`.
+ * code, lists and task lists, quotes, rules, tables, links, math kept as its TeX, character
+ * references and a few formatting tags, with every other character escaped. Hand what it answers to
+ * `raw`.
  */
 export function markdown(
     text: string,
@@ -38,6 +40,12 @@ export function markdown(
         >
         /** Whether `text` is one line of inline marks — a title, a table cell — with no paragraph around it. */
         inline?: boolean
+        /**
+         * 52.50 — whether `text` is still being written, a model's answer as it streams: what its
+         * end may yet turn into something else — an emphasis, a link, a table — is left out until it
+         * can't.
+         */
+        streaming?: boolean
     } = {},
 ): string {
     const settings = {
@@ -47,7 +55,8 @@ export function markdown(
         references: referencesOf(text),
         blocks: options.blocks ?? {},
     }
+    const streaming = options.streaming === true
     return options.inline === true
-        ? inline(text, settings, false)
-        : render(text, settings)
+        ? inline(streaming ? settled(text) : text, settings, false)
+        : render(text, settings, streaming)
 }

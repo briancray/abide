@@ -716,7 +716,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `markdown` | `(text: string, options?: { schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (source: string, info: string) => string>>; inline?: boolean }) => string` | Markdown as HTML safe to hand `raw`. | 52.8, 52.9, 52.10, 52.11, 52.12, 52.13, 52.14, 52.15, 52.16, 52.40, 52.41, 52.42 |
+| `markdown` | `(text: string, options?: { schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (source: string, info: string) => string>>; inline?: boolean; streaming?: boolean }) => string` | Markdown as HTML safe to hand `raw`. | 52.8, 52.9, 52.10, 52.11, 52.12, 52.13, 52.14, 52.15, 52.16, 52.40, 52.41, 52.42, 52.46, 52.47, 52.48, 52.49, 52.50 |
 | `LinkTarget` | `{ href: string; target?: string; rel?: string }` | Where a link `markdown` writes goes: its address, and the `target` and `rel` it opens with. | 52.40 |
 
 ## `hotkeys`
@@ -942,7 +942,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Markdown` | `{ source: string; schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (props: { source: string; info: string }) => unknown>> } & Attributes<'div'>` | A `div` of the markup `markdown` renders for `source`, the component `@abide/abide/Markdown.abide` exports. | 49.1, 49.3, 49.5, 49.6, 52.17, 52.18, 52.40, 52.41, 52.43 |
+| `Markdown` | `{ source: string; schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (props: { source: string; info: string }) => unknown>>; streaming?: boolean } & Attributes<'div'>` | A `div` of the markup `markdown` renders for `source`, the component `@abide/abide/Markdown.abide` exports. | 49.1, 49.3, 49.5, 49.6, 52.17, 52.18, 52.40, 52.41, 52.43, 52.50 |
 
 ## `LineChart`
 

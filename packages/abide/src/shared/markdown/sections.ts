@@ -1,7 +1,8 @@
 // MARKDOWN AS HTML THAT IS SAFE BY CONSTRUCTION: every character of the source reaches the output
-// escaped, and the only markup is what this file writes — so raw HTML in the source is text (52.8),
-// a link keeps an address only on a scheme the caller allows (52.9), and an image is a link to it
-// rather than a request for it (52.10).
+// escaped, and the only markup is what this file writes — so raw HTML in the source is text (52.8)
+// save the few formatting tags a model writes on purpose, written with no attribute (52.46), a link
+// keeps an address only on a scheme the caller allows (52.9), and an image is a link to it rather
+// than a request for it (52.10).
 //
 // The source renders as SECTIONS, each starting on a line that opens a fresh block after a blank
 // one, and a section renders the same alone as inside the whole. That is what lets a stream render
@@ -12,6 +13,7 @@
 // is checked against the schemes its caller names.
 
 import { escapeAttribute as escape } from '../escapeText.ts'
+import { numericReferenceCharacter } from '../numericReferenceCharacter.ts'
 
 /** 52.40 — where a link goes: its address, and the `target` and `rel` it opens with. */
 export type LinkTarget = { href: string; target?: string; rel?: string }
@@ -92,12 +94,23 @@ const LIST_ITEM = /^( {0,3})([-*+]|\d{1,9}[.)])(?:( +)(.*))?$/
 const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/
 const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 const QUOTE = /^ {0,3}> ?/
+const TASK = /^\[([ xX])\](?:[ \t]+|$)/
 const TABLE_DELIMITER =
     /^ {0,3}\|?(?: *:?-+:? *\|)+(?: *:?-+:? *)?$|^ {0,3}\|? *:?-+:? *\|(?: *:?-+:? *\|?)*$/
 
 type Fence = { marker: string; length: number; info: string }
 
+// 52.49 — a line of `$$` or `\[` alone opens a block of math, which runs as a fence does.
+const MATH_OPEN = /^ {0,3}(\$\$|\\\[)[ \t]*$/
+const MATH_CLOSE: Readonly<Record<string, RegExp>> = {
+    $: /^ {0,3}\$\$[ \t]*$/,
+    '\\': /^ {0,3}\\\][ \t]*$/,
+}
+
 function fenceOf(line: string): Fence | undefined {
+    const math = MATH_OPEN.exec(line)?.[1]
+    if (math !== undefined)
+        return { marker: math[0] as string, length: math.length, info: '' }
     const match = FENCE.exec(line)
     if (!match?.[1]) return undefined
     const marker = match[1]
@@ -110,6 +123,8 @@ function fenceOf(line: string): Fence | undefined {
 }
 
 function closes(line: string, fence: Fence): boolean {
+    const math = MATH_CLOSE[fence.marker]
+    if (math !== undefined) return math.test(line)
     const run = FENCE_CLOSE.exec(line)?.[1]
     return (
         run !== undefined &&
@@ -158,13 +173,24 @@ export function sectionEnd(text: string, from: number): number {
     return text.length
 }
 
-/** `text`'s sections, from its first, as HTML: what `markdown` renders. */
-export function render(text: string, settings: Settings): string {
+/**
+ * `text`'s sections, from its first, as HTML: what `markdown` renders. 52.50 — `streaming` leaves out
+ * what the last section is still writing (`settled`).
+ */
+export function render(
+    text: string,
+    settings: Settings,
+    streaming: boolean,
+): string {
     let html = ''
     let at = 0
     while (at < text.length) {
         const end = sectionEnd(text, at)
-        html += renderSection(text.slice(at, end), settings)
+        const section = text.slice(at, end)
+        html += renderSection(
+            streaming && end === text.length ? settled(section) : section,
+            settings,
+        )
         at = end
     }
     return html
@@ -252,6 +278,10 @@ function blocks(
                 index += 1
             }
             index += 1
+            if (MATH_CLOSE[fence.marker] !== undefined) {
+                html += `<div data-math="display">${escape(code.join('\n'))}</div>`
+                continue
+            }
             const language = fence.info.split(/\s/)[0] ?? ''
             // 52.42 — a block the caller renders, handed its source and the info after its name.
             const block = Object.hasOwn(settings.blocks, language)
@@ -408,8 +438,17 @@ function list(
     const tag = ordered ? 'ol' : 'ul'
     const first = Number.parseInt(marker, 10)
     let html = ordered && first !== 1 ? `<ol start="${first}">` : `<${tag}>`
-    for (const content of items)
-        html += `<li>${blocks(content, settings, !loose)}</li>`
+    for (const content of items) {
+        // 52.48 — `[ ]` or `[x]` opening an item is its box, ticked or not.
+        const task = TASK.exec(content[0] as string)
+        if (task === null) {
+            html += `<li>${blocks(content, settings, !loose)}</li>`
+            continue
+        }
+        const done = task[1] !== ' '
+        content[0] = (content[0] as string).slice(task[0].length)
+        html += `<li data-task="${done ? 'done' : 'open'}"><input type="checkbox" disabled${done ? ' checked' : ''}> ${blocks(content, settings, !loose)}</li>`
+    }
     return { html: `${html}</${tag}>`, next: index }
 }
 
@@ -471,7 +510,7 @@ function table(
     return { html: `${html}</tbody></table>`, next: index }
 }
 
-const SPECIAL = /[\\`*_~[!<h]/g
+const SPECIAL = /[\\`*_~[!<h&$]/g
 const PUNCTUATION = /[!-/:-@[-`{-~]/
 const WORD = /[\p{L}\p{N}]/u
 
@@ -497,9 +536,28 @@ export function inline(
         let end = at
         if (character === '\\') {
             const next = text[at + 1]
-            if (next !== undefined && PUNCTUATION.test(next)) {
+            const math =
+                next === '(' || next === '['
+                    ? bracketMathAt(text, at)
+                    : undefined
+            if (math) {
+                written = math.html
+                end = math.end
+            } else if (next !== undefined && PUNCTUATION.test(next)) {
                 written = escape(next)
                 end = at + 2
+            }
+        } else if (character === '$') {
+            const math = dollarMathAt(text, at)
+            if (math) {
+                written = math.html
+                end = math.end
+            }
+        } else if (character === '&') {
+            const reference = referenceCharacterAt(text, at)
+            if (reference) {
+                written = escape(reference.character)
+                end = reference.end
             }
         } else if (character === '`') {
             const run = runOf(text, at)
@@ -539,10 +597,12 @@ export function inline(
                 end = link.end
             }
         } else if (character === '<') {
-            const autolink = linked ? undefined : autolinkAt(text, at, settings)
-            if (autolink) {
-                written = autolink.html
-                end = autolink.end
+            const tagged =
+                (linked ? undefined : autolinkAt(text, at, settings)) ??
+                tagAt(text, at, settings, linked)
+            if (tagged) {
+                written = tagged.html
+                end = tagged.end
             }
         } else if (character === 'h') {
             const url = linked ? undefined : bareUrlAt(text, at, settings)
@@ -797,4 +857,350 @@ function bareUrlAt(
     const address = addressOf(url, settings)
     if (address === undefined) return undefined
     return { html: anchor(address, escape(url)), end }
+}
+
+// 52.49 — MATH IS KEPT AS ITS TEX, in an element an app can render it from: `$…$`, `$$…$$`, `\(…\)`
+// and `\[…\]` on one line. A `$` opens only before a non-space and closes only after one, never
+// before a digit, so the prices in `$5 and $10` stay text.
+function dollarMathAt(
+    text: string,
+    at: number,
+): { html: string; end: number } | undefined {
+    if (text.startsWith('$$', at)) {
+        const close = text.indexOf('$$', at + 2)
+        if (close === -1 || close === at + 2) return undefined
+        return {
+            html: `<span data-math="display">${escape(text.slice(at + 2, close).trim())}</span>`,
+            end: close + 2,
+        }
+    }
+    const first = text[at + 1]
+    if (first === undefined || /\s/.test(first)) return undefined
+    let scan = at + 1
+    while (scan < text.length) {
+        const close = text.indexOf('$', scan)
+        if (close === -1) return undefined
+        const following = text[close + 1]
+        if (
+            text[close - 1] !== '\\' &&
+            !/\s/.test(text[close - 1] as string) &&
+            !(following !== undefined && /\d/.test(following))
+        )
+            return {
+                html: `<span data-math="inline">${escape(text.slice(at + 1, close))}</span>`,
+                end: close + 1,
+            }
+        scan = close + 1
+    }
+    return undefined
+}
+
+function bracketMathAt(
+    text: string,
+    at: number,
+): { html: string; end: number } | undefined {
+    const display = text[at + 1] === '['
+    const close = text.indexOf(display ? '\\]' : '\\)', at + 2)
+    if (close === -1) return undefined
+    return {
+        html: `<span data-math="${display ? 'display' : 'inline'}">${escape(text.slice(at + 2, close).trim())}</span>`,
+        end: close + 2,
+    }
+}
+
+// 52.47 — the named character references a model writes: markup it means as text, spaces and
+// typography. The rest of HTML's two thousand stay as written, which keeps this off a page's bytes.
+const NAMED_REFERENCES: Readonly<Record<string, string>> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: '\u00a0',
+    ensp: '\u2002',
+    emsp: '\u2003',
+    thinsp: '\u2009',
+    zwj: '\u200d',
+    zwnj: '\u200c',
+    shy: '\u00ad',
+    copy: '©',
+    reg: '®',
+    trade: '™',
+    deg: '°',
+    plusmn: '±',
+    times: '×',
+    divide: '÷',
+    minus: '−',
+    middot: '·',
+    bull: '•',
+    hellip: '…',
+    ndash: '–',
+    mdash: '—',
+    lsquo: '‘',
+    rsquo: '’',
+    ldquo: '“',
+    rdquo: '”',
+    laquo: '«',
+    raquo: '»',
+    larr: '←',
+    rarr: '→',
+    uarr: '↑',
+    darr: '↓',
+    harr: '↔',
+    rArr: '⇒',
+    lArr: '⇐',
+    le: '≤',
+    ge: '≥',
+    ne: '≠',
+    asymp: '≈',
+    infin: '∞',
+    micro: 'µ',
+    para: '¶',
+    sect: '§',
+    euro: '€',
+    pound: '£',
+    yen: '¥',
+    cent: '¢',
+    check: '✓',
+    cross: '✗',
+}
+
+const CHARACTER_REFERENCE =
+    /^&(?:#(\d{1,7})|#[xX]([\da-fA-F]{1,6})|([A-Za-z]{2,8}));/
+
+function referenceCharacterAt(
+    text: string,
+    at: number,
+): { character: string; end: number } | undefined {
+    const match = CHARACTER_REFERENCE.exec(text.slice(at, at + 12))
+    if (match === null) return undefined
+    const named = match[3]
+    const character =
+        named !== undefined
+            ? Object.hasOwn(NAMED_REFERENCES, named)
+                ? NAMED_REFERENCES[named]
+                : undefined
+            : numericReferenceCharacter(
+                  match[1] !== undefined
+                      ? Number(match[1])
+                      : Number.parseInt(match[2] as string, 16),
+              )
+    if (character === undefined) return undefined
+    return { character, end: at + match[0].length }
+}
+
+// 52.46 — THE TAGS A MODEL WRITES ON PURPOSE, each written with no attribute: `<br>` anywhere — a table
+// cell's line break — and a formatting tag around text its closing tag ends on the same line. A tag
+// with an attribute, or one not here, is text.
+const TAGS: ReadonlySet<string> = new Set([
+    'b',
+    'i',
+    'u',
+    's',
+    'em',
+    'strong',
+    'del',
+    'ins',
+    'mark',
+    'small',
+    'sub',
+    'sup',
+    'kbd',
+])
+
+function tagAt(
+    text: string,
+    at: number,
+    settings: Settings,
+    linked: boolean,
+): { html: string; end: number } | undefined {
+    const br = /^<br[ \t]*\/?>/i.exec(text.slice(at, at + 8))
+    if (br !== null) return { html: '<br>', end: at + br[0].length }
+    const open = /^<([a-zA-Z]{1,6})>/.exec(text.slice(at, at + 9))
+    const name = open?.[1]?.toLowerCase()
+    if (open === null || name === undefined || !TAGS.has(name)) return undefined
+    const closing = `</${name}>`
+    const close = text.toLowerCase().indexOf(closing, at + open[0].length)
+    if (close === -1) return undefined
+    const inner = inline(
+        text.slice(at + open[0].length, close),
+        settings,
+        linked,
+    )
+    return {
+        html: `<${name}>${inner}</${name}>`,
+        end: close + closing.length,
+    }
+}
+
+// 52.50 — WHAT A STREAM IS STILL WRITING, LEFT OUT: the section as far as the next chunk cannot turn
+// it into something else. A closing fence half written, a line that is a block's marker alone, a
+// table's rows before the delimiter under its head is whole, and the end of the last line from an
+// opening — of code, emphasis, a link or a tag — nothing closes yet. HELD AS FAR BACK AS
+// `HOLD_REACH` ONLY: a model writes a paragraph as one line, and a `*` that was never emphasis must
+// not hide the rest of it until the line ends.
+const HOLD_REACH = 160
+const HELD_LINE =
+    /^ {0,3}(?:#{1,6}|[-*+]|\d{1,9}[.)]?|>|[-*_]{2}|`{1,2}|~{1,2}|\$|\\)[ \t]*$/
+
+/** `section`, the last of a source still being written, without what the next chunk may yet change. */
+export function settled(section: string): string {
+    const lines = section.split('\n')
+    const last = lines.length - 1
+    const line = (lines[last] as string).replace(/\r$/, '')
+    const upTo = (count: number) => lines.slice(0, count).join('\n')
+    let fence: Fence | undefined
+    for (let index = 0; index < last; index += 1) {
+        const each = (lines[index] as string).replace(/\r$/, '')
+        if (fence !== undefined) {
+            if (closes(each, fence)) fence = undefined
+        } else fence = fenceOf(each)
+    }
+    if (fence !== undefined)
+        return closingStarted(line, fence) ? upTo(last) : section
+    if (line === '') return section
+    if (HELD_LINE.test(line)) return upTo(last)
+    // A table's head waits for its delimiter, and its last row for the line to end.
+    let head = last
+    while (head > 0 && (lines[head - 1] as string).trimStart().startsWith('|'))
+        head -= 1
+    if (line.trimStart().startsWith('|')) {
+        if (last - head < 2) return upTo(head)
+        if (TABLE_DELIMITER.test(lines[head + 1] as string)) return upTo(last)
+    }
+    const from = heldFrom(line)
+    if (from === undefined) return section
+    const kept = line.slice(0, from)
+    // What is held may leave the line a marker alone: `- [` waiting on its box or its link.
+    if (HELD_LINE.test(kept) || kept.trim() === '') return upTo(last)
+    return last === 0 ? kept : `${upTo(last)}\n${kept}`
+}
+
+/** Whether `line` is the start of what would close `fence`, and not yet all of it. */
+function closingStarted(line: string, fence: Fence): boolean {
+    const written = line.trimStart()
+    const closing =
+        fence.marker === '$'
+            ? '$$'
+            : fence.marker === '\\'
+              ? '\\]'
+              : fence.marker.repeat(fence.length)
+    return (
+        written !== '' &&
+        written.length < closing.length &&
+        closing.startsWith(written)
+    )
+}
+
+/** Where the end of `line` a later chunk may still close starts, or `undefined` where nothing is open. */
+function heldFrom(line: string): number | undefined {
+    const floor = line.length - HOLD_REACH
+    let held: number | undefined
+    const hold = (at: number) => {
+        if (at >= floor && (held === undefined || at < held)) held = at
+    }
+    const brackets: number[] = []
+    const opened: { character: string; run: number; at: number }[] = []
+    let at = 0
+    while (at < line.length) {
+        const character = line[at] as string
+        if (character === '\\') {
+            if (at === line.length - 1) hold(at)
+            at += 2
+            continue
+        }
+        if (character === '`') {
+            const run = runOf(line, at)
+            const close = closingTicks(line, at + run, run)
+            if (close === -1) {
+                hold(at)
+                break
+            }
+            at = close + run
+            continue
+        }
+        if (character === '[') {
+            brackets.push(line[at - 1] === '!' ? at - 1 : at)
+            at += 1
+            continue
+        }
+        if (character === ']') {
+            const open = brackets.pop()
+            if (open !== undefined) {
+                if (at === line.length - 1) hold(open)
+                else if (line[at + 1] === '(') {
+                    const close = parenClose(line, at + 2)
+                    if (close === -1) hold(open)
+                    else at = close
+                }
+            }
+            at += 1
+            continue
+        }
+        if (character === '*' || character === '_' || character === '~') {
+            const run = runOf(line, at)
+            const before = line[at - 1]
+            const after = line[at + run]
+            const top = opened.at(-1)
+            const closes =
+                before !== undefined &&
+                !/\s/.test(before) &&
+                !(character === '_' && after !== undefined && WORD.test(after))
+            if (
+                closes &&
+                top !== undefined &&
+                top.character === character &&
+                top.run === run
+            )
+                opened.pop()
+            // A run the line ends on may still open, or grow into one that does.
+            else if (after === undefined) hold(at)
+            else if (
+                run <= 3 &&
+                !(character === '~' && run !== 2) &&
+                !/\s/.test(after) &&
+                !(
+                    character === '_' &&
+                    before !== undefined &&
+                    WORD.test(before)
+                )
+            )
+                opened.push({ character, run, at })
+            at += run
+            continue
+        }
+        if (character === '<') {
+            const rest = line.slice(at)
+            if (/^<\/?[a-zA-Z]/.test(rest) && !rest.includes('>')) hold(at)
+            else {
+                const open = /^<([a-zA-Z]{1,6})>/.exec(rest)?.[1]?.toLowerCase()
+                if (
+                    open !== undefined &&
+                    TAGS.has(open) &&
+                    !rest.toLowerCase().includes(`</${open}>`)
+                )
+                    hold(at)
+            }
+        } else if (character === '&' && /^&#?[\w]*$/.test(line.slice(at)))
+            hold(at)
+        at += 1
+    }
+    for (const open of brackets) hold(open)
+    for (const open of opened) hold(open.at)
+    return held
+}
+
+/** Where the `)` ending a link's address from `from` is, or `-1`. */
+function parenClose(line: string, from: number): number {
+    let depth = 0
+    for (let at = from; at < line.length; at += 1) {
+        const character = line[at]
+        if (character === '\\') at += 1
+        else if (character === '(') depth += 1
+        else if (character === ')') {
+            if (depth === 0) return at
+            depth -= 1
+        }
+    }
+    return -1
 }
