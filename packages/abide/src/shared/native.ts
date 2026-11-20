@@ -20,17 +20,18 @@ const TAGGED = new RegExp(
  */
 export const REQUEST_AGENT: { current: () => string } = { current: () => '' }
 
+/** The visitor's user agent: the request's on a server, `navigator`'s in a browser — the same text. */
+export function visitorAgent(): string {
+    if (isServer()) return REQUEST_AGENT.current()
+    return typeof navigator === 'undefined' ? '' : navigator.userAgent
+}
+
 /**
  * The version of the native app whose window the work is for, and the name its menu bar shows, or
  * `undefined` where none is.
  */
 export function native(): { version: string; name: string } | undefined {
-    const agent = isServer()
-        ? REQUEST_AGENT.current()
-        : typeof navigator === 'undefined'
-          ? ''
-          : navigator.userAgent
-    const tagged = TAGGED.exec(agent)
+    const tagged = TAGGED.exec(visitorAgent())
     if (tagged === null) return undefined
     return {
         version: tagged[1] as string,

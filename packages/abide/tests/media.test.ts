@@ -103,7 +103,7 @@ const wide = media('(min-width: 800px)')
 // `online` are adopted, and the browser's answer swaps them as an update with no 41.24 warning — while
 // any other value the two sides disagree on still warns. `online` was built at import, long before,
 // and is written the browser's answer at the end all the same. THE REVERTS, each run: make
-// `beginHydration` write nothing and `isHydrating` answer false — 2 warnings, `media`'s beside the
+// `beginHydration` write nothing, so `HYDRATION.pending` stays false — 2 warnings, `media`'s beside the
 // other's; drop the 41.24 warning from `ArmRegion.paintedOther` — 0.
 test('media and online hydrate as the server answered, and swap after without a warning — 41.32', async () => {
     viewport(1024)

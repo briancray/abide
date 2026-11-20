@@ -44,7 +44,6 @@ export const REPORTING: {
 /** A report not yet sent: what the person writes, and what goes with it. */
 export class ReportDraft {
     /** 48.12 — minted with the draft, and what every send of it hands back. */
-    // `getRandomValues` rather than `randomUUID`, which a page served over plain http does not have.
     readonly id: string = randomToken(16, 'hex')
     readonly summary: Reactive<string> = reactive('')
     readonly description: Reactive<string> = reactive('')

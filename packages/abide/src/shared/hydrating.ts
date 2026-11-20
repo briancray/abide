@@ -40,7 +40,7 @@ const HYDRATION: {
  */
 export function hydratedValue<Value>(server: Value, browser: () => Value) {
     const value = ambient<Value>(() =>
-        typeof window === 'undefined' || isServer() || isHydrating()
+        typeof window === 'undefined' || isServer() || HYDRATION.pending
             ? server
             : browser(),
     )
@@ -52,11 +52,6 @@ export function hydratedValue<Value>(server: Value, browser: () => Value) {
         if (!HYDRATION.pending) settable.set(next)
     }
     return { value, write }
-}
-
-/** Whether a page is hydrating, so a stand-in built now answers the server's answer. */
-export function isHydrating(): boolean {
-    return HYDRATION.pending
 }
 
 /** Settles once the page hydrating now has hydrated; `undefined` where none is hydrating. */

@@ -4,19 +4,15 @@
 // platform: a job in the native app labels its keys as the Mac it runs on.
 
 import { isServer } from './isServer.ts'
-import { REQUEST_AGENT } from './native.ts'
+import { visitorAgent } from './native.ts'
 
 const APPLE = /Mac|iPhone|iPad|iPod/
 
 /** Whether the visitor's platform is Apple's, whose `mod` key is ⌘. */
 export function isApplePlatform(): boolean {
-    if (!isServer())
-        return APPLE.test(
-            typeof navigator === 'undefined' ? '' : navigator.userAgent,
-        )
-    const agent = REQUEST_AGENT.current()
+    const agent = visitorAgent()
     // Off `globalThis`, so a browser bundle is not handed a `process` shim for a branch it never runs.
-    if (agent === '')
+    if (agent === '' && isServer())
         return (
             (globalThis as { process?: { platform?: string } }).process
                 ?.platform === 'darwin'

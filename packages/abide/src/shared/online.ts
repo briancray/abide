@@ -7,9 +7,6 @@
 // PURE, SO AN APP THAT NEVER NAMES `online` DOES NOT SHIP IT: the listeners are a side effect at
 // load, and a top-level side effect keeps the module in the shared chunk whether anything reads it.
 
-// A BODY RATHER THAN A VALUE where there is a window, so each scope's instance asks again: a test
-// process has both a DOM and a server render, and the render's `online` is 23.8's (22.11).
-
 import { hydratedValue } from './hydrating.ts'
 
 /** Whether the caller can reach the app, as a `Reactive<boolean>`. */

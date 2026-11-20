@@ -1,4 +1,8 @@
-/** `bytes` random bytes, encoded as `encoding` — base64url unpadded, as a URL or a cookie carries it. */
+/**
+ * `bytes` random bytes, encoded as `encoding` — base64url unpadded, as a URL or a cookie carries it.
+ *
+ * `getRandomValues` RATHER THAN `randomUUID`, which a page served over plain http does not have.
+ */
 export function randomToken(
     bytes: number,
     encoding: 'base64' | 'base64url' | 'hex',
