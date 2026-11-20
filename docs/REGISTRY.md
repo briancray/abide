@@ -888,11 +888,13 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | --- | --- | --- | --- |
 | `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.23, 50.26, 50.27, 50.35, 50.36, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
 
-## `Menu`
+## `menu`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Menu` | `{ label: string; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number } & Attributes<'div'>` | A button opening a list of actions, whose children are the menu items, imported from `@abide/abide/Menu.abide`. | 50.26, 50.27, 50.35, 50.28, 50.29, 50.30, 50.31, 50.32, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7 |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40 |
+| `MenuOptions` | `{ open?: Reactive<boolean>; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, and what hears it open and close. | 50.35, 50.37 |
+| `Menu` | `{ readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38 |
 
 ## `Combobox`
 

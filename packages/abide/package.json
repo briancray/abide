@@ -48,7 +48,6 @@
         "./Prompts.abide": "./src/components/Prompts.abide",
         "./Toasts.abide": "./src/components/Toasts.abide",
         "./Tooltips.abide": "./src/components/Tooltips.abide",
-        "./Menu.abide": "./src/components/Menu.abide",
         "./Combobox.abide": "./src/components/Combobox.abide",
         "./Tabs.abide": "./src/components/Tabs.abide",
         "./SortableTable.abide": "./src/components/SortableTable.abide",

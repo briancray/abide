@@ -4938,26 +4938,26 @@ open it for focus that does not.
 50.25 `tooltip` MUST close its hint when the pointer leaves its element, when its element loses
 focus, and on Escape.
 
-50.26 A `Tooltips` showing a hint and a `Menu` MUST open in the top layer as a popover placed by
+50.26 A `Tooltips` showing a hint and the menu of a `menu` MUST open in the top layer as a popover placed by
 `place` against their anchor, and MUST be placed again while open whenever anything scrolls, the
 window resizes, or the anchor or the popover changes size.
 
-50.27 A `Tooltips` showing a hint and a `Menu` MUST write the side `place` took as `data-side`, and
+50.27 A `Tooltips` showing a hint and the menu of a `menu` MUST write the side `place` took as `data-side`, and
 the `arrow` of its `Placement` as the `--arrow-offset` custom property.
 
-50.28 A `Menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
+50.28 A `menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
 opened it.
 
-50.29 The menu items of a `Menu` MUST be the descendants of its menu carrying `role="menuitem"` that
-are not disabled.
+50.29 The menu items of a `menu` MUST be the descendants of its menu carrying `role="menuitem"`,
+`role="menuitemcheckbox"` or `role="menuitemradio"` that are not disabled.
 
-50.30 In an open `Menu`, ArrowDown and ArrowUp MUST move focus to the next and the previous menu
+50.30 In an open `menu`, ArrowDown and ArrowUp MUST move focus to the next and the previous menu
 item, wrapping, and Home and End to the first and the last.
 
-50.31 Escape in an open `Menu`, and a click on one of its menu items, MUST close it and return
-focus to its trigger.
+50.31 Escape in an open `menu`, and a click on one of its items carrying `role="menuitem"`, MUST
+close it and return focus to its trigger.
 
-50.32 A press on the trigger of an open `Menu` MUST close it, and MUST NOT open it again.
+50.32 A press on the trigger of an open `menu` MUST close it, and MUST NOT open it again.
 
 50.33 `prompts.prompt` MUST settle with the text in its input where its prompt closed by the
 confirming button, and `undefined` where it closed any other way.
@@ -4970,6 +4970,19 @@ element's facing edge, and MUST put it at that edge's middle where the edge is s
 
 50.36 One hint MUST show at a time, in the last `Tooltips` bound of those standing, and a hint
 opening with none standing MUST warn once on `abide:tooltip`.
+
+50.37 A `menu` MUST write every opening and every closing of its menu, however it happened, to its
+`open`, calling `onopen` or `onclose` after, and MUST open and close its menu as `open` is written.
+
+50.38 A `menu`'s parts MUST carry every attribute its trigger and its menu need as the server writes
+them: the menu `popover="auto"`, `role="menu"` and an `id`, named by its trigger's `aria-controls`,
+and the trigger `aria-haspopup="menu"` and the `id` the menu's `aria-labelledby` names.
+
+50.39 A click on a menu item carrying `role="menuitemcheckbox"` or `role="menuitemradio"` MUST leave
+its `menu` open.
+
+50.40 A printable key in an open `menu` MUST move focus to the next menu item whose text starts with
+the keys typed within 500 milliseconds of each other.
 
 # 51. Lists and tables
 

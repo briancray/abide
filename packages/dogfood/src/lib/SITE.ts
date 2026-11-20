@@ -688,11 +688,11 @@ export const SITE: readonly SiteGroup[] = [
             },
             {
                 route: '/components/menu',
-                title: '`Menu`',
-                nav: '`Menu`',
+                title: '`menu`',
+                nav: '`menu`',
                 description:
-                    'Open a list of actions from a button, walked by the arrow keys and closed by a pick.',
-                registry: '`Menu`',
+                    'Open a list of actions from a button of your own, walked by the arrow keys and closed by a pick.',
+                registry: '`menu`',
             },
             {
                 route: '/components/combobox',
