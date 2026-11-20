@@ -8,6 +8,8 @@ import { dismissible } from '#shared/dismissible.ts'
 import { dropzone } from '#shared/dropzone.ts'
 import { followBottom } from '#shared/followBottom.ts'
 import { imageFiles } from '#shared/imagePiece.ts'
+import { shown } from '#shared/tooltip/tips.ts'
+import { tooltip } from '#shared/tooltip/tooltip.ts'
 
 afterEach(() => {
     Reflect.deleteProperty(navigator, 'clipboard')
@@ -106,6 +108,29 @@ test('Escape closes the top panel alone and is prevented, and a field that took 
     expect(closed).toEqual(['inner', 'inner'])
     stopInner()
     stopOuter()
+})
+
+// 50.25, 53.15 — AN OPEN HINT IS THE TOP LAYER: one Escape closes the hint alone and is prevented, so
+// the panel under it — or a `<dialog>` — stays, and the next Escape is the panel's. A hint another
+// replaced leaves no layer behind to take that Escape. THE REVERT: close the hint from a `keydown`
+// listener of its own on the document, as it was — the first Escape closes the panel too.
+test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15', () => {
+    const panel = element()
+    const closed: string[] = []
+    const stopPanel = dismissible(() => closed.push('panel'))(panel)
+    const first = panel.appendChild(document.createElement('button'))
+    const second = panel.appendChild(document.createElement('button'))
+    const stopFirst = tooltip('First', { trigger: 'bound' })(first)
+    const stopSecond = tooltip('Second', { trigger: 'bound' })(second)
+    expect(shown.peek()?.anchor).toBe(second)
+    expect(escape()).toBe(true)
+    expect(shown.peek()).toBeUndefined()
+    expect(closed).toEqual([])
+    expect(escape()).toBe(true)
+    expect(closed).toEqual(['panel'])
+    stopSecond()
+    stopFirst()
+    stopPanel()
 })
 
 // THE REVERT: drop the `splice` from the disposer, and a panel already gone still takes the Escape

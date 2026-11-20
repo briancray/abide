@@ -4973,8 +4973,9 @@ for as long as it shows.
 for `delay` milliseconds, and at once when its element takes focus that matches `:focus-visible`, and
 MUST NOT open it for focus that does not.
 
-50.25 `tooltip` MUST close its hint on Escape and once it is unbound, and, where its `trigger` is
-`hover`, when the pointer leaves its element and when its element loses focus.
+50.25 `tooltip` MUST close its hint on an Escape no one prevented, as the top layer of `dismissible`'s
+stack while it shows (53.14, 53.15), and once it is unbound, and, where its `trigger` is `hover`,
+when the pointer leaves its element and when its element loses focus.
 
 50.26 A `Tooltips` showing a hint and the menu of a `menu` MUST open in the top layer as a popover placed by
 `place` against their anchor, and MUST be placed again while open whenever anything scrolls, the
@@ -5461,9 +5462,9 @@ bound.
 53.14 `dismissible` MUST call its callback on an Escape `keydown` not already `defaultPrevented`, and
 MUST call `preventDefault` on it, save where `escape` is `false`.
 
-53.15 Elements `dismissible` is bound to at once MUST stack in the order they were bound: an Escape
-dismissing the top one alone, and a press dismissing each from the top that it lands outside until
-the first it lands in.
+53.15 Elements `dismissible` is bound to at once, and the anchor of the hint `tooltip` shows, MUST
+stack in the order they were bound or opened: an Escape dismissing the top one alone, and a press
+dismissing each from the top that it lands outside until the first it lands in.
 
 53.16 `dismissible`'s `Disposer` MUST take its element off the stack, and the last one MUST remove
 the document's listeners.

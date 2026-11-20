@@ -1,12 +1,20 @@
 // 53.12-53.16 — A PANEL CLOSED FROM OUTSIDE IT. Every element bound is a layer on one stack, and the
 // document is listened to only while the stack holds one: a page with no panel open pays nothing.
+//
+// WHO TAKES AN ESCAPE, innermost first and one per keypress: the FOCUSED element, whose own `keydown`
+// runs before the document's — an open `menu`'s items (50.31), a `Combobox`'s input (51.27, 51.28) —
+// keeps it with `preventDefault`; then this stack from the top, an open hint among its layers (50.25);
+// then a native `<dialog>` or an `auto` popover, whose close request an Escape anyone prevented never
+// makes. A menu stays off the stack because focus is inside it for as long as it is open — Tab and a
+// press outside close it as the browser light-dismisses an `auto` popover — so its own handler is
+// already the innermost one.
 
 import { reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 import { register } from './register.ts'
 
 /** An element `dismissible` is bound to, in the order they were bound: the last is on top. */
-type Layer = {
+export type Layer = {
     element: Element
     dismiss: (event: PointerEvent | KeyboardEvent) => void
     escape: boolean
@@ -43,25 +51,32 @@ export function dismissible(
     } = {},
 ): (element: Element) => Disposer {
     return (element) => {
-        const layer: Layer = {
+        return stack({
             element,
             dismiss: onDismiss,
             escape: options.escape ?? true,
             outside: options.outside ?? true,
             inside: options.inside ?? [],
-        }
-        if (layers.peek()?.length === 0) {
-            // CAPTURE, so a press an inner handler stops still reaches here.
-            document.addEventListener('pointerdown', pressed, true)
-            document.addEventListener('keydown', escaped)
-        }
-        const unregister = register(layers, layer)
-        return () => {
-            unregister()
-            if ((layers.peek()?.length ?? 0) > 0) return
-            document.removeEventListener('pointerdown', pressed, true)
-            document.removeEventListener('keydown', escaped)
-        }
+        })
+    }
+}
+
+/**
+ * Puts `layer` on top of the stack, and hands back what takes it off: `dismissible` stacks the
+ * element it is bound to, and `tooltip` the anchor of the hint it has open (50.25).
+ */
+export function stack(layer: Layer): Disposer {
+    if (layers.peek()?.length === 0) {
+        // CAPTURE, so a press an inner handler stops still reaches here.
+        document.addEventListener('pointerdown', pressed, true)
+        document.addEventListener('keydown', escaped)
+    }
+    const unregister = register(layers, layer)
+    return () => {
+        unregister()
+        if ((layers.peek()?.length ?? 0) > 0) return
+        document.removeEventListener('pointerdown', pressed, true)
+        document.removeEventListener('keydown', escaped)
     }
 }
 
