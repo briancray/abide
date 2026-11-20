@@ -5,7 +5,7 @@
 import { expect, test } from 'bun:test'
 
 import type { AssistantEvent, AssistantMessage } from '@abide/abide'
-import { flushSync } from '@abide/abide'
+import { flushSync, reactive } from '@abide/abide'
 import Chat from '@abide/abide/Chat.abide'
 import { mount, settled } from '@abide/harness/abide'
 
@@ -274,6 +274,78 @@ test('the transcript follows its bottom until the reader scrolls up', async () =
     log.dispatchEvent(new Event('scroll'))
     await chunk('signed in March.')
     expect(log.scrollTop).toBe(0)
+    stream.end()
+    await settled()
+})
+
+// THE REVERT: refuse a send while an answer streams, and the follow-up typed during it is lost.
+test('a question sent while an answer streams is queued, and asked once the answer ends', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    type('Which company is Ada at?')
+    press({})
+    type('And Grace?')
+    press({})
+    expect(turns()).toEqual(['you', 'assistant'])
+    expect(document.querySelector('[data-part=queued]')?.textContent).toContain(
+        'And Grace?',
+    )
+    stream.push({ type: 'text', text: 'Analytical Engines.' })
+    stream.end()
+    await settled()
+    flushSync()
+    expect(turns()).toEqual(['you', 'assistant', 'you', 'assistant'])
+    expect(stream.asked[1]?.at(-1)).toEqual({
+        role: 'user',
+        content: 'And Grace?',
+    })
+    expect(document.querySelector('[data-part=queued]')).toBeNull()
+    stream.end()
+    await settled()
+})
+
+test('a queued question cancelled is never asked', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    type('Which company is Ada at?')
+    press({})
+    type('And Grace?')
+    press({})
+    ;(document.querySelector('[data-part=cancel]') as HTMLButtonElement).click()
+    flushSync()
+    expect(document.querySelector('[data-part=queued]')).toBeNull()
+    stream.end()
+    await settled()
+    flushSync()
+    expect(turns()).toEqual(['you', 'assistant'])
+    expect(stream.asked).toHaveLength(1)
+})
+
+test('a conversation handed in as turns is shown, and asked about with what follows', async () => {
+    const stream = fed()
+    const saved = reactive([
+        {
+            role: 'user' as const,
+            parts: [
+                { type: 'text' as const, text: 'Which company is Ada at?' },
+            ],
+            stop: undefined,
+            failed: undefined,
+        },
+        {
+            role: 'assistant' as const,
+            parts: [{ type: 'text' as const, text: 'Analytical Engines.' }],
+            stop: 'end' as const,
+            failed: undefined,
+        },
+    ])
+    using _chat = await mount(Chat({ ask: stream.ask, turns: saved }))
+    expect(turns()).toEqual(['you', 'assistant'])
+    type('And Grace?')
+    press({})
+    expect(stream.asked[0]).toHaveLength(3)
+    // Bound, the conversation it grows is the caller's.
+    expect(saved.peek()).toHaveLength(4)
     stream.end()
     await settled()
 })

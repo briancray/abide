@@ -5317,8 +5317,9 @@ question included, and with a `signal` of its own.
 53.33 `Chat`'s composer MUST send on Enter, and MUST NOT on Shift+Enter or on an Enter an input
 method is composing.
 
-53.34 `Chat` MUST NOT send while an answer streams, while `disabled` is `true`, or with neither words
-nor an image to send.
+53.34 `Chat` MUST NOT send while `disabled` is `true`, or with neither words nor an image to send,
+and what it is sent while an answer streams MUST be queued, shown in its composer until it is
+cancelled or the answer ends, and asked once the answer ends.
 
 53.35 `Chat`'s Stop MUST abort the `signal` it handed `ask`, keeping what arrived and setting the
 answer's `stop` to `stopped`.
@@ -5332,8 +5333,8 @@ image part `imagePiece` draws.
 53.38 `Chat` MUST answer a permission part through `permit` with the part's id and the visitor's
 answer, and MUST disable the part's buttons where `permit` is absent or the part is answered.
 
-53.39 `Chat` MUST render an assistant's text part through `Text` where one is given, and as text
-where none is.
+53.39 `Chat` MUST render an assistant's text part through `Text` where one is given, handed the
+text, the part and its turn, and as text where none is.
 
 53.40 `Chat` MUST keep its transcript scrolled to its bottom as it grows, save while the reader has
 scrolled up from it.
@@ -5355,6 +5356,16 @@ landed and the element clicked.
 
 53.46 `dropzone` MUST hand `onreject` the files a drop or a paste carries that it does not take,
 `accept` refusing them or `multiple` being `false`, and MUST NOT call it where it takes every one.
+
+53.47 `Chat` MUST render a tool part through `Tool` where one is given, handed the part and its
+turn, and as its name, its input and its result where none is.
+
+53.48 `Chat` MUST render `Actions` under each assistant turn that is not streaming, where it is
+given, handed the turn, its index and a `retry` that drops the turn and every one after it and asks
+again for an answer to what is left.
+
+53.49 `Chat` MUST show the turns `turns` holds, and MUST write every turn it adds and every part it
+folds to `turns`.
 
 # 54. Guards, fetches and jobs
 

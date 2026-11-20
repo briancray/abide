@@ -27,6 +27,28 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
             from: ["test('a permission prompt is answered through permit'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a question sent while an answer streams is queued, and asked once the answer ends'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: ["test('a queued question cancelled is never asked'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/AssistantThread.test.ts',
+            from: [
+                "test('Ask again replaces the answer with a fresh one to the same question'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a conversation handed in as turns is shown, and asked about with what follows'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Put the CRM's assistant on a page">
@@ -70,6 +92,53 @@ import Section from '#src/lib/Section.abide'
             </script>
 
             <Chat ask={askClaudeCode} permit={permitClaudeCode} />
+        `} />
+    </Section>
+
+    <Section level={3} title="Show a tool call as a line of its own">
+        <p>A <code>Tool</code> component renders each tool call, handed the
+            <code>part</code> and its <code>turn</code>, in place of its name, input and
+            result.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chat ask={askAssistant}>
+                {#component Tool({ part }: { part: { name: string } })}
+                    <span>looked up {part.name}</span>
+                {/component}
+            </Chat>
+        `} />
+    </Section>
+
+    <Section level={3} title="Offer to ask again under each answer">
+        <p>An <code>Actions</code> component renders under each answer that has ended, handed
+            the <code>turn</code>, its <code>index</code> and <code>retry</code>, which asks the
+            same question again in the answer's place.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chat ask={askAssistant}>
+                {#component Actions({ retry }: { retry: () => void })}
+                    <button type="button" onclick={retry}>Ask again</button>
+                {/component}
+            </Chat>
+        `} />
+    </Section>
+
+    <Section level={3} title="Send a follow-up while an answer streams">
+        <p>A question sent while an answer streams waits in the composer's
+            <code>data-part="queued"</code>, with a <code>cancel</code> button, and is asked as
+            soon as the answer ends.</p>
+    </Section>
+
+    <Section level={3} title="Keep a conversation across visits">
+        <p>Bind <code>turns</code>. A conversation it holds is shown and asked about, and every
+            turn the chat adds is written to it, for you to store.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import Chat from '@abide/abide/Chat.abide'
+
+            let thread = reactive(loadThread())
+            </script>
+
+            <Chat ask={askAssistant} bind:turns={thread} />
         `} />
     </Section>
 
