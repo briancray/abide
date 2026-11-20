@@ -75,3 +75,18 @@ test('a dialog not dismissible stays open on Escape', async () => {
     flushSync()
     expect(dialog().open).toBe(false)
 })
+
+// 50.2 — A CLOSE REPORTED LATE DOES NOT SHUT A DIALOG THAT HAS OPENED AGAIN: `close` is a queued
+// task, so a dialog shut in code and opened before it fires hears of a close that is already over.
+// THE REVERT: write `false` on every `close` — the reopened dialog shuts under the reader.
+test('a dialog opened again before its close is reported stays open', async () => {
+    using _log = await mount(LogCallDialog({}))
+    open()
+    dialog().close()
+    open()
+    expect(dialog().open).toBe(true)
+    dialog().dispatchEvent(new Event('close'))
+    flushSync()
+    expect(dialog().open).toBe(true)
+    expect(dialog().hasAttribute('data-open')).toBe(true)
+})

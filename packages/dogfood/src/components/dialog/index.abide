@@ -20,6 +20,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/contacts/lib/LogCallDialog.test.ts',
             from: ["test('a dialog not dismissible stays open on Escape'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/LogCallDialog.test.ts',
+            from: [
+                "test('a dialog opened again before its close is reported stays open'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Log a call from a form over the contact page">

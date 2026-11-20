@@ -1,0 +1,35 @@
+<script>
+import { navigate, props, url } from '@abide/abide'
+import CommandPalette from '@abide/abide/CommandPalette.abide'
+
+// Where a command goes: the router's `navigate`, or a test's own record of it.
+const { go = (address: string) => void navigate(address) } = props<{
+    go?: (address: string) => void
+}>()
+
+const COMMANDS = [
+    { label: 'Contacts', run: () => go(url('/contacts')) },
+    { label: 'Companies', run: () => go(url('/companies')) },
+    { label: 'Deals', run: () => go(url('/deals')) },
+    {
+        label: 'Pipeline',
+        keywords: ['stages', 'forecast'],
+        run: () => go(url('/pipeline')),
+    },
+    {
+        label: 'Add a deal',
+        keywords: ['new', 'create'],
+        key: 'n',
+        run: () => go(url('/deals')),
+    },
+]
+</script>
+
+<CommandPalette
+    commands={COMMANDS}
+    label="Jump to"
+    placeholder="Go to a page or run a command"
+    class="palette"
+>
+    Nothing matches.
+</CommandPalette>

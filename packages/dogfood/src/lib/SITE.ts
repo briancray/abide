@@ -558,6 +558,12 @@ const WRITTEN: readonly {
                     'Pick one item from a list narrowed or searched on the server as someone types.',
             },
             {
+                route: '/components/command-palette',
+                title: '`CommandPalette`',
+                description:
+                    'Open a search over what the app can do on one key, and run the command picked.',
+            },
+            {
                 route: '/components/tabs',
                 title: '`tabs`',
                 description:

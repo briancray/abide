@@ -51,6 +51,7 @@
         "./Announcer.abide": "./src/components/Announcer.abide",
         "./Outlet.abide": "./src/components/Outlet.abide",
         "./Combobox.abide": "./src/components/Combobox.abide",
+        "./CommandPalette.abide": "./src/components/CommandPalette.abide",
         "./SortableTable.abide": "./src/components/SortableTable.abide",
         "./Markdown.abide": "./src/components/Markdown.abide",
         "./Chart.abide": "./src/components/Chart.abide",

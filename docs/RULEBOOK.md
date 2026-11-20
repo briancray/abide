@@ -4940,7 +4940,8 @@ the states that pattern names.
 where `modal` is `false`, and closed while `open` is false.
 
 50.2 Every close of a `Dialog`, whatever closed it, MUST write `false` to `open` and then call
-`onclose` with the `returnValue` that close set, and `''` where it set none.
+`onclose` with the `returnValue` that close set, and `''` where it set none, save that a close
+reported after the dialog has opened again MUST leave `open` true.
 
 50.3 Escape and a click on a `Dialog`'s backdrop MUST close it where `dismissible` is true, and MUST
 NOT where it is false.
@@ -5288,6 +5289,27 @@ row into view.
 `index`, and MUST answer a range holding that row before the scroll lands.
 
 51.71 `virtualRows` MUST take every row to be `rowHeight` pixels tall.
+
+51.72 `CommandPalette` MUST open and shut on `hotkey`, wherever focus is, its own input included, and
+MUST open as a modal `Dialog` with focus in its input.
+
+51.73 `CommandPalette` MUST list each of `commands`, in the order given, whose `label` and `keywords`
+together hold every word typed in its input, ignoring case, and MUST render its children where none
+does.
+
+51.74 `CommandPalette` MUST keep and move its active command as a `listbox` over the commands it lists
+does, its input naming the active command as its `aria-activedescendant`.
+
+51.75 `CommandPalette` MUST run a command chosen by Enter or a click after it has shut, so focus is back
+where it stood when the palette opened before the command moves it.
+
+51.76 `CommandPalette`'s input MUST leave Escape to the dialog, which shuts on it, and Home and End to
+its caret.
+
+51.77 `CommandPalette` MUST show a command's `key` beside its label as `keyLabel` writes it, and MUST
+NOT bind it.
+
+51.78 `CommandPalette` MUST list every command again, its input emptied, each time it opens.
 
 # 52. Formatting, markdown and charts
 

@@ -912,6 +912,12 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item \| readonly Item[]; Option?: (props: { item: Item }) => unknown; Chip?: (props: { item: Item; remove: () => void }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62, 50.26, 50.27, 51.64 |
 
+## `CommandPalette`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `CommandPalette` | `{ commands: readonly { label: string; keywords?: readonly string[]; key?: string; run: () => void }[]; open?: boolean; hotkey?: string; id?: string; label?: string; placeholder?: string } & Attributes<'dialog'>` | A modal search over what an app can do, opened on a key, the component `@abide/abide/CommandPalette.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 50.1, 50.2, 50.3, 50.4, 51.72, 51.73, 51.74, 51.75, 51.76, 51.77, 51.78 |
+
 ## `tabs`
 
 | Name | Signature | Meaning | Rules |

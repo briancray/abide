@@ -40,9 +40,11 @@ watch(() => {
     )
 })
 
-// `open` is written before `onclose` runs, so a caller reopening from it is not undone (50.2).
+// `open` is written before `onclose` runs, so a caller reopening from it is not undone (50.2). A
+// `close` event is queued as a task, so one a close made in code fires after whatever ran next: where
+// that reopened the dialog, the close it reports is already over and `open` stays as it is.
 function closed() {
-    open = false
+    if (dialog?.open !== true) open = false
     onclose?.(dialog?.returnValue ?? '')
 }
 

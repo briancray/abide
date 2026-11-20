@@ -8,6 +8,7 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 
 <script>
 import '#src/lib/app.css'
+import JumpTo from '#src/lib/JumpTo.abide'
 </script>
 
 <html lang="en">
@@ -20,5 +21,6 @@ import '#src/lib/app.css'
         text-ink antialiased"
     >
         <slot />
+        <JumpTo />
     </body>
 </html>
