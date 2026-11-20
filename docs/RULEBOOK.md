@@ -5212,6 +5212,12 @@ against its first.
 52.32 `LineChart` and `Sparkline` declaring `zero` MUST take zero into the range of their values, and
 MUST draw a series whose every present value is zero along the bottom of that range.
 
+52.33 `format.money` and `format.percent` declaring `signed` MUST write a negative value's sign as
+`−` (U+2212), and MUST NOT otherwise.
+
+52.34 `format.dateParts` MUST answer the pieces whose values joined in order are what `format.date`
+writes for the same value and options.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

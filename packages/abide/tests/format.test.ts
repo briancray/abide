@@ -9,6 +9,7 @@ import { formatters } from '../src/shared/format/cached.ts'
 import {
     bytes,
     date,
+    dateParts,
     duration,
     list,
     money,
@@ -46,7 +47,7 @@ test('a formatter writes en-US where no locale is named — 52.2', () => {
     expect(percent(0.4)).toBe('40%')
     expect(percent(0.125)).toBe('12.5%')
     expect(percent(0.4, { digits: 1 })).toBe('40.0%')
-    expect(percent(-0.05, { signed: true })).toBe('-5%')
+    expect(percent(-0.05, { signed: true })).toBe('\u22125%')
     expect(number(1200)).toBe('1,200')
     expect(number(1200, { compact: true })).toBe('1.2K')
     expect(number(12, { digits: 1 })).toBe('12.0')
@@ -126,4 +127,29 @@ test('a size in bytes is in the largest unit it fills — 52.7', () => {
     expect(bytes(1_500_000)).toBe('1.5 MB')
     expect(bytes(2_000_000_000, { digits: 2 })).toBe('2.00 GB')
     expect(bytes(999_999)).toBe('1,000 kB')
+})
+
+// THE REVERT: drop the `replace('-', MINUS)` in `percent` and `money` — `-12%` where `−12%` is due.
+test('a signed value writes its minus as −, and an unsigned one as Intl does — 52.33', () => {
+    expect(percent(-0.12, { signed: true })).toBe('−12%')
+    expect(percent(0.12, { signed: true })).toBe('+12%')
+    expect(money(-5, { signed: true })).toBe('−$5.00')
+    expect(percent(-0.12)).toBe('-12%')
+})
+
+// THE REVERT: have `dateParts` answer `format` as one literal piece rather than `formatToParts` —
+// the first piece is `{ type: 'literal', value: '3 PM' }` where `{ type: 'hour', value: '3' }` is due.
+test('the parts of a date join to what date writes, and an hour is written alone — 52.34', () => {
+    const at = '2026-11-18T15:04:00Z'
+    for (const style of ['day', 'time', 'hour', 'dateTime'] as const) {
+        let joined = ''
+        for (const part of dateParts(at, { style })) joined += part.value
+        expect(joined).toBe(date(at, { style }))
+    }
+    expect(date(at, { style: 'hour' })).toBe('3 PM')
+    expect(dateParts(at, { style: 'hour' })[0]).toEqual({
+        type: 'hour',
+        value: '3',
+    })
+    expect(dateParts('not a date')).toEqual([{ type: 'literal', value: '—' }])
 })

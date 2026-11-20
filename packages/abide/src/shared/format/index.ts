@@ -8,6 +8,8 @@ import { cached } from './cached.ts'
 
 const MISSING = '—'
 const LOCALE = 'en-US'
+// 52.33 — the minus a signed number is written with, the width of the `+` it stands against.
+const MINUS = '\u2212'
 
 /** `value` as a number Intl can format, or `undefined` for anything else. */
 function numeric(value: unknown): number | bigint | undefined {
@@ -37,7 +39,7 @@ export function money(
         currency?: string
         /** Whether to shorten a large amount: `$1.2M` rather than `$1,200,000.00`. */
         compact?: boolean
-        /** Whether a positive amount carries a `+`, for a change rather than a balance. */
+        /** Whether a positive amount carries a `+`, and a negative one `−`, for a change rather than a balance. */
         signed?: boolean
         /** The digits after the point, fixed. The currency's own (2 for USD) by default. */
         digits?: number
@@ -54,7 +56,7 @@ export function money(
         digits,
         locale = LOCALE,
     } = options
-    return cached(
+    const written = cached(
         `money ${locale} ${currency} ${compact} ${signed} ${digits}`,
         () =>
             new Intl.NumberFormat(locale, {
@@ -66,6 +68,7 @@ export function money(
                 maximumFractionDigits: digits,
             }),
     ).format(amount)
+    return signed ? written.replace('-', MINUS) : written
 }
 
 /** A fraction as a percent: `format.percent(0.4)` is `40%`, and `format.percent(0.125)` is `12.5%`. */
@@ -74,7 +77,7 @@ export function percent(
     options: {
         /** The digits after the point, fixed. Up to 1, as needed, by default. */
         digits?: number
-        /** Whether a positive fraction carries a `+`, for a change rather than a share. */
+        /** Whether a positive fraction carries a `+`, and a negative one `−`, for a change rather than a share. */
         signed?: boolean
         /** The BCP 47 locale the percent is written in. `'en-US'` by default. */
         locale?: string
@@ -83,7 +86,7 @@ export function percent(
     const fraction = numeric(value)
     if (fraction === undefined) return MISSING
     const { digits, signed = false, locale = LOCALE } = options
-    return cached(
+    const written = cached(
         `percent ${locale} ${digits} ${signed}`,
         () =>
             new Intl.NumberFormat(locale, {
@@ -93,6 +96,7 @@ export function percent(
                 signDisplay: signed ? 'exceptZero' : 'auto',
             }),
     ).format(fraction)
+    return signed ? written.replace('-', MINUS) : written
 }
 
 /** A number with its thousands grouped: `format.number(1200)` is `1,200`. */
@@ -171,34 +175,52 @@ const DATE_STYLES = {
     monthDay: { month: 'short', day: 'numeric' },
     month: { month: 'short', year: 'numeric' },
     time: { timeStyle: 'short' },
+    hour: { hour: 'numeric' },
 } as const
+
+/** What `format.date` and `format.dateParts` take. */
+type DateOptions = {
+    /**
+     * What of the time to write: `'day'` is `Nov 18, 2026`, `'monthDay'` is `Nov 18`, `'month'` is
+     * `Nov 2026`, `'time'` is `3:04 PM`, `'hour'` is `3 PM`, and `'dateTime'` is
+     * `Nov 18, 2026, 3:04 PM`. `'day'` by default.
+     */
+    style?: 'day' | 'monthDay' | 'month' | 'time' | 'hour' | 'dateTime'
+    /** The IANA time zone the time is written in. `'UTC'` by default. */
+    timeZone?: string
+    /** The BCP 47 locale the date is written in. `'en-US'` by default. */
+    locale?: string
+}
 
 /**
  * A date, a time or both: `format.date('2026-11-18')` is `Nov 18, 2026`. Takes a `Date`, epoch
  * milliseconds or an ISO string.
  */
-export function date(
+export function date(value: unknown, options: DateOptions = {}): string {
+    let written = ''
+    for (const part of dateParts(value, options)) written += part.value
+    return written
+}
+
+/**
+ * 52.34 — what `format.date` writes, as the pieces `Intl` names: `{ type: 'hour', value: '3' }` and
+ * the rest, so each piece can be styled on its own. A value it cannot format is one literal `—`.
+ */
+export function dateParts(
     value: unknown,
-    options: {
-        /**
-         * What of the time to write: `'day'` is `Nov 18, 2026`, `'monthDay'` is `Nov 18`, `'month'`
-         * is `Nov 2026`, `'time'` is `3:04 PM`, and `'dateTime'` is `Nov 18, 2026, 3:04 PM`.
-         * `'day'` by default.
-         */
-        style?: 'day' | 'monthDay' | 'month' | 'time' | 'dateTime'
-        /** The IANA time zone the time is written in. `'UTC'` by default. */
-        timeZone?: string
-        /** The BCP 47 locale the date is written in. `'en-US'` by default. */
-        locale?: string
-    } = {},
-): string {
+    options: DateOptions = {},
+): Intl.DateTimeFormatPart[] {
     const time = instant(value)
-    if (time === undefined) return MISSING
+    if (time === undefined) return [{ type: 'literal', value: MISSING }]
     const { style = 'day', timeZone = 'UTC', locale = LOCALE } = options
     // Two formatters joined rather than one asked for both: engines join a date and a time with
     // different words.
     if (style === 'dateTime')
-        return `${date(time, { style: 'day', timeZone, locale })}, ${date(time, { style: 'time', timeZone, locale })}`
+        return [
+            ...dateParts(time, { style: 'day', timeZone, locale }),
+            { type: 'literal', value: ', ' },
+            ...dateParts(time, { style: 'time', timeZone, locale }),
+        ]
     return cached(
         `date ${locale} ${timeZone} ${style}`,
         () =>
@@ -206,7 +228,7 @@ export function date(
                 ...DATE_STYLES[style],
                 timeZone,
             }),
-    ).format(time)
+    ).formatToParts(time)
 }
 
 const DURATION_UNITS = [

@@ -27,6 +27,10 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/format.test.ts',
             from: ["test('a relative time is measured from the now it is handed"],
         },
+        {
+            path: 'packages/abide/tests/format.test.ts',
+            from: ["test('the parts of a date join to what date writes"],
+        },
     ]}
 >
     <Section level={3} title="Write deal amounts and chances in a table column">
@@ -79,6 +83,20 @@ import Section from '#src/lib/Section.abide'
             <strong title={format.date(touch.at, { style: 'dateTime' })}>
                 {touch.contact}, {format.relative(touch.at, { now })}
             </strong>
+        `} />
+    </Section>
+
+    <Section level={3} title="Set a meeting's hour apart from its date">
+        <p><code>format.dateParts</code> answers what <code>format.date</code> writes as named
+            pieces, so the hour can carry a style of its own.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { format } from '@abide/abide'
+            </script>
+
+            {#for part of format.dateParts(meeting.at, { style: 'dateTime' })}
+                {#if part.type === 'hour'}<strong>{part.value}</strong>{:else}{part.value}{/if}
+            {/for}
         `} />
     </Section>
 </Doc>
