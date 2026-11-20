@@ -219,6 +219,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'server',
             'signedIn',
             'trace',
+            'trustedIdentity',
         ].sort(),
     )
     // `store` is the server's over the shared one, and carries the two members only a server has.

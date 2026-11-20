@@ -769,6 +769,12 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | --- | --- | --- | --- |
 | `signedIn` | `Middleware<never, object, Failed<'SignedOut', undefined>>` | A rung admitting a caller the server authenticated, from `@abide/abide/server`. | 15.9, 54.1 |
 
+## `trustedIdentity`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `trustedIdentity` | `(options: { header: string; proxies: readonly string[]; claims: (value: string) => Record<string, unknown> }) => Middleware` | A rung signing in the caller a trusted proxy names in a header, from `@abide/abide/server`. | 54.35, 54.36, 54.37 |
+
 ## `requireRole`
 
 | Name | Signature | Meaning | Rules |

@@ -568,6 +568,14 @@ export const SITE: readonly SiteGroup[] = [
                 registry: '`requireRole`',
             },
             {
+                route: '/helpers/trusted-identity',
+                title: '`trustedIdentity`',
+                nav: '`trustedIdentity`',
+                description:
+                    'Sign in the caller a single sign-on proxy in front of the app names in a header, believed from that proxy alone.',
+                registry: '`trustedIdentity`',
+            },
+            {
                 route: '/helpers/read-only',
                 title: '`readOnly`',
                 nav: '`readOnly`',

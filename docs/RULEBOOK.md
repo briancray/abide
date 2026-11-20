@@ -5607,6 +5607,17 @@ a `Response` with no body as `undefined`.
 54.34 A `FetchFailed` that `fetchJson` or `fetchText` settles to for a thrown attempt MUST carry what
 was thrown as its `cause`, and Problem Details MUST NOT carry a `cause`.
 
+54.35 `trustedIdentity` MUST sign in, for the request it runs in, the caller its `header` names on a
+request from one of its `proxies`, as the claims `claims` makes of the header's value, as `App.run`'s
+`principal` does (42.19).
+
+54.36 `trustedIdentity` MUST read the peer a request came from as `request.ip` answers it, and MUST
+ignore its `header` on a request from a peer none of its `proxies` names, and on one made in
+process.
+
+54.37 `trustedIdentity` MUST seal no cookie, and MUST pass a request whose `header` is absent or
+empty as it came.
+
 # 55. Worker files
 
 55.1 An import of a worker file MUST answer each export with a function running that export in the
