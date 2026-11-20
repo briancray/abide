@@ -1544,7 +1544,7 @@ function emitArms(
                 : arm === 1 && caught !== undefined
                   ? caught
                   : ''
-        const builders = `const ${own}_build = function (${PARENT}) {\n${emitMaker(sink, lowering)}\n}\n${mountFunction(own, REGION_ROOT, body, `${fillRegion}(${REGION_ROOT}, ${own}_build)`, lowering, sink.defersSetup, setup !== null)}`
+        const builders = `${buildFunction(`${own}_build`, sink, lowering)}\n${mountFunction(own, REGION_ROOT, body, `${fillRegion}(${REGION_ROOT}, ${own}_build)`, lowering, sink.defersSetup, setup !== null)}`
         if (local === '') {
             helpers.push(
                 `${builders}\nconst ${own}_arm = { build: ${own}_build, mount: ${own}_mount }`,

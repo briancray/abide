@@ -1705,8 +1705,8 @@ test('a region made once is parsed, and one made once a row is built', async () 
     const { file, answer } = await typed(source, ['rows', 'on'])
     const once = emitClient(file, answer, 'routed')
     const page = once.slice(
-        once.indexOf('const rg0_a0_build'),
-        once.indexOf('const rg0_a0_build') + 200,
+        once.indexOf('function rg0_a0_build'),
+        once.indexOf('function rg0_a0_build') + 200,
     )
     expect(page).toContain('__markupNodes(__parent')
     expect(page).not.toContain('createElement')
