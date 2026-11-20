@@ -167,7 +167,7 @@ export function menu(options: MenuOptions = {}): Menu {
                 event.key === 'ArrowDown'
                     ? (at + 1) % listed.length
                     : event.key === 'ArrowUp'
-                      ? (at - 1 + listed.length) % listed.length
+                      ? (at <= 0 ? listed.length : at) - 1
                       : event.key === 'Home'
                         ? 0
                         : event.key === 'End'
