@@ -22,6 +22,7 @@ import {
     sendTyped,
     windowButton,
 } from './appKit.ts'
+import { EVENT_MODIFIER } from './EVENT_MODIFIER.ts'
 import type { Launcher } from './launcherOptions.ts'
 import { nativeUserAgent } from './nativeUserAgent.ts'
 import { WINDOW_STYLE } from './WINDOW_STYLE.ts'
@@ -38,7 +39,6 @@ const PANEL_BEHAVIOR = (1 << 1) | (1 << 3) | (1 << 8)
 // NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp.
 const CLICKS = (1 << 2) | (1 << 4)
 const RIGHT_MOUSE_UP = 4
-const CONTROL_KEY = 1 << 18
 const SCREEN_MARGIN = 8
 // A press on the item takes the key from an open panel before the item hears it; a click this soon
 // after the panel closed that way is the click that closed it, and opens nothing.
@@ -182,7 +182,7 @@ export function openMenuBarExtra(
                                         FFIType.u64,
                                     ),
                                 ) &
-                                    CONTROL_KEY) !==
+                                    EVENT_MODIFIER.CONTROL) !==
                                     0)
                         // 38.170 — the item opens the menu while it holds one, and holds it no longer.
                         if (secondary) {

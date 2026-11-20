@@ -1,10 +1,6 @@
 import { hotkeyBinding } from '#shared/hotkeyBinding.ts'
 
-// NSEventModifierFlags.
-const SHIFT = 1 << 17
-const CONTROL = 1 << 18
-const OPTION = 1 << 19
-const COMMAND = 1 << 20
+import { EVENT_MODIFIER } from './EVENT_MODIFIER.ts'
 
 const NAMED_KEYS: Record<string, string> = {
     enter: '\r',
@@ -13,10 +9,11 @@ const NAMED_KEYS: Record<string, string> = {
     escape: '\x1b',
     backspace: '\b',
     delete: '\x7f',
-    up: '',
-    down: '',
-    left: '',
-    right: '',
+    // 38.213 — spelled as `hotkeys` matches them in a page and `keyLabel` writes them.
+    arrowup: '\uf700',
+    arrowdown: '\uf701',
+    arrowleft: '\uf702',
+    arrowright: '\uf703',
 }
 
 /**
@@ -32,10 +29,10 @@ export function menuShortcut(key: string | undefined): {
         return { keyEquivalent: '', modifiers: 0 }
     const binding = hotkeyBinding(key)
     const modifiers =
-        (binding.shift === true ? SHIFT : 0) |
-        (binding.ctrl ? CONTROL : 0) |
-        (binding.alt ? OPTION : 0) |
-        (binding.meta || binding.mod ? COMMAND : 0)
+        (binding.shift === true ? EVENT_MODIFIER.SHIFT : 0) |
+        (binding.ctrl ? EVENT_MODIFIER.CONTROL : 0) |
+        (binding.alt ? EVENT_MODIFIER.OPTION : 0) |
+        (binding.meta || binding.mod ? EVENT_MODIFIER.COMMAND : 0)
     const function_ = /^f([1-9]|1[0-2])$/.exec(binding.key)
     const keyEquivalent =
         NAMED_KEYS[binding.key] ??
