@@ -5203,6 +5203,9 @@ series' value there, while a pointer is over it.
 52.31 `Sparkline` MUST carry `data-trend` on its root, `up`, `down` or `flat` by its last present value
 against its first.
 
+52.32 `LineChart` and `Sparkline` declaring `zero` MUST take zero into the range of their values, and
+MUST draw a series whose every present value is zero along the bottom of that range.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

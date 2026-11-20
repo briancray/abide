@@ -2,7 +2,8 @@
 import { format, reactive } from '@abide/abide'
 import Sparkline from '@abide/abide/Sparkline.abide'
 
-// Won revenue per month, June to November; Grace's August is not closed yet.
+// Won revenue per month, June to November; Grace's August is not closed yet, and Joan, new this
+// summer, has closed nothing.
 const REPS = [
     {
         name: 'Ada Lovelace',
@@ -13,6 +14,7 @@ const REPS = [
         won: [24_000, 21_000, null, 11_000, 14_000, 17_000],
     },
     { name: 'Alan Turing', won: [9_000, 9_000, 9_000, 9_000, 9_000, 9_000] },
+    { name: 'Joan Clarke', won: [0, 0, 0, 0, 0, 0] },
 ]
 
 let months = reactive(6)
@@ -40,6 +42,7 @@ let months = reactive(6)
                         values={rep.won.slice(-months)}
                         label="{rep.name}'s won revenue, {months} months"
                         dot
+                        zero
                         class="h-6 w-24 text-muted data-[trend=up]:text-good
                             data-[trend=down]:text-bad"
                      />

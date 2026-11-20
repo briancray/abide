@@ -13,7 +13,7 @@ const trends = () =>
 
 test("a rep's sparkline carries its trend, and redraws in place", async () => {
     using _trends = await mount(RepTrends({}))
-    expect(trends()).toEqual(['up', 'down', 'flat'])
+    expect(trends()).toEqual(['up', 'down', 'flat', 'flat'])
     const grace = document.querySelectorAll('svg')[1]
     expect(grace?.getAttribute('role')).toBe('img')
     expect(grace?.getAttribute('aria-label')).toBe(
@@ -27,6 +27,16 @@ test("a rep's sparkline carries its trend, and redraws in place", async () => {
         ;(document.querySelectorAll('.tabs button')[1] as HTMLElement).click()
         flushSync()
     })
-    expect(trends()).toEqual(['up', 'up', 'flat'])
+    expect(trends()).toEqual(['up', 'up', 'flat', 'flat'])
     atMost(work, { nodesCreated: 0 })
+})
+
+// THE REVERT: drop the `zero && low === high` widening in `Sparkline` — Joan's dot sits at 50, the
+// middle, where the bottom, 100, is due.
+test('a rep who has closed nothing lies along the bottom, not across the middle', async () => {
+    using _trends = await mount(RepTrends({}))
+    const joan = document.querySelectorAll('svg')[3]
+    expect(joan?.querySelector('[data-part=dot]')?.getAttribute('d')).toBe(
+        'M100,100Z',
+    )
 })

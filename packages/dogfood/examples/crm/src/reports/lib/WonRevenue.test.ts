@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 
 import { flushSync } from '@abide/abide'
+import LineChart from '@abide/abide/LineChart.abide'
 import { measure, mount } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
 
@@ -69,4 +70,20 @@ test('the crosshair reads each line at the nearest month', async () => {
     chart().dispatchEvent(new PointerEvent('pointerleave'))
     flushSync()
     expect(chart().hasAttribute('data-hovering')).toBe(false)
+})
+
+// 52.32 — held by `chart.ticks`, which widens a range of no width. THE REVERT: have `ticks` answer
+// `[low]` for one — the y ticks are `['0']` alone, and the line runs across the middle.
+test('a series of zeroes is drawn along the bottom of a chart that takes zero in', async () => {
+    using _chart = await mount(
+        LineChart({
+            series: [{ label: 'Won', values: [0, 0, 0] }],
+            label: 'Won revenue',
+            zero: true,
+            yTicks: 2,
+        }),
+    )
+    expect(
+        texts('[data-part=tick][data-axis=y]').map((text) => text?.trim()),
+    ).toEqual(['0', '0.5', '1'])
 })

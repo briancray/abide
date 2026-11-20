@@ -920,13 +920,13 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `LineChart` | `{ series: readonly { label: string; values: readonly (number \| null \| undefined)[] }[]; label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; width?: number; height?: number } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | One or more series drawn as lines over a shared x in an `svg`, the component `@abide/abide/LineChart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30 |
+| `LineChart` | `{ series: readonly { label: string; values: readonly (number \| null \| undefined)[] }[]; label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; width?: number; height?: number } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | One or more series drawn as lines over a shared x in an `svg`, the component `@abide/abide/LineChart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.32 |
 
 ## `Sparkline`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31 |
+| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.32 |
 
 ## `Chat`
 
