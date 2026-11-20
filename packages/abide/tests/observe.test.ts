@@ -64,8 +64,8 @@ function standIn() {
     return { counts, StandIn }
 }
 
-// Installed at load, ahead of every test: the shared observer is made by the first bind in the
-// process and kept, so a stand-in installed later would never be asked.
+// Installed at load, ahead of every test: the shared observer is kept while it observes any element
+// (32.98), and every page mounted here stays bound, so a stand-in installed later would never be asked.
 const resize = standIn()
 const intersect = standIn()
 Object.assign(globalThis, {

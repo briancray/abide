@@ -7,12 +7,15 @@ import { observedTwice } from './observedTwice.ts'
 type Size = { width: number; height: number }
 type Box = 'content' | 'border'
 
-// 32.81 — ONE OBSERVER FOR EVERY `observe.size` IN THE DOCUMENT, made by the first and kept: an
+// 32.81 — ONE OBSERVER FOR EVERY `observe.size` IN THE DOCUMENT, made by the first and dropped with
+// the last, so the next is made by whatever `ResizeObserver` stands then — a test's fake among them: an
 // observer per element is a callback per element per frame a layout moves, where one hands every
 // resize of the frame over in a single batch. Keyed by the element, so a delivery finds what to
 // write — in one map per box, since the box is an option of `observe` rather than of the observer,
 // and the delivery has to know which one the element asked for (32.90).
 let observer: ResizeObserver | undefined
+// How many elements `observer` observes, for it to be dropped with the last.
+let observed = 0
 const content = new WeakMap<Element, Measured>()
 const bordered = new WeakMap<Element, Measured>()
 const BORDER_BOX: ResizeObserverOptions = { box: 'border-box' }
@@ -56,6 +59,7 @@ export function size(
         if (content.has(element) || bordered.has(element))
             observedTwice('size', element)
         observer ??= new ResizeObserver(deliverSizes)
+        observed += 1
         const measured = new Measured(target)
         // 32.90 — a box that moves observes the element again.
         let stop: Disposer | undefined
@@ -69,6 +73,10 @@ export function size(
             content.delete(element)
             bordered.delete(element)
             ;(observer as ResizeObserver).unobserve(element)
+            observed -= 1
+            if (observed > 0) return
+            ;(observer as ResizeObserver).disconnect()
+            observer = undefined
         }
     }
 }

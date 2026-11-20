@@ -89,6 +89,9 @@ export function rect(target: unknown): (element: Element) => Disposer {
             if (bound.size > 0) return
             removeEventListener('scroll', scroll, SCROLLING)
             removeEventListener('resize', schedule, RESIZING)
+            // 32.81 — dropped with the last, as `observe.size`'s is.
+            ;(observer as ResizeObserver).disconnect()
+            observer = undefined
             if (frame !== 0) cancelAnimationFrame(frame)
             frame = 0
             scrolled = false
