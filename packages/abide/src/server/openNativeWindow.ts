@@ -69,6 +69,8 @@ export type LauncherThread = {
         | {
               staged: Staged | undefined
               check(): Promise<Checked>
+              /** The Mac woke, or the app came to the front: a check where one is due. */
+              nudge(): void
               onStaged: () => void
           }
         | undefined
@@ -121,41 +123,64 @@ export function openNativeWindow(
         launcher.quit(reopen)
     }
     const restart = (): void => quit(true)
+    const nudgeUpdates = (): void => launcher.updates?.nudge()
+    const applicationDelegate = send(
+        definedClass('AbideApplicationDelegate', {
+            'applicationShouldTerminate:': {
+                types: 'Q@:@',
+                args: [FFIType.ptr],
+                returns: FFIType.u64,
+                // NSTerminateCancel: 38.76 — the app is stopped first, and the process ends after.
+                run: () => {
+                    quit()
+                    return 0
+                },
+            },
+            // 38.172 — the menu bar extra outlives the window it shows and hides.
+            'applicationShouldTerminateAfterLastWindowClosed:': {
+                types: 'c@:@',
+                args: [FFIType.ptr],
+                returns: FFIType.bool,
+                run: () => !options.menuBarExtra,
+            },
+            // 38.173.
+            'applicationShouldHandleReopen:hasVisibleWindows:': {
+                types: 'c@:@c',
+                args: [FFIType.ptr, FFIType.bool],
+                returns: FFIType.bool,
+                run: (_application: Id, visible: boolean) => {
+                    if (!visible) front()
+                    return true
+                },
+            },
+            // 38.142.
+            'applicationDidBecomeActive:': {
+                types: 'v@:@',
+                args: [FFIType.ptr],
+                returns: FFIType.void,
+                run: nudgeUpdates,
+            },
+            'workspaceDidWake:': {
+                types: 'v@:@',
+                args: [FFIType.ptr],
+                returns: FFIType.void,
+                run: nudgeUpdates,
+            },
+        }),
+        'new',
+    )
+    send(application, 'setDelegate:', applicationDelegate)
+    // 38.142 — the workspace's own center, which alone posts a wake.
     send(
-        application,
-        'setDelegate:',
         send(
-            definedClass('AbideApplicationDelegate', {
-                'applicationShouldTerminate:': {
-                    types: 'Q@:@',
-                    args: [FFIType.ptr],
-                    returns: FFIType.u64,
-                    // NSTerminateCancel: 38.76 — the app is stopped first, and the process ends after.
-                    run: () => {
-                        quit()
-                        return 0
-                    },
-                },
-                // 38.172 — the menu bar extra outlives the window it shows and hides.
-                'applicationShouldTerminateAfterLastWindowClosed:': {
-                    types: 'c@:@',
-                    args: [FFIType.ptr],
-                    returns: FFIType.bool,
-                    run: () => !options.menuBarExtra,
-                },
-                // 38.173.
-                'applicationShouldHandleReopen:hasVisibleWindows:': {
-                    types: 'c@:@c',
-                    args: [FFIType.ptr, FFIType.bool],
-                    returns: FFIType.bool,
-                    run: (_application: Id, visible: boolean) => {
-                        if (!visible) front()
-                        return true
-                    },
-                },
-            }),
-            'new',
+            send(objcClass('NSWorkspace'), 'sharedWorkspace'),
+            'notificationCenter',
         ),
+        'addObserver:selector:name:object:',
+        applicationDelegate,
+        selector('workspaceDidWake:'),
+        nsString('NSWorkspaceDidWakeNotification'),
+        null,
     )
     for (const signal of [SIGTERM, SIGINT]) onSignal(signal, () => quit())
     // A native app outlives a fault in it: it is reported, and the window stays.

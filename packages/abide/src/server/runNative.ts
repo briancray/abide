@@ -29,7 +29,13 @@ import { LOOPBACK } from './LOOPBACK.ts'
 import type { MenuBarIcon } from './menuBarExtra.ts'
 import { requestNotificationPermission } from './nativeNotifications.ts'
 import { NativeSession } from './NativeSession.ts'
-import { appOf, NativeUpdater, type Staged } from './NativeUpdater.ts'
+import {
+    appOf,
+    type Checked,
+    NativeUpdater,
+    RETRY_INTERVAL,
+    type Staged,
+} from './NativeUpdater.ts'
 import { type LauncherThread, openNativeWindow } from './openNativeWindow.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { randomToken } from './randomToken.ts'
@@ -78,7 +84,7 @@ type ToWindow =
       }
     | { kind: 'navigate'; address: string }
     | { kind: 'shown'; address: string | undefined }
-    | { kind: 'staged'; staged: Staged }
+    | { kind: 'staged'; staged: Staged | undefined }
     | { kind: 'answer'; call: number; value: unknown }
     | { kind: 'ended'; code: number }
 
@@ -93,6 +99,7 @@ type ToLauncher =
       }
     | { kind: 'background'; color: [number, number, number] }
     | { kind: 'report'; error: unknown }
+    | { kind: 'nudge' }
     | { kind: 'quit'; reopen: boolean }
 
 /**
@@ -153,6 +160,7 @@ async function openWindow(
                     updates = {
                         staged: undefined,
                         check: () => call('check'),
+                        nudge: () => tell({ kind: 'nudge' }),
                         onStaged: () => {},
                     }
                 navigate = openNativeWindow(
@@ -405,8 +413,8 @@ async function launch(
                   (staged) => tell({ kind: 'staged', staged }),
               )
     // 38.143 — a feed that refused is reported, wherever the check was asked from.
-    const checkReported = async () => {
-        const checked = await updater?.check()
+    const reported = async (checking: Promise<Checked> | undefined) => {
+        const checked = await checking
         if (checked?.outcome === 'refused')
             reportUnexpected(
                 new Error(`abide: ${checked.reason}. RULEBOOK 38.143.`),
@@ -428,7 +436,7 @@ async function launch(
                 (answered) => answered.ok,
                 () => false,
             )
-        return checkReported()
+        return reported(updater?.check())
     }
     hear = (message) => {
         if (message.kind === 'call')
@@ -440,6 +448,9 @@ async function launch(
         else if (message.kind === 'background')
             session.rememberBackground(message.color).catch(reportUnexpected)
         else if (message.kind === 'report') reportUnexpected(message.error)
+        // 38.142 — the Mac woke, or the app came to the front.
+        else if (message.kind === 'nudge')
+            void reported(updater?.checkWhenDue(true))
         else if (message.kind === 'quit')
             // 38.76 — the app is stopped first, and the process ends after.
             session
@@ -468,11 +479,12 @@ async function launch(
     tellShown()
     tell({ kind: 'navigate', address: `${base}open` })
     if (updater === undefined) return
-    // 38.142 — as it launches and hourly after; a feed that cannot be reached is tried again at
-    // the next, and only a refusal is reported (38.143).
-    const checkQuietly = (): void => void checkReported()
-    checkQuietly()
-    setInterval(checkQuietly, UPDATE_INTERVAL)
+    // 38.142 — as it launches, and whenever the wall clock says one is due: hourly, or sooner
+    // after a feed that could not be read, which is why the clock is read as often as a retry can
+    // come. Only a refusal is reported (38.143).
+    void reported(updater.check())
+    setInterval(
+        () => void reported(updater.checkWhenDue(false)),
+        RETRY_INTERVAL,
+    )
 }
-
-const UPDATE_INTERVAL = 60 * 60 * 1000

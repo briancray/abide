@@ -11,7 +11,14 @@ import { spawned } from '@abide/harness/gate'
 
 import { launcherOf } from '#server/launcherOptions.ts'
 import { menuBar } from '#server/menuBar.ts'
-import { appOf, type Checked, NativeUpdater } from '#server/NativeUpdater.ts'
+import {
+    appOf,
+    CHECK_INTERVAL,
+    type Checked,
+    NativeUpdater,
+    NUDGE_INTERVAL,
+    RETRY_INTERVAL,
+} from '#server/NativeUpdater.ts'
 import { ran } from '#server/ran.ts'
 import {
     newUpdateKey,
@@ -19,6 +26,7 @@ import {
     publishUpdate,
     updateKey,
 } from '#server/updateFeed.ts'
+import { log } from '#shared/log.ts'
 
 import { BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -100,7 +108,7 @@ async function installed(version: string, update: string, privateKey: string) {
         await publicKeyOf(privateKey),
         app,
         version,
-        (staged) => told.push(staged.version),
+        (staged) => told.push(staged?.version ?? 'lost'),
     )
     return { app, updater, told }
 }
@@ -241,6 +249,106 @@ test.skipIf(!ON_MAC)(
         expect(await versionAt(app)).toBe('1.0.0')
     },
 )
+
+// THE REVERT is `check` answering what is staged without reading the feed, as before: 1.2.0 is
+// never read, and the restart installs 1.1.0.
+test.skipIf(!ON_MAC)(
+    'a check after staging reads the feed again, and stages a newer release in place of the staged one — 38.142',
+    async () => {
+        const key = await newUpdateKey()
+        const host = await published('1.1.0', key)
+        using _ = host.server
+        const { app, updater, told } = await installed(
+            '1.0.0',
+            host.update,
+            key,
+        )
+        expect(outcome(await updater.check())).toBe('staged 1.1.0')
+        host.reads.length = 0
+        expect(outcome(await updater.check())).toBe('staged 1.1.0')
+        expect(host.reads).toEqual(['/updates/latest.json'])
+        await fakeApp(`${host.directory}/build/CRM.app`, '1.2.0')
+        await publishUpdate(
+            `${host.directory}/build/CRM.app`,
+            `${host.directory}/updates`,
+            { version: '1.2.0', required: false, notes: null },
+            key,
+        )
+        expect(outcome(await updater.check())).toBe('staged 1.2.0')
+        expect(told).toEqual(['1.1.0', '1.2.0'])
+        expect(await updater.install()).toBe(true)
+        expect(await versionAt(app)).toBe('1.2.0')
+    },
+)
+
+// THE REVERT is `due` an hour after every check, whatever it found: the feed that could not be read
+// is tried again an hour later rather than a minute.
+test('a feed that cannot be reached is tried again after a minute, backing off to the hour — 38.142', async () => {
+    const { updater } = await installed(
+        '1.0.0',
+        'http://127.0.0.1:9/updates',
+        await newUpdateKey(),
+    )
+    const waits: number[] = []
+    for (let tries = 0; tries < 8; tries += 1) {
+        await updater.check()
+        waits.push(updater.due - updater.lastChecked)
+    }
+    expect(waits).toEqual([
+        RETRY_INTERVAL,
+        2 * RETRY_INTERVAL,
+        4 * RETRY_INTERVAL,
+        8 * RETRY_INTERVAL,
+        16 * RETRY_INTERVAL,
+        32 * RETRY_INTERVAL,
+        CHECK_INTERVAL,
+        CHECK_INTERVAL,
+    ])
+})
+
+// THE REVERT is `checkWhenDue` reading `due` alone: the app coming to the front an hour short of the
+// next check reads nothing.
+test('a check is due by the wall clock, and waking or coming to the front brings it to five minutes after the last — 38.142', async () => {
+    const { updater } = await installed(
+        '1.0.0',
+        'http://127.0.0.1:9/updates',
+        await newUpdateKey(),
+    )
+    expect(updater.checkWhenDue(false)).toBeDefined()
+    await updater.checking
+    updater.due = updater.lastChecked + CHECK_INTERVAL
+    const after = (elapsed: number, nudged: boolean): boolean => {
+        const checking = updater.checkWhenDue(
+            nudged,
+            updater.lastChecked + elapsed,
+        )
+        return checking !== undefined
+    }
+    expect(after(NUDGE_INTERVAL - 1, true)).toBe(false)
+    expect(after(CHECK_INTERVAL - 1, false)).toBe(false)
+    expect(after(NUDGE_INTERVAL, true)).toBe(true)
+    await updater.checking
+})
+
+// THE REVERT is the `logged` line dropped from `check`: nothing in the log says a check ran.
+test('every check writes one line naming what it found — 38.142', async () => {
+    const { updater } = await installed(
+        '1.0.0',
+        'http://127.0.0.1:9/updates',
+        await newUpdateKey(),
+    )
+    const before = log.records().length
+    await updater.check()
+    const lines = log
+        .records()
+        .slice(before)
+        .filter((record) => record.namespace.endsWith(':update'))
+        .map((record) => record.message)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toStartWith(
+        '1.0.0: unreachable http://127.0.0.1:9/updates/latest.json could not be read',
+    )
+})
 
 test('a feed that cannot be reached stages nothing and is not a refusal — 38.142', async () => {
     const key = await newUpdateKey()
