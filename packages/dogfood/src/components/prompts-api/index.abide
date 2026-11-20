@@ -16,6 +16,14 @@ import Section from '#src/lib/Section.abide'
             from: ["test('a deal is deleted only once the dialog is confirmed'"],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DeleteDeal.test.ts',
+            from: ["test('a confirm that is a call stays up, busy, until it lands"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DeleteDeal.test.ts',
+            from: ["test('a withdrawn prompt is declined"],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/deals/lib/RenameDeal.test.ts',
             from: [
                 "test('Rename takes the text typed, and Cancel keeps the old name'",
@@ -90,6 +98,43 @@ import Section from '#src/lib/Section.abide'
             import { prompts } from '@abide/abide/Prompts.abide'
 
             await prompts.alert('The import finished with 3 duplicate contacts.')
+        `} />
+    </Section>
+
+    <Section level={3} title="Delete a deal from the dialog, and say why it could not">
+        <p>Hand <code>run</code> the call the confirm makes. The dialog stays up with
+            <code>data-busy</code> while it runs, closes once it lands, and shows the refusal in its
+            <code>error</code> part.</p>
+        <Code language="ts" caption="browser" code={`
+            import { prompts } from '@abide/abide/Prompts.abide'
+
+            await prompts.confirm({
+                body: 'Delete Engine renewal?',
+                danger: true,
+                run: () => deleteDeal({ id }),
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Withdraw a question the page no longer needs">
+        <p>Pass a <code>signal</code>, and aborting it takes the prompt down, or out of the
+            queue, as declined.</p>
+        <Code language="ts" caption="browser" code={`
+            import { prompts } from '@abide/abide/Prompts.abide'
+
+            const leaving = new AbortController()
+            const keep = prompts.confirm({ body: 'Keep editing?', signal: leaving.signal })
+            leaving.abort() // keep settles false
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask without blocking the page">
+        <p><code>modal: false</code> shows the prompt beside the page, which stays usable
+            around it.</p>
+        <Code language="ts" caption="browser" code={`
+            import { prompts } from '@abide/abide/Prompts.abide'
+
+            await prompts.alert({ body: 'Saved as a draft.', modal: false })
         `} />
     </Section>
 </Doc>

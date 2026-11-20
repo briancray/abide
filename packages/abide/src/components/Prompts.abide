@@ -11,7 +11,7 @@ export type { PromptOptions }
 // 50.6, 50.8-50.10, 50.34 — WHERE `prompts.confirm`, `prompts.alert` AND `prompts.prompt` SHOW: rendered once, in the root
 // layout, and showing the queue's first prompt in a `Dialog` until it is answered.
 import type { Attributes } from '#shared/Attributes.ts'
-import { queue } from '#shared/prompts/queue.ts'
+import { type Prompt, queue } from '#shared/prompts/queue.ts'
 import { props } from '#shared/props.ts'
 import { reactive } from '#shared/reactive/index.ts'
 
@@ -33,15 +33,56 @@ const typedRight = reactive(() => {
     )
 })
 
+// 50.39 — a confirm whose `run` is in flight, and what its last run failed with; each prompt starts
+// from neither.
+// Each reads `current` alone so the queue moving on resets it, as `typed` is.
+let busy = reactive((): boolean => {
+    void current
+    return false
+})
+let failure = reactive((): string | undefined => {
+    void current
+    return undefined
+})
+
 // Only the confirming button's `value` confirms; Escape, the backdrop and Cancel decline (50.8).
 function answered(returnValue: string) {
     const asked = current
     if (asked === undefined) return
-    const answer = returnValue === 'confirm' && typedRight ? typed : undefined
+    settle(asked, returnValue === 'confirm' && typedRight ? typed : undefined)
+}
+
+// The first prompt off the queue, and its caller settled — where it is still the first: a withdrawn
+// prompt (50.37) is gone already, and its close answers nothing.
+function settle(asked: Prompt, answer: string | undefined) {
+    if (queue[0] !== asked) return
     queue.patch((waiting) => {
         waiting.shift()
     })
     asked.resolve(answer)
+}
+
+// 50.39 — THE CONFIRM IS A CALL: the dialog stays up while it runs, closes on its answer, and shows
+// what it failed with. The form's own close is held back, since it would answer before the call does.
+async function submitted(event: SubmitEvent) {
+    const asked = current
+    const submitter = event.submitter as HTMLButtonElement | null
+    if (asked?.run === undefined || submitter?.value !== 'confirm') return
+    event.preventDefault()
+    if (busy || !typedRight) return
+    const answer = typed
+    busy = true
+    failure = undefined
+    try {
+        await asked.run(answer)
+    } catch (thrown) {
+        if (current === asked) {
+            busy = false
+            failure = thrown instanceof Error ? thrown.message : String(thrown)
+        }
+        return
+    }
+    settle(asked, answer)
 }
 </script>
 
@@ -50,11 +91,13 @@ function answered(returnValue: string) {
     role="alertdialog"
     aria-label={current?.title ?? current?.body}
     data-danger={current?.danger ? '' : undefined}
+    data-busy={busy ? '' : undefined}
+    modal={current?.modal ?? true}
     bind:open={showing}
     onclose={answered}
 >
     {#if current}
-        <form method="dialog" data-part="form">
+        <form method="dialog" data-part="form" onsubmit={submitted}>
             {#if current.title}
                 <h2 data-part="title">{current.title}</h2>
             {/if}
@@ -78,12 +121,15 @@ function answered(returnValue: string) {
                     >
                 </label>
             {/if}
+            {#if failure !== undefined}
+                <p data-part="error" role="alert">{failure}</p>
+            {/if}
             <div data-part="actions">
                 <button
                     type="submit"
                     value="confirm"
                     data-part="confirm"
-                    disabled={!typedRight}
+                    disabled={!typedRight || busy}
                     autofocus={current.kind === 'alert'}
                 >{current.confirm}</button>
                 {#if current.kind !== 'alert'}

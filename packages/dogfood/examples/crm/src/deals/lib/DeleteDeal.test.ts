@@ -73,3 +73,106 @@ test('Escape declines the question', async () => {
     flushSync()
     expect(dialog().open).toBe(false)
 })
+
+// 50.37 — A PROMPT WITHDRAWN IS DECLINED, waiting or showing, and the next one shows in its place.
+// THE REVERT: drop the `abort` listener in `queued` — the withdrawn prompt never settles, and
+// `withdrawn: pending` where `false` is due.
+test('a withdrawn prompt is declined, and the next shows in its place', async () => {
+    using _deals = await mount(DeleteDeal({}))
+    const leaving = new AbortController()
+    let withdrawn: boolean | 'pending' = 'pending'
+    void prompts
+        .confirm({ body: 'Keep editing?', signal: leaving.signal })
+        .then((answer) => {
+            withdrawn = answer
+        })
+    const next = prompts.confirm('Archive Compiler pilot?')
+    flushSync()
+    expect(dialog().querySelector('[data-part=body]')?.textContent).toBe(
+        'Keep editing?',
+    )
+    leaving.abort()
+    await settled()
+    flushSync()
+    expect(`withdrawn: ${withdrawn}`).toBe('withdrawn: false')
+    expect(dialog().open).toBe(true)
+    expect(dialog().querySelector('[data-part=body]')?.textContent).toBe(
+        'Archive Compiler pilot?',
+    )
+    dialog().querySelector<HTMLButtonElement>('[data-part=confirm]')?.click()
+    expect(await next).toBe(true)
+    expect(
+        await prompts.confirm({ body: 'Gone?', signal: AbortSignal.abort() }),
+    ).toBe(false)
+})
+
+// 50.39 — A CONFIRM THAT IS A CALL stays up while the call runs, shows what it failed with, and
+// closes once it lands. THE REVERT: drop `onsubmit={submitted}` from `Prompts`' form — the dialog
+// closes on the first press, `open: false` where `true` is due.
+test('a confirm that is a call stays up, busy, until it lands, and shows why it failed', async () => {
+    using _deals = await mount(DeleteDeal({}))
+    let attempts = 0
+    let release: () => void = () => {}
+    const answered = prompts.confirm({
+        body: 'Delete Engine renewal?',
+        run: () => {
+            attempts += 1
+            if (attempts === 1)
+                return Promise.reject(new Error('The deal is locked.'))
+            return new Promise<void>((resolve) => {
+                release = resolve
+            })
+        },
+    })
+    flushSync()
+    const confirm = () =>
+        dialog().querySelector<HTMLButtonElement>('[data-part=confirm]')
+    confirm()?.click()
+    await settled()
+    flushSync()
+    expect(`open: ${dialog().open}`).toBe('open: true')
+    expect(dialog().querySelector('[data-part=error]')?.textContent).toBe(
+        'The deal is locked.',
+    )
+    confirm()?.click()
+    flushSync()
+    expect(dialog().hasAttribute('data-busy')).toBe(true)
+    expect(confirm()?.disabled).toBe(true)
+    release()
+    expect(await answered).toBe(true)
+    await settled()
+    flushSync()
+    expect(dialog().open).toBe(false)
+    expect(dialog().hasAttribute('data-busy')).toBe(false)
+})
+
+// 50.38 — `modal: false` opens with `show`, leaving the page usable. THE REVERT: call `showModal`
+// whatever `modal` says in `Dialog` — `showModal` where `show` is due.
+test('a prompt that is not modal opens beside the page', async () => {
+    using _deals = await mount(DeleteDeal({}))
+    const opened: string[] = []
+    const { show, showModal } = HTMLDialogElement.prototype
+    HTMLDialogElement.prototype.show = function () {
+        opened.push('show')
+        show.call(this)
+    }
+    HTMLDialogElement.prototype.showModal = function () {
+        opened.push('showModal')
+        showModal.call(this)
+    }
+    try {
+        const answered = prompts.alert({
+            body: 'Saved as draft.',
+            modal: false,
+        })
+        flushSync()
+        expect(opened).toEqual(['show'])
+        dialog()
+            .querySelector<HTMLButtonElement>('[data-part=confirm]')
+            ?.click()
+        await answered
+    } finally {
+        HTMLDialogElement.prototype.show = show
+        HTMLDialogElement.prototype.showModal = showModal
+    }
+})

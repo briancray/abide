@@ -1,12 +1,14 @@
 <script>
 // 50.1-50.4 — A NATIVE MODAL: the browser puts a `showModal` dialog in the top layer, makes the page
 // behind it inert, keeps focus inside it and fires `cancel` on Escape, so none of that is code here.
+// `modal: false` is `show`, which does none of it: the page stays usable around the dialog.
 import type { Attributes } from '#shared/Attributes.ts'
 import { props } from '#shared/props.ts'
 import { reactive, watch } from '#shared/reactive/index.ts'
 
 const {
     open = false,
+    modal = true,
     dismissible = true,
     onclose,
     ...rest
@@ -14,6 +16,8 @@ const {
     {
         /** Whether the dialog is showing, modal, over the page. Bind it — `bind:open={editing}` — and every way it closes writes `false` back. Mirrored as `data-open` on the `<dialog>`. */
         open?: boolean
+        /** Whether it opens modal, over an inert page, or beside the page with `show`. Default `true`. */
+        modal?: boolean
         /** Whether Escape and a click on the backdrop close it. `false` keeps it open until `open` turns false or a `<form method="dialog">` inside it submits. Default `true`. */
         dismissible?: boolean
         /** Called each time it closes, however it closed, with the `<dialog>`'s `returnValue`: the `value` of the button that submitted a `<form method="dialog">`, or `''`. */
@@ -28,7 +32,8 @@ watch(() => {
     if (element === undefined || element.open === open) return
     if (!open) return element.close()
     element.returnValue = ''
-    element.showModal()
+    if (modal) element.showModal()
+    else element.show()
     // What renders with the opening lands after `showModal`'s own focusing ran (50.4).
     queueMicrotask(() =>
         element.querySelector<HTMLElement>('[autofocus]')?.focus(),

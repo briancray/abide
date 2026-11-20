@@ -4895,8 +4895,8 @@ the states that pattern names.
 
 # 50. Dialogs, toasts and popovers
 
-50.1 `Dialog` MUST hold its `<dialog>` open with `showModal` while `open` is true, and closed while
-`open` is false.
+50.1 `Dialog` MUST hold its `<dialog>` open while `open` is true, with `showModal`, or with `show`
+where `modal` is `false`, and closed while `open` is false.
 
 50.2 Every close of a `Dialog`, whatever closed it, MUST write `false` to `open` and then call
 `onclose` with the `returnValue` that close set, and `''` where it set none.
@@ -4995,6 +4995,17 @@ under its `data-part` and `data-tone`.
 
 50.36 A notice's `onclose` MUST be called once, as the notice leaves `toasts.list`, with `timeout`
 where its timeout took it, `action` where its action did, and `dismissed` otherwise.
+
+50.37 A prompt whose `signal` aborts MUST leave the queue, showing or waiting, and settle as one closed
+other than by the confirming button, and a prompt whose `signal` is aborted already MUST NOT be
+queued.
+
+50.38 `Prompts` MUST show a prompt whose `modal` is `false` in a `Dialog` whose `modal` is `false`.
+
+50.39 The confirming button of a prompt carrying `run` MUST call `run` with the text typed, and while
+that call is in flight MUST keep the prompt showing, disabled, with `data-busy` on the dialog; the
+prompt MUST settle as confirmed once the call resolves, and stay showing with the rejection's message
+in its `error` part once it rejects.
 
 # 51. Lists and tables
 

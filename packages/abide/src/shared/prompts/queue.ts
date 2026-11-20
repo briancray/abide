@@ -25,6 +25,15 @@ export type PromptOptions = {
     value?: string
     /** The input's placeholder. */
     placeholder?: string
+    /** Withdraws the prompt once it aborts, waiting or showing; it settles as one declined (50.37). */
+    signal?: AbortSignal
+    /** Whether it is shown modal, over an inert page. `false` leaves the page usable around it (50.38). Default `true`. */
+    modal?: boolean
+    /**
+     * The call confirming makes, handed the text typed: the prompt stays up, `data-busy`, until it
+     * settles, closes once it resolves, and shows its error once it rejects (50.39).
+     */
+    run?: (answer: string) => unknown
 }
 
 /** One queued prompt: what it shows, which of the three asked it, and what settles its caller. */
@@ -37,6 +46,8 @@ export type Prompt = {
     mustType: string | undefined
     value: string
     placeholder: string | undefined
+    modal: boolean
+    run: ((answer: string) => unknown) | undefined
     kind: 'confirm' | 'alert' | 'prompt'
     /** Settles the caller with the text typed where the confirming button closed it, and `undefined` otherwise. */
     resolve: (answer: string | undefined) => void
@@ -54,8 +65,30 @@ export function queued(
         throw new Error(
             `prompts.${kind} asks a person, and a server has none to ask. RULEBOOK 50.11.`,
         )
-    const options = typeof asked === 'string' ? { body: asked } : asked
-    const { promise, resolve } = Promise.withResolvers<string | undefined>()
+    const options: PromptOptions =
+        typeof asked === 'string' ? { body: asked } : asked
+    const { promise, resolve: settle } = Promise.withResolvers<
+        string | undefined
+    >()
+    // 50.37 — withdrawn before it was ever shown: nothing queued, declined at once.
+    const signal = options.signal
+    if (signal?.aborted === true) {
+        settle(undefined)
+        return promise
+    }
+    const withdraw = (): void => {
+        const at = queue.peek()?.indexOf(prompt) ?? -1
+        if (at === -1) return
+        queue.patch((waiting) => {
+            waiting.splice(at, 1)
+        })
+        settle(undefined)
+    }
+    const resolve = (answer: string | undefined): void => {
+        signal?.removeEventListener('abort', withdraw)
+        settle(answer)
+    }
+    signal?.addEventListener('abort', withdraw, { once: true })
     const prompt: Prompt = {
         title: options.title,
         body: options.body ?? '',
@@ -65,6 +98,8 @@ export function queued(
         mustType: options.mustType,
         value: options.value ?? '',
         placeholder: options.placeholder,
+        modal: options.modal ?? true,
+        run: options.run,
         kind,
         resolve,
     }

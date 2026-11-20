@@ -217,6 +217,8 @@ test('the notices and the prompts are one list per request — 11.32', async () 
                 mustType: undefined,
                 value: '',
                 placeholder: undefined,
+                modal: true,
+                run: undefined,
                 kind: 'confirm',
                 resolve: () => {},
             },
