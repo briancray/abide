@@ -21,6 +21,24 @@ import Section from '#src/lib/Section.abide'
                 "test('inline renders one line of marks with no block around it",
             ],
         },
+        {
+            path: 'packages/abide/tests/markdown.test.ts',
+            from: [
+                "test('a fenced block the caller names is its markup, handed the source and the rest of the info",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/markdown.test.ts',
+            from: [
+                "test('a reference link takes the address its definition names, in any case",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/markdown.test.ts',
+            from: [
+                "test('href may answer the address with the target and rel it opens with",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Show a pasted deal note as formatted text">
@@ -66,6 +84,21 @@ import Section from '#src/lib/Section.abide'
             markdown(note, {
                 href: (address) =>
                     address.startsWith('/') ? url(address as RouteLiteral) : address,
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Draw a chart from a fenced block in a report">
+        <p><code>blocks</code> names a function per fence language, handed the block's source and
+            the rest of its info. What it answers is written as it is, so escape what it
+            writes.</p>
+        <Code language="ts" caption="shared" code={`
+            import { markdown } from '@abide/abide'
+
+            markdown(report, {
+                blocks: {
+                    chart: (source, info) => drawChart(source.split(','), info),
+                },
             })
         `} />
     </Section>

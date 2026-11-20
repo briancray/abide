@@ -2,12 +2,21 @@
 import { reactive } from '@abide/abide'
 import Markdown from '@abide/abide/Markdown.abide'
 
+import CopyableCode from './CopyableCode.abide'
+
 let note = reactive(`**Ada** wants the annual plan. [Brief](https://x.co/b7)
 
 - legal review by *Friday*
 - [open the quote](javascript:alert('pwned'))
 
 <script>alert('pwned')<\/script>`)
+
+// A link off the CRM opens in a tab of its own; one inside it stays in this one.
+function linkTo(address: string) {
+    return address.startsWith('/')
+        ? address
+        : { href: address, target: '_blank', rel: 'noopener noreferrer' }
+}
 </script>
 
 <label>
@@ -17,6 +26,8 @@ let note = reactive(`**Ada** wants the annual plan. [Brief](https://x.co/b7)
 <Markdown
     source={note}
     headingLevel={3}
+    href={linkTo}
+    blocks={{ sh: CopyableCode }}
     aria-label="Preview"
     class="flex flex-col gap-tight"
  />

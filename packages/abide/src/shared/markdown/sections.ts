@@ -13,19 +13,65 @@
 
 import { escapeAttribute as escape } from '../escapeText.ts'
 
+/** 52.40 — where a link goes: its address, and the `target` and `rel` it opens with. */
+export type LinkTarget = { href: string; target?: string; rel?: string }
+
 /** The settings a render runs under, defaults filled in. */
 export type Settings = {
     schemes: readonly string[]
     headingLevel: number
-    href: ((address: string) => string | undefined) | undefined
+    href: ((address: string) => string | LinkTarget | undefined) | undefined
+    /** 52.41 — the addresses each reference label names, read from the whole source. */
+    references: ReadonlyMap<string, string>
+    /** 52.42 — the fenced blocks the caller renders itself, by the first word of the fence's info. */
+    blocks: Readonly<Record<string, (source: string, info: string) => string>>
 }
 
 export const SCHEMES: readonly string[] = ['http', 'https', 'mailto']
 
-/** The address a link to `url` is written with, or `undefined` where it is written as its text. */
-function addressOf(url: string, settings: Settings): string | undefined {
+/** Where a link to `url` goes, or `undefined` where it is written as its text. */
+function addressOf(url: string, settings: Settings): LinkTarget | undefined {
     if (!allowed(url, settings.schemes)) return undefined
-    return settings.href === undefined ? url : settings.href(url)
+    if (settings.href === undefined) return { href: url }
+    const answered = settings.href(url)
+    return typeof answered === 'string' ? { href: answered } : answered
+}
+
+/** `inner` as a link to `target`: its address, and the `target` and `rel` it carries where it has them. */
+function anchor(target: LinkTarget, inner: string): string {
+    let attributes = ` href="${escape(target.href)}"`
+    if (target.target !== undefined)
+        attributes += ` target="${escape(target.target)}"`
+    if (target.rel !== undefined) attributes += ` rel="${escape(target.rel)}"`
+    return `<a${attributes}>${inner}</a>`
+}
+
+// 52.41 — `[label]: address "title"`, a definition a reference link elsewhere names.
+const DEFINITION =
+    /^ {0,3}\[((?:[^\]\\]|\\.){1,999})\]:[ \t]*<?([^\s>]+)>?(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$/
+
+/** A reference label as it matches: case and runs of whitespace aside. */
+function labelKey(label: string): string {
+    return label.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+/** 52.41 — the definitions `text` holds outside its fences, the first of a label kept. */
+export function referencesOf(text: string): Map<string, string> {
+    const references = new Map<string, string>()
+    let fence: Fence | undefined
+    for (const line of text.split('\n')) {
+        if (fence !== undefined) {
+            if (closes(line, fence)) fence = undefined
+            continue
+        }
+        fence = fenceOf(line)
+        if (fence !== undefined) continue
+        const definition = DEFINITION.exec(line)
+        if (definition === null) continue
+        const key = labelKey(definition[1] as string)
+        if (!references.has(key)) references.set(key, definition[2] as string)
+    }
+    return references
 }
 
 /** Whether `url` may be a link's address: a scheme in `schemes`, or a path on this origin. */
@@ -124,6 +170,30 @@ export function render(text: string, settings: Settings): string {
     return html
 }
 
+/**
+ * 52.43 — the block a section is where it is one closed fence and nothing else, its name one of
+ * `names`: the name, its source and the rest of its info.
+ */
+export function blockOf(
+    section: string,
+    names: readonly string[],
+): { name: string; source: string; info: string } | undefined {
+    const lines = section.replace(/\s+$/, '').split('\n')
+    const fence = fenceOf((lines[0] ?? '').replace(/\r$/, ''))
+    if (fence === undefined || lines.length < 2) return undefined
+    const name = fence.info.split(/\s/)[0] ?? ''
+    if (!names.includes(name)) return undefined
+    if (!closes((lines.at(-1) as string).replace(/\r$/, ''), fence))
+        return undefined
+    for (let index = 1; index < lines.length - 1; index += 1)
+        if (closes(lines[index] as string, fence)) return undefined
+    return {
+        name,
+        source: lines.slice(1, -1).join('\n'),
+        info: fence.info.slice(name.length).trim(),
+    }
+}
+
 /** One section's HTML. */
 export function renderSection(section: string, settings: Settings): string {
     const lines = section.split('\n')
@@ -183,6 +253,17 @@ function blocks(
             }
             index += 1
             const language = fence.info.split(/\s/)[0] ?? ''
+            // 52.42 — a block the caller renders, handed its source and the info after its name.
+            const block = Object.hasOwn(settings.blocks, language)
+                ? settings.blocks[language]
+                : undefined
+            if (block !== undefined) {
+                html += block(
+                    code.join('\n'),
+                    fence.info.slice(language.length).trim(),
+                )
+                continue
+            }
             html += `<pre><code${language === '' ? '' : ` data-language="${escape(language)}"`}>${escape(code.join('\n'))}</code></pre>`
             continue
         }
@@ -228,6 +309,11 @@ function blocks(
                 index = tabled.next
                 continue
             }
+        }
+        // 52.41 — a definition opening a block is read by `referencesOf`, and renders nothing.
+        if (DEFINITION.test(line)) {
+            index += 1
+            continue
         }
         const paragraph: string[] = [inline(line.trim(), settings, false)]
         index += 1
@@ -585,7 +671,9 @@ function linkAt(
             }
         }
     }
-    if (close === -1 || text[close + 1] !== '(') return undefined
+    if (close === -1) return undefined
+    if (text[close + 1] !== '(')
+        return referenceAt(text, open, close, image, settings)
     let scan = close + 2
     while (text[scan] === ' ') scan += 1
     let url = ''
@@ -632,12 +720,34 @@ function linkAt(
           ? escape(url)
           : inline(label, settings, true)
     return {
-        html:
-            address === undefined
-                ? inner
-                : `<a href="${escape(address)}">${inner}</a>`,
+        html: address === undefined ? inner : anchor(address, inner),
         end,
     }
+}
+
+/** 52.41 — `[text][label]`, `[text][]` or `[label]`, where a definition names the label. */
+function referenceAt(
+    text: string,
+    open: number,
+    close: number,
+    image: boolean,
+    settings: Settings,
+): { html: string; end: number } | undefined {
+    const label = text.slice(open + 1, close)
+    let named = label
+    let end = close + 1
+    if (text[close + 1] === '[') {
+        const shut = text.indexOf(']', close + 2)
+        if (shut === -1) return undefined
+        const written = text.slice(close + 2, shut)
+        if (written !== '') named = written
+        end = shut + 1
+    }
+    const url = settings.references.get(labelKey(named))
+    if (url === undefined) return undefined
+    const address = addressOf(url, settings)
+    const inner = image ? escape(label) : inline(label, settings, true)
+    return { html: address === undefined ? inner : anchor(address, inner), end }
 }
 
 function autolinkAt(
@@ -656,7 +766,7 @@ function autolinkAt(
     const address = addressOf(uri ? written : `mailto:${written}`, settings)
     const end = at + matched[0].length
     if (address === undefined) return { html: escape(written), end }
-    return { html: `<a href="${escape(address)}">${escape(written)}</a>`, end }
+    return { html: anchor(address, escape(written)), end }
 }
 
 function bareUrlAt(
@@ -686,5 +796,5 @@ function bareUrlAt(
     if (!/^https?:\/\/[^/]/.test(url)) return undefined
     const address = addressOf(url, settings)
     if (address === undefined) return undefined
-    return { html: `<a href="${escape(address)}">${escape(url)}</a>`, end }
+    return { html: anchor(address, escape(url)), end }
 }

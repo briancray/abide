@@ -21,6 +21,18 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/DealSummary.test.ts',
             from: ["test('a chunk renders only the section still growing'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NotePreview.test.ts',
+            from: [
+                "test('a fenced sh block renders as the code with a Copy beside it, and once closed only'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NotePreview.test.ts',
+            from: [
+                "test('a reference link takes its address from a definition anywhere in the note, which shows nothing'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Preview a deal note as it is typed">
@@ -80,5 +92,43 @@ import Section from '#src/lib/Section.abide'
 
             <Markdown source={note} href={inside} />
         `} />
+    </Section>
+
+    <Section level={3} title="Open a note's outside links in a tab of their own">
+        <p><code>href</code> may answer the address with the <code>target</code> and
+            <code>rel</code> the link opens with.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Markdown from '@abide/abide/Markdown.abide'
+
+            const linkTo = (address: string) =>
+                address.startsWith('/')
+                    ? address
+                    : { href: address, target: '_blank', rel: 'noopener' }
+            </script>
+
+            <Markdown source={note} href={linkTo} />
+        `} />
+    </Section>
+
+    <Section level={3} title="Put a Copy button beside each shell command">
+        <p><code>blocks</code> names a component per fence language. A fenced block whose
+            language is one of them renders as that component, handed its <code>source</code>
+            and the rest of its <code>info</code>, once its fence closes.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Markdown from '@abide/abide/Markdown.abide'
+
+            import CopyableCode from './CopyableCode.abide'
+            </script>
+
+            <Markdown source={note} blocks={{ sh: CopyableCode }} />
+        `} />
+    </Section>
+
+    <Section level={3} title="Name a link once and use it anywhere in a note">
+        <p>A reference link — <code>[the quote][q]</code>, <code>[q][]</code> or
+            <code>[q]</code> — takes its address from a <code>[q]: address</code> line anywhere
+            in the source, which renders nothing.</p>
     </Section>
 </Doc>

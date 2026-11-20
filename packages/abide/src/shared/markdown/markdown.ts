@@ -1,4 +1,10 @@
-import { inline, render, SCHEMES } from './sections.ts'
+import {
+    inline,
+    type LinkTarget,
+    referencesOf,
+    render,
+    SCHEMES,
+} from './sections.ts'
 
 /**
  * Markdown as HTML that is safe to render as markup: paragraphs, headings, emphasis, code, fenced
@@ -17,10 +23,19 @@ export function markdown(
         /** The level a `#` heading renders at, the deeper ones below it, down to 6. 1 by default. */
         headingLevel?: number
         /**
-         * Rewrites the address of each link `schemes` lets through: a path under the app's mount, say.
-         * A link it answers `undefined` for renders as its text.
+         * Where each link `schemes` lets through goes: an address — a path under the app's mount,
+         * say — or the address with the `target` and `rel` it opens with (52.40). A link it answers
+         * `undefined` for renders as its text.
          */
-        href?: (address: string) => string | undefined
+        href?: (address: string) => string | LinkTarget | undefined
+        /**
+         * 52.42 — the fenced blocks rendered by the caller, by the first word of the fence's info:
+         * each is handed the block's source and the rest of the info, and answers its markup, which is
+         * written as it is.
+         */
+        blocks?: Readonly<
+            Record<string, (source: string, info: string) => string>
+        >
         /** Whether `text` is one line of inline marks — a title, a table cell — with no paragraph around it. */
         inline?: boolean
     } = {},
@@ -29,6 +44,8 @@ export function markdown(
         schemes: options.schemes ?? SCHEMES,
         headingLevel: options.headingLevel ?? 1,
         href: options.href,
+        references: referencesOf(text),
+        blocks: options.blocks ?? {},
     }
     return options.inline === true
         ? inline(text, settings, false)

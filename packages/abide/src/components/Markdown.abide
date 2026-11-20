@@ -3,6 +3,9 @@
 // its nodes, so a chunk re-renders only the section still growing (52.18).
 import type { Attributes } from '#shared/Attributes.ts'
 import {
+    blockOf,
+    type LinkTarget,
+    referencesOf,
     renderSection,
     SCHEMES,
     sectionEnd,
@@ -12,7 +15,7 @@ import { props } from '#shared/props.ts'
 import { raw } from '#shared/Raw.ts'
 import { reactive } from '#shared/reactive/index.ts'
 
-const { source, schemes, headingLevel, href, ...rest } = props<
+const { source, schemes, headingLevel, href, blocks, ...rest } = props<
     {
         /** The markdown to render, as it stands: a stream hands it the text so far. */
         source: string
@@ -24,15 +27,28 @@ const { source, schemes, headingLevel, href, ...rest } = props<
         /** The level a `#` heading renders at, the deeper ones below it, down to 6. 1 by default. */
         headingLevel?: number
         /**
-         * Rewrites the address of each link `schemes` lets through; a link it answers `undefined`
-         * for renders as its text. Pass one function for the component's life: a new one renders
-         * every section again.
+         * Where each link `schemes` lets through goes: an address, or the address with the
+         * `target` and `rel` it opens with (52.40); a link it answers `undefined` for renders as its
+         * text. Pass one function for the component's life: a new one renders every section again.
          */
-        href?: (address: string) => string | undefined
+        href?: (address: string) => string | LinkTarget | undefined
+        /**
+         * 52.43 — the components rendering fenced blocks, by the first word of the fence's info:
+         * each is handed the block's `source` and the rest of its `info`. A block still being
+         * written shows as code until its fence closes.
+         */
+        blocks?: Readonly<
+            Record<string, (props: { source: string; info: string }) => unknown>
+        >
     } & Attributes<'div'>
 >()
 
-type Section = { source: string; html: string }
+type Block = {
+    Block: (props: { source: string; info: string }) => unknown
+    source: string
+    info: string
+}
+type Section = { source: string; html: string; block: Block | undefined }
 
 // The sections no later text can change, the source and settings they were rendered from, and the
 // section still growing as the last text left it.
@@ -42,9 +58,29 @@ let closedSettings: Settings | undefined
 let open: Section | undefined
 
 // The section `source` renders as — the growing one itself where it closed as the last text left it.
-function sectionOf(source: string, settings: Settings): Section {
-    if (open?.source === source) return open
-    return { source, html: renderSection(source, settings) }
+function sectionOf(
+    source: string,
+    settings: Settings,
+    closing: boolean,
+): Section {
+    const found =
+        closing && blocks !== undefined
+            ? blockOf(source, Object.keys(blocks))
+            : undefined
+    const Block = found === undefined ? undefined : blocks?.[found.name]
+    // 52.18 — a section closing as it stood keeps the nodes it rendered while open.
+    if (Block === undefined && open?.source === source) return open
+    return {
+        source,
+        html:
+            Block === undefined || found === undefined
+                ? renderSection(source, settings)
+                : '',
+        block:
+            Block === undefined || found === undefined
+                ? undefined
+                : { Block, source: found.source, info: found.info },
+    }
 }
 
 const sections = reactive(() => {
@@ -53,12 +89,16 @@ const sections = reactive(() => {
         schemes: schemes ?? SCHEMES,
         headingLevel: headingLevel ?? 1,
         href,
+        references: referencesOf(text),
+        blocks: {},
     }
     if (
         closedSettings === undefined ||
         closedSettings.schemes.join() !== settings.schemes.join() ||
         closedSettings.headingLevel !== settings.headingLevel ||
         closedSettings.href !== settings.href ||
+        // 52.41 — a definition landing later names links in sections already rendered.
+        !sameReferences(closedSettings.references, settings.references) ||
         !text.startsWith(closedSource)
     ) {
         closed = []
@@ -69,21 +109,36 @@ const sections = reactive(() => {
     let at = closedSource.length
     let end = sectionEnd(text, at)
     while (end < text.length) {
-        closed.push(sectionOf(text.slice(at, end), settings))
+        closed.push(sectionOf(text.slice(at, end), settings, true))
         at = end
         end = sectionEnd(text, at)
     }
     closedSource = text.slice(0, at)
     const shown = closed.slice()
     if (at < text.length) {
-        open = sectionOf(text.slice(at), settings)
+        open = sectionOf(text.slice(at), settings, false)
         shown.push(open)
     }
     return shown
 })
+
+function sameReferences(
+    held: ReadonlyMap<string, string>,
+    now: ReadonlyMap<string, string>,
+): boolean {
+    if (held.size !== now.size) return false
+    for (const [label, url] of now) if (held.get(label) !== url) return false
+    return true
+}
 </script>
 
 <div {...rest}>
-    <!-- Keyed by the section itself: a closed section is the same object chunk after chunk. -->
-    {#for section of sections by section}{raw(section.html)}{/for}
+    <!-- Keyed by the section itself: a closed section is the same object chunk after chunk. With
+    no `blocks`, a section is its markup alone, with no branch's anchors around it. A block's
+    component is bound by a `for` of one, the binding a `<Name/>` renders by. -->
+    {#if blocks === undefined}
+        {#for section of sections by section}{raw(section.html)}{/for}
+    {:else}
+        {#for section of sections by section}{#if section.block}{#for Block of [section.block.Block] by Block}<Block source={section.block.source} info={section.block.info} />{/for}{:else}{raw(section.html)}{/if}{/for}
+    {/if}
 </div>

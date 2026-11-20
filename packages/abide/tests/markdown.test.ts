@@ -184,3 +184,48 @@ test('the sections rendered one by one are the whole rendered at once — 52.17'
 test('unmatched delimiters render in time linear in the line', () => {
     expect(markdown('*_`['.repeat(10_000))).toStartWith('<p>')
 })
+
+// THE REVERT: write `href`'s answer as the address alone, and the link opens in this tab.
+test('href may answer the address with the target and rel it opens with — 52.40', () => {
+    expect(
+        markdown('[the registry](https://registry.example)', {
+            href: (address) => ({
+                href: address,
+                target: '_blank',
+                rel: 'noopener',
+            }),
+        }),
+    ).toBe(
+        '<p><a href="https://registry.example" target="_blank" rel="noopener">the registry</a></p>',
+    )
+})
+
+test('a reference link takes the address its definition names, in any case — 52.41', () => {
+    expect(
+        markdown(
+            '[Brief][B] and [b] and [Quote][]\n\n[b]: https://x.co/b7\n[quote]: /q',
+        ),
+    ).toBe(
+        '<p><a href="https://x.co/b7">Brief</a> and <a href="https://x.co/b7">b</a> and <a href="/q">Quote</a></p>',
+    )
+    // A label nothing defines stays as written.
+    expect(markdown('[nothing][here]')).toBe('<p>[nothing][here]</p>')
+    // A definition is checked against `schemes` as any address is.
+    expect(markdown('[run][x]\n\n[x]: javascript:alert(1)')).toBe('<p>run</p>')
+})
+
+// THE REVERT: drop the blocks, and the chart is a code block with its source in it.
+test('a fenced block the caller names is its markup, handed the source and the rest of the info — 52.42', () => {
+    expect(
+        markdown('```chart bar\n3, 5, 4\n```', {
+            blocks: {
+                chart: (source, info) =>
+                    `<figure data-kind="${info}">${source.split(', ').length}</figure>`,
+            },
+        }),
+    ).toBe('<figure data-kind="bar">3</figure>')
+    // A name the caller gave no block for is code.
+    expect(markdown('```toString\nx\n```', { blocks: {} })).toBe(
+        '<pre><code data-language="toString">x</code></pre>',
+    )
+})

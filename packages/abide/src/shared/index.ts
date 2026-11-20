@@ -64,8 +64,9 @@ export { type Listbox, type ListboxOptions, listbox } from './listbox.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log, type Span } from './log.ts'
-// 52.8-52.16 — markdown as markup safe to hand `raw`.
+// 52.8-52.16, 52.40-52.42 — markdown as markup safe to hand `raw`.
 export { markdown } from './markdown/markdown.ts'
+export type { LinkTarget } from './markdown/sections.ts'
 export { type Report, ReportDraft, report } from './report.ts'
 export type { Sort } from './Sort.ts'
 export { sortRows } from './sortRows.ts'

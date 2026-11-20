@@ -5300,6 +5300,21 @@ where `disabled` holds for that index.
 52.39 `LineChart` MUST write `data-disabled` on each bar, and on the readout, of an index `disabled`
 holds for.
 
+52.40 `markdown` MUST write a link `href` answers with a `LinkTarget` with its `href` as the address,
+and its `target` and `rel`, where it carries them, as the link's attributes.
+
+52.41 `markdown` MUST write a reference link — `[text][label]`, `[text][]` or `[label]` — whose label
+a definition in its source names, compared without case and with runs of whitespace as one space,
+as a link to that definition's address, MUST write one naming no definition as it is written, and
+MUST render a definition as nothing.
+
+52.42 `markdown` MUST render a fenced block whose info starts with a name `blocks` holds as what that
+function answers for the block's source and the rest of its info, written as it is.
+
+52.43 `Markdown` MUST render a section that is one closed fenced block, and nothing else, whose info
+starts with a name `blocks` holds, as that component, handed the block's `source` and the rest of
+its `info`, and MUST render the block as code while its fence is open.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are
