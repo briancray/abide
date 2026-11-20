@@ -1,7 +1,7 @@
 // ANOTHER SERVICE, ASKED WITH A DEADLINE, RETRIES AND A CACHE: 54.7-54.17. A server's helper — the
 // fetch carries the server's credentials, and the cache is this process's.
 
-import { isFailed, isTransient } from '#shared/Failed.ts'
+import { isFailed, isTransient, retryAtOf } from '#shared/Failed.ts'
 import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
 import { refusedBy } from '#shared/handle.ts'
 import { namedLogger } from '#shared/log.ts'
@@ -145,12 +145,8 @@ async function asked(
 
 /** A `Retry-After`, in seconds or as an HTTP date, as milliseconds from now. */
 function retryAfterOf(header: string | null): number | undefined {
-    if (header === null) return undefined
-    const seconds = Number(header)
-    if (header.trim() !== '' && Number.isFinite(seconds))
-        return Math.max(0, seconds * 1000)
-    const at = Date.parse(header)
-    return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now())
+    const at = retryAtOf(header)
+    return at === undefined ? undefined : Math.max(0, at - Date.now())
 }
 
 // A logged address without its query, which is where a key rides.
