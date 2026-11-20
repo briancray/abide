@@ -122,8 +122,8 @@ let registered = false
 // The handler files a registered `handlerFilesPlugin` already answers, by path: its filter is fixed,
 // but it reads each face from `RUNTIME`, so a later compilation of the same file needs no second one.
 const HANDLER_FILES_SERVED = new Set<string>()
-// The worker files a registered `workerFilesPlugin` already answers, to their exports, by path.
-const WORKER_FILES_SERVED = new Map<string, Record<string, WorkerExport>>()
+// The worker files a registered `workerFilesPlugin` already answers, by path.
+const WORKER_FILES_SERVED = new Set<string>()
 
 /**
  * Serves `compilation` to this process's imports from now on, and places a stack frame in each of
@@ -144,7 +144,7 @@ export function serveCompilation(root: string, compilation: Compilation): void {
     const workers = new Map<string, Record<string, WorkerExport>>()
     for (const [path, kinds] of workerFilesOf(root, compilation))
         if (!WORKER_FILES_SERVED.has(path)) {
-            WORKER_FILES_SERVED.set(path, kinds)
+            WORKER_FILES_SERVED.add(path)
             workers.set(path, kinds)
         }
     if (workers.size !== 0)
@@ -224,7 +224,7 @@ const WORKER_HOST = Bun.fileURLToPath(
 )
 
 /** 55.1 — a server started from its sources runs a worker file in `workerHost`, handed the file's path. */
-export const HOSTED_WORKER: WorkerSpawn = (path) =>
+const HOSTED_WORKER: WorkerSpawn = (path) =>
     `() => { const worker = new Worker(${JSON.stringify(WORKER_HOST)}); worker.postMessage(${JSON.stringify(path)}); return worker }`
 
 // 55.1 — A WORKER FILE IMPORTED IS ITS STAND-INS, one per export, each posting its call to a thread

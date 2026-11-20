@@ -418,7 +418,6 @@ export function forwardOf(tools: Toolbox): McpForward {
     }
 }
 
-// The protocol's own requests ask nothing of the asker, so what answers them is asked as nobody.
 /**
  * `assistant` in a scope over the window's latest request, each step taken inside it. 44.100.
  *
@@ -456,6 +455,7 @@ async function* asWindow(
     }
 }
 
+// The protocol's own requests ask nothing of the asker, so what answers them is asked as nobody.
 const NO_ASKER = new Request('http://abide.invalid/')
 
 // Without `mcp` there is no surface to forward to, so this is the protocol over nothing — and

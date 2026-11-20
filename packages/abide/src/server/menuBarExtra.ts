@@ -24,6 +24,7 @@ import {
 } from './appKit.ts'
 import type { Launcher } from './launcherOptions.ts'
 import { nativeUserAgent } from './nativeUserAgent.ts'
+import { WINDOW_STYLE } from './WINDOW_STYLE.ts'
 
 /** The picture the item is drawn from, and whether the platform tints it as a template. */
 export type MenuBarIcon = { bytes: Uint8Array; template: boolean }
@@ -31,8 +32,6 @@ export type MenuBarIcon = { bytes: Uint8Array; template: boolean }
 // NSVariableStatusItemLength.
 const VARIABLE_LENGTH = -1
 const ICON_POINTS = 18
-const TITLED = 1
-const FULL_SIZE_CONTENT_VIEW = 1 << 15
 const STATUS_WINDOW_LEVEL = 25
 // NSWindowCollectionBehavior: move to the active space, transient, and over a full-screen app.
 const PANEL_BEHAVIOR = (1 << 1) | (1 << 3) | (1 << 8)
@@ -225,7 +224,7 @@ function openPanel(
     sendNumber(
         window,
         'setStyleMask:',
-        TITLED | FULL_SIZE_CONTENT_VIEW,
+        WINDOW_STYLE.TITLED | WINDOW_STYLE.FULL_SIZE_CONTENT_VIEW,
         FFIType.u64,
     )
     sendFlag(window, 'setTitlebarAppearsTransparent:', true)

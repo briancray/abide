@@ -149,7 +149,7 @@ test('a member no parameter takes is kept as an own member, `__proto__` included
 // holds it to. THE REVERT: drop the `derivedArgs` call from `mountHandlers`; `id` arrives as '42'.
 test('a mounted row holds its handler to the schema the build derived — 19.9', async () => {
     const loose = GET((_args: { id: number }) => 1)
-    const { handlers } = await mountHandlers([
+    const handlers = await mountHandlers([
         {
             ...handlerFileMount(
                 {

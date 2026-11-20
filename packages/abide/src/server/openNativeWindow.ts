@@ -42,16 +42,11 @@ import {
 import type { Checked, Staged } from './NativeUpdater.ts'
 import { nativeUserAgent } from './nativeUserAgent.ts'
 import { pageBridge } from './pageBridge.ts'
+import { WINDOW_STYLE } from './WINDOW_STYLE.ts'
 import { windowBridge } from './windowBridge.ts'
 
 const SIGINT = 2
 const SIGTERM = 15
-// NSWindowStyleMask.
-const TITLED = 1
-const CLOSABLE = 2
-const MINIATURIZABLE = 4
-const RESIZABLE = 8
-const FULL_SIZE_CONTENT_VIEW = 1 << 15
 // NSWindowCollectionBehavior.
 const FULL_SCREEN_PRIMARY = 1 << 7
 const FULL_SCREEN_NONE = 1 << 9
@@ -208,13 +203,13 @@ export function openNativeWindow(
     sendNumber(
         window,
         'setStyleMask:',
-        TITLED |
-            CLOSABLE |
-            MINIATURIZABLE |
+        WINDOW_STYLE.TITLED |
+            WINDOW_STYLE.CLOSABLE |
+            WINDOW_STYLE.MINIATURIZABLE |
             // 38.158.
-            (options.resizable ? RESIZABLE : 0) |
+            (options.resizable ? WINDOW_STYLE.RESIZABLE : 0) |
             // 38.152.
-            (drawnUnder ? FULL_SIZE_CONTENT_VIEW : 0),
+            (drawnUnder ? WINDOW_STYLE.FULL_SIZE_CONTENT_VIEW : 0),
         FFIType.u64,
     )
     if (drawnUnder) {

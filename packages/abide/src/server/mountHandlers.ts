@@ -184,7 +184,7 @@ export function mountedOwn(
  */
 export async function mountHandlers(
     table: MountRow[],
-): Promise<{ handlers: Map<string, Mounted> }> {
+): Promise<Map<string, Mounted>> {
     const modules = await Promise.all(table.map((mount) => mount.load()))
     const handlers = new Map<string, Mounted>()
     for (let at = 0; at < table.length; at += 1) {
@@ -206,10 +206,10 @@ export async function mountHandlers(
             handler,
         })
     }
-    return { handlers }
+    return handlers
 }
 
 /** What a handler is keyed by among the mounted: its method and its route. 19.1. */
-export function handlerKey(method: string, address: string): string {
+function handlerKey(method: string, address: string): string {
     return `${method} ${address}`
 }

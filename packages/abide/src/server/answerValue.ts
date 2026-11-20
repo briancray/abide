@@ -171,7 +171,7 @@ async function answerStream(
  * The type one JSON value per line is answered as: NDJSON's where the reader asks for it by that
  * name, and `application/jsonl` otherwise — the same bytes either way (16.45).
  */
-export function linesType(request: Request): string {
+function linesType(request: Request): string {
     return prefers(request, 'application/x-ndjson', 'application/jsonl')
         ? 'application/x-ndjson'
         : 'application/jsonl'

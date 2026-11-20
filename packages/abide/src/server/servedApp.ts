@@ -177,7 +177,7 @@ type ClientLane = {
  * error pages deepest directory first, so the nearest answers.
  */
 export async function appSources(parts: SourceParts): Promise<AppSources> {
-    const [mounted, published, client] = await Promise.all([
+    const [handlers, published, client] = await Promise.all([
         mountHandlers(parts.handlers),
         publicFilesAt(parts.published),
         parts.client,
@@ -230,7 +230,7 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
     }
     for (const page of rankRoutes(pages))
         rowAt(page.pattern, page.matchers).page = page
-    for (const handler of mounted.handlers.values())
+    for (const handler of handlers.values())
         rowAt(handler.address, handler.matchers).handlers.set(
             handler.method,
             handler,
@@ -264,7 +264,7 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
         published,
         explained: parts.explained,
         offline: client.offline,
-        ...mounted,
+        handlers,
     }
     for (const row of sources.routes) {
         if (row.page !== undefined)

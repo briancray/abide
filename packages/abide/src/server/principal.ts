@@ -53,15 +53,9 @@ export function principalSecrets(): string[] {
     return listed
 }
 
-function signature(secret: string, signed: string): Uint8Array {
-    return new Bun.CryptoHasher('sha256', secret).update(signed).digest()
-}
-
-/** `signature` as unpadded base64url, the spelling a JWT and a holder carry it in. */
-function signatureText(secret: string, signed: string): string {
-    return new Bun.CryptoHasher('sha256', secret)
-        .update(signed)
-        .digest('base64url')
+/** The HMAC-SHA256 of `signed` under `secret`, to digest as bytes or as a JWT's unpadded base64url. */
+function signature(secret: string, signed: string): Bun.CryptoHasher {
+    return new Bun.CryptoHasher('sha256', secret).update(signed)
 }
 
 /** The JWT header every seal carries, and the only one a seal is read under: HS256, never `none`. */
@@ -87,7 +81,7 @@ function seal(
         }),
     )
     const signed = `${JWT_HEADER}.${payload}`
-    return `${signed}.${signatureText(secret, signed)}`
+    return `${signed}.${signature(secret, signed).digest('base64url')}`
 }
 
 /**
@@ -107,7 +101,7 @@ function unseal(sealed: string | null): Sealed | undefined {
         })
         let verified = false
         for (const secret of principalSecrets()) {
-            const expected = signature(secret, `${header}.${payload}`)
+            const expected = signature(secret, `${header}.${payload}`).digest()
             if (
                 expected.length === given.length &&
                 crypto.timingSafeEqual(expected, given)
@@ -270,7 +264,7 @@ export function holderOf(caller: string, signedIn: string): string {
     const [secret] = principalSecrets()
     return signedIn === 'null' || secret === undefined
         ? `browser.${new Bun.CryptoHasher('sha256').update(caller).digest('base64url')}`
-        : `account.${signatureText(secret, signedIn)}`
+        : `account.${signature(secret, signedIn).digest('base64url')}`
 }
 
 /**

@@ -264,19 +264,7 @@ async function localBridge(): Promise<Bridge> {
     if (LOCAL.bridge !== undefined) return LOCAL.bridge
     const { serveTurns } = await import('@abide/bridge/serveTurns')
     if (LOCAL.bridge !== undefined) return LOCAL.bridge
-    const bridge: Bridge = {
-        key: '',
-        token: '',
-        frames: new Inbox(),
-        turns: new Map(),
-        prompts: new Map(),
-        watched: false,
-        idle: undefined,
-        held: undefined,
-        asked: [],
-        missing: [],
-        calls: true,
-    }
+    const bridge = newBridge('', '', { watched: false, asked: [], calls: true })
     LOCAL.bridge = bridge
     const core = serveTurns({
         site: 'this app',
@@ -573,8 +561,7 @@ export async function* pairingStatus(
             }
             if (
                 pairing === undefined ||
-                pairing.expires <= Date.now() ||
-                !CODES.has(pairing.code)
+                standingCode(pairing.code) === undefined
             )
                 pairing = mintCode(caller, signedIn, tools, note)
             const state: PairingState = {
@@ -623,11 +610,7 @@ export function pairingNow(
     const key = pairingKey(caller, signedIn)
     const at = `${key}\n${tools.join(',')}\n${note ?? ''}`
     let standing = STANDING.get(at)
-    if (
-        standing === undefined ||
-        standing.expires <= Date.now() ||
-        !CODES.has(standing.code)
-    ) {
+    if (standing === undefined || standingCode(standing.code) === undefined) {
         if (standing !== undefined) clearTimeout(standing.expiry)
         const { code, expires } = mintCode(caller, signedIn, tools, note)
         const expiry = setTimeout(() => {
@@ -754,19 +737,11 @@ function pair(request: Request): Response {
         standing.frames.push({ type: 'bye' })
         dropBridge(standing)
     }
-    const bridge: Bridge = {
-        key: pairing.key,
-        token: randomToken(24, 'base64url'),
-        frames: new Inbox(),
-        turns: new Map(),
-        prompts: new Map(),
+    const bridge = newBridge(pairing.key, randomToken(24, 'base64url'), {
         watched: WATCHERS.has(pairing.key),
-        idle: undefined,
-        held: undefined,
         asked: pairing.tools,
-        missing: [],
         calls: query.get('calls') === '1',
-    }
+    })
     BY_KEY.set(bridge.key, bridge)
     BY_TOKEN.set(bridge.token, bridge)
     bridge.frames.push({
@@ -790,6 +765,27 @@ function holderAnswer(code: string): Response {
         name: appName(),
         ...(pairing.note === undefined ? {} : { note: pairing.note }),
     })
+}
+
+/** A bridge for `key`, holding `token`, with every field its shape declares set at once. */
+function newBridge(
+    key: string,
+    token: string,
+    opened: Pick<Bridge, 'watched' | 'asked' | 'calls'>,
+): Bridge {
+    return {
+        key,
+        token,
+        frames: new Inbox(),
+        turns: new Map(),
+        prompts: new Map(),
+        watched: opened.watched,
+        idle: undefined,
+        held: undefined,
+        asked: opened.asked,
+        missing: [],
+        calls: opened.calls,
+    }
 }
 
 /** What `code` was minted with, while it is unspent and unexpired. */
