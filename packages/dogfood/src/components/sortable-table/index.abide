@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import PickRows from './lib/PickRows.abide'
+import pickRows from './lib/PickRows.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -39,6 +43,26 @@ import Section from '#src/lib/Section.abide'
             from: [
                 'test("each company\'s contact sits in a row of its own under it',
             ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StaleDeals.test.ts',
+            from: ["test('a checked row is selected, and named by its deal'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StaleDeals.test.ts',
+            from: [
+                "test('a Shift-click picks every row from the last one clicked'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StaleDeals.test.ts',
+            from: [
+                "test('the header box is mixed for some, and picks every row or none'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StaleDeals.test.ts',
+            from: ["test('marking the selected deals lost clears the pick'"],
         },
     ]}
 >
@@ -189,5 +213,10 @@ import Section from '#src/lib/Section.abide'
                 …
             />
         `} />
+    </Section>
+    <Section level={3} title="Pick deals to act on together">
+        <p>Bind <code>selected</code> to the keys of the rows picked, and a checkbox leads each row,
+            with one over them all. Shift-click picks every row from the last one clicked.</p>
+        <Example code={pickRows}><PickRows /></Example>
     </Section>
 </Doc>

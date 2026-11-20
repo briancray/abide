@@ -2,33 +2,40 @@
 import type { Attributes } from '#shared/Attributes.ts'
 import type { Column } from '#shared/Column.ts'
 import { props } from '#shared/props.ts'
-import { reactive } from '#shared/reactive/index.ts'
+import { reactive, watch } from '#shared/reactive/index.ts'
 import type { Sort } from '#shared/Sort.ts'
 import { cellText, sortRows } from '#shared/sortRows.ts'
 
-const { rows, columns, key, sort, Cell, Detail, rowAttributes, ...rest } =
-    props<
-        {
-            /** The rows, in the order they show while no column is sorted. */
-            rows: readonly Row[]
-            /** The columns, left to right: what each header says, sorts by and shows. */
-            columns: readonly Column<Row>[]
-            /** What tells one row from another, so a re-sort moves each row rather than rewriting it. */
-            key(row: Row): string
-            /** The column sorted by and its direction, or none; bind it to read and set the sort. */
-            sort?: Sort | undefined
-            /** Renders a cell's content in place of its text, handed the row, the column and the text. */
-            Cell?(props: {
-                row: Row
-                column: Column<Row>
-                text: string
-            }): unknown
-            /** Renders a row of its own under each row, spanning every column: what the row expands to. */
-            Detail?(props: { row: Row }): unknown
-            /** 51.60 — the attributes each row's `<tr>` carries, handed the row: a `class`, a `data-` state, an `onclick`. */
-            rowAttributes?(row: Row): Attributes<'tr'>
-        } & Attributes<'table'>
-    >()
+const {
+    rows,
+    columns,
+    key,
+    sort,
+    selected,
+    Cell,
+    Detail,
+    rowAttributes,
+    ...rest
+} = props<
+    {
+        /** The rows, in the order they show while no column is sorted. */
+        rows: readonly Row[]
+        /** The columns, left to right: what each header says, sorts by and shows. */
+        columns: readonly Column<Row>[]
+        /** What tells one row from another, so a re-sort moves each row rather than rewriting it. */
+        key(row: Row): string
+        /** The column sorted by and its direction, or none; bind it to read and set the sort. */
+        sort?: Sort | undefined
+        /** The keys of the rows selected, where rows can be: a checkbox column leads the table while it is given. Bind it to read and set the selection (51.79). */
+        selected?: readonly string[] | undefined
+        /** Renders a cell's content in place of its text, handed the row, the column and the text. */
+        Cell?(props: { row: Row; column: Column<Row>; text: string }): unknown
+        /** Renders a row of its own under each row, spanning every column: what the row expands to. */
+        Detail?(props: { row: Row }): unknown
+        /** 51.60 — the attributes each row's `<tr>` carries, handed the row: a `class`, a `data-` state, an `onclick`. */
+        rowAttributes?(row: Row): Attributes<'tr'>
+    } & Attributes<'table'>
+>()
 
 const sorted = reactive(() => sortRows(rows, columns, sort))
 
@@ -51,11 +58,65 @@ function sortBy(column: Column<Row>) {
 
 const directionOf = (column: Column<Row>) =>
     sort?.key === column.key ? sort.direction : undefined
+
+// 51.79-51.83 — ROWS PICKED BY NATIVE CHECKBOXES: a table is no grid, so each row's checkbox is in the
+// page's tab order and Space toggles it as the browser does, with nothing to rove.
+const picked = reactive(() => new Set(selected))
+// Read only where the header's box renders, so a table with nothing selectable holds no value that
+// waits on its rows.
+const every = () =>
+    sorted.length > 0 && sorted.every((row) => picked.has(key(row)))
+const some = () => !every() && sorted.some((row) => picked.has(key(row)))
+// The row a click last checked or cleared, which a Shift-click runs a range from (51.81).
+let anchor: string | undefined
+
+function toggle(row: Row, event: MouseEvent) {
+    const checked = !picked.has(key(row))
+    const at = sorted.findIndex((each) => key(each) === key(row))
+    const from =
+        event.shiftKey && anchor !== undefined
+            ? sorted.findIndex((each) => key(each) === anchor)
+            : -1
+    const keys =
+        from === -1
+            ? [key(row)]
+            : sorted.slice(Math.min(from, at), Math.max(from, at) + 1).map(key)
+    anchor = key(row)
+    const next = new Set(picked)
+    for (const each of keys) {
+        if (checked) next.add(each)
+        else next.delete(each)
+    }
+    // 51.80 — the selection keeps the rows' order.
+    selected = rows.map(key).filter((each) => next.has(each))
+}
+
+// 51.82 — the header's box is checked where every row is, and mixed where some are.
+function toggleEvery() {
+    selected = every() ? [] : rows.map(key)
+}
+
+function mixed(input: HTMLInputElement) {
+    return watch(() => {
+        input.indeterminate = some()
+    })
+}
 </script>
 
 <table {...rest}>
     <thead>
         <tr>
+            {#if selected !== undefined}
+                <th scope="col" data-part="select">
+                    <input
+                        type="checkbox"
+                        aria-label="Select every row"
+                        checked={every()}
+                        bind:element={mixed}
+                        onclick={toggleEvery}
+                    >
+                </th>
+            {/if}
             {#for column of columns by column.key}
                 <th
                     scope="col"
@@ -75,7 +136,21 @@ const directionOf = (column: Column<Row>) =>
     </thead>
     <tbody>
         {#for row of sorted by key(row)}
-            <tr {...rowAttributes?.(row)} data-part="row">
+            <tr
+                {...rowAttributes?.(row)}
+                data-part="row"
+                data-selected={picked.has(key(row)) ? '' : undefined}
+            >
+                {#if selected !== undefined}
+                    <td data-part="select">
+                        <input
+                            type="checkbox"
+                            aria-label="Select {cellText(row, columns[0] as Column<Row>)}"
+                            checked={picked.has(key(row))}
+                            onclick={(event) => toggle(row, event)}
+                        >
+                    </td>
+                {/if}
                 {#for column of columns by column.key}
                     <td data-part="cell" data-align={column.align}>
                         {#if Cell}
@@ -88,7 +163,7 @@ const directionOf = (column: Column<Row>) =>
             </tr>
             {#if Detail}
                 <tr data-part="detail">
-                    <td colspan={columns.length}><Detail row={row} /></td>
+                    <td colspan={columns.length + (selected === undefined ? 0 : 1)}><Detail row={row} /></td>
                 </tr>
             {/if}
         {/for}

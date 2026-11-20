@@ -10,6 +10,7 @@ import StageBoard from './lib/StageBoard.abide'
 import StageFilter from './lib/StageFilter.abide'
 import StageHints from './lib/StageHints.abide'
 import StageTiles from './lib/StageTiles.abide'
+import StaleDeals from './lib/StaleDeals.abide'
 import TeamTarget from './lib/TeamTarget.abide'
 </script>
 
@@ -23,6 +24,7 @@ import TeamTarget from './lib/TeamTarget.abide'
     <StageHints />
     <QualifyBoard />
     <StageTiles />
+    <StaleDeals />
     <Forecast />
     <DealLink />
     <DealSearch />

@@ -930,7 +930,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown; rowAttributes?: (row: Row) => Attributes<'tr'> } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60, 51.63 |
+| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; selected?: readonly string[]; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown; rowAttributes?: (row: Row) => Attributes<'tr'> } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60, 51.63, 51.79, 51.80, 51.81, 51.82, 51.83 |
 
 ## `listbox`
 

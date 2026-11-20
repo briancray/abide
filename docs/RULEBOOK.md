@@ -5311,6 +5311,21 @@ NOT bind it.
 
 51.78 `CommandPalette` MUST list every command again, its input emptied, each time it opens.
 
+51.79 `SortableTable` given `selected` MUST lead each row with a checkbox, named for the row by its
+first column's text, checked while `selected` holds the row's key, and MUST write `data-selected` on
+each such row; given none, it MUST render no checkbox.
+
+51.80 A row's checkbox pressed in a `SortableTable` MUST add the row's key to `selected` or take it
+out, `selected` keeping the order of `rows`.
+
+51.81 A row's checkbox pressed with Shift in a `SortableTable` MUST check or clear, as it turns, every
+row from the row whose checkbox was pressed last to it, in the order the rows show.
+
+51.82 `SortableTable` given `selected` MUST head its checkboxes with one checked while every row is
+selected and mixed while some are, whose press selects every row or, where every row is, none.
+
+51.83 `SortableTable` MUST write a change of `selected` it makes back to a `selected` bound to it.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

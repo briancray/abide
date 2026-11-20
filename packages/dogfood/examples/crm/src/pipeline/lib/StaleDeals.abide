@@ -1,0 +1,66 @@
+<script>
+import { type Column, format, reactive } from '@abide/abide'
+import SortableTable from '@abide/abide/SortableTable.abide'
+
+type Deal = { id: string; name: string; amount: number; stage: string }
+
+const COLUMNS: Column<Deal>[] = [
+    { key: 'name', label: 'Deal' },
+    { key: 'stage', label: 'Stage' },
+    {
+        key: 'amount',
+        label: 'Amount',
+        align: 'end',
+        format: (amount) => format.money(Number(amount), { digits: 0 }),
+    },
+]
+
+let deals = reactive<Deal[]>([
+    {
+        id: 'lovelace-audit',
+        name: 'Lovelace audit',
+        amount: 9_000,
+        stage: 'qualified',
+    },
+    {
+        id: 'turing-seats',
+        name: 'Turing seats',
+        amount: 22_000,
+        stage: 'proposal',
+    },
+    {
+        id: 'hopper-renewal',
+        name: 'Hopper renewal',
+        amount: 48_000,
+        stage: 'proposal',
+    },
+    {
+        id: 'noether-pilot',
+        name: 'Noether pilot',
+        amount: 6_500,
+        stage: 'lead',
+    },
+])
+let selected = reactive<readonly string[]>([])
+
+// A bulk action over the rows picked: each goes to lost, and the pick is cleared.
+function markLost() {
+    deals = deals.map((deal) =>
+        selected.includes(deal.id) ? { ...deal, stage: 'lost' } : deal,
+    )
+    selected = []
+}
+</script>
+
+<div class="row">
+    <span class="status">{selected.length} selected</span>
+    <button onclick={markLost} disabled={selected.length === 0}>Mark lost</button>
+</div>
+<SortableTable
+    rows={deals}
+    columns={COLUMNS}
+    key={(deal: Deal) => deal.id}
+    bind:selected={selected}
+    class="[&_[data-align=end]]:text-right [&_[data-selected]]:bg-signal/10
+        [&_th_button]:bg-transparent [&_th_button]:p-0 [&_th_button]:text-muted"
+ />
