@@ -139,9 +139,9 @@ test('dismiss takes one notice down, and leaves the list alone for one already g
     expect(held.map((toast) => toast.text)).toEqual(['two'])
 })
 
-// 50.36 — TOLD ONCE, AND WHY. THE REVERT: call `onclose` from `notify`'s timer alone — the dismissed
+// 50.42 — TOLD ONCE, AND WHY. THE REVERT: call `onclose` from `notify`'s timer alone — the dismissed
 // notice's reason is never told, `[timeout]` where `[timeout, dismissed]` is due.
-test('a notice tells its onclose once, why it left — 50.36', async () => {
+test('a notice tells its onclose once, why it left — 50.42', async () => {
     const reasons: string[] = []
     toasts.notify('Saved', {
         timeout: 5,

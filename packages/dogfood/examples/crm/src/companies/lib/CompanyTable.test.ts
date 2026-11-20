@@ -32,7 +32,7 @@ test('a name links to its company, and sorts with its row', async () => {
     ])
 })
 
-// 51.60 — EACH ROW'S DETAIL IS A ROW OF ITS OWN UNDER IT, spanning the columns, and moves with it on a
+// 51.63 — EACH ROW'S DETAIL IS A ROW OF ITS OWN UNDER IT, spanning the columns, and moves with it on a
 // sort. THE REVERT: drop the `{#if Detail}` row from `SortableTable` — no detail row, and the
 // three contacts are missing between the companies.
 test("each company's contact sits in a row of its own under it, and sorts with it", async () => {

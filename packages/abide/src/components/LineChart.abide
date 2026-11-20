@@ -51,9 +51,9 @@ const {
         width?: number
         /** The height drawn at before the chart is measured, and where nothing sizes it. 240 by default. */
         height?: number
-        /** Called with the x position nearest a click on the plot, where `disabled` does not hold for it (52.36). */
+        /** Called with the x position nearest a click on the plot, where `disabled` does not hold for it (52.38). */
         onpick?: (index: number) => void
-        /** Whether an x position takes no pick, written as `data-disabled` on its bars and the readout (52.37). */
+        /** Whether an x position takes no pick, written as `data-disabled` on its bars and the readout (52.39). */
         disabled?: (index: number) => boolean
     } & Omit<Attributes<'svg'>, 'x' | 'width' | 'height'>
 >()
@@ -107,7 +107,7 @@ const plot = reactive(() => {
         ys: (number | undefined)[]
         bar: boolean
     }[] = []
-    // 52.35 — EACH BAR SERIES TAKES A SHARE OF ITS X'S SLOT, side by side, rising from zero where the
+    // 52.37 — EACH BAR SERIES TAKES A SHARE OF ITS X'S SLOT, side by side, rising from zero where the
     // range takes it in and from the plot's floor otherwise.
     let barSeries = 0
     for (const line of series) if (line.kind === 'bar') barSeries += 1
@@ -217,7 +217,7 @@ function track(event: PointerEvent) {
     hovered = nearest(plot.xs, pointer)
 }
 
-// 52.36 — a click picks the x the crosshair is on, read again from the click's own position.
+// 52.38 — a click picks the x the crosshair is on, read again from the click's own position.
 function pick(event: MouseEvent) {
     if (onpick === undefined) return
     const box = (event.currentTarget as Element).getBoundingClientRect()

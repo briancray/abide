@@ -8,7 +8,7 @@ export type Series = {
     label: string
     /** One value per x position. `null` or `undefined` leaves a gap in the line. */
     values: readonly (number | null | undefined)[]
-    /** How `LineChart` draws it: a line through the values, or a bar per value (52.35). `'line'` by default. */
+    /** How `LineChart` draws it: a line through the values, or a bar per value (52.37). `'line'` by default. */
     kind?: 'line' | 'bar'
 }
 

@@ -4990,19 +4990,19 @@ confirming button, and `undefined` where it closed any other way.
 50.34 `Prompts` MUST show an input for a prompt asked by `prompts.prompt`, starting from its
 `value`, and `''` where it has none.
 
-50.35 `Toasts` MUST write each attribute a notice's `attributes` names onto that notice's element,
+50.41 `Toasts` MUST write each attribute a notice's `attributes` names onto that notice's element,
 under its `data-part` and `data-tone`.
 
-50.36 A notice's `onclose` MUST be called once, as the notice leaves `toasts.list`, with `timeout`
+50.42 A notice's `onclose` MUST be called once, as the notice leaves `toasts.list`, with `timeout`
 where its timeout took it, `action` where its action did, and `dismissed` otherwise.
 
-50.37 A prompt whose `signal` aborts MUST leave the queue, showing or waiting, and settle as one closed
+50.43 A prompt whose `signal` aborts MUST leave the queue, showing or waiting, and settle as one closed
 other than by the confirming button, and a prompt whose `signal` is aborted already MUST NOT be
 queued.
 
-50.38 `Prompts` MUST show a prompt whose `modal` is `false` in a `Dialog` whose `modal` is `false`.
+50.44 `Prompts` MUST show a prompt whose `modal` is `false` in a `Dialog` whose `modal` is `false`.
 
-50.39 The confirming button of a prompt carrying `run` MUST call `run` with the text typed, and while
+50.45 The confirming button of a prompt carrying `run` MUST call `run` with the text typed, and while
 that call is in flight MUST keep the prompt showing, disabled, with `data-busy` on the dialog; the
 prompt MUST settle as confirmed once the call resolves, and stay showing with the rejection's message
 in its `error` part once it rejects.
@@ -5153,7 +5153,7 @@ column has one, and otherwise the value's own text, or none for a blank value.
 51.59 `SortableTable` MUST write a `Column`'s `align` as `data-align` on its header and on each of
 its cells.
 
-51.60 `SortableTable` given `Detail` MUST render, after each row, a row of its own whose
+51.63 `SortableTable` given `Detail` MUST render, after each row, a row of its own whose
 `data-part` is `detail` and whose one cell spans every column and holds `Detail` handed that row.
 
 # 52. Formatting, markdown and charts
@@ -5236,23 +5236,23 @@ series' value there, while a pointer is over it.
 52.31 `Sparkline` MUST carry `data-trend` on its root, `up`, `down` or `flat` by its last present value
 against its first.
 
-52.32 `LineChart` and `Sparkline` declaring `zero` MUST take zero into the range of their values, and
+52.34 `LineChart` and `Sparkline` declaring `zero` MUST take zero into the range of their values, and
 MUST draw a series whose every present value is zero along the bottom of that range.
 
-52.33 `format.money` and `format.percent` declaring `signed` MUST write a negative value's sign as
+52.35 `format.money` and `format.percent` declaring `signed` MUST write a negative value's sign as
 `−` (U+2212), and MUST NOT otherwise.
 
-52.34 `format.dateParts` MUST answer the pieces whose values joined in order are what `format.date`
+52.36 `format.dateParts` MUST answer the pieces whose values joined in order are what `format.date`
 writes for the same value and options.
 
-52.35 `LineChart` MUST draw a series whose `kind` is `bar` as a `data-part="bar"` rect per present
+52.37 `LineChart` MUST draw a series whose `kind` is `bar` as a `data-part="bar"` rect per present
 value, rising from zero where the range takes zero in and from the bottom of the plot otherwise, its
 `data-series` the series' index, and MUST NOT draw it as a line.
 
-52.36 A click on a `LineChart` MUST call `onpick` with the index of the x position nearest it, save
+52.38 A click on a `LineChart` MUST call `onpick` with the index of the x position nearest it, save
 where `disabled` holds for that index.
 
-52.37 `LineChart` MUST write `data-disabled` on each bar, and on the readout, of an index `disabled`
+52.39 `LineChart` MUST write `data-disabled` on each bar, and on the readout, of an index `disabled`
 holds for.
 
 # 53. Keys, element behaviors and chat
@@ -5383,16 +5383,16 @@ where none is.
 53.43 `Pairing` MUST render its children once `pairing` reports the bridge paired, and MUST NOT
 before.
 
-53.44 `followBottom` MUST keep the element it is bound to scrolled to its bottom as what the element
+53.53 `followBottom` MUST keep the element it is bound to scrolled to its bottom as what the element
 holds changes, save while the reader has scrolled up from that bottom.
 
-53.45 `keyLabel` writing for an Apple platform MUST write Enter as ↩, Escape as ⎋, Backspace as ⌫,
+53.54 `keyLabel` writing for an Apple platform MUST write Enter as ↩, Escape as ⎋, Backspace as ⌫,
 Delete as ⌦ and Tab as ⇥.
 
-53.46 `keyLabel.parts` MUST answer each modifier and the key `keyLabel` writes for the same binding
+53.55 `keyLabel.parts` MUST answer each modifier and the key `keyLabel` writes for the same binding
 and options, apart and in the order `keyLabel` writes them.
 
-53.47 `keyLabel` and `keyLabel.parts` MUST write for an Apple platform where `apple` is `true`, and
+53.56 `keyLabel` and `keyLabel.parts` MUST write for an Apple platform where `apple` is `true`, and
 for any other where it is `false`, whatever 53.3 reads.
 
 # 54. Guards, fetches and jobs

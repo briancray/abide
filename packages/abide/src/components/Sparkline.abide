@@ -47,7 +47,7 @@ const drawing = reactive(() => {
         last = value
         lastIndex = index
     }
-    // 52.32 — a range of zero alone has no width, and is drawn as zero to one.
+    // 52.34 — a range of zero alone has no width, and is drawn as zero to one.
     if (zero && low === high) high = 1
     const x = scale([0, Math.max(1, values.length - 1)], [0, SIZE])
     const y = scale([low, high], [SIZE, 0])

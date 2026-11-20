@@ -25,13 +25,13 @@ export type PromptOptions = {
     value?: string
     /** The input's placeholder. */
     placeholder?: string
-    /** Withdraws the prompt once it aborts, waiting or showing; it settles as one declined (50.37). */
+    /** Withdraws the prompt once it aborts, waiting or showing; it settles as one declined (50.43). */
     signal?: AbortSignal
-    /** Whether it is shown modal, over an inert page. `false` leaves the page usable around it (50.38). Default `true`. */
+    /** Whether it is shown modal, over an inert page. `false` leaves the page usable around it (50.44). Default `true`. */
     modal?: boolean
     /**
      * The call confirming makes, handed the text typed: the prompt stays up, `data-busy`, until it
-     * settles, closes once it resolves, and shows its error once it rejects (50.39).
+     * settles, closes once it resolves, and shows its error once it rejects (50.45).
      */
     run?: (answer: string) => unknown
 }
@@ -70,7 +70,7 @@ export function queued(
     const { promise, resolve: settle } = Promise.withResolvers<
         string | undefined
     >()
-    // 50.37 — withdrawn before it was ever shown: nothing queued, declined at once.
+    // 50.43 — withdrawn before it was ever shown: nothing queued, declined at once.
     const signal = options.signal
     if (signal?.aborted === true) {
         settle(undefined)

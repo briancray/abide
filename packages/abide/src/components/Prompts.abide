@@ -33,7 +33,7 @@ const typedRight = reactive(() => {
     )
 })
 
-// 50.39 — a confirm whose `run` is in flight, and what its last run failed with; each prompt starts
+// 50.45 — a confirm whose `run` is in flight, and what its last run failed with; each prompt starts
 // from neither.
 // Each reads `current` alone so the queue moving on resets it, as `typed` is.
 let busy = reactive((): boolean => {
@@ -53,7 +53,7 @@ function answered(returnValue: string) {
 }
 
 // The first prompt off the queue, and its caller settled — where it is still the first: a withdrawn
-// prompt (50.37) is gone already, and its close answers nothing.
+// prompt (50.43) is gone already, and its close answers nothing.
 function settle(asked: Prompt, answer: string | undefined) {
     if (queue[0] !== asked) return
     queue.patch((waiting) => {
@@ -62,7 +62,7 @@ function settle(asked: Prompt, answer: string | undefined) {
     asked.resolve(answer)
 }
 
-// 50.39 — THE CONFIRM IS A CALL: the dialog stays up while it runs, closes on its answer, and shows
+// 50.45 — THE CONFIRM IS A CALL: the dialog stays up while it runs, closes on its answer, and shows
 // what it failed with. The form's own close is held back, since it would answer before the call does.
 async function submitted(event: SubmitEvent) {
     const asked = current

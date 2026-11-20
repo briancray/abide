@@ -8,7 +8,7 @@ import { cached } from './cached.ts'
 
 const MISSING = '—'
 const LOCALE = 'en-US'
-// 52.33 — the minus a signed number is written with, the width of the `+` it stands against.
+// 52.35 — the minus a signed number is written with, the width of the `+` it stands against.
 const MINUS = '\u2212'
 
 /** `value` as a number Intl can format, or `undefined` for anything else. */
@@ -203,7 +203,7 @@ export function date(value: unknown, options: DateOptions = {}): string {
 }
 
 /**
- * 52.34 — what `format.date` writes, as the pieces `Intl` names: `{ type: 'hour', value: '3' }` and
+ * 52.36 — what `format.date` writes, as the pieces `Intl` names: `{ type: 'hour', value: '3' }` and
  * the rest, so each piece can be styled on its own. A value it cannot format is one literal `—`.
  */
 export function dateParts(

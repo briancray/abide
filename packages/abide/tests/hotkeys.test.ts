@@ -194,7 +194,7 @@ test('a label writes a binding as the platform reads it — 53.11', () => {
 })
 
 // THE REVERT: write `NAMED` alone on an Apple platform — `⌘Enter` where `⌘↩` is due.
-test('an Apple platform writes the named keys it has a symbol for as that symbol — 53.45', () => {
+test('an Apple platform writes the named keys it has a symbol for as that symbol — 53.54', () => {
     onPlatform(MAC)
     expect(keyLabel('mod+Enter')).toBe('⌘↩')
     expect(keyLabel('Escape')).toBe('⎋')
@@ -205,7 +205,7 @@ test('an Apple platform writes the named keys it has a symbol for as that symbol
 
 // THE REVERT: read `isApplePlatform()` over `apple` — the Windows visitor's label asked for as a
 // Mac's reads `Ctrl+Shift+K`, where `⇧⌘K` is due.
-test('parts are the keys a label writes, apart, and apple names the platform — 53.46, 53.47', () => {
+test('parts are the keys a label writes, apart, and apple names the platform — 53.55, 53.56', () => {
     onPlatform(WINDOWS)
     expect(keyLabel.parts('mod+shift+k')).toEqual(['Ctrl', 'Shift', 'K'])
     expect(keyLabel('mod+shift+k', { apple: true })).toBe('⇧⌘K')

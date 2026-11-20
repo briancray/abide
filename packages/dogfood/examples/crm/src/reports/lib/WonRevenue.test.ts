@@ -72,7 +72,7 @@ test('the crosshair reads each line at the nearest month', async () => {
     expect(chart().hasAttribute('data-hovering')).toBe(false)
 })
 
-// 52.32 — held by `chart.ticks`, which widens a range of no width. THE REVERT: have `ticks` answer
+// 52.34 — held by `chart.ticks`, which widens a range of no width. THE REVERT: have `ticks` answer
 // `[low]` for one — the y ticks are `['0']` alone, and the line runs across the middle.
 test('a series of zeroes is drawn along the bottom of a chart that takes zero in', async () => {
     using _chart = await mount(
@@ -88,7 +88,7 @@ test('a series of zeroes is drawn along the bottom of a chart that takes zero in
     ).toEqual(['0', '0.5', '1'])
 })
 
-// 52.35 — A BAR SERIES IS A BAR PER VALUE from zero, and no line. THE REVERT: draw every series as a
+// 52.37 — A BAR SERIES IS A BAR PER VALUE from zero, and no line. THE REVERT: draw every series as a
 // line — no `bar` parts, `bars: 0` where `3` is due.
 test('a bar series draws a bar per value from zero, in place of a line', async () => {
     using _chart = await mount(
@@ -108,7 +108,7 @@ test('a bar series draws a bar per value from zero, in place of a line', async (
     expect(heights[1]).toBeCloseTo((heights[2] as number) * 4)
 })
 
-// 52.36, 52.37 — A CLICK PICKS THE NEAREST X, save one `disabled` holds for, which is marked. THE
+// 52.38, 52.39 — A CLICK PICKS THE NEAREST X, save one `disabled` holds for, which is marked. THE
 // REVERT: drop the `disabled` check in `pick` — the click on November picks it, `[1, 5]` where `[1]`
 // is due.
 test('a click picks the nearest month, and a disabled one is marked and takes no pick', async () => {

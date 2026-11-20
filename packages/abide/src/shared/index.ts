@@ -35,7 +35,7 @@ export { copyText } from './copyText.ts'
 export { csp } from './csp.ts'
 // 53.12-53.16 — the `bind:element` adaptor closing a panel from outside it.
 export { dismissible } from './dismissible.ts'
-// 53.44 — the `bind:element` adaptor keeping a scrolling element at its bottom.
+// 53.53 — the `bind:element` adaptor keeping a scrolling element at its bottom.
 export { followBottom } from './followBottom.ts'
 // 53.17-53.20 — the `bind:element` adaptor taking dropped and pasted files.
 export { dropzone } from './dropzone.ts'

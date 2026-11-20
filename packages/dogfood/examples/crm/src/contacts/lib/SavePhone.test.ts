@@ -65,7 +65,7 @@ test('closing one notice leaves the others where they are', async () => {
     flushSync()
 })
 
-// 50.35, 50.36 — A NOTICE CARRIES THE ATTRIBUTES IT WAS GIVEN, and its action tells `onclose` it was
+// 50.41, 50.42 — A NOTICE CARRIES THE ATTRIBUTES IT WAS GIVEN, and its action tells `onclose` it was
 // the action that took it. THE REVERTS: drop the `{...toast.attributes}` spread in `Toasts` — the
 // notice carries no `data-track`; take the action through `dismiss` again — `dismissed` where `action`
 // is due.

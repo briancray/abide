@@ -130,7 +130,7 @@ test('a size in bytes is in the largest unit it fills — 52.7', () => {
 })
 
 // THE REVERT: drop the `replace('-', MINUS)` in `percent` and `money` — `-12%` where `−12%` is due.
-test('a signed value writes its minus as −, and an unsigned one as Intl does — 52.33', () => {
+test('a signed value writes its minus as −, and an unsigned one as Intl does — 52.35', () => {
     expect(percent(-0.12, { signed: true })).toBe('−12%')
     expect(percent(0.12, { signed: true })).toBe('+12%')
     expect(money(-5, { signed: true })).toBe('−$5.00')
@@ -139,7 +139,7 @@ test('a signed value writes its minus as −, and an unsigned one as Intl does �
 
 // THE REVERT: have `dateParts` answer `format` as one literal piece rather than `formatToParts` —
 // the first piece is `{ type: 'literal', value: '3 PM' }` where `{ type: 'hour', value: '3' }` is due.
-test('the parts of a date join to what date writes, and an hour is written alone — 52.34', () => {
+test('the parts of a date join to what date writes, and an hour is written alone — 52.36', () => {
     const at = '2026-11-18T15:04:00Z'
     for (const style of ['day', 'time', 'hour', 'dateTime'] as const) {
         let joined = ''

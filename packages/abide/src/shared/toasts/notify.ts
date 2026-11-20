@@ -10,9 +10,9 @@ export type NotifyOptions = {
     timeout?: number
     /** A button on the notice that takes the notice down and calls `run`: an undo, a retry, or `report({ trace }).open()` for a failed call. */
     action?: { label: string; run: () => unknown }
-    /** Written onto the notice's element: a `data-` attribute an analytics tag reads, say (50.35). */
+    /** Written onto the notice's element: a `data-` attribute an analytics tag reads, say (50.41). */
     attributes?: Record<string, string>
-    /** Called once as the notice leaves, told whether its timeout, a dismissal or its action took it (50.36). */
+    /** Called once as the notice leaves, told whether its timeout, a dismissal or its action took it (50.42). */
     onclose?: (reason: CloseReason) => void
 }
 

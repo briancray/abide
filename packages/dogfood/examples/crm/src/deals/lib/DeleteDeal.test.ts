@@ -74,7 +74,7 @@ test('Escape declines the question', async () => {
     expect(dialog().open).toBe(false)
 })
 
-// 50.37 — A PROMPT WITHDRAWN IS DECLINED, waiting or showing, and the next one shows in its place.
+// 50.43 — A PROMPT WITHDRAWN IS DECLINED, waiting or showing, and the next one shows in its place.
 // THE REVERT: drop the `abort` listener in `queued` — the withdrawn prompt never settles, and
 // `withdrawn: pending` where `false` is due.
 test('a withdrawn prompt is declined, and the next shows in its place', async () => {
@@ -106,7 +106,7 @@ test('a withdrawn prompt is declined, and the next shows in its place', async ()
     ).toBe(false)
 })
 
-// 50.39 — A CONFIRM THAT IS A CALL stays up while the call runs, shows what it failed with, and
+// 50.45 — A CONFIRM THAT IS A CALL stays up while the call runs, shows what it failed with, and
 // closes once it lands. THE REVERT: drop `onsubmit={submitted}` from `Prompts`' form — the dialog
 // closes on the first press, `open: false` where `true` is due.
 test('a confirm that is a call stays up, busy, until it lands, and shows why it failed', async () => {
@@ -146,7 +146,7 @@ test('a confirm that is a call stays up, busy, until it lands, and shows why it 
     expect(dialog().hasAttribute('data-busy')).toBe(false)
 })
 
-// 50.38 — `modal: false` opens with `show`, leaving the page usable. THE REVERT: call `showModal`
+// 50.44 — `modal: false` opens with `show`, leaving the page usable. THE REVERT: call `showModal`
 // whatever `modal` says in `Dialog` — `showModal` where `show` is due.
 test('a prompt that is not modal opens beside the page', async () => {
     using _deals = await mount(DeleteDeal({}))

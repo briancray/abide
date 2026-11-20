@@ -1,4 +1,4 @@
-// 53.12-53.23, 53.44 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
+// 53.12-53.23, 53.53 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
 // element the way `bind:element` binds one: called with the node, and stopped by what it hands back.
 
 import { afterEach, expect, test } from 'bun:test'
@@ -237,7 +237,7 @@ test('a page with no clipboard copies through a selected textarea — 53.22', as
 
 // THE REVERT: drop the `following` check in `followBottom` — the reader scrolled up to 0 is pulled
 // back to 180 by the next line.
-test('a scrolling element follows its bottom until the reader scrolls up, and again once back — 53.44', async () => {
+test('a scrolling element follows its bottom until the reader scrolls up, and again once back — 53.53', async () => {
     const log = element()
     // The emulator lays nothing out: the element is 100px tall and grows 40px a line.
     let height = 100

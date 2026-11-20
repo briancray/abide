@@ -700,13 +700,13 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `format` | `{ money; percent; number; plural; list; date; duration; relative; bytes }` | The formatters abide ships, as one namespace. | 52.1, 52.2, 52.6 |
-| `format.money` | `(value: unknown, options?: { currency?: string; compact?: boolean; signed?: boolean; digits?: number; locale?: string }) => string` | An amount of money as it is written. | 52.1, 52.2, 52.6, 52.33 |
-| `format.percent` | `(value: unknown, options?: { digits?: number; signed?: boolean; locale?: string }) => string` | A fraction written as a percent. | 52.1, 52.2, 52.6, 52.33 |
+| `format.money` | `(value: unknown, options?: { currency?: string; compact?: boolean; signed?: boolean; digits?: number; locale?: string }) => string` | An amount of money as it is written. | 52.1, 52.2, 52.6, 52.35 |
+| `format.percent` | `(value: unknown, options?: { digits?: number; signed?: boolean; locale?: string }) => string` | A fraction written as a percent. | 52.1, 52.2, 52.6, 52.35 |
 | `format.number` | `(value: unknown, options?: { compact?: boolean; digits?: number; locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6 |
 | `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
 | `format.list` | `(value: unknown, options?: { conjunction?: 'and' \| 'or'; locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6 |
-| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.34 |
-| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.34 |
+| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36 |
+| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36 |
 | `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
 | `format.relative` | `(value: unknown, options?: { now?: number; locale?: string }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6 |
 | `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
@@ -734,8 +734,8 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `keyLabel` | `(binding: string, options?: { apple?: boolean }) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.9, 53.11, 53.45, 53.47 |
-| `keyLabel.parts` | `(binding: string, options?: { apple?: boolean }) => string[]` | Each key `keyLabel` writes for a binding, apart, for one key cap apiece. | 53.46, 53.47 |
+| `keyLabel` | `(binding: string, options?: { apple?: boolean }) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.9, 53.11, 53.54, 53.56 |
+| `keyLabel.parts` | `(binding: string, options?: { apple?: boolean }) => string[]` | Each key `keyLabel` writes for a binding, apart, for one key cap apiece. | 53.55, 53.56 |
 
 ## `dismissible`
 
@@ -747,7 +747,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `followBottom` | `(element: Element) => Disposer` | The `bind:element` adaptor keeping a scrolling element at its bottom as what it holds grows. | 32.9, 53.44 |
+| `followBottom` | `(element: Element) => Disposer` | The `bind:element` adaptor keeping a scrolling element at its bottom as what it holds grows. | 32.9, 53.53 |
 
 ## `dropzone`
 
@@ -838,7 +838,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
 | `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], baseline?: number) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`. | 52.21, 52.22 |
 | `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
-| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'bar' }` | One series of a chart: what it is called, its values in x order, and whether it is drawn as a line or as bars. | 52.21, 52.24, 52.35 |
+| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'bar' }` | One series of a chart: what it is called, its values in x order, and whether it is drawn as a line or as bars. | 52.21, 52.24, 52.37 |
 
 # Components
 
@@ -864,7 +864,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question asked in the app's `Prompts`. | 50.5, 50.7, 50.8, 50.11, 11.32 |
 | `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown in the app's `Prompts` until it is closed. | 50.5, 50.7, 50.9, 50.11, 11.32 |
 | `prompts.prompt` | `(asked: string \| PromptOptions) => Promise<string \| undefined>` | A line of text asked for in the app's `Prompts`. | 50.5, 50.7, 50.11, 50.33, 11.32 |
-| `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string; value?: string; placeholder?: string; signal?: AbortSignal; modal?: boolean; run?: (answer: string) => unknown }` | What a prompt shows, what its buttons say, what withdraws it, whether it is modal, and the call confirming makes. | 50.7, 50.10, 50.34, 50.37, 50.38, 50.39 |
+| `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string; value?: string; placeholder?: string; signal?: AbortSignal; modal?: boolean; run?: (answer: string) => unknown }` | What a prompt shows, what its buttons say, what withdraws it, whether it is modal, and the call confirming makes. | 50.7, 50.10, 50.34, 50.43, 50.44, 50.45 |
 
 ## `Toasts`
 
@@ -877,10 +877,10 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16 |
-| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.35, 50.36 |
+| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.41, 50.42 |
 | `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
 | `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
-| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.35 |
+| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.41 |
 
 ## `Tooltip`
 
@@ -910,7 +910,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60 |
+| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.63 |
 
 ## `Markdown`
 
@@ -922,13 +922,13 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `LineChart` | `{ series: readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'bar' }[]; label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | One or more series drawn as lines or bars over a shared x in an `svg`, the component `@abide/abide/LineChart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.32, 52.35, 52.36, 52.37 |
+| `LineChart` | `{ series: readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'bar' }[]; label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | One or more series drawn as lines or bars over a shared x in an `svg`, the component `@abide/abide/LineChart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39 |
 
 ## `Sparkline`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.32 |
+| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.34 |
 
 ## `Chat`
 
