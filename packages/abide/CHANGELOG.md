@@ -1,5 +1,91 @@
 # @abide/abide
 
+## 0.143.0
+
+### Minor Changes
+
+- attributes written onto a notice, and onclose told whether its timeout, a dismissal or its action took it — 50.35, 50.36 ([`01314e8`](https://github.com/briancray/abide/commit/01314e80e449a3c8311e10a09cb37bdb95645b9a))
+- a signal withdraws a prompt, modal: false shows it beside the page, and run makes the confirm a call it stays up for — 50.1, 50.37-50.39 ([`101eefb`](https://github.com/briancray/abide/commit/101eefb7f8fbbaac0b3f459aff2943b7881e50d0))
+- prevent: false runs a binding and leaves the key its default — 53.2 ([`2f5018e`](https://github.com/briancray/abide/commit/2f5018eacef47f39a87e216e3befa5f87e1d4d4a))
+- Detail renders a row of its own under each row, spanning every column — 51.60 ([`333c24a`](https://github.com/briancray/abide/commit/333c24a8f1c08acf0fbfff6f1a3eb7a2fb25fce4))
+- a poll does not refresh while the document is hidden, and refreshes once when it is shown again — 7.43, 7.44 ([`3f32700`](https://github.com/briancray/abide/commit/3f32700febf580ff4f07a22bee3a16b5a73c237c))
+- zero takes zero into the range, and a series of zeroes lies along the bottom — 52.32 ([`47da978`](https://github.com/briancray/abide/commit/47da978ca346ee43eef1f2215b4cee2479139b8f))
+- a series of kind 'bar' draws bars from zero, onpick hears a click's nearest x, and disabled marks an x that takes no pick — 52.35-52.37 ([`659f554`](https://github.com/briancray/abide/commit/659f5547e5e8e5ffca6b658c9bfd55b5fe852702))
+- export followBottom, the bind:element adaptor Chat's transcript follows its bottom with, and the UpdateFeed type — 53.40, 53.44, 38.146 ([`c58a268`](https://github.com/briancray/abide/commit/c58a26852a6eb4f6c7ad66efca387c676b5d0e2a))
+- Apple symbols for named keys, keyLabel.parts, an apple option, and a server with no request labels by its own platform — 53.3, 53.45-53.47 ([`ca85533`](https://github.com/briancray/abide/commit/ca85533f98bb38e5d79022c7d56ee18073dbef49))
+- its key runs it in a browser page where no menu bar takes it, and on() filed in a setup is unfiled with it — 38.213, 38.214 ([`d167f03`](https://github.com/briancray/abide/commit/d167f03a269c50eaa01e154c462dbe235da72e83))
+- a signed value's minus is −, an 'hour' style, and format.dateParts — 52.33, 52.34 ([`f636a18`](https://github.com/briancray/abide/commit/f636a188809128b252c4204cb13b86a37a6c7631))
+- ab3f197: `Chat` takes `Tool`, rendering a tool call in place of its name, input and result; `Actions`, rendered under each answer with a `retry` that asks the question again; and `turns`, bound to load and keep a conversation. `Text` is handed the part and its turn beside the text, and a question sent while an answer streams is queued, with a Cancel, and asked once it ends (RULEBOOK 53.34, 53.39, 53.47-53.49)
+- 910a6d3: `Combobox` bound to an array picks several items: a pick adds an item or takes it out again with the list left open, each item picked is a chip with a remove button (or a `Chip` component), and Backspace in the empty input takes out the last (RULEBOOK 51.61, 51.62)
+- 8eb5b83: `copyText` is now `copy`. It takes a record of MIME type to what that type holds, beside a string, so one click copies `text/html` and `text/plain` together, or an `image/png` Blob, as one clipboard item (RULEBOOK 53.57). Where `navigator.clipboard` or `ClipboardItem` is missing or refuses, the selected-textarea fallback lays every string type on the `copy` event, and a value holding no string reports not copied (53.22, 53.58). Rename `copyText(…)` to `copy(…)`; a string copies as before.
+- 813ce06: `copy` takes `selector`, so one binding on a container copies from the buttons inside it — the ones a `raw` block holds — and `oncopied`, called with whether the copy landed and the element clicked; a function given as the text is handed that element (RULEBOOK 53.44, 53.45)
+- 22d5c6d: `dropzone` takes `onreject`, handed the files a drop or a paste carried that `accept` or `multiple` turned away (RULEBOOK 53.46)
+- 8f58694: `handle` reads a `Response` you fetched yourself as its `content-type` says — `fetch(url).then(handle)` — JSON as its value, a JSON Lines or event stream as its chunks as they arrive, text as a string and anything else as a `Blob`, with a status outside 2xx a `FetchFailed`; your fetch keeps its headers, and what it throws reaches you untouched. A `FetchFailed` from `fetchJson` or `fetchText` for an attempt that threw carries the thrown error as its `cause`, which Problem Details never sends (RULEBOOK 54.30-54.34)
+- ac319b8: `format.date` with no `timeZone` writes in the visitor's zone — UTC on the server and while the page hydrates, so the two agree, then the browser's own — or in the zone the app pins with `format.timeZone.set(zone)`, per request on a server (RULEBOOK 52.3, 52.44, 52.45, 41.32)
+- 5ea6ff3: `job` takes `from: 'start'`, measuring `every` from when the last run started rather than ended; a run due while the last one overran starts at the look after it ends (RULEBOOK 54.29)
+- d53ad3c: `markdown` and `Markdown` take `blocks`: a fenced block whose language is one of its names renders as the caller's markup (`markdown`) or component (`Markdown`), handed its source and the rest of its info — a chart, a callout, a code block with a Copy button. `href` may answer the address with the `target` and `rel` it opens with, and a reference link (`[text][label]`, `[text][]`, `[label]`) takes its address from a definition anywhere in the source (RULEBOOK 52.40-52.43)
+- 584b528: `markdown` and `Markdown` render model output as a model writes it: `<br>` and a short list of attribute-free formatting tags (`<kbd>`, `<sup>`, `<sub>`, `<b>`, `<i>`, …) are markup rather than text, numeric and common named character references are their characters, `[ ]`/`[x]` list items are checkboxes, and math is kept as its TeX in a `data-math` element. Given `streaming`, both leave out what the end of a stream is still writing — an unclosed mark, a half link, a table's head before its delimiter — until it can't change (RULEBOOK 52.46-52.50).
+- a0383c9: **breaking:** `Menu.abide` is replaced by `menu(options)`, two parts an app spreads onto elements of its own — `<button {...actions.trigger}>` and `<div {...actions.menu}>` — so the trigger holds anything and carries its own attributes. `open` takes a `Reactive` the menu writes back on every close, beside `onopen` and `onclose`; `menuitemcheckbox` and `menuitemradio` items change state with the menu left open; and typing moves focus to the item starting with what was typed (RULEBOOK 50.28-50.32, 50.37-50.40)
+- b0044b9: `hotkeys` and `keyLabel` read a native menu's modifier spellings — `cmd`/`command` as `meta`, `option` as `alt`, `control` as `ctrl` — and a `MenuItem`'s `key` reads `meta` and `mod`, so one shortcut string labels, matches and fills the menu bar alike (RULEBOOK 53.9)
+- 9ff91ed: `Pairing` takes the step `slow` after `slowAfter` milliseconds of connecting, offering a Try again that calls `pairing`'s new `retry`; the step `offline` while the visitor has no network; and a `Message` component rendering each step's words (RULEBOOK 44.102, 53.42, 53.50-53.52)
+- 0d9fafd: an open `Tooltip` or `Menu` is placed again when it or its anchor changes size, not only on a scroll or a resize; and `place`, `Tooltip` and `Menu` take `arrowInset`, the pixels the arrow keeps from the corners (RULEBOOK 50.26, 50.35)
+- 07d5f7d: `format.relative` takes a `style` — `short` writes `12 min. ago`, `narrow` writes `12m ago` (RULEBOOK 52.32)
+- 1168778: `requireRole(role, { status: 404 })` answers a caller without the role as an address nothing serves — the same `NotFound` the router answers — for an app that hides what exists (RULEBOOK 54.28)
+- 8b80ba6: a `Column` takes `firstDirection`, the direction a first press of its header sorts in, and `SortableTable` takes `rowAttributes`, spread onto each row's `<tr>` — a `class`, a `data-` state, an `onclick` (RULEBOOK 51.53, 51.60)
+- adee697: `Sparkline` takes `kind: 'bar'`, drawing each value as a bar up from zero in place of the line — a count reads by its length (RULEBOOK 52.33)
+- dfb693e: **breaking:** `Tabs.abide` is replaced by `tabs({ keys, selected })`, parts an app spreads onto elements of its own — `list`, `tab(key)` and `panel()` — so a tab holds anything, and `panel(key)` gives each tab a panel of its own, hidden while another is selected and kept (RULEBOOK 51.36-51.44)
+- c1042cd: `Toasts` takes `Toast`, a component rendering each notice's content — handed the notice, `dismiss` and `act` — inside the element carrying its attributes and tone; an element in it whose `bind:element` hands back an animation's `finished` keeps the notice in the page until it ends (RULEBOOK 50.46, 32.38)
+- d45ea96: **breaking:** `Tooltip.abide` is replaced by `tooltip(hint, options)`, a `bind:element` adaptor on the element it explains, and `Tooltips.abide`, rendered once in the root layout as the one popover every hint opens in. Nothing is written beside the anchor, a text hint describes it through `aria-description`, and a hint may be a component (RULEBOOK 50.23-50.27, 50.36)
+- 516d872: `trustedIdentity({ header, proxies, claims })` signs in the caller a single sign-on proxy in front of the app names in a header — believed only on a request whose peer, as `request.ip` answers it, is one of `proxies` — for that request alone, with no cookie sealed, so `signedIn` and `requireRole` admit them as any caller (RULEBOOK 54.35-54.37)
+- c70418a: a `<name>.worker.ts` under `lib` runs each call to its exports in a thread started for that call — a `Worker` on a server and in an executable, a Web Worker in a browser — behind functions of the same name and type: an `async function*` streams a chunk per read, an `AbortSignal` argument aborts in the thread, and the app stopping ends the thread (RULEBOOK 55)
+
+### Patch Changes
+
+- fetchText reads Retry-After through #shared's retryAtOf ([`00e93c1`](https://github.com/briancray/abide/commit/00e93c1c22632b46362d2efd32efabbbe1ab11d1))
+- one unlisten, one sendUnsub, settle owns the in-page step ([`091b734`](https://github.com/briancray/abide/commit/091b7347b559d951ff12d548dbdc1f5992f0b9b8))
+- in the native app, a conversation outside a request before the window's first runs as the window signed out, rather than refusing — 44.100 ([`1870c84`](https://github.com/briancray/abide/commit/1870c843687610e30ebd18bb7ef44162520488ce))
+- renumber this branch's clauses after fix/tooltip-menu-gaps' — 50.41-50.45, 51.63, 52.34-52.39, 53.53-53.56 ([`203c0c4`](https://github.com/briancray/abide/commit/203c0c4101a950b38be60fdb47c5cdb2388d0f26))
+- track and pick read the pointer's x through one indexAt ([`2b586f2`](https://github.com/briancray/abide/commit/2b586f2e6f05262d03bc7335b65ea6b1b1e22af1))
+- format SortableTable's merged props ([`6d29f6b`](https://github.com/briancray/abide/commit/6d29f6bcb1b1edda359a0afce7046744ac188988))
+- a press passes over a layer outside is off for, rather than ending the walk down the stack — 53.15 ([`76d3aa3`](https://github.com/briancray/abide/commit/76d3aa375fdcb770e97e938d73ba219ffbda1438))
+- the runtime exports List, as it does ArmRegion and Scope, and listAt goes ([`77c0883`](https://github.com/briancray/abide/commit/77c0883ecb39beedeaac5de3feab0b4712649cdd))
+- one hydratedValue for every stand-in — 41.32 ([`7cecdfb`](https://github.com/briancray/abide/commit/7cecdfb1a41af69ebd2d2ae6261f15951ecbd586))
+- a seed answers no call that carries a different value for a cookie its render read — a render made signed out answered the same browser's signed-in call for up to 30 s — 41.18 ([`7d0c2c3`](https://github.com/briancray/abide/commit/7d0c2c3dc4c2228b1192889c3b27cfba2649fb0a))
+- a component mounts after what the body holds rather than over it, and its stop removes what it added — 38.119 ([`7d6a2b5`](https://github.com/briancray/abide/commit/7d6a2b5825336a724cc655883c53029ca66f8ef6))
+- the last thrown-to-message spellings go through messageOf ([`886c6c9`](https://github.com/briancray/abide/commit/886c6c9e594fcbd4400d65fd17961f010021cb13))
+- unexport file-local names, one subscribed(), settled asks busy once ([`90fa861`](https://github.com/briancray/abide/commit/90fa8610faff48fb09ff2eb8221180b6c0f60913))
+- isHydrating inlined, one visitorAgent, and the stale notes moved or dropped ([`938dca9`](https://github.com/briancray/abide/commit/938dca9fa1ebd32461103fa41932414f817e8fbc))
+- one messageOf for what a thrown value says ([`9721860`](https://github.com/briancray/abide/commit/9721860b2d5defd530cdaff308e2bcfa3b36c790))
+- the shared ResizeObserver goes with the last element it observes, so the next bind is made from the one standing then — 32.98 ([`c600cea`](https://github.com/briancray/abide/commit/c600ceaa50782ab9bc4f44a25c9cd9887061abd3))
+- one bracket counter, one maker header, one blank-run rule, and the dead walks out ([`c92b71b`](https://github.com/briancray/abide/commit/c92b71bca415e681eca34c209d40008e5cb22708))
+- the app tree's build walk lives with the compiler that reads it ([`d0d9664`](https://github.com/briancray/abide/commit/d0d966421040c34399dec775f3987e7448bdc9f5))
+- an arm's builder is written through buildFunction, the one maker header ([`da42a87`](https://github.com/briancray/abide/commit/da42a87e79cd95e42e6e77b33fcb36ead0284b46))
+- a global production's Direct duration is timed from before the call — the call starts its body, so its work before the first await, and any pause before the clock was read, went uncounted; a loaded CI box read 35 ms for a 50 ms sleep — RULEBOOK 21.15 ([`de3e69c`](https://github.com/briancray/abide/commit/de3e69c48604af60e66b42c2c836269210e379a3))
+- a test build keeps the four builds most recently asked for, and sweeps on reuse as well as after a build — 42.22 ([`deeebd4`](https://github.com/briancray/abide/commit/deeebd47a690c1c882a6dd6596e23e5571e8cd02))
+- a route.query write in the same turn as another builds on the address the first is navigating to, and reads see it — 30.44, 30.45, 30.48 ([`e69335a`](https://github.com/briancray/abide/commit/e69335a369ad6ac97729c8112bb50a0666690f80))
+- the request path's and the desktop's small duplicates and dead exports ([`f89f9e1`](https://github.com/briancray/abide/commit/f89f9e1ed00910e5bfefb3942ff3a710e5dbe7f3))
+- cebd12a: a `Combobox` with its list shut and its input empty leaves Escape alone, so a `<dialog>` holding it cancels as it should rather than every Escape being prevented (RULEBOOK 51.28)
+- 412de91: `pairing`'s `copyInstall` copies on a page served over plain http, through the selected textarea `copy` already falls back to (RULEBOOK 44.72, 53.22).
+- a37eef7: a global production's `Direct` duration is timed from before the call, so the body's work before its first await is counted (RULEBOOK 21.15)
+- cc5fc47: A paste carrying its files in `items` alone reaches `dropzone`'s `onreject` with the files it turns away, as a drop does (RULEBOOK 53.46).
+- da5222f: A refusal `fetchText`, `fetchJson` or `handle` hands back keeps the service's `Retry-After`: a handler returning it answers with the same header, and a value it refused is held until then (RULEBOOK 15.23, 15.24).
+- a88603d: `Markdown` renders a closed fenced block its `blocks` names as that component when it ends the source, not only once more text follows it, and keeps the block's nodes when text does follow (RULEBOOK 52.43, 52.18).
+- fe9eded: A `MenuItem`'s `key` spells an arrow as `arrowup`, `arrowdown`, `arrowleft` or `arrowright` in the native menu bar too, the spelling a page's `hotkeys` matches and `keyLabel` writes, so one key works in both (RULEBOOK 38.213).
+- b53c025: ArrowUp in a `menu` with no item focused moves focus to the last item rather than the one before it (RULEBOOK 50.30).
+- 703fe4e: A native `MenuItem`'s `key` is read by the same parser as `hotkeys` and `keyLabel`: `mod++` binds the plus key, and a modifier that is not one of the five or a spelling of one throws instead of being dropped (RULEBOOK 53.9).
+- a883c04: A native app reads its update feed by the wall clock rather than a timer a sleeping Mac stops, again when the Mac wakes or the app comes to the front, a minute after a feed it could not reach (backing off to the hour), and on after an update is staged, so a newer release replaces the staged one; every read logs one line naming what it found (RULEBOOK 38.142)
+- 8899e79: A `ReportDraft` and a mutation queued in `outbox` are minted their ids on a page served over plain http, where `crypto.randomUUID` is missing (RULEBOOK 48.12, 46.10).
+- 54bc3f4: `readOnly({ allow })` lets a write through to an allowed handler when the app is served under a sub-path too; it used to refuse every write there (RULEBOOK 54.6).
+- d1a23d1: `requireRole(…, { status: 404 })` under a sub-path names the same path an address nothing serves does, below the mount, so the two stay indistinguishable (RULEBOOK 54.28).
+- 9f9ff82: `sortRows`, and so `SortableTable`, compares text in the `en-US` locale `format` writes in, rather than the runtime's, so rows a server sorted keep their order once the page hydrates (RULEBOOK 51.48).
+- 6a0ea03: The language server's template completions read a slot's end as the parser does, so a `{` inside a comment, a regex or a template string no longer stops completions for the rest of the file (RULEBOOK 38.117).
+- 0e990d2: a `Tooltip` opens at once only for focus the browser shows (`:focus-visible`), so a mouse click on its anchor no longer opens the hint and holds it open while the anchor keeps focus — the pointer's hover delay still applies (RULEBOOK 50.24)
+- 84115cd: `observe.visible`'s shared viewport observer is disconnected with the last element it observes, as every other shared observer is, and the next bind makes one from the `IntersectionObserver` standing then (RULEBOOK 32.98).
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies [5c6d6da]
+  - @abide/bridge@0.8.4
+
 ## 0.142.0
 
 ### Minor Changes

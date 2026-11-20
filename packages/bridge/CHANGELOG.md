@@ -1,5 +1,13 @@
 # @abide/bridge
 
+## 0.8.4
+
+### Patch Changes
+
+- a refused call is answered through served() like every other report ([`604a78c`](https://github.com/briancray/abide/commit/604a78cd7b05e838d48d4926693426d7444310a2))
+- a direct call to an http MCP server sends what its headersHelper writes, over its headers, as Claude Code does — 44.95 ([`c75e1bf`](https://github.com/briancray/abide/commit/c75e1bfeaef80545ee8f58c5f746cd42490cf746))
+- 5c6d6da: A turn whose readying fails is reported failed, as a call's already was, rather than left running with nothing reported.
+
 ## 0.8.3
 
 ### Patch Changes
