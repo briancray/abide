@@ -1,5 +1,5 @@
 <script>
-import { type Column, reactive } from '@abide/abide'
+import { type Column, reactive, url } from '@abide/abide'
 import SortableTable from '@abide/abide/SortableTable.abide'
 
 import listCompanies from '../listCompanies.handler.ts'
@@ -27,7 +27,7 @@ const companies = reactive(() => listCompanies())
         text: string
     })}
         {#if column.key === 'name'}
-            <a href={`/companies/${row.id}`}>{text}</a>
+            <a href={url('/companies/[id=SLUG]', { id: row.id })}>{text}</a>
         {:else}
             {text}
         {/if}

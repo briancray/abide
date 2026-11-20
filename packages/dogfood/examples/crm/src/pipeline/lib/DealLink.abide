@@ -1,15 +1,16 @@
 <script>
-import { reactive } from '@abide/abide'
+import { copyText } from '@abide/abide'
 
-let copied = reactive(false, { ttl: 2_000 })
-
-async function copy(): Promise<void> {
-    await navigator.clipboard.writeText(`${location.origin}/pipeline#d1`)
-    copied = true
-}
+// The address is read as the click lands, on whichever origin serves the page.
+const copyLink = copyText(() => `${location.origin}/pipeline#d1`, {
+    copiedFor: 2_000,
+})
 </script>
 
 <div class="row">
     <span>Analytical Engines renewal</span>
-    <button onclick={copy}>{copied ? 'Copied' : 'Copy link'}</button>
+    <button class="group" bind:element={copyLink}>
+        <span class="group-data-copied:hidden">Copy link</span>
+        <span class="hidden group-data-copied:inline">Copied</span>
+    </button>
 </div>
