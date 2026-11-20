@@ -1,15 +1,16 @@
 <script>
 // THE WORDS OF AN ANSWER, rendered as `Chat` hands them over: markdown a section at a time, so a
-// chunk re-renders only the section still growing (52.18); a fence as the docs' code, and a `show`
-// fence as the live thing it names (40.28).
-import { props } from '@abide/abide'
+// chunk re-renders only the section still growing (52.18), with what its end is still writing left
+// out while it streams (52.50); a fence as the docs' code, and a `show` fence as the live thing it
+// names (40.28).
+import { type AssistantTurn, props } from '@abide/abide'
 import Markdown from '@abide/abide/Markdown.abide'
 
 import AnswerCode from './AnswerCode.abide'
 import { answerHref } from './answerHref.ts'
 import ShowBlock from './ShowBlock.abide'
 
-const { text } = props<{ text: string }>()
+const { text, turn } = props<{ text: string; turn?: AssistantTurn }>()
 
 // The languages the system prompt has the model fence code in, and the ones it reaches for besides.
 const blocks = {
@@ -29,4 +30,5 @@ const blocks = {
 }
 </script>
 
-<Markdown class="flow" source={text} href={answerHref} blocks={blocks} />
+<Markdown class="flow" source={text} href={answerHref} blocks={blocks}
+    streaming={turn !== undefined && turn.stop === undefined && turn.failed === undefined} />

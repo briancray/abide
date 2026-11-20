@@ -65,3 +65,41 @@ test('a docs tool reads as being read, then as read, and the words after it rend
     steps.shift()?.()
     await settled()
 })
+
+// THE REVERT: drop `streaming` from `AnswerText`'s `Markdown` — the answer shows `Use **bo` mid-word.
+test('an answer leaves out what it is still writing until the turn ends — 52.50', async () => {
+    const steps: (() => void)[] = []
+    const step = () => new Promise<void>((go) => steps.push(go))
+    async function* ask(): AsyncGenerator<AssistantEvent> {
+        yield { type: 'text', text: 'Use **bo' }
+        await step()
+        yield { type: 'text', text: 'ld** and [the do' }
+        await step()
+        yield { type: 'done', stop: 'end_turn', usage: { input: 0, output: 0 } }
+    }
+    const settled = async () => {
+        for (let turn = 0; turn < 5; turn += 1) await Bun.sleep(0)
+        flushSync()
+    }
+    using _chat = await mount(ScriptedAnswer({ ask }))
+    const input = document.querySelector(
+        '[data-part=input]',
+    ) as HTMLTextAreaElement
+    input.value = 'How?'
+    input.dispatchEvent(new Event('input'))
+    flushSync()
+    document
+        .querySelector('[data-part=composer]')
+        ?.dispatchEvent(new Event('submit', { cancelable: true }))
+    await settled()
+    const answer = () =>
+        document.querySelector('[data-speaker=assistant] .flow')?.textContent
+    expect(answer()).toBe('Use')
+    steps.shift()?.()
+    await settled()
+    expect(answer()).toBe('Use bold and')
+    steps.shift()?.()
+    await settled()
+    // Ended: what never closed is shown as it was written.
+    expect(answer()).toBe('Use bold and [the do')
+})

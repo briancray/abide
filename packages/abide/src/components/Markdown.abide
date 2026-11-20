@@ -10,38 +10,49 @@ import {
     SCHEMES,
     sectionEnd,
     type Settings,
+    settled,
 } from '#shared/markdown/sections.ts'
 import { props } from '#shared/props.ts'
 import { raw } from '#shared/Raw.ts'
 import { reactive } from '#shared/reactive/index.ts'
 
-const { source, schemes, headingLevel, href, blocks, ...rest } = props<
-    {
-        /** The markdown to render, as it stands: a stream hands it the text so far. */
-        source: string
-        /**
-         * The schemes a link's address may have, lowercase and without the colon. A link to any
-         * other renders as its text. `['http', 'https', 'mailto']` by default.
-         */
-        schemes?: readonly string[]
-        /** The level a `#` heading renders at, the deeper ones below it, down to 6. 1 by default. */
-        headingLevel?: number
-        /**
-         * Where each link `schemes` lets through goes: an address, or the address with the
-         * `target` and `rel` it opens with (52.40); a link it answers `undefined` for renders as its
-         * text. Pass one function for the component's life: a new one renders every section again.
-         */
-        href?: (address: string) => string | LinkTarget | undefined
-        /**
-         * 52.43 — the components rendering fenced blocks, by the first word of the fence's info:
-         * each is handed the block's `source` and the rest of its `info`. A block still being
-         * written shows as code until its fence closes.
-         */
-        blocks?: Readonly<
-            Record<string, (props: { source: string; info: string }) => unknown>
-        >
-    } & Attributes<'div'>
->()
+const { source, schemes, headingLevel, href, blocks, streaming, ...rest } =
+    props<
+        {
+            /** The markdown to render, as it stands: a stream hands it the text so far. */
+            source: string
+            /**
+             * The schemes a link's address may have, lowercase and without the colon. A link to any
+             * other renders as its text. `['http', 'https', 'mailto']` by default.
+             */
+            schemes?: readonly string[]
+            /** The level a `#` heading renders at, the deeper ones below it, down to 6. 1 by default. */
+            headingLevel?: number
+            /**
+             * Where each link `schemes` lets through goes: an address, or the address with the
+             * `target` and `rel` it opens with (52.40); a link it answers `undefined` for renders as its
+             * text. Pass one function for the component's life: a new one renders every section again.
+             */
+            href?: (address: string) => string | LinkTarget | undefined
+            /**
+             * 52.43 — the components rendering fenced blocks, by the first word of the fence's info:
+             * each is handed the block's `source` and the rest of its `info`. A block still being
+             * written shows as code until its fence closes.
+             */
+            blocks?: Readonly<
+                Record<
+                    string,
+                    (props: { source: string; info: string }) => unknown
+                >
+            >
+            /**
+             * 52.50 — whether `source` is still being written, a model's answer as it streams: what its
+             * end may yet turn into something else is left out until it can't. Not for a field someone
+             * is typing into, whose last line is theirs to see.
+             */
+            streaming?: boolean
+        } & Attributes<'div'>
+    >()
 
 type Block = {
     Block: (props: { source: string; info: string }) => unknown
@@ -122,7 +133,11 @@ const sections = reactive(() => {
     closedSource = text.slice(0, at)
     const shown = closed.slice()
     if (at < text.length) {
-        open = sectionOf(text.slice(at), settings)
+        const growing = text.slice(at)
+        open = sectionOf(
+            streaming === true ? settled(growing) : growing,
+            settings,
+        )
         shown.push(open)
     }
     return shown

@@ -5223,7 +5223,8 @@ time where it passes none.
 52.7 `format.bytes` MUST write a size in the largest unit it fills at least one of, each unit 1,000
 of the one below it.
 
-52.8 `markdown` MUST escape every character of its source that HTML reads as markup.
+52.8 `markdown` MUST escape every character of its source that HTML reads as markup, save the tags
+52.46 writes.
 
 52.9 `markdown` MUST write a link whose address has a scheme outside `schemes` as its text alone.
 
@@ -5233,7 +5234,7 @@ of the one below it.
 `data-language` attribute.
 
 52.12 `markdown` MUST render a source that ends inside an unclosed fence, emphasis or link as the text
-it has so far.
+it has so far, save what 52.50 leaves out.
 
 52.13 `markdown` MUST write each address a link keeps as what `href` answers for it, where its caller
 passes `href`.
@@ -5329,6 +5330,27 @@ request on a server.
 
 52.45 The visitor's zone MUST be `UTC` on a server and while a page hydrates, and the zone the
 browser resolves once it has.
+
+52.46 `markdown` MUST write a `<br>` in its source as a line break, and each of `b`, `i`, `u`, `s`,
+`em`, `strong`, `del`, `ins`, `mark`, `small`, `sub`, `sup` and `kbd` opened with no attribute and
+closed later on its line as that element around its text, and MUST escape any other tag.
+
+52.47 `markdown` MUST write a numeric character reference outside code, and a named one of the
+markup, space, typographic, arrow, comparison and currency names it holds, as the character it names.
+
+52.48 `markdown` MUST render a list item opening with `[ ]` or `[x]` as a disabled checkbox,
+checked for `[x]`, before the rest of the item, its `li` carrying `data-task` of `open` or `done`.
+
+52.49 `markdown` MUST keep math as its TeX, escaped, in an element carrying `data-math` of `inline`
+or `display`: `$…$`, `\(…\)`, `$$…$$` and `\[…\]` on a line, and lines of `$$` or `\[` alone opening a
+block a line of `$$` or `\]` alone closes; a `$` opens math only before a non-space and closes it only
+after a non-space and before no digit.
+
+52.50 `markdown` given `streaming` and `Markdown` given `streaming` MUST leave out the end of the last
+section a later chunk may still change, as far back as 160 characters of its last line: a closing
+fence half written, a last line that is a block's marker alone, a table's rows until the delimiter
+under its head is whole and its last row until the line ends, and the end of the last line from an
+opening of code, emphasis, a link or a tag nothing closes yet.
 
 # 53. Keys, element behaviors and chat
 
