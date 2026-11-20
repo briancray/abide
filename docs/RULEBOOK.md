@@ -5222,6 +5222,9 @@ against its first.
 52.32 `format.relative` MUST write in the `style` its caller passes, and in `long` where it passes
 none.
 
+52.33 `Sparkline` given `kind: 'bar'` MUST draw each present value as a bar from zero, each in a
+band of equal width, with zero on its scale, and MUST draw no line, area or dot.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

@@ -11,6 +11,7 @@ const {
     label,
     area = false,
     dot = false,
+    kind = 'line',
     ...rest
 } = props<
     {
@@ -22,6 +23,8 @@ const {
         area?: boolean
         /** Whether to mark the last value, as `data-part="dot"`. `false` by default. */
         dot?: boolean
+        /** 52.33 — `'bar'` draws each value as a bar up from zero, as `data-part="bar"`, in place of the line: a count. `'line'` by default. */
+        kind?: 'line' | 'bar'
     } & Omit<Attributes<'svg'>, 'values'>
 >()
 
@@ -45,7 +48,28 @@ const drawing = reactive(() => {
         lastIndex = index
     }
     const x = scale([0, Math.max(1, values.length - 1)], [0, SIZE])
-    const y = scale([low, high], [SIZE, 0])
+    // 52.33 — a bar is read by its length, so zero is on the scale however far the values sit from it.
+    const y =
+        kind === 'bar'
+            ? scale([Math.min(low, 0), Math.max(high, 0)], [SIZE, 0])
+            : scale([low, high], [SIZE, 0])
+    let bars = ''
+    if (kind === 'bar' && values.length > 0) {
+        const band = SIZE / values.length
+        const gap = band * 0.2
+        const zero = y(0)
+        for (let index = 0; index < values.length; index += 1) {
+            const value = values[index]
+            if (
+                value === null ||
+                value === undefined ||
+                !Number.isFinite(value)
+            )
+                continue
+            const left = index * band + gap / 2
+            bars += `M${left},${zero}H${left + band - gap}V${y(value)}H${left}Z`
+        }
+    }
     const xs: number[] = []
     const ys: (number | undefined)[] = []
     for (let index = 0; index < values.length; index += 1) {
@@ -54,6 +78,7 @@ const drawing = reactive(() => {
         ys.push(value === null || value === undefined ? undefined : y(value))
     }
     return {
+        bars,
         line: path(xs, ys),
         area: path(xs, ys, SIZE),
         end: last === undefined ? '' : `M${x(lastIndex)},${y(last)}Z`,
@@ -76,19 +101,23 @@ const drawing = reactive(() => {
     aria-label={label}
     data-trend={drawing.trend}
 >
-    {#if area}
+    {#if kind === 'bar'}
+        <path data-part="bar" d={drawing.bars} fill="currentColor" stroke="none" />
+    {:else if area}
         <path data-part="area" d={drawing.area} fill="currentColor" fill-opacity="0.15" stroke="none" />
     {/if}
-    <path
-        data-part="line"
-        d={drawing.line}
-        fill="none"
-        stroke="currentColor"
-        stroke-linejoin="round"
-        stroke-linecap="round"
-        vector-effect="non-scaling-stroke"
-     />
-    {#if dot && drawing.end !== ''}
+    {#if kind === 'line'}
+        <path
+            data-part="line"
+            d={drawing.line}
+            fill="none"
+            stroke="currentColor"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+            vector-effect="non-scaling-stroke"
+         />
+    {/if}
+    {#if kind === 'line' && dot && drawing.end !== ''}
         <path
             data-part="dot"
             d={drawing.end}

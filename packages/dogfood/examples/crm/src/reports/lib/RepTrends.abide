@@ -7,12 +7,18 @@ const REPS = [
     {
         name: 'Ada Lovelace',
         won: [12_000, 18_000, 15_000, 22_000, 26_000, 31_000],
+        closed: [2, 3, 3, 4, 5, 6],
     },
     {
         name: 'Grace Hopper',
         won: [24_000, 21_000, null, 11_000, 14_000, 17_000],
+        closed: [4, 4, null, 2, 3, 3],
     },
-    { name: 'Alan Turing', won: [9_000, 9_000, 9_000, 9_000, 9_000, 9_000] },
+    {
+        name: 'Alan Turing',
+        won: [9_000, 9_000, 9_000, 9_000, 9_000, 9_000],
+        closed: [1, 1, 1, 1, 1, 1],
+    },
 ]
 
 let months = reactive(6)
@@ -29,7 +35,7 @@ let months = reactive(6)
     {/for}
 </div>
 <table>
-    <thead><tr><th>Rep</th><th>November</th><th>Trend</th></tr></thead>
+    <thead><tr><th>Rep</th><th>November</th><th>Trend</th><th>Deals</th></tr></thead>
     <tbody>
         {#for rep of REPS by rep.name}
             <tr>
@@ -42,6 +48,14 @@ let months = reactive(6)
                         dot
                         class="h-6 w-24 text-muted data-[trend=up]:text-good
                             data-[trend=down]:text-bad"
+                     />
+                </td>
+                <td>
+                    <Sparkline
+                        kind="bar"
+                        values={rep.closed.slice(-months)}
+                        label="{rep.name}'s deals closed, {months} months"
+                        class="h-6 w-24 text-muted"
                      />
                 </td>
             </tr>
