@@ -1,8 +1,9 @@
+import { isComponentTag } from './classifyTemplate.ts'
 import { IDENTIFIER_PART } from './isNamedAlone.ts'
 import { closeTagAt } from './parseAbide.ts'
 import { importedNames } from './splitImports.ts'
 import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
-import { skipQuoted } from './tokenize.ts'
+import { skipQuoted, slotEnd } from './tokenize.ts'
 
 /**
  * What the markup at a cursor is waiting for: a block keyword after `{#`, `{:` or `{/`, a component
@@ -26,22 +27,18 @@ export function templateContext(
 ): TemplateContext | undefined {
     const markup = markupStart(text, offset)
     if (markup === -1) return undefined
-    let depth = 0
     let braceAt = -1
     let tagAt = -1
-    // A quote is stepped over to its close — and a close at or past the cursor ends the scan inside it.
+    // A slot ends where the parser ends it (`slotEnd`); one closing at or past the cursor holds it.
     for (let at = markup; at < offset; at += 1) {
         const char = text[at]
-        if (depth > 0) {
-            if (char === '{') depth += 1
-            else if (char === '}') depth -= 1
-            else if (char === '"' || char === "'" || char === '`')
-                at = skipQuoted(text, at) - 1
-            continue
-        }
         if (char === '{') {
-            depth = 1
-            braceAt = at
+            const end = slotEnd(text, at)
+            if (end >= offset) {
+                braceAt = at
+                break
+            }
+            at = end
         } else if (tagAt !== -1) {
             if (char === '>') tagAt = -1
             else if (char === '"' || char === "'") at = skipQuoted(text, at) - 1
@@ -49,7 +46,7 @@ export function templateContext(
             tagAt = at
         } else if (char === '<' && at + 1 === offset) tagAt = at
     }
-    if (depth > 0) {
+    if (braceAt !== -1) {
         const block = /^\{([#:/])([a-z ]*)$/.exec(text.slice(braceAt, offset))
         if (block === null) return undefined
         return {
@@ -135,7 +132,7 @@ function componentsIn(text: string): string[] {
         const body = open.index + open[0].length
         const end = closeTagAt(text, 'script', body)?.start ?? text.length
         for (const { name } of importedNames(text.slice(body, end)))
-            if (/^[A-Z]/.test(name)) names.add(name)
+            if (isComponentTag(name)) names.add(name)
     }
     for (const found of text.matchAll(/\{#component\s+([A-Z][\w$]*)/g))
         names.add(found[1] as string)

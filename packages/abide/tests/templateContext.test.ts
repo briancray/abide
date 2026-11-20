@@ -72,6 +72,16 @@ test('markup is told apart from scripts, expressions and text — 38.117', () =>
     expect(at(`${SCRIPT}<p>text`)).toBeUndefined()
 })
 
+// A SLOT ENDS WHERE THE PARSER ENDS IT, so a brace in a comment, a regex or a template substitution
+// leaves the markup after it completing. THE REVERT: count `{`/`}` by hand past quotes alone; the
+// comment's `{` holds the depth at 1 and all three answer `undefined`.
+test('a slot ends where the parser ends it — 38.117', () => {
+    for (const slot of ['{/* { */ x}', '{/{/.test(s)}', '{`${"{"}`}'])
+        expect(at(`${SCRIPT}<p>${slot}</p>{#`)).toMatchObject({
+            kind: 'block',
+        })
+})
+
 // A `#` NAMING NOTHING never finished tokenizing, so `{#` typed at the end of a file hung the parser
 // — and the language server, which checks the text before it answers a completion. Asked of a child,
 // whose deadline is the failure. THE REVERT: drop the stall guard in `tokenize.ts`'s `scan`; the
