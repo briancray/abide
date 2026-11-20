@@ -5069,26 +5069,28 @@ of `search`.
 
 51.35 `Combobox` MUST write `data-selected` on the option of `value`.
 
-51.36 `Tabs` MUST select the first of `tabs` where `selected` names none of them.
+51.36 `tabs` MUST select the first of `keys` where `selected` names none of them.
 
-51.37 `Tabs` MUST select a tab that is clicked.
+51.37 `tabs` MUST select a tab that is clicked, writing its key to `selected`.
 
-51.38 `Tabs` MUST select the next tab on ArrowRight and the previous on ArrowLeft, going round the
+51.38 `tabs` MUST select the next tab on ArrowRight and the previous on ArrowLeft, going round the
 ends.
 
-51.39 `Tabs` MUST select the first tab on Home, and the last on End.
+51.39 `tabs` MUST select the first tab on Home, and the last on End.
 
-51.40 `Tabs` MUST move focus to a tab a key selects.
+51.40 `tabs` MUST move focus to a tab a key selects.
 
-51.41 `Tabs` MUST give the selected tab a `tabindex` of `0`, and every other tab a `tabindex` of
+51.41 `tabs` MUST give the selected tab a `tabindex` of `0`, and every other tab a `tabindex` of
 `-1`.
 
-51.42 `Tabs` MUST render its children in one panel, labelled by the selected tab.
+51.42 A panel `tabs` hands back for a key MUST be hidden while another tab is selected and MUST keep
+what it holds, and a panel for no key MUST take the id the selected tab's `aria-controls` names and
+be labelled by that tab.
 
-51.43 `Tabs` MUST render a tab's content through `Tab` where it is given, as the tab's `label` where
-`label` is given, and as the tab's key otherwise.
+51.43 `tabs`'s parts MUST carry every attribute its tabs and panels need as the server writes them,
+`role`, `aria-selected`, `aria-controls` and `aria-labelledby` included.
 
-51.44 `Tabs` MUST write `data-selected` on the selected tab.
+51.44 `tabs` MUST write `data-selected` on the selected tab.
 
 51.45 `sortRows` MUST order `rows` by each row's value for the column `sort` names, in the direction
 `sort` names.

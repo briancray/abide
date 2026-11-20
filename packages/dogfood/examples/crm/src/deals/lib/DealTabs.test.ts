@@ -51,6 +51,18 @@ test('switching tabs rebuilds the panel, and none of the tabs', async () => {
         true,
         false,
     ])
-    // The Value tab's one field, and the marks on two tabs and the panel
-    atMost(work, { nodesCreated: 6, attributesSet: 7 })
+    // The Value tab's one field, the three marks on each of two tabs, and the panel's id and label,
+    // which follow the tab selected (51.42)
+    atMost(work, { nodesCreated: 6, attributesSet: 8 })
+})
+
+// THE REVERT: hand the panel a fixed id, and the selected tab's `aria-controls` names nothing.
+test('the selected tab controls the panel, and the panel is labelled by it', async () => {
+    using _tabs = await mount(DealTabs({}))
+    await settled()
+    ;(tabs()[2] as HTMLElement).click()
+    flushSync()
+    const panel = document.querySelector('[role=tabpanel]') as HTMLElement
+    expect(tabs()[2]?.getAttribute('aria-controls')).toBe(panel.id)
+    expect(panel.getAttribute('aria-labelledby')).toBe(tabs()[2]?.id)
 })

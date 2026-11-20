@@ -902,11 +902,13 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | --- | --- | --- | --- |
 | `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item; Option?: (props: { item: Item }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35 |
 
-## `Tabs`
+## `tabs`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Tabs` | `<Item>{ id: string; tabs: readonly Item[]; key: (item: Item) => string; label?: (item: Item) => string; selected?: string; Tab?: (props: { item: Item }) => unknown } & Attributes<'div'>` | A row of tabs over one panel holding the selected tab's content, the component `@abide/abide/Tabs.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44 |
+| `tabs` | `(options: TabsOptions) => Tabs` | WAI-ARIA's tabs as parts an app spreads onto elements of its own: a tab list, a tab per key, and a panel. | 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44 |
+| `TabsOptions` | `{ keys: readonly string[] \| (() => readonly string[]); selected?: Reactive<string \| undefined> }` | The tabs' keys in order, and the key of the one selected. | 51.36, 51.37 |
+| `Tabs` | `{ readonly list: Record<string, unknown>; tab(key: string): Record<string, unknown>; panel(key?: string): Record<string, unknown>; readonly current: Reactive<string \| undefined> }` | The list's part, a tab's, a panel's, and the key of the tab selected. | 32.11, 51.36, 51.42, 51.43 |
 
 ## `SortableTable`
 

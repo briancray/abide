@@ -23,70 +23,57 @@ import Section from '#src/lib/Section.abide'
                 "test('switching tabs rebuilds the panel, and none of the tabs'",
             ],
         },
+        {
+            path: 'packages/abide/tests/tabs.test.ts',
+            from: [
+                "test('a panel per tab is hidden while another is selected, and kept",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Switch a deal between its details and its stage">
-        <p>Bind <code>selected</code> to the key of the tab showing, and branch on it in the
-            children: they are the one panel.</p>
+        <p>Spread <code>list</code> on the row, <code>tab(key)</code> on each tab, and
+            <code>panel()</code> on the one panel, and branch on the selected key in it.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { reactive } from '@abide/abide'
-            import Tabs from '@abide/abide/Tabs.abide'
+            import { reactive, tabs } from '@abide/abide'
 
-            type View = { key: string; label: string }
-
-            const VIEWS: View[] = [
-                { key: 'details', label: 'Details' },
-                { key: 'stage', label: 'Stage' },
-            ]
-            let tab = reactive('details')
+            let tab = reactive<string | undefined>('details')
+            const view = tabs({ keys: ['details', 'stage'], selected: tab })
             </script>
 
-            <Tabs
-                id="deal"
-                tabs={VIEWS}
-                key={(view: View) => view.key}
-                label={(view: View) => view.label}
-                bind:selected={tab}
-            >
+            <div {...view.list}>
+                <button {...view.tab('details')}>Details</button>
+                <button {...view.tab('stage')}>Stage</button>
+            </div>
+            <div {...view.panel()}>
                 {#if tab === 'details'}<DealDetails />{:else}<DealStage />{/if}
-            </Tabs>
+            </div>
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a draft in a tab while another shows">
+        <p>Spread <code>panel(key)</code> on a panel per tab. A panel is hidden while another
+            tab is selected, and keeps what it holds.</p>
+        <Code language="abide" caption="abide" code={`
+            <div {...view.panel('details')}><DealDetails /></div>
+            <div {...view.panel('notes')}><textarea></textarea></div>
         `} />
     </Section>
 
     <Section level={3} title="Put a count beside each tab's name">
-        <p>A <code>Tab</code> component renders each tab's content, handed its item.</p>
+        <p>A tab is your own element, so it holds anything.</p>
         <Code language="abide" caption="abide" code={`
-            <script>
-            import Tabs from '@abide/abide/Tabs.abide'
-            </script>
-
-            <Tabs
-                id="company"
-                tabs={VIEWS}
-                key={(view: View) => view.key}
-                bind:selected={tab}
-            >
-                {#component Tab({ item }: { item: View })}
-                    {item.label} <span>{item.count}</span>
-                {/component}
-                <CompanyView tab={tab} />
-            </Tabs>
+            <button {...view.tab('notes')}>Notes <span>{notes.length}</span></button>
         `} />
     </Section>
 
     <Section level={3} title="Underline the selected tab">
-        <p>The row is <code>data-part="tablist"</code>, each tab <code>data-part="tab"</code>,
-            and the selected one carries <code>data-selected</code>.</p>
+        <p>The selected tab carries <code>data-selected</code>.</p>
         <Code language="abide" caption="abide" code={`
-            <script>
-            import Tabs from '@abide/abide/Tabs.abide'
-            </script>
-
-            <Tabs
-                class="[&_[data-part=tablist]]:flex [&_[data-selected]]:border-b-2"
+            <div class="flex [&_[data-selected]]:border-b-2" {...view.list}>
                 …
-            />
+            </div>
         `} />
     </Section>
 </Doc>

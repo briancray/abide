@@ -704,11 +704,11 @@ export const SITE: readonly SiteGroup[] = [
             },
             {
                 route: '/components/tabs',
-                title: '`Tabs`',
-                nav: '`Tabs`',
+                title: '`tabs`',
+                nav: '`tabs`',
                 description:
-                    'Switch one panel between views from a row of tabs that the arrow keys move along.',
-                registry: '`Tabs`',
+                    'Switch between views from a row of tabs of your own that the arrow keys move along.',
+                registry: '`tabs`',
             },
             {
                 route: '/components/sortable-table',
