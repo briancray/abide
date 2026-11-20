@@ -45,6 +45,7 @@ export function pairing(): {
     step: Reactive<'click' | 'waiting' | 'install'>
     copied: Reactive<boolean>
     start: () => void
+    retry: () => void
     copyInstall: () => Promise<void>
     stop: () => void
     [Symbol.dispose]: () => void
@@ -105,6 +106,10 @@ export function pairing(): {
                 // Paired already: a reconnect that opened no app leaves the old bridge answering.
                 step.set(blurred || status.peek()?.paired ? 'click' : 'install')
             }, PAIR_WAIT)
+        },
+        // 44.102 — the pairing asked for again, over a read in flight that is taking too long.
+        retry() {
+            read?.copy.refresh()
         },
         // 44.72.
         async copyInstall() {

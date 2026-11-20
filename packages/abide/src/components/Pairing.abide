@@ -4,32 +4,95 @@
 // caller put inside it. 53.42 — the step is the root's `data-step`.
 //
 // STYLED BY WHAT IT WRITES (49.2, 49.4): `data-step` on the root, and the `data-part`s `message`,
-// `command`, `copy` (`data-copied`), `pair` and `missing`.
+// `command`, `copy` (`data-copied`), `pair`, `retry` and `missing`.
 import type { Attributes } from '#shared/Attributes.ts'
 import { copyText } from '#shared/copyText.ts'
+import { isServer } from '#shared/isServer.ts'
+import { online } from '#shared/online.ts'
 import { pairing } from '#shared/pairing.ts'
 import { props } from '#shared/props.ts'
-import { reactive } from '#shared/reactive/index.ts'
+import { reactive, watch } from '#shared/reactive/index.ts'
 
-const { ...rest } = props<Attributes<'section'>>()
+type Step =
+    | 'connecting'
+    | 'slow'
+    | 'offline'
+    | 'unavailable'
+    | 'click'
+    | 'waiting'
+    | 'install'
+    | 'paired'
 
-const { status, step, copied, start, copyInstall } = pairing()
+const {
+    slowAfter = 8000,
+    Message,
+    ...rest
+} = props<
+    {
+        /** 53.50 — milliseconds of connecting before the step is `slow`, offering to try again. Default `8000`. */
+        slowAfter?: number
+        /** 53.52 — renders a step's message in place of its own words, handed the step. */
+        Message?(props: { step: Step }): unknown
+    } & Attributes<'section'>
+>()
 
-const shown = reactive(() => {
-    if (status.error()) return 'unavailable'
-    if (status === undefined) return 'connecting'
-    if (status.paired) return 'paired'
-    return step
+const { status, step, copied, start, retry: askAgain, copyInstall } = pairing()
+
+// 53.50 — connecting for longer than `slowAfter`.
+let slow = reactive(false)
+watch(() => {
+    const connecting = status === undefined && !status.error()
+    if (!connecting || isServer()) {
+        slow = false
+        return
+    }
+    const timer = setTimeout(() => {
+        slow = true
+    }, slowAfter)
+    return () => clearTimeout(timer)
 })
+
+const shown = reactive((): Step => {
+    const reachable = online
+    const failed = status.error()
+    const value = status
+    const late = slow
+    const asked = step
+    // 53.51 — no network is said before anything else, since nothing below it can change until it returns.
+    if (!reachable) return 'offline'
+    if (failed) return 'unavailable'
+    if (value === undefined) return late ? 'slow' : 'connecting'
+    if (value.paired) return 'paired'
+    return asked
+})
+
+const WORDS: Record<Step, string> = {
+    connecting: 'Connecting…',
+    slow: 'Still connecting to Claude Code.',
+    offline: 'You are offline. Pairing resumes once you are back.',
+    unavailable: 'Claude Code is unavailable here.',
+    click: 'Pair your Claude Code with this page with a click, or run this in a terminal:',
+    waiting:
+        'Pair your Claude Code with this page with a click, or run this in a terminal:',
+    install:
+        'No bridge app opened. Install it once, in a terminal, then pair again:',
+    paired: '',
+}
+
+function retry() {
+    slow = false
+    askAgain()
+}
 
 const command = () => status.peek()?.command ?? ''
 </script>
 
 <section {...rest} data-step={shown}>
-    {#if shown === 'unavailable'}
-        <p data-part="message">Claude Code is unavailable here.</p>
-    {:else if shown === 'connecting'}
-        <p data-part="message">Connecting…</p>
+    {#if shown !== 'paired'}
+        <p data-part="message">{#if Message}<Message step={shown} />{:else}{WORDS[shown]}{/if}</p>
+    {/if}
+    {#if shown === 'slow'}
+        <button type="button" data-part="retry" onclick={retry}>Try again</button>
     {:else if shown === 'paired'}
         {#if status?.missing.length}
             <p data-part="missing">Claude Code here cannot use
@@ -38,16 +101,12 @@ const command = () => status.peek()?.command ?? ''
         <slot />
         <button type="button" data-part="pair" onclick={start}>Reconnect</button>
     {:else if shown === 'install'}
-        <p data-part="message">No bridge app opened. Install it once, in a
-            terminal, then pair again:</p>
         <pre data-part="command">{status?.install}</pre>
         <button type="button" data-part="copy"
             data-copied={copied ? '' : undefined}
             onclick={copyInstall}>{copied ? 'Copied' : 'Copy'}</button>
         <button type="button" data-part="pair" onclick={start}>Pair again</button>
-    {:else}
-        <p data-part="message">Pair your Claude Code with this page with a
-            click, or run this in a terminal:</p>
+    {:else if shown === 'click' || shown === 'waiting'}
         <pre data-part="command">{status?.command}</pre>
         <button type="button" data-part="copy"
             bind:element={copyText(command)}>Copy</button>

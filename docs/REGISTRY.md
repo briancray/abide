@@ -460,7 +460,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `pairing` | `() => { status: Reactive<BridgeStatus \| undefined, BridgeStatus \| undefined, Failed<'HttpError', undefined>>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; copyInstall: () => Promise<void>; stop: () => void; [Symbol.dispose]: () => void }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.69, 44.70, 44.71, 44.72, 44.73 |
+| `pairing` | `() => { status: Reactive<BridgeStatus \| undefined, BridgeStatus \| undefined, Failed<'HttpError', undefined>>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; retry: () => void; copyInstall: () => Promise<void>; stop: () => void; [Symbol.dispose]: () => void }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.69, 44.70, 44.71, 44.72, 44.73, 44.102 |
 
 ## `transcript`
 
@@ -944,7 +944,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Pairing` | `Attributes<'section'>` | The shipped component pairing the visitor's Claude Code with the page, around what it renders once paired. | 44.69, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.42, 53.43 |
+| `Pairing` | `{ slowAfter?: number; Message?: (props: { step: 'connecting' \| 'slow' \| 'offline' \| 'unavailable' \| 'click' \| 'waiting' \| 'install' \| 'paired' }) => unknown } & Attributes<'section'>` | The shipped component pairing the visitor's Claude Code with the page, around what it renders once paired. | 44.69, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.42, 53.43, 53.50, 53.51, 53.52 |
 
 # `.abide` files
 

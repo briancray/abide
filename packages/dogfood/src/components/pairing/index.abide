@@ -20,6 +20,18 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/assistant/lib/ClaudeCodeChat.test.ts',
             from: ["test('paired: the chat, and the tools it cannot use'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Pairing.test.ts',
+            from: [
+                "test('a connection that takes too long offers to try again, and trying again asks again'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Pairing.test.ts',
+            from: [
+                "test('a visitor offline is told so, and the step returns once they are back'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Show the chat once the visitor's Claude Code is paired">
@@ -39,11 +51,34 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Offer a retry when connecting takes too long">
+        <p>After <code>slowAfter</code> milliseconds of connecting, the step is
+            <code>slow</code> and a Try again button reads the pairing again. A visitor with no
+            network sees the <code>offline</code> step until they are back.</p>
+        <Code language="abide" caption="abide" code={`
+            <Pairing slowAfter={5000}>…</Pairing>
+        `} />
+    </Section>
+
+    <Section level={3} title="Say each step in the app's own words">
+        <p>A <code>Message</code> component renders each step's message, handed the
+            <code>step</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <Pairing>
+                {#component Message({ step }: { step: string })}
+                    {step === 'click' ? 'Connect your Claude Code to the CRM.' : step}
+                {/component}
+                …
+            </Pairing>
+        `} />
+    </Section>
+
     <Section level={3} title="Style each step of pairing">
         <p>The root carries <code>data-step</code>: <code>connecting</code>,
-            <code>click</code>, <code>waiting</code>, <code>install</code>, <code>paired</code> or
-            <code>unavailable</code>. Inside are the <code>message</code>, <code>command</code>,
-            <code>copy</code>, <code>pair</code> and <code>missing</code> parts.</p>
+            <code>slow</code>, <code>offline</code>, <code>click</code>, <code>waiting</code>,
+            <code>install</code>, <code>paired</code> or <code>unavailable</code>. Inside are the
+            <code>message</code>, <code>command</code>, <code>copy</code>, <code>pair</code>,
+            <code>retry</code> and <code>missing</code> parts.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import Pairing from '@abide/abide/Pairing.abide'

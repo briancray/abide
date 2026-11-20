@@ -4573,6 +4573,8 @@ the app that request reached, where such a request has come.
 44.101 `assistant` called outside a request, or in the run of a `global` value, where 44.100 does not
 run it, MUST run its conversation carrying no asker's credentials, and MUST throw where given `mcp`.
 
+44.102 `pairing`'s `retry` MUST read the pairing again, over a read in flight.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker
@@ -5344,8 +5346,8 @@ scrolled up from it.
 
 53.41 `Chat`'s transcript MUST carry `role="log"` and `aria-live="polite"`.
 
-53.42 `Pairing` MUST write its step as `data-step`: `connecting`, `unavailable`, `click`, `waiting`,
-`install` or `paired`.
+53.42 `Pairing` MUST write its step as `data-step`: `connecting`, `slow`, `offline`, `unavailable`,
+`click`, `waiting`, `install` or `paired`.
 
 53.43 `Pairing` MUST render its children once `pairing` reports the bridge paired, and MUST NOT
 before.
@@ -5369,6 +5371,14 @@ again for an answer to what is left.
 
 53.49 `Chat` MUST show the turns `turns` holds, and MUST write every turn it adds and every part it
 folds to `turns`.
+
+53.50 `Pairing` MUST take the step `slow` once it has been connecting for `slowAfter` milliseconds,
+offering a retry that calls `pairing`'s `retry`.
+
+53.51 `Pairing` MUST take the step `offline` while `online` is false, whatever its status.
+
+53.52 `Pairing` MUST render a step's message through `Message` where one is given, handed the
+step, and in its own words where none is.
 
 # 54. Guards, fetches and jobs
 
