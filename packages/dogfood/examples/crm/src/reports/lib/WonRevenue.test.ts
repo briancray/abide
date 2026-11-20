@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 
 import { flushSync } from '@abide/abide'
+import { announce } from '@abide/abide/Announcer.abide'
 import { measure, mount } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
 
@@ -136,4 +137,45 @@ test('the arrows step the crosshair month by month, and Escape puts it away', as
     chart().dispatchEvent(new FocusEvent('focusout'))
     flushSync()
     expect(chart().hasAttribute('data-hovering')).toBe(false)
+})
+
+const said = (part: 'polite' | 'assertive') =>
+    document.querySelector(`[data-part=${part}]`)?.textContent ?? ''
+
+// 52.72 — A MOVE THE KEYS MAKE IS READ OUT, and a pointer's is not: the keyboard's reader has no
+// readout in front of them, and a pointer sweeping the plot would read every month it crossed.
+// THE REVERT: drop the `announce` from `Chart`'s key handler, and the region stays empty.
+test("a move the keys make is read out, and a pointer's is not", async () => {
+    using _chart = await mount(WonRevenue({}))
+    announce('Ready')
+    flushSync()
+    pointAt(1)
+    expect(said('polite')).toBe('Ready')
+    press('ArrowRight')
+    expect(said('polite')).toBe('Aug 2026, Won: —, Target: $24K')
+    press('End')
+    expect(said('polite')).toBe('Nov 2026, Won: $42K, Target: $30K')
+    pointAt(2)
+    expect(said('polite')).toBe('Nov 2026, Won: $42K, Target: $30K')
+})
+
+// 50.52, 50.53 — THE SAME WORDS SAID TWICE ARE READ TWICE, each landing as an element of its own, and a
+// message replaces the last rather than joining a log. THE REVERT: key the message by its text rather
+// than its count, and the second `Saved` lands on the element the first did — nothing for a screen
+// reader to read.
+test('the same words said twice land twice, each replacing the last', async () => {
+    using _chart = await mount(WonRevenue({}))
+    const region = document.querySelector('[data-part=polite]') as HTMLElement
+    expect(region.getAttribute('aria-live')).toBe('polite')
+    announce('Saved')
+    flushSync()
+    const first = region.firstElementChild
+    announce('Saved')
+    flushSync()
+    expect(region.children).toHaveLength(1)
+    expect(region.firstElementChild).not.toBe(first)
+    expect(said('polite')).toBe('Saved')
+    announce('Connection lost', { politeness: 'assertive' })
+    flushSync()
+    expect([said('polite'), said('assertive')]).toEqual(['', 'Connection lost'])
 })

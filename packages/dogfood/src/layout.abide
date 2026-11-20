@@ -23,6 +23,7 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 
 <script>
 import { onMenu, url } from '@abide/abide'
+import Announcer from '@abide/abide/Announcer.abide'
 import Tooltips from '@abide/abide/Tooltips.abide'
 
 import DocsNav from '#src/lib/DocsNav.abide'
@@ -64,6 +65,8 @@ onMenu(() => MENUS)
         focus:rounded-md focus:bg-raised focus:px-3 focus:py-2"
             href="#content"
         >Skip to content</a>
+<!-- Ahead of the page, so an example's own Announcer, standing after it, is the one that shows (50.36). -->
+<Announcer class="sr-only" />
 <UpdateBanner />
 <SiteBar />
 <DocsNav />

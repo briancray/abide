@@ -171,7 +171,7 @@ it writes, grouped as REGISTRY groups them, and a prompt above every page that a
 
 | | |
 | --- | --- |
-| A page | the name, what you use it for, then its Syntax, its examples, its See also, its Tests and its Rules, always in that order (40.9) |
+| A page | the name, what you use it for, then its Syntax, its examples, its Types, its See also, its Tests and its Rules, always in that order (40.9, 40.32) |
 | A group | the pages that answer one kind of problem, listed on the home page with each page's description |
 | The prompt | the visitor's own Claude Code, answering from the pages, rendering the files, rows and clauses it names in the answer |
 

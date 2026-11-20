@@ -1,0 +1,53 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import SeeTheMessage from './lib/SeeTheMessage.abide'
+import seeTheMessage from './lib/SeeTheMessage.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/components/announce', '/components/toasts', '/components/chart']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: [
+                "test('the same words said twice land twice, each replacing the last'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/announce.test.ts',
+            from: [
+                "test('a message with no Announcer standing warns once — 50.36'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Read every announcement out from one place">
+        <p>Render <code>Announcer</code> once, in the root layout, and hide it with a class. Its
+            two live regions stand empty from the first paint, which is what lets a screen reader
+            hear the first message that lands in them.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Announcer from '@abide/abide/Announcer.abide'
+            </script>
+
+            <html lang="en">
+                <body>
+                    <slot />
+                    <Announcer class="sr-only" />
+                </body>
+            </html>
+        `} />
+    </Section>
+
+    <Section level={3} title="See the message while you build">
+        <p>Leave the class off to read what a screen reader is told. Each message lands in the
+            region its politeness names, the <code>polite</code> and the <code>assertive</code> part,
+            and replaces the one before it, so neither grows into a log. A page shows its messages
+            in the last <code>Announcer</code> it renders.</p>
+        <Example code={seeTheMessage}><SeeTheMessage /></Example>
+    </Section>
+</Doc>

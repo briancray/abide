@@ -99,7 +99,8 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
     <Section level={3} title="Read the chart from the keyboard">
         <p>The chart takes focus. The arrows step its crosshair one x at a time and stop at the
             ends, Home and End go to the first and the last, Enter picks the x it stands at, and
-            Escape puts it away. The readout describes the chart while it shows.</p>
+            Escape puts it away. The readout describes the chart while it shows, and each step is
+            read out through the page's <code>Announcer</code>.</p>
         <Example code={keyboardReadout}><KeyboardReadout /></Example>
     </Section>
 

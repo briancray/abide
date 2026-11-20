@@ -3871,8 +3871,8 @@ label, description and `registry` MUST be its `SITE` entry's alone.
 40.8 A page documenting an export MUST carry the export's name as its `SITE` entry's `title`.
 
 40.9 A page MUST render, in this order, its Syntax, being the rows directly under its section; a
-heading per `###` of its section, holding that heading's rows; its Examples; its See also; its Tests;
-and its Rules.
+heading per `###` of its section, holding that heading's rows; its Examples; its Types; its See also;
+its Tests; and its Rules.
 
 40.10 A page's rows MUST be read from REGISTRY as the page renders.
 
@@ -3937,6 +3937,13 @@ grouped as the sidebar groups them.
 
 40.31 An example shown from a `.abide` file MUST mount that same file beneath its fence, and the
 page's `.md` twin MUST carry the fence and nothing the file renders.
+
+40.32 A page's Syntax and the headings under it MUST show each row's `Signature` cell in a short form
+derived from REGISTRY's, and its Types MUST show every row carrying a `Signature` cell with the cell in
+full, under the heading it sits under; a page whose section carries no `Signature` cell MUST NOT render
+Types. Of the rows carrying a `Signature` cell directly under the section, the Syntax MUST show only
+the name the page documents and every name that is not a type and is called, and a Syntax left with
+no row MUST NOT be rendered.
 
 # 41. Rendering and hydration
 
@@ -5009,10 +5016,10 @@ confirming button, and `undefined` where it closed any other way.
 50.35 `place` MUST keep `arrow` at least `arrowInset` pixels from each end of the floating
 element's facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
 
-50.36 One hint MUST show at a time. The hint, the notices and the prompts MUST each show in the last
-`Tooltips`, `Toasts` and `Prompts` of those standing, the others showing none, and a hint, a notice
-or a prompt asked for with none standing MUST warn once, on `abide:tooltip`, `abide:toasts` and
-`abide:prompts`.
+50.36 One hint MUST show at a time. The hint, the notices, the prompts and the message `announce`
+gives MUST each show in the last `Tooltips`, `Toasts`, `Prompts` and `Announcer` of those standing,
+the others showing none, and a hint, a notice, a prompt or a message asked for with none standing
+MUST warn once, on `abide:tooltip`, `abide:toasts`, `abide:prompts` and `abide:announce`.
 
 50.37 A `menu` MUST write every opening and every closing of its menu, however it happened, to its
 `open`, calling `onopen` or `onclose` after, and MUST open and close its menu as `open` is written.
@@ -5057,6 +5064,18 @@ takes the pointer from it.
 
 50.49 `popover` MUST show the element it is bound to as a popover, a manual one where the element
 carries no `popover` attribute, for as long as it is bound, and MUST hide it once it is unbound.
+
+50.50 `announce` MUST make its text the one message `Announcer` holds, in place of the message before
+it, read `polite` unless its `politeness` says `assertive`.
+
+50.51 `announce` MUST throw where `isServer` is true.
+
+50.52 `Announcer` MUST render a polite and an assertive live region, both standing and empty as it
+first renders, and MUST hold its message in the region its politeness names and nothing in the
+other.
+
+50.53 `Announcer` MUST render each message as an element of its own, a message saying the words of
+the one before it among them.
 
 # 51. Lists and tables
 
@@ -5435,6 +5454,9 @@ away.
 
 52.71 Enter on a `Chart` MUST call `onpick` with the index of the x position its crosshair stands at,
 save where `disabled` holds for that index.
+
+52.72 `Chart` MUST `announce` the x its crosshair stands at and every series' value there each time a
+key moves the crosshair, and MUST NOT for a move of the pointer.
 
 # 53. Keys, element behaviors and chat
 

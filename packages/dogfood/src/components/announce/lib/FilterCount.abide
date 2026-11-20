@@ -1,0 +1,27 @@
+<script>
+import { reactive } from '@abide/abide'
+import Announcer, { announce } from '@abide/abide/Announcer.abide'
+
+const DEALS = ['Acme renewal', 'Hopper expansion', 'Initech pilot']
+let query = reactive('')
+const found = reactive(() =>
+    DEALS.filter((deal) => deal.toLowerCase().includes(query.toLowerCase())),
+)
+
+function filter(text: string) {
+    query = text
+    announce(`${found.length} of ${DEALS.length} deals match`)
+}
+</script>
+
+<input
+    placeholder="Filter deals"
+    value={query}
+    oninput={(event) => filter((event.target as HTMLInputElement).value)}
+ />
+<ul>
+    {#for deal of found}
+        <li>{deal}</li>
+    {/for}
+</ul>
+<Announcer class="text-signal" />

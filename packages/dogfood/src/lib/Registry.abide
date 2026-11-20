@@ -1,11 +1,23 @@
 <script module>
 import REGISTRY from '../../../../docs/REGISTRY.md' with { type: 'text' }
 // A PAGE'S SYNTAX, read off docs/REGISTRY.md as it renders (40.10): the rows directly under the
-// page's `##` as its Syntax, then each `###` under it as a heading of its own. The clause column is
-// left out: the clauses the rows cite are the page's Rules, at its foot (40.11).
+// page's `##` as its Syntax, then each `###` under it as a heading of its own, every signature in its
+// short form — and, given `types`, the same rows again with the signatures in full, as the page's
+// Types (40.32). The clause column is left out: the clauses the rows cite are the page's Rules, at
+// its foot (40.11).
 import { registryRows, sectionsOf } from './registryRows.ts'
+import { inSyntax, shortSignature } from './shortSignature.ts'
 
 const ROWS = registryRows(REGISTRY)
+const SIGNATURE = 'Signature'
+
+/** Whether the REGISTRY section `registry` has a signature to spell out in full as its Types. */
+export function hasTypes(registry: string): boolean {
+    for (const row of ROWS)
+        if (row.section === registry && row.header.includes(SIGNATURE))
+            return true
+    return false
+}
 
 /** Every clause the rows of the REGISTRY section `registry` cite, once each, in rulebook order. */
 export function clausesOf(registry: string): string[] {
@@ -24,41 +36,115 @@ export function clausesOf(registry: string): string[] {
 </script>
 
 <script>
-import { raw, reactive, route } from '@abide/abide'
+import { props, raw, reactive, route } from '@abide/abide'
 
 import type { Heading } from './Heading.ts'
 import { inline, slugify } from './inline.ts'
 import { pageAt } from './sitePages.ts'
 
+const { types = false } = props<{
+    /** Render the page's Types — every signature in full — rather than its Syntax and headings. */
+    types?: boolean
+}>()
 const page = pageAt(route.name())
-const sections = sectionsOf(ROWS, page.registry)
 const SYNTAX = 'Syntax'
+const TYPES = 'Types'
+const sections = sectionsOf(ROWS, page.registry)
+const typed = sections
+    .map((section) => ({
+        ...section,
+        tables: section.tables.filter((table) =>
+            table.header.includes(SIGNATURE),
+        ),
+    }))
+    .filter((section) => section.tables.length > 0)
+// Above the Examples, the rows directly under the section are only what 40.32 has its Syntax show; a
+// Syntax left with no row is not rendered, its rows being the page's Types.
+const shown: typeof sections = []
+for (const section of sections) {
+    if (section.heading !== page.registry) {
+        shown.push(section)
+        continue
+    }
+    const tables: (typeof section)['tables'] = []
+    for (const table of section.tables) {
+        const at = table.header.indexOf(SIGNATURE)
+        const rows =
+            at < 0
+                ? table.rows
+                : table.rows.filter((row) =>
+                      inSyntax(
+                          row.cells[0] ?? '',
+                          row.cells[at] ?? '',
+                          page.registry,
+                      ),
+                  )
+        if (rows.length > 0) tables.push({ header: table.header, rows })
+    }
+    if (tables.length > 0) shown.push({ heading: section.heading, tables })
+}
 
+/** A row's cells as the page shows them, the clause column left out. */
+function cellsShown(
+    header: readonly string[],
+    cells: readonly string[],
+): string[] {
+    const shown = cells.slice(0, -1)
+    if (types) return shown
+    const at = header.indexOf(SIGNATURE)
+    if (at >= 0) shown[at] = shortSignature(shown[at] ?? '')
+    return shown
+}
+
+// Types is filed by `Doc` with the parts after Examples, so only the Syntax side files its own.
 const headings = reactive.share('docHeadings', () => reactive([]))
 const filed: Heading[] = []
-for (const section of sections) {
-    const title = section.heading === page.registry ? SYNTAX : section.heading
-    filed.push({ id: slugify(title), title, level: 2 })
-}
+if (!types)
+    for (const section of shown) {
+        const title =
+            section.heading === page.registry ? SYNTAX : section.heading
+        filed.push({ id: slugify(title), title, level: 2 })
+    }
 headings = [...headings, ...filed]
 </script>
 
-{#for section of sections}
+{#if types}
     <section><div class="flow">
-            {#if section.heading === page.registry}
-                <h2 id={slugify(SYNTAX)}>{SYNTAX}</h2>
-            {:else}
-                <h2 id={slugify(section.heading)}>{raw(inline(section.heading))}</h2>
-            {/if}
-            {#for table of section.tables}
-                <table>
-                    <thead><tr>{#for cell of table.header.slice(0, -1)}<th>{cell}</th>{/for}</tr></thead>
-                    <tbody>
-                        {#for row of table.rows}
-                            <tr>{#for cell of row.cells.slice(0, -1)}<td>{raw(inline(cell))}</td>{/for}</tr>
-                        {/for}
-                    </tbody>
-                </table>
+            <h2 id={slugify(TYPES)}>{TYPES}</h2>
+            {#for section of typed}
+                {#if section.heading !== page.registry}
+                    <h3 id="{slugify(TYPES)}-{slugify(section.heading)}">{raw(inline(section.heading))}</h3>
+                {/if}
+                {#for table of section.tables}
+                    <table>
+                        <thead><tr>{#for cell of table.header.slice(0, -1)}<th>{cell}</th>{/for}</tr></thead>
+                        <tbody>
+                            {#for row of table.rows}
+                                <tr>{#for cell of cellsShown(table.header, row.cells)}<td>{raw(inline(cell))}</td>{/for}</tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                {/for}
             {/for}
         </div></section>
-{/for}
+{:else}
+    {#for section of shown}
+        <section><div class="flow">
+                {#if section.heading === page.registry}
+                    <h2 id={slugify(SYNTAX)}>{SYNTAX}</h2>
+                {:else}
+                    <h2 id={slugify(section.heading)}>{raw(inline(section.heading))}</h2>
+                {/if}
+                {#for table of section.tables}
+                    <table>
+                        <thead><tr>{#for cell of table.header.slice(0, -1)}<th>{cell}</th>{/for}</tr></thead>
+                        <tbody>
+                            {#for row of table.rows}
+                                <tr>{#for cell of cellsShown(table.header, row.cells)}<td>{raw(inline(cell))}</td>{/for}</tr>
+                            {/for}
+                        </tbody>
+                    </table>
+                {/for}
+            </div></section>
+    {/for}
+{/if}

@@ -3,6 +3,7 @@
 // the size the chart is laid out at: the drawing is measured rather than stretched, so its labels are
 // never distorted, and a pointer over it — or the arrows, once it has focus — moves a crosshair to an
 // x and opens a readout of every series there in the page's `Tooltips`.
+import { announce } from '#shared/announce.ts'
 import type { Attributes } from '#shared/Attributes.ts'
 import type { ChartChild } from '#shared/chart/children.ts'
 import {
@@ -311,8 +312,17 @@ function pick(index: number | undefined) {
 }
 
 function key(event: KeyboardEvent) {
-    if (event.key === 'Enter') pick(hovered)
-    else scrubbing.key(event)
+    if (event.key === 'Enter') return pick(hovered)
+    const before = hovered
+    scrubbing.key(event)
+    // 52.72 — a move the keys make is read out, its readout being nowhere the reader is: a pointer's
+    // move is not, since the pointer's own readout is in front of it and a sweep would read every x.
+    const read = readout
+    if (hovered === before || read === undefined) return
+    const parts = [read.x]
+    for (const point of read.values)
+        parts.push(`${point.label}: ${point.value}`)
+    announce(parts.join(', '))
 }
 </script>
 

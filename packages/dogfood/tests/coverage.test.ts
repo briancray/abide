@@ -8,6 +8,7 @@ import { beforeAll, expect, test } from 'bun:test'
 
 import { cellsOf } from '../src/lib/cellsOf.ts'
 import { registryRows } from '../src/lib/registryRows.ts'
+import { shortSignature } from '../src/lib/shortSignature.ts'
 import { SITE } from '../src/lib/SITE.ts'
 import { isFramed } from '../src/lib/sitePages.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
@@ -473,8 +474,9 @@ test('every export of a public entry is a name the registry writes', async () =>
 
 // 40.6 — EVERY REGISTRY ROW IS ON EXACTLY ONE PAGE, read off the markdown each page serves: a row on
 // none is a name a reader cannot look up, and a row on two is a second copy. A row is its cells save
-// the clauses, which a page lists as its Rules (40.11). THE REVERT: drop `<Registry />` from `Doc`,
-// and every row is named.
+// the clauses, which a page lists as its Rules (40.11). A row carrying a signature is read where it is
+// whole, in the page's Types (40.32), its short form above the Examples being the same row again.
+// THE REVERT: drop `<Registry />` from `Doc`, and every row is named.
 test('every registry row is on exactly one page', async () => {
     const key = (cells: string[]): string =>
         cells.join(' | ').replace(/\s+/g, ' ')
@@ -485,12 +487,19 @@ test('every registry row is on exactly one page', async () => {
     }
     const found = new Map<string, string[]>()
     for (const [route, body] of await renderedMarkdown()) {
-        for (const line of body.split('\n'))
-            if (line.startsWith('| ') && !line.startsWith('| ---')) {
-                const cells = key(cellsOf(line))
-                if (written.has(cells))
-                    found.set(cells, [...(found.get(cells) ?? []), route])
+        let typed = false
+        let shortened = false
+        for (const line of body.split('\n')) {
+            if (line === '## Types') typed = true
+            if (!line.startsWith('| ') || line.startsWith('| ---')) continue
+            if (cellsOf(line)[0] === 'Name') {
+                shortened = !typed && cellsOf(line).includes('Signature')
+                continue
             }
+            const cells = key(cellsOf(line))
+            if (!shortened && written.has(cells))
+                found.set(cells, [...(found.get(cells) ?? []), route])
+        }
     }
     const misplaced: string[] = []
     for (const [cells, count] of written) {
@@ -559,7 +568,7 @@ test('a page documenting an export is titled with its name', () => {
 // 40.9 — EVERY PAGE IN THE ONE ORDER, read off its markdown: a reader who has found Tests on one
 // page finds it in the same place on the next. THE REVERT: render `<SeeAlso>` after `<Tests>` in
 // `Doc`, and every page with both is named.
-const ORDER = ['Syntax', 'Examples', 'See also', 'Tests', 'Rules']
+const ORDER = ['Syntax', 'Examples', 'Types', 'See also', 'Tests', 'Rules']
 
 test('every page renders its parts in the one order', async () => {
     const disordered: string[] = []
@@ -576,6 +585,74 @@ test('every page renders its parts in the one order', async () => {
         }
     }
     expect([...new Set(disordered)]).toEqual([])
+})
+
+// 40.32 — A SIGNATURE IS SHORT ABOVE THE EXAMPLES AND WHOLE IN TYPES, read off the markdown against
+// REGISTRY: a reader scanning the Syntax sees the names, and the full type is one part further down.
+// THE REVERT: hand `<Registry>` its `types` on both instances in `Doc`, and every page whose
+// signature shortens is named for showing it in full above its Examples.
+test('a signature is short above the examples and whole in Types', async () => {
+    const full = new Map<string, Set<string>>()
+    for (const row of registryRows(registry)) {
+        const at = row.header.indexOf('Signature')
+        const signature = row.cells[at]
+        if (at < 0 || signature === undefined) continue
+        const signatures = full.get(row.section) ?? new Set<string>()
+        signatures.add(signature)
+        full.set(row.section, signatures)
+    }
+    const registryOf = new Map<string, string>()
+    for (const group of SITE)
+        for (const page of group.pages)
+            registryOf.set(page.route, page.registry)
+    const wrong: string[] = []
+    for (const [route, body] of await renderedMarkdown()) {
+        const signatures = full.get(registryOf.get(route) ?? '')
+        if (signatures === undefined) continue
+        const above = body.split('\n## Examples\n')[0] ?? ''
+        const types = body.split('\n## Types\n')[1]?.split('\n## ')[0] ?? ''
+        for (const signature of signatures) {
+            const written = signature.replaceAll('|', '\\|')
+            if (!types.includes(written))
+                wrong.push(`${route}: not in Types: ${signature}`)
+            if (
+                shortSignature(signature) !== signature &&
+                above.includes(written)
+            )
+                wrong.push(`${route}: in full above Examples: ${signature}`)
+        }
+    }
+    expect(wrong).toEqual([])
+})
+
+// 40.32 — THE SYNTAX IS WHAT IS CALLED: a type directly under the section — a capitalized name the
+// page does not document — is in Types alone, so the Syntax a reader scans is the page's name and what
+// they call. Read off each page's first part, with types named here rather than by `inSyntax`, which
+// is what is under test. THE REVERT: return `true` from `inSyntax`, and every page declaring a type
+// is named.
+test('the syntax shows what is called, a type being in Types alone', async () => {
+    const typesOf = new Map<string, string[]>()
+    for (const row of registryRows(registry)) {
+        const name = row.cells[0] ?? ''
+        const declared = /^`([A-Z][a-z]\w*)`$/.exec(name)?.[1]
+        if (!row.header.includes('Signature') || row.subsection !== undefined)
+            continue
+        if (declared === undefined || row.section.includes(`\`${declared}\``))
+            continue
+        typesOf.set(row.section, [...(typesOf.get(row.section) ?? []), name])
+    }
+    const registryOf = new Map<string, string>()
+    for (const group of SITE)
+        for (const page of group.pages)
+            registryOf.set(page.route, page.registry)
+    const wrong: string[] = []
+    for (const [route, body] of await renderedMarkdown()) {
+        const syntax = body.split('\n## Syntax\n')[1]?.split('\n## ')[0] ?? ''
+        for (const name of typesOf.get(registryOf.get(route) ?? '') ?? [])
+            if (syntax.includes(`\n| ${name} |`))
+                wrong.push(`${route}: ${name}`)
+    }
+    expect(wrong).toEqual([])
 })
 
 // 40.12 — EVERY PAGE SHOWS ITS SUBJECT IN USE: an Examples part with at least one example under a

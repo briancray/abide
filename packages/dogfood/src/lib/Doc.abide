@@ -1,8 +1,8 @@
 <script>
 // A docs page: its header from `SITE` — the group it is in, its title and what it is for — then,
 // for a page documenting a REGISTRY section, the parts every such page has in one order (40.9): its
-// Syntax and the headings under it, the examples the page writes, its See also, its Tests and its
-// Rules. Then the thread to the pages either side, and the rail: the page's own headings, and its two
+// Syntax and the headings under it, the examples the page writes, its Types, its See also, its Tests
+// and its Rules. Then the thread to the pages either side, and the rail: the page's own headings, and its two
 // markdown downloads.
 //
 // WHICH PAGE COMES FROM THE ROUTE, so a page names nothing about itself: its words are `SITE`'s,
@@ -23,7 +23,7 @@ import {
 import type { Heading } from './Heading.ts'
 import { inline } from './inline.ts'
 import { installDocs } from './installDocs.ts'
-import Registry, { clausesOf } from './Registry.abide'
+import Registry, { clausesOf, hasTypes } from './Registry.abide'
 import Rules from './Rules.abide'
 import Section from './Section.abide'
 import SeeAlso from './SeeAlso.abide'
@@ -62,6 +62,8 @@ const headings = reactive.share('docHeadings', () => reactive([]))
 // (41.4), and a rail they filed themselves would hold fewer rows on the server than on the client.
 const rules = documents ? clausesOf(page.registry) : []
 const trailing: Heading[] = []
+if (documents && hasTypes(page.registry))
+    trailing.push({ id: 'types', title: 'Types', level: 2 })
 if (documents && seeAlso.length > 0)
     trailing.push({ id: 'see-also', title: 'See also', level: 2 })
 if (documents && tests.length > 0)
@@ -91,6 +93,9 @@ if (rules.length > 0) trailing.push({ id: 'rules', title: 'Rules', level: 2 })
         <Section title="Examples">
             <slot />
         </Section>
+        {#if hasTypes(page.registry)}
+            <Registry types={true} />
+        {/if}
         <SeeAlso routes={seeAlso} />
         <Tests tests={tests} />
         <Rules ids={rules} />

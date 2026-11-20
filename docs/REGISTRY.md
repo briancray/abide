@@ -960,7 +960,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 50.47, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64, 52.69, 52.70, 52.71 |
+| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 50.47, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64, 52.69, 52.70, 52.71, 52.72 |
 
 ## `Line`, `Column` and `Area`
 
@@ -1006,6 +1006,19 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `markdown` | `(text: string, options?: { schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (source: string, info: string) => string>>; inline?: boolean; streaming?: boolean }) => string` | Markdown as HTML safe to hand `raw`. | 52.8, 52.9, 52.10, 52.11, 52.12, 52.13, 52.14, 52.15, 52.16, 52.40, 52.41, 52.42, 52.46, 52.47, 52.48, 52.49, 52.50 |
 | `LinkTarget` | `{ href: string; target?: string; rel?: string }` | Where a link `markdown` writes goes: its address, and the `target` and `rel` it opens with. | 52.40 |
+
+## `Announcer`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Announcer` | `Attributes<'div'>` | The polite and the assertive live region `announce` is read out from, rendered once and imported from `@abide/abide/Announcer.abide`. | 50.36, 50.52, 50.53, 49.1, 49.2, 49.3, 49.4, 49.5 |
+
+## `announce`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `announce` | `(text: string, options?: AnnounceOptions) => void` | A message a screen reader reads out from the app's `Announcer`, with nothing shown. | 50.36, 50.50, 50.51 |
+| `AnnounceOptions` | `{ politeness?: 'polite' \| 'assertive' }` | How urgently a message interrupts what a screen reader is reading. | 50.50 |
 
 ## `Chat`
 

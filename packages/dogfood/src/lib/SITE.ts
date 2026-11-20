@@ -636,7 +636,7 @@ const WRITTEN: readonly {
     {
         group: 'Content',
         description:
-            'Markdown, a chat transcript and formatted values, and elements that follow what they hold or how big they are.',
+            'Markdown, a chat transcript, formatted values and messages read to a screen reader, and elements that follow what they hold or how big they are.',
         pages: [
             {
                 route: '/components/markdown',
@@ -655,6 +655,18 @@ const WRITTEN: readonly {
                 title: '`Chat`',
                 description:
                     'Put a streaming conversation with your assistant handler on a page, with a composer, Stop and tool permissions.',
+            },
+            {
+                route: '/components/announcer',
+                title: '`Announcer`',
+                description:
+                    'Render once in the root layout as the live regions a screen reader reads every announced message from.',
+            },
+            {
+                route: '/components/announce',
+                title: '`announce`',
+                description:
+                    'Tell a screen reader what changed where nothing on screen says it, politely or interrupting.',
             },
             {
                 route: '/helpers/format',

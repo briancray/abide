@@ -1,0 +1,12 @@
+<script>
+import Announcer, { announce } from '@abide/abide/Announcer.abide'
+</script>
+
+<button onclick={() => announce('Draft saved')}>Save draft</button>
+<button
+    onclick={() => announce('Connection lost', { politeness: 'assertive' })}
+>Drop the connection</button>
+<Announcer
+    class="mt-3 [&_[data-part=polite]]:text-signal
+    [&_[data-part=assertive]]:text-bad"
+ />

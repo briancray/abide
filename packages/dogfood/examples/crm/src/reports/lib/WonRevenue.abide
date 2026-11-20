@@ -1,5 +1,6 @@
 <script>
 import { format, props } from '@abide/abide'
+import Announcer from '@abide/abide/Announcer.abide'
 import Chart from '@abide/abide/Chart.abide'
 import Line from '@abide/abide/Line.abide'
 import Tooltips from '@abide/abide/Tooltips.abide'
@@ -33,3 +34,4 @@ const { won = WON, target = TARGET } = props<{
     class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
     text-chrome text-ink shadow-sm [&_[data-part=readout-x]]:text-muted"
  />
+<Announcer class="sr-only" />
