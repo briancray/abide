@@ -1493,8 +1493,8 @@ test('a view transition a later navigation overtook writes nothing — 39.9', as
 // 30.23, 30.24, 30.25 — THE ROUTE STANDING, AT ANOTHER QUERY: a filter written to the address. The page
 // reads the address through `route`, so it follows rather than being rebuilt — the count the reader
 // bumped, and the focus a search box would hold, stay — nothing is asked, and the scroll stays put.
-// THE REVERT: drop the same-route, same-path `follow` branch from `go`; this reports `asked` as
-// ['/'], a new scope, the count back at 0 and the page scrolled to the top.
+// THE REVERT: drop the same-route, same-path `follow` answer from `outcomeOf`, so the step asks; this
+// reports `asked` as ['/'], a new scope, the count back at 0 and the page scrolled to the top.
 test('a navigation that moves only the query keeps the page — 30.23, 30.24, 30.25', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
@@ -1549,8 +1549,8 @@ test('a navigation to another path of the same route asks, and keeps the page �
 // reader bumped is the state, and the scope is how a remount that rebuilt the same text shows.
 //
 // THE REVERT: have `onPop` call `router.go` for every step; this reports `asked` as ['/'] where
-// [] is due, and the count back at 0. AND 30.33's: drop `arrive` from `Router.follow`, which
-// writes `route.url`; the hash reads '' where '#setup' is due, and '' where '#install' is due below.
+// [] is due, and the count back at 0. AND 30.33's: drop the `arriveAt` call from `Router.settle`,
+// which writes `route.url`; the hash reads '' where '#setup' is due, and '' where '#install' is due below.
 test('back over a fragment of the standing page neither asks nor remounts, and moves route.url — 30.20, 30.33', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
@@ -2134,7 +2134,7 @@ test('a view transition carries the direction it moved in — 39.18, 39.19', asy
 // 23.28 — `route.index` IS THE ENTRY'S PLACE in the history the router wrote: 0 at a document load
 // that found none, one past the entry a push or a browser-pushed fragment step left, and the index
 // a reload or a history step arrives at. THE REVERT, run: hand `arrive` 0 in place of `this.index`
-// in `arriveAt` and `follow`; the push reads 0 where 1 is due.
+// in `arriveAt`; the push reads 0 where 1 is due.
 test('route.index follows the entry the address bar stands at — 23.28', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
