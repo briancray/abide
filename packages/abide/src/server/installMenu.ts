@@ -14,6 +14,7 @@ import {
     sendNumber,
     sendTyped,
 } from './appKit.ts'
+import { menuShortcut } from './menuShortcut.ts'
 
 // 38.89 — A ROLE AppKit ALREADY ANSWERS is sent down the responder chain, so `copy` copies whatever
 // holds the selection and is grayed where nothing does. The rest are the launcher's own.
@@ -34,34 +35,6 @@ const RESPONDER_ROLES: Partial<Record<NonNullable<Choice['role']>, string>> = {
     minimize: 'performMiniaturize:',
     zoom: 'performZoom:',
     front: 'arrangeInFront:',
-}
-
-const MODIFIERS: Record<string, number> = {
-    shift: 1 << 17,
-    ctrl: 1 << 18,
-    control: 1 << 18,
-    alt: 1 << 19,
-    option: 1 << 19,
-    cmd: 1 << 20,
-    command: 1 << 20,
-    // 53.9 — `hotkeys`' spellings: a menu bar is AppKit's alone, so `mod` is ⌘ here.
-    meta: 1 << 20,
-    mod: 1 << 20,
-}
-
-const NAMED_KEYS: Record<string, string> = {
-    enter: '\r',
-    return: '\r',
-    tab: '\t',
-    escape: '\x1b',
-    esc: '\x1b',
-    backspace: '\b',
-    delete: '\x7f',
-    space: ' ',
-    up: '',
-    down: '',
-    left: '',
-    right: '',
 }
 
 type Choice = Exclude<NativeMenuItem, 'separator'>
@@ -123,7 +96,7 @@ export function installMenu(
 function menuItem(item: NativeMenuItem): Id {
     if (item === 'separator')
         return send(objcClass('NSMenuItem'), 'separatorItem')
-    const { keyEquivalent, modifiers } = shortcut(item.key)
+    const { keyEquivalent, modifiers } = menuShortcut(item.key)
     const responder =
         item.role === undefined ? undefined : RESPONDER_ROLES[item.role]
     const built = send(
@@ -154,25 +127,4 @@ function menuItem(item: NativeMenuItem): Id {
     sendNumber(built, 'setTag:', chosen.length)
     chosen.push(item)
     return built
-}
-
-/** A shortcut as AppKit spells it: the key, and the mask of the modifiers written before it. */
-function shortcut(key: string | undefined): {
-    keyEquivalent: string
-    modifiers: number
-} {
-    if (key === undefined || key === '')
-        return { keyEquivalent: '', modifiers: 0 }
-    const parts = key.toLowerCase().split('+')
-    const last = parts.pop() as string
-    let modifiers = 0
-    for (const part of parts) modifiers |= MODIFIERS[part] ?? 0
-    const named = NAMED_KEYS[last]
-    const function_ = /^f([1-9]|1[0-2])$/.exec(last)
-    const keyEquivalent =
-        named ??
-        (function_ === null
-            ? last
-            : String.fromCharCode(0xf704 + Number(function_[1]) - 1))
-    return { keyEquivalent, modifiers }
 }
