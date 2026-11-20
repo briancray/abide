@@ -3501,8 +3501,12 @@ being served, and in a browser those named in its own, and MUST answer `undefine
 none or no request is being served.
 
 38.142 The native app given an `update` by `onLauncher` MUST read the feed under that address as
-it launches, every hour while it runs, and when the `update` role is picked, and MUST stage only a
-version `Bun.semver.order` places after the version it was built from.
+it launches, when the `update` role is picked, an hour by the wall clock after the last read, a
+minute after a read that could not reach the feed — doubling with each that follows, up to the
+hour — and when the Mac wakes or the app comes to the front five minutes or more after the last
+read. It MUST go on reading the feed with an update staged, MUST stage only a version
+`Bun.semver.order` places after both the version it was built from and the one staged, and MUST
+log one line per read naming what it found.
 
 38.143 The native app MUST NOT stage an update whose feed the key `abide native` built into it did
 not sign, or whose zip's digest is not the one the feed names, and MUST report one it refuses
