@@ -12,7 +12,6 @@
 // folds `AssistantEvent`s into words, so the composer and the answers are this file's. The pairing
 // is `Pairing`'s, styled in `app.css` by what it writes.
 import {
-    hotkeys,
     keyLabel,
     navigate,
     pairing,
@@ -29,6 +28,7 @@ import type { AnswerPart } from '#src/ask/lib/AnswerPart.ts'
 import permit from '#src/ask/permit.handler.ts'
 
 import Code from './Code.abide'
+import { ASK_ITEM } from './nativeMenus.ts'
 import Shown from './Shown.abide'
 
 type Message = { role: 'user' | 'assistant'; content: string }
@@ -111,15 +111,11 @@ function clear() {
     asking = undefined
 }
 
-// ⌘K (Ctrl+K off a Mac) from anywhere on the page, a field included, lands in the prompt; the native
-// app's Ask menu item lands there too (`layout.abide`).
+// ⌘K (Ctrl+K off a Mac) lands in the prompt: the native app's Ask menu item, whose key a page in a
+// browser answers itself, from anywhere, a field included (38.213).
 let prompt: HTMLInputElement | undefined
-const keys = hotkeys({
-    'mod+k': { run: () => prompt?.focus(), editable: true },
-})
+ASK_ITEM.on(() => prompt?.focus())
 </script>
-
-<window onkeydown={keys} />
 
 <form class="ask" onsubmit={ask}>
     <input

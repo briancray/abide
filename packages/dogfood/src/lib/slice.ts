@@ -6,6 +6,7 @@
 // end of the construct it opens — which is the whole rule, applied by two balancers because markup
 // and code close differently and nothing else does.
 
+import { dedent } from './dedent.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 const TAG = /<\/?([a-zA-Z][\w-]*)|\/>/g
@@ -87,18 +88,6 @@ function scanCode(line: string, scan: CodeScan): void {
         } else if (char === '(' || char === '[' || char === '{') scan.depth += 1
         else if (char === ')' || char === ']' || char === '}') scan.depth -= 1
     }
-}
-
-function dedent(lines: string[]): string {
-    let margin = Infinity
-    for (const line of lines) {
-        if (!line.trim()) continue
-        margin = Math.min(margin, line.length - line.trimStart().length)
-    }
-    if (!Number.isFinite(margin) || margin === 0) return lines.join('\n')
-    const out: string[] = []
-    for (const line of lines) out.push(line.slice(margin))
-    return out.join('\n')
 }
 
 /**

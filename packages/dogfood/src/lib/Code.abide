@@ -6,6 +6,7 @@
 // alone says where the code runs and leaves a reader guessing between a name read by name and `s()`.
 import { props, raw } from '@abide/abide'
 
+import { dedent } from './dedent.ts'
 import { highlight, sideOf } from './highlight.ts'
 
 const {
@@ -16,17 +17,12 @@ const {
 
 // Written inside an indented template literal, the code is shown flush: its first and last blank
 // lines dropped and the margin every line shares taken off.
-const lines = code
-    .replace(/^\s*\n/, '')
-    .trimEnd()
-    .split('\n')
-let margin = Infinity
-for (const line of lines)
-    if (line.trim() !== '')
-        margin = Math.min(margin, line.length - line.trimStart().length)
-const flush = lines
-    .map((line) => line.slice(margin === Infinity ? 0 : margin))
-    .join('\n')
+const flush = dedent(
+    code
+        .replace(/^\s*\n/, '')
+        .trimEnd()
+        .split('\n'),
+)
 
 const shown =
     caption.includes('/') || caption.startsWith('.') || language === ''

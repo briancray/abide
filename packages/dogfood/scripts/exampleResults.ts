@@ -1,6 +1,6 @@
-// THE CRM'S TESTS AND BENCHES, RUN AND KEPT: `bun run examples:results`. A card's Tests and
-// Bench views read `examples/<app>/.abide/results.json`, so a page shows what the app's own files
-// reported rather than a figure in its prose. Run serially: a bench shares the machine with nothing.
+// THE CRM'S TESTS AND BENCHES, RUN AND KEPT: `bun run examples:results`. The assistant's results
+// tool reads `examples/<app>/.abide/results.json`, so an answer shows what the app's own files
+// reported rather than a figure it made up. Run serially: a bench shares the machine with nothing.
 
 import type { TestRow } from '@abide/harness/rows'
 import { runBenches } from '@abide/harness/runner'
@@ -40,10 +40,10 @@ async function benchesOf(app: string): Promise<ExampleResults['benches']> {
     )) {
         if (over.length > 0)
             throw new Error(`${app} ${file} ${name}: ${over.join('; ')}`)
-        // A card shows one bench a file, so a second would overwrite the first unseen.
+        // Results are kept one bench a file, so a second would overwrite the first unseen.
         if (benches[file] !== undefined)
             throw new Error(
-                `${app} ${file} exports a second bench, ${name}, and a card shows one`,
+                `${app} ${file} exports a second bench, ${name}, and results keep one`,
             )
         benches[file] = figures
     }

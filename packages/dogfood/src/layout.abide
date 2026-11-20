@@ -22,22 +22,17 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 </script>
 
 <script>
-import { onMenu, url, watch } from '@abide/abide'
+import { onMenu, url } from '@abide/abide'
 import Tooltips from '@abide/abide/Tooltips.abide'
 
 import DocsNav from '#src/lib/DocsNav.abide'
-import { ASK_ITEM, MENUS } from '#src/lib/nativeMenus.ts'
+import { MENUS } from '#src/lib/nativeMenus.ts'
 import SiteBar from '#src/lib/SiteBar.abide'
 import UpdateBanner from '#src/lib/UpdateBanner.abide'
 import '#src/lib/app.css'
 
 // The native app's menu bar; in a browser, nothing reads it (38.88).
 onMenu(() => MENUS)
-watch(() =>
-    ASK_ITEM.on(() =>
-        (document.getElementById('ask') as HTMLInputElement | null)?.focus(),
-    ),
-)
 </script>
 
 <html lang="en">

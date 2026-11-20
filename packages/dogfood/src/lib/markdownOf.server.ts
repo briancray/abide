@@ -5,7 +5,6 @@
 // A READER FOR THE MARKUP `Doc` AND ITS PARTS WRITE, not for HTML at large: headings, prose, lists,
 // tables, and code under a caption.
 
-import { withoutExcerpt } from './highlight.ts'
 import { markdownAddressOf } from './sitePages.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
@@ -137,15 +136,11 @@ function inline(node: Node): string {
     }
 }
 
-/**
- * A `<pre>` as a fence. Its language is the code's own class where it has one, and its caption's
- * extension where not.
- */
+/** A `<pre>` as a fence, in the language its code's class names. */
 function fence(caption: string, pre: Element | undefined): string {
     const code = pre && find(pre, (node) => node.tag === 'code')
     const language =
-        /\blanguage-(\w+)/.exec(code?.attributes.class ?? '')?.[1] ||
-        (/\.(\w+)$/.exec(withoutExcerpt(caption))?.[1] ?? '')
+        /\blanguage-(\w+)/.exec(code?.attributes.class ?? '')?.[1] ?? ''
     const text = pre === undefined ? '' : textOf(pre)
     return `\`\`\`${language}${caption ? ` ${caption}` : ''}\n${text.replace(/\n$/, '')}\n\`\`\``
 }

@@ -1,7 +1,6 @@
 <script>
 // What a CRM test or bench file last reported, as a list: each case passed or failed, or each
-// arm's nanoseconds per op and the ratio claimed. The card's test and bench tabs and the answer's
-// `<show results>` both render it, so the two read one file's report the same way.
+// arm's nanoseconds per op and the ratio claimed — what an answer's `<show results>` shows.
 import { format, props } from '@abide/abide'
 
 import type { ExampleResults } from './ExampleResults.ts'

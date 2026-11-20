@@ -13,7 +13,7 @@ import Code from './Code.abide'
 import { languageOf } from './highlight.ts'
 import { inline } from './inline.ts'
 import ResultsList from './ResultsList.abide'
-import { isSitePage, pageAt } from './sitePages.ts'
+import { sitePageAt } from './sitePages.ts'
 import { slice } from './slice.ts'
 
 const { show } = props<{ show: Show }>()
@@ -32,9 +32,7 @@ const reported = reactive(() =>
 )
 const page =
     show.kind === 'page' || show.kind === 'open'
-        ? isSitePage(show.value)
-            ? pageAt(show.value)
-            : undefined
+        ? sitePageAt(show.value)
         : undefined
 
 // A `from` the model wrote that no line opens shows the whole file rather than failing the answer.

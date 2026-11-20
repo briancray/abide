@@ -23,7 +23,7 @@
     /* where the rail beside a page stops fitting, and goes */
     --breakpoint-rail: 82rem;
 
-    /* a run in progress: the row's state word breathing until its reading lands */
+    /* an answer being worked on: Ask's thinking line breathing until the first words land */
     --animate-board-pulse: board-pulse 1.2s ease-in-out infinite;
 
     @keyframes board-pulse {
@@ -421,10 +421,6 @@ html:has(> body > .site)::view-transition-new(root) {
 
     button.quiet {
         @apply border-0 bg-transparent px-2 py-1 text-chrome text-muted shadow-none hover:text-ink;
-    }
-
-    .shown-card {
-        @apply w-full rounded-lg border-0;
     }
 
     .shown-missing {

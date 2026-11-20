@@ -12,10 +12,12 @@ const HOME: SitePage = {
 
 // THE SITE MAP READ BY ROUTE, walked once: every page in reading order, and the group each is in.
 const ORDER: SitePage[] = [HOME]
+const INDEX_OF = new Map<string, number>([[HOME.route, 0]])
 const GROUP_OF = new Map<string, SiteGroup>()
 const ROUTE_OF_SECTION = new Map<string, string>()
 for (const group of SITE)
     for (const page of group.pages) {
+        INDEX_OF.set(page.route, ORDER.length)
         ORDER.push(page)
         GROUP_OF.set(page.route, group)
         ROUTE_OF_SECTION.set(page.registry, page.route)
@@ -26,14 +28,15 @@ export const PAGES: readonly SitePage[] = ORDER
 
 /** The page at `route`, which every docs page is — a route `SITE` does not list throws. */
 export function pageAt(route: string): SitePage {
-    for (const page of ORDER) if (page.route === route) return page
-    throw new Error(`docs: ${route} is not in SITE`)
+    const page = sitePageAt(route)
+    if (page === undefined) throw new Error(`docs: ${route} is not in SITE`)
+    return page
 }
 
-/** Whether `route` is a page of the site, rather than the rulebook or a page of the CRM. */
-export function isSitePage(route: string): boolean {
-    for (const page of ORDER) if (page.route === route) return true
-    return false
+/** The page at `route`, or `undefined` for the rulebook or a page of the CRM. */
+export function sitePageAt(route: string): SitePage | undefined {
+    const at = INDEX_OF.get(route)
+    return at === undefined ? undefined : ORDER[at]
 }
 
 /** The route of the page a REGISTRY section is documented on, or `''` where none is. */
@@ -51,7 +54,8 @@ export function neighborsOf(route: string): {
     previous: SitePage | undefined
     next: SitePage | undefined
 } {
-    const at = ORDER.indexOf(pageAt(route))
+    const at = INDEX_OF.get(route)
+    if (at === undefined) throw new Error(`docs: ${route} is not in SITE`)
     return { previous: ORDER[at - 1], next: ORDER[at + 1] }
 }
 
@@ -65,5 +69,5 @@ export function markdownAddressOf(route: string): string {
  * reach it here: that app rather than the site, so served with none of the site around it (40.24).
  */
 export function isFramed(pathname: string): boolean {
-    return pathname !== '/rulebook' && !isSitePage(pathname)
+    return pathname !== '/rulebook' && !INDEX_OF.has(pathname)
 }
