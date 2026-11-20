@@ -165,7 +165,7 @@ export class NativeUpdater {
         } catch (thrown) {
             return {
                 outcome: 'unreachable',
-                reason: `${this.feed} could not be read: ${(thrown as Error).message}`,
+                reason: `${this.feed} could not be read: ${messageOf(thrown)}`,
             }
         }
         const feed = await verifiedFeed(answered, this.publicKey)
@@ -225,7 +225,7 @@ export class NativeUpdater {
             }
             return {
                 outcome: 'refused',
-                reason: `the update could not be unpacked beside ${this.app}: ${(thrown as Error).message}`,
+                reason: `the update could not be unpacked beside ${this.app}: ${messageOf(thrown)}`,
             }
         }
         this.onStaged(this.staged)

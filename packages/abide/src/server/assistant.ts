@@ -505,10 +505,7 @@ function toolboxOver(surface: McpSurface, asker: Request): Toolbox {
                     content: [
                         {
                             type: 'text',
-                            text:
-                                thrown instanceof Error
-                                    ? thrown.message
-                                    : String(thrown),
+                            text: messageOf(thrown),
                         },
                     ],
                     failed: true,

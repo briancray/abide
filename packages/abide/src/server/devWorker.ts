@@ -284,7 +284,7 @@ async function bundleInMemory(
     } catch (thrown) {
         const logs = thrown instanceof AggregateError ? thrown.errors : []
         console.error(
-            `${(thrown as Error).message}\n${logs.map((log) => String(log)).join('\n')}`,
+            `${messageOf(thrown)}\n${logs.map((log) => String(log)).join('\n')}`,
         )
         bundle = { files: new Map(), manifest: NO_MANIFEST }
     }
