@@ -18,11 +18,8 @@ let team = reactive<Contact[]>([])
     label={(each: Contact) => each.name}
     bind:value={team}
     placeholder="Add a contact"
-    class="flex flex-wrap gap-hair [&_[data-part=chip]]:rounded-md
-        [&_[data-part=chip]]:bg-signal/10 [&_[data-part=chip]]:px-2
-        [&_[data-part=listbox]]:w-full [&_[data-part=listbox]]:list-none
-        [&_[data-part=listbox]]:p-0 [&_[data-selected]]:font-semibold
-        [&_[data-active]]:bg-signal/10"
+    class="picker flex-row flex-wrap [&_[data-part=chip]]:rounded-md
+        [&_[data-part=chip]]:bg-signal/10 [&_[data-part=chip]]:px-2"
 >
     No contact matches
 </Combobox>

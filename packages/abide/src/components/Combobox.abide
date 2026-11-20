@@ -1,6 +1,7 @@
 <script generics="Item">
 import type { Attributes } from '#shared/Attributes.ts'
 import { listbox } from '#shared/listbox.ts'
+import { popover } from '#shared/popover.ts'
 import { props } from '#shared/props.ts'
 import { busy, type Reactive, reactive } from '#shared/reactive/index.ts'
 import { openingEnd } from '#shared/roving.ts'
@@ -64,6 +65,8 @@ const query = reactive(() => {
     return many !== undefined || one === undefined ? '' : label(one as Item)
 })
 let open = reactive(false)
+// 51.64 — what the open list is placed against.
+let input = reactive<HTMLInputElement | undefined>(undefined)
 
 const NOTHING: readonly Item[] = []
 
@@ -177,36 +180,49 @@ const pickedKeys = reactive(() => {
         aria-activedescendant={open ? list.activeId() : undefined}
         placeholder={placeholder}
         data-part="input"
+        bind:element={(element: HTMLInputElement) => {
+            input = element
+            return () => {
+                input = undefined
+            }
+        }}
         bind:value={{ get: () => query, set: write }}
         onkeydown={keydown}
         onblur={() => {
             open = false
         }}
     >
-    {#if open}
-        <ul id={`${id}-listbox`} role="listbox" data-part="listbox"
-            aria-multiselectable={picks ? 'true' : undefined} onmousedown={(event) => event.preventDefault()}>
-            {#for item of found by key(item)}
-                <li
-                    id={list.idOf(key(item))}
-                    role="option"
-                    aria-selected={list.active() === key(item) ? 'true' : 'false'}
-                    data-part="option"
-                    data-active={list.active() === key(item) ? '' : undefined}
-                    data-selected={pickedKeys.has(key(item)) ? '' : undefined}
-                    onpointermove={() => list.activate(key(item))}
-                    onclick={() => pick(item)}
-                >
-                    {#if Option}
-                        <Option item={item} />
-                    {:else}
-                        {label(item)}
-                    {/if}
-                </li>
-            {/for}
-        </ul>
-        {#if !busy(found) && found.length === 0}
-            <div role="status" data-part="empty"><slot /></div>
-        {/if}
+    {#if open && input}
+        <div
+            data-part="popup"
+            popover="manual"
+            bind:element={popover(input, { side: 'bottom', align: 'start', offset: 4 })}
+            onmousedown={(event) => event.preventDefault()}
+        >
+            <ul id={`${id}-listbox`} role="listbox" data-part="listbox"
+                aria-multiselectable={picks ? 'true' : undefined}>
+                {#for item of found by key(item)}
+                    <li
+                        id={list.idOf(key(item))}
+                        role="option"
+                        aria-selected={list.active() === key(item) ? 'true' : 'false'}
+                        data-part="option"
+                        data-active={list.active() === key(item) ? '' : undefined}
+                        data-selected={pickedKeys.has(key(item)) ? '' : undefined}
+                        onpointermove={() => list.activate(key(item))}
+                        onclick={() => pick(item)}
+                    >
+                        {#if Option}
+                            <Option item={item} />
+                        {:else}
+                            {label(item)}
+                        {/if}
+                    </li>
+                {/for}
+            </ul>
+            {#if !busy(found) && found.length === 0}
+                <div role="status" data-part="empty"><slot /></div>
+            {/if}
+        </div>
     {/if}
 </div>

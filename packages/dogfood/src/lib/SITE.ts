@@ -520,6 +520,12 @@ const WRITTEN: readonly {
                 description:
                     'Work out where a popover or hint sits beside its anchor, flipped and kept inside the viewport, without writing to the page.',
             },
+            {
+                route: '/helpers/popover',
+                title: '`popover`',
+                description:
+                    'Open a panel of your own in the top layer against the button or field it belongs to, and keep it there as the page moves.',
+            },
         ],
     },
     {

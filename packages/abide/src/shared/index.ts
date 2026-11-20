@@ -99,6 +99,7 @@ export { pairing } from './pairing.ts'
 export { onRefusal } from './onRefusal.ts'
 // 50.19 — where a floating element sits beside its anchor.
 export { type Placement, type PlaceOptions, place, type Side } from './place.ts'
+export { popover } from './popover.ts'
 export { type Principal, principal } from './principal.ts'
 // 50.5 — a question or a message shown in the app's `Prompts`, as one namespace.
 export { props } from './props.ts'

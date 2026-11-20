@@ -487,6 +487,35 @@
    load takes and gone the rest of the time, so showing it by ADDING a node reflows everything
    under it twice per press — and the frame reports its height to the page, so the shift reaches
    past the example. The row is here whether or not there is anything to say. */
+/* A `Combobox`'s list, opened in the top layer under its input and as wide as it (51.64). */
+@utility picker {
+    @apply flex flex-col gap-hair;
+
+    & [data-part=popup] {
+        @apply m-0 w-(--anchor-width) rounded-md border border-rule bg-raised p-0 text-ink shadow-sm;
+    }
+
+    & [data-part=listbox] {
+        @apply m-0 list-none p-0;
+    }
+
+    & [data-part=option] {
+        @apply px-3 py-1;
+    }
+
+    & [data-part=empty] {
+        @apply px-3 py-1 text-muted;
+    }
+
+    & [data-active] {
+        @apply bg-signal/10;
+    }
+
+    & [data-selected] {
+        @apply font-semibold;
+    }
+}
+
 @utility status {
     @apply min-h-6 text-chrome text-muted;
 }

@@ -1,0 +1,22 @@
+<script>
+import { reactive } from '@abide/abide'
+import Combobox from '@abide/abide/Combobox.abide'
+
+const NAMES = ['Ada Lovelace', 'Grace Hopper', 'Katherine Johnson']
+let name = reactive<string | undefined>(undefined)
+</script>
+
+<div class="h-14 overflow-hidden">
+    <Combobox
+        id="clipped-name"
+        options={NAMES}
+        key={(each: string) => each}
+        label={(each: string) => each}
+        bind:value={name}
+        placeholder="Type a name"
+        class="[&_[data-part=popup]]:m-0
+        [&_[data-part=popup]]:w-(--anchor-width)"
+    >
+        No one matches
+    </Combobox>
+</div>

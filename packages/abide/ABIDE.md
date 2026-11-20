@@ -219,8 +219,9 @@ table.
   `Column` and `Area` children), `Pie`, `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `sortRows`, `hotkeys` and `keyLabel`, and
-  the `bind:element` adaptors `dismissible`, `dropzone`, `copyText` and `tooltip` (shown by the root
-  layout's `Tooltips`) beside `observe`.
+  the `bind:element` adaptors `dismissible`, `dropzone`, `copyText`, `popover` (an app's own panel in
+  the top layer, against its anchor) and `tooltip` (shown by the root layout's `Tooltips`) beside
+  `observe`.
 - From `@abide/abide/server`: the rungs `signedIn`, `requireRole` and `readOnly`, `fetchJson` /
   `fetchText` (a deadline, retries worth retrying, a cache), and `job` (work on a schedule, one run at
   a time).

@@ -1,0 +1,44 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import AnchorWidth from './lib/AnchorWidth.abide'
+import anchorWidth from './lib/AnchorWidth.abide' with { type: 'text' }
+import FilterPanel from './lib/FilterPanel.abide'
+import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/helpers/place',
+        '/helpers/dismissible',
+        '/components/menu',
+        '/components/combobox',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageFilter.test.ts',
+            from: [
+                "test('the stage panel opens as a popover under its button, and shuts with its {#if}'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageFilter.test.ts',
+            from: ["test('Escape shuts the stage panel'"],
+        },
+    ]}
+>
+    <Section level={3} title="Open a filter panel under its button">
+        <p>The panel is open for as long as it is bound, so its <code>&#123;#if&#125;</code>
+            opens and closes it. It sits in the top layer, placed on the side it is given and
+            flipped where there is no room, and <code>data-side</code> says which it took. Bind
+            <code>dismissible</code> beside it to close it on a press outside or on Escape.</p>
+        <Example code={filterPanel}><FilterPanel /></Example>
+    </Section>
+
+    <Section level={3} title="Make a list as wide as the field it suggests for">
+        <p><code>--anchor-width</code> is the anchor's width, kept current as it resizes.</p>
+        <Example code={anchorWidth}><AnchorWidth /></Example>
+    </Section>
+</Doc>

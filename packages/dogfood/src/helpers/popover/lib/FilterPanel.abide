@@ -1,0 +1,20 @@
+<script>
+import { dismissible, popover, reactive } from '@abide/abide'
+
+let open = reactive(false)
+let opener = reactive<HTMLButtonElement | undefined>(undefined)
+</script>
+
+<button bind:element={opener} onclick={() => (open = !open)}>Filters</button>
+
+{#if open && opener}
+    <div
+        class="m-0 rounded-md border border-rule bg-raised p-3 shadow-sm"
+        bind:element={[
+            popover(opener, { align: 'start' }),
+            dismissible(() => (open = false), { inside: [opener] }),
+        ]}
+    >
+        <label><input type="checkbox" /> Only my deals</label>
+    </div>
+{/if}

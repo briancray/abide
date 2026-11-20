@@ -18,9 +18,7 @@ let contact = reactive<Contact | undefined>(undefined)
     label={(each: Contact) => each.name}
     bind:value={contact}
     placeholder="Type a name"
-    class="flex flex-col gap-hair [&_[data-part=listbox]]:list-none
-        [&_[data-part=listbox]]:p-0 [&_[data-part=option]]:px-3
-        [&_[data-part=option]]:py-1 [&_[data-active]]:bg-signal/10"
+    class="picker"
 >
     No contact matches
 </Combobox>

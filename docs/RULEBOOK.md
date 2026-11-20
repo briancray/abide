@@ -4977,12 +4977,14 @@ MUST NOT open it for focus that does not.
 stack while it shows (53.14, 53.15), once it is unbound, when the pointer leaves its element and
 when its element loses focus.
 
-50.26 A `Tooltips` showing a hint and the menu of a `menu` MUST open in the top layer as a popover placed by
-`place` against their anchor, and MUST be placed again while open whenever anything scrolls, the
-window resizes, or the anchor or the popover changes size.
+50.26 A `Tooltips` showing a hint, the menu of a `menu`, an element `popover` is bound to and a
+`Combobox`'s open list MUST open in the top layer as a popover placed by `place` against their
+anchor, and MUST be placed again while open whenever anything scrolls, the window resizes, or the
+anchor or the popover changes size.
 
-50.27 A `Tooltips` showing a hint and the menu of a `menu` MUST write the side `place` took as `data-side`, and
-the `arrow` of its `Placement` as the `--arrow-offset` custom property.
+50.27 A `Tooltips` showing a hint, the menu of a `menu`, an element `popover` is bound to and a
+`Combobox`'s open list MUST write the side `place` took as `data-side`, the `arrow` of its
+`Placement` as the `--arrow-offset` custom property, and the anchor's width as `--anchor-width`.
 
 50.28 A `menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
 opened it.
@@ -5052,6 +5054,9 @@ component hint describes its anchor (50.23).
 
 50.48 A `Tooltips` MUST NOT be the target of a pointer event, so a hint open over its anchor never
 takes the pointer from it.
+
+50.49 `popover` MUST show the element it is bound to as a popover, a manual one where the element
+carries no `popover` attribute, for as long as it is bound, and MUST hide it once it is unbound.
 
 # 51. Lists and tables
 
@@ -5216,6 +5221,10 @@ and Backspace in its empty input MUST take out the last item it holds.
 
 51.63 `SortableTable` given `Detail` MUST render, after each row, a row of its own whose
 `data-part` is `detail` and whose one cell spans every column and holds `Detail` handed that row.
+
+51.64 `Combobox` MUST hold its open list, and the children 51.31 renders, in one `data-part="popup"`
+element opened against its input as `popover` opens one, and a press inside that element MUST NOT
+take focus from its input.
 
 # 52. Formatting, markdown and charts
 

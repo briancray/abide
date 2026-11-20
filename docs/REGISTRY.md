@@ -878,13 +878,19 @@ type Reached = { readonly [REACHED]: true }
 | `Placement` | `{ x: number; y: number; side: Side; arrow: number }` | The left and top edges `place` chose, the side it took, and where along the facing edge the anchor's middle falls. | 50.19, 50.27 |
 | `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
+## `popover`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `popover` | `(anchor: Element, options?: PlaceOptions) => (element: Element) => Disposer` | The `bind:element` adaptor showing an element in the top layer against an anchor for as long as it is bound. | 50.26, 50.27, 50.49 |
+
 # Input and lists
 
 ## `Combobox`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item \| readonly Item[]; Option?: (props: { item: Item }) => unknown; Chip?: (props: { item: Item; remove: () => void }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62 |
+| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item \| readonly Item[]; Option?: (props: { item: Item }) => unknown; Chip?: (props: { item: Item; remove: () => void }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62, 50.26, 50.27, 51.64 |
 
 ## `tabs`
 

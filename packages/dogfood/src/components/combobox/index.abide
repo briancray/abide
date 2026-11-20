@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import ListOverClip from './lib/ListOverClip.abide'
+import listOverClip from './lib/ListOverClip.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -136,5 +140,12 @@ import Section from '#src/lib/Section.abide'
                 …
             />
         `} />
+    </Section>
+    <Section level={3} title="Open the list over a box that clips its input">
+        <p>The list opens in the top layer under its input, as <code>popover</code> opens one, so
+            no scroller or <code>overflow</code> cuts it off. It is
+            <code>data-part="popup"</code>, holding the list and the children, and
+            <code>--anchor-width</code> is its input's width.</p>
+        <Example code={listOverClip}><ListOverClip /></Example>
     </Section>
 </Doc>

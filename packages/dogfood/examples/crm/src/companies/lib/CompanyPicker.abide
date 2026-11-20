@@ -17,9 +17,7 @@ let company = reactive<Company | undefined>(undefined)
     label={(found: Company) => found.name}
     bind:value={company}
     placeholder="Search companies"
-    class="flex flex-col gap-hair [&_[data-part=listbox]]:list-none
-        [&_[data-part=listbox]]:p-0 [&_[data-part=option]]:px-3
-        [&_[data-part=option]]:py-1 [&_[data-active]]:bg-signal/10"
+    class="picker"
 >
     {#component Option({ item }: { item: Company })}
         {item.name} · {item.city}
