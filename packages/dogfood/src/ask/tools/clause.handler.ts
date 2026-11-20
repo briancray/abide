@@ -1,16 +1,10 @@
 import { GET, refuse } from '@abide/abide/server'
 
-import { rulebookClauses } from '#src/rulebook/lib/rulebookClauses.ts'
-
-import RULEBOOK from '../../../../../docs/RULEBOOK.md' with { type: 'text' }
-
-const CLAUSES = new Map<string, string>()
-for (const clause of rulebookClauses(RULEBOOK))
-    CLAUSES.set(clause.id, clause.text)
+import { CLAUSE_TEXTS } from '#src/rulebook/lib/CLAUSE_TEXTS.server.ts'
 
 export default GET(
     ({ number }: { number: string }) => {
-        const text = CLAUSES.get(number)
+        const text = CLAUSE_TEXTS.get(number)
         if (text === undefined)
             throw refuse.notFound({ path: number, method: 'GET' })
         return { number, text }

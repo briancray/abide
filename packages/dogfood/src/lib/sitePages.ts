@@ -1,7 +1,7 @@
 import { SITE, type SiteGroup, type SitePage } from './SITE.ts'
 
 /** The home page: the index of every group, under the prompt. Not a primitive, so not in `SITE`. */
-export const HOME: SitePage = {
+const HOME: SitePage = {
     route: '/',
     title: 'abide',
     nav: 'Overview',

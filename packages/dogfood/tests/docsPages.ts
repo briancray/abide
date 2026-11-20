@@ -3,7 +3,6 @@
 // what the voice and coverage gates hold the words to.
 
 import { addressOf, BIN } from '../../abide/tests/builtApp.ts'
-import { attributeOf } from '../src/lib/attributeOf.ts'
 import type { SitePage } from '../src/lib/SITE.ts'
 import { groupOf, markdownAddressOf, PAGES } from '../src/lib/sitePages.ts'
 
@@ -20,7 +19,7 @@ export type DocsPage = SitePage & {
 }
 
 /** A page's `index.abide`, from the docs app's root. */
-export function pageFileOf(route: string): string {
+function pageFileOf(route: string): string {
     return `src${route === '/' ? '' : route}/index.abide`
 }
 
@@ -44,7 +43,7 @@ export function docsPages(): Promise<DocsPage[]> {
     return pages
 }
 
-let served: Promise<{ base: string; stop: () => void }> | undefined
+let served: Promise<{ base: string }> | undefined
 
 const WHILE_OPEN = new URL('./whileOpen.ts', import.meta.url).pathname
 
@@ -56,7 +55,7 @@ const WHILE_OPEN = new URL('./whileOpen.ts', import.meta.url).pathname
  * hooked to the first file's `afterAll` left every later file in a serial run reading a server that
  * was gone.
  */
-export function servedDocs(): Promise<{ base: string; stop: () => void }> {
+export function servedDocs(): Promise<{ base: string }> {
     if (served === undefined) {
         // `DOCS_OUT` names a build of one's own, for a run beside another that is building.
         const server = Bun.spawn(
@@ -75,10 +74,7 @@ export function servedDocs(): Promise<{ base: string; stop: () => void }> {
             ],
             { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe', env: process.env },
         )
-        served = addressOf(server).then((base) => ({
-            base,
-            stop: () => void server.stdin.end(),
-        }))
+        served = addressOf(server).then((base) => ({ base }))
     }
     return served
 }
@@ -142,20 +138,14 @@ export function renderedMarkdown(): Promise<Map<string, string>> {
     return markdown
 }
 
-/** A `<Code>` block a page writes by hand, with the `<Section>` it sits in. */
-export type Fence = {
-    language: string
-    caption: string
-    code: string
-    /** The title of the section it sits in, or `''` before the first. */
-    section: string
-}
+/** A `<Code>` block a page writes by hand. */
+export type Fence = { language: string; caption: string }
 
 /**
- * Where the tag opening at `from` ends — past its `>`, or its `/>` where `closed` — stepping over
- * quotes and braces, so a `>` inside an attribute's value does not end it.
+ * Where the self-closing tag opening at `from` ends, past its `/>` — stepping over quotes and braces,
+ * so a `/>` inside a `code={`…`}` does not end it.
  */
-function tagEnd(source: string, from: number, closed = true): number {
+function tagEnd(source: string, from: number): number {
     let depth = 0
     let quote = ''
     for (let at = from; at < source.length; at += 1) {
@@ -169,41 +159,26 @@ function tagEnd(source: string, from: number, closed = true): number {
             quote = character
         else if (character === '{') depth += 1
         else if (character === '}') depth -= 1
-        else if (depth === 0 && closed && source.startsWith('/>', at))
-            return at + 2
-        else if (depth === 0 && !closed && character === '>') return at + 1
+        else if (depth === 0 && source.startsWith('/>', at)) return at + 2
     }
     return source.length
 }
 
-/** The title of the `<Section>` whose tag opens at `index` in `source`. */
-function sectionTitleAt(source: string, index: number): string {
-    return (
-        attributeOf(
-            source.slice(index, tagEnd(source, index, false)),
-            'title',
-        ) ?? ''
-    )
-}
+// A page writes `language` and `caption` as plain quoted text.
+const attributeIn = (tag: string, name: string): string =>
+    new RegExp(`\\b${name}="([^"]*)"`).exec(tag)?.[1] ?? ''
 
 /** Every `<Code>` a page writes, in order. */
 export function fencesOf(page: DocsPage): Fence[] {
     const fences: Fence[] = []
     const source = page.source
-    const tags = /<(Section|Code)\b/g
-    let section = ''
+    const tags = /<Code\b/g
     for (let match = tags.exec(source); match; match = tags.exec(source)) {
-        if (match[1] === 'Section') {
-            section = sectionTitleAt(source, match.index)
-            continue
-        }
         const end = tagEnd(source, match.index)
         const tag = source.slice(match.index, end)
         fences.push({
-            language: attributeOf(tag, 'language') ?? '',
-            caption: attributeOf(tag, 'caption') ?? '',
-            code: attributeOf(tag, 'code') ?? '',
-            section,
+            language: attributeIn(tag, 'language'),
+            caption: attributeIn(tag, 'caption'),
         })
         tags.lastIndex = end
     }

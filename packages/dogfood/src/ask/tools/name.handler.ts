@@ -1,11 +1,7 @@
 import { GET } from '@abide/abide/server'
 
-import { registryRows } from '#src/lib/registryRows.ts'
+import { REGISTRY_ROWS } from '#src/lib/REGISTRY_ROWS.server.ts'
 import { routeOfSection } from '#src/lib/sitePages.ts'
-
-import REGISTRY from '../../../../../docs/REGISTRY.md' with { type: 'text' }
-
-const ROWS = registryRows(REGISTRY)
 
 export default GET(
     ({ name }: { name: string }) => {
@@ -16,7 +12,7 @@ export default GET(
             rules: string
             route: string
         }[] = []
-        for (const row of ROWS) {
+        for (const row of REGISTRY_ROWS) {
             const first = row.cells[0] ?? ''
             if (
                 !first.includes(`\`${name}\``) &&

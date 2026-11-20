@@ -1,15 +1,10 @@
 import { GET } from '@abide/abide/server'
 
-import { registryRows } from '#src/lib/registryRows.ts'
+import { REGISTRY_ROWS } from '#src/lib/REGISTRY_ROWS.server.ts'
 import { SITE } from '#src/lib/SITE.ts'
 import { routeOfSection } from '#src/lib/sitePages.ts'
-import { rulebookClauses } from '#src/rulebook/lib/rulebookClauses.ts'
+import { CLAUSE_TEXTS } from '#src/rulebook/lib/CLAUSE_TEXTS.server.ts'
 
-import REGISTRY from '../../../../../docs/REGISTRY.md' with { type: 'text' }
-import RULEBOOK from '../../../../../docs/RULEBOOK.md' with { type: 'text' }
-
-const ROWS = registryRows(REGISTRY)
-const CLAUSES = rulebookClauses(RULEBOOK)
 const LIMIT = 12
 
 // A hit is a text holding every word of the query, scored by how often they appear in it.
@@ -61,7 +56,7 @@ export default GET(
             hit: { name: string; meaning: string; route: string }
             score: number
         }[] = []
-        for (const row of ROWS) {
+        for (const row of REGISTRY_ROWS) {
             const found = score(row.cells.join(' '), words)
             if (found > 0)
                 names.push({
@@ -77,11 +72,11 @@ export default GET(
             hit: { number: string; text: string }
             score: number
         }[] = []
-        for (const clause of CLAUSES) {
-            const found = score(clause.text, words)
+        for (const [number, text] of CLAUSE_TEXTS) {
+            const found = score(text, words)
             if (found > 0)
                 clauses.push({
-                    hit: { number: clause.id, text: clause.text },
+                    hit: { number, text },
                     score: found,
                 })
         }

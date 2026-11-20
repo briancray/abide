@@ -21,11 +21,6 @@ export function clausesOf(registry: string): string[] {
         return ag - bg || an - bn
     })
 }
-
-/** The rows of the REGISTRY section `registry`, under the `###` headings they sit under. */
-export function sectionOf(registry: string) {
-    return sectionsOf(ROWS, registry)
-}
 </script>
 
 <script>
@@ -36,7 +31,7 @@ import { inline, slugify } from './inline.ts'
 import { pageAt } from './sitePages.ts'
 
 const page = pageAt(route.name())
-const sections = sectionOf(page.registry)
+const sections = sectionsOf(ROWS, page.registry)
 const SYNTAX = 'Syntax'
 
 const headings = reactive.share('docHeadings', () => reactive([]))
