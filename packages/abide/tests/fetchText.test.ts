@@ -4,7 +4,9 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { fetchJson, fetchText } from '#server'
+import { answered } from '#server/answerFailure.ts'
 import { type Failed, problemOf } from '#shared/Failed.ts'
+import type { FetchFailed } from '#shared/fetchFailed.ts'
 
 // Every path the service answers, to how many times it was asked.
 const asked = new Map<string, number>()
@@ -21,6 +23,11 @@ const service = Bun.serve({
                 ? new Response('busy', { status: 503 })
                 : Response.json({ name: 'Hopper & Co' })
         if (pathname === '/missing') return new Response('no', { status: 404 })
+        if (pathname === '/limited')
+            return new Response('later', {
+                status: 429,
+                headers: { 'retry-after': '30' },
+            })
         if (pathname === '/slow-down')
             return new Response('later', {
                 status: 429,
@@ -69,6 +76,15 @@ test('a Retry-After is waited, and one past the deadline is not — 54.10', asyn
     expect(answer).toMatchObject({ data: { status: 429, reason: 'status' } })
     // Asked again at once for `0`, then given up on for an hour.
     expect(asked.get('/slow-down')).toBe(2)
+})
+
+// A HANDLER HANDING ON WHAT A FETCH WAS REFUSED hands on the service's wait with it. THE REVERT: drop
+// the `holdUntil` in `fetchText`; the answer carries `null` where `30` is due.
+test("a refusal's Retry-After is held, and crosses the wire again — 15.23, 15.24", async () => {
+    const answer = await fetchText(at('/limited'))
+    expect(answered(answer as FetchFailed).headers.get('retry-after')).toBe(
+        '30',
+    )
 })
 
 test('an attempt past its timeout is a FetchFailed for the timeout — 54.7', async () => {
