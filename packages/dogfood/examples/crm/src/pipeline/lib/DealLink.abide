@@ -1,8 +1,8 @@
 <script>
-import { copyText } from '@abide/abide'
+import { copyText, url } from '@abide/abide'
 
-// The address is read as the click lands, on whichever origin serves the page.
-const copyLink = copyText(() => `${location.origin}/pipeline#d1`, {
+// The address is read as the click lands, on whichever origin and mount serve the page.
+const copyLink = copyText(() => `${location.origin}${url('/pipeline')}#d1`, {
     copiedFor: 2_000,
 })
 </script>
