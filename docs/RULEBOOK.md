@@ -5031,6 +5031,10 @@ that call is in flight MUST keep the prompt showing, disabled, with `data-busy` 
 prompt MUST settle as confirmed once the call resolves, and stay showing with the rejection's message
 in its `error` part once it rejects.
 
+50.46 `Toasts` MUST render a notice's content through `Toast` where it is given, handed the notice,
+what dismisses it and what runs its action, inside the element carrying the notice's attributes,
+`data-part="toast"` and `data-tone`, and as its text, action and close button otherwise.
+
 # 51. Lists and tables
 
 51.1 `listbox` MUST keep active the option whose key it last moved to, for as long as the options

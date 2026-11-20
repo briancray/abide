@@ -877,7 +877,7 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Toasts` | `{ label?: string } & Omit<Attributes<'div'>, 'role'>` | The live region the notices are listed in, rendered once and imported from `@abide/abide/Toasts.abide`. | 50.17, 50.18, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
+| `Toasts` | `{ label?: string; Toast?: (props: { toast: Toast; dismiss: () => void; act: () => void }) => unknown } & Omit<Attributes<'div'>, 'role'>` | The live region the notices are listed in, rendered once and imported from `@abide/abide/Toasts.abide`. | 50.17, 50.18, 50.46, 32.38, 49.1, 49.2, 49.3, 49.4, 49.5, 49.7 |
 
 ## `toasts`
 

@@ -1,0 +1,23 @@
+<script>
+import Toasts, { toasts } from '@abide/abide/Toasts.abide'
+
+// The notice fades out, and stays in the page until it has (32.38).
+function fadeOut(element: Element) {
+    return () =>
+        element.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200 })
+            .finished
+}
+</script>
+
+<button onclick={() => toasts.notify('Engine renewal is won', { tone: 'success' })}>
+    Mark won
+</button>
+
+<Toasts class="fixed right-5 bottom-5 flex flex-col gap-tight">
+    {#component Toast({ toast, dismiss }: { toast: { text: string }; dismiss: () => void })}
+        <p class="row" bind:element={fadeOut}>
+            <strong>Won.</strong> {toast.text}
+            <button onclick={dismiss}>Close</button>
+        </p>
+    {/component}
+</Toasts>

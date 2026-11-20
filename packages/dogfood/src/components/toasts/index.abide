@@ -15,6 +15,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/overlays.test.ts',
             from: ["test('the notices and the prompts are one list per request"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/WonNotice.test.ts',
+            from: [
+                "test('a notice renders through Toast, and stays until its fade has finished'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Show every notice of the app in one corner">
@@ -48,6 +54,29 @@ import Section from '#src/lib/Section.abide'
                 class="fixed right-5 bottom-5 *:rounded-lg *:border *:px-4
                 *:data-[tone=error]:border-bad *:data-[tone=success]:border-good"
             />
+        `} />
+    </Section>
+    <Section level={3} title="Fade a notice out as it leaves">
+        <p>A <code>Toast</code> component renders each notice's content, handed the
+            <code>toast</code>, <code>dismiss</code> and <code>act</code>. An element in it whose
+            <code>bind:element</code> hands back <code>element.animate(…).finished</code> keeps the
+            notice in the page until the animation ends.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Toasts from '@abide/abide/Toasts.abide'
+
+            const fadeOut = (element: Element) => () =>
+                element.animate([{ opacity: 1 }, { opacity: 0 }], 200).finished
+            </script>
+
+            <Toasts>
+                {#component Toast({ toast, dismiss }: ToastProps)}
+                    <p bind:element={fadeOut}>
+                        <strong>Won.</strong> {toast.text}
+                        <button onclick={dismiss}>Close</button>
+                    </p>
+                {/component}
+            </Toasts>
         `} />
     </Section>
 </Doc>

@@ -14,16 +14,31 @@ export type { NotifyOptions, Toast }
 import type { Attributes } from '#shared/Attributes.ts'
 import { props } from '#shared/props.ts'
 import { close, dismiss } from '#shared/toasts/dismiss.ts'
-import { list, type Toast } from '#shared/toasts/list.ts'
+// Named apart from the `Toast` prop: a type annotation naming a prop is read as the prop.
+import { list, type Toast as Notice } from '#shared/toasts/list.ts'
 
-const { label = 'Notices', ...rest } = props<
+const {
+    label = 'Notices',
+    Toast,
+    ...rest
+} = props<
     {
         /** The region's accessible name. Default `'Notices'`. */
         label?: string
+        /**
+         * 50.46 — renders a notice's content in place of its text, action and close button, handed
+         * the notice, what dismisses it and what runs its action. An element in it whose
+         * `bind:element` hands back `element.animate(…).finished` keeps the notice until it ends (32.38).
+         */
+        Toast?(props: {
+            toast: Notice
+            dismiss: () => void
+            act: () => void
+        }): unknown
     } & Omit<Attributes<'div'>, 'role'>
 >()
 
-function act(toast: Toast) {
+function act(toast: Notice) {
     close(toast.id, 'action')
     toast.action?.run()
 }
@@ -32,16 +47,20 @@ function act(toast: Toast) {
 <div {...rest} role="status" aria-live="polite" aria-label={label}>
     {#for toast of list by toast.id}
         <div {...toast.attributes} data-part="toast" data-tone={toast.tone}>
-            <span data-part="text">{toast.text}</span>
-            {#if toast.action}
-                <button type="button" data-part="action" onclick={() => act(toast)}>{toast.action.label}</button>
+            {#if Toast}
+                <Toast toast={toast} dismiss={() => dismiss(toast.id)} act={() => act(toast)} />
+            {:else}
+                <span data-part="text">{toast.text}</span>
+                {#if toast.action}
+                    <button type="button" data-part="action" onclick={() => act(toast)}>{toast.action.label}</button>
+                {/if}
+                <button
+                    type="button"
+                    data-part="close"
+                    aria-label="Dismiss"
+                    onclick={() => dismiss(toast.id)}
+                >×</button>
             {/if}
-            <button
-                type="button"
-                data-part="close"
-                aria-label="Dismiss"
-                onclick={() => dismiss(toast.id)}
-            >×</button>
         </div>
     {/for}
 </div>
