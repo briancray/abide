@@ -67,10 +67,11 @@ test("nothing on the native window's main thread waits on bun's own loop", async
             /^import (type )?[^;]*?from '((?:\.\/|#server\/|#shared\/)[^']+)'/gm,
         )) {
             if (type !== undefined || specifier === undefined) continue
+            // A relative import is the importing module's directory's, `shared/` as well as `server/`.
             pending.push(
                 specifier.startsWith('#')
                     ? specifier.slice(1)
-                    : `server/${specifier.slice(2)}`,
+                    : `${path.slice(0, path.lastIndexOf('/'))}/${specifier.slice(2)}`,
             )
         }
     }
