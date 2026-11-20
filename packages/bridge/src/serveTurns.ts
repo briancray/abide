@@ -8,6 +8,7 @@ import type { ProviderEvent, ToolAnswer } from '@abide/abide/server'
 import { callTool } from './callTool.ts'
 import { claudeTurn, type TurnRequest } from './claudeTurn.ts'
 import { callGrant, PERMISSION_SERVER } from './grant.ts'
+import { messageOf } from './messageOf.ts'
 
 // 44.24 — how long a relayed MCP request waits for the site's reply.
 const REPLY_MILLISECONDS = 120_000
@@ -259,54 +260,69 @@ export function serveTurns(options: {
         },
     })
 
+    // ONE LIFECYCLE for a turn and a call: registered to be cancelled, readied, worked, and answered
+    // once — by what it settled to, or a cancel's own reason where one cut it — and then forgotten.
     // A cancel or a signal aborts with no reason of its own, and ends the turn as asked.
-    const missedBy = (controller: AbortController): string | undefined =>
-        controller.signal.reason instanceof MissedTurn
-            ? controller.signal.reason.message
-            : undefined
-
-    const run = async (turn: TurnRequest): Promise<void> => {
+    const served = async (
+        id: string,
+        work: (signal: AbortSignal) => Promise<TurnReport | undefined>,
+        ended?: () => void,
+    ): Promise<void> => {
         const controller = new AbortController()
-        turns.set(turn.id, controller)
-        await options.beforeTurn()
-        const missed = (): string | undefined => missedBy(controller)
+        turns.set(id, controller)
+        const missed = (): string | undefined =>
+            controller.signal.reason instanceof MissedTurn
+                ? controller.signal.reason.message
+                : undefined
         try {
-            await claudeTurn(turn, {
-                claude: options.claude,
-                claudeArgs: [...options.claudeArgs(turn)],
-                full: options.full,
-                mcpUrl: `http://127.0.0.1:${shim.port}/${secret}/${turn.id}`,
-                signal: controller.signal,
-                report: (event) =>
-                    report({ type: 'event', turn: turn.id, event }),
-                say: options.say,
-            })
+            await options.beforeTurn()
+            const settled = await work(controller.signal)
+            if (settled === undefined) return
             const message = missed()
-            if (message === undefined) report({ type: 'end', turn: turn.id })
-            else report({ type: 'fail', turn: turn.id, message })
+            report(
+                message === undefined
+                    ? settled
+                    : { type: 'fail', turn: id, message },
+            )
         } catch (thrown) {
             report({
                 type: 'fail',
-                turn: turn.id,
-                message:
-                    missed() ??
-                    (thrown instanceof Error ? thrown.message : String(thrown)),
+                turn: id,
+                message: missed() ?? messageOf(thrown),
             })
         } finally {
-            turns.delete(turn.id)
-            for (const [id, waiter] of waiting)
-                if (waiter.turn === turn.id)
-                    answer(id, unanswered(waiter.method, 'The turn ended.'))
+            turns.delete(id)
+            ended?.()
         }
     }
 
+    const run = (turn: TurnRequest): Promise<void> =>
+        served(
+            turn.id,
+            async (signal) => {
+                await claudeTurn(turn, {
+                    claude: options.claude,
+                    claudeArgs: [...options.claudeArgs(turn)],
+                    full: options.full,
+                    mcpUrl: `http://127.0.0.1:${shim.port}/${secret}/${turn.id}`,
+                    signal,
+                    report: (event) =>
+                        report({ type: 'event', turn: turn.id, event }),
+                    say: options.say,
+                })
+                return { type: 'end', turn: turn.id }
+            },
+            () => {
+                for (const [id, waiter] of waiting)
+                    if (waiter.turn === turn.id)
+                        answer(id, unanswered(waiter.method, 'The turn ended.'))
+            },
+        )
+
     // 44.93, 44.97 — A CALL IS MADE AS IT ARRIVES, beside every other call and turn, by the grant a turn
     // naming its tool alone would have (44.94), on the visitor's server started for it alone (44.95).
-    const call = async (asked: CallRequest): Promise<void> => {
-        const controller = new AbortController()
-        turns.set(asked.id, controller)
-        try {
-            await options.beforeTurn()
+    const call = (asked: CallRequest): Promise<void> =>
+        served(asked.id, async (signal) => {
             const granted = await callGrant(
                 asked.name,
                 options.claudeArgs(asked),
@@ -319,33 +335,17 @@ export function serveTurns(options: {
                     turn: asked.id,
                     message: granted.refused,
                 })
-                return
+                return undefined
             }
             const answer = await callTool(
                 granted.server,
                 granted.configuration,
                 granted.name,
                 asked.input,
-                controller.signal,
+                signal,
             )
-            const message = missedBy(controller)
-            report(
-                message === undefined
-                    ? { type: 'answer', turn: asked.id, answer }
-                    : { type: 'fail', turn: asked.id, message },
-            )
-        } catch (thrown) {
-            report({
-                type: 'fail',
-                turn: asked.id,
-                message:
-                    missedBy(controller) ??
-                    (thrown instanceof Error ? thrown.message : String(thrown)),
-            })
-        } finally {
-            turns.delete(asked.id)
-        }
-    }
+            return { type: 'answer', turn: asked.id, answer }
+        })
 
     const cancelAll = (): void => {
         for (const controller of turns.values()) controller.abort()

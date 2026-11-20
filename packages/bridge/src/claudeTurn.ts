@@ -12,9 +12,6 @@
 // A TOOL OF THIS MACHINE IS APPROVED AS AUTO MODE DECIDES, and what it would ask is asked of the page
 // (44.81): the site's own tools alone are approved without asking.
 
-import { mkdtemp, rm } from 'node:fs/promises' // bun has no temporary directory or recursive remove of its own
-import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
-
 import type { ClaudeCodeConfig, ProviderEvent } from '@abide/abide/server'
 
 import {
@@ -26,6 +23,7 @@ import {
     withheldNotices,
 } from './grant.ts'
 import { readLines } from './readLines.ts'
+import { scratchDirectory } from './scratchDirectory.ts'
 
 // Every tool of that server, as `--allowedTools` names them.
 const SERVER_TOOLS = `mcp__${SERVER_NAME}`
@@ -207,7 +205,7 @@ export async function claudeTurn(
     )
     if (!options.full)
         for (const notice of withheldNotices(grant)) options.say(notice)
-    const directory = await mkdtemp(`${tmpdir()}/abide-bridge-`)
+    const { directory, remove } = await scratchDirectory()
     const config = `${directory}/mcp.json`
     await Bun.write(
         config,
@@ -315,6 +313,6 @@ export async function claudeTurn(
         )
     } finally {
         child.kill()
-        await rm(directory, { recursive: true, force: true })
+        await remove()
     }
 }

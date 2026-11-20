@@ -21,6 +21,7 @@ import {
 import { BRIDGE_PATH } from './BRIDGE_PATH.ts'
 import { type Answer, ask, notify, type Question } from './desktop.ts'
 import { grantFor, serversNamed } from './grant.ts'
+import { messageOf } from './messageOf.ts'
 import { type Pairing, pairingOf, withoutScheme } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
 import { requestedLines } from './requestedLines.ts'
@@ -409,9 +410,7 @@ export async function open(link: string, directory: string): Promise<number> {
         return settled(await pairWith(link, directory, say, record))
     } catch (thrown) {
         // The applet discards this process's output, so a throw is only seen if it is said.
-        say(
-            `The bridge could not open: ${thrown instanceof Error ? thrown.message : String(thrown)}`,
-        )
+        say(`The bridge could not open: ${messageOf(thrown)}`)
         return settled(1)
     }
 }

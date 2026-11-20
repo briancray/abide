@@ -2,12 +2,11 @@
 // server itself — the server as 44.58 finds it, started as Claude Code would start it — and hands back
 // what the tool answered. A server is started for the one call and ended with it.
 
-import { mkdtemp, rm } from 'node:fs/promises' // bun has no temporary directory or recursive remove of its own
-import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
-
 import type { AssistantContent, ToolAnswer } from '@abide/abide/server'
 
+import { messageOf } from './messageOf.ts'
 import { readLines } from './readLines.ts'
+import { scratchDirectory } from './scratchDirectory.ts'
 
 const PROTOCOL_VERSION = '2025-06-18'
 /** How long a `headersHelper` has to write its headers, as Claude Code gives one. */
@@ -157,7 +156,7 @@ async function stdioSession(
     configuration: ServerConfiguration,
     signal: AbortSignal,
 ): Promise<Session> {
-    const directory = await mkdtemp(`${tmpdir()}/abide-bridge-`)
+    const { directory, remove } = await scratchDirectory()
     let child: Bun.Subprocess<'pipe', 'pipe', 'pipe'>
     try {
         child = Bun.spawn({
@@ -173,9 +172,9 @@ async function stdioSession(
             signal,
         })
     } catch (thrown) {
-        await rm(directory, { recursive: true, force: true })
+        await remove()
         throw new Error(
-            `The ${name} MCP server could not be started: ${thrown instanceof Error ? thrown.message : String(thrown)}`,
+            `The ${name} MCP server could not be started: ${messageOf(thrown)}`,
         )
     }
     const stderr = new Response(child.stderr).text()
@@ -238,7 +237,7 @@ async function stdioSession(
         async close() {
             child.kill()
             await child.exited
-            await rm(directory, { recursive: true, force: true })
+            await remove()
         },
     }
 }

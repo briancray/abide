@@ -10,6 +10,7 @@
 import { BRIDGE_PATH } from './BRIDGE_PATH.ts'
 import { grantFor, withheldNotices } from './grant.ts'
 import { HEARTBEAT_MILLISECONDS } from './HEARTBEAT_MILLISECONDS.ts'
+import { messageOf } from './messageOf.ts'
 import { siteOf } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
 import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
@@ -53,14 +54,21 @@ export async function bridge(options: {
         options.silenceMilliseconds ?? SILENCE_MILLISECONDS
     // What cuts the stream being read, where it went silent.
     let dialed = new AbortController()
-    // 44.96 — `calls` says, as it pairs, that this bridge makes a call of one tool with no model.
-    let stream = await fetch(
-        `${site}${BRIDGE_PATH}?code=${encodeURIComponent(options.code)}&calls=1`,
-        {
-            headers: { accept: 'text/event-stream' },
+    const dial = (
+        query: string,
+        headers: Record<string, string>,
+    ): Promise<Response> => {
+        dialed = new AbortController()
+        return fetch(`${site}${BRIDGE_PATH}${query}`, {
+            headers: { accept: 'text/event-stream', ...headers },
             signal: dialed.signal,
             tls,
-        },
+        })
+    }
+    // 44.96 — `calls` says, as it pairs, that this bridge makes a call of one tool with no model.
+    let stream = await dial(
+        `?code=${encodeURIComponent(options.code)}&calls=1`,
+        {},
     )
     if (!stream.ok || stream.body === null)
         throw new Error(
@@ -97,7 +105,7 @@ export async function bridge(options: {
                 notice = `${host} didn’t take Claude Code’s reply (${posted.status}), so it stopped.`
             } else await posted.body?.cancel()
         } catch (thrown) {
-            failure = `${site} could not be reached: ${thrown instanceof Error ? thrown.message : String(thrown)}`
+            failure = `${site} could not be reached: ${messageOf(thrown)}`
             notice = `Can’t reach ${host}, so Claude Code stopped its reply.`
         }
         if (failure === undefined) {
@@ -190,14 +198,8 @@ export async function bridge(options: {
             await Bun.sleep(delay)
             delay = Math.min(delay * 2, LAST_REDIAL_MILLISECONDS)
             try {
-                dialed = new AbortController()
-                const resumed = await fetch(`${site}${BRIDGE_PATH}`, {
-                    headers: {
-                        accept: 'text/event-stream',
-                        authorization: `Bearer ${token}`,
-                    },
-                    signal: dialed.signal,
-                    tls,
+                const resumed = await dial('', {
+                    authorization: `Bearer ${token}`,
                 })
                 if (resumed.ok && resumed.body !== null) {
                     say(`Reconnected to ${host}.`)

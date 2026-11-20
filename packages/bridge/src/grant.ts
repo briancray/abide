@@ -3,6 +3,8 @@
 // a server's as `mcp__<server>` — and of those, the MCP tools whose server the visitor's own Claude Code
 // configuration holds. A site names tools and never a server: a server is a command this machine runs.
 
+import { messageOf } from './messageOf.ts'
+
 /** What Claude Code names the MCP server the bridge relays to the site, and so the prefix on each of its tools. */
 export const SERVER_NAME = 'app'
 
@@ -116,7 +118,7 @@ export async function visitorServers(
                 )
             } catch (thrown) {
                 throw new Error(
-                    `The --mcp-config ${source} could not be read: ${thrown instanceof Error ? thrown.message : String(thrown)}`,
+                    `The --mcp-config ${source} could not be read: ${messageOf(thrown)}`,
                 )
             }
         }
@@ -191,9 +193,7 @@ export async function grantFor(
             configured = await visitorServers(sources)
         } catch (thrown) {
             if (unreadable === undefined) throw thrown
-            unreadable(
-                thrown instanceof Error ? thrown.message : String(thrown),
-            )
+            unreadable(messageOf(thrown))
         }
     return { grant: grantOf(asked, granted, configured), args }
 }

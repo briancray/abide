@@ -22,6 +22,7 @@ import {
     installDirectory,
     uninstall,
 } from '../src/install.ts'
+import { messageOf } from '../src/messageOf.ts'
 
 const USAGE =
     'usage: abide-bridge <site> <code> [--full] [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge install [--full] [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge uninstall\n       abide-bridge forget [<site>]'
@@ -116,6 +117,6 @@ try {
     }
     process.exit(0)
 } catch (thrown) {
-    console.error(thrown instanceof Error ? thrown.message : String(thrown))
+    console.error(messageOf(thrown))
     process.exit(1)
 }
