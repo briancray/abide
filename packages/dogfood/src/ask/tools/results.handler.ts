@@ -26,6 +26,6 @@ export default GET(
     },
     {
         description:
-            'What a CRM test or bench file last reported, by its path below the CRM, e.g. src/activity/lib/QuickLog.bench.ts: each case\'s pass or fail, or each arm\'s nanoseconds per op and the ratio claimed. null where it was never run. Use it for <show results="path"/>.',
+            'What a CRM test or bench file last reported, by its path below the CRM, e.g. src/activity/lib/QuickLog.bench.ts: each case\'s pass or fail, or each arm\'s nanoseconds per op and the ratio claimed. null where it was never run. Use it for a ```show results="path"``` block.',
     },
 )

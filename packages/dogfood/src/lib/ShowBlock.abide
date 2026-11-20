@@ -1,0 +1,18 @@
+<script>
+// A `show` block of an answer, handed by `Markdown` once its fence closes: the live thing its info
+// names, or a note that it names none.
+import { props } from '@abide/abide'
+
+import { showOf } from './showFence.ts'
+import Shown from './Shown.abide'
+
+const { info } = props<{ source: string; info: string }>()
+
+const show = showOf(info)
+</script>
+
+{#if show}
+    <Shown show={show} />
+{:else}
+    <p class="shown-missing">Nothing to show for <code>{info}</code>.</p>
+{/if}

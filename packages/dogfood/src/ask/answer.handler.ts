@@ -6,8 +6,6 @@ import {
     provider,
 } from '@abide/abide/server'
 
-import type { AnswerEvent } from './lib/AnswerPart.ts'
-import { AnswerWriter } from './lib/AnswerWriter.server.ts'
 import { SYSTEM_PROMPT } from './lib/SYSTEM_PROMPT.server.ts'
 
 // The docs' own tools, `src/ask/tools/*`: the app's MCP surface also lists the CRM's handlers, which
@@ -26,44 +24,12 @@ const docsOnly: Provider = {
     },
 }
 
+// `assistant`'s events as they come, which `Chat` folds into the answering turn (`Ask.abide`): its
+// words are rendered on the page, a section at a time, and a prompt from a full-access turn is the
+// panel's to answer (44.81, `permit`).
 export default POST(
-    async function* ({
-        messages,
-    }: {
-        messages: AssistantMessage[]
-    }): AsyncGenerator<AnswerEvent> {
-        const writer = new AnswerWriter()
-        for await (const event of assistant(messages, docsOnly, {
-            mcp: true,
-        })) {
-            if (event.type === 'tool') {
-                // The text either side of a call is two turns of the model's: never one paragraph.
-                const { parts, tail } = writer.write('\n\n')
-                for (const part of parts) yield { type: 'part', part }
-                yield { type: 'tail', part: tail }
-                yield {
-                    type: 'tool',
-                    name: event.name.replace(/^.*_ask_tools_/, ''),
-                }
-                continue
-            }
-            if (event.type === 'text') {
-                const { parts, tail } = writer.write(event.text)
-                for (const part of parts) yield { type: 'part', part }
-                yield { type: 'tail', part: tail }
-                continue
-            }
-            // 44.81 — a prompt from a full-access turn is the panel's to answer (`permit`).
-            if (event.type === 'permission') {
-                yield event
-                continue
-            }
-            if (event.type === 'done') {
-                for (const part of writer.end()) yield { type: 'part', part }
-                yield { type: 'tail', part: undefined }
-                yield { type: 'done', text: writer.text, stop: event.stop }
-            }
-        }
+    async function* ({ messages }: { messages: AssistantMessage[] }) {
+        yield* assistant(messages, docsOnly, { mcp: true })
     },
     {
         description:

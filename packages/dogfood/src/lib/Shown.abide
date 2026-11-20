@@ -1,9 +1,8 @@
 <script>
-// ONE `<show/>` OF AN ANSWER, rendered from the same docs tool Claude read it with, so what the
+// ONE `show` BLOCK OF AN ANSWER, rendered from the same docs tool Claude read it with, so what the
 // reader sees is what the model was answered — never a description of it.
 import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
 
-import type { Show } from '#src/ask/lib/AnswerPart.ts'
 import clause from '#src/ask/tools/clause.handler.ts'
 import name from '#src/ask/tools/name.handler.ts'
 import results from '#src/ask/tools/results.handler.ts'
@@ -13,6 +12,7 @@ import Code from './Code.abide'
 import { languageOf } from './highlight.ts'
 import { inline } from './inline.ts'
 import ResultsList from './ResultsList.abide'
+import type { Show } from './showFence.ts'
 import { sitePageAt } from './sitePages.ts'
 import { slice } from './slice.ts'
 

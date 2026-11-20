@@ -1,0 +1,14 @@
+<script>
+// A TEST'S CONVERSATION (`AnswerTool.test.ts`): `Chat` handed the docs' pieces as `Ask.abide` hands
+// them, over an `ask` the test scripts. The pieces are imported here, by a `.abide`, because a
+// component a test file imports is the harness's callable (38.109), not the one `Chat` mounts.
+import { type AssistantEvent, props } from '@abide/abide'
+import Chat from '@abide/abide/Chat.abide'
+
+import AnswerText from './AnswerText.abide'
+import AnswerTool from './AnswerTool.abide'
+
+const { ask } = props<{ ask: () => AsyncIterable<AssistantEvent> }>()
+</script>
+
+<Chat class="conversation" ask={ask} Text={AnswerText} Tool={AnswerTool} />

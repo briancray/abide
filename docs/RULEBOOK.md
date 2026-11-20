@@ -3886,7 +3886,7 @@ and an example MUST demonstrate exactly one behavior.
 40.14 An example MUST be a fence written on its page, captioned with the side its code runs on, and
 MUST NOT be captioned with an address.
 
-40.15 A slice of a file the site shows, an entry of a page's `tests` or a `<show code/>` line, MUST
+40.15 A slice of a file the site shows, an entry of a page's `tests` or a `show code` block, MUST
 be named by a line prefix matching exactly once, and MUST run to the end of the construct that line
 opens.
 
@@ -3925,10 +3925,10 @@ each workspace dependency naming the published version it stands for.
 40.27 The documentation site MUST put above every page a prompt that asks the visitor's Claude Code
 through `provider.claudeCode`, with the site's own documentation tools as its only tools.
 
-40.28 A `<show/>` line in an answer MUST render from the documentation tool that answers the model the
-same thing.
+40.28 A `show` block in an answer — a fence whose info is `show` and what it names — MUST render, once
+its fence closes, from the documentation tool that answers the model the same thing.
 
-40.29 An answer MUST render the markup the model writes outside a `<show/>` line as text, and MUST NOT
+40.29 An answer MUST render the markup the model writes outside a `show` block as text, and MUST NOT
 link to an address other than a page of the site, an anchor, a web address or a mail address.
 
 40.30 The documentation site's native app MUST file every page in its menu bar through `onMenu`,

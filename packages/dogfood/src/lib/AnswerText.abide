@@ -1,0 +1,32 @@
+<script>
+// THE WORDS OF AN ANSWER, rendered as `Chat` hands them over: markdown a section at a time, so a
+// chunk re-renders only the section still growing (52.18); a fence as the docs' code, and a `show`
+// fence as the live thing it names (40.28).
+import { props } from '@abide/abide'
+import Markdown from '@abide/abide/Markdown.abide'
+
+import AnswerCode from './AnswerCode.abide'
+import { answerHref } from './answerHref.ts'
+import ShowBlock from './ShowBlock.abide'
+
+const { text } = props<{ text: string }>()
+
+// The languages the system prompt has the model fence code in, and the ones it reaches for besides.
+const blocks = {
+    show: ShowBlock,
+    abide: AnswerCode,
+    ts: AnswerCode,
+    typescript: AnswerCode,
+    js: AnswerCode,
+    javascript: AnswerCode,
+    tsx: AnswerCode,
+    json: AnswerCode,
+    html: AnswerCode,
+    css: AnswerCode,
+    sh: AnswerCode,
+    bash: AnswerCode,
+    shell: AnswerCode,
+}
+</script>
+
+<Markdown class="flow" source={text} href={answerHref} blocks={blocks} />

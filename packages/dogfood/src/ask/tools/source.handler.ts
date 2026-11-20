@@ -15,6 +15,6 @@ export default GET(
     },
     {
         description:
-            'The text of one file of the CRM, the example app the abide docs ship, by its path below the CRM, e.g. src/activity/lib/QuickLog.abide. Use it for <show code="path"/>.',
+            'The text of one file of the CRM, the example app the abide docs ship, by its path below the CRM, e.g. src/activity/lib/QuickLog.abide. Use it for a ```show code="path"``` block.',
     },
 )
