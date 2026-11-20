@@ -34,8 +34,8 @@ async function sources(
 }
 
 // Every package's own source, relative to `packages/`: the framework (its tests, benches and
-// browser specs are its own), the harness, the docs app's source, scripts and browser specs, and the
-// bridge.
+// browser specs are its own), the harness, the docs app's source, scripts and browser specs, the
+// bridge — and the repo's own release scripts beside `packages/`.
 const AUTHORED = [
     'abide/**/*.ts',
     'harness/**/*.ts',
@@ -43,6 +43,7 @@ const AUTHORED = [
     'dogfood/scripts/**/*.ts',
     'dogfood/e2e/**/*.ts',
     'bridge/**/*.ts',
+    '../scripts/**/*.ts',
 ]
 
 async function authored(

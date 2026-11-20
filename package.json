@@ -7,7 +7,7 @@
         "packages/dogfood/examples/*"
     ],
     "scripts": {
-        "typecheck": "bun check -p packages/abide && bun check -p packages/harness && bun run --cwd packages/dogfood check && bun check -p packages/bridge",
+        "typecheck": "bun check -p packages/abide && bun check -p packages/harness && bun run --cwd packages/dogfood check && bun check -p packages/bridge && bun check -p .",
         "test": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json",
         "test:timings": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json --update-timings",
         "test:serial": "bun run build && bun test packages/abide/tests packages/harness/tests packages/dogfood/tests",
@@ -34,6 +34,10 @@
         "clauses:uncited": "bun packages/dogfood/scripts/uncitedClauses.ts",
         "bench:reorder": "bun packages/abide/bench/reorderShare.ts",
         "bench:rect": "bun packages/abide/bench/rectScrollShare.ts",
+        "bench:selected": "bun packages/abide/bench/selectedRowShare.ts",
+        "bench:inline": "bun packages/abide/bench/inlineRowShare.ts",
+        "bench:mux": "bun packages/abide/bench/muxShare.ts",
+        "bench:first-chunk": "bun packages/abide/bench/firstChunkShare.ts",
         "prepare": "git config core.hooksPath .githooks || true",
         "changeset": "changeset",
         "version-packages": "bun run scripts/autofillChangesets.ts && changeset version",
