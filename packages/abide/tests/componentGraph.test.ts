@@ -163,7 +163,7 @@ test('a .abide directly in an address directory is a page, and one under lib is 
 // a bare `.ts` among them — is refused by name with where it goes. A test file, a bench file and a
 // declaration file are kept there, and the rest under `lib/`.
 //
-// THE REVERTS: drop the `refuse` for a file neither `.abide` nor a handler file in `appTree`'s
+// THE REVERTS: drop the `refuse` for a file neither `.abide` nor a handler file in `appFiles`'s
 // walk; the three strays build, 0 of 3 refused where 3 are due. Or drop `isDeclarationFile` from the
 // walk's skip; `media/types.d.ts` is refused under 23.22. Or drop `isBenchFile` from it;
 // `media/index.bench.ts` is refused under 23.22 too. Or skip the non-default export check in
@@ -215,7 +215,7 @@ test('a file in an address directory that is no page or handler file is a build 
 // what `lib/` already fenced, and an `index.abide` under `lib/` names a route that nothing there
 // has. Both are refused naming the file, rather than one silently going unrouted.
 //
-// THE REVERTS: drop the 23.16 `refuse` for a reserved directory under another in `appTree`'s walk;
+// THE REVERTS: drop the 23.16 `refuse` for a reserved directory under another in `appFiles`'s walk;
 // `lib/public/` builds. Or drop the `DIRECTORY_FILES` arm; `lib/index.abide` builds as a component.
 test('a fence under a fence, and an index.abide under lib, are build errors — 23.16, 23.18', async () => {
     const nested = await compiledTree({ 'media/lib/public/a.txt': 'a' })
@@ -229,7 +229,7 @@ test('a fence under a fence, and an index.abide under lib, are build errors — 
 // 16.29, 23.23 — A SERVER FILE IS ITS NAME, NOT ITS DIRECTORY: `lib/db.server.ts` builds and is the
 // server's, a `server` directory is a segment like any other, and a dot directory is never walked.
 //
-// THE REVERTS: refuse a server file under `lib` too in `appTree`'s walk; `lib/db.server.ts` is
+// THE REVERTS: refuse a server file under `lib` too in `appFiles`'s walk; `lib/db.server.ts` is
 // refused. Or match `server` as a directory in `isServerFile`; `server/db.ts` reads as one.
 test('a server file under lib builds, and is the server file by its name — 16.29, 23.23', async () => {
     const nested = await compiledTree({

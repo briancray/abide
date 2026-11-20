@@ -1,7 +1,6 @@
 import { relative as relativeTo } from 'node:path' // bun exposes no path helpers of its own
 
 import type { Compilation } from '#server/abideModules.ts'
-import { appFiles } from '#server/appTree.ts'
 import {
     isWorkerFile,
     type Placement,
@@ -22,6 +21,7 @@ import {
     type Segment,
 } from '#shared/routePattern.ts'
 
+import { appFiles } from './appFiles.ts'
 import { abideImportsOf } from './componentGraph.ts'
 import { type Diagnosis, Diagnostics } from './Diagnostics.ts'
 import type { HandlerFile } from './handlersUnder.ts'

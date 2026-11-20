@@ -20,10 +20,10 @@ import {
 } from '@abide/abide/compiler'
 import { render } from '@abide/abide/server'
 
+import { appFiles } from '../../abide/src/compiler/appFiles.ts'
 import { Diagnostics } from '../../abide/src/compiler/Diagnostics.ts'
 import { privateAddress } from '../../abide/src/compiler/handlersUnder.ts'
 import { resolverIn } from '../../abide/src/compiler/resolverIn.ts'
-import { appFiles } from '../../abide/src/server/appTree.ts'
 import { placement, routeOf } from '../../abide/src/server/placement.ts'
 import { PRIVATE_EXPORT } from '../../abide/src/server/PRIVATE_EXPORT.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'

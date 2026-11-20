@@ -9,7 +9,6 @@
 // each module exports and which call declares each (16.73) — which is also what makes an export
 // that is not a handler a refusal here rather than an address that silently never answers.
 
-import { frameworkRouteRefusal } from '#server/appTree.ts'
 import { handlerFileMount } from '#server/handlerFileMount.ts'
 import type { Mount } from '#server/mountHandlers.ts'
 import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
@@ -17,6 +16,7 @@ import { surfaceName } from '#server/surfaceOf.ts'
 import { PRIVATE_HANDLERS_ADDRESS } from '#shared/ADDRESSES.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 
+import { frameworkRouteRefusal } from './appFiles.ts'
 import type { PlacedHandler, PlacedSource } from './appLayout.ts'
 import { declaredExports } from './declaredExports.ts'
 import type { Diagnostics } from './Diagnostics.ts'
