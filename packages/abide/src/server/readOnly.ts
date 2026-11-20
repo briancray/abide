@@ -1,7 +1,7 @@
 import type { Failed } from '#shared/Failed.ts'
 import type { Middleware } from '#shared/Middleware.ts'
+import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
-import { url } from '#shared/url.ts'
 
 // RFC 9110's safe methods: a read, which 54.5 never refuses.
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
@@ -29,7 +29,7 @@ export function readOnly(
         if (SAFE_METHODS.has(request.method)) return next()
         if (allowed.length > 0) {
             // 37.20 — the lane hands the path below the mount, and an address carries the mount.
-            const path = url('/').slice(0, -1) + new URL(request.url).pathname
+            const path = mounted(new URL(request.url).pathname)
             for (const handler of allowed)
                 if (handler.address === path) return next()
         }

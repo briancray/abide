@@ -4,6 +4,7 @@
 import { expect, test } from 'bun:test'
 
 import { GET, POST, readOnly, requireRole, signedIn } from '#server'
+import { MOUNT } from '#shared/mount.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -141,4 +142,27 @@ test('readOnly hands a read and a write to an allowed handler to next — 54.5, 
     ).toBe(
         'GET getOwn: through | HEAD getOwn: through | OPTIONS archive: through | POST signIn: through | POST archive: refused | DELETE archive: refused',
     )
+})
+
+// 37.20 — UNDER A SUB-PATH TOO: the lane hands the path below the mount, and an address carries it.
+// THE REVERT: rebuild the address as `url('/').slice(0, -1)` + the path; the bare mount `/docs` loses
+// its last letter, and sign-in is refused — `POST signIn: refused`.
+test('readOnly hands a write to an allowed handler under a mount — 54.6, 37.20', async () => {
+    const standing = MOUNT.current
+    MOUNT.current = () => '/docs'
+    try {
+        const answer = await readOnly({ allow: [signIn] })(
+            async () => 'through',
+            {
+                request: new Request('http://app.invalid/team/signIn', {
+                    method: 'POST',
+                }),
+            },
+        )
+        expect(
+            `POST signIn: ${answer === 'through' ? 'through' : 'refused'}`,
+        ).toBe('POST signIn: through')
+    } finally {
+        MOUNT.current = standing
+    }
 })
