@@ -32,7 +32,7 @@ function standIn() {
     return { counts, StandIn: StandIn as unknown as typeof ResizeObserver }
 }
 
-// THE REVERT: drop the `disconnect` and `observer = undefined` once `observed` reaches 0 in `size` —
+// THE REVERT: drop the `disconnect` and `observer = undefined` once `watched` empties in `resized` —
 // the later stand-in is made 0 times where 1 is due.
 test('an observer installed after every observed element has gone is the one used — 32.81', () => {
     const first = standIn()

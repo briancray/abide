@@ -16,7 +16,11 @@ export function followBottom(element: Element): Disposer {
             element.scrollHeight - element.scrollTop - element.clientHeight <=
             AT_BOTTOM
     }
-    // One delivery per batch of changes, however many chunks the batch held.
+    // One delivery per batch of changes, however many chunks the batch held. AN OBSERVER OF ITS OWN,
+    // not one shared as resizes are (32.81): a mutation record names the node that changed, deep in
+    // the subtree, so a shared observer would walk each record's ancestors to find which followed
+    // element it belongs to — a walk per record of a stream writing one per chunk — where an observer
+    // per element is handed only its own, and is told nothing it has to sort.
     const observer = new MutationObserver(() => {
         if (following) element.scrollTop = element.scrollHeight
     })

@@ -1,6 +1,7 @@
 // 50.26, 50.27 — AN OPEN POPOVER KEPT AGAINST ITS ANCHOR: what `Tooltip` and `Menu` share. Not an
 // export of the barrel: an app's own overlay calls `place` and writes what it hands back itself.
 
+import { resized } from './observe/resized.ts'
 import { place, type Placement, type PlaceOptions } from './place.ts'
 
 /**
@@ -32,12 +33,12 @@ export function follow(
     addEventListener('scroll', scheduled, { capture: true, passive: true })
     addEventListener('resize', scheduled, { passive: true })
     // 50.26 — a hint whose text lands after it opens, or an anchor that reflows, moves nothing a
-    // scroll or a resize would report.
-    const resized = new ResizeObserver(scheduled)
-    resized.observe(anchor)
-    resized.observe(floating)
+    // scroll or a resize would report: both are watched by the observer every resize shares (32.81).
+    const unresizeAnchor = resized(anchor, scheduled)
+    const unresizeFloating = resized(floating, scheduled)
     return () => {
-        resized.disconnect()
+        unresizeAnchor()
+        unresizeFloating()
         cancelAnimationFrame(frame)
         frame = 0
         removeEventListener('scroll', scheduled, { capture: true })

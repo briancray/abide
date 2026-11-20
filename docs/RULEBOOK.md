@@ -2581,9 +2581,10 @@ hold.
 32.80 `observe.visible` MUST write whether the element intersects the viewport, or the root 32.89
 names, at each observation.
 
-32.81 Every `observe.size` in a document MUST be observed by one shared observer, every
-`observe.visible` measured against one root by one other per root, the viewport being one, and
-every `observe.rect` by a third.
+32.81 Every `observe.size` and every `observe.rect` in a document, and the anchor and the popover
+50.26 places again when either changes size, MUST be observed for resizes by one shared observer,
+and every `observe.visible` measured against one root by one other per root, the viewport being
+one.
 
 32.82 An `observe.size` or an `observe.visible` MUST NOT write its target before the first
 observation of its element, and MUST NOT read the element's layout to write it.
@@ -2645,8 +2646,8 @@ NOT begin again.
 read in it has not landed — `x.ready() ? x : []`, `x || []`, or `x ?? []` where 14.17 does not warn —
 naming 32.22.
 
-32.98 The observers 32.81 shares for `observe.size`, for `observe.rect` and for `observe.visible`
-against the viewport MUST each be made by the first of its kind bound while it observes no element,
+32.98 The observers 32.81 shares for resizes and for `observe.visible` against the viewport MUST
+each be made by the first of its kind bound while it observes no element,
 from the `ResizeObserver` or `IntersectionObserver` the document holds then.
 
 # 33. Props

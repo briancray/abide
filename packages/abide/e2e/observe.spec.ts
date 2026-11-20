@@ -139,10 +139,10 @@ test('observe.size writes the content box, and follows it — 32.79', async ({
     await expect(page.locator('#size')).toHaveText('300x100')
 })
 
-// 32.81, 32.83 — ONE OBSERVER OF EACH KIND FOR EVERY BOUND ELEMENT ON THE PAGE — two
-// `ResizeObserver`s, one for the six `observe.size`s and one for the `observe.rect` — and a row that leaves
-// is unobserved. Counted by wrapping the browser's own constructor and `unobserve` before the page
-// loads. THE REVERT: `observer = new ResizeObserver(…)` in place of `??=` in `observe/size.ts`; 7 are made.
+// 32.81, 32.83 — ONE OBSERVER FOR EVERY RESIZE ON THE PAGE — one `ResizeObserver` for the six
+// `observe.size`s and the `observe.rect` — and a row that leaves is unobserved. Counted by wrapping
+// the browser's own constructor and `unobserve` before the page loads. THE REVERT: `observer = new
+// ResizeObserver(…)` in place of `??=` in `observe/resized.ts`; 7 are made.
 test('every observe.size shares one ResizeObserver, and a row that leaves is unobserved — 32.81, 32.83', async ({
     page,
 }) => {
@@ -173,10 +173,10 @@ test('every observe.size shares one ResizeObserver, and a row that leaves is uno
                     }
                 ).__OBSERVERS__,
         )
-    expect(await counts()).toEqual({ made: 2, unobserved: 0 })
+    expect(await counts()).toEqual({ made: 1, unobserved: 0 })
     await page.click('#drop')
     await expect(page.locator('.row')).toHaveCount(0)
-    expect(await counts()).toEqual({ made: 2, unobserved: 5 })
+    expect(await counts()).toEqual({ made: 1, unobserved: 5 })
 })
 
 // 32.80 — AN ELEMENT BELOW THE FOLD IS NOT VISIBLE UNTIL IT IS SCROLLED TO. THE REVERT: write `true`

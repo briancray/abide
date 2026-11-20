@@ -122,7 +122,9 @@ test('a floating element that changes size is placed again — 50.26', async () 
             tops.push(placement.y),
         )
         height = 50
-        for (const callback of heard) callback([], {} as ResizeObserver)
+        // A browser hands over an entry per element whose size changed: here, the floating one.
+        const entry = { target: floating } as unknown as ResizeObserverEntry
+        for (const callback of heard) callback([entry], {} as ResizeObserver)
         await Bun.sleep(50)
         stop()
         expect(tops).toEqual([62, 42])

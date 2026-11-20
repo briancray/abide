@@ -3,22 +3,13 @@ import type { Reactive } from '../reactive/Reactive.ts'
 import { type Disposer, watchTracked } from '../reactive/watch.ts'
 import { Measured } from './Measured.ts'
 import { observedTwice } from './observedTwice.ts'
+import { resized } from './resized.ts'
 
 type Size = { width: number; height: number }
 type Box = 'content' | 'border'
 
-// 32.81 — ONE OBSERVER FOR EVERY `observe.size` IN THE DOCUMENT, made by the first and dropped with
-// the last, so the next is made by whatever `ResizeObserver` stands then — a test's fake among them: an
-// observer per element is a callback per element per frame a layout moves, where one hands every
-// resize of the frame over in a single batch. Keyed by the element, so a delivery finds what to
-// write — in one map per box, since the box is an option of `observe` rather than of the observer,
-// and the delivery has to know which one the element asked for (32.90).
-let observer: ResizeObserver | undefined
-// How many elements `observer` observes, for it to be dropped with the last.
-let observed = 0
-const content = new WeakMap<Element, Measured>()
-const bordered = new WeakMap<Element, Measured>()
-const BORDER_BOX: ResizeObserverOptions = { box: 'border-box' }
+// 32.92 — the elements an `observe.size` is bound to, so a second one throws.
+const bound = new WeakSet<Element>()
 
 /**
  * The `bind:element` callback writing an element's size into `target` as it is laid out.
@@ -56,42 +47,34 @@ export function size(
 ): (element: Element) => Disposer {
     const box = options?.box
     return (element) => {
-        if (content.has(element) || bordered.has(element))
-            observedTwice('size', element)
-        observer ??= new ResizeObserver(deliverSizes)
-        observed += 1
+        if (bound.has(element)) observedTwice('size', element)
+        bound.add(element)
         const measured = new Measured(target)
-        // 32.90 — a box that moves observes the element again.
+        // 32.90 — a box that moves observes the element again: the new listener is registered before
+        // the old one leaves, so the shared observer is kept rather than dropped and made again.
+        let unobserve: Disposer | undefined
+        const observeIn = (asked: unknown): void => {
+            const border = asked === 'border'
+            const previous = unobserve
+            unobserve = resized(
+                element,
+                (entry) => deliverSize(entry, measured, border),
+                border ? 'border' : 'content',
+            )
+            previous?.()
+        }
         let stop: Disposer | undefined
         if (isReactive(box))
             stop = watchTracked(() => {
-                observeBox(element, measured, (box as () => unknown)())
+                observeIn((box as () => unknown)())
             })
-        else observeBox(element, measured, box)
+        else observeIn(box)
         return () => {
             stop?.()
-            content.delete(element)
-            bordered.delete(element)
-            ;(observer as ResizeObserver).unobserve(element)
-            observed -= 1
-            if (observed > 0) return
-            ;(observer as ResizeObserver).disconnect()
-            observer = undefined
+            unobserve?.()
+            bound.delete(element)
         }
     }
-}
-
-// Observing an element again replaces its box, so a box that moves needs no unobserve.
-function observeBox(element: Element, measured: Measured, box: unknown): void {
-    if (box === 'border') {
-        content.delete(element)
-        bordered.set(element, measured)
-        ;(observer as ResizeObserver).observe(element, BORDER_BOX)
-        return
-    }
-    bordered.delete(element)
-    content.set(element, measured)
-    ;(observer as ResizeObserver).observe(element)
 }
 
 // 32.79 — A FRESH RECORD PER WRITE DEFEATS THE IDENTITY GATE, so a size the target already holds is
@@ -101,28 +84,27 @@ function observeBox(element: Element, measured: Measured, box: unknown): void {
 // writing mode. The border box has no physical spelling — `borderBoxSize` is inline and block — so
 // 32.90's axes are turned by the element's writing mode, a style read made only for a border box,
 // after the layout the delivery follows and so never a forced one.
-function deliverSizes(entries: ResizeObserverEntry[]): void {
-    for (const entry of entries) {
-        let measured = content.get(entry.target)
-        let width: number
-        let height: number
-        if (measured !== undefined) ({ width, height } = entry.contentRect)
-        else {
-            measured = bordered.get(entry.target)
-            if (measured === undefined) continue
-            const borderBox = entry.borderBoxSize[0] as ResizeObserverSize
-            const writingMode = getComputedStyle(entry.target).writingMode
-            if (writingMode === '' || writingMode === 'horizontal-tb') {
-                width = borderBox.inlineSize
-                height = borderBox.blockSize
-            } else {
-                width = borderBox.blockSize
-                height = borderBox.inlineSize
-            }
+function deliverSize(
+    entry: ResizeObserverEntry,
+    measured: Measured,
+    border: boolean,
+): void {
+    let width: number
+    let height: number
+    if (!border) ({ width, height } = entry.contentRect)
+    else {
+        const borderBox = entry.borderBoxSize[0] as ResizeObserverSize
+        const writingMode = getComputedStyle(entry.target).writingMode
+        if (writingMode === '' || writingMode === 'horizontal-tb') {
+            width = borderBox.inlineSize
+            height = borderBox.blockSize
+        } else {
+            width = borderBox.blockSize
+            height = borderBox.inlineSize
         }
-        const held = measured.held() as
-            { width?: unknown; height?: unknown } | null | undefined
-        if (held?.width === width && held.height === height) continue
-        measured.write({ width, height })
     }
+    const held = measured.held() as
+        { width?: unknown; height?: unknown } | null | undefined
+    if (held?.width === width && held.height === height) return
+    measured.write({ width, height })
 }

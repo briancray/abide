@@ -2,6 +2,7 @@ import type { Reactive } from '../reactive/Reactive.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { Measured } from './Measured.ts'
 import { observedTwice } from './observedTwice.ts'
+import { resized } from './resized.ts'
 
 type Rect = {
     x: number
@@ -16,11 +17,10 @@ type Rect = {
 
 // 32.86 — ONE LISTENER SET FOR EVERY `observe.rect` IN THE DOCUMENT, added with the first and removed
 // with the last. A scroll is listened for in CAPTURE, where a nested scroller's scroll reaches the
-// window though the event does not bubble. 32.81 — the third shared observer, for resizes of the
-// elements themselves.
+// window though the event does not bubble. 32.81 — a resize of an element itself is seen by the one
+// observer every resize in the document shares.
 // A Map rather than a WeakMap: the frame walks every bound element, and teardown deletes each one.
 const bound = new Map<Element, Placed>()
-let observer: ResizeObserver | undefined
 let frame = 0
 // Whether a scroll event arrived since the last frame: such a frame reads and writes but arms
 // nothing (32.88), and asks for the frame after it, where the scroll is over unless another came.
@@ -42,6 +42,8 @@ const rects: DOMRect[] = []
  */
 class Placed extends Measured {
     position: IntersectionObserver | undefined = undefined
+    // Stops the shared resize observer telling this element's resizes (32.81).
+    unresize: Disposer | undefined = undefined
     top = 0
     right = 0
     bottom = 0
@@ -79,19 +81,15 @@ export function rect(target: unknown): (element: Element) => Disposer {
         }
         const placed = new Placed(target)
         bound.set(element, placed)
-        observer ??= new ResizeObserver(schedule)
-        observer.observe(element)
+        placed.unresize = resized(element, schedule)
         schedule()
         return () => {
             bound.delete(element)
-            ;(observer as ResizeObserver).unobserve(element)
+            placed.unresize?.()
             placed.position?.disconnect()
             if (bound.size > 0) return
             removeEventListener('scroll', scroll, SCROLLING)
             removeEventListener('resize', schedule, RESIZING)
-            // 32.81 — dropped with the last, as `observe.size`'s is.
-            ;(observer as ResizeObserver).disconnect()
-            observer = undefined
             if (frame !== 0) cancelAnimationFrame(frame)
             frame = 0
             scrolled = false
