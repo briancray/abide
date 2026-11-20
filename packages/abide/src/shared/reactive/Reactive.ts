@@ -3100,10 +3100,11 @@ function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
     if (cell.expiry?.dropped) expire(cell)
     if (untilStreaming && cell.stream !== null)
         return Promise.resolve(STREAMING)
-    if (cell.servable && !busyNow(cell)) return Promise.resolve(heldValue(cell))
+    const busy = busyNow(cell)
+    if (cell.servable && !busy) return Promise.resolve(heldValue(cell))
     // 2.8 — UNSERVED, NOT UNLANDED: an invalidated value has landed (7.8), and a reload that failed
     // over it leaves the failure as the answer, or the await waits on a load that has ended.
-    if (!busyNow(cell)) {
+    if (!busy) {
         const failure = failureOf(cell)
         if (failure !== undefined) return Promise.reject(failure)
     }
@@ -3798,11 +3799,7 @@ function refreshIn(cell: Cell, tags: string[] | null): void {
     // 13.16 — a mutation's reload is its write sent again, so a sweep marks it instead; 7.40 — and a
     // job `App.stop` stopped is left to the next opening or a read, a stream one included.
     if (cell.mutation || jobStopped(cell)) invalidateIn(cell, tags)
-    else if (
-        readByAny(cell.readers) ||
-        readByAny(cell.probeReaders) ||
-        cell.stream !== null
-    ) {
+    else if (subscribed(cell) || cell.stream !== null) {
         if (tags === null) refreshOne(cell)
         else eachAdopted(cell, refreshOne)
     } else if (cell.body !== null) {
@@ -3816,7 +3813,10 @@ function refreshIn(cell: Cell, tags: string[] | null): void {
  * followed (47.22's poll) asks before it does the work.
  */
 export function isSubscribed(value: unknown): boolean {
-    const cell = (value as Callable)[CELL]
+    return subscribed((value as Callable)[CELL])
+}
+
+function subscribed(cell: Cell): boolean {
     return readByAny(cell.readers) || readByAny(cell.probeReaders)
 }
 
@@ -4099,10 +4099,10 @@ export function streamingOrSettled(value: unknown): Promise<unknown> {
 /**
  * The keys of every `Reactive` member.
  *
- * What a value filed outside every scope forwards (`scoped.ts`): read off the record, so a member
- * added here is forwarded without a second list to keep in step.
+ * What `forwardingPrototype` forwards for a value filed outside every scope (`scoped.ts`): read off
+ * the record, so a member added here is forwarded without a second list to keep in step.
  */
-export const MEMBER_KEYS: readonly PropertyKey[] = Reflect.ownKeys(MEMBERS)
+const MEMBER_KEYS: readonly PropertyKey[] = Reflect.ownKeys(MEMBERS)
 
 /**
  * Builds a `Reactive` prototype: every member, the overrides, and the brand.

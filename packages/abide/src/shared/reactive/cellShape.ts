@@ -714,7 +714,7 @@ function comparatorFor(
 }
 
 /**
- * Recomputes `simple` and re-seats the callable on the matching prototype.
+ * Recomputes `simple`. Re-seating the callable on the prototype that goes with it is `seat`'s.
  *
  * `simple` IN ONE PLACE. A second copy of this conjunction is the drift that would let one of the
  * sites go on reading `true` after the field under it moved — and what the short write would then

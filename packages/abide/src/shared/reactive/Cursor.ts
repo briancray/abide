@@ -20,7 +20,7 @@ import {
  * `ring[index]` carries ordinal `ringBase + index + 1`, so a cursor holding an ordinal finds its
  * place in a stream's chunk buffer without the buffer having to hold one.
  */
-export type Retained = Tracked & {
+type Retained = Tracked & {
     ordinal: number
     ring: unknown[]
     ringBase: number

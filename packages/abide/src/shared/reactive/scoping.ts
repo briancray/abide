@@ -23,7 +23,7 @@ export type Scope = {
     stops: (() => void)[]
 }
 
-export type Scoping = {
+type Scoping = {
     current(): Scope | undefined
     /**
      * The stops of the server work running — a request's scope, or a `render` outside every request —
