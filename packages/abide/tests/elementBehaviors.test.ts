@@ -171,6 +171,26 @@ test('a drop takes what accept takes, by type, extension or function — 53.18, 
     for (const stop of stops) stop()
 })
 
+// THE REVERT: call `onreject` only where nothing was taken, and the photo past `multiple` and the
+// contract beside an accepted photo are turned away unheard.
+test('the files a drop carries and does not take are handed to onreject — 53.46', () => {
+    const zone = element()
+    const turnedAway: string[][] = []
+    const reject = (files: File[]) =>
+        turnedAway.push(files.map((file) => file.name))
+    const stops = [
+        dropzone(() => {}, {
+            accept: 'image/*',
+            multiple: false,
+            onreject: reject,
+        })(zone),
+        dropzone(() => {}, { onreject: reject })(zone),
+    ]
+    drag(zone, 'drop', [CONTRACT, PHOTO, PHOTO])
+    expect(turnedAway).toEqual([['ledger-audit.pdf', 'signing.png']])
+    for (const stop of stops) stop()
+})
+
 test('a paste of files is a drop, and words pasted alone paste — 53.20', () => {
     const zone = element('textarea')
     const taken: File[][] = []
@@ -205,6 +225,44 @@ test('a click copies, marks the element copied, and the mark wears off — 53.21
     expect(button.hasAttribute('data-copied')).toBe(true)
     await Bun.sleep(20)
     expect(button.hasAttribute('data-copied')).toBe(false)
+    stop()
+})
+
+// THE REVERT: copy from the element bound rather than the button clicked, and every copy is the
+// container's whole text, marked on the container.
+test('with a selector, a click on a button inside copies from that button, and nothing else does — 53.44, 53.45', async () => {
+    const copied: string[] = []
+    Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: async (text: string) => copied.push(text) },
+    })
+    const block = element()
+    // Markup no template built, as a `raw` block holds it.
+    block.innerHTML =
+        '<pre><code>bun add @abide/abide</code><button data-copy>Copy</button></pre>' +
+        '<pre><code>bun run dev</code><button data-copy>Copy</button></pre><p>prose</p>'
+    const heard: [boolean, string][] = []
+    const stop = copyText(
+        (clicked) =>
+            clicked.closest('pre')?.querySelector('code')?.textContent ?? '',
+        {
+            selector: '[data-copy]',
+            oncopied: (landed, clicked) =>
+                heard.push([
+                    landed,
+                    clicked.previousElementSibling?.textContent ?? '',
+                ]),
+        },
+    )(block)
+    const [first, second] = block.querySelectorAll('button')
+    second?.click()
+    block.querySelector('p')?.click()
+    await Bun.sleep(0)
+    expect(copied).toEqual(['bun run dev'])
+    expect(heard).toEqual([[true, 'bun run dev']])
+    expect(second?.hasAttribute('data-copied')).toBe(true)
+    expect(first?.hasAttribute('data-copied')).toBe(false)
+    expect(block.hasAttribute('data-copied')).toBe(false)
     stop()
 })
 

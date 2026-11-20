@@ -32,15 +32,17 @@ const LONGEST_LOOK = 60_000
 export function job(
     name: string,
     options: {
-        /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, read at each look where a function. */
+        /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
         every: number | (() => number)
+        /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
+        from?: 'end' | 'start'
         /** 54.26 — the work, handed the signal that says stop. */
         run: (signal: AbortSignal) => unknown
         /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
         lastRun?: () => number | undefined
     },
 ): Job {
-    const { every, run } = options
+    const { every, run, from = 'end' } = options
     const intervalOf = typeof every === 'function' ? every : () => every
     const logger = log.named('job').named(name)
     let current: JobStatus = {
@@ -57,6 +59,8 @@ export function job(
     }
     // When the last run ended, in ms; `undefined` before one has, and before 54.21 has been asked.
     let lastRunAt: number | undefined
+    // What `every` is measured from: the last run's end, or its start under 54.29.
+    let measuredFrom: number | undefined
     let remembered = false
     let running: Promise<JobStatus> | undefined
     // 54.27 — aborted by `stop`, beside the app's own stop.
@@ -65,11 +69,12 @@ export function job(
     const nextRunOf = (): string | null => {
         const interval = intervalOf()
         if (stopping.signal.aborted || !(interval > 0)) return null
-        return new Date((lastRunAt ?? Date.now()) + interval).toISOString()
+        return new Date((measuredFrom ?? Date.now()) + interval).toISOString()
     }
 
     const runOnce = async (): Promise<JobStatus> => {
         const signal = AbortSignal.any([stopSignal(), stopping.signal])
+        const startedAt = Date.now()
         write({ running: true })
         let lastError = current.lastError
         try {
@@ -83,7 +88,10 @@ export function job(
                 logger.error('run failed', error)
             }
         }
-        if (!signal.aborted) lastRunAt = Date.now()
+        if (!signal.aborted) {
+            lastRunAt = Date.now()
+            measuredFrom = from === 'start' ? startedAt : lastRunAt
+        }
         return write({
             running: false,
             lastRun:
@@ -113,13 +121,19 @@ export function job(
         if (!remembered) {
             remembered = true
             lastRunAt = options.lastRun?.()
+            measuredFrom = lastRunAt
         }
         const interval = intervalOf()
         if (
             interval > 0 &&
-            (lastRunAt === undefined || Date.now() >= lastRunAt + interval)
+            (measuredFrom === undefined ||
+                Date.now() >= measuredFrom + interval)
         ) {
-            await runNow()
+            // 54.29 — the clock spaces its looks from when one settles, so a look waiting on the run
+            // would measure from its end. A look made while it runs joins it (54.20): a run due
+            // while the last one overran starts at the look after that one ends.
+            if (from === 'start') void runNow()
+            else await runNow()
             return
         }
         const nextRun = nextRunOf()

@@ -1,30 +1,26 @@
 <script>
-import { reactive } from '@abide/abide'
-import Tabs from '@abide/abide/Tabs.abide'
+import { reactive, tabs } from '@abide/abide'
 
 import getDeal from '../getDeal.handler.ts'
 
-type View = { key: string; label: string }
-
-const VIEWS: View[] = [
+const VIEWS = [
     { key: 'details', label: 'Details' },
     { key: 'value', label: 'Value' },
     { key: 'stage', label: 'Stage' },
 ]
 
-let tab = reactive('details')
+let tab = reactive<string | undefined>('details')
+const view = tabs({ keys: VIEWS.map((each) => each.key), selected: tab })
 const deal = reactive(() => getDeal({ id: 'd1' }))
 </script>
 
-<Tabs
-    id="deal"
-    tabs={VIEWS}
-    key={(view: View) => view.key}
-    label={(view: View) => view.label}
-    bind:selected={tab}
-    class="flex flex-col gap-snug [&_[data-part=tablist]]:tabs"
->
-    <ul class="fields">
+<div class="flex flex-col gap-snug">
+    <div class="tabs" {...view.list}>
+        {#for each of VIEWS by each.key}
+            <button {...view.tab(each.key)}>{each.label}</button>
+        {/for}
+    </div>
+    <ul class="fields" {...view.panel()}>
         {#if tab === 'details'}
             <li><span>deal</span><strong>{deal.name}</strong></li>
             <li><span>company</span><strong>{deal.company}</strong></li>
@@ -35,4 +31,4 @@ const deal = reactive(() => getDeal({ id: 'd1' }))
             <li><span>stage</span><strong>{deal.stage}</strong></li>
         {/if}
     </ul>
-</Tabs>
+</div>

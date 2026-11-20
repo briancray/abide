@@ -18,6 +18,16 @@ import Section from '#src/lib/Section.abide'
         },
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/ClosingDeals.test.ts',
+            from: ["test('a first press on Amount sorts the largest deal first'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/ClosingDeals.test.ts',
+            from: [
+                "test('each row carries its stage, and a click on it picks the deal'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/ClosingDeals.test.ts',
             from: ["test('a re-sort moves the rows, building and rewriting none'"],
         },
         {
@@ -116,6 +126,34 @@ import Section from '#src/lib/Section.abide'
                     {/if}
                 {/component}
             </SortableTable>
+        `} />
+    </Section>
+
+    <Section level={3} title="Sort amounts largest first on the first press">
+        <p>A column's <code>firstDirection</code> is the direction a first press of its header
+            sorts in. A second press turns it round.</p>
+        <Code language="abide" caption="abide" code={`
+            const COLUMNS: Column<Deal>[] = [
+                { key: 'amount', label: 'Amount', firstDirection: 'descending' },
+            ]
+        `} />
+    </Section>
+
+    <Section level={3} title="Pick a deal by clicking its row">
+        <p><code>rowAttributes</code> is handed each row and answers the attributes its
+            <code>&lt;tr&gt;</code> carries: a <code>class</code>, a <code>data-</code> state,
+            an <code>onclick</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <SortableTable
+                rows={deals}
+                columns={COLUMNS}
+                key={(deal: Deal) => deal.id}
+                rowAttributes={(deal: Deal) => ({
+                    'data-stage': deal.stage,
+                    onclick: () => (picked = deal.name),
+                })}
+                class="[&_[data-stage=won]]:font-semibold"
+            />
         `} />
     </Section>
 

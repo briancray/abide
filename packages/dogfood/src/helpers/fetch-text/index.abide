@@ -28,6 +28,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/fetchText.test.ts',
             from: ["test('a write is not asked again unless `retries` says so"],
         },
+        {
+            path: 'packages/abide/tests/fetchText.test.ts',
+            from: [
+                "test('a FetchFailed carries what fetch threw as its cause, and the wire carries none of it",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Read a company's filing as text">
@@ -47,7 +53,9 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Find out why a fetch gave up">
         <p>A <code>FetchFailed</code> carries the last status, or <code>null</code> where nothing
             answered, and a reason: <code>timeout</code>, <code>network</code>,
-            <code>status</code> or <code>shape</code>.</p>
+            <code>status</code> or <code>shape</code>. Where an attempt threw, its
+            <code>cause</code> is what <code>fetch</code> threw, a refused certificate's code
+            and all; it never leaves the server.</p>
         <Code language="ts" caption="server" code={`
             import { fetchText, isFailed, log } from '@abide/abide/server'
 
@@ -55,7 +63,7 @@ import Section from '#src/lib/Section.abide'
                 timeout: 2_000,
             })
             if (isFailed(filing))
-                log.warning('registry gave up', filing.data)
+                log.warning('registry gave up', filing.data, filing.cause)
         `} />
     </Section>
 

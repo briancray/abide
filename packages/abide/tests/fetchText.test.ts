@@ -4,6 +4,7 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { fetchJson, fetchText } from '#server'
+import { type Failed, problemOf } from '#shared/Failed.ts'
 
 // Every path the service answers, to how many times it was asked.
 const asked = new Map<string, number>()
@@ -81,6 +82,19 @@ test('a service nobody answers for is a FetchFailed for the network — 54.16', 
     await closed.stop(true)
     const answer = await fetchText(origin, { retries: 0 })
     expect(answer).toMatchObject({ data: { status: null, reason: 'network' } })
+})
+
+// THE REVERT: drop `cause`, and the refused connection is only 'network', its code lost.
+test('a FetchFailed carries what fetch threw as its cause, and the wire carries none of it — 54.34', async () => {
+    const closed = Bun.serve({ port: 0, fetch: () => new Response() })
+    const origin = closed.url.origin
+    await closed.stop(true)
+    const answer = await fetchText(origin, { retries: 0 })
+    const cause = (answer as Error).cause as { code?: string } | undefined
+    expect(cause?.code).toBe('ECONNREFUSED')
+    expect(
+        JSON.stringify(problemOf(answer as Failed<string, unknown>)),
+    ).not.toContain('ECONNREFUSED')
 })
 
 test("the caller's own abort is thrown, and nothing is asked again — 54.11", async () => {

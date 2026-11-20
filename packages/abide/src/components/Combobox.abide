@@ -13,6 +13,7 @@ const {
     label,
     value,
     Option,
+    Chip,
     placeholder,
     ...rest
 } = props<
@@ -34,10 +35,15 @@ const {
         key(item: Item): string
         /** An item's text: what an option shows by default, and what the input holds once it is picked. */
         label(item: Item): string
-        /** The item picked; bind it to read and set the pick. */
-        value?: Item | undefined
+        /**
+         * The item picked; bind it to read and set the pick. 51.61 — bound to an array, every item
+         * picked: a pick adds an item or takes it out again, and the list stays open.
+         */
+        value?: Item | undefined | readonly Item[]
         /** Renders an option's content in place of its label, handed the item. */
         Option?(props: { item: Item }): unknown
+        /** 51.62 — renders an item picked, where `value` is an array, handed the item and what takes it out. */
+        Chip?(props: { item: Item; remove: () => void }): unknown
         /** The input's placeholder. */
         placeholder?: string
     } & Omit<Attributes<'div'>, 'id'>
@@ -45,7 +51,17 @@ const {
 
 // What was typed since the last pick; the input shows the pick's label while nothing has been.
 let typed = reactive<string | undefined>(undefined)
-const query = reactive(() => typed ?? (value === undefined ? '' : label(value)))
+// 51.61 — the items picked, where `value` is an array; `undefined` where it holds one item.
+const picks = reactive((): readonly Item[] | undefined =>
+    Array.isArray(value) ? (value as readonly Item[]) : undefined,
+)
+const query = reactive(() => {
+    const text = typed
+    const many = picks
+    const one = value
+    if (text !== undefined) return text
+    return many !== undefined || one === undefined ? '' : label(one as Item)
+})
 let open = reactive(false)
 
 const NOTHING: readonly Item[] = []
@@ -79,22 +95,44 @@ function write(text: string) {
 }
 
 function pick(item: Item) {
-    value = item
     typed = undefined
-    open = false
+    const many = picks
+    if (many === undefined) {
+        value = item
+        open = false
+        return
+    }
+    const picked = key(item)
+    const kept = many.filter((each) => key(each) !== picked)
+    value = kept.length === many.length ? [...many, item] : kept
+}
+
+function remove(item: Item) {
+    const removed = key(item)
+    value = (picks ?? []).filter((each) => key(each) !== removed)
 }
 
 function dismiss() {
     if (open) open = false
     else {
         typed = undefined
-        value = undefined
+        // 51.61 — what is picked into an array is taken out one at a time, never by Escape.
+        if (picks === undefined) value = undefined
     }
 }
 
 function keydown(event: KeyboardEvent) {
     // Home and End move the caret in the text, not the active option.
     if (event.key === 'Home' || event.key === 'End') return
+    // 51.28 — an Escape with nothing to shut or clear is left to whatever holds the input: a
+    // `<dialog>` cancels only on an Escape no one prevented.
+    if (event.key === 'Escape' && !open && query === '') return
+    // 51.62 — Backspace in an empty input takes out the last item picked.
+    if (event.key === 'Backspace' && query === '' && picks !== undefined) {
+        const last = picks.at(-1)
+        if (last !== undefined) remove(last)
+        return
+    }
     if (!open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
         event.preventDefault()
         open = true
@@ -103,10 +141,30 @@ function keydown(event: KeyboardEvent) {
     list.keydown(event)
 }
 
-const pickedKey = reactive(() => (value === undefined ? undefined : key(value)))
+const pickedKeys = reactive(() => {
+    const many = picks
+    const one = value
+    const keys = new Set<string>()
+    if (many !== undefined) for (const each of many) keys.add(key(each))
+    else if (one !== undefined) keys.add(key(one as Item))
+    return keys
+})
 </script>
 
 <div {...rest} data-open={open ? '' : undefined} data-busy={open && busy(found) ? '' : undefined}>
+    {#if picks}
+        <span data-part="chips">
+            {#for item of picks by key(item)}
+                {#if Chip}
+                    <Chip item={item} remove={() => remove(item)} />
+                {:else}
+                    <span data-part="chip">{label(item)}<button type="button"
+                            data-part="remove" aria-label="Remove {label(item)}"
+                            onclick={() => remove(item)}>×</button></span>
+                {/if}
+            {/for}
+        </span>
+    {/if}
     <input
         id={id}
         type="text"
@@ -125,7 +183,8 @@ const pickedKey = reactive(() => (value === undefined ? undefined : key(value)))
         }}
     >
     {#if open}
-        <ul id={`${id}-listbox`} role="listbox" data-part="listbox" onmousedown={(event) => event.preventDefault()}>
+        <ul id={`${id}-listbox`} role="listbox" data-part="listbox"
+            aria-multiselectable={picks ? 'true' : undefined} onmousedown={(event) => event.preventDefault()}>
             {#for item of found by key(item)}
                 <li
                     id={list.idOf(key(item))}
@@ -133,7 +192,7 @@ const pickedKey = reactive(() => (value === undefined ? undefined : key(value)))
                     aria-selected={list.active() === key(item) ? 'true' : 'false'}
                     data-part="option"
                     data-active={list.active() === key(item) ? '' : undefined}
-                    data-selected={pickedKey === key(item) ? '' : undefined}
+                    data-selected={pickedKeys.has(key(item)) ? '' : undefined}
                     onpointermove={() => list.activate(key(item))}
                     onclick={() => pick(item)}
                 >

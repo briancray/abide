@@ -23,6 +23,7 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 
 <script>
 import { onMenu, url, watch } from '@abide/abide'
+import Tooltips from '@abide/abide/Tooltips.abide'
 
 import DocsNav from '#src/lib/DocsNav.abide'
 import { ASK_ITEM, MENUS } from '#src/lib/nativeMenus.ts'
@@ -72,5 +73,6 @@ watch(() =>
 <SiteBar />
 <DocsNav />
 <slot />
+<Tooltips class="m-0 w-max max-w-60 rounded-md border border-rule bg-raised px-3 py-2 text-chrome text-ink shadow-sm" />
     </body>
 </html>

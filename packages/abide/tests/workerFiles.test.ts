@@ -9,6 +9,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
+import { job } from '#server'
 import { serveCompilation } from '#server/abideModules.ts'
 import { workerExports } from '#server/workerExports.ts'
 import { reactive } from '#shared'
@@ -218,6 +219,32 @@ test('an argument no thread can be handed rejects its call — 55.2', async () =
 test('a worker file the thread imports is the module itself, run in that thread — 55.10', async () => {
     const [own, imported] = await thread.threads()
     expect(imported).toBe(own as number)
+})
+
+// A job's `run` is any function handed the job's signal, and a worker export is one: each run is a
+// thread of its own, and `stop` aborts the run in it.
+test('a job whose run is a worker export runs it off the main thread, and stopping it aborts it there — 54.26, 55.6', async () => {
+    let onMain: boolean | undefined
+    const offloaded = job('offloaded', {
+        every: 3_600_000,
+        run: async () => {
+            onMain = await thread.onMainThread()
+        },
+    })
+    await offloaded.runNow()
+    expect(onMain).toBe(false)
+    await offloaded.stop()
+    let answered: string | undefined
+    const waiting = job('waiting', {
+        every: 3_600_000,
+        run: async (signal) => {
+            answered = await thread.untilAborted(signal)
+        },
+    })
+    const running = waiting.runNow()
+    await waiting.stop()
+    await running
+    expect(answered).toBe('aborted')
 })
 
 test('the app stopping aborts a call in flight — 55.8, 37.28', async () => {

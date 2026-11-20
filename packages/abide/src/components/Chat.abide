@@ -7,8 +7,8 @@
 // `transcript`, `turn` (`data-speaker`, `data-streaming`, `data-stop`, `data-failed`), `speaker`,
 // `text`, `image`, `tool` (`data-status`) holding `tool-name`, `tool-input` and `tool-result`,
 // `permission` (`data-answer`) holding `permission-name`, `permission-input`, `allow` and `deny`,
-// `failure`, and `composer` (`data-dragging`) holding `attachments`, `attachment`, `remove`, `input`,
-// `send` and `stop`.
+// `failure`, `actions`, and `composer` (`data-dragging`) holding `attachments`, `attachment`,
+// `remove`, `queued` holding `cancel`, `input`, `send` and `stop`.
 import type {
     AssistantEvent,
     AssistantMessage,
@@ -26,13 +26,17 @@ import { messages } from '#shared/transcript/messages.ts'
 import { turn as turnOf } from '#shared/transcript/turn.ts'
 
 type Image = Extract<AssistantTurnPart, { type: 'image' }>
-type Tool = Extract<AssistantTurnPart, { type: 'tool' }>
+type ToolPart = Extract<AssistantTurnPart, { type: 'tool' }>
+type TextPart = Extract<AssistantTurnPart, { type: 'text' }>
 type Permission = Extract<AssistantTurnPart, { type: 'permission' }>
 
 const {
     ask,
     permit,
     Text,
+    Tool,
+    Actions,
+    turns = [],
     placeholder = 'Ask anything',
     label = 'Message',
     disabled = false,
@@ -53,10 +57,27 @@ const {
          */
         permit?: (answer: { id: string; allow: boolean }) => unknown
         /**
-         * Renders the assistant's words, handed `text` as it grows: a markdown component, say. Plain
-         * text without it.
+         * Renders the assistant's words, handed `text` as it grows, the part it is and the turn it
+         * is in: a markdown component, say. Plain text without it.
          */
-        Text?(props: { text: string }): unknown
+        Text?(props: {
+            text: string
+            part: TextPart
+            turn: AssistantTurn
+        }): unknown
+        /** 53.47 — renders a tool call, handed the part and the turn it is in, in place of its name, input and result. */
+        Tool?(props: { part: ToolPart; turn: AssistantTurn }): unknown
+        /**
+         * 53.48 — renders under each answer that has ended, handed the turn, its place in `turns`, and
+         * `retry`, which asks the question it answered again in its place.
+         */
+        Actions?(props: {
+            turn: AssistantTurn
+            index: number
+            retry: () => void
+        }): unknown
+        /** 53.49 — the conversation: bind it to load one and to keep it as it grows. Empty by default. */
+        turns?: AssistantTurn[]
         /** The composer's placeholder. `Ask anything` by default. */
         placeholder?: string
         /** The composer's accessible name. `Message` by default. */
@@ -66,22 +87,44 @@ const {
     } & Attributes<'section'>
 >()
 
-let turns = reactive<AssistantTurn[]>([])
 let draft = reactive('')
+// 53.34 — what was sent while an answer streamed, sent once it ends unless it is cancelled.
+let queued = reactive<AssistantTurnPart[] | undefined>(undefined)
 let attached = reactive<Image[]>([])
 let streaming = reactive(false)
 // The answer in flight, which Stop aborts.
 let asking: AbortController | undefined
 
-async function send() {
+function send() {
     const text = draft.trim()
-    if (streaming || disabled || (text === '' && attached.length === 0)) return
+    if (disabled || (text === '' && attached.length === 0)) return
     const parts: AssistantTurnPart[] = [...attached]
     if (text !== '') parts.push({ type: 'text', text })
     draft = ''
     attached = []
+    if (streaming) {
+        queued = [...(queued ?? []), ...parts]
+        return
+    }
     turns.patch((all) => {
-        all.push(turnOf('user', parts), turnOf('assistant'))
+        all.push(turnOf('user', parts))
+    })
+    answerFrom()
+}
+
+// 53.48 — the question an answer answered, asked again in its place.
+function retry(index: number) {
+    if (streaming) return
+    turns.patch((all) => {
+        all.splice(index)
+    })
+    answerFrom()
+}
+
+// Asks for an answer to the conversation as it stands, and sends what was queued once it ends.
+async function answerFrom() {
+    turns.patch((all) => {
+        all.push(turnOf('assistant'))
     })
     const controller = new AbortController()
     asking = controller
@@ -105,6 +148,13 @@ async function send() {
         streaming = false
         asking = undefined
     }
+    const next = queued
+    if (next === undefined) return
+    queued = undefined
+    turns.patch((all) => {
+        all.push(turnOf('user', next))
+    })
+    answerFrom()
 }
 
 // 53.35, 53.36 — an answer Stop ended is `stopped`; one that threw carries the failure's message.
@@ -150,7 +200,7 @@ async function answer(id: string, allow: boolean) {
     await permit?.({ id, allow })
 }
 
-const statusOf = (part: Tool) =>
+const statusOf = (part: ToolPart) =>
     part.result === undefined ? 'running' : part.failed ? 'failed' : 'done'
 const answerOf = (part: Permission) =>
     part.allowed === undefined ? 'waiting' : part.allowed ? 'allowed' : 'denied'
@@ -170,12 +220,14 @@ const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
                 {#for part of turn.parts by part}
                     {#if part.type === 'text'}
                         {#if Text && turn.role === 'assistant'}
-                            <div data-part="text"><Text text={part.text} /></div>
+                            <div data-part="text"><Text text={part.text} part={part} turn={turn} /></div>
                         {:else}
                             <p data-part="text">{part.text}</p>
                         {/if}
                     {:else if part.type === 'image'}
                         <img data-part="image" src={sourceOf(part)} alt="an image you sent">
+                    {:else if part.type === 'tool' && Tool}
+                        <div data-part="tool" data-status={statusOf(part)}><Tool part={part} turn={turn} /></div>
                     {:else if part.type === 'tool'}
                         <details data-part="tool" data-status={statusOf(part)}>
                             <summary data-part="tool-name">{part.name}</summary>
@@ -200,6 +252,11 @@ const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
                 {#if turn.failed !== undefined}
                     <p data-part="failure" role="alert">{turn.failed}</p>
                 {/if}
+                {#if Actions &&
+                    turn.role === 'assistant' &&
+                    !(streaming && index === turns.length - 1)}
+                    <div data-part="actions"><Actions turn={turn} index={index} retry={() => retry(index)} /></div>
+                {/if}
             </li>
         {/for}
     </ol>
@@ -218,15 +275,22 @@ const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
                 {/for}
             </div>
         {/if}
+        {#if queued}
+            <div data-part="queued">
+                <span>{queued
+                    .map((part) => (part.type === 'text' ? part.text : 'an image'))
+                    .join(' ')}</span>
+                <button type="button" data-part="cancel" onclick={() => (queued = undefined)}>Cancel</button>
+            </div>
+        {/if}
         <textarea data-part="input" aria-label={label}
             placeholder={placeholder} disabled={disabled} bind:value={draft}
             onkeydown={keys}></textarea>
         {#if streaming}
             <button type="button" data-part="stop" onclick={stop}>Stop</button>
-        {:else}
-            <button type="submit" data-part="send"
-                disabled={disabled || (draft.trim() === '' && attached.length === 0)}>
-                Send</button>
         {/if}
+        <button type="submit" data-part="send"
+            disabled={disabled || (draft.trim() === '' && attached.length === 0)}>
+            {streaming ? 'Queue' : 'Send'}</button>
     </form>
 </section>

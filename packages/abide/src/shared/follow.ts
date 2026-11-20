@@ -4,8 +4,9 @@
 import { place, type Placement, type PlaceOptions } from './place.ts'
 
 /**
- * Places `floating` against `anchor` now, and again in the frame after anything scrolls or the window
- * resizes, until the stop it hands back is called. `placed` is told each placement.
+ * Places `floating` against `anchor` now, and again in the frame after anything scrolls, the window
+ * resizes, or either of the two changes size, until the stop it hands back is called. `placed` is
+ * told each placement.
  */
 export function follow(
     anchor: Element,
@@ -30,7 +31,13 @@ export function follow(
     update()
     addEventListener('scroll', scheduled, { capture: true, passive: true })
     addEventListener('resize', scheduled, { passive: true })
+    // 50.26 — a hint whose text lands after it opens, or an anchor that reflows, moves nothing a
+    // scroll or a resize would report.
+    const resized = new ResizeObserver(scheduled)
+    resized.observe(anchor)
+    resized.observe(floating)
     return () => {
+        resized.disconnect()
         cancelAnimationFrame(frame)
         frame = 0
         removeEventListener('scroll', scheduled, { capture: true })

@@ -48,9 +48,12 @@ export { type Failed, isFailed } from './Failed.ts'
 export { type Hotkey, hotkeys } from './hotkeys.ts'
 export { isEditableTarget } from './isEditableTarget.ts'
 export { keyLabel } from './keyLabel.ts'
+export { type Menu, type MenuOptions, menu } from './menu.ts'
 // 52.1-52.7 — numbers, money and time as words, the same on both sides.
 export * as format from './format/index.ts'
 // 25 — the account of the app.
+export type { FetchFailed } from './fetchFailed.ts'
+export { handle } from './handle.ts'
 export { type Health, health } from './health.ts'
 // 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.
 export { imageFiles, imagePiece } from './imagePiece.ts'
@@ -127,7 +130,10 @@ export { refuse } from './refuse.ts'
 // 44.51 — what a conversation's calls to one handler answered.
 export { resultsOf } from './resultsOf.ts'
 export { route } from './route.ts'
+export { type Tabs, type TabsOptions, tabs } from './tabs.ts'
 export * as transcript from './transcript/index.ts'
+export { type Hint, type TooltipOptions } from './tooltip/tips.ts'
+export { tooltip } from './tooltip/tooltip.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 // 8.22, 8.34, 8.37 — the `Store`s, as one namespace: `store.web`, `store.indexedDB`, `store.cookies`.
 // `@abide/abide/server` exports its own over this one, with the two a server alone has.

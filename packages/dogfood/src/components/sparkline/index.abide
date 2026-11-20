@@ -13,6 +13,12 @@ import Section from '#src/lib/Section.abide'
                 'test("a rep\'s sparkline carries its trend, and redraws in place"',
             ],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/RepTrends.test.ts',
+            from: [
+                'test("a rep\'s deals closed draw as bars up from zero, as long as the count"',
+            ],
+        },
     ]}
 >
     <Section level={3} title="Show each rep's trend in a table cell">
@@ -58,6 +64,23 @@ import Section from '#src/lib/Section.abide'
                 label="{rep.name}'s won revenue"
                 class="h-6 w-24 text-muted data-[trend=up]:text-good
                 data-[trend=down]:text-bad"
+            />
+        `} />
+    </Section>
+
+    <Section level={3} title="Show a count as bars up from zero">
+        <p><code>kind="bar"</code> draws each value as a bar from zero, so a rep closing one deal
+            a month reads as a steady row rather than a swing.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Sparkline from '@abide/abide/Sparkline.abide'
+            </script>
+
+            <Sparkline
+                kind="bar"
+                values={[2, 3, 3, 4, 5, 6]}
+                label="Deals closed, 6 months"
+                class="h-6 w-24"
             />
         `} />
     </Section>

@@ -4601,6 +4601,8 @@ credential and no principal, through the app the executable booted last.
 44.101 `assistant` called outside a request, or in the run of a `global` value, where 44.100 does not
 run it, MUST run its conversation carrying no asker's credentials, and MUST throw where given `mcp`.
 
+44.102 `pairing`'s `retry` MUST read the pairing again, over a read in flight.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker
@@ -4955,40 +4957,62 @@ axes, its start edge kept where it does not fit.
 
 50.22 `place` MUST read layout alone, and MUST NOT write to the document.
 
-50.23 A `Tooltip` MUST describe the element written immediately before it, through that element's
-`aria-describedby`.
+50.23 `tooltip` MUST describe the element it is bound to by its hint: text through that element's
+`aria-description`, and a component through its `aria-describedby` naming the `Tooltips` showing it,
+for as long as it shows.
 
-50.24 A `Tooltip` MUST open once a pointer has rested on its anchor for `delay` milliseconds, and
-at once when its anchor takes focus.
+50.24 `tooltip` MUST open its hint once a pointer has rested on its element for `delay`
+milliseconds, and at once when its element takes focus that matches `:focus-visible`, and MUST NOT
+open it for focus that does not.
 
-50.25 A `Tooltip` MUST close when the pointer leaves its anchor, when its anchor loses focus, and
-on Escape.
+50.25 `tooltip` MUST close its hint when the pointer leaves its element, when its element loses
+focus, and on Escape.
 
-50.26 A `Tooltip` and a `Menu` MUST open in the top layer as a popover placed by `place` against
-their anchor, and MUST be placed again while open whenever anything scrolls or the window resizes.
+50.26 A `Tooltips` showing a hint and the menu of a `menu` MUST open in the top layer as a popover placed by
+`place` against their anchor, and MUST be placed again while open whenever anything scrolls, the
+window resizes, or the anchor or the popover changes size.
 
-50.27 A `Tooltip` and a `Menu` MUST write the side `place` took as `data-side`, and the `arrow` of
-its `Placement` as the `--arrow-offset` custom property.
+50.27 A `Tooltips` showing a hint and the menu of a `menu` MUST write the side `place` took as `data-side`, and
+the `arrow` of its `Placement` as the `--arrow-offset` custom property.
 
-50.28 A `Menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
+50.28 A `menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
 opened it.
 
-50.29 The menu items of a `Menu` MUST be the descendants of its menu carrying `role="menuitem"` that
-are not disabled.
+50.29 The menu items of a `menu` MUST be the descendants of its menu carrying `role="menuitem"`,
+`role="menuitemcheckbox"` or `role="menuitemradio"` that are not disabled.
 
-50.30 In an open `Menu`, ArrowDown and ArrowUp MUST move focus to the next and the previous menu
+50.30 In an open `menu`, ArrowDown and ArrowUp MUST move focus to the next and the previous menu
 item, wrapping, and Home and End to the first and the last.
 
-50.31 Escape in an open `Menu`, and a click on one of its menu items, MUST close it and return
-focus to its trigger.
+50.31 Escape in an open `menu`, and a click on one of its items carrying `role="menuitem"`, MUST
+close it and return focus to its trigger.
 
-50.32 A press on the trigger of an open `Menu` MUST close it, and MUST NOT open it again.
+50.32 A press on the trigger of an open `menu` MUST close it, and MUST NOT open it again.
 
 50.33 `prompts.prompt` MUST settle with the text in its input where its prompt closed by the
 confirming button, and `undefined` where it closed any other way.
 
 50.34 `Prompts` MUST show an input for a prompt asked by `prompts.prompt`, starting from its
 `value`, and `''` where it has none.
+
+50.35 `place` MUST keep `arrow` at least `arrowInset` pixels from each end of the floating
+element's facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
+
+50.36 One hint MUST show at a time, in the last `Tooltips` bound of those standing, and a hint
+opening with none standing MUST warn once on `abide:tooltip`.
+
+50.37 A `menu` MUST write every opening and every closing of its menu, however it happened, to its
+`open`, calling `onopen` or `onclose` after, and MUST open and close its menu as `open` is written.
+
+50.38 A `menu`'s parts MUST carry every attribute its trigger and its menu need as the server writes
+them: the menu `popover="auto"`, `role="menu"` and an `id`, named by its trigger's `aria-controls`,
+and the trigger `aria-haspopup="menu"` and the `id` the menu's `aria-labelledby` names.
+
+50.39 A click on a menu item carrying `role="menuitemcheckbox"` or `role="menuitemradio"` MUST leave
+its `menu` open.
+
+50.40 A printable key in an open `menu` MUST move focus to the next menu item whose text starts with
+the keys typed within 500 milliseconds of each other.
 
 50.41 `Toasts` MUST write each attribute a notice's `attributes` names onto that notice's element,
 under its `data-part` and `data-tone`.
@@ -5072,7 +5096,9 @@ on Home and End.
 
 51.27 `Combobox` MUST shut its list on Escape where the list is open.
 
-51.28 `Combobox` MUST clear `value` and the typed text on Escape where its list is shut.
+51.28 `Combobox` MUST clear `value` and the typed text on Escape where its list is shut and its
+input holds text, and MUST NOT prevent the default of an Escape where its list is shut and its
+input is empty.
 
 51.29 `Combobox` MUST shut its list when its input loses focus.
 
@@ -5090,26 +5116,28 @@ of `search`.
 
 51.35 `Combobox` MUST write `data-selected` on the option of `value`.
 
-51.36 `Tabs` MUST select the first of `tabs` where `selected` names none of them.
+51.36 `tabs` MUST select the first of `keys` where `selected` names none of them.
 
-51.37 `Tabs` MUST select a tab that is clicked.
+51.37 `tabs` MUST select a tab that is clicked, writing its key to `selected`.
 
-51.38 `Tabs` MUST select the next tab on ArrowRight and the previous on ArrowLeft, going round the
+51.38 `tabs` MUST select the next tab on ArrowRight and the previous on ArrowLeft, going round the
 ends.
 
-51.39 `Tabs` MUST select the first tab on Home, and the last on End.
+51.39 `tabs` MUST select the first tab on Home, and the last on End.
 
-51.40 `Tabs` MUST move focus to a tab a key selects.
+51.40 `tabs` MUST move focus to a tab a key selects.
 
-51.41 `Tabs` MUST give the selected tab a `tabindex` of `0`, and every other tab a `tabindex` of
+51.41 `tabs` MUST give the selected tab a `tabindex` of `0`, and every other tab a `tabindex` of
 `-1`.
 
-51.42 `Tabs` MUST render its children in one panel, labelled by the selected tab.
+51.42 A panel `tabs` hands back for a key MUST be hidden while another tab is selected and MUST keep
+what it holds, and a panel for no key MUST take the id the selected tab's `aria-controls` names and
+be labelled by that tab.
 
-51.43 `Tabs` MUST render a tab's content through `Tab` where it is given, as the tab's `label` where
-`label` is given, and as the tab's key otherwise.
+51.43 `tabs`'s parts MUST carry every attribute its tabs and panels need as the server writes them,
+`role`, `aria-selected`, `aria-controls` and `aria-labelledby` included.
 
-51.44 `Tabs` MUST write `data-selected` on the selected tab.
+51.44 `tabs` MUST write `data-selected` on the selected tab.
 
 51.45 `sortRows` MUST order `rows` by each row's value for the column `sort` names, in the direction
 `sort` names.
@@ -5133,8 +5161,9 @@ the row's field its `key` names otherwise.
 51.52 `SortableTable` MUST render each header's `label` in a button that sorts by its column, save a
 `Column` whose `sortable` is `false`.
 
-51.53 `SortableTable` MUST sort descending by a column whose button is pressed while it is sorted
-ascending by that column, and ascending otherwise.
+51.53 `SortableTable` MUST turn the direction round on a column whose button is pressed while it is
+sorted by that column, and MUST otherwise sort by the column in its `firstDirection`, ascending where
+it has none.
 
 51.54 `SortableTable` MUST write the direction of `sort` as `aria-sort` on the sorted column's
 header, and on no other header.
@@ -5152,6 +5181,16 @@ column has one, and otherwise the value's own text, or none for a blank value.
 
 51.59 `SortableTable` MUST write a `Column`'s `align` as `data-align` on its header and on each of
 its cells.
+
+51.60 `SortableTable` MUST spread what `rowAttributes` hands back for a row onto that row's `<tr>`.
+
+51.61 A `Combobox` whose `value` is an array MUST add an item picked to it, or take the item out
+where it holds it already, MUST keep its list open and clear the typed text on a pick, MUST write
+`data-selected` on the option of every item it holds, and MUST NOT clear it on Escape.
+
+51.62 A `Combobox` whose `value` is an array MUST render each item it holds through `Chip` where it is
+given, handed the item and what takes it out, and as its `label` beside a remove button otherwise,
+and Backspace in its empty input MUST take out the last item it holds.
 
 51.63 `SortableTable` given `Detail` MUST render, after each row, a row of its own whose
 `data-part` is `detail` and whose one cell spans every column and holds `Detail` handed that row.
@@ -5235,6 +5274,12 @@ series' value there, while a pointer is over it.
 
 52.31 `Sparkline` MUST carry `data-trend` on its root, `up`, `down` or `flat` by its last present value
 against its first.
+
+52.32 `format.relative` MUST write in the `style` its caller passes, and in `long` where it passes
+none.
+
+52.33 `Sparkline` given `kind: 'bar'` MUST draw each present value as a bar from zero, each in a
+band of equal width, with zero on its scale, and MUST draw no line, area or dot.
 
 52.34 `LineChart` and `Sparkline` declaring `zero` MUST take zero into the range of their values, and
 MUST draw a series whose every present value is zero along the bottom of that range.
@@ -5355,8 +5400,9 @@ question included, and with a `signal` of its own.
 53.33 `Chat`'s composer MUST send on Enter, and MUST NOT on Shift+Enter or on an Enter an input
 method is composing.
 
-53.34 `Chat` MUST NOT send while an answer streams, while `disabled` is `true`, or with neither words
-nor an image to send.
+53.34 `Chat` MUST NOT send while `disabled` is `true`, or with neither words nor an image to send,
+and what it is sent while an answer streams MUST be queued, shown in its composer until it is
+cancelled or the answer ends, and asked once the answer ends.
 
 53.35 `Chat`'s Stop MUST abort the `signal` it handed `ask`, keeping what arrived and setting the
 answer's `stop` to `stopped`.
@@ -5370,18 +5416,46 @@ image part `imagePiece` draws.
 53.38 `Chat` MUST answer a permission part through `permit` with the part's id and the visitor's
 answer, and MUST disable the part's buttons where `permit` is absent or the part is answered.
 
-53.39 `Chat` MUST render an assistant's text part through `Text` where one is given, and as text
-where none is.
+53.39 `Chat` MUST render an assistant's text part through `Text` where one is given, handed the
+text, the part and its turn, and as text where none is.
 
 53.40 `Chat`'s transcript MUST be bound to `followBottom`.
 
 53.41 `Chat`'s transcript MUST carry `role="log"` and `aria-live="polite"`.
 
-53.42 `Pairing` MUST write its step as `data-step`: `connecting`, `unavailable`, `click`, `waiting`,
-`install` or `paired`.
+53.42 `Pairing` MUST write its step as `data-step`: `connecting`, `slow`, `offline`, `unavailable`,
+`click`, `waiting`, `install` or `paired`.
 
 53.43 `Pairing` MUST render its children once `pairing` reports the bridge paired, and MUST NOT
 before.
+
+53.44 `copyText` given `selector` MUST copy on a click inside its element on an element matching
+`selector`, handing that element to its function and writing `data-copied` on it, and MUST copy
+nothing for a click on no such element.
+
+53.45 `copyText` MUST call `oncopied` once a click's copy has landed or failed, with whether it
+landed and the element clicked.
+
+53.46 `dropzone` MUST hand `onreject` the files a drop or a paste carries that it does not take,
+`accept` refusing them or `multiple` being `false`, and MUST NOT call it where it takes every one.
+
+53.47 `Chat` MUST render a tool part through `Tool` where one is given, handed the part and its
+turn, and as its name, its input and its result where none is.
+
+53.48 `Chat` MUST render `Actions` under each assistant turn that is not streaming, where it is
+given, handed the turn, its index and a `retry` that drops the turn and every one after it and asks
+again for an answer to what is left.
+
+53.49 `Chat` MUST show the turns `turns` holds, and MUST write every turn it adds and every part it
+folds to `turns`.
+
+53.50 `Pairing` MUST take the step `slow` once it has been connecting for `slowAfter` milliseconds,
+offering a retry that calls `pairing`'s `retry`.
+
+53.51 `Pairing` MUST take the step `offline` while `online` is false, whatever its status.
+
+53.52 `Pairing` MUST render a step's message through `Message` where one is given, handed the
+step, and in its own words where none is.
 
 53.53 `followBottom` MUST keep the element it is bound to scrolled to its bottom as what the element
 holds changes, save while the reader has scrolled up from that bottom.
@@ -5461,7 +5535,7 @@ under a minute, and every minute otherwise, from a first look made as 7.30 makes
 first run, and MUST stop looking where 7.26 stops a poll.
 
 54.19 A look MUST start a run of a `job` where no run has ended, or where `every` milliseconds have
-passed since the last one ended.
+passed since the last one ended, or since it started under 54.29.
 
 54.20 `runNow`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second.
 
@@ -5484,6 +5558,28 @@ throwing.
 
 54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
 run, from a look or from `runNow`, and MUST hold `nextRun` null.
+
+54.28 `requireRole` given `status: 404` MUST answer an authenticated caller it does not admit with
+the refusal 15.7 answers an address nothing serves, naming the path and method of the request.
+
+54.29 A `job` given `from: 'start'` MUST measure `every` from when its last run started, and its
+looks MUST be spaced from when each started rather than from the end of the run it started.
+
+54.30 `handle` MUST answer a 2xx `Response` with its body read as its `content-type` says: JSON, or
+a type ending `+json`, as its parsed value, and a type 54.32 and 54.33 do not name as a `Blob`.
+
+54.31 `handle` MUST answer a `Response` outside 2xx with a `FetchFailed` carrying its status, the
+reason `status`, and its body canceled, and JSON that does not parse with one for the reason
+`shape` whose `cause` is what the parse threw.
+
+54.32 `handle` MUST answer a JSON Lines or event stream `Response` with an async iterable of its
+chunks, each yielded as the frame carrying it completes.
+
+54.33 `handle` MUST answer a `text/` type, and a `Response` naming no type, as its text, and a 204 or
+a `Response` with no body as `undefined`.
+
+54.34 A `FetchFailed` that `fetchJson` or `fetchText` settles to for a thrown attempt MUST carry what
+was thrown as its `cause`, and Problem Details MUST NOT carry a `cause`.
 
 # 55. Worker files
 

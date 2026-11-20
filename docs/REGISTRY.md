@@ -460,7 +460,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `pairing` | `() => { status: Reactive<BridgeStatus \| undefined, BridgeStatus \| undefined, Failed<'HttpError', undefined>>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; copyInstall: () => Promise<void>; stop: () => void; [Symbol.dispose]: () => void }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.69, 44.70, 44.71, 44.72, 44.73 |
+| `pairing` | `() => { status: Reactive<BridgeStatus \| undefined, BridgeStatus \| undefined, Failed<'HttpError', undefined>>; step: Reactive<'click' \| 'waiting' \| 'install'>; copied: Reactive<boolean>; start: () => void; retry: () => void; copyInstall: () => Promise<void>; stop: () => void; [Symbol.dispose]: () => void }` | This browser's pairing with a Claude Code bridge, and the click that pairs one. | 44.69, 44.70, 44.71, 44.72, 44.73, 44.102 |
 
 ## `transcript`
 
@@ -708,7 +708,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36 |
 | `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36 |
 | `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
-| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6 |
+| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
 | `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
 
 ## `markdown`
@@ -753,13 +753,13 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20 |
+| `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean; onreject?: (files: File[], event: DragEvent \| ClipboardEvent) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20, 53.46 |
 
 ## `copyText`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copyText` | `(text: string \| (() => string), options?: { copiedFor?: number }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text to the clipboard on a click of an element. | 32.9, 53.21, 53.22, 53.23 |
+| `copyText` | `(text: string \| ((clicked: Element) => string), options?: { copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45 |
 
 ## `signedIn`
 
@@ -771,7 +771,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.9, 54.2, 54.3, 54.4 |
+| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.7, 15.9, 54.2, 54.3, 54.4, 54.28 |
 
 ## `readOnly`
 
@@ -783,21 +783,27 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17 |
+| `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
 | `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.12, 54.15, 54.17 |
-| `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up settles to. | 15.9, 54.14, 54.16, 54.17 |
+| `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up, or a `Response` `handle` read outside 2xx, settles to. | 15.9, 54.14, 54.16, 54.17, 54.31, 54.34 |
+
+## `handle`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `handle` | `(response: Response) => Promise<unknown \| FetchFailed>` | A `Response` the app fetched itself, read as its `content-type` says: `fetch(url).then(handle)`. | 54.30, 54.31, 54.32, 54.33 |
 
 ## `fetchText`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `fetchText` | `(url: string \| URL, options?: FetchOptions<string>) => Promise<string \| FetchFailed>` | Another service's answer as text, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17 |
+| `fetchText` | `(url: string \| URL, options?: FetchOptions<string>) => Promise<string \| FetchFailed>` | Another service's answer as text, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
 
 ## `job`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `(name: string, options: { every: number \| (() => number); run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26 |
+| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29 |
 | `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
 | `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
 | `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
@@ -809,7 +815,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `place` | `(anchor: Element, floating: Element, options?: PlaceOptions) => Placement` | Where a floating element sits beside its anchor, in viewport pixels. | 50.19, 50.20, 50.21, 50.22 |
-| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number }` | The side tried first, the edge lined up with, the gap to the anchor and the gap kept to the viewport. | 50.19, 50.20, 50.21 |
+| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number; arrowInset?: number }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners. | 50.19, 50.20, 50.21, 50.35 |
 | `Placement` | `{ x: number; y: number; side: Side; arrow: number }` | The left and top edges `place` chose, the side it took, and where along the facing edge the anchor's middle falls. | 50.19, 50.27 |
 | `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
@@ -826,7 +832,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `sortRows` | `<Row>(rows: readonly Row[], columns: readonly Column<Row>[], sort: Sort \| undefined) => readonly Row[]` | The rows in the order a `Sort` names. | 51.45, 51.46, 51.47, 51.48, 51.49, 51.50 |
-| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.49, 51.52, 51.58, 51.59 |
+| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean; firstDirection?: 'ascending' \| 'descending' }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.49, 51.52, 51.53, 51.58, 51.59 |
 | `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.45, 51.53, 51.54, 51.55 |
 
 ## `chart`
@@ -882,35 +888,47 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
 | `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.41 |
 
-## `Tooltip`
+## `tooltip`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Tooltip` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; delay?: number } & Omit<Attributes<'span'>, 'popover' \| 'role'>` | A hint for the element written just before it, whose children are the hint, imported from `@abide/abide/Tooltip.abide`. | 50.23, 50.24, 50.25, 50.26, 50.27, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+| `tooltip` | `(hint: Hint, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a hint for the element it is bound to, shown by the page's `Tooltips`. | 32.9, 50.23, 50.24, 50.25, 50.36 |
+| `Hint` | `string \| ((props: Record<string, never>) => unknown)` | What a hint shows: text, or a component. | 50.23 |
+| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number }` | Where a hint opens against its anchor, and how long a pointer rests first. | 50.24, 50.26, 50.35 |
 
-## `Menu`
+## `Tooltips`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Menu` | `{ label: string; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number } & Attributes<'div'>` | A button opening a list of actions, whose children are the menu items, imported from `@abide/abide/Menu.abide`. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7 |
+| `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.23, 50.26, 50.27, 50.35, 50.36, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+
+## `menu`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40 |
+| `MenuOptions` | `{ open?: Reactive<boolean>; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, and what hears it open and close. | 50.35, 50.37 |
+| `Menu` | `{ readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38 |
 
 ## `Combobox`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item; Option?: (props: { item: Item }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35 |
+| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item \| readonly Item[]; Option?: (props: { item: Item }) => unknown; Chip?: (props: { item: Item; remove: () => void }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62 |
 
-## `Tabs`
+## `tabs`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Tabs` | `<Item>{ id: string; tabs: readonly Item[]; key: (item: Item) => string; label?: (item: Item) => string; selected?: string; Tab?: (props: { item: Item }) => unknown } & Attributes<'div'>` | A row of tabs over one panel holding the selected tab's content, the component `@abide/abide/Tabs.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44 |
+| `tabs` | `(options: TabsOptions) => Tabs` | WAI-ARIA's tabs as parts an app spreads onto elements of its own: a tab list, a tab per key, and a panel. | 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44 |
+| `TabsOptions` | `{ keys: readonly string[] \| (() => readonly string[]); selected?: Reactive<string \| undefined> }` | The tabs' keys in order, and the key of the one selected. | 51.36, 51.37 |
+| `Tabs` | `{ readonly list: Record<string, unknown>; tab(key: string): Record<string, unknown>; panel(key?: string): Record<string, unknown>; readonly current: Reactive<string \| undefined> }` | The list's part, a tab's, a panel's, and the key of the tab selected. | 32.11, 51.36, 51.42, 51.43 |
 
 ## `SortableTable`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.63 |
+| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown; rowAttributes?: (row: Row) => Attributes<'tr'> } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60, 51.63 |
 
 ## `Markdown`
 
@@ -928,19 +946,19 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.34 |
+| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean; kind?: 'line' \| 'bar' } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line, or as bars, with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.33, 52.34 |
 
 ## `Chat`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Chat` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; Text?: (props: { text: string }) => unknown; placeholder?: string; label?: string; disabled?: boolean } & Attributes<'section'>` | The shipped component showing a conversation with an assistant handler as it streams, above a composer. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.41 |
+| `Chat` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; Text?: (props: { text: string; part: AssistantTurnPart; turn: AssistantTurn }) => unknown; Tool?: (props: { part: AssistantTurnPart; turn: AssistantTurn }) => unknown; Actions?: (props: { turn: AssistantTurn; index: number; retry: () => void }) => unknown; turns?: AssistantTurn[]; placeholder?: string; label?: string; disabled?: boolean } & Attributes<'section'>` | The shipped component showing a conversation with an assistant handler as it streams, above a composer. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.41, 53.47, 53.48, 53.49 |
 
 ## `Pairing`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Pairing` | `Attributes<'section'>` | The shipped component pairing the visitor's Claude Code with the page, around what it renders once paired. | 44.69, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.42, 53.43 |
+| `Pairing` | `{ slowAfter?: number; Message?: (props: { step: 'connecting' \| 'slow' \| 'offline' \| 'unavailable' \| 'click' \| 'waiting' \| 'install' \| 'paired' }) => unknown } & Attributes<'section'>` | The shipped component pairing the visitor's Claude Code with the page, around what it renders once paired. | 44.69, 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 53.42, 53.43, 53.50, 53.51, 53.52 |
 
 # `.abide` files
 

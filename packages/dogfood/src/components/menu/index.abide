@@ -15,21 +15,40 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
             from: ["test('a pick moves the deal and hands focus back'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
+            from: [
+                "test('a checkbox item changes its state and leaves the menu open'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
+            from: [
+                "test('typing moves focus to the item whose text starts with it'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/menu.test.ts',
+            from: ["test('open written by the app opens and closes the menu"],
+        },
     ]}
 >
     <Section level={3} title="Move a deal to another stage from a menu">
-        <p>Each child carrying <code>role="menuitem"</code> is an item. A disabled one is passed
-            over by the arrow keys, and a pick runs its own <code>onclick</code>.</p>
+        <p>Spread <code>trigger</code> on a button and <code>menu</code> on the element holding
+            the items. Each child carrying <code>role="menuitem"</code> is an item. A disabled
+            one is passed over by the arrow keys, and a pick runs its own
+            <code>onclick</code>.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { reactive } from '@abide/abide'
-            import Menu from '@abide/abide/Menu.abide'
+            import { menu, reactive } from '@abide/abide'
 
             const STAGES = ['lead', 'qualified', 'proposal', 'won']
             let stage = reactive('proposal')
+            const move = menu()
             </script>
 
-            <Menu label="Move to…">
+            <button type="button" {...move.trigger}>Move to…</button>
+            <div {...move.menu}>
                 {#for next of STAGES}
                     <button
                         role="menuitem"
@@ -37,26 +56,69 @@ import Section from '#src/lib/Section.abide'
                         onclick={() => (stage = next)}
                     >{next}</button>
                 {/for}
-            </Menu>
+            </div>
+        `} />
+    </Section>
+
+    <Section level={3} title="Open a menu from an icon">
+        <p>The trigger is your own element, so it holds anything, and its
+            <code>aria-label</code> names the menu.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { menu } from '@abide/abide'
+
+            const more = menu({ side: 'bottom', align: 'end' })
+            </script>
+
+            <button type="button" aria-label="More" {...more.trigger}>⋯</button>
+            <div {...more.menu}>…</div>
+        `} />
+    </Section>
+
+    <Section level={3} title="Pin a deal from a menu that stays open">
+        <p>An item carrying <code>role="menuitemcheckbox"</code> or
+            <code>role="menuitemradio"</code> leaves the menu open. Write its
+            <code>aria-checked</code> from your own state.</p>
+        <Code language="abide" caption="abide" code={`
+            <button
+                role="menuitemcheckbox"
+                aria-checked={pinned ? 'true' : 'false'}
+                onclick={() => (pinned = !pinned)}
+            >pin to the top</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Open a menu from somewhere else">
+        <p>Hand <code>menu</code> a <code>Reactive</code> as <code>open</code>. Writing it opens
+            and closes the menu, and every way the menu closes writes it back.
+            <code>onopen</code> and <code>onclose</code> hear each.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { menu, reactive } from '@abide/abide'
+
+            let choosing = reactive(false)
+            const move = menu({
+                open: choosing,
+                onclose: () => console.log('closed'),
+            })
+            </script>
+
+            <button onclick={() => (choosing = true)}>Choose a stage</button>
         `} />
     </Section>
 
     <Section level={3} title="Lay out an open menu while a closed menu stays hidden">
-        <p>The list is <code>data-part="menu"</code>, a popover. A <code>display</code> class
-            beats the browser's hiding of a closed popover, so set it behind
-            <code>open:</code>.</p>
+        <p>The menu is a popover. A <code>display</code> class beats the browser's hiding of a
+            closed popover, so set it behind <code>open:</code>.</p>
         <Code language="abide" caption="abide" code={`
-            <script>
-            import Menu from '@abide/abide/Menu.abide'
-            </script>
-
-            <Menu
-                label="Move to…"
-                class="[&_[data-part=menu]]:m-0 [&_[data-part=menu]]:open:flex
-                [&_[data-part=menu]]:flex-col [&_[data-part=menu]]:rounded-lg"
-            >
+            <div {...move.menu} class="m-0 flex-col rounded-lg open:flex">
                 …
-            </Menu>
+            </div>
         `} />
+    </Section>
+
+    <Section level={3} title="Jump to an item by typing">
+        <p>A letter typed in an open menu moves focus to the next item starting with it, and
+            letters typed together find the first item starting with the word.</p>
     </Section>
 </Doc>

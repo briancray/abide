@@ -215,11 +215,12 @@ table.
 - Components, each imported on its own — `import Dialog from '@abide/abide/Dialog.abide'`:
   `Dialog`, `Prompts` (and `prompts.confirm` / `prompts.alert` / `prompts.prompt` beside it:
   `import Prompts, { prompts } from '@abide/abide/Prompts.abide'`), `Toasts` (and `toasts.notify`
-  beside it), `Tooltip`, `Menu`, `Combobox`, `Tabs`, `SortableTable`, `Markdown`, `LineChart`,
+  beside it), `Tooltips`, `Combobox`, `SortableTable`, `Markdown`, `LineChart`,
   `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
-  on both sides), `markdown`, `chart`, `place`, `listbox`, `sortRows`, `hotkeys` and `keyLabel`, and
-  the `bind:element` adaptors `dismissible`, `dropzone` and `copyText` beside `observe`.
+  on both sides), `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `sortRows`, `hotkeys` and `keyLabel`, and
+  the `bind:element` adaptors `dismissible`, `dropzone`, `copyText` and `tooltip` (shown by the root
+  layout's `Tooltips`) beside `observe`.
 - From `@abide/abide/server`: the rungs `signedIn`, `requireRole` and `readOnly`, `fetchJson` /
   `fetchText` (a deadline, retries worth retrying, a cache), and `job` (work on a schedule, one run at
   a time).

@@ -57,6 +57,20 @@ test('a run asked for while one is in flight joins it — 54.20', async () => {
     ).toBe(3_600_000)
 })
 
+// THE REVERT: measure from the end under `from: 'start'` too, and the next run is a full hour after
+// the last one ended rather than after it started.
+test('a job measured from the start names its next run an interval after the last run started — 54.29', async () => {
+    const digest = job('fromStart', {
+        every: 3_600_000,
+        from: 'start',
+        run: () => Bun.sleep(30),
+    })
+    const ran = await digest.runNow()
+    const fromEnd =
+        Date.parse(ran.nextRun ?? '') - Date.parse(ran.lastRun ?? '')
+    expect(fromEnd).toBeLessThanOrEqual(3_600_000 - 25)
+})
+
 // THE REVERT: drop `global` from the status, and the request's run is the request's alone.
 test('a run in a request writes the status every caller reads — 54.22', async () => {
     const digest = job('requested', { every: 3_600_000, run: () => {} })

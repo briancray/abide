@@ -54,3 +54,26 @@ test('Enter picks the active contact, and the input shows it', async () => {
         document.querySelector('strong')?.textContent,
     ]).toEqual(['Katherine Johnson', 'Langley Research'])
 })
+
+// THE REVERT: hand every Escape to the list, and the third one is prevented, so a `<dialog>`
+// holding the picker never cancels.
+test('Escape shuts, then clears, then is left to the page', async () => {
+    using _picker = await mount(ContactPicker({}))
+    await settled()
+    type('ka')
+    const escape = () => {
+        const event = new KeyboardEvent('keydown', {
+            key: 'Escape',
+            cancelable: true,
+            bubbles: true,
+        })
+        input().dispatchEvent(event)
+        flushSync()
+        return event.defaultPrevented
+    }
+    expect(escape()).toBe(true)
+    expect(document.querySelector('[role=listbox]')).toBeNull()
+    expect(escape()).toBe(true)
+    expect(input().value).toBe('')
+    expect(escape()).toBe(false)
+})

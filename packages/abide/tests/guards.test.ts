@@ -24,6 +24,9 @@ const getAudit = GET(() => 'audit', {
         }),
     ],
 })
+const getPayroll = GET(() => 'payroll', {
+    middleware: [requireRole('admin', { status: 404 })],
+})
 const signIn = POST(() => 'signed in')
 const archive = POST(() => 'archived', {
     middleware: [readOnly({ allow: [signIn] })],
@@ -33,6 +36,7 @@ const app = await inMemoryApp({
     'team/getFigure.handler.ts': { default: getFigure },
     'team/getOwn.handler.ts': { default: getOwn },
     'team/getAudit.handler.ts': { default: getAudit },
+    'team/getPayroll.handler.ts': { default: getPayroll },
     'team/signIn.handler.ts': { default: signIn },
     'team/archive.handler.ts': { default: archive },
 })
@@ -80,6 +84,16 @@ test('requireRole given a function admits whom it passes, refusing with the mess
         '403 Forbidden: Maya audits.',
     )
     expect(await answered('getAudit', { name: 'maya' })).toBe('200 "audit"')
+})
+
+// THE REVERT: ignore `status`, and Theo is told the address exists — `403 Forbidden`.
+test('requireRole at 404 answers a member without the role as an address nothing serves — 54.28', async () => {
+    expect(await answered('getPayroll', { name: 'theo', role: 'sales' })).toBe(
+        await answered('getNothing', { name: 'theo', role: 'sales' }),
+    )
+    expect(await answered('getPayroll', { name: 'maya', role: 'admin' })).toBe(
+        '200 "payroll"',
+    )
 })
 
 test('a rung refuses an in-process call as it refuses one over the wire — 54.4', async () => {

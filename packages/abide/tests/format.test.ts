@@ -96,6 +96,15 @@ test('a relative time is measured from the now it is handed — 52.5', () => {
     ).toBe('2 weeks ago')
 })
 
+// THE REVERT: key the cache by locale alone, and the second style reads the first one's formatter.
+test('a relative time is written in the style it is handed — 52.32', () => {
+    const now = Date.UTC(2026, 10, 18, 12)
+    const ago = now - 12 * 60_000
+    expect(relative(ago, { now })).toBe('12 minutes ago')
+    expect(relative(ago, { now, style: 'short' })).toBe('12 min. ago')
+    expect(relative(ago, { now, style: 'narrow' })).toBe('12m ago')
+})
+
 // THE REVERT: a cache that never finds what it built — every call builds its formatter again.
 gate(
     'a formatter is built once per set of options — 52.6',

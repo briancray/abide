@@ -292,14 +292,16 @@ export function relative(
         now?: number
         /** The BCP 47 locale it is written in. `'en-US'` by default. */
         locale?: string
+        /** `'long'` (`12 minutes ago`), `'short'` (`12 min. ago`) or `'narrow'` (`12m ago`). `'long'` by default. */
+        style?: Intl.RelativeTimeFormatStyle
     } = {},
 ): string {
     const time = instant(value)
     if (time === undefined) return MISSING
-    const { now = Date.now(), locale = LOCALE } = options
+    const { now = Date.now(), locale = LOCALE, style = 'long' } = options
     const formatter = cached(
-        `relative ${locale}`,
-        () => new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }),
+        `relative ${locale} ${style}`,
+        () => new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style }),
     )
     const gap = time - now
     for (const [unit, size] of RELATIVE_UNITS)

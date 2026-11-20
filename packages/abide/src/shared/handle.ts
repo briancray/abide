@@ -1,0 +1,53 @@
+// 54.30-54.33 — A `Response` THE APP FETCHED ITSELF, read as its type says. The fetch is the caller's —
+// its options, its headers, and whatever it throws, which reaches the caller untouched — so `handle`
+// is only what comes after: `fetch(url).then(handle)`.
+
+import { type FetchFailed, fetchFailed } from './fetchFailed.ts'
+import { essenceOf, framedStream, framingOf } from './framing.ts'
+
+/**
+ * The body a `Response` carries, read as its `content-type` says: JSON as its value, a JSON Lines or
+ * event stream as its chunks as they arrive, text as a string, and anything else as a `Blob`. A
+ * status outside 2xx is a `FetchFailed`, and so is JSON that does not parse.
+ *
+ * @param response what a `fetch` answered
+ */
+export async function handle(
+    response: Response,
+): Promise<unknown | FetchFailed> {
+    // 54.31 — refused: the status it was answered at, and a body nobody will read let go.
+    if (!response.ok) return refusedBy(response)
+    const type = response.headers.get('content-type')
+    // 54.32 — a stream is handed back as it arrives, never read to its end first.
+    const framing = framingOf(type)
+    if (framing !== null)
+        return response.body === null
+            ? emptyStream()
+            : framedStream(response.body, framing)
+    if (response.status === 204 || response.body === null) return undefined
+    const essence = essenceOf(type)
+    if (essence === 'application/json' || essence.endsWith('+json')) {
+        const text = await response.text()
+        try {
+            return JSON.parse(text)
+        } catch (thrown) {
+            const failure = fetchFailed({
+                status: response.status,
+                reason: 'shape',
+            })
+            failure.cause = thrown
+            return failure
+        }
+    }
+    // 54.33 — text whatever its subtype, and a type that says nothing is text too.
+    if (essence === '' || essence.startsWith('text/')) return response.text()
+    return response.blob()
+}
+
+/** 54.31 — a `Response` outside 2xx as the `FetchFailed` naming its status, its body let go. */
+export async function refusedBy(response: Response): Promise<FetchFailed> {
+    await response.body?.cancel()
+    return fetchFailed({ status: response.status, reason: 'status' })
+}
+
+async function* emptyStream(): AsyncGenerator<never> {}

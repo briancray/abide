@@ -584,6 +584,14 @@ export const SITE: readonly SiteGroup[] = [
                 registry: '`fetchJson`',
             },
             {
+                route: '/helpers/handle',
+                title: '`handle`',
+                nav: '`handle`',
+                description:
+                    'Read a response you fetched yourself as its type says: JSON, a stream of chunks, text or bytes.',
+                registry: '`handle`',
+            },
+            {
                 route: '/helpers/fetch-text',
                 title: '`fetchText`',
                 nav: '`fetchText`',
@@ -679,20 +687,28 @@ export const SITE: readonly SiteGroup[] = [
                 registry: '`toasts`',
             },
             {
-                route: '/components/tooltip',
-                title: '`Tooltip`',
-                nav: '`Tooltip`',
+                route: '/components/tooltips',
+                title: '`Tooltips`',
+                nav: '`Tooltips`',
                 description:
-                    'Show a hint for the element just before it, on hover and on focus, placed where it fits.',
-                registry: '`Tooltip`',
+                    'Render once in the root layout as the one popover every hint on the page opens in.',
+                registry: '`Tooltips`',
+            },
+            {
+                route: '/components/tooltip',
+                title: '`tooltip`',
+                nav: '`tooltip`',
+                description:
+                    'Show a hint for the element it is bound to, on hover and on focus, placed where it fits.',
+                registry: '`tooltip`',
             },
             {
                 route: '/components/menu',
-                title: '`Menu`',
-                nav: '`Menu`',
+                title: '`menu`',
+                nav: '`menu`',
                 description:
-                    'Open a list of actions from a button, walked by the arrow keys and closed by a pick.',
-                registry: '`Menu`',
+                    'Open a list of actions from a button of your own, walked by the arrow keys and closed by a pick.',
+                registry: '`menu`',
             },
             {
                 route: '/components/combobox',
@@ -704,11 +720,11 @@ export const SITE: readonly SiteGroup[] = [
             },
             {
                 route: '/components/tabs',
-                title: '`Tabs`',
-                nav: '`Tabs`',
+                title: '`tabs`',
+                nav: '`tabs`',
                 description:
-                    'Switch one panel between views from a row of tabs that the arrow keys move along.',
-                registry: '`Tabs`',
+                    'Switch between views from a row of tabs of your own that the arrow keys move along.',
+                registry: '`tabs`',
             },
             {
                 route: '/components/sortable-table',
