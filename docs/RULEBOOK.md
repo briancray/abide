@@ -3414,9 +3414,10 @@ its `props` call declares that the tag does not yet pass.
 its code, linked to that clause on the documentation's rulebook page.
 
 38.119 `mount` MUST render the component it is given into the document's body as the server renders
-it, MUST hydrate it there with that component's browser module, and MUST run every effect the
-hydration woke before it settles; it MUST throw where the component was not imported from a
-`.abide` and bound, or where the process has no DOM.
+it, after what the body already holds, MUST hydrate it there with that component's browser module,
+and MUST run every effect the hydration woke before it settles; its `Mounted`'s stop MUST remove what
+it rendered; it MUST throw where the component was not imported from a `.abide` and bound, or where
+the process has no DOM.
 
 38.120 Under `bun test` with `@abide/abide/test` preloaded, an app that declares no
 `ABIDE_PRINCIPAL_SECRET` MUST seal and verify the principal cookie with a secret the preload

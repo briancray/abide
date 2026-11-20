@@ -42,13 +42,16 @@ export function closeOf(open: Node): Comment | null {
 /**
  * The page's region, as the server wrote it; throws `Mismatch` where the host holds none.
  *
- * The first `REGION_OPEN` among the host's children and the close that ends it. The server writes
+ * The first `REGION_OPEN` among the host's children from `from` on, and the close that ends it. The server writes
  * the page between the same pair `renderComponent` writes a child between (41.9), so everything a
  * shell puts in the host — its module script, a stylesheet link — stands outside the pair wherever
  * the shell put it, and nothing here has to guess where the page ends.
  */
-export function pageRegion(host: Node): Region {
-    for (let node = host.firstChild; node !== null; node = node.nextSibling) {
+export function pageRegion(
+    host: Node,
+    from: ChildNode | null = host.firstChild,
+): Region {
+    for (let node = from; node !== null; node = node.nextSibling) {
         if (node.nodeType !== 8 || (node as Comment).data !== REGION_OPEN)
             continue
         const close = closeOf(node)

@@ -133,6 +133,54 @@ test('a click rewrites the count and builds nothing', async () => {
     )
 }, 90_000)
 
+// 38.119 — TWO COMPONENTS MOUNTED TOGETHER EACH KEEP THEIR MARKUP: the second is rendered after the
+// first rather than over it, so a click on the first still lands, and each one's stop takes away its
+// own markup alone. THE REVERT: write the render over `document.body.innerHTML` again — the first
+// tally is gone once the second mounts, `tallies: 1` where `2` is due — exit 1, `0 pass`.
+test('two components mounted together each keep their markup, and stop removes its own — 38.119', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'mount-together-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/lib/Tally.abide': `<script>
+import { props, reactive } from '@abide/abide'
+
+const { name } = props<{ name: string }>()
+let count = reactive(0)
+</script>
+
+<button class="tally" data-name={name} onclick={() => (count = count + 1)}>{name}: {count}</button>`,
+        'src/tests/Tally.test.ts': `import { expect, test } from 'bun:test'
+import { flushSync } from '@abide/abide'
+import { mount } from '@abide/harness/abide'
+import Tally from '../lib/Tally.abide'
+
+const tallies = () => [...document.querySelectorAll('.tally')].map((one) => one.textContent)
+
+test('both stand, and each stop removes its own', async () => {
+    using _first = await mount(Tally({ name: 'calls' }))
+    const second = await mount(Tally({ name: 'emails' }))
+    expect(\`tallies: \${tallies().length}\`).toBe('tallies: 2')
+    document.querySelector<HTMLButtonElement>('[data-name=calls]')?.click()
+    flushSync()
+    expect(tallies()).toEqual(['calls: 1', 'emails: 0'])
+    second.stop()
+    expect(tallies()).toEqual(['calls: 1'])
+})
+`,
+    })
+    const ran = await spawned(['bun', 'test', './src/tests/Tally.test.ts'], {
+        cwd,
+    })
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 38.134 — A PROP HANDED AS A GETTER IS LIVE: the mounted component reads it through the getter, so a
 // test drives a read-only prop as a parent would, where a Reactive would bind it. THE REVERT: read
 // `props[key]` once in `boundModule` whatever its descriptor; `#label` stays 'one still' where
