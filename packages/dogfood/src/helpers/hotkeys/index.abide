@@ -26,6 +26,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/hotkeys.test.ts',
             from: ["test('a symbol is matched by what it types, shift or not"],
         },
+        {
+            path: 'packages/abide/tests/hotkeys.test.ts',
+            from: [
+                "test('a binding whose prevent is false runs and leaves the key",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Open a new deal with a key anywhere on the page">
@@ -60,6 +66,24 @@ import Section from '#src/lib/Section.abide'
                 Escape: {
                     run: () => adding.set(false),
                     editable: true,
+                },
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Clear a search on Escape and still let the dialog close">
+        <p>A binding takes the key's default with <code>preventDefault</code>. Write
+            <code>prevent: false</code> and the press keeps it, so the dialog around the search
+            closes on the same Escape.</p>
+        <Code language="ts" caption="shared" code={`
+            import { hotkeys, reactive } from '@abide/abide'
+
+            const query = reactive('')
+            const keys = hotkeys({
+                Escape: {
+                    run: () => query.set(''),
+                    editable: true,
+                    prevent: false,
                 },
             })
         `} />

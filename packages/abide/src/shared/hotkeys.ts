@@ -16,11 +16,17 @@ export type Hotkey =
            * (`isEditableTarget`). `false` by default: a bare `n` belongs to the field it is typed in.
            */
           editable?: boolean
+          /**
+           * Whether the binding calls `preventDefault` on the press it runs for. `true` by default;
+           * `false` leaves the key's default to the page — an Escape a dialog still closes on.
+           */
+          prevent?: boolean
       }
 
 type Bound = HotkeyBinding & {
     run: (event: KeyboardEvent) => void
     editable: boolean
+    prevent: boolean
 }
 
 /**
@@ -44,6 +50,8 @@ export function hotkeys(
             run: typeof hotkey === 'function' ? hotkey : hotkey.run,
             editable:
                 typeof hotkey === 'function' ? false : hotkey.editable === true,
+            prevent:
+                typeof hotkey === 'function' ? true : hotkey.prevent !== false,
         })
     }
     let apple: boolean | undefined
@@ -60,7 +68,8 @@ export function hotkeys(
         for (const binding of bound) {
             if (editing && !binding.editable) continue
             if (!matches(binding, event, apple)) continue
-            event.preventDefault()
+            // 53.2.
+            if (binding.prevent) event.preventDefault()
             binding.run(event)
             return
         }

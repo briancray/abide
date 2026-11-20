@@ -5217,8 +5217,8 @@ MUST draw a series whose every present value is zero along the bottom of that ra
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are
 written, whose key and modifiers match it.
 
-53.2 `hotkeys` MUST call `preventDefault` on a `keydown` it ran a binding for, and MUST NOT on any
-other.
+53.2 `hotkeys` MUST call `preventDefault` on a `keydown` it ran a binding for, save one whose
+`prevent` is `false`, and MUST NOT on any other.
 
 53.3 A `hotkeys` binding holding `mod` MUST match ⌘ on an Apple platform and Ctrl on any other,
 reading the platform off the user agent of the request being served on a server and off

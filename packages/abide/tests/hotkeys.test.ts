@@ -66,6 +66,30 @@ test('the first binding a press matches runs alone, and only it is prevented —
     expect(pressed(['k'], { key: 'j' })).toEqual({ ran: [], taken: false })
 })
 
+// THE REVERT: call `preventDefault` whatever `prevent` says — `taken: true` where the dialog under
+// the panel is owed its Escape, `false`.
+test('a binding whose prevent is false runs and leaves the key its default — 53.2', () => {
+    let ran = 0
+    const listener = hotkeys({
+        Escape: {
+            run: () => {
+                ran += 1
+            },
+            prevent: false,
+        },
+    })
+    const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+    })
+    listener(event)
+    expect({ ran, taken: event.defaultPrevented }).toEqual({
+        ran: 1,
+        taken: false,
+    })
+})
+
 test('a modifier the binding does not hold refuses the press — 53.4', () => {
     expect(pressed(['k'], { key: 'k', ctrlKey: true }).ran).toEqual([])
     expect(pressed(['k'], { key: 'K', shiftKey: true }).ran).toEqual([])
