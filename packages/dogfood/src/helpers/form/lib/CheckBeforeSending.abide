@@ -1,0 +1,37 @@
+<script server>
+import { jsonSchema } from '@abide/abide'
+import { POST } from '@abide/abide/server'
+
+type Deal = { name: string; amount: number }
+
+const DEAL = jsonSchema<Deal>({
+    type: 'object',
+    required: ['name', 'amount'],
+    properties: {
+        name: { type: 'string', minLength: 2 },
+        amount: { type: 'number', minimum: 1 },
+    },
+})
+
+const addDeal = POST((deal: Deal) => deal, { args: DEAL })
+</script>
+
+<script>
+import { form } from '@abide/abide'
+
+const deal = form(addDeal)
+</script>
+
+<form {...deal.element} class="flex flex-col items-start gap-2">
+    <label>name <input {...deal.field('name')}></label>
+    <small {...deal.error('name')} class="text-bad">
+        {deal.message('name')}
+    </small>
+    <label>
+        amount <input type="number" {...deal.field('amount')} value="0">
+    </label>
+    <small {...deal.error('amount')} class="text-bad">
+        {deal.message('amount')}
+    </small>
+    <button {...deal.submit()}>Add deal</button>
+</form>

@@ -94,6 +94,7 @@ These are immutable. A change to them is a change to what this document is.
 - [53. Keys, element behaviors and chat](#53)
 - [54. Guards, fetches and jobs](#54)
 - [55. Worker files](#55)
+- [56. Forms](#56)
 
 ## Terms
 
@@ -1609,7 +1610,7 @@ optional.
 
 19.12 A `Schema` that answers asynchronously MUST be refused.
 
-19.13 A page that does not call `jsonSchema` MUST NOT carry `validateJson`.
+19.13 A page that calls neither `jsonSchema` nor `form` MUST NOT carry `validateJson`.
 
 19.14 A `JsonSchema` given as a `Schema` without `jsonSchema` MUST be refused, naming
 `jsonSchema`.
@@ -1653,6 +1654,13 @@ MUST NOT change that type.
 
 19.27 A `GET` or `DELETE`'s text arg the `JsonSchema` declares a record, or a list of records or
 lists, MUST be read from its JSON text, and text that is not that JSON MUST be left as text.
+
+19.28 Where a handler's `args` is `jsonSchema` over a document written as a literal, inline or bound
+to a name first, the build MUST read that document as the handler's args document in place of the
+one 19.9 derives.
+
+19.29 A mutation's browser copy MUST hold the args document the build read for it, and a `GET`'s
+MUST NOT.
 
 # 20. Generated surfaces
 
@@ -5804,3 +5812,36 @@ or rejected with what it rejected with.
 
 55.14 A worker file's import MUST answer each export with a function declaring a parameter where the
 export declares one, and carrying the literal defaults 11.29 reads off the export's.
+
+# 56. Forms
+
+56.1 `form` MUST read the args of a submit off the `<form>` submitted as a post carries them, a name
+given more than once a list, each coerced as 19.7 coerces text args.
+
+56.2 A submit of a `form` MUST check the args 56.1 reads against its handler's args document (19.28),
+and MUST NOT call the handler where the check finds an issue.
+
+56.3 A `form` whose handler has no args document MUST call it unchecked.
+
+56.4 A `form`'s issues MUST be what its last check found, or, where no check has run since it last
+called its handler, the issues of that call's `ValidationError` (15.8).
+
+56.5 A submit of a `form` while its last call is in flight MUST NOT call its handler again.
+
+56.6 A `form` MUST move focus to the first field of its `<form>`, in document order, whose name has a
+message, at a submit its check refuses and once a call it made is refused.
+
+56.7 An edit of a `form` showing issues MUST check its fields again, and its issues MUST become what
+that check finds.
+
+56.8 A `form` over a `POST` MUST write `method="post"` on its `<form>`, and the handler's address as
+its `action`.
+
+56.9 `form`'s `field` MUST carry `aria-invalid="true"` while its field has a message, and MUST name
+the element `error` writes the id of in `aria-describedby`.
+
+56.10 `form`'s `error` MUST be `hidden` while its field has no message.
+
+56.11 `form`'s `submit` MUST be disabled while the form's last call is in flight.
+
+56.12 A `form` whose `<form>` holds a file in a field MUST throw at its submit, naming the field.

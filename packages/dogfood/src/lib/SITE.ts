@@ -543,8 +543,14 @@ const WRITTEN: readonly {
     {
         group: 'Input and lists',
         description:
-            'Pickers, tabs and sortable tables, and the keys, drops and copies a page takes.',
+            'Forms, pickers, tabs and sortable tables, and the keys, drops and copies a page takes.',
         pages: [
+            {
+                route: '/helpers/form',
+                title: '`form`',
+                description:
+                    'Check a form against the handler it submits to before calling it, and show what is wrong beside each field.',
+            },
             {
                 route: '/components/combobox',
                 title: '`Combobox`',

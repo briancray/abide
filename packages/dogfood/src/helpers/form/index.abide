@@ -1,0 +1,64 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CheckBeforeSending from './lib/CheckBeforeSending.abide'
+import checkBeforeSending from './lib/CheckBeforeSending.abide' with { type: 'text' }
+import RefusedByTheServer from './lib/RefusedByTheServer.abide'
+import refusedByTheServer from './lib/RefusedByTheServer.abide' with { type: 'text' }
+import WaitOnTheCall from './lib/WaitOnTheCall.abide'
+import waitOnTheCall from './lib/WaitOnTheCall.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/transports/post',
+        '/transports/json-schema',
+        '/reactive/refuse',
+        '/ambient/outbox',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NewDeal.test.ts',
+            from: [
+                'test("a deal that does not fit shows field by field what the handler\'s refusal says"',
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NewDeal.test.ts',
+            from: [
+                "test('a refused submit moves focus to the first field with a message'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NewDeal.test.ts',
+            from: ["test('an edit checks the form again'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NewDeal.test.ts',
+            from: ["test('the form posts to the handler where no script runs'"],
+        },
+    ]}
+>
+    <Section level={3} title="Check a new deal before it is sent">
+        <p>The fields are read off the form as a post carries them and checked against the
+            handler's own <code>jsonSchema</code>, so a deal that does not fit is refused in the
+            browser with the message the server would answer. Focus goes to the first field with
+            a message, and an edit checks the form again. With no script, the same form posts to
+            the handler.</p>
+        <Example code={checkBeforeSending}><CheckBeforeSending /></Example>
+    </Section>
+
+    <Section level={3} title="Show a name the server refuses beside its field">
+        <p>What only the server can know, it refuses with <code>refuse.validation</code>, and the
+            form shows that beside the field it names as it shows its own check.</p>
+        <Example code={refusedByTheServer}><RefusedByTheServer /></Example>
+    </Section>
+
+    <Section level={3} title="Hold the button while the deal saves">
+        <p><code>submit</code> is disabled while the call is in flight, and a second submit makes
+            no second call.</p>
+        <Example code={waitOnTheCall}><WaitOnTheCall /></Example>
+    </Section>
+</Doc>

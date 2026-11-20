@@ -5,9 +5,10 @@
 import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
-import { argsFor, collapsed, derivedArgs } from '#server/argsContract.ts'
+import { argsFor, derivedArgs } from '#server/argsContract.ts'
 import { handlerFileMount } from '#server/handlerFileMount.ts'
 import { type Mounted, mountHandlers } from '#server/mountHandlers.ts'
+import { collapsed } from '#shared/coerceArgs.ts'
 import { isFailed } from '#shared/Failed.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
 

@@ -29,6 +29,7 @@ import {
 
 import type { Mount } from '#server/mountHandlers.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
+import type { JsonValue } from '#shared/JsonValue.ts'
 import {
     type Defaults,
     defaultsInSource,
@@ -44,6 +45,7 @@ import {
     type Walk,
 } from './argsSchemaOf.ts'
 import { type Diagnosis, diagnosisAt, type Diagnostics } from './Diagnostics.ts'
+import { literalJson } from './literalJson.ts'
 import {
     inlineOptions,
     isReactiveCall,
@@ -191,14 +193,16 @@ async function exportsIn(
                                     : declared.middleware,
                             copy: declared?.copy,
                             defaults: declared?.defaults,
+                            // 19.28 — a declared `jsonSchema` literal where there is one.
                             args:
-                                handlerType === undefined
+                                declared?.document ??
+                                (handlerType === undefined
                                     ? undefined
                                     : await argsSchemaOf(
                                           checker,
                                           handlerType,
                                           declared?.defaulted ?? [],
-                                      ),
+                                      )),
                             // 19.21 — a stream's chunks are framed one by one, never one JSON value.
                             result: declared?.copy?.stream
                                 ? undefined
@@ -261,6 +265,7 @@ async function declaringMethod(
           unread: Node[]
           defaulted?: string[]
           defaults?: Defaults | undefined
+          document?: JsonValue | undefined
       }
     | undefined
 > {
@@ -333,7 +338,42 @@ async function declaringMethod(
         ...declared,
         defaulted: defaultedMembers(body),
         defaults: literalDefaults(body) ?? undefined,
+        document: await declaredDocument(checker, call, abide),
     }
+}
+
+/**
+ * The document a handler's `args` declares, where it is `jsonSchema(…)` over a literal: written inline
+ * in the options, or bound to a name first — or `undefined` where it is anything else.
+ *
+ * 19.28 — WHAT THE BUILD CAN READ OF A DECLARED GATE without running the module: the literal its
+ * `jsonSchema` is handed. A gate built any other way — another library's schema, a document assembled
+ * at run time — is the server's alone, and the build keeps the schema its annotation derives (19.9).
+ */
+async function declaredDocument(
+    checker: Checker,
+    call: CallExpression,
+    abide: Abide,
+): Promise<JsonValue | undefined> {
+    if (abide.jsonSchema === undefined) return undefined
+    const options = await declarationOf(checker, call.arguments[1])
+    if (options === undefined || !isObjectLiteralExpression(options))
+        return undefined
+    const gate = await declarationOf(checker, optionNamed(options, 'args'))
+    if (gate === undefined || !isCallExpression(gate)) return undefined
+    const callee = isPropertyAccessExpression(gate.expression)
+        ? gate.expression.name
+        : gate.expression
+    const named = await checker.getSymbolAtLocation(callee)
+    if (named === undefined) return undefined
+    const target = await aliasedSymbol(checker, named)
+    if (
+        target.name !== 'jsonSchema' ||
+        target.valueDeclaration?.path !== abide.jsonSchema
+    )
+        return undefined
+    const document = await declarationOf(checker, gate.arguments[0])
+    return document === undefined ? undefined : literalJson(document)
 }
 
 /**

@@ -16,6 +16,8 @@ export const FRAMEWORK_SOURCES = {
     route: besideCompiler('../shared/route.ts'),
     /** `RouteParams`. */
     url: besideCompiler('../shared/url.ts'),
+    /** `jsonSchema`, whose literal document a handler's `args` the build reads (19.28). */
+    jsonSchema: besideCompiler('../shared/jsonSchema.ts'),
     /** The five methods: `GET` is `declare('GET')` there and nowhere else. */
     methods: besideCompiler('../shared/rpc.ts'),
     /** `onConfig` (27.13). */

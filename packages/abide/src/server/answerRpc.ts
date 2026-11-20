@@ -5,6 +5,7 @@
 // WIRE-ONLY, per 16.13: `maxBodySize`, the `crossOrigin` preflight, and the text a URL or a form
 // carried the args as.
 
+import { collapsed } from '#shared/coerceArgs.ts'
 import { CONTINUE_HEADER } from '#shared/CONTINUE_HEADER.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { framingOf } from '#shared/framing.ts'
@@ -25,7 +26,6 @@ import {
     handlerHeaders,
 } from './answerFailure.ts'
 import { answerValue, isValues, namesEtag, sseHeaders } from './answerValue.ts'
-import { collapsed } from './argsContract.ts'
 import { callerCookieOf } from './callerOf.ts'
 import { ownOrigin, positiveSetting } from './config.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'

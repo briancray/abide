@@ -25,6 +25,7 @@ import {
     noAnswer,
     unanswered,
 } from '#shared/answerOf.ts'
+import { ARGS_DOCUMENT } from '#shared/ARGS_DOCUMENT.ts'
 import { CONTINUE_KEY } from '#shared/CONTINUE_KEY.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { isFailed } from '#shared/Failed.ts'
@@ -54,6 +55,8 @@ export function wire(
     options?: CopyOptions,
     // 11.29 — and the defaults its parameter writes, which the copy keys by as the server does.
     defaults?: Defaults,
+    // 19.28 — and, for a mutation, the JSON Schema the build read for its args, which a `form` checks.
+    document?: JsonValue,
 ): unknown {
     // 16.9 — the handler's route, compiled once for every call through the copy.
     const route = new HandlerRoute(address)
@@ -257,6 +260,10 @@ export function wire(
     const rpc = declare(method)(value as typeof produce)
     // 16.9 — the address `rpc.url` and `rpc.raw` build on.
     rpc.address = address
+    if (document !== undefined)
+        (rpc as unknown as Record<typeof ARGS_DOCUMENT, JsonValue>)[
+            ARGS_DOCUMENT
+        ] = document
     return rpc
 }
 

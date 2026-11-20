@@ -53,6 +53,8 @@ export { type Menu, type MenuOptions, menu } from './menu.ts'
 export * as format from './format/index.ts'
 // 25 — the account of the app.
 export type { FetchFailed } from './fetchFailed.ts'
+// 56.1-56.12 — a form over a handler, checked against its args document before the call.
+export { type FieldName, type Form, form } from './form.ts'
 export { handle } from './handle.ts'
 export { type Health, health } from './health.ts'
 // 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.

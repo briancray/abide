@@ -669,7 +669,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET`, with `RpcOptions` in place of `Omit<RpcOptions, 'refreshes'>` | Declares a mutation. | 16.2, 16.7, 16.32, 16.68, 16.76, 16.38, 16.53 |
+| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET`, with `RpcOptions` in place of `Omit<RpcOptions, 'refreshes'>` | Declares a mutation. | 16.2, 16.7, 16.32, 16.68, 16.76, 16.38, 16.53, 19.29 |
 
 ## Mount paths
 
@@ -695,7 +695,7 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.14 |
-| `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 19.23, 20.11 |
+| `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 19.23, 20.11, 19.28 |
 
 ## Headers abide generates
 
@@ -897,6 +897,14 @@ type Reached = { readonly [REACHED]: true }
 | `popover` | `(anchor: Element, options?: PlaceOptions) => (element: Element) => Disposer` | The `bind:element` adaptor showing an element in the top layer against an anchor for as long as it is bound. | 50.26, 50.27, 50.49 |
 
 # Input and lists
+
+## `form`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `form` | `<Handler extends Rpc<any, any, any, any>>(handler: Handler) => Form<Handler>` | A form over a handler as parts an app spreads onto a `<form>` and fields of its own, checked against the handler's args document before the call is made. | 56.1, 56.2, 56.3, 56.4, 56.5, 56.6, 56.7, 56.8, 56.12, 19.13 |
+| `FieldName` | `Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? keyof NonNullable<Args> & string : string` | The names a form's fields post under: the members of its handler's args. | 56.1 |
+| `Form` | `{ readonly element: Record<string, unknown>; field(name: FieldName<Handler>): Record<string, unknown>; error(name: FieldName<Handler>): Record<string, unknown>; message(name: FieldName<Handler> \| ''): string \| undefined; submit(): Record<string, unknown>; issues(): Issues<Handler> \| undefined; readonly call: ReturnType<Handler> }` | The form's part, a field's, a field message's and a submit button's, what is wrong with the form, and the last call it made. | 32.11, 56.4, 56.9, 56.10, 56.11 |
 
 ## `Combobox`
 

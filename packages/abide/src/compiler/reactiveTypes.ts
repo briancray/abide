@@ -106,19 +106,30 @@ export type Abide = {
     methods: string | undefined
     /** 18.4 — the file declaring `structural`. */
     structural: string | undefined
+    /** 19.28 — the file declaring `jsonSchema`. */
+    jsonSchema: string | undefined
 }
 
 export async function abideIn(project: Project): Promise<Abide> {
-    const [declares, props, selects, route, hooks, methods, structural] =
-        await Promise.all([
-            project.program.getSourceFile(FRAMEWORK_SOURCES.reactive),
-            project.program.getSourceFile(FRAMEWORK_SOURCES.props),
-            project.program.getSourceFile(FRAMEWORK_SOURCES.selection),
-            project.program.getSourceFile(FRAMEWORK_SOURCES.route),
-            project.program.getSourceFile(FRAMEWORK_SOURCES.hooks),
-            project.program.getSourceFile(FRAMEWORK_SOURCES.methods),
-            project.program.getSourceFile(FRAMEWORK_SOURCES.structural),
-        ])
+    const [
+        declares,
+        props,
+        selects,
+        route,
+        hooks,
+        methods,
+        structural,
+        documents,
+    ] = await Promise.all([
+        project.program.getSourceFile(FRAMEWORK_SOURCES.reactive),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.props),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.selection),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.route),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.hooks),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.methods),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.structural),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.jsonSchema),
+    ])
     let selection: CheckedSymbol | undefined
     for (const statement of selects?.statements ?? [])
         if (
@@ -150,6 +161,7 @@ export async function abideIn(project: Project): Promise<Abide> {
         onConfig: hooks?.path,
         methods: methods?.path,
         structural: structural?.path,
+        jsonSchema: documents?.path,
     }
 }
 

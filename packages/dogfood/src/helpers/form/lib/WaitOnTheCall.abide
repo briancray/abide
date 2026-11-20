@@ -1,0 +1,21 @@
+<script server>
+import { POST } from '@abide/abide/server'
+
+const addDeal = POST(async ({ name }: { name: string }) => {
+    await Bun.sleep(1_500)
+    return { name }
+})
+</script>
+
+<script>
+import { form } from '@abide/abide'
+
+const deal = form(addDeal)
+</script>
+
+<form {...deal.element} class="row">
+    <label>name <input {...deal.field('name')} value="Ledger audit"></label>
+    <button {...deal.submit()}>
+        {deal.call.busy() ? 'Adding…' : 'Add deal'}
+    </button>
+</form>

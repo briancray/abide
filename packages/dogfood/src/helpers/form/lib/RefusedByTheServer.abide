@@ -1,0 +1,26 @@
+<script server>
+import { refuse } from '@abide/abide'
+import { POST } from '@abide/abide/server'
+
+const TAKEN = ['Ledger audit']
+
+const addDeal = POST(({ name }: { name: string }) =>
+    TAKEN.includes(name)
+        ? refuse.validation<{ name: string }>({ name: ['is taken'] })
+        : { name },
+)
+</script>
+
+<script>
+import { form } from '@abide/abide'
+
+const deal = form(addDeal)
+</script>
+
+<form {...deal.element} class="flex flex-col items-start gap-2">
+    <label>name <input {...deal.field('name')} value="Ledger audit"></label>
+    <small {...deal.error('name')} class="text-bad">
+        {deal.message('name')}
+    </small>
+    <button {...deal.submit()}>Add deal</button>
+</form>

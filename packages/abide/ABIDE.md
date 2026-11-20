@@ -220,7 +220,8 @@ table.
   layout leaves, painted there by the server), `Combobox`, `SortableTable`, `Markdown`, `Chart` (with `Line`,
   `Column` and `Area` children), `Pie`, `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
-  on both sides), `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `sortRows`, `hotkeys` and `keyLabel`, and
+  on both sides), `form` (a `<form>` over a handler, checked against its args before the call),
+  `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `sortRows`, `hotkeys` and `keyLabel`, and
   the `bind:element` adaptors `dismissible`, `dropzone`, `copyText`, `popover` (an app's own panel in
   the top layer, against its anchor) and `tooltip` (shown by the root layout's `Tooltips`) beside
   `observe`.

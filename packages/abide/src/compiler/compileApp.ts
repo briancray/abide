@@ -694,12 +694,16 @@ function wireLine(mount: Mount, binding: string): string {
     const at = JSON.stringify(posix.relative(CLIENT_ADDRESS, mount.address))
     // 18.4 — what the handler's value declares that the browser's copy behaves by.
     // 11.29 — and the defaults its parameter writes, which the copy keys by.
-    const copy =
-        mount.defaults !== undefined
-            ? `, ${JSON.stringify(mount.copy)}, ${JSON.stringify(mount.defaults)}`
-            : mount.copy === undefined
-              ? ''
-              : `, ${JSON.stringify(mount.copy)}`
+    // 19.28 — and a mutation's args document, which a `form` checks a submit against before sending.
+    const trailing = [
+        mount.copy,
+        mount.defaults,
+        mount.method === 'GET' ? undefined : mount.args,
+    ]
+    while (trailing.length > 0 && trailing.at(-1) === undefined) trailing.pop()
+    let copy = ''
+    for (const each of trailing)
+        copy += `, ${each === undefined ? 'undefined' : JSON.stringify(each)}`
     return `${binding} __wire(${JSON.stringify(mount.method)}, new URL(${at}, import.meta.url).pathname${copy})\n`
 }
 

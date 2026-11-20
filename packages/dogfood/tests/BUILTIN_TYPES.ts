@@ -23,6 +23,7 @@ export const BUILTIN_TYPES = new Set([
     'Iterable',
     'Map',
     'NoInfer',
+    'NonNullable',
     'Omit',
     'Partial',
     'Promise',

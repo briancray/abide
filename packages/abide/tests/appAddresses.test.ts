@@ -919,3 +919,50 @@ test('a private handler is on neither the OpenAPI document nor the MCP listing �
         ),
     ).toEqual([])
 })
+
+// 19.28, 19.29 — A MUTATION'S BROWSER COPY HOLDS THE DOCUMENT ITS ARGS ARE CHECKED BY, which is the one
+// its declared `jsonSchema` is written as where it is a literal, bound to a name first: what a `form`
+// checks a submit against before the call (56.2). A `GET`'s copy holds none. THE REVERT: drop
+// `declaredDocument` from the build's args; the copy holds the type's document, with no `minLength`.
+test("a mutation's browser copy holds its declared literal document, and a GET's holds none — 19.28, 19.29", async () => {
+    const { handlers } = await compileApp(
+        appFixture({
+            'deals/createDeal.handler.ts': `import { jsonSchema } from '@abide/abide'
+import { POST } from '@abide/abide/server'
+
+const NEW_DEAL = jsonSchema<{ company: string; amount: number }>({
+    type: 'object',
+    required: ['company', 'amount'],
+    properties: {
+        company: { type: 'string', minLength: 2 },
+        amount: { type: 'number', minimum: 1_000 },
+    },
+})
+
+export default POST(({ company }: { company: string; amount: number }) => company, {
+    args: NEW_DEAL,
+})
+`,
+            'deals/getDeal.handler.ts': `import { GET } from '@abide/abide/server'
+
+export default GET(({ id }: { id: string }) => id)
+`,
+        }),
+    )
+    const face = (name: string) =>
+        Object.entries(handlers).find(([path]) =>
+            path.endsWith(`${name}.handler.ts`),
+        )?.[1]
+    const declared = {
+        type: 'object',
+        required: ['company', 'amount'],
+        properties: {
+            company: { type: 'string', minLength: 2 },
+            amount: { type: 'number', minimum: 1000 },
+        },
+    }
+    expect(face('createDeal')?.args).toEqual(declared)
+    expect(face('createDeal')?.client).toContain(JSON.stringify(declared))
+    expect(face('getDeal')?.args).toBeDefined()
+    expect(face('getDeal')?.client).not.toContain('"properties"')
+})
