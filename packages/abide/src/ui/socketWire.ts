@@ -371,11 +371,7 @@ class Mux {
 
     /** Stops following `id`, telling the server where the socket is open. */
     unfollow(id: number): void {
-        if (
-            this.subscriptions.delete(id) &&
-            this.socket?.readyState === WebSocket.OPEN
-        )
-            this.socket.send(JSON.stringify({ op: 'unsub', id }))
+        if (this.subscriptions.delete(id)) this.sendUnsub(id)
     }
 
     private send(stream: MuxStream): void {
@@ -384,8 +380,12 @@ class Mux {
     }
 
     private unsubscribe(stream: MuxStream): void {
-        if (stream.sent && this.socket?.readyState === WebSocket.OPEN)
-            this.socket.send(JSON.stringify({ op: 'unsub', id: stream.id }))
+        if (stream.sent) this.sendUnsub(stream.id)
+    }
+
+    private sendUnsub(id: number): void {
+        if (this.socket?.readyState === WebSocket.OPEN)
+            this.socket.send(JSON.stringify({ op: 'unsub', id }))
     }
 
     /**
@@ -572,7 +572,7 @@ export function followRpc(
 }
 
 /** Stops following the copy for `address` and `args`, which `followRpc` started. */
-export function unfollowRpc(address: string, args: unknown): void {
+function unfollowRpc(address: string, args: unknown): void {
     const key = `${address} ${canonicalKey(args)}`
     const following = FOLLOWING.get(key)
     if (following === undefined) return

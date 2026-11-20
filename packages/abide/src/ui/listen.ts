@@ -21,11 +21,15 @@ export function listen(
     const added = listener as EventListenerObject
     target.addEventListener(type, added, added as AddEventListenerOptions)
     if (scope !== undefined)
-        scope.stops.push(() =>
-            target.removeEventListener(
-                type,
-                added,
-                added as EventListenerOptions,
-            ),
-        )
+        scope.stops.push(() => unlisten(target, type, added))
+}
+
+/** Removes what `listen` added, under the options it was added with (32.4). */
+export function unlisten(
+    target: EventTarget,
+    type: string,
+    listener: unknown,
+): void {
+    const added = listener as EventListenerObject
+    target.removeEventListener(type, added, added as EventListenerOptions)
 }

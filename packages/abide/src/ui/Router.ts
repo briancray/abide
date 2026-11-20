@@ -206,7 +206,7 @@ export class Router {
      * Arrives at the entry a back or forward step has already moved the address bar to.
      *
      * The page is mounted where the bar already points and nothing is pushed for it. 30.20 — a step
-     * within the standing page, back over an in-page `#anchor` jump, is `follow`'s: nothing asked,
+     * within the standing page, back over an in-page `#anchor` jump, is `settle`'s: nothing asked,
      * nothing remounted. 30.29 — the scroll is put back once the page it belongs to is mounted.
      */
     async popped(): Promise<void> {
@@ -306,18 +306,8 @@ export class Router {
         }
     }
 
-    /** Executes an outcome that loads nothing: a document load, or a step within the page. */
-    private settle(
-        outcome: Settled<Compiled>,
-        options: NavigateOptions,
-        step: Step,
-    ): void {
-        if (outcome.kind === 'document') location.href = outcome.href
-        else this.follow(outcome.at, options, outcome.found, step)
-    }
-
     /**
-     * Moves the address within the standing page, leaving the page mounted.
+     * Executes an outcome that loads nothing: a document load, or a step within the standing page.
      *
      * A STEP WITHIN THE STANDING PAGE: the address written and `route` moved, and the page, its
      * scope and every call it made left where they are. It supersedes a navigation in flight the
@@ -327,12 +317,16 @@ export class Router {
      * 30.25 — THE SCROLL STAYS where no page was replaced, except to a fragment the address names:
      * a reader choosing a season is not sent back to the top of the series.
      */
-    follow(
-        target: URL,
+    private settle(
+        outcome: Settled<Compiled>,
         options: NavigateOptions,
-        found: Found<Compiled>,
         step: Step,
     ): void {
+        if (outcome.kind === 'document') {
+            location.href = outcome.href
+            return
+        }
+        const target = outcome.at
         this.supersede()
         route.navigating.set(false)
         // THE SAME ADDRESS REPLACES rather than pushing, which is what the browser does for a
@@ -342,7 +336,7 @@ export class Router {
             options.replace === true || target.href === location.href,
             [scrollX, scrollY],
         )
-        this.arriveAt(target, found)
+        this.arriveAt(target, outcome.found)
         if (step.scroll !== undefined) scrollTo(step.scroll[0], step.scroll[1])
         else if (options.keepScroll !== true && target.hash !== '')
             scrollToFragment(target.hash)

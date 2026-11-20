@@ -4,7 +4,7 @@
 
 import { spreadEntries } from '#shared/spread.ts'
 
-import { listen } from './listen.ts'
+import { listen, unlisten } from './listen.ts'
 import type { Scope } from './Scope.ts'
 import { writeAttribute } from './setAttribute.ts'
 
@@ -42,17 +42,4 @@ export function bindSpread(
                 listeners.delete(event)
             }
     })
-}
-
-/** Removes what `listen` added, under the options it was added with (32.4). */
-function unlisten(
-    element: Element,
-    event: string,
-    listener: EventListener,
-): void {
-    element.removeEventListener(
-        event,
-        listener,
-        listener as EventListenerOptions,
-    )
 }
