@@ -1,0 +1,52 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import AccountsByRegion from './lib/AccountsByRegion.abide'
+import accountsByRegion from './lib/AccountsByRegion.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/components/tabs', '/components/menu', '/helpers/listbox']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/AccountTree.test.ts',
+            from: [
+                "test('an item says its depth and place, and a shut branch hides its children'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/AccountTree.test.ts',
+            from: [
+                "test('Down and Up move through the items that show, and stop at the ends'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/AccountTree.test.ts',
+            from: [
+                "test('Right opens a branch and enters it; Left shuts it and climbs to its parent'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/AccountTree.test.ts',
+            from: [
+                "test('a letter moves to the next item whose name starts with it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/AccountTree.test.ts',
+            from: [
+                "test('a click picks the item it lands in, and Enter picks the one focused'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Browse accounts by region">
+        <p>Spread <code>tree</code> on your list, <code>item</code> on each node and
+            <code>group</code> on the list of its children. Focus an item and the arrows move
+            through what shows; Right opens a region, Left closes it, and a letter jumps to the next
+            name it starts.</p>
+        <Example code={accountsByRegion}><AccountsByRegion /></Example>
+    </Section>
+</Doc>

@@ -1,0 +1,44 @@
+<script>
+import { reactive, tree } from '@abide/abide'
+
+type Account = { id: string; name: string; under?: Account[] }
+
+const REGIONS: Account[] = [
+    {
+        id: 'europe',
+        name: 'Europe',
+        under: [
+            { id: 'hopper', name: 'Hopper & Co' },
+            { id: 'babbage', name: 'Babbage & Co' },
+        ],
+    },
+    {
+        id: 'americas',
+        name: 'Americas',
+        under: [{ id: 'turing', name: 'Turing Labs' }],
+    },
+]
+
+let selected = reactive<string | undefined>(undefined)
+const accounts = tree({
+    roots: REGIONS,
+    children: (account: Account) => account.under,
+    key: (account: Account) => account.id,
+    label: (account: Account) => account.name,
+    selected,
+})
+</script>
+
+<p>{selected ?? 'Pick an account.'}</p>
+<ul {...accounts.tree} aria-label="Accounts" class="tree">
+    {#for region of REGIONS by region.id}
+        <li {...accounts.item(region)}>
+            {region.name}
+            <ul {...accounts.group(region)}>
+                {#for company of region.under by company.id}
+                    <li {...accounts.item(company)}>{company.name}</li>
+                {/for}
+            </ul>
+        </li>
+    {/for}
+</ul>

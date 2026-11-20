@@ -221,7 +221,7 @@ table.
   `Column` and `Area` children), `Pie`, `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `form` (a `<form>` over a handler, checked against its args before the call),
-  `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `sortRows`, `virtualRows`, `hotkeys` and `keyLabel`, and
+  `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `tree`, `sortRows`, `virtualRows`, `hotkeys` and `keyLabel`, and
   the `bind:element` adaptors `dismissible`, `dropzone`, `copyText`, `popover` (an app's own panel in
   the top layer, against its anchor) and `tooltip` (shown by the root layout's `Tooltips`) beside
   `observe`.

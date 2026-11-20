@@ -50,3 +50,43 @@ export function roving(
     if (back) return at === -1 ? last : at === 0 ? (wrap ? last : 0) : at - 1
     return key === 'Home' ? 0 : last
 }
+
+// 50.40 — how long typed letters keep adding to the text an item is looked for by.
+const TYPED_FOR = 500
+
+/**
+ * 50.40, 51.89 — A LIST'S TYPE-AHEAD: the index a printable key moves to, the next item whose text
+ * starts with what was typed, or `-1`. A letter typed again walks the items starting with it; letters
+ * typed within half a second of each other are one word, found from the item on now. What `menu` and
+ * `tree` share; each holds its own, since what was typed belongs to the one list it was typed in.
+ */
+export function typeahead(): (
+    event: KeyboardEvent,
+    at: number,
+    length: number,
+    textOf: (index: number) => string,
+) => number {
+    let typed = ''
+    let typedAt = 0
+    return (event, at, length, textOf) => {
+        if (
+            event.key.length !== 1 ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.altKey
+        )
+            return -1
+        const now = event.timeStamp
+        typed =
+            now - typedAt > TYPED_FOR
+                ? event.key.toLowerCase()
+                : typed + event.key.toLowerCase()
+        typedAt = now
+        const from = typed.length === 1 ? at + 1 : Math.max(at, 0)
+        for (let step = 0; step < length; step += 1) {
+            const index = (from + step) % length
+            if (textOf(index).toLowerCase().startsWith(typed)) return index
+        }
+        return -1
+    }
+}

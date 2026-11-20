@@ -8,7 +8,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, listbox, reactive, tabs } from '#shared'
+import { flushSync, listbox, reactive, tabs, tree } from '#shared'
 import { menu } from '#shared/menu.ts'
 
 afterEach(() => document.body.replaceChildren())
@@ -157,4 +157,64 @@ test("a menu's trigger opens on the arrows openingEnd names, and at that end", (
     press(keydown, 'ArrowUp')
     expect(parts.open()).toBe(true)
     expect(document.activeElement?.textContent).toBe('c')
+})
+
+// 50.40, 51.89 — ONE TYPE-AHEAD under `menu` and `tree`: a letter typed again walks the items that
+// start with it, round the end, and letters typed together are one word. THE REVERT: give `menu` back
+// a type-ahead of its own that starts the search at the item on now rather than past it, and B typed
+// twice stays on the first B.
+test('a letter walks the items that start with it, in a menu as in a tree — 50.40, 51.89', () => {
+    const NAMES = ['Ada', 'Babbage', 'Byron', 'Boole']
+    const parts = menu()
+    const list = document.createElement('div')
+    list.id = parts.menu.id as string
+    for (const text of NAMES) {
+        const item = document.createElement('button')
+        item.setAttribute('role', 'menuitem')
+        item.textContent = text
+        list.append(item)
+    }
+    document.body.append(list)
+    ;(list.firstElementChild as HTMLElement).focus()
+    const keydown = parts.menu.onkeydown as (event: KeyboardEvent) => void
+    // A second apart, so each letter is a search of its own rather than a word.
+    const typed = (key: string, at: number) => {
+        const event = new KeyboardEvent('keydown', { key, cancelable: true })
+        Object.defineProperty(event, 'timeStamp', { value: at * 1000 })
+        Object.defineProperty(event, 'target', {
+            value: document.activeElement,
+        })
+        return event
+    }
+    const inMenu: string[] = []
+    for (const [at, key] of ['b', 'b', 'b', 'b'].entries()) {
+        keydown(typed(key, at))
+        inMenu.push(document.activeElement?.textContent ?? '')
+    }
+    document.body.replaceChildren()
+
+    const view = tree({
+        roots: NAMES,
+        children: () => undefined,
+        key: (name: string) => name,
+        label: (name: string) => name,
+    })
+    const root = document.createElement('ul')
+    for (const name of NAMES) {
+        const item = document.createElement('li')
+        item.id = view.item(name).id as string
+        item.textContent = name
+        item.tabIndex = -1
+        root.append(item)
+    }
+    document.body.append(root)
+    ;(root.firstElementChild as HTMLElement).focus()
+    const inTree: string[] = []
+    for (const [at, key] of ['b', 'b', 'b', 'b'].entries()) {
+        ;(view.tree.onkeydown as (event: KeyboardEvent) => void)(typed(key, at))
+        flushSync()
+        inTree.push(document.activeElement?.textContent ?? '')
+    }
+    expect(inMenu).toEqual(['Babbage', 'Byron', 'Boole', 'Babbage'])
+    expect(inTree).toEqual(inMenu)
 })

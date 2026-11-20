@@ -5326,6 +5326,31 @@ selected and mixed while some are, whose press selects every row or, where every
 
 51.83 `SortableTable` MUST write a change of `selected` it makes back to a `selected` bound to it.
 
+51.84 `tree` MUST give its tree `role="tree"`, each node's item `role="treeitem"` with the node's depth
+as `aria-level` and its count and place among its siblings as `aria-setsize` and `aria-posinset`, and
+the element holding a node's children `role="group"`.
+
+51.85 `tree` MUST write `aria-expanded` on the item of a node with children, `true` while the node is
+expanded, and on no other item.
+
+51.86 `tree` MUST put exactly one item in the page's tab order: the one last focused while it shows,
+else the one selected, else the first.
+
+51.87 `tree` MUST move focus on ArrowDown and ArrowUp to the next and the previous item that shows,
+stopping at the ends, and on Home and End to the first and the last.
+
+51.88 `tree` MUST, on ArrowRight, expand a collapsed node and move focus to an expanded one's first
+child, and, on ArrowLeft, collapse an expanded node and move focus to the parent of any other.
+
+51.89 `tree` MUST move focus on a printable key to an item that shows whose `label` starts with what
+was typed, as `menu` moves among its items (50.40).
+
+51.90 A click on an item of a `tree`, and Enter or Space on the one focused, MUST set `selected` to that
+item's node's key, a click picking only the item it lands in; `tree` MUST write `aria-selected` on each
+item and `data-selected` on the one selected.
+
+51.91 `tree` MUST hide the element holding a node's children while the node is collapsed.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

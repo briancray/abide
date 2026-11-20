@@ -569,3 +569,38 @@
         }
     }
 }
+
+/* A tree: each level indented under its branch, a branch marked open or shut, the item picked lit. */
+@utility tree {
+    @apply m-0 list-none gap-0 p-0 text-ink;
+
+    & li {
+        @apply my-0 py-0.5;
+    }
+
+    /* the group resets what a picked branch lights, so its children read as their own */
+    & [role=group] {
+        @apply m-0 list-none gap-0 py-0 pr-0 pl-5 font-normal text-ink;
+    }
+
+    & [role=treeitem] {
+        @apply cursor-default rounded-sm outline-none;
+    }
+
+    & [role=treeitem][aria-expanded]::before {
+        content: '▸ ';
+        @apply text-muted;
+    }
+
+    & [role=treeitem][aria-expanded=true]::before {
+        content: '▾ ';
+    }
+
+    & [role=treeitem]:focus-visible {
+        @apply outline-2 outline-offset-2 outline-signal outline-solid;
+    }
+
+    & [data-selected] {
+        @apply font-semibold text-signal;
+    }
+}

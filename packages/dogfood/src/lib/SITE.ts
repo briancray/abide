@@ -570,6 +570,12 @@ const WRITTEN: readonly {
                     'Switch between views from a row of tabs of your own that the arrow keys move along.',
             },
             {
+                route: '/helpers/tree',
+                title: '`tree`',
+                description:
+                    'Show nested records as a tree of your own that the arrow keys open, close and move through.',
+            },
+            {
                 route: '/components/sortable-table',
                 title: '`SortableTable`',
                 description:

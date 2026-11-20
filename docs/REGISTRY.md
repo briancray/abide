@@ -926,6 +926,14 @@ type Reached = { readonly [REACHED]: true }
 | `TabsOptions` | `{ keys: readonly string[] \| (() => readonly string[]); selected?: Reactive<string \| undefined> }` | The tabs' keys in order, and the key of the one selected. | 51.36, 51.37 |
 | `Tabs` | `{ readonly list: Record<string, unknown>; tab(key: string): Record<string, unknown>; panel(key?: string): Record<string, unknown>; readonly current: Reactive<string \| undefined> }` | The list's part, a tab's, a panel's, and the key of the tab selected. | 32.11, 51.36, 51.42, 51.43 |
 
+## `tree`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `tree` | `<Node>(options: TreeOptions<Node>) => Tree<Node>` | WAI-ARIA's tree as parts an app spreads onto elements of its own: the tree, an item per node, and the group holding a node's children. | 51.84, 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91 |
+| `TreeOptions` | `<Node>{ roots: readonly Node[] \| (() => readonly Node[]); children(node: Node): readonly Node[] \| undefined; key(node: Node): string; label(node: Node): string; expanded?: Reactive<readonly string[]>; selected?: Reactive<string \| undefined> }` | The nodes, how each is told apart and named, and which are expanded and which is selected. | 51.84, 51.86, 51.89, 51.90 |
+| `Tree` | `<Node>{ readonly tree: Record<string, unknown>; item(node: Node): Record<string, unknown>; group(node: Node): Record<string, unknown>; isExpanded(node: Node): boolean; toggle(node: Node): void }` | The parts `tree` hands back, and whether a node is expanded. | 51.84, 51.85, 51.91 |
+
 ## `SortableTable`
 
 | Name | Signature | Meaning | Rules |

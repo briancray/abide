@@ -7,7 +7,7 @@ import { anchored } from './anchored.ts'
 import type { Side } from './place.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
-import { openingEnd, roving } from './roving.ts'
+import { openingEnd, roving, typeahead } from './roving.ts'
 
 /** Where a menu opens against its trigger, and what hears it open and close. */
 export type MenuOptions = {
@@ -40,8 +40,6 @@ export type Menu = {
 // 50.29, 50.38 — the items the keys walk and a click picks.
 const ITEM =
     ':is([role=menuitem],[role=menuitemcheckbox],[role=menuitemradio]):not([disabled]):not([aria-disabled=true])'
-// 50.40 — how long typed letters keep adding to the text an item is looked for by.
-const TYPED_FOR = 500
 
 /** WAI-ARIA's menu button: a trigger and the menu it opens, as two parts to spread. */
 export function menu(options: MenuOptions = {}): Menu {
@@ -66,8 +64,7 @@ export function menu(options: MenuOptions = {}): Menu {
     // Whether the menu was open as the trigger was pressed: a press outside an open popover closes it
     // before the click lands, and the click must not open it again (50.32).
     let openAtPress = false
-    let typed = ''
-    let typedAt = 0
+    const typedTo = typeahead()
 
     const items = (): HTMLElement[] => {
         const list = menuOf()
@@ -170,7 +167,12 @@ export function menu(options: MenuOptions = {}): Menu {
                 at,
                 listed.length,
             ])
-            const next = roved === -1 ? typedTo(event, listed, at) : roved
+            const next =
+                roved === -1
+                    ? typedTo(event, at, listed.length, (index) =>
+                          (listed[index]?.textContent ?? '').trim(),
+                      )
+                    : roved
             if (next === -1) return
             event.preventDefault()
             listed[next]?.focus()
@@ -185,35 +187,6 @@ export function menu(options: MenuOptions = {}): Menu {
             hide()
             triggerOf()?.focus()
         },
-    }
-
-    // 50.40 — a printable key moves focus to the next item whose text starts with what was typed.
-    function typedTo(
-        event: KeyboardEvent,
-        listed: HTMLElement[],
-        at: number,
-    ): number {
-        if (
-            event.key.length !== 1 ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.altKey
-        )
-            return -1
-        const now = event.timeStamp
-        typed =
-            now - typedAt > TYPED_FOR
-                ? event.key.toLowerCase()
-                : typed + event.key.toLowerCase()
-        typedAt = now
-        // A letter typed again walks the items starting with it; a word finds the first it starts.
-        const from = typed.length === 1 ? at + 1 : Math.max(at, 0)
-        for (let step = 0; step < listed.length; step += 1) {
-            const index = (from + step) % listed.length
-            const text = listed[index]?.textContent?.trim().toLowerCase() ?? ''
-            if (text.startsWith(typed)) return index
-        }
-        return -1
     }
 
     return { trigger, menu: list, open }
