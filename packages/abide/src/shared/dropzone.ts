@@ -1,5 +1,6 @@
 // 53.17-53.20, 53.46 — FILES DROPPED ON AN ELEMENT, or pasted into it, filtered as a file input filters.
 
+import { filesOf } from './filesOf.ts'
 import type { Disposer } from './reactive/watch.ts'
 
 /**
@@ -44,7 +45,7 @@ export function dropzone(
         // Matched one for one, so the second of two identical files is turned away where one was taken.
         const unmatched = [...files]
         const turnedAway: File[] = []
-        for (const file of data.files) {
+        for (const file of filesOf(data)) {
             const at = unmatched.indexOf(file)
             if (at === -1) turnedAway.push(file)
             else unmatched.splice(at, 1)
@@ -124,22 +125,14 @@ function acceptOf(accept: string): string[] {
     return entries
 }
 
-/** The files a transfer carries that an `accept` list takes, reading `items` where `files` hold none. */
+/** The files a transfer carries that an `accept` list takes. */
 function acceptedBy(
     accepted: readonly string[],
 ): (data: DataTransfer | null) => File[] {
     return (data) => {
         const files: File[] = []
-        if (data === null) return files
-        for (const file of data.files)
+        for (const file of filesOf(data))
             if (accepts(accepted, file)) files.push(file)
-        if (data.files.length > 0) return files
-        // A pasted file some browsers carry in `items` alone.
-        for (const item of data.items) {
-            if (item.kind !== 'file') continue
-            const file = item.getAsFile()
-            if (file !== null && accepts(accepted, file)) files.push(file)
-        }
         return files
     }
 }

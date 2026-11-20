@@ -209,6 +209,39 @@ test('a paste of files is a drop, and words pasted alone paste — 53.20', () =>
     stop()
 })
 
+// THE REVERT: walk `data.files` alone for what was turned away, and a paste carrying its files in
+// `items` alone reaches no `onreject` — this reports `[]`. `getAsFile` hands a new `File` per call,
+// as a browser's does, so the photo taken is matched only where the transfer is read once.
+test('a paste carrying its files in items alone takes and turns away as a drop does — 53.20, 53.46', () => {
+    const zone = element('textarea')
+    const taken: string[][] = []
+    const turnedAway: string[][] = []
+    const stop = dropzone(
+        (files) => taken.push(files.map((file) => file.name)),
+        {
+            paste: true,
+            accept: 'image/*',
+            onreject: (files) =>
+                turnedAway.push(files.map((file) => file.name)),
+        },
+    )(zone)
+    const item = (file: File) => ({
+        kind: 'file',
+        type: file.type,
+        getAsFile: () => new File([file], file.name, { type: file.type }),
+    })
+    const event = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'clipboardData', {
+        value: { files: [], items: [item(PHOTO), item(CONTRACT)] },
+    })
+    zone.dispatchEvent(event)
+    expect({ taken, turnedAway }).toEqual({
+        taken: [['signing.png']],
+        turnedAway: [['ledger-audit.pdf']],
+    })
+    stop()
+})
+
 test('a click copies, marks the element copied, and the mark wears off — 53.21, 53.23', async () => {
     const copied: string[] = []
     Object.defineProperty(navigator, 'clipboard', {

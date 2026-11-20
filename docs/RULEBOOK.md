@@ -5467,7 +5467,9 @@ nothing for a click on no such element.
 landed and the element clicked.
 
 53.46 `dropzone` MUST hand `onreject` the files a drop or a paste carries that it does not take,
-`accept` refusing them or `multiple` being `false`, and MUST NOT call it where it takes every one.
+`accept` refusing them or `multiple` being `false`, and MUST NOT call it where it takes every one. A
+transfer whose `files` hold none carries the files in its `items`, for what it takes and turns away
+alike.
 
 53.47 `Chat` MUST render a tool part through `Tool` where one is given, handed the part and its
 turn, and as its name, its input and its result where none is.

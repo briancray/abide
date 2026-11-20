@@ -4,6 +4,7 @@
 // with it; where nothing can draw (a server) it goes as it is.
 
 import type { AssistantContent } from './AssistantEvent.ts'
+import { filesOf } from './filesOf.ts'
 import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
 
 // The longest side, in pixels, a model looks at before it scales an image down itself.
@@ -15,15 +16,7 @@ const PHOTO_TYPES = new Set(['image/heic', 'image/heif'])
 /** The image files a paste or a drop carries of a type a model is shown, or a HEIC or HEIF, in order. 44.55. */
 export function imageFiles(data: DataTransfer | null): File[] {
     const files: File[] = []
-    if (data === null) return files
-    for (const file of data.files) if (carried(file.type)) files.push(file)
-    if (files.length > 0) return files
-    // A pasted image some browsers carry in `items` alone.
-    for (const item of data.items) {
-        if (item.kind !== 'file' || !carried(item.type)) continue
-        const file = item.getAsFile()
-        if (file !== null) files.push(file)
-    }
+    for (const file of filesOf(data)) if (carried(file.type)) files.push(file)
     return files
 }
 
