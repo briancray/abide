@@ -1,0 +1,7 @@
+<script>
+import { props } from '@abide/abide'
+
+const { label } = props<{ label: string }>()
+</script>
+
+<button>{label}</button>

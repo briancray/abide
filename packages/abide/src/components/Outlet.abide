@@ -1,0 +1,41 @@
+<script module>
+// 35.20, 34.33 — THE CALL THAT FILLS THIS COMPONENT, imported beside it from its own entry.
+import { fill } from '#shared/fill.ts'
+
+export { fill }
+</script>
+
+<script>
+// 35.20-35.22 — WHERE `fill` RENDERS: a place a layout owns, rendering every component handed to its
+// name in the order it was handed, where the outlet stands.
+import { fillings, outlets, type Standing, stood } from '#shared/fill.ts'
+import { props } from '#shared/props.ts'
+import { join } from '#shared/register.ts'
+
+const { name } = props<{
+    /** The name `fill` hands its component to. */
+    name: string
+}>()
+
+// 35.22 — this outlet, among those standing; of two under one name, the last renders the fills.
+const self: Standing = { name }
+join(outlets, self)
+stood.add(name)
+
+function shows(): boolean {
+    let last: Standing | undefined
+    for (const standing of outlets) if (standing.name === name) last = standing
+    return last === self
+}
+</script>
+
+{#component Placed({ Content, given }: {
+    Content: (props: Record<string, unknown>) => unknown
+    given: Record<string, unknown>
+})}
+    <Content {...given} />
+{/component}
+
+{#for filling of shows() ? fillings.filter((each) => each.into === name) : [] by filling}
+    <Placed Content={filling.Component as (props: Record<string, unknown>) => unknown} given={filling.props} />
+{/for}

@@ -1,0 +1,13 @@
+<script>
+import { reactive } from '@abide/abide'
+import Outlet, { fill } from '@abide/abide/Outlet.abide'
+
+import Action from './Action.abide'
+
+let exported = reactive(0)
+
+fill('actions', Action, { label: 'Export', onclick: () => (exported += 1) })
+</script>
+
+<header class="row"><Outlet name="actions" /></header>
+<p>Exported {exported} times.</p>

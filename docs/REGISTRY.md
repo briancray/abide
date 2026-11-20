@@ -168,6 +168,18 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
 | `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
 
+## `Outlet`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Outlet` | `{ name: string }` | A place a layout owns, rendering every component `fill` hands to its name where it stands, imported from `@abide/abide/Outlet.abide`. | 35.20, 35.21, 35.22, 35.23 |
+
+## `fill`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `fill` | `<Props>(into: string, Component: (props: Props) => unknown, props?: Props) => void` | A component handed to the `Outlet` named `into`, rendered there with `props` for as long as the setup that called it stands. | 35.20, 35.21, 35.23, 35.24 |
+
 ## `createApp`
 
 | Name | Signature | Meaning | Rules |

@@ -216,7 +216,8 @@ table.
   `Dialog`, `Prompts` (and `prompts.confirm` / `prompts.alert` / `prompts.prompt` beside it:
   `import Prompts, { prompts } from '@abide/abide/Prompts.abide'`), `Toasts` (and `toasts.notify`
   beside it), `Tooltips`, `Announcer` (and `announce` beside it, a message read to a screen reader
-  with nothing shown), `Combobox`, `SortableTable`, `Markdown`, `Chart` (with `Line`,
+  with nothing shown), `Outlet` (and `fill` beside it: a page's component rendered in a place its
+  layout leaves, painted there by the server), `Combobox`, `SortableTable`, `Markdown`, `Chart` (with `Line`,
   `Column` and `Area` children), `Pie`, `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `sortRows`, `hotkeys` and `keyLabel`, and

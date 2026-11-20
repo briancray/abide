@@ -8,6 +8,7 @@ onError((error) => tracker.capture(error))
 
 <script>
 import { reactive, url } from '@abide/abide'
+import Outlet from '@abide/abide/Outlet.abide'
 
 let note = reactive('')
 </script>
@@ -17,6 +18,7 @@ let note = reactive('')
 <header class="row">
     <a href={url('/companies')}>All companies</a>
     <input bind:value={note} placeholder="Note for the call">
+    <Outlet name="actions" />
 </header>
 
 <slot />

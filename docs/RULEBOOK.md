@@ -2885,6 +2885,21 @@ navigation from it MUST load the document it asks for.
 35.19 A page route MUST answer a request whose `sec-fetch-dest` names neither a destination fetch
 calls a navigation request's nor `empty` with a bodiless 404, and MUST NOT set up its page.
 
+35.20 `fill` MUST render its component with its props in the `Outlet` whose `name` is its `into`,
+for as long as the setup that called it stands, and the fills of one name MUST render in the order
+they were made.
+
+35.21 A `fill` made in the setup of a page or a layout MUST be written by the server inside the
+`Outlet` it fills, and hydration MUST adopt it there.
+
+35.22 Of the `Outlet`s standing under one name, the last MUST render that name's fills and the
+others MUST render none.
+
+35.23 A `fill` made once the `Outlet` it fills has been built MUST render there in a browser once it
+is made, and MUST NOT be written by the server.
+
+35.24 A `fill` whose `into` no `Outlet` has stood under MUST warn once, on `abide:fill`.
+
 # 36. Environment and files
 
 36.1 `PORT` MUST default to 3000, and a command's own port flag MUST override it by declaring it.

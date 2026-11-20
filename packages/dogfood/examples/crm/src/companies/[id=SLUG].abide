@@ -1,8 +1,13 @@
 <script>
 import { reactive, route } from '@abide/abide'
+import { fill } from '@abide/abide/Outlet.abide'
 
 import getCompany from './getCompany.handler.ts'
 import CompanyTabs from './lib/CompanyTabs.abide'
+import PrintSheet from './lib/PrintSheet.abide'
+
+// The layout's toolbar, while this company is open.
+fill('actions', PrintSheet)
 
 const company = reactive(() => getCompany({ id: route.params.id }))
 </script>

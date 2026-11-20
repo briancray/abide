@@ -1,0 +1,12 @@
+<script>
+import Outlet, { fill } from '@abide/abide/Outlet.abide'
+
+import Action from './Action.abide'
+
+fill('side', Action, { label: 'Share' })
+</script>
+
+<div class="row">
+    <span>Above: <Outlet name="side" /></span>
+    <span>Below: <Outlet name="side" /></span>
+</div>

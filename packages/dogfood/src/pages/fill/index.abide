@@ -1,0 +1,39 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CountExports from './lib/CountExports.abide'
+import countExports from './lib/CountExports.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/pages/outlet', '/pages/pages', '/reactive/tracking']}
+    tests={[
+        {
+            path: 'packages/abide/tests/fill.test.ts',
+            from: [
+                "test('fills stand in the order they were made, and each leaves with its setup — 35.20'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/fill.test.ts',
+            from: [
+                "test('a fill no Outlet of its name has stood under warns once — 35.24'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/Layout.test.ts',
+            from: [
+                'test("a company\'s page fills the layout\'s toolbar, painted by the server"',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Put a page's action in its layout's toolbar">
+        <p>Call <code>fill</code> in a page's script, and the component renders in the layout's
+            <code>Outlet</code> with the props you hand it. Every level of a page is set up before
+            any is drawn, so the server paints it in the toolbar, and it leaves with the page.</p>
+        <Example code={countExports}><CountExports /></Example>
+    </Section>
+</Doc>

@@ -114,6 +114,18 @@ const WRITTEN: readonly {
                     'Send a page before its data lands, leaving holes in text, attributes, titles and textareas that fill as each value arrives.',
             },
             {
+                route: '/pages/outlet',
+                title: '`Outlet`',
+                description:
+                    'Leave a named place in a layout, a toolbar or a side panel, for the page under it to fill.',
+            },
+            {
+                route: '/pages/fill',
+                title: '`fill`',
+                description:
+                    "Put a component in a layout's named place from the page under it, painted there by the server.",
+            },
+            {
                 route: '/app/create-app',
                 title: '`createApp`',
                 description:

@@ -1,0 +1,41 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import Toolbar from './lib/Toolbar.abide'
+import toolbar from './lib/Toolbar.abide' with { type: 'text' }
+import TwoPlaces from './lib/TwoPlaces.abide'
+import twoPlaces from './lib/TwoPlaces.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/pages/fill', '/pages/pages', '/components/tooltips']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/Layout.test.ts',
+            from: [
+                'test("a company\'s page fills the layout\'s toolbar, painted by the server"',
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/e2e/Layout.test.ts',
+            from: [
+                'test("a company\'s toolbar action hydrates in place and leaves with the company"',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Leave a toolbar for the page to fill">
+        <p>An <code>Outlet</code> renders what <code>fill</code> hands its name, in the order it
+            was handed, where the outlet stands. Write one in a layout, and every page under it
+            can put its own actions in the layout's header.</p>
+        <Example code={toolbar}><Toolbar /></Example>
+    </Section>
+
+    <Section level={3} title="Render a place once where two layouts leave the same name">
+        <p>Of the outlets standing under one name, the last renders its fills and the others
+            render nothing, so a nested layout can take over a place its parent leaves.</p>
+        <Example code={twoPlaces}><TwoPlaces /></Example>
+    </Section>
+</Doc>

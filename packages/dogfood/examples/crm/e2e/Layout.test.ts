@@ -17,3 +17,28 @@ test('a company opens inside the layout, and the note stays', async ({
     await expect(page).toHaveURL('companies')
     await expect(note).toHaveValue('Grace wants a quote')
 })
+
+// 35.20-35.22 — THE TOOLBAR A COMPANY FILLS IS ADOPTED WHERE THE SERVER PAINTED IT, and leaves with the
+// company: on a direct hit hydration finds the button where it is, with no warning that the client
+// and the server disagree, and the list it navigates back to fills nothing.
+// THE REVERT: drop the disposer `fill`'s watch hands back, and the list keeps the company's button.
+test("a company's toolbar action hydrates in place and leaves with the company", async ({
+    page,
+}) => {
+    const mismatches: string[] = []
+    page.on('console', (message) => {
+        if (message.text().includes('abide:hydrate'))
+            mismatches.push(message.text())
+    })
+    await page.goto('companies/hopper-and-co', { waitUntil: 'networkidle' })
+    const toolbar = page.locator('header')
+    await expect(
+        toolbar.getByRole('button', { name: 'Print sheet' }),
+    ).toHaveCount(1)
+    expect(mismatches).toEqual([])
+    await page.getByRole('link', { name: 'All companies', exact: true }).click()
+    await expect(page).toHaveURL('companies')
+    await expect(
+        toolbar.getByRole('button', { name: 'Print sheet' }),
+    ).toHaveCount(0)
+})
