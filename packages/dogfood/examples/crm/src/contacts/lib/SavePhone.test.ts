@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 
 import { flushSync } from '@abide/abide'
+import Toasts, { toasts } from '@abide/abide/Toasts.abide'
 import { measure, mount, settled } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
 
@@ -62,4 +63,30 @@ test('closing one notice leaves the others where they are', async () => {
     atMost(work, { nodesCreated: 0, elementsMoved: 1, attributesSet: 0 })
     document.querySelector<HTMLButtonElement>('[data-part=close]')?.click()
     flushSync()
+})
+
+// 50.35, 50.36 — A NOTICE CARRIES THE ATTRIBUTES IT WAS GIVEN, and its action tells `onclose` it was
+// the action that took it. THE REVERTS: drop the `{...toast.attributes}` spread in `Toasts` — the
+// notice carries no `data-track`; take the action through `dismiss` again — `dismissed` where `action`
+// is due.
+test('a notice carries its attributes, and its action tells onclose why it left', async () => {
+    using _phone = await mount(SavePhone({}))
+    await save('555 0100')
+    expect(
+        document.querySelector('[data-part=toast]')?.getAttribute('data-track'),
+    ).toBe('phone-saved')
+    document.querySelector<HTMLButtonElement>('[data-part=close]')?.click()
+    flushSync()
+
+    using _toasts = await mount(Toasts({}))
+    const reasons: string[] = []
+    toasts.notify('Deal archived', {
+        timeout: Infinity,
+        action: { label: 'Undo', run: () => {} },
+        onclose: (reason) => reasons.push(reason),
+    })
+    flushSync()
+    document.querySelector<HTMLButtonElement>('[data-part=action]')?.click()
+    flushSync()
+    expect(reasons).toEqual(['action'])
 })

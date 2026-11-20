@@ -13,7 +13,7 @@ export type { NotifyOptions, Toast }
 // every notice is read out from as it lands.
 import type { Attributes } from '#shared/Attributes.ts'
 import { props } from '#shared/props.ts'
-import { dismiss } from '#shared/toasts/dismiss.ts'
+import { close, dismiss } from '#shared/toasts/dismiss.ts'
 import { list, type Toast } from '#shared/toasts/list.ts'
 
 const { label = 'Notices', ...rest } = props<
@@ -24,14 +24,14 @@ const { label = 'Notices', ...rest } = props<
 >()
 
 function act(toast: Toast) {
-    dismiss(toast.id)
+    close(toast.id, 'action')
     toast.action?.run()
 }
 </script>
 
 <div {...rest} role="status" aria-live="polite" aria-label={label}>
     {#for toast of list by toast.id}
-        <div data-part="toast" data-tone={toast.tone}>
+        <div {...toast.attributes} data-part="toast" data-tone={toast.tone}>
             <span data-part="text">{toast.text}</span>
             {#if toast.action}
                 <button type="button" data-part="action" onclick={() => act(toast)}>{toast.action.label}</button>

@@ -10,7 +10,10 @@ let phone = reactive('555 0100')
 async function save() {
     try {
         await savePhone({ phone })
-        toasts.notify('Phone saved', { tone: 'success' })
+        toasts.notify('Phone saved', {
+            tone: 'success',
+            attributes: { 'data-track': 'phone-saved' },
+        })
     } catch (refused) {
         toasts.notify((refused as Error).message, {
             tone: 'error',

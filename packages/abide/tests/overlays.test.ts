@@ -111,6 +111,7 @@ test('a notice lands at the end of the list and leaves it at its timeout — 50.
         text: 'Phone saved',
         tone: 'success',
         action: undefined,
+        attributes: {},
     })
     await Bun.sleep(20)
     expect(toasts.list().map((toast) => toast.text)).toEqual(['Saved'])
@@ -136,6 +137,24 @@ test('dismiss takes one notice down, and leaves the list alone for one already g
     toasts.dismiss(first)
     expect(toasts.list()).toBe(held)
     expect(held.map((toast) => toast.text)).toEqual(['two'])
+})
+
+// 50.36 — TOLD ONCE, AND WHY. THE REVERT: call `onclose` from `notify`'s timer alone — the dismissed
+// notice's reason is never told, `[timeout]` where `[timeout, dismissed]` is due.
+test('a notice tells its onclose once, why it left — 50.36', async () => {
+    const reasons: string[] = []
+    toasts.notify('Saved', {
+        timeout: 5,
+        onclose: (reason) => reasons.push(reason),
+    })
+    const kept = toasts.notify('Phone saved', {
+        timeout: Infinity,
+        onclose: (reason) => reasons.push(reason),
+    })
+    await Bun.sleep(20)
+    toasts.dismiss(kept)
+    toasts.dismiss(kept)
+    expect(reasons).toEqual(['timeout', 'dismissed'])
 })
 
 test('a string is the body of the prompt confirm queues, behind the one before it — 50.5, 50.7', () => {
@@ -180,7 +199,13 @@ test('confirm, alert, prompt and notify throw inside a request — 50.11, 50.16'
 test('the notices and the prompts are one list per request — 11.32', async () => {
     await inScope(new Request('http://app/a'), async () => {
         toasts.list.set([
-            { id: 1, text: 'Ada saved', tone: 'info', action: undefined },
+            {
+                id: 1,
+                text: 'Ada saved',
+                tone: 'info',
+                action: undefined,
+                attributes: {},
+            },
         ])
         queue.set([
             {

@@ -877,10 +877,10 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16 |
-| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown } }` | A notice's tone, how long it stays, and the one action it offers. | 50.13, 50.14, 50.18 |
+| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.35, 50.36 |
 | `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
 | `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
-| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined }` | One notice `toasts.list` holds. | 50.12 |
+| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.35 |
 
 ## `Tooltip`
 

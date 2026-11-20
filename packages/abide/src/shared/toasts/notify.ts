@@ -1,5 +1,5 @@
 import { isServer } from '../isServer.ts'
-import { dismiss } from './dismiss.ts'
+import { close, type CloseReason, CLOSERS } from './dismiss.ts'
 import { list, type Toast } from './list.ts'
 
 /** How a notice reads, how long it stays, and what it offers. */
@@ -10,6 +10,10 @@ export type NotifyOptions = {
     timeout?: number
     /** A button on the notice that takes the notice down and calls `run`: an undo, a retry, or `report({ trace }).open()` for a failed call. */
     action?: { label: string; run: () => unknown }
+    /** Written onto the notice's element: a `data-` attribute an analytics tag reads, say (50.35). */
+    attributes?: Record<string, string>
+    /** Called once as the notice leaves, told whether its timeout, a dismissal or its action took it (50.36). */
+    onclose?: (reason: CloseReason) => void
 }
 
 const TIMEOUT_MS = 3000
@@ -29,10 +33,17 @@ export function notify(text: string, options: NotifyOptions = {}): number {
     lastId += 1
     const id = lastId
     list.patch((held) => {
-        held.push({ id, text, tone, action: options.action })
+        held.push({
+            id,
+            text,
+            tone,
+            action: options.action,
+            attributes: options.attributes ?? {},
+        })
     })
+    if (options.onclose !== undefined) CLOSERS.set(id, options.onclose)
     const timeout =
         options.timeout ?? (tone === 'error' ? ERROR_TIMEOUT_MS : TIMEOUT_MS)
-    if (timeout !== Infinity) setTimeout(() => dismiss(id), timeout)
+    if (timeout !== Infinity) setTimeout(() => close(id, 'timeout'), timeout)
     return id
 }

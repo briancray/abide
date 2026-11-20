@@ -4990,6 +4990,12 @@ confirming button, and `undefined` where it closed any other way.
 50.34 `Prompts` MUST show an input for a prompt asked by `prompts.prompt`, starting from its
 `value`, and `''` where it has none.
 
+50.35 `Toasts` MUST write each attribute a notice's `attributes` names onto that notice's element,
+under its `data-part` and `data-tone`.
+
+50.36 A notice's `onclose` MUST be called once, as the notice leaves `toasts.list`, with `timeout`
+where its timeout took it, `action` where its action did, and `dismissed` otherwise.
+
 # 51. Lists and tables
 
 51.1 `listbox` MUST keep active the option whose key it last moved to, for as long as the options

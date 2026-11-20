@@ -26,6 +26,10 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/overlays.test.ts',
             from: ["test(\"an error's notice outlasts every other tone's"],
         },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: ["test('a notice tells its onclose once, why it left"],
+        },
     ]}
 >
     <Section level={3} title="Say whether a save landed">
@@ -63,6 +67,21 @@ import Section from '#src/lib/Section.abide'
             const id = toasts.notify('Importing contacts…', { timeout: Infinity })
             await importContacts({ file })
             toasts.dismiss(id)
+        `} />
+    </Section>
+
+    <Section level={3} title="Count the undos people take">
+        <p><code>attributes</code> are written onto the notice, for a tag that reads them.
+            <code>onclose</code> is told whether the timeout, a dismissal or the action took the
+            notice down.</p>
+        <Code language="ts" caption="browser" code={`
+            import { toasts } from '@abide/abide/Toasts.abide'
+
+            toasts.notify('Deal archived', {
+                attributes: { 'data-track': 'deal-archived' },
+                action: { label: 'Undo', run: () => restoreDeal({ id }) },
+                onclose: (reason) => track('archive-notice', { reason }),
+            })
         `} />
     </Section>
 </Doc>

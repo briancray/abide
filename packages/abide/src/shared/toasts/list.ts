@@ -14,6 +14,8 @@ export type Toast = {
     tone: 'info' | 'success' | 'error'
     /** The button it offers, written in the `action` part, where it offers one. */
     action: { label: string; run: () => unknown } | undefined
+    /** Written onto the notice's element, `{}` where `notify` was given none (50.35). */
+    attributes: Record<string, string>
 }
 
 /** The notices showing, oldest first. */
