@@ -1,4 +1,4 @@
-// 50.23-50.25 — A HINT FOR THE ELEMENT IT IS BOUND TO, shown by the `Tooltips` the layout renders:
+// 50.23-50.25, 50.47 — A HINT FOR THE ELEMENT IT IS BOUND TO, shown by the `Tooltips` the layout renders:
 // nothing is added beside the anchor, and one popover serves every hint on the page.
 
 import { namedLogger } from '../log.ts'
@@ -10,7 +10,8 @@ let warned = false
 
 /**
  * The `bind:element` adaptor opening `hint` against the element once a pointer has rested on it for
- * `delay` milliseconds, and at once when it takes focus the browser shows (`:focus-visible`).
+ * `delay` milliseconds, and at once when it takes focus the browser shows (`:focus-visible`) — or,
+ * given `trigger: 'bound'`, at once and for as long as it is bound.
  *
  * @param hint the text, or a component rendered with no props
  * @param options where it opens, and how long a pointer rests first
@@ -58,10 +59,14 @@ export function tooltip(
             timer = setTimeout(show, delay)
         }
 
-        anchor.addEventListener('mouseenter', linger)
-        anchor.addEventListener('mouseleave', hide)
-        anchor.addEventListener('focusin', focused)
-        anchor.addEventListener('focusout', hide)
+        // 50.47 — bound is open: nothing on the anchor opens or closes it but Escape and the unbinding.
+        const hovers = options.trigger !== 'bound'
+        if (hovers) {
+            anchor.addEventListener('mouseenter', linger)
+            anchor.addEventListener('mouseleave', hide)
+            anchor.addEventListener('focusin', focused)
+            anchor.addEventListener('focusout', hide)
+        } else show()
         return () => {
             hide()
             anchor.removeEventListener('mouseenter', linger)

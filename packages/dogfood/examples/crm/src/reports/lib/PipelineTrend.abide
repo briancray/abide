@@ -1,0 +1,38 @@
+<script>
+import { format, reactive } from '@abide/abide'
+import Area from '@abide/abide/Area.abide'
+import Chart from '@abide/abide/Chart.abide'
+import Line from '@abide/abide/Line.abide'
+import Tooltips from '@abide/abide/Tooltips.abide'
+
+const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
+const LEADS = [40_000, 52_000, 47_000, 61_000, 58_000, 66_000]
+const QUALIFIED = [22_000, 25_000, null, 31_000, 36_000, 34_000]
+const PROPOSALS = [12_000, 18_000, 21_000, 19_000, 26_000, 30_000]
+const TARGET = [90_000, 95_000, 100_000, 105_000, 110_000, 115_000]
+
+let leads = reactive(true)
+</script>
+
+<label><input type="checkbox" bind:checked={leads} /> Leads</label>
+<Chart
+    x={MONTHS}
+    label="Open pipeline by stage against target, June to November"
+    xFormat={(month) => format.date(month, { style: 'month' })}
+    yFormat={(amount) => format.money(amount, { compact: true })}
+    stack
+    bounds={{ y: [0, 150_000] }}
+    class="block h-60 w-full overflow-visible text-chrome text-muted
+        [&_[data-part=area]]:opacity-30 [&_[data-part=line]]:[stroke-dasharray:4_4]"
+>
+    <Area label="Proposals" values={PROPOSALS} />
+    <Area label="Qualified" values={QUALIFIED} />
+    {#if leads}
+        <Area label="Leads" values={LEADS} />
+    {/if}
+    <Line label="Target" values={TARGET} stack={false} />
+</Chart>
+<Tooltips
+    class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
+    text-chrome text-ink shadow-sm [&_[data-part=readout-x]]:text-muted"
+ />

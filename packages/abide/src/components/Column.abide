@@ -1,0 +1,18 @@
+<script>
+// A series its `Chart` draws as a column per value, rising from zero. It draws nothing itself: it
+// declares the series to the chart it is slotted into (52.24), which draws every series over one pair
+// of axes.
+import { joinChart } from '#shared/chart/children.ts'
+import { props } from '#shared/props.ts'
+
+const { label, values, stack } = props<{
+    /** What the series is called, in the chart's readout: `'Won'`. */
+    label: string
+    /** One value per x position of the chart. `null` or `undefined` is a value missing there. */
+    values: readonly (number | null | undefined)[]
+    /** The stack it piles into with the series naming the same one, or `false` for none, where the chart's `stack` would put it in one (52.55). */
+    stack?: string | false
+}>()
+
+joinChart(() => ({ label, values, stack, kind: 'column' }))
+</script>

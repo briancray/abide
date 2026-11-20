@@ -5,7 +5,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/components/line-chart', '/helpers/chart', '/helpers/format']}
+    seeAlso={['/components/chart', '/helpers/chart', '/helpers/format']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/RepTrends.test.ts',

@@ -1,0 +1,103 @@
+<script>
+// Shares of a whole as slices of a ring, clockwise from the top in the order given: a pie, or a donut
+// where `inner` leaves a hole. Drawn in its own units and scaled to its box, kept round. A pointer
+// resting on a slice opens its label, value and share in the page's `Tooltips`.
+import type { Attributes } from '#shared/Attributes.ts'
+import { number, percent } from '#shared/format/index.ts'
+import { props } from '#shared/props.ts'
+import { reactive } from '#shared/reactive/index.ts'
+import { tooltip } from '#shared/tooltip/tooltip.ts'
+
+const {
+    slices,
+    label,
+    inner = 0,
+    valueFormat = (value: number) => number(value),
+    onpick,
+    disabled,
+    ...rest
+} = props<
+    {
+        /** The slices in order, each a label and its value. Slice `i` is drawn as `data-series="i"`. */
+        slices: readonly { label: string; value: number | null | undefined }[]
+        /** What the pie shows, as its accessible name: `'Open pipeline by stage'`. */
+        label: string
+        /** The hole at the center, as a fraction of the radius: `0.6` for a donut. `0` by default. */
+        inner?: number
+        /** Writes a slice's value for its hint: `format.money`, say. `format.number` by default. */
+        valueFormat?: (value: number) => string
+        /** Called with the index of a slice clicked, where `disabled` does not hold for it (52.38). */
+        onpick?: (index: number) => void
+        /** Whether a slice takes no pick, written as `data-disabled` on it (52.39). */
+        disabled?: (index: number) => boolean
+    } & Omit<Attributes<'svg'>, 'values'>
+>()
+
+// The drawing's own units: a ring centered in a square this wide.
+const SIZE = 100
+const CENTER = SIZE / 2
+
+// 52.65 — A SLICE IS A STROKE ALONG ONE CIRCLE, as long as its share of the circumference: a ring
+// stroked as wide as the ring is, so a pie and a donut are one drawing.
+const ring = reactive(() => {
+    const hole = Math.min(Math.max(inner, 0), 0.95) * CENTER
+    const radius = (CENTER + hole) / 2
+    const circumference = 2 * Math.PI * radius
+    let total = 0
+    for (const slice of slices) total += drawable(slice.value)
+    const drawn: {
+        index: number
+        dashes: string
+        offset: string
+        hint: string
+    }[] = []
+    let before = 0
+    for (let index = 0; index < slices.length; index += 1) {
+        const slice = slices[index] as (typeof slices)[0]
+        const value = drawable(slice.value)
+        if (value === 0) continue
+        const share = value / total
+        drawn.push({
+            index,
+            // 52.64 — the sweep as `style` properties, which a CSS transition eases.
+            dashes: `${share * circumference} ${circumference}`,
+            offset: `${-before * circumference}`,
+            hint: `${slice.label}: ${valueFormat(value)} (${percent(share)})`,
+        })
+        before += share
+    }
+    return { radius, width: CENTER - hole, drawn }
+})
+
+// 52.66 — a value missing, zero or below it is no slice.
+function drawable(value: number | null | undefined): number {
+    return value === null || value === undefined || !(value > 0) ? 0 : value
+}
+
+// 52.38 — the click lands on the slice's own stroke, so the slice is the one under the pointer.
+function pick(index: number) {
+    if (onpick === undefined || disabled?.(index) === true) return
+    onpick(index)
+}
+</script>
+
+<svg {...rest} viewBox="0 0 {SIZE} {SIZE}" role="img" aria-label={label}>
+    {#for slice of ring.drawn by slice.index}
+        <circle
+            data-part="slice"
+            data-series={slice.index}
+            data-disabled={disabled?.(slice.index) ? '' : undefined}
+            cx={CENTER}
+            cy={CENTER}
+            r={ring.radius}
+            fill="none"
+            stroke="currentColor"
+            stroke-width={ring.width}
+            transform="rotate(-90 {CENTER} {CENTER})"
+            style:stroke-dasharray={slice.dashes}
+            style:stroke-dashoffset={slice.offset}
+            bind:element={tooltip(slice.hint)}
+            onclick={() => pick(slice.index)}
+         />
+    {/for}
+</svg>

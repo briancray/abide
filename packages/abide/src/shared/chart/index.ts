@@ -1,15 +1,106 @@
 // The `chart` namespace: the arithmetic under a chart, apart from any one way of drawing it — round
-// ticks, a linear scale, a path that breaks where a value is missing, and the point nearest the
-// pointer. `LineChart` and `Sparkline` draw with it, and so can a chart of your own.
+// ticks, a linear scale, a path that breaks where a value is missing, series piled into stacks, and
+// the point nearest the pointer. `Chart`, `Pie` and `Sparkline` draw with it, and so can a chart of
+// your own.
 
-/** One line of a chart: what it is called, and its values in x order, `null` where one is missing. */
+/** One series of a chart: what it is called, its values in x order, how it is drawn, and its stack. */
 export type Series = {
-    /** What the line is called, in the readout and the accessible description. */
+    /** What the series is called, in the readout. */
     label: string
-    /** One value per x position. `null` or `undefined` leaves a gap in the line. */
+    /** One value per x position. `null` or `undefined` is a value missing there. */
     values: readonly (number | null | undefined)[]
-    /** How `LineChart` draws it: a line through the values, or a bar per value (52.37). `'line'` by default. */
-    kind?: 'line' | 'bar'
+    /** How `Chart` draws it: a line, a column per value, or a filled area. `'line'` by default. */
+    kind?: 'line' | 'column' | 'area'
+    /** The stack it piles into with the series naming the same one, or `false` for none (52.55). */
+    stack?: string | false
+}
+
+/**
+ * 52.54-52.58 — where each series stands at each x once the stacks are piled: `high` is the value
+ * drawn, `low` the top of what is stacked under it, and both are shares of their stack's total under
+ * `normalize`; `stack` is the stack it joined. A series in no stack keeps its own values, with `low`
+ * absent; a missing value there is absent from `high` too.
+ */
+export function stack<Each extends Pick<Series, 'values' | 'stack'>>(
+    series: readonly Each[],
+    options: { stack?: boolean; normalize?: boolean } = {},
+): {
+    low: (number | undefined)[]
+    high: (number | undefined)[]
+    stack: string | undefined
+}[] {
+    const normalize = options.normalize === true
+    const stackAll = normalize || options.stack === true
+    let length = 0
+    for (const each of series) length = Math.max(length, each.values.length)
+    // A stack's running totals per x, the positive side and the negative one apart (52.54), and the
+    // sum of its magnitudes per x for 52.57.
+    const totals = new Map<
+        string,
+        { up: number[]; down: number[]; magnitude: number[] }
+    >()
+    const keys: (string | undefined)[] = []
+    for (const each of series) {
+        const key =
+            each.stack === false
+                ? undefined
+                : (each.stack ?? (stackAll ? '' : undefined))
+        keys.push(key)
+        if (key === undefined) continue
+        let total = totals.get(key)
+        if (total === undefined) {
+            total = {
+                up: new Array(length).fill(0),
+                down: new Array(length).fill(0),
+                magnitude: new Array(length).fill(0),
+            }
+            totals.set(key, total)
+        }
+        for (let index = 0; index < length; index += 1)
+            total.magnitude[index] =
+                (total.magnitude[index] as number) +
+                Math.abs(present(each.values[index]) ?? 0)
+    }
+    const placed: {
+        low: (number | undefined)[]
+        high: (number | undefined)[]
+        stack: string | undefined
+    }[] = []
+    for (let at = 0; at < series.length; at += 1) {
+        const values = (series[at] as Each).values
+        const key = keys[at]
+        const low: (number | undefined)[] = []
+        const high: (number | undefined)[] = []
+        const total = key === undefined ? undefined : totals.get(key)
+        for (let index = 0; index < length; index += 1) {
+            const value = present(values[index])
+            if (total === undefined) {
+                low.push(undefined)
+                high.push(value)
+                continue
+            }
+            // 52.56 — a missing value is zero toward its stack, standing on the positive side.
+            const amount = value ?? 0
+            const side = amount < 0 ? total.down : total.up
+            const from = side[index] as number
+            const to = from + amount
+            side[index] = to
+            // 52.57 — a share of the stack's magnitudes, zero where they sum to nothing.
+            const sum = total.magnitude[index] as number
+            const share = normalize ? (sum === 0 ? 0 : 1 / sum) : 1
+            low.push(from * share)
+            high.push(to * share)
+        }
+        placed.push({ low, high, stack: key })
+    }
+    return placed
+}
+
+/** A value that can be drawn, or `undefined`. */
+function present(value: number | null | undefined): number | undefined {
+    return value === null || value === undefined || !Number.isFinite(value)
+        ? undefined
+        : value
 }
 
 /**
@@ -66,12 +157,13 @@ export function scale(
 /**
  * An SVG path through the points `(xs[i], ys[i])`, broken where `ys[i]` is `null` or `undefined`. A
  * point alone between two gaps is a segment of no length, which a round line cap draws as a dot.
- * Given a `baseline`, each run is closed down to it instead, as an area to fill.
+ * Given a `baseline`, each run is closed down to it instead, as an area to fill — back along its own
+ * points where it is one per x, as a stacked area closes onto the series under it.
  */
 export function path(
     xs: readonly number[],
     ys: readonly (number | null | undefined)[],
-    baseline?: number,
+    baseline?: number | readonly number[],
 ): string {
     let path = ''
     let runStart = -1
@@ -88,9 +180,13 @@ export function path(
             continue
         }
         if (runStart === -1) continue
-        if (baseline !== undefined)
+        if (typeof baseline === 'number')
             path += `L${round(xs[index - 1] as number)},${round(baseline)}L${round(xs[runStart] as number)},${round(baseline)}Z`
-        else if (runStart === index - 1) path += 'Z'
+        else if (baseline !== undefined) {
+            for (let back = index - 1; back >= runStart; back -= 1)
+                path += `L${round(xs[back] as number)},${round(baseline[back] ?? 0)}`
+            path += 'Z'
+        } else if (runStart === index - 1) path += 'Z'
         runStart = -1
     }
     return path

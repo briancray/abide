@@ -1,0 +1,111 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/components/chart', '/helpers/chart']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('won and lost stand side by side in each month'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('each stage stacks on the one before it, through a month it has no value'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('the target is drawn at its own values, on an axis fixed at $150K'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('leads leave the chart when unchecked, and come back last'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Draw counts as columns under a revenue line">
+        <p>A <code>Line</code>, a <code>Column</code> and an <code>Area</code> each draw
+            nothing of their own. The <code>Chart</code> they are children of draws them all on
+            one pair of axes, in the order they are written, the first at the back.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Chart from '@abide/abide/Chart.abide'
+            import Column from '@abide/abide/Column.abide'
+            import Line from '@abide/abide/Line.abide'
+            </script>
+
+            <Chart label="Deals and revenue won by month" zero>
+                <Column label="Deals won" values={[4, 6, 5, 8]} />
+                <Line label="Won" values={[18_000, 24_500, 31_000, 27_000]} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Stand two columns side by side in each month">
+        <p>Columns in no stack share their month's slot, each up from zero.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart label="Deals closed by month">
+                <Column label="Won" values={[4, 6, 5, 8]} />
+                <Column label="Lost" values={[3, 2, 4, 3]} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Stack the pipeline's stages as areas">
+        <p>Areas sharing a stack fill from the one written before them. A missing value
+            counts as zero toward the stack, so the area above it carries on.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart label="Open pipeline by stage" stack>
+                <Area label="Proposals" values={[12_000, 18_000, 21_000]} />
+                <Area label="Qualified" values={[22_000, null, 31_000]} />
+                <Area label="Leads" values={[40_000, 52_000, 47_000]} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a target line out of a stacked chart">
+        <p><code>stack={'{false}'}</code> draws a series at its own values when the chart
+            stacks every other.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart label="Open pipeline against target" stack>
+                <Area label="Qualified" values={QUALIFIED} />
+                <Area label="Leads" values={LEADS} />
+                <Line label="Target" values={TARGET} stack={false} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Group stacked columns, one group per team">
+        <p>Series naming the same <code>stack</code> pile together, and each stack takes a band
+            of its month's slot beside the others.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart label="Deals closed by team">
+                <Column label="East won" values={EAST_WON} stack="east" />
+                <Column label="East lost" values={EAST_LOST} stack="east" />
+                <Column label="West won" values={WEST_WON} stack="west" />
+                <Column label="West lost" values={WEST_LOST} stack="west" />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Hide a series with a checkbox">
+        <p>A series under an <code>{'{#if}'}</code> leaves the chart when the arm closes, and
+            joins it again last when it reopens.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart label="Open pipeline by stage" stack>
+                <Area label="Qualified" values={QUALIFIED} />
+                {#if leads}
+                    <Area label="Leads" values={LEADS} />
+                {/if}
+            </Chart>
+        `} />
+    </Section>
+</Doc>

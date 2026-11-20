@@ -5,11 +5,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={[
-        '/components/line-chart',
-        '/components/sparkline',
-        '/helpers/format',
-    ]}
+    seeAlso={['/components/chart', '/components/sparkline', '/helpers/format']}
     tests={[
         {
             path: 'packages/abide/tests/chart.test.ts',
@@ -18,6 +14,18 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/chart.test.ts',
             from: ["test('path breaks where a value is missing"],
+        },
+        {
+            path: 'packages/abide/tests/chart.test.ts',
+            from: [
+                "test('a stack piles each x up from zero, positives up and negatives down",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/chart.test.ts',
+            from: [
+                "test('normalize answers each value as its share of its stack, stacking on its own",
+            ],
         },
         {
             path: 'packages/abide/tests/chart.test.ts',
@@ -63,6 +71,25 @@ import Section from '#src/lib/Section.abide'
             import { chart } from '@abide/abide'
 
             chart.path([0, 10], [1, 2], 50) // 'M0,1L10,2L10,50L0,50Z'
+        `} />
+    </Section>
+
+    <Section level={3} title="Pile won and lost deals into one stack">
+        <p><code>chart.stack</code> answers where each series stands at each x: <code>low</code>
+            is the top of what is under it and <code>high</code> its own top. Negative values pile
+            down from zero.</p>
+        <Code language="ts" caption="shared" code={`
+            import { chart } from '@abide/abide'
+
+            const [won, lost] = chart.stack(
+                [
+                    { label: 'Won', values: [4, 6] },
+                    { label: 'Lost', values: [3, 2] },
+                ],
+                { stack: true },
+            )
+            lost.low // [4, 6]
+            lost.high // [7, 8]
         `} />
     </Section>
 

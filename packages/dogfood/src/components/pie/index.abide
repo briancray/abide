@@ -1,0 +1,97 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/components/chart', '/components/tooltips', '/helpers/format']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineMix.test.ts',
+            from: [
+                "test('each stage sweeps its share of the ring, one after the other'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineMix.test.ts',
+            from: ["test('the pie is a donut with a hole of 0.6 of its radius'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineMix.test.ts',
+            from: ["test('a slice reads its stage, its value and its share'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineMix.test.ts',
+            from: [
+                "test('a click on a slice opens its stage, and Verbal takes no pick'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Show the open pipeline's mix of stages">
+        <p>Each slice sweeps its share of the total, clockwise from the top in the order
+            given. A stage holding nothing draws no slice.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import Pie from '@abide/abide/Pie.abide'
+            </script>
+
+            <Pie
+                label="Open pipeline by stage"
+                slices={[
+                    { label: 'Lead', value: 66_000 },
+                    { label: 'Qualified', value: 34_000 },
+                    { label: 'Proposal', value: 30_000 },
+                ]}
+                class="size-40"
+            />
+        `} />
+    </Section>
+
+    <Section level={3} title="Leave a hole for a donut">
+        <p><code>inner</code> is the hole's width as a share of the radius.</p>
+        <Code language="abide" caption="abide" code={`
+            <Pie label="Open pipeline by stage" slices={STAGES} inner={0.6} />
+        `} />
+    </Section>
+
+    <Section level={3} title="Read a stage's value and share on hover">
+        <p>A pointer resting on a slice opens its label, value and share in the page's
+            <code>Tooltips</code>. <code>valueFormat</code> writes the value.</p>
+        <Code language="abide" caption="abide" code={`
+            <Pie
+                label="Open pipeline by stage"
+                slices={STAGES}
+                valueFormat={(amount) => format.money(amount, { compact: true })}
+            />
+        `} />
+    </Section>
+
+    <Section level={3} title="Ease the slices when the mix changes">
+        <p>A slice's sweep is a CSS <code>stroke-dasharray</code> on the same element whatever
+            its value becomes, so a transition on it animates every change.</p>
+        <Code language="abide" caption="abide" code={`
+            <Pie
+                label="Open pipeline by stage"
+                slices={STAGES}
+                class="[&_[data-part=slice]]:transition-all
+                motion-reduce:[&_[data-part=slice]]:transition-none"
+            />
+        `} />
+    </Section>
+
+    <Section level={3} title="Open a stage's deals from its slice">
+        <p><code>onpick</code> is called with the index of the slice clicked. A slice
+            <code>disabled</code> holds for takes no pick, and carries
+            <code>data-disabled</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <Pie
+                label="Open pipeline by stage"
+                slices={STAGES}
+                onpick={(index) => navigate(\`/deals?stage=\${STAGES[index].label}\`)}
+                disabled={(index) => STAGES[index].value === 0}
+            />
+        `} />
+    </Section>
+</Doc>

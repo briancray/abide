@@ -27,7 +27,7 @@ export type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 export type { Attributes } from './Attributes.ts'
 // 51.31-51.43 — a sortable table's columns, its sort, and the order its rows are in.
 export type { Column } from './Column.ts'
-// 52.19-52.23 — the arithmetic under a chart, which `LineChart` and `Sparkline` draw with.
+// 52.19-52.23, 52.54-52.58 — the arithmetic under a chart, which `Chart`, `Pie` and `Sparkline` draw with.
 export * as chart from './chart/index.ts'
 export { type Cookies, cookies } from './cookies.ts'
 // 53.21-53.23 — the `bind:element` adaptor copying text on a click.

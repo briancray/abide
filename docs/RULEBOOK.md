@@ -4965,12 +4965,12 @@ axes, its start edge kept where it does not fit.
 `aria-description`, and a component through its `aria-describedby` naming the `Tooltips` showing it,
 for as long as it shows.
 
-50.24 `tooltip` MUST open its hint once a pointer has rested on its element for `delay`
-milliseconds, and at once when its element takes focus that matches `:focus-visible`, and MUST NOT
-open it for focus that does not.
+50.24 `tooltip` whose `trigger` is `hover` MUST open its hint once a pointer has rested on its element
+for `delay` milliseconds, and at once when its element takes focus that matches `:focus-visible`, and
+MUST NOT open it for focus that does not.
 
-50.25 `tooltip` MUST close its hint when the pointer leaves its element, when its element loses
-focus, and on Escape.
+50.25 `tooltip` MUST close its hint on Escape and once it is unbound, and, where its `trigger` is
+`hover`, when the pointer leaves its element and when its element loses focus.
 
 50.26 A `Tooltips` showing a hint and the menu of a `menu` MUST open in the top layer as a popover placed by
 `place` against their anchor, and MUST be placed again while open whenever anything scrolls, the
@@ -5038,6 +5038,8 @@ in its `error` part once it rejects.
 50.46 `Toasts` MUST render a notice's content through `Toast` where it is given, handed the notice,
 what dismisses it and what runs its action, inside the element carrying the notice's attributes,
 `data-part="toast"` and `data-tone`, and as its text, action and close button otherwise.
+
+50.47 `tooltip` whose `trigger` is `bound` MUST open its hint at once as it is bound.
 
 # 51. Lists and tables
 
@@ -5260,27 +5262,30 @@ below `min` and the last at or above `max`.
 
 52.21 `chart.path` MUST break the path at each value that is `null`, `undefined` or not finite.
 
-52.22 `chart.path` MUST close each run of values down to `baseline`, where its caller passes one.
+52.22 `chart.path` MUST close each run of values down to `baseline`, where its caller passes one, and
+back along its points where `baseline` holds one per x.
 
 52.23 `chart.nearest` MUST answer the index of the position nearest `x`, the earlier of two equally
 near, and `-1` where there are no positions.
 
-52.24 `LineChart` MUST draw each series as a `data-part="line"` path whose `data-series` is the
-series' index.
+52.24 `Chart` MUST draw the series of each `Line`, `Column` and `Area` among its children, in the
+order they were mounted with the first at the back, each mark carrying its series' index in that
+order as `data-series`.
 
-52.25 `LineChart` MUST draw a `data-part="zero"` line at zero inside its plot, where `zero` is set.
+52.25 `Chart` MUST draw a `data-part="zero"` line at zero inside its plot, where `zero` is set.
 
-52.26 `LineChart` MUST draw a crosshair at the x position nearest the pointer, and a readout of every
-series' value there, while a pointer is over it.
+52.26 `Chart` MUST draw a crosshair at the x position nearest the pointer while a pointer is over it,
+and MUST open a readout of every series' value there as a hint `tooltip` opens bound to the
+crosshair.
 
-52.27 `LineChart` MUST place its readout on the side of the crosshair that has more of the plot.
+52.27 `Chart` MUST open its readout on the side of the crosshair that has more of the plot.
 
-52.28 `LineChart` MUST carry `data-hovering` on its root while its readout is drawn.
+52.28 `Chart` MUST carry `data-hovering` on its root while its readout is open.
 
-52.29 `LineChart` and `Sparkline` MUST carry `role="img"` and take their accessible name from
+52.29 `Chart`, `Pie` and `Sparkline` MUST carry `role="img"` and take their accessible name from
 `label`.
 
-52.30 `LineChart` and `Sparkline` MUST draw every mark in `currentColor`.
+52.30 `Chart`, `Pie` and `Sparkline` MUST draw every mark in `currentColor`.
 
 52.31 `Sparkline` MUST carry `data-trend` on its root, `up`, `down` or `flat` by its last present value
 against its first.
@@ -5291,7 +5296,7 @@ none.
 52.33 `Sparkline` given `kind: 'bar'` MUST draw each present value as a bar from zero, each in a
 band of equal width, with zero on its scale, and MUST draw no line, area or dot.
 
-52.34 `LineChart` and `Sparkline` declaring `zero` MUST take zero into the range of their values, and
+52.34 `Chart` and `Sparkline` declaring `zero` MUST take zero into the range of their values, and
 MUST draw a series whose every present value is zero along the bottom of that range.
 
 52.35 `format.money` and `format.percent` declaring `signed` MUST write a negative value's sign as
@@ -5300,15 +5305,15 @@ MUST draw a series whose every present value is zero along the bottom of that ra
 52.36 `format.dateParts` MUST answer the pieces whose values joined in order are what `format.date`
 writes for the same value and options.
 
-52.37 `LineChart` MUST draw a series whose `kind` is `bar` as a `data-part="bar"` rect per present
-value, rising from zero where the range takes zero in and from the bottom of the plot otherwise, its
-`data-series` the series' index, and MUST NOT draw it as a line.
+52.37 `Chart` MUST draw a `Column` as a `data-part="bar"` rect per present value, take zero into its
+range where it draws one, and stand the columns of an x side by side in its slot, one band per stack
+of columns and one per column in none.
 
-52.38 A click on a `LineChart` MUST call `onpick` with the index of the x position nearest it, save
-where `disabled` holds for that index.
+52.38 A click on a `Chart` MUST call `onpick` with the index of the x position nearest it, and a click
+on a slice of a `Pie` with that slice's index, save where `disabled` holds for that index.
 
-52.39 `LineChart` MUST write `data-disabled` on each bar, and on the readout, of an index `disabled`
-holds for.
+52.39 `Chart` MUST write `data-disabled` on each bar, and on the readout, of an index `disabled`
+holds for, and `Pie` on each such slice.
 
 52.40 `markdown` MUST write a link `href` answers with a `LinkTarget` with its `href` as the address,
 and its `target` and `rel`, where it carries them, as the link's attributes.
@@ -5351,6 +5356,54 @@ section a later chunk may still change, as far back as 160 characters of its las
 fence half written, a last line that is a block's marker alone, a table's rows until the delimiter
 under its head is whole and its last row until the line ends, and the end of the last line from an
 opening of code, emphasis, a link or a tag nothing closes yet.
+
+52.51 `Chart` MUST draw a `Line` as a `data-part="line"` path through its present values.
+
+52.52 `Chart` MUST draw an `Area` as a `data-part="area"` path closed onto the top of what is stacked
+under it, through a value it is missing, and, where it is in no stack, down to zero or the edge of the
+plot nearer zero.
+
+52.53 `Chart` MUST stop drawing a child's series once the child is removed.
+
+52.54 `chart.stack` MUST pile the values of the series sharing a stack up from zero at each x in
+series order, a positive value up from the stack's positive total so far and a negative value down
+from its negative total so far.
+
+52.55 `chart.stack` MUST put a series whose `stack` is `false` in no stack, one naming a stack in that
+stack, and one naming none in a single stack shared with the others naming none where `stack` is set,
+and in no stack where it is not.
+
+52.56 `chart.stack` MUST count a missing value as zero toward its stack.
+
+52.57 `chart.stack` given `normalize` MUST answer each stacked value as its share of the sum of the
+magnitudes of its stack's values at that x, and as zero where that sum is zero.
+
+52.58 `chart.stack` given `normalize` MUST stack as it does given `stack`.
+
+52.59 `Chart` MUST draw each series where `chart.stack` places it given the `Chart`'s own `stack` and
+`normalize`.
+
+52.60 `Chart` declaring `normalize` MUST write its y ticks as percentages.
+
+52.61 `Chart` MUST read each series' own value in its readout, and, where `normalize` is set, a
+stacked value's share of its stack beside it.
+
+52.62 `Chart` MUST span each axis `bounds` gives a range for over that range, in place of the range
+of its values.
+
+52.63 `Chart` and `Pie` MUST keep each mark's element across a change of the values it draws.
+
+52.64 `Chart` MUST write a column's place and size, and `Pie` a slice's sweep, as `style` properties.
+
+52.65 `Pie` MUST draw each slice as a `data-part="slice"` arc sweeping its value's share of the sum of
+the slices' values, clockwise from the top in the order given, its index as `data-series`.
+
+52.66 `Pie` MUST draw no slice for a value that is missing, zero or negative.
+
+52.67 `Pie` MUST leave a hole at its center `inner` of its radius across.
+
+52.68 `Pie` MUST open a hint for a slice as `tooltip` does, reading its label, its value and its
+share.
 
 # 53. Keys, element behaviors and chat
 

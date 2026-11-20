@@ -1,0 +1,173 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/components/series',
+        '/components/pie',
+        '/components/tooltips',
+        '/helpers/chart',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: [
+                "test('won revenue is a line broken where a month has no total'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: ["test('the crosshair reads each line at the nearest month'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('stacked, lost stands on top of won in one column'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: [
+                "test('as shares, every month fills the column and reads its share'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('stacking moves the columns rather than redrawing them'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('a click opens its month, and November takes no pick'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('the target is drawn at its own values, on an axis fixed at $150K'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('leads leave the chart when unchecked, and come back last'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Plot won revenue against target by month">
+        <p>Each child is a series over the chart's x. A pointer over the chart moves a
+            crosshair to the nearest month and opens every series' value there in the page's
+            <code>Tooltips</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { format } from '@abide/abide'
+            import Chart from '@abide/abide/Chart.abide'
+            import Line from '@abide/abide/Line.abide'
+
+            const MONTHS = [5, 6, 7, 8].map((month) => Date.UTC(2026, month, 1))
+            </script>
+
+            <Chart
+                x={MONTHS}
+                label="Won revenue against target"
+                xFormat={(month) => format.date(month, { style: 'month' })}
+                yFormat={(amount) => format.money(amount, { compact: true })}
+                zero
+            >
+                <Line label="Won" values={[18_000, 24_500, 31_000, 27_000]} />
+                <Line label="Target" values={[20_000, 22_000, 24_000, 26_000]} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Fill the box a layout gives the chart">
+        <p>Size the chart with classes. It measures itself and redraws at the new size whenever
+            its box changes, so its labels are never stretched.</p>
+        <Code language="abide" caption="abide" code={`
+            <div class="h-72 resize-y overflow-hidden">
+                <Chart label="Won revenue" class="block h-full w-full">
+                    <Line label="Won" values={WON} />
+                </Chart>
+            </div>
+        `} />
+    </Section>
+
+    <Section level={3} title="Stack won and lost deals in one column per month">
+        <p><code>stack</code> piles every child that names no stack of its own into one stack,
+            each month's values in the order the children are written.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart label="Deals closed by month" x={MONTHS} stack>
+                <Column label="Won" values={[4, 6, 5, 8]} />
+                <Column label="Lost" values={[3, 2, 4, 3]} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Read each month's wins as a share of the deals closed">
+        <p><code>normalize</code> draws each stack as shares of its total, so every month
+            reaches the top. The axis reads percentages, and the readout reads each count with
+            its share.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart label="Win rate by month" x={MONTHS} normalize>
+                <Column label="Won" values={[4, 6, 5, 8]} />
+                <Column label="Lost" values={[3, 2, 4, 3]} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Compare two charts on one fixed axis">
+        <p><code>bounds</code> fixes an axis's range rather than fitting it to the values, so two
+            teams' charts read on the same scale.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart label="Open pipeline, east" bounds={{ y: [0, 150_000] }}>
+                <Area label="Open" values={EAST} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Ease columns between stacked and side by side">
+        <p>A column is drawn by a CSS <code>transform</code> on the same element whatever its
+            values become, so a transition on it animates every change.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart
+                label="Deals closed by month"
+                stack={stacked}
+                class="[&_[data-part=bar]]:transition-transform
+                motion-reduce:[&_[data-part=bar]]:transition-none"
+            >
+                <Column label="Won" values={WON} />
+                <Column label="Lost" values={LOST} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Style the target as a dashed line">
+        <p>Every mark carries <code>data-series</code>, the index of its child in the order they
+            were mounted, and draws in <code>currentColor</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart
+                label="Won revenue against target"
+                class="text-muted [&_[data-series='0']]:text-signal
+                [&_[data-part=line][data-series='1']]:[stroke-dasharray:4_4]"
+            >
+                <Line label="Won" values={WON} />
+                <Line label="Target" values={TARGET} />
+            </Chart>
+        `} />
+    </Section>
+
+    <Section level={3} title="Open a month's deals from the chart">
+        <p><code>onpick</code> is called with the month nearest a click. A month
+            <code>disabled</code> holds for takes no pick, and its columns and readout carry
+            <code>data-disabled</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <Chart
+                label="Deals closed by month"
+                onpick={(month) => navigate(\`/deals?month=\${month}\`)}
+                disabled={(month) => WON[month] === null}
+            >
+                <Column label="Won" values={WON} />
+            </Chart>
+        `} />
+    </Section>
+</Doc>

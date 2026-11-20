@@ -847,12 +847,13 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `chart` | `{ ticks; scale; path; nearest }` | The arithmetic under a chart, as one namespace. | 52.19, 52.20, 52.21, 52.22, 52.23 |
+| `chart` | `{ ticks; scale; path; stack; nearest }` | The arithmetic under a chart, as one namespace. | 52.19, 52.20, 52.21, 52.22, 52.23, 52.54 |
 | `chart.ticks` | `(min: number, max: number, count?: number) => number[]` | Round values for an axis from `min` to `max`, about `count` intervals apart. | 52.19 |
 | `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
-| `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], baseline?: number) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`. | 52.21, 52.22 |
+| `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], baseline?: number \| readonly number[]) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`. | 52.21, 52.22 |
+| `chart.stack` | `<Each extends { values: readonly (number \| null \| undefined)[]; stack?: string \| false }>(series: readonly Each[], options?: { stack?: boolean; normalize?: boolean }) => { low: (number \| undefined)[]; high: (number \| undefined)[]; stack: string \| undefined }[]` | Where each series stands at each x once its stack is piled, and the stack it joined. | 52.54, 52.55, 52.56, 52.57, 52.58 |
 | `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
-| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'bar' }` | One series of a chart: what it is called, its values in x order, and whether it is drawn as a line or as bars. | 52.21, 52.24, 52.37 |
+| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false }` | One series of a chart: what it is called, its values in x order, how it is drawn, and the stack it piles into. | 52.21, 52.24, 52.55 |
 
 # Components
 
@@ -900,9 +901,9 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `tooltip` | `(hint: Hint, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a hint for the element it is bound to, shown by the page's `Tooltips`. | 32.9, 50.23, 50.24, 50.25, 50.36 |
+| `tooltip` | `(hint: Hint, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a hint for the element it is bound to, shown by the page's `Tooltips`. | 32.9, 50.23, 50.24, 50.25, 50.36, 50.47 |
 | `Hint` | `string \| ((props: Record<string, never>) => unknown)` | What a hint shows: text, or a component. | 50.23 |
-| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number }` | Where a hint opens against its anchor, and how long a pointer rests first. | 50.24, 50.26, 50.35 |
+| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number; trigger?: 'hover' \| 'bound' }` | Where a hint opens against its anchor, and what opens it. | 50.24, 50.25, 50.26, 50.35, 50.47 |
 
 ## `Tooltips`
 
@@ -944,11 +945,23 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 | --- | --- | --- | --- |
 | `Markdown` | `{ source: string; schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (props: { source: string; info: string }) => unknown>>; streaming?: boolean } & Attributes<'div'>` | A `div` of the markup `markdown` renders for `source`, the component `@abide/abide/Markdown.abide` exports. | 49.1, 49.3, 49.5, 49.6, 52.17, 52.18, 52.40, 52.41, 52.43, 52.50 |
 
-## `LineChart`
+## `Chart`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `LineChart` | `{ series: readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'bar' }[]; label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | One or more series drawn as lines or bars over a shared x in an `svg`, the component `@abide/abide/LineChart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39 |
+| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64 |
+
+## `Line`, `Column` and `Area`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Line` / `Column` / `Area` | `{ label: string; values: readonly (number \| null \| undefined)[]; stack?: string \| false }` | A series of the `Chart` it is a child of, drawn as a line, a column per value or a filled area, the components `@abide/abide/Line.abide`, `@abide/abide/Column.abide` and `@abide/abide/Area.abide` export. | 52.24, 52.37, 52.51, 52.52, 52.53, 52.55 |
+
+## `Pie`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Pie` | `{ slices: readonly { label: string; value: number \| null \| undefined }[]; label: string; inner?: number; valueFormat?: (value: number) => string; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'values'>` | Shares of a whole as the slices of a ring in an `svg`, a pie or a donut, the component `@abide/abide/Pie.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.29, 52.30, 52.38, 52.39, 52.63, 52.64, 52.65, 52.66, 52.67, 52.68 |
 
 ## `Sparkline`
 

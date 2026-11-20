@@ -1,0 +1,34 @@
+<script>
+import { format, reactive } from '@abide/abide'
+import Pie from '@abide/abide/Pie.abide'
+import Tooltips from '@abide/abide/Tooltips.abide'
+
+const STAGES = [
+    { label: 'Lead', value: 66_000 },
+    { label: 'Qualified', value: 34_000 },
+    { label: 'Proposal', value: 30_000 },
+    { label: 'Negotiation', value: 0 },
+    { label: 'Verbal', value: 20_000 },
+]
+
+let picked = reactive<string | undefined>(undefined)
+</script>
+
+<Pie
+    slices={STAGES}
+    label="Open pipeline by stage"
+    inner={0.6}
+    valueFormat={(amount) => format.money(amount, { compact: true })}
+    onpick={(index) => (picked = STAGES[index]?.label)}
+    disabled={(index) => STAGES[index]?.label === 'Verbal'}
+    class="size-40 text-muted [&_[data-series='0']]:text-signal
+        [&_[data-part=slice]]:transition-[stroke-dasharray,stroke-dashoffset]
+        [&_[data-part=slice]:hover]:opacity-80"
+ />
+{#if picked !== undefined}
+    <p>Open deals at {picked}</p>
+{/if}
+<Tooltips
+    class="m-0 w-max rounded-md border border-rule bg-raised px-3 py-2 text-chrome
+    text-ink shadow-sm"
+ />

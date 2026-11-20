@@ -594,10 +594,23 @@ const WRITTEN: readonly {
                     'Render markdown as safe markup, a section at a time, so a streamed source redraws only its growing end.',
             },
             {
-                route: '/components/line-chart',
-                title: '`LineChart`',
+                route: '/components/chart',
+                title: '`Chart`',
                 description:
-                    'Plot one or more series over a shared x, with a crosshair that reads each one out.',
+                    'Plot lines, columns and areas over one pair of axes, stacked or as shares, with a crosshair that reads each one out.',
+            },
+            {
+                route: '/components/series',
+                title: '`Line`, `Column` and `Area`',
+                nav: 'Chart series',
+                description:
+                    'Declare the series a chart draws, each as a line, a column per value or a filled area, and the stack it piles into.',
+            },
+            {
+                route: '/components/pie',
+                title: '`Pie`',
+                description:
+                    'Show shares of a whole as the slices of a pie or a donut, each reading its value and share on hover.',
             },
             {
                 route: '/components/sparkline',
