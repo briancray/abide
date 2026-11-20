@@ -1,7 +1,9 @@
 // 53.12-53.16 — A PANEL CLOSED FROM OUTSIDE IT. Every element bound is a layer on one stack, and the
 // document is listened to only while the stack holds one: a page with no panel open pays nothing.
 
+import { reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
+import { register } from './register.ts'
 
 /** An element `dismissible` is bound to, in the order they were bound: the last is on top. */
 type Layer = {
@@ -12,7 +14,7 @@ type Layer = {
     inside: readonly (Element | null | undefined)[]
 }
 
-const layers: Layer[] = []
+const layers = reactive<readonly Layer[]>([])
 
 /**
  * The `bind:element` adaptor calling `onDismiss` on a press outside the element or on Escape.
@@ -48,16 +50,15 @@ export function dismissible(
             outside: options.outside ?? true,
             inside: options.inside ?? [],
         }
-        if (layers.length === 0) {
+        if (layers.peek()?.length === 0) {
             // CAPTURE, so a press an inner handler stops still reaches here.
             document.addEventListener('pointerdown', pressed, true)
             document.addEventListener('keydown', escaped)
         }
-        layers.push(layer)
+        const unregister = register(layers, layer)
         return () => {
-            const at = layers.indexOf(layer)
-            if (at !== -1) layers.splice(at, 1)
-            if (layers.length > 0) return
+            unregister()
+            if ((layers.peek()?.length ?? 0) > 0) return
             document.removeEventListener('pointerdown', pressed, true)
             document.removeEventListener('keydown', escaped)
         }
@@ -66,10 +67,11 @@ export function dismissible(
 
 // 53.15 — from the top, until the layer the press lands in. A layer `outside` is off for is passed
 // over rather than ending the walk, as Escape passes a layer `escape` is off for. A layer dismissed
-// here may take itself off the stack as it closes, so the walk reads a copy.
+// here may take itself off the stack as it closes, and the walk reads the list as it stood: a
+// layer leaving writes a new one rather than changing this.
 function pressed(event: PointerEvent): void {
     const target = event.target as Node | null
-    const stacked = layers.slice()
+    const stacked = layers.peek() ?? []
     for (let at = stacked.length - 1; at >= 0; at--) {
         const layer = stacked[at] as Layer
         if (target !== null && holds(layer, target)) return
@@ -89,8 +91,9 @@ function holds(layer: Layer, target: Node): boolean {
 function escaped(event: KeyboardEvent): void {
     if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing)
         return
-    for (let at = layers.length - 1; at >= 0; at--) {
-        const layer = layers[at] as Layer
+    const stacked = layers.peek() ?? []
+    for (let at = stacked.length - 1; at >= 0; at--) {
+        const layer = stacked[at] as Layer
         if (!layer.escape) continue
         event.preventDefault()
         layer.dismiss(event)

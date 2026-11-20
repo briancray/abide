@@ -8,6 +8,7 @@ import type { Side } from '#shared/place.ts'
 import { props } from '#shared/props.ts'
 import { randomToken } from '#shared/randomToken.ts'
 import { reactive, watch } from '#shared/reactive/index.ts'
+import { register } from '#shared/register.ts'
 import { hosts, shown } from '#shared/tooltip/tips.ts'
 
 const { ...rest } = props<Omit<Attributes<'span'>, 'popover' | 'role'>>()
@@ -31,9 +32,9 @@ let placed = reactive<Side>('top')
 function attach(host: HTMLElement) {
     element = host
     if (host.id === '') host.id = `tip-${randomToken(4, 'hex')}`
-    hosts = [...hosts, self]
+    const unregister = register(hosts, self)
     return () => {
-        hosts = hosts.filter((each) => each !== self)
+        unregister()
         element = undefined
     }
 }
