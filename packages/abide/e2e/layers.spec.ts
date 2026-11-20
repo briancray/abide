@@ -33,7 +33,7 @@ let dialog: HTMLDialogElement | undefined
 
 <button id="open" onclick={() => dialog?.showModal()}>Open</button>
 <dialog bind:element={(element) => { dialog = element as HTMLDialogElement }}>
-    <button id="hinted" bind:element={tooltip('Saves the deal', { trigger: 'bound' })}>Save</button>
+    <button id="hinted" bind:element={tooltip('Saves the deal')}>Save</button>
 </dialog>`
 
 let server: Subprocess | undefined
@@ -60,7 +60,10 @@ test('an Escape closes the hint over a dialog, and the next the dialog — 50.25
     page,
 }) => {
     await page.goto(`${base}/`)
-    await page.click('#open')
+    // Opened from the keyboard, so the dialog's first control takes focus the browser shows, and its
+    // hint opens on it (50.24).
+    await page.locator('#open').focus()
+    await page.keyboard.press('Enter')
     const dialog = page.locator('dialog')
     const tip = page.locator('[role=tooltip]')
     await expect(dialog).toHaveJSProperty('open', true)

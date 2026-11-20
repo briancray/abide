@@ -37,7 +37,7 @@ watch(() => {
     const host = element
     const open = tip
     if (host === undefined || open === undefined) return
-    const { anchor, hint, options } = open
+    const { anchor, hint, options, describes } = open
     const stop = anchored(
         anchor,
         host,
@@ -53,18 +53,19 @@ watch(() => {
             placed = placement.side
         },
     )
-    // 50.23 — a component describes its anchor from here, for as long as it is open.
-    const described = anchor.getAttribute('aria-describedby')
+    // 50.23, 50.47 — a component describes its anchor, or the element it names, from here, for as long
+    // as it is open.
+    const described = describes.getAttribute('aria-describedby')
     if (typeof hint !== 'string')
-        anchor.setAttribute(
+        describes.setAttribute(
             'aria-describedby',
             described === null ? host.id : `${described} ${host.id}`,
         )
     return () => {
         stop()
         if (typeof hint === 'string') return
-        if (described === null) anchor.removeAttribute('aria-describedby')
-        else anchor.setAttribute('aria-describedby', described)
+        if (described === null) describes.removeAttribute('aria-describedby')
+        else describes.setAttribute('aria-describedby', described)
     }
 })
 </script>

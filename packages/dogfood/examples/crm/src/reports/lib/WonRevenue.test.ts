@@ -43,10 +43,10 @@ test('won revenue is a line broken where a month has no total', async () => {
     ])
 })
 
-// 52.26, 52.27, 50.47 — THE READOUT OPENS IN THE PAGE'S `Tooltips` as the crosshair's bound hint,
-// beside it on the side with more of the plot. THE REVERTS: open it on the `'top'` side the hint
-// defaults to — `data-side` reads 'top' where 'right' is due; and have `tooltip` ignore `trigger` —
-// no pointer rests on the crosshair, so the popover never opens.
+// 52.26, 52.27, 50.47 — THE READOUT OPENS IN THE PAGE'S `Tooltips` against the crosshair, beside it on
+// the side with more of the plot. THE REVERTS: open it on the `'top'` side a hint defaults to —
+// `data-side` reads 'top' where 'right' is due; and bind the crosshair to `tooltip` rather than
+// `openHint` — no pointer rests on the crosshair, so the popover never opens.
 test('the crosshair reads each line at the nearest month', async () => {
     using _chart = await mount(WonRevenue({}))
     const tip = () => document.querySelector('[role=tooltip]') as HTMLElement
@@ -95,4 +95,45 @@ test('a series of zeroes is drawn along the bottom of a chart that takes zero in
         ),
     )
     expect([...heights]).toEqual(['216'])
+})
+
+/** A key pressed on the chart, bubbling to the document as a browser's does. */
+function press(key: string) {
+    chart().dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+    )
+    flushSync()
+}
+
+// 52.70, 50.47 — THE CHART READS FROM THE KEYBOARD: it takes focus, the arrows step the crosshair one
+// month at a time and stop at the ends, Home and End go to the first and the last, the readout
+// describes the chart while it shows, and an Escape — or focus leaving — puts the crosshair away.
+// THE REVERTS: drop `onkeydown` from the chart — no arrow opens the readout; let `roving` wrap — the
+// arrow past November reads June; and describe the crosshair rather than the chart — the chart names
+// no description.
+test('the arrows step the crosshair month by month, and Escape puts it away', async () => {
+    using _chart = await mount(WonRevenue({}))
+    const tip = () => document.querySelector('[role=tooltip]') as HTMLElement
+    const month = () => texts('[role=tooltip] [data-part=readout-x]')[0]
+    expect(chart().getAttribute('tabindex')).toBe('0')
+    press('ArrowRight')
+    expect(month()).toBe('Jun 2026')
+    expect(chart().getAttribute('aria-describedby')).toBe(tip().id)
+    press('ArrowRight')
+    expect(month()).toBe('Jul 2026')
+    press('End')
+    expect(month()).toBe('Nov 2026')
+    press('ArrowRight')
+    expect(month()).toBe('Nov 2026')
+    press('Home')
+    expect(month()).toBe('Jun 2026')
+    press('Escape')
+    expect(chart().hasAttribute('data-hovering')).toBe(false)
+    expect(tip().matches(':popover-open')).toBe(false)
+    expect(chart().hasAttribute('aria-describedby')).toBe(false)
+    press('ArrowLeft')
+    expect(month()).toBe('Nov 2026')
+    chart().dispatchEvent(new FocusEvent('focusout'))
+    flushSync()
+    expect(chart().hasAttribute('data-hovering')).toBe(false)
 })

@@ -4970,13 +4970,12 @@ axes, its start edge kept where it does not fit.
 `aria-description`, and a component through its `aria-describedby` naming the `Tooltips` showing it,
 for as long as it shows.
 
-50.24 `tooltip` whose `trigger` is `hover` MUST open its hint once a pointer has rested on its element
-for `delay` milliseconds, and at once when its element takes focus that matches `:focus-visible`, and
+50.24 `tooltip` MUST open its hint once a pointer has rested on its element for `delay` milliseconds, and at once when its element takes focus that matches `:focus-visible`, and
 MUST NOT open it for focus that does not.
 
 50.25 `tooltip` MUST close its hint on an Escape no one prevented, as the top layer of `dismissible`'s
-stack while it shows (53.14, 53.15), and once it is unbound, and, where its `trigger` is `hover`,
-when the pointer leaves its element and when its element loses focus.
+stack while it shows (53.14, 53.15), once it is unbound, when the pointer leaves its element and
+when its element loses focus.
 
 50.26 A `Tooltips` showing a hint and the menu of a `menu` MUST open in the top layer as a popover placed by
 `place` against their anchor, and MUST be placed again while open whenever anything scrolls, the
@@ -5047,7 +5046,9 @@ in its `error` part once it rejects.
 what dismisses it and what runs its action, inside the element carrying the notice's attributes,
 `data-part="toast"` and `data-tone`, and as its text, action and close button otherwise.
 
-50.47 `tooltip` whose `trigger` is `bound` MUST open its hint at once as it is bound.
+50.47 A `Chart`'s readout MUST show in the `Tooltips` standing as a hint does, against the chart's
+crosshair, for as long as the crosshair stands, and MUST describe the chart while it shows, as a
+component hint describes its anchor (50.23).
 
 50.48 A `Tooltips` MUST NOT be the target of a pointer event, so a hint open over its anchor never
 takes the pointer from it.
@@ -5286,8 +5287,7 @@ order as `data-series`.
 52.25 `Chart` MUST draw a `data-part="zero"` line at zero inside its plot, where `zero` is set.
 
 52.26 `Chart` MUST draw a crosshair at the x position nearest the pointer while a pointer is over it,
-and MUST open a readout of every series' value there as a hint `tooltip` opens bound to the
-crosshair.
+and MUST open a readout of every series' value wherever its crosshair stands (50.47).
 
 52.27 `Chart` MUST open its readout on the side of the crosshair that has more of the plot.
 
@@ -5418,6 +5418,14 @@ share.
 
 52.69 `Chart` MUST draw its y ticks as `data-part="tick"` labels left of its plot, and no mark over
 one.
+
+52.70 `Chart` MUST take focus, and while it has it, ArrowRight and ArrowLeft MUST move its crosshair
+one x position, from none to the first and the last, stopping at either end, and Home and End to the
+first and the last; an Escape no one prevented, and focus leaving the chart, MUST put the crosshair
+away.
+
+52.71 Enter on a `Chart` MUST call `onpick` with the index of the x position its crosshair stands at,
+save where `disabled` holds for that index.
 
 # 53. Keys, element behaviors and chat
 

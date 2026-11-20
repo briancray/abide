@@ -9,7 +9,7 @@ import { dropzone } from '#shared/dropzone.ts'
 import { followBottom } from '#shared/followBottom.ts'
 import { imageFiles } from '#shared/imagePiece.ts'
 import { shown } from '#shared/tooltip/tips.ts'
-import { tooltip } from '#shared/tooltip/tooltip.ts'
+import { openHint } from '#shared/tooltip/tooltip.ts'
 
 afterEach(() => {
     Reflect.deleteProperty(navigator, 'clipboard')
@@ -120,8 +120,8 @@ test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15
     const stopPanel = dismissible(() => closed.push('panel'))(panel)
     const first = panel.appendChild(document.createElement('button'))
     const second = panel.appendChild(document.createElement('button'))
-    const stopFirst = tooltip('First', { trigger: 'bound' })(first)
-    const stopSecond = tooltip('Second', { trigger: 'bound' })(second)
+    const stopFirst = openHint(first, 'First', {}, () => stopFirst())
+    const stopSecond = openHint(second, 'Second', {}, () => stopSecond())
     expect(shown.peek()?.anchor).toBe(second)
     expect(escape()).toBe(true)
     expect(shown.peek()).toBeUndefined()

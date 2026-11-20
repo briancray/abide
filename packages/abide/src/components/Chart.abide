@@ -1,12 +1,11 @@
 <script>
 // The series its `Line`, `Column` and `Area` children declare, over one pair of axes, drawn in SVG at
 // the size the chart is laid out at: the drawing is measured rather than stretched, so its labels are
-// never distorted, and a pointer over it moves a crosshair to the nearest x and opens a readout of
-// every series there in the page's `Tooltips`.
+// never distorted, and a pointer over it — or the arrows, once it has focus — moves a crosshair to an
+// x and opens a readout of every series there in the page's `Tooltips`.
 import type { Attributes } from '#shared/Attributes.ts'
 import type { ChartChild } from '#shared/chart/children.ts'
 import {
-    nearest,
     path,
     scale,
     type Series,
@@ -17,7 +16,8 @@ import { number, percent } from '#shared/format/index.ts'
 import { size as observeSize } from '#shared/observe/size.ts'
 import { props } from '#shared/props.ts'
 import { reactive } from '#shared/reactive/index.ts'
-import { tooltip } from '#shared/tooltip/tooltip.ts'
+import { scrub } from '#shared/scrub.ts'
+import { openHint } from '#shared/tooltip/tooltip.ts'
 
 const {
     label,
@@ -295,27 +295,24 @@ const readout = reactive(() => {
     }
 })
 
-// The x position nearest the pointer, or `undefined` where the plot has no width to read it on.
-function indexAt(event: MouseEvent): number | undefined {
-    const box = (event.currentTarget as Element).getBoundingClientRect()
-    if (box.width === 0) return undefined
-    return nearest(
-        plot.xs,
-        ((event.clientX - box.left) * size.width) / box.width,
-    )
-}
+// 52.26, 52.70 — the crosshair's x, picked by the pointer or the arrows.
+const scrubbing = scrub(
+    hovered,
+    () => plot.xs,
+    () => size.width,
+)
 
-function track(event: PointerEvent) {
-    const index = indexAt(event)
-    if (index !== undefined) hovered = index
-}
-
-// 52.38 — a click picks the x the crosshair is on, read again from the click's own position.
-function pick(event: MouseEvent) {
+// 52.38, 52.71 — a click picks the x nearest it, read again from the click's own position, and Enter
+// the x the crosshair stands at.
+function pick(index: number | undefined) {
     if (onpick === undefined) return
-    const index = indexAt(event)
     if (index === undefined || index < 0 || disabled?.(index) === true) return
     onpick(index)
+}
+
+function key(event: KeyboardEvent) {
+    if (event.key === 'Enter') pick(hovered)
+    else scrubbing.key(event)
 }
 </script>
 
@@ -338,10 +335,13 @@ function pick(event: MouseEvent) {
     role="img"
     aria-label={label}
     data-hovering={readout ? '' : undefined}
+    tabindex="0"
     bind:element={observeSize(size)}
-    onpointermove={track}
-    onpointerleave={() => (hovered = -1)}
-    onclick={pick}
+    onpointermove={scrubbing.move}
+    onpointerleave={scrubbing.leave}
+    onfocusout={scrubbing.leave}
+    onkeydown={key}
+    onclick={(event) => pick(scrubbing.indexAt(event))}
 >
     <slot />
     {#for line of plot.grid}
@@ -392,6 +392,7 @@ function pick(event: MouseEvent) {
         {/if}
     {/for}
     {#if readout}
+        <!-- 50.47 — the readout shows in the page's `Tooltips` against the crosshair, one per x it stands at, and describes the chart while it shows. -->
         {#for crosshair of [readout.index] by crosshair}
             <line
                 data-part="crosshair"
@@ -400,7 +401,14 @@ function pick(event: MouseEvent) {
                 y1={TOP}
                 y2={plot.bottom}
                 stroke="currentColor"
-                bind:element={tooltip(Readout, { trigger: 'bound', side: readout.side })}
+                bind:element={(crosshair) =>
+                    openHint(
+                        crosshair,
+                        Readout,
+                        { side: readout.side },
+                        scrubbing.leave,
+                        crosshair.closest('svg') ?? crosshair,
+                    ),}
              />
         {/for}
         {#for point, index of readout.values}

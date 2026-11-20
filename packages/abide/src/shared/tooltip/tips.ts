@@ -8,7 +8,7 @@ import { reactive } from '../reactive/index.ts'
 /** What a hint shows: text, or a component rendered with no props. */
 export type Hint = string | ((props: Record<string, never>) => unknown)
 
-/** Where a hint opens against its anchor, and what opens it. */
+/** Where a hint opens against its anchor, and how long a pointer rests first. */
 export type TooltipOptions = {
     /** The side of the anchor the hint opens on, flipped to the opposite one where it has no room. Default `'top'`. */
     side?: Side
@@ -20,15 +20,15 @@ export type TooltipOptions = {
     arrowInset?: number
     /** Milliseconds a pointer rests on the anchor before the hint opens. Default `300`. */
     delay?: number
-    /** `'hover'` opens the hint on a pointer resting or on focus; `'bound'` for as long as it is bound (50.47). Default `'hover'`. */
-    trigger?: 'hover' | 'bound'
 }
 
-/** The hint open, the anchor it is open against, and where it opens. */
+/** The hint open, the anchor it is open against, where it opens, and the element it describes. */
 export type OpenTip = {
     anchor: Element
     hint: Hint
     options: TooltipOptions
+    /** The anchor, save a `Chart`'s readout, which is placed against its crosshair and describes the chart (50.47). */
+    describes: Element
 }
 
 export const shown = reactive<OpenTip | undefined>(undefined)

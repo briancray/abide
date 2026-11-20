@@ -21,10 +21,6 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageHints.test.ts',
             from: ["test('a pointer resting on a stage opens its hint'"],
         },
-        {
-            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
-            from: ["test('the crosshair reads each line at the nearest month'"],
-        },
     ]}
 >
     <Section level={3} title="Explain a pipeline stage on hover and on focus">
@@ -72,22 +68,6 @@ import Section from '#src/lib/Section.abide'
             </script>
 
             <a href="/deals/acme" bind:element={tooltip(DealSummary)}>Acme renewal</a>
-        `} />
-    </Section>
-
-    <Section level={3} title="Keep a hint open beside a marker that follows the pointer">
-        <p><code>trigger: 'bound'</code> opens the hint as soon as it is bound and keeps it open
-            until the element goes, with no pointer resting on it. Bind it to a marker that
-            exists only while the pointer is over a chart.</p>
-        <Code language="abide" caption="abide" code={`
-            {#if hovered >= 0}
-                <line
-                    x1={xs[hovered]}
-                    x2={xs[hovered]}
-                    y2="200"
-                    bind:element={tooltip(\`Won: \${WON[hovered]}\`, { trigger: 'bound' })}
-                />
-            {/if}
         `} />
     </Section>
 </Doc>

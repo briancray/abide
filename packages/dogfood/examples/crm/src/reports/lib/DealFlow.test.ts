@@ -136,3 +136,31 @@ test('a click opens its month, and November takes no pick', async () => {
             ?.hasAttribute('data-disabled'),
     ).toBe(true)
 })
+
+// 52.71 — ENTER PICKS THE MONTH THE CROSSHAIR STANDS AT, as a click on it does, save the one whose
+// books are open. THE REVERT: drop Enter from the chart's `keydown` — the arrows move the crosshair and
+// nothing is picked.
+test('Enter picks the month the crosshair stands at, and November takes no pick', async () => {
+    using _flow = await mount(DealFlow({}))
+    const press = (key: string) => {
+        chart().dispatchEvent(
+            new KeyboardEvent('keydown', {
+                key,
+                bubbles: true,
+                cancelable: true,
+            }),
+        )
+        flushSync()
+    }
+    press('ArrowRight')
+    press('ArrowRight')
+    press('Enter')
+    expect(document.querySelector('p')?.textContent).toBe(
+        'Deals closed in Jul 2026',
+    )
+    press('End')
+    press('Enter')
+    expect(document.querySelector('p')?.textContent).toBe(
+        'Deals closed in Jul 2026',
+    )
+})

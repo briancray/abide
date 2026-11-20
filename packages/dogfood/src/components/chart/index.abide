@@ -11,6 +11,8 @@ import FillTheBox from './lib/FillTheBox.abide'
 import fillTheBox from './lib/FillTheBox.abide' with { type: 'text' }
 import FixedAxis from './lib/FixedAxis.abide'
 import fixedAxis from './lib/FixedAxis.abide' with { type: 'text' }
+import KeyboardReadout from './lib/KeyboardReadout.abide'
+import keyboardReadout from './lib/KeyboardReadout.abide' with { type: 'text' }
 import PickMonth from './lib/PickMonth.abide'
 import pickMonth from './lib/PickMonth.abide' with { type: 'text' }
 import StackWonLost from './lib/StackWonLost.abide'
@@ -38,6 +40,18 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
             from: ["test('the crosshair reads each line at the nearest month'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: [
+                "test('the arrows step the crosshair month by month, and Escape puts it away'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: [
+                "test('Enter picks the month the crosshair stands at, and November takes no pick'",
+            ],
         },
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
@@ -80,6 +94,13 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             crosshair to the nearest month and opens every series' value there in the page's
             <code>Tooltips</code>.</p>
         <Example code={wonAgainstTarget}><WonAgainstTarget /></Example>
+    </Section>
+
+    <Section level={3} title="Read the chart from the keyboard">
+        <p>The chart takes focus. The arrows step its crosshair one x at a time and stop at the
+            ends, Home and End go to the first and the last, Enter picks the x it stands at, and
+            Escape puts it away. The readout describes the chart while it shows.</p>
+        <Example code={keyboardReadout}><KeyboardReadout /></Example>
     </Section>
 
     <Section level={3} title="Fill the box a layout gives the chart">

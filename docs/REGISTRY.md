@@ -851,9 +851,9 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `tooltip` | `(hint: Hint, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a hint for the element it is bound to, shown by the page's `Tooltips`. | 32.9, 50.23, 50.24, 50.25, 50.36, 50.47, 53.15 |
+| `tooltip` | `(hint: Hint, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a hint for the element it is bound to, shown by the page's `Tooltips`. | 32.9, 50.23, 50.24, 50.25, 50.36, 53.15 |
 | `Hint` | `string \| ((props: Record<string, never>) => unknown)` | What a hint shows: text, or a component. | 50.23 |
-| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number; trigger?: 'hover' \| 'bound' }` | Where a hint opens against its anchor, and what opens it. | 50.24, 50.25, 50.26, 50.35, 50.47 |
+| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number }` | Where a hint opens against its anchor, and how long a pointer rests first. | 50.24, 50.26, 50.35 |
 
 ## `menu`
 
@@ -954,7 +954,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64, 52.69 |
+| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 50.47, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64, 52.69, 52.70, 52.71 |
 
 ## `Line`, `Column` and `Area`
 

@@ -1,0 +1,8 @@
+<script>
+import Chart from '@abide/abide/Chart.abide'
+import Line from '@abide/abide/Line.abide'
+</script>
+
+<Chart label="Won revenue by month">
+    <Line label="Won" values={[18_000, 24_500, 31_000, 27_000]} />
+</Chart>
