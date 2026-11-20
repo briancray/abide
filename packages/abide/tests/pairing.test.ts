@@ -319,6 +319,32 @@ test('copyInstall copies the install command and holds copied — 44.72', async 
     dispose()
 })
 
+// THE REVERT: return where `navigator.clipboard` is absent, as `copyInstall` once did — this copies
+// nothing and reports `copied: false`.
+test('copyInstall copies on a page with no clipboard, through a selected textarea — 44.72, 53.22', async () => {
+    const { pair, dispose } = built()
+    await landed(pair, UNPAIRED)
+    Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: undefined,
+    })
+    const copied: string[] = []
+    const execCommand = document.execCommand
+    document.execCommand = ((command: string) => {
+        copied.push(`${command}:${document.querySelector('textarea')?.value}`)
+        return true
+    }) as typeof document.execCommand
+    try {
+        await pair.copyInstall()
+        expect(`${copied.join()} copied: ${pair.copied()}`).toBe(
+            `copy:${UNPAIRED.install} copied: true`,
+        )
+    } finally {
+        document.execCommand = execCommand
+        dispose()
+    }
+})
+
 // 44.73 — A DISPOSED PAIRING LEAVES NOTHING RUNNING: its read of `/__abide/pairing` and its follow, the
 // blur listener a click added, the wait it set and the write back a copy armed — asserted by what
 // they would have written, since bun's `jest.getTimerCount` still counts a cleared one. `copied`'s write

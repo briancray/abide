@@ -4478,8 +4478,8 @@ set `step` to `waiting` and navigate the page to the status's `link`.
 44.71 2500 ms after `pairing`'s `start`, `step` MUST become `click` where the window blurred since,
 or `status` is paired, and `install` otherwise.
 
-44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard, and once written
-MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `click`.
+44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard as 53.22 copies, and
+once written MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `click`.
 
 44.73 A `pairing` MUST, once its `stop` or its `[Symbol.dispose]` is called, or the component whose
 setup built it is disposed, stop reading and following `/__abide/pairing` where no other `pairing`
