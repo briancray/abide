@@ -798,6 +798,53 @@ import Section from './Section.abide'
     expect(document.querySelector('#rail')?.textContent).toBe('one|two')
 })
 
+// 10.5 — AN ARM INSIDE SLOTTED CHILDREN IS A DESCENDANT OF THE COMPONENT TOO. The arm's mount resumed
+// the scope its CALLER captured, so a `<Section>` under an `{#if}` in a `<Doc>`'s children filled a
+// list of the caller's own on hydration, and again on every reopening: the server listed it, the
+// browser dropped it. THE REVERT: in `mountFunction`, resume `resumed` without shadowing `SHARE_AT`
+// for the regions nested in it — the rail reads 'one' once mounted, and after the reopening.
+test('an arm inside children slotted into a component finds the share it holds — 10.5', async () => {
+    const DOC = `<script>
+import { reactive } from '@abide/abide'
+
+const headings = reactive.share('headings', () => reactive<string[]>([]))
+</script>
+
+<main><slot/></main>
+<aside id="rail">{headings.join('|')}</aside>`
+    const SECTION = `<script>
+import { props, reactive, watch } from '@abide/abide'
+
+const { title } = props<{ title: string }>()
+const headings = reactive.share('headings', () => reactive<string[]>([]))
+watch(() => {
+    headings.set([...(headings.peek() ?? []), title])
+    return () => headings.set((headings.peek() ?? []).filter((each) => each !== title))
+})
+</script>
+
+<h2>{title}</h2>`
+    const { html } = await mountPage(
+        `<script>
+import { reactive } from '@abide/abide'
+import Doc from './Doc.abide'
+import Section from './Section.abide'
+
+let open = reactive(true)
+</script>
+
+<Doc><Section title="one"/>{#if open}<Section title="two"/>{/if}</Doc>
+<button id="toggle" onclick={() => { open = !open }}>toggle</button>`,
+        { Doc: DOC, Section: SECTION },
+    )
+    expect(html).toContain('<aside id="rail">one|two</aside>')
+    expect(document.querySelector('#rail')?.textContent).toBe('one|two')
+    click('#toggle')
+    expect(document.querySelector('#rail')?.textContent).toBe('one')
+    click('#toggle')
+    expect(document.querySelector('#rail')?.textContent).toBe('one|two')
+})
+
 // 12.14 — A ROW THAT LEAVES LETS GO OF WHAT ITS VALUES READ. A `reactive` a row's
 // `<script>` built stayed on the reader list of what it read for the life of the page, so the work
 // a write does grows with every row ever dropped, and nothing on the page shows it. An adoption's

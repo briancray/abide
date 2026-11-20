@@ -1321,7 +1321,19 @@ function mountFunction(
     ].join('\n')
     // 10.5 — the instance's own scope, put back for a mount that happens later than its caller's.
     // Only where a component stands below this region: nothing else can read it.
-    return `const ${name}_mount = (${parameters}, __rebuilt) => {\n${resumes ? insideShare(lowering, resumed, mount) : mount}\n}`
+    if (!resumes || resumed === SHARE_AT)
+        return `const ${name}_mount = (${parameters}, __rebuilt) => {\n${resumes ? insideShare(lowering, resumed, mount) : mount}\n}`
+    // 10.5 — A SCOPE OTHER THAN THE INSTANCE'S IS WHAT EVERY REGION NESTED HERE RESUMES TOO, so it
+    // shadows `SHARE_AT` for them: an arm or a row inside a caller's children, mounted later from a
+    // `watch`, put back the CALLER's scope and missed the share of the component they were slotted
+    // into, where the server had built them inside it.
+    return `const ${name}_mount = (${parameters}, __rebuilt) => {
+const __resumedShare = ${resumed}
+{
+const ${SHARE_AT} = __resumedShare
+${insideShare(lowering, SHARE_AT, mount)}
+}
+}`
 }
 
 /**
