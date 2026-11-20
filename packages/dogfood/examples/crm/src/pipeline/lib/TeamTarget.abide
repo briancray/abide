@@ -1,7 +1,6 @@
 <script>
-import { reactive } from '@abide/abide'
+import { format, reactive } from '@abide/abide'
 
-import { dollars } from './dollars.ts'
 import { targetStore } from './targetStore.ts'
 
 // One option, and the reads and writes below are untouched.
@@ -13,5 +12,5 @@ let target = reactive<number | undefined>(500_000, { store: targetStore })
 </label>
 
 <ul class="tiles">
-    <li><span>target</span><strong>{dollars(target ?? 0)}</strong></li>
+    <li><span>target</span><strong>{format.money(target ?? 0, { digits: 0 })}</strong></li>
 </ul>

@@ -1,5 +1,5 @@
 <script>
-import { type Column, reactive, type Sort } from '@abide/abide'
+import { type Column, format, reactive, type Sort } from '@abide/abide'
 import SortableTable from '@abide/abide/SortableTable.abide'
 
 import listClosing from '../listClosing.handler.ts'
@@ -21,7 +21,7 @@ const COLUMNS: Column<Deal>[] = [
         align: 'end',
         // The largest deal first, on the first press.
         firstDirection: 'descending',
-        format: (amount) => `$${Number(amount).toLocaleString('en-US')}`,
+        format: (amount) => format.money(Number(amount), { digits: 0 }),
     },
     { key: 'closes', label: 'Closes', format: (date) => String(date ?? '—') },
 ]

@@ -1,5 +1,5 @@
 <script>
-import { reactive, tabs } from '@abide/abide'
+import { format, reactive, tabs } from '@abide/abide'
 
 import getDeal from '../getDeal.handler.ts'
 
@@ -26,7 +26,7 @@ const deal = reactive(() => getDeal({ id: 'd1' }))
             <li><span>company</span><strong>{deal.company}</strong></li>
         {:else if tab === 'value'}
             <li><span>amount</span>
-                <strong>${deal.amount.toLocaleString('en-US')}</strong></li>
+                <strong>{format.money(deal.amount, { digits: 0 })}</strong></li>
         {:else}
             <li><span>stage</span><strong>{deal.stage}</strong></li>
         {/if}

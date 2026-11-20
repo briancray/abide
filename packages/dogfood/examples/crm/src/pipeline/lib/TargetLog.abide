@@ -1,9 +1,8 @@
 <script>
-import { reactive } from '@abide/abide'
+import { format, reactive } from '@abide/abide'
 
 import listTargets from '../listTargets.handler.ts'
 import setTarget from '../setTarget.handler.ts'
-import { dollars } from './dollars.ts'
 
 let next = reactive<number | undefined>(600_000)
 const targets = reactive(() => listTargets())
@@ -23,6 +22,6 @@ async function record() {
 
 <ul class="fields stacked">
     {#for row of targets by row.id}
-        <li><span>{row.setAt}</span><strong>{dollars(row.target)}</strong></li>
+        <li><span>{row.setAt}</span><strong>{format.money(row.target, { digits: 0 })}</strong></li>
     {/for}
 </ul>

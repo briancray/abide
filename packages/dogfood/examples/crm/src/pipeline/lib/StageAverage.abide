@@ -1,15 +1,14 @@
 <script>
-import { reactive } from '@abide/abide'
+import { format, reactive } from '@abide/abide'
 
 import getStage from '../getStage.handler.ts'
-import { dollars } from './dollars.ts'
 import { STAGES } from './STAGES.ts'
 
 let stage = reactive('lead')
 const totals = reactive(() => getStage({ stage }))
 const average = reactive(() =>
     totals.ready() && totals.count > 0
-        ? dollars(Math.round(totals.value / totals.count))
+        ? format.money(Math.round(totals.value / totals.count), { digits: 0 })
         : '—',
 )
 </script>
