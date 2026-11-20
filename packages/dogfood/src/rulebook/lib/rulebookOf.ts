@@ -1,6 +1,7 @@
-import { cellsOf } from '#src/lib/cellsOf.ts'
+import { markdown } from '@abide/abide'
+
 import type { Heading } from '#src/lib/Heading.ts'
-import { inline, slugify } from '#src/lib/inline.ts'
+import { inline, siteHref, slugify } from '#src/lib/inline.ts'
 
 import { CLAUSE } from './CLAUSE.ts'
 
@@ -20,28 +21,8 @@ const CLAUSE_CLASS =
 const NUMBER_CLASS =
     'absolute top-1 left-2 font-mono text-chrome/6 text-muted no-underline hover:text-signal'
 
-function table(lines: string[]): string {
-    let head = ''
-    for (const cell of cellsOf(lines[0] ?? ''))
-        head += `<th>${inline(cell)}</th>`
-    let body = ''
-    for (const line of lines.slice(2)) {
-        body += '<tr>'
-        for (const cell of cellsOf(line)) body += `<td>${inline(cell)}</td>`
-        body += '</tr>'
-    }
-    return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
-}
-
-function orderedList(paragraph: string): string {
-    let items = ''
-    for (const item of paragraph.split(/\n(?=\d+\.\s)/))
-        items += `<li>${inline(item.replace(/^\d+\.\s+/, '').replace(/\s*\n\s*/g, ' '))}</li>`
-    return `<ol>${items}</ol>`
-}
-
 /** The rulebook's opening line and every heading the rail lists, as `Doc` inlines them, and its body as HTML. */
-export function rulebookOf(markdown: string): {
+export function rulebookOf(rulebook: string): {
     summary: string
     html: string
     headings: Heading[]
@@ -50,7 +31,7 @@ export function rulebookOf(markdown: string): {
     let summary = ''
     let html = ''
     // A heading is a block of its own even where no blank line sets it off, as markdown reads it.
-    for (const block of markdown.split(/\n\s*\n|\n(?=#{1,2} )/)) {
+    for (const block of rulebook.split(/\n\s*\n|\n(?=#{1,2} )/)) {
         const paragraph = block.trim()
         if (paragraph === '' || paragraph.startsWith('# Rulebook')) continue
         const clause = CLAUSE.exec(paragraph)
@@ -73,17 +54,12 @@ export function rulebookOf(markdown: string): {
             html += `<h2 id="${slugify(title)}">${inline(title)}</h2>`
             continue
         }
-        if (paragraph.startsWith('|')) {
-            html += table(paragraph.split('\n'))
-            continue
-        }
-        if (/^\d+\.\s/.test(paragraph)) {
-            html += orderedList(paragraph)
-            continue
-        }
-        const text = paragraph.replace(/\n/g, ' ')
+        // A table, a numbered list or a paragraph: markdown's own, with each line's break a space.
+        const text = paragraph.startsWith('|')
+            ? paragraph
+            : paragraph.replace(/\n(?!\d+\.\s|- )\s*/g, ' ')
         if (summary === '') summary = text
-        else html += `<p>${inline(text)}</p>`
+        else html += markdown(text, { href: siteHref })
     }
     return { summary, html, headings }
 }
