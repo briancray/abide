@@ -934,6 +934,12 @@ type Reached = { readonly [REACHED]: true }
 | `TreeOptions` | `<Node>{ roots: readonly Node[] \| (() => readonly Node[]); children(node: Node): readonly Node[] \| undefined; key(node: Node): string; label(node: Node): string; expanded?: Reactive<readonly string[]>; selected?: Reactive<string \| undefined> }` | The nodes, how each is told apart and named, and which are expanded and which is selected. | 51.84, 51.86, 51.89, 51.90 |
 | `Tree` | `<Node>{ readonly tree: Record<string, unknown>; item(node: Node): Record<string, unknown>; group(node: Node): Record<string, unknown>; isExpanded(node: Node): boolean; toggle(node: Node): void }` | The parts `tree` hands back, and whether a node is expanded. | 51.84, 51.85, 51.91 |
 
+## `Range`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Range` | `{ value: readonly [number, number]; label: string; min?: number; max?: number; step?: number; labels?: readonly [string, string]; format?: (value: number) => string; name?: string } & Omit<Attributes<'div'>, 'role'>` | A range between two thumbs on one track, the component `@abide/abide/Range.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.92, 51.93, 51.94, 51.95, 51.96, 51.97, 51.98 |
+
 ## `SortableTable`
 
 | Name | Signature | Meaning | Rules |

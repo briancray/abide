@@ -5351,6 +5351,28 @@ item and `data-selected` on the one selected.
 
 51.91 `tree` MUST hide the element holding a node's children while the node is collapsed.
 
+51.92 `Range` MUST render a `role="group"` named by `label` holding two thumbs, each `role="slider"`
+named by its entry of `labels`, with its value as `aria-valuenow`, what `format` writes for it as
+`aria-valuetext`, and the bounds the other thumb leaves it as `aria-valuemin` and `aria-valuemax`.
+
+51.93 `Range` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
+low, each at a whole number of `step`s from `min`, within `min` and `max`.
+
+51.94 A thumb of a `Range` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown and
+ArrowLeft, by a tenth of the way on Page Up and Page Down, and to the least and the greatest value it
+can take on Home and End, as a `Chart`'s crosshair steps (52.70).
+
+51.95 A press on a `Range`'s track MUST move the thumb nearer it to the value nearest the press and
+focus it, and the thumb MUST follow the pointer until it lets go.
+
+51.96 `Range` MUST write each change of `value` it makes back to a `value` bound to it.
+
+51.97 `Range` MUST write `data-dragging` on its root while a pointer holds a thumb, and place its
+thumbs, and its `data-part="fill"` between them, as `style` properties.
+
+51.98 `Range` given `name` MUST submit its low and then its high value with a form it is in, each as
+a field of that name.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

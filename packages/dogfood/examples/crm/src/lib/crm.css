@@ -604,3 +604,28 @@
         @apply font-semibold text-signal;
     }
 }
+
+/* A range: a thin track, the span picked lit along it, and a round thumb at each end of the span. */
+@utility range {
+    @apply py-3;
+
+    & [data-part=track] {
+        @apply relative h-1.5 touch-none rounded-full bg-rule;
+    }
+
+    & [data-part=fill] {
+        @apply absolute inset-y-0 rounded-full bg-signal;
+    }
+
+    & [data-part=thumb] {
+        @apply absolute top-1/2 size-4 -translate-1/2 cursor-grab rounded-full border-2 border-signal bg-raised;
+    }
+
+    & [data-part=thumb]:focus-visible {
+        @apply outline-2 outline-offset-2 outline-signal outline-solid;
+    }
+
+    &[data-dragging] [data-part=thumb] {
+        @apply cursor-grabbing;
+    }
+}

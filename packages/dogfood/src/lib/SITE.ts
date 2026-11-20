@@ -570,6 +570,12 @@ const WRITTEN: readonly {
                     'Switch between views from a row of tabs of your own that the arrow keys move along.',
             },
             {
+                route: '/components/range',
+                title: '`Range`',
+                description:
+                    'Pick a low and a high value on one track, by dragging either thumb or with the arrow keys.',
+            },
+            {
                 route: '/helpers/tree',
                 title: '`tree`',
                 description:

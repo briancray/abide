@@ -1,32 +1,31 @@
-// 52.26, 52.70, 52.71 — A POSITION ALONG AN AXIS, PICKED BY THE POINTER OR THE KEYBOARD: the pointer
-// takes the position nearest it, and the arrows step one position at a time, stopping at the ends, with
-// Home and End at the first and the last. Leaving — the pointer, or focus — picks none. What a `Chart`'s
-// crosshair stands at; the chart decides what standing there shows.
+// 52.26, 52.70, 51.92-51.97 — A POSITION ALONG AN AXIS, PICKED BY THE POINTER OR THE KEYBOARD: the
+// pointer takes the position nearest it, and the arrows step one position at a time, stopping at the
+// ends, with Home and End at the first and the last. Leaving picks none. What a `Chart`'s crosshair
+// stands at and where a `Range`'s thumb sits; each decides what standing there means.
 
-import { nearest } from './chart/index.ts'
-import type { Reactive } from './reactive/Reactive.ts'
 import { roving } from './roving.ts'
 
-/**
- * The handlers that write `at` — the index picked, `-1` for none — from the element they are bound to.
- *
- * @param at the index picked, which the handlers write
- * @param positions each position's x in the drawing's units, ascending
- * @param width how wide the drawing is in its own units, read against the element's laid-out width
- */
-export function scrub(
-    at: Reactive<number>,
-    positions: () => readonly number[],
-    width: () => number,
-) {
+/** Where a scrub stands: the index it reads, and how it is written — a `Reactive<number>`, or a thumb that keeps within its neighbour. */
+export type ScrubPosition = {
+    peek(): number | undefined
+    set(index: number): void
+}
+
+/** The positions a scrub moves among. */
+export type ScrubAxis = {
+    /** How many positions there are. */
+    count(): number
+    /** The index of the position nearest `fraction`, the share of the element's width from its left edge. */
+    nearest(fraction: number): number
+}
+
+/** The handlers that write `at` — the index picked, `-1` for none — from the element they are bound to. */
+export function scrub(at: ScrubPosition, axis: ScrubAxis) {
     /** The position nearest a pointer event, or `undefined` where the element has no width to read it on. */
     function indexAt(event: MouseEvent): number | undefined {
         const box = (event.currentTarget as Element).getBoundingClientRect()
         if (box.width === 0) return undefined
-        return nearest(
-            positions(),
-            ((event.clientX - box.left) * width()) / box.width,
-        )
+        return axis.nearest((event.clientX - box.left) / box.width)
     }
     return {
         indexAt,
@@ -37,12 +36,12 @@ export function scrub(
         leave(): void {
             at.set(-1)
         },
-        // 52.70 — the arrows along the axis, and Home and End, with no going round the ends.
+        // 52.70, 51.94 — the arrows along the axis, and Home and End, with no going round the ends.
         key(event: KeyboardEvent): void {
             const to = roving(
                 event.key,
                 'horizontal',
-                () => [at.peek() ?? -1, positions().length],
+                () => [at.peek() ?? -1, axis.count()],
                 false,
             )
             if (to === -1) return

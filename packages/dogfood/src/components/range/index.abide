@@ -1,0 +1,46 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import PriceBand from './lib/PriceBand.abide'
+import priceBand from './lib/PriceBand.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/helpers/form', '/components/chart', '/helpers/format']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            from: [
+                "test('each thumb is a slider bounded by the other, its value written as money'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            from: [
+                "test('the keys step a thumb, and the low one stops at the high'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            from: ["test('a press takes the nearer thumb, and dragging moves it'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            from: [
+                "test('a form holding the range submits both ends under its name'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/e2e/range.spec.ts',
+            from: ["test('a thumb dragged takes the keys after it — 51.95'"],
+        },
+    ]}
+>
+    <Section level={3} title="Pick a band of prices with two thumbs">
+        <p>Bind <code>value</code> to the low and the high end. Drag either thumb, or focus one and
+            step it with the arrow keys; neither passes the other.</p>
+        <Example code={priceBand}><PriceBand /></Example>
+    </Section>
+</Doc>

@@ -7,6 +7,7 @@ import { announce } from '#shared/announce.ts'
 import type { Attributes } from '#shared/Attributes.ts'
 import type { ChartChild } from '#shared/chart/children.ts'
 import {
+    nearest,
     path,
     scale,
     type Series,
@@ -298,9 +299,13 @@ const readout = reactive(() => {
 
 // 52.26, 52.70 — the crosshair's x, picked by the pointer or the arrows.
 const scrubbing = scrub(
-    hovered,
-    () => plot.xs,
-    () => size.width,
+    // Written through by name: a `ScrubPosition` is no `Reactive`, so `hovered` alone would hand over
+    // its value (31.3).
+    { peek: () => hovered, set: (index) => (hovered = index) },
+    {
+        count: () => plot.xs.length,
+        nearest: (fraction) => nearest(plot.xs, fraction * size.width),
+    },
 )
 
 // 52.38, 52.71 — a click picks the x nearest it, read again from the click's own position, and Enter

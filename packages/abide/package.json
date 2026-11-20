@@ -60,6 +60,7 @@
         "./Column.abide": "./src/components/Column.abide",
         "./Area.abide": "./src/components/Area.abide",
         "./Pie.abide": "./src/components/Pie.abide",
+        "./Range.abide": "./src/components/Range.abide",
         "./Sparkline.abide": "./src/components/Sparkline.abide",
         "./Chat.abide": "./src/components/Chat.abide",
         "./Pairing.abide": "./src/components/Pairing.abide",

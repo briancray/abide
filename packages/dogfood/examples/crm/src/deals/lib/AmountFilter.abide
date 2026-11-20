@@ -1,0 +1,38 @@
+<script>
+import { format, reactive } from '@abide/abide'
+import Range from '@abide/abide/Range.abide'
+
+const DEALS = [
+    { id: 'noether-pilot', name: 'Noether pilot', amount: 6_500 },
+    { id: 'lovelace-audit', name: 'Lovelace audit', amount: 9_000 },
+    { id: 'turing-seats', name: 'Turing seats', amount: 22_000 },
+    { id: 'hopper-renewal', name: 'Hopper renewal', amount: 48_000 },
+]
+
+let amount = reactive<readonly [number, number]>([0, 50_000])
+const shown = reactive(() =>
+    DEALS.filter(
+        (deal) => deal.amount >= amount[0] && deal.amount <= amount[1],
+    ),
+)
+</script>
+
+<form class="fields stacked">
+    <Range
+        bind:value={amount}
+        label="Deal amount"
+        max={50_000}
+        step={500}
+        name="amount"
+        format={(each) => format.money(each, { compact: true })}
+        class="range"
+     />
+</form>
+<p class="status">
+    {format.money(amount[0], { compact: true })} to {format.money(amount[1], { compact: true })}
+</p>
+<ul>
+    {#for deal of shown by deal.id}
+        <li>{deal.name}</li>
+    {/for}
+</ul>

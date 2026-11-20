@@ -1,4 +1,5 @@
 <script>
+import AmountFilter from './lib/AmountFilter.abide'
 import DealActions from './lib/DealActions.abide'
 import DealDetail from './lib/DealDetail.abide'
 import DealDrawer from './lib/DealDrawer.abide'
@@ -16,6 +17,7 @@ import QuickDeal from './lib/QuickDeal.abide'
 <main>
     <h1>Deals</h1>
     <Pipeline />
+    <AmountFilter />
     <DealDetail />
     <DealDrawer />
     <DealNotes />
