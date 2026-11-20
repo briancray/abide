@@ -33,7 +33,7 @@ function type(words: string) {
 }
 
 // The server writes the label for the browser that asked.
-test('on a Mac, ⌘Enter saves the note and Ctrl+Enter does not', async () => {
+test('on a Mac, ⌘↩ saves the note and Ctrl+Enter does not', async () => {
     Object.defineProperty(navigator, 'userAgent', {
         configurable: true,
         get: () => MAC,
@@ -42,7 +42,7 @@ test('on a Mac, ⌘Enter saves the note and Ctrl+Enter does not', async () => {
     await app.run(
         async () => {
             using _note = await mount(SaveShortcut({}))
-            expect(document.querySelector('kbd')?.textContent).toBe('⌘Enter')
+            expect(document.querySelector('kbd')?.textContent).toBe('⌘↩')
             type('Wants a three-year term.')
             // Not the binding: nothing taken, nothing built.
             let taken = true

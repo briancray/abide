@@ -3,6 +3,8 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
+import { spawned } from '@abide/harness/gate'
+
 import { hotkeyBinding } from '#shared/hotkeyBinding.ts'
 import { hotkeys } from '#shared/hotkeys.ts'
 import { isEditableTarget } from '#shared/isEditableTarget.ts'
@@ -189,4 +191,44 @@ test('a label writes a binding as the platform reads it — 53.11', () => {
     expect(keyLabel('mod+k')).toBe('Ctrl+K')
     expect(keyLabel('shift+?')).toBe('Shift+?')
     expect(keyLabel('Escape')).toBe('Esc')
+})
+
+// THE REVERT: write `NAMED` alone on an Apple platform — `⌘Enter` where `⌘↩` is due.
+test('an Apple platform writes the named keys it has a symbol for as that symbol — 53.45', () => {
+    onPlatform(MAC)
+    expect(keyLabel('mod+Enter')).toBe('⌘↩')
+    expect(keyLabel('Escape')).toBe('⎋')
+    expect(keyLabel('alt+Backspace')).toBe('⌥⌫')
+    onPlatform(WINDOWS)
+    expect(keyLabel('mod+Enter')).toBe('Ctrl+Enter')
+})
+
+// THE REVERT: read `isApplePlatform()` over `apple` — the Windows visitor's label asked for as a
+// Mac's reads `Ctrl+Shift+K`, where `⇧⌘K` is due.
+test('parts are the keys a label writes, apart, and apple names the platform — 53.46, 53.47', () => {
+    onPlatform(WINDOWS)
+    expect(keyLabel.parts('mod+shift+k')).toEqual(['Ctrl', 'Shift', 'K'])
+    expect(keyLabel('mod+shift+k', { apple: true })).toBe('⇧⌘K')
+    expect(keyLabel.parts('mod+shift+k', { apple: true })).toEqual([
+        '⇧',
+        '⌘',
+        'K',
+    ])
+    onPlatform(MAC)
+    expect(keyLabel('mod+k', { apple: false })).toBe('Ctrl+K')
+})
+
+// 53.3 — A SERVER ANSWERING NO REQUEST reads its own platform. Run with no DOM, where every module
+// is a server's. THE REVERT: test the empty agent against the Apple pattern again — on a Mac
+// `Ctrl+K` where `⌘K` is due.
+test('outside a request, a server labels mod by its own platform — 53.3', async () => {
+    const ran = await spawned([
+        'bun',
+        '-e',
+        `import { keyLabel } from '${new URL('../src/shared/keyLabel.ts', import.meta.url).pathname}'
+console.log(keyLabel('mod+k'))`,
+    ])
+    expect(ran.stdout.trim()).toBe(
+        process.platform === 'darwin' ? '⌘K' : 'Ctrl+K',
+    )
 })

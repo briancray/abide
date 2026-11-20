@@ -19,11 +19,15 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/deals/lib/SaveShortcut.test.ts',
             from: ["test('anywhere else the label and the key are Ctrl+Enter'"],
         },
+        {
+            path: 'packages/abide/tests/hotkeys.test.ts',
+            from: ["test('parts are the keys a label writes, apart"],
+        },
     ]}
 >
     <Section level={3} title="Show the save shortcut a visitor's keyboard takes">
         <p>Write the hint from the same binding <code>hotkeys</code> matches, so it never names a
-            key the binding does not take. The label reads ⌘Enter on a Mac and Ctrl+Enter on
+            key the binding does not take. The label reads ⌘↩ on a Mac and Ctrl+Enter on
             Windows.</p>
         <Code language="abide" caption="abide" code={`
             <script>
@@ -46,6 +50,19 @@ import Section from '#src/lib/Section.abide'
 
             keyLabel('mod+k') // '⌘K' on a Mac, 'Ctrl+K' elsewhere
             keyLabel('shift+n') // '⇧N' on a Mac, 'Shift+N' elsewhere
+        `} />
+    </Section>
+
+    <Section level={3} title="Draw each key of a shortcut as a key cap">
+        <p><code>keyLabel.parts</code> answers the keys apart, so each gets a
+            <code>&lt;kbd&gt;</code> of its own. Pass <code>apple</code> to write a Mac's keys
+            whatever the visitor's platform is.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { keyLabel } from '@abide/abide'
+            </script>
+
+            {#for cap of keyLabel.parts('mod+shift+k')}<kbd>{cap}</kbd>{/for}
         `} />
     </Section>
 </Doc>

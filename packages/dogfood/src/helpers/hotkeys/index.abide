@@ -89,7 +89,7 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Save a note with ⌘Enter on a Mac and Ctrl+Enter elsewhere">
+    <Section level={3} title="Save a note with ⌘↩ on a Mac and Ctrl+Enter elsewhere">
         <p><code>mod</code> is ⌘ on Apple platforms and Ctrl on any other. On an element, the
             listener hears only the keys pressed inside it.</p>
         <Code language="abide" caption="abide" code={`

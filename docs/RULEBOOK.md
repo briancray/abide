@@ -5227,8 +5227,8 @@ written, whose key and modifiers match it.
 `prevent` is `false`, and MUST NOT on any other.
 
 53.3 A `hotkeys` binding holding `mod` MUST match ⌘ on an Apple platform and Ctrl on any other,
-reading the platform off the user agent of the request being served on a server and off
-`navigator.userAgent` in a browser.
+reading the platform off the user agent of the request being served on a server, off the server's
+own platform where it serves no request, and off `navigator.userAgent` in a browser.
 
 53.4 A `hotkeys` binding MUST NOT match a `keydown` holding Ctrl, ⌘ or Alt where the binding does not
 hold it, nor one lacking a modifier the binding holds.
@@ -5348,6 +5348,15 @@ before.
 
 53.44 `followBottom` MUST keep the element it is bound to scrolled to its bottom as what the element
 holds changes, save while the reader has scrolled up from that bottom.
+
+53.45 `keyLabel` writing for an Apple platform MUST write Enter as ↩, Escape as ⎋, Backspace as ⌫,
+Delete as ⌦ and Tab as ⇥.
+
+53.46 `keyLabel.parts` MUST answer each modifier and the key `keyLabel` writes for the same binding
+and options, apart and in the order `keyLabel` writes them.
+
+53.47 `keyLabel` and `keyLabel.parts` MUST write for an Apple platform where `apple` is `true`, and
+for any other where it is `false`, whatever 53.3 reads.
 
 # 54. Guards, fetches and jobs
 
