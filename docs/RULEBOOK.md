@@ -5114,8 +5114,9 @@ the row's field its `key` names otherwise.
 51.52 `SortableTable` MUST render each header's `label` in a button that sorts by its column, save a
 `Column` whose `sortable` is `false`.
 
-51.53 `SortableTable` MUST sort descending by a column whose button is pressed while it is sorted
-ascending by that column, and ascending otherwise.
+51.53 `SortableTable` MUST turn the direction round on a column whose button is pressed while it is
+sorted by that column, and MUST otherwise sort by the column in its `firstDirection`, ascending where
+it has none.
 
 51.54 `SortableTable` MUST write the direction of `sort` as `aria-sort` on the sorted column's
 header, and on no other header.
@@ -5133,6 +5134,8 @@ column has one, and otherwise the value's own text, or none for a blank value.
 
 51.59 `SortableTable` MUST write a `Column`'s `align` as `data-align` on its header and on each of
 its cells.
+
+51.60 `SortableTable` MUST spread what `rowAttributes` hands back for a row onto that row's `<tr>`.
 
 # 52. Formatting, markdown and charts
 

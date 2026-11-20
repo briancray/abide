@@ -70,3 +70,31 @@ test('a re-sort moves the rows, building and rewriting none', async () => {
     ).toBe(true)
     atMost(work, { nodesCreated: 0, dataWrites: 0, elementsMoved: 6 })
 })
+
+// THE REVERT: sort every new column ascending, and the first press on Amount puts the smallest
+// deal on top.
+test('a first press on Amount sorts the largest deal first', async () => {
+    using _deals = await mount(ClosingDeals({}))
+    await settled()
+    sortBy('Amount')
+    const amounts = DEALS.map((deal) => deal.amount).toSorted(
+        (left, right) => right - left,
+    )
+    expect(column(2)).toEqual(
+        amounts.map((amount) => `$${amount.toLocaleString('en-US')}`),
+    )
+})
+
+test('each row carries its stage, and a click on it picks the deal', async () => {
+    using _deals = await mount(ClosingDeals({}))
+    await settled()
+    const rows = [...document.querySelectorAll<HTMLElement>('tbody tr')]
+    expect(rows.map((row) => row.getAttribute('data-part'))).toContain('row')
+    expect(rows.every((row) => row.hasAttribute('data-stage'))).toBe(true)
+    const second = rows[1] as HTMLElement
+    second.click()
+    flushSync()
+    expect(document.querySelector('.status')?.textContent).toBe(
+        second.children[0]?.textContent,
+    )
+})

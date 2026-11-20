@@ -6,7 +6,7 @@ import { reactive } from '#shared/reactive/index.ts'
 import type { Sort } from '#shared/Sort.ts'
 import { cellText, sortRows } from '#shared/sortRows.ts'
 
-const { rows, columns, key, sort, Cell, ...rest } = props<
+const { rows, columns, key, sort, Cell, rowAttributes, ...rest } = props<
     {
         /** The rows, in the order they show while no column is sorted. */
         rows: readonly Row[]
@@ -18,17 +18,28 @@ const { rows, columns, key, sort, Cell, ...rest } = props<
         sort?: Sort | undefined
         /** Renders a cell's content in place of its text, handed the row, the column and the text. */
         Cell?(props: { row: Row; column: Column<Row>; text: string }): unknown
+        /** 51.60 — the attributes each row's `<tr>` carries, handed the row: a `class`, a `data-` state, an `onclick`. */
+        rowAttributes?(row: Row): Attributes<'tr'>
     } & Attributes<'table'>
 >()
 
 const sorted = reactive(() => sortRows(rows, columns, sort))
 
-// A header pressed again turns its direction round; a new one sorts ascending.
+// 51.53 — a header pressed again turns its direction round; a new one sorts its first direction.
 function sortBy(column: Column<Row>) {
     sort =
-        sort?.key === column.key && sort.direction === 'ascending'
-            ? { key: column.key, direction: 'descending' }
-            : { key: column.key, direction: 'ascending' }
+        sort?.key === column.key
+            ? {
+                  key: column.key,
+                  direction:
+                      sort.direction === 'ascending'
+                          ? 'descending'
+                          : 'ascending',
+              }
+            : {
+                  key: column.key,
+                  direction: column.firstDirection ?? 'ascending',
+              }
 }
 
 const directionOf = (column: Column<Row>) =>
@@ -57,7 +68,7 @@ const directionOf = (column: Column<Row>) =>
     </thead>
     <tbody>
         {#for row of sorted by key(row)}
-            <tr data-part="row">
+            <tr {...rowAttributes?.(row)} data-part="row">
                 {#for column of columns by column.key}
                     <td data-part="cell" data-align={column.align}>
                         {#if Cell}

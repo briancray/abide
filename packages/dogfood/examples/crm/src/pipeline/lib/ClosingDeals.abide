@@ -19,6 +19,8 @@ const COLUMNS: Column<Deal>[] = [
         key: 'amount',
         label: 'Amount',
         align: 'end',
+        // The largest deal first, on the first press.
+        firstDirection: 'descending',
         format: (amount) => `$${Number(amount).toLocaleString('en-US')}`,
     },
     { key: 'closes', label: 'Closes', format: (date) => String(date ?? '—') },
@@ -26,15 +28,22 @@ const COLUMNS: Column<Deal>[] = [
 
 const deals = reactive(() => listClosing())
 let sort = reactive<Sort | undefined>({ key: 'closes', direction: 'ascending' })
+let picked = reactive<string | undefined>(undefined)
 </script>
 
+<p class="status">{picked ?? 'no deal picked'}</p>
 <SortableTable
     rows={deals}
     columns={COLUMNS}
     key={(deal: Deal) => deal.id}
     bind:sort={sort}
+    rowAttributes={(deal: Deal) => ({
+        'data-stage': deal.stage,
+        onclick: () => (picked = deal.name),
+    })}
     class="[&_[data-align=end]]:text-right [&_[data-sort]_button]:text-signal
         [&_th_button]:bg-transparent [&_th_button]:p-0 [&_th_button]:text-muted
         [&_[data-sort=ascending]_button]:after:content-['_↑']
-        [&_[data-sort=descending]_button]:after:content-['_↓']"
+        [&_[data-sort=descending]_button]:after:content-['_↓']
+        [&_[data-stage=won]]:font-semibold [&_tbody_tr]:cursor-pointer"
  />
