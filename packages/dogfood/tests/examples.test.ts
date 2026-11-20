@@ -1,6 +1,6 @@
 // THE CRM PASSES ITS OWN TESTS AND ITS OWN CHECK, run as a reader who downloaded it runs them: from
-// the app's directory, under its own `bunfig.toml`. A card's Tests view shows what these report, so a
-// red one here is a card claiming a test the app fails (40.25).
+// the app's directory, under its own `bunfig.toml`. A page's sliced Tests and the assistant's results
+// tool show what these report, so a red one here is a page claiming a test the app fails (40.25).
 
 import { expect, test } from 'bun:test'
 
@@ -10,7 +10,7 @@ import { DOGFOOD } from './docsPages.ts'
 
 const CRM = `${DOGFOOD}examples/crm`
 
-// A process each: the suite runs every card's component, past `spawned`'s 60 s on a CI runner, and
+// A process each: the suite mounts every example component, past `spawned`'s 60 s on a CI runner, and
 // still inside this test's own 120 s, so a hang fails naming the command.
 test.concurrent(
     'the CRM passes its own tests',

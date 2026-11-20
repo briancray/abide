@@ -1,8 +1,8 @@
-/* THE CRM'S LOOK, one file for every chapter app and the documentation site that renders them: the
-   tokens, the element defaults a page renders with, and the example vocabulary its components
-   write. Chapter 1's app owns it; `examples:forward` copies it into every later app, and the docs
-   app's `app.css` imports it, so a card and a downloaded app are styled by the same rules. It
-   opens no `@import "tailwindcss"` — the stylesheet importing it does. */
+/* THE CRM'S LOOK, one file for the CRM and the documentation site that renders it: the tokens,
+   the element defaults a page renders with, and the example vocabulary its components write. The
+   CRM's own stylesheet and the docs app's `app.css` both import it, so an example on a page and a
+   downloaded app are styled by the same rules. It opens no `@import "tailwindcss"` — the
+   stylesheet importing it does. */
 
 /* THE TOKENS, as the theme every utility reads. The defaults a token replaces are cleared rather
    than left beside it, so `text-red-500` or `text-sm` is a build that emits nothing rather than a
@@ -187,8 +187,8 @@
         background: color-mix(in srgb, var(--color-ink) 7%, transparent);
     }
 
-    /* FORM DEFAULTS, which an example's own controls render with, inline in a card and in the
-       app alike. */
+    /* FORM DEFAULTS, which an example's own controls render with, on a docs page and in the app
+       alike. */
     /* EVERY CONTROL IS THE SAME BOX, stated once: one line, one block padding, one 1px edge — so
        a button and the field it acts on are the same height, and neither of them names a height.
        The line is a LENGTH rather than a ratio because the button sets a smaller type than the
@@ -262,7 +262,7 @@
     }
 
     /* A CONTROL A READER MAY NOT USE HAS TO LOOK LIKE ONE. Four arms already drove `disabled`
-       and nothing styled it, so a locked Save was pixel-identical to a live one — a card whose
+       and nothing styled it, so a locked Save was pixel-identical to a live one — an example whose
        whole subject is which arm got taken, rendering the same either way. */
     button:disabled {
         opacity: .42;
@@ -347,8 +347,8 @@
     }
 }
 
-/* THE EXAMPLE VOCABULARY. An example's source is what a reader reads in the card's Files tab, so
-   it writes one short name per job and the name is defined here, once, from the same utilities
+/* THE EXAMPLE VOCABULARY. An example's source is what a reader reads on a docs page, so it
+   writes one short name per job and the name is defined here, once, from the same utilities
    the rest of the site is written in. Utilities rather than a component layer, so a utility on
    the element beside the name still overrides it — Tailwind orders a single-property utility after
    a many-property one. */
@@ -366,7 +366,7 @@
     }
 }
 
-/* A DEMO CARD'S READOUTS ARE A STAT ROW, not sentences with numbers in them. A card claims a
+/* AN EXAMPLE'S READOUTS ARE A STAT ROW, not sentences with numbers in them. An example claims a
    number the reader has to find before they can check it, so the label is a small uppercase mono
    tag and the value is display-sized under it — eyes land on the value, and the label is there
    when they need it. Auto-fit, so three tiles are a row on a page and a column in a narrow frame
