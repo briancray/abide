@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import DealDrawer from './lib/DealDrawer.abide'
+import dealDrawer from './lib/DealDrawer.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -24,6 +28,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/contacts/lib/LogCallDialog.test.ts',
             from: [
                 "test('a dialog opened again before its close is reported stays open'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealDrawer.test.ts',
+            from: [
+                'test("a deal\'s details open in a modal drawer, and Close shuts it"',
             ],
         },
     ]}
@@ -90,5 +100,10 @@ import Section from '#src/lib/Section.abide'
                 …
             </Dialog>
         `} />
+    </Section>
+    <Section level={3} title="Slide a deal's details in from the side">
+        <p>A drawer is a <code>Dialog</code> laid out at an edge by its own classes: modal the same
+            way, with <code>open:</code> and <code>starting:</code> easing it in and out.</p>
+        <Example code={dealDrawer}><DealDrawer /></Example>
     </Section>
 </Doc>

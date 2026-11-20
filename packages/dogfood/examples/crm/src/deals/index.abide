@@ -1,6 +1,7 @@
 <script>
 import DealActions from './lib/DealActions.abide'
 import DealDetail from './lib/DealDetail.abide'
+import DealDrawer from './lib/DealDrawer.abide'
 import DealNotes from './lib/DealNotes.abide'
 import DealStage from './lib/DealStage.abide'
 import DeleteDeal from './lib/DeleteDeal.abide'
@@ -16,6 +17,7 @@ import QuickDeal from './lib/QuickDeal.abide'
     <h1>Deals</h1>
     <Pipeline />
     <DealDetail />
+    <DealDrawer />
     <DealNotes />
     <DealStage />
     <NewDeal />

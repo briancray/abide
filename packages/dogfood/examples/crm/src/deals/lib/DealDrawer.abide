@@ -1,0 +1,47 @@
+<script>
+import { format, reactive } from '@abide/abide'
+import Dialog from '@abide/abide/Dialog.abide'
+
+const DEALS = [
+    {
+        id: 'hopper-renewal',
+        name: 'Hopper & Co renewal',
+        amount: 48_000,
+        stage: 'Proposal',
+    },
+    {
+        id: 'babbage-pilot',
+        name: 'Babbage pilot',
+        amount: 12_500,
+        stage: 'Qualified',
+    },
+]
+
+let shown = reactive<(typeof DEALS)[number] | undefined>(undefined)
+let open = reactive(false)
+
+function show(deal: (typeof DEALS)[number]) {
+    shown = deal
+    open = true
+}
+</script>
+
+<ul>
+    {#for deal of DEALS by deal.id}
+        <li><button onclick={() => show(deal)}>{deal.name}</button></li>
+    {/for}
+</ul>
+<Dialog
+    bind:open={open}
+    aria-labelledby="deal-drawer-title"
+    class="m-0 ms-auto h-dvh max-h-none w-80 max-w-full translate-x-full border-0
+    border-l border-rule bg-raised p-6 transition-[translate,display,overlay]
+    transition-discrete duration-200 open:translate-x-0 starting:open:translate-x-full
+    motion-reduce:transition-none backdrop:bg-ink/20"
+>
+    {#if shown}
+        <h2 id="deal-drawer-title">{shown.name}</h2>
+        <p>{format.money(shown.amount)} · {shown.stage}</p>
+    {/if}
+    <form method="dialog"><button>Close</button></form>
+</Dialog>
