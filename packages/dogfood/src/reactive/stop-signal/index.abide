@@ -26,13 +26,15 @@ import Section from '#src/lib/Section.abide'
             stop early, rather than holding the shutdown until the sweep ends.</p>
         <Code language="ts" caption="server" code={`
             import { reactive, stopSignal } from '@abide/abide'
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
             export const followUps = reactive(
                 async function* () {
                     const stopping = stopSignal()
                     for (const deal of DEALS) {
                         if (stopping.aborted) return
-                        if (await awaitingReply(deal)) yield deal.name
+                        await Bun.sleep(1) // a look at the lead's inbox
+                        if (deal.stage === 'lead') yield deal.name
                     }
                 },
                 { global: true, poll: 300_000 },

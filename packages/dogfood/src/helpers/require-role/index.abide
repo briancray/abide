@@ -50,13 +50,14 @@ import Section from '#src/lib/Section.abide'
             the <code>Forbidden</code> refusal says.</p>
         <Code language="ts" caption="server" code={`
             import { GET, requireRole } from '@abide/abide/server'
+            import { TEAM } from './lib/TEAM.server.ts'
 
-            const auditor = requireRole(
-                (member) => member.team === 'finance',
-                { message: 'Finance audits the ledger.' },
+            const onTheTeam = requireRole(
+                (member) => member.role === 'admin' || member.role === 'sales',
+                { message: 'Only the team sees the team.' },
             )
 
-            export default GET(() => ledger(), { middleware: [auditor] })
+            export default GET(() => TEAM, { middleware: [onTheTeam] })
         `} />
     </Section>
 

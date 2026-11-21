@@ -1,21 +1,22 @@
-// 53.21-53.23, 53.44, 53.45 — A CLICK THAT COPIES, and the element marked once the copy lands.
+// 53.21-53.23, 53.44, 53.45, 53.57, 53.58 — A CLICK THAT COPIES, and the element marked once the copy lands.
 
 import type { Disposer } from './reactive/watch.ts'
-import { writeText } from './writeText.ts'
+import { type Copyable, writeClipboard } from './writeClipboard.ts'
 
 /**
- * The `bind:element` adaptor copying text to the clipboard when the element is clicked, and writing
+ * The `bind:element` adaptor copying to the clipboard when the element is clicked — text, or a
+ * record of MIME type to what it holds (`text/html` beside `text/plain`, `image/png`) — and writing
  * `data-copied` on it for `copiedFor` milliseconds once the copy landed.
  *
  * 53.44 — WITH `selector`, THE ELEMENT HOLDS THE BUTTONS RATHER THAN BEING ONE: a click inside it
  * on an element matching `selector` copies, and that element is marked. One listener reaches buttons
  * written by markup no template built, which is what a `raw` block holds.
  *
- * @param text the text, or a function read at the click — handed the element clicked — for text that changes
+ * @param value what to copy, or a function read at the click — handed the element clicked — for a value that changes
  * @param options how long `data-copied` stays, the buttons inside the element, and what hears the outcome
  */
-export function copyText(
-    text: string | ((clicked: Element) => string),
+export function copy(
+    value: Copyable | ((clicked: Element) => Copyable),
     options: {
         /** How long `data-copied` stays on the element after a copy, in milliseconds. 1500 by default. */
         copiedFor?: number
@@ -37,8 +38,9 @@ export function copyText(
                       ? event.target.closest(selector)
                       : null
             if (clicked === null || !element.contains(clicked)) return
-            const copied = await writeText(
-                typeof text === 'function' ? text(clicked) : text,
+            // Read and written inside the click: Safari writes the clipboard from a gesture alone.
+            const copied = await writeClipboard(
+                typeof value === 'function' ? value(clicked) : value,
             )
             if (!bound) return
             oncopied?.(copied, clicked)

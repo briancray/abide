@@ -91,6 +91,7 @@ import sortedByClose from './lib/SortedByClose.abide' with { type: 'text' }
             cells show.</p>
         <Code language="ts" caption="shared" code={`
             import { type Column, format } from '@abide/abide'
+            import { STAGES } from './lib/STAGES.ts'
 
             const COLUMNS: Column<Deal>[] = [
                 { key: 'name', label: 'Deal', sortable: false },

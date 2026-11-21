@@ -26,6 +26,8 @@ import Section from '#src/lib/Section.abide'
             entries and leave every other stage alone.</p>
         <Code language="ts" caption="browser" code={`
             import { refresh } from '@abide/abide'
+            import getStage from './getStage.handler.ts'
+            import winDeal from './winDeal.handler.ts'
 
             async function win() {
                 await winDeal()
@@ -40,9 +42,11 @@ import Section from '#src/lib/Section.abide'
             whichever handler it came from.</p>
         <Code language="ts" caption="server" code={`
             import { GET } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
 
             export default GET(
-                async ({ stage }: { stage: string }) => countStage(stage),
+                async ({ stage }: { stage: string }) =>
+                    DEALS.filter((deal) => deal.stage === stage).length,
                 { tags: ({ stage }) => [\`stage:\${stage}\`] },
             )
         `} />

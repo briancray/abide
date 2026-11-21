@@ -22,6 +22,7 @@ import Section from '#src/lib/Section.abide'
             sees.</p>
         <Code language="ts" caption="shared" code={`
             import { THRESHOLDS } from '@abide/harness/report'
+            import { priced } from './Forecast.bench.ts'
 
             const run = priced()
             const perDeal = run.samples['among 1,000'].nanoseconds / 1000

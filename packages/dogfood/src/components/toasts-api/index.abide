@@ -54,29 +54,37 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
         <Example code={savePhone}><SavePhone /></Example>
     </Section>
 
-    <Section level={3} title="Keep a notice up until the import finishes">
+    <Section level={3} title="Keep a notice up until the digest is sent">
         <p>A <code>timeout</code> of <code>Infinity</code> keeps the notice until its close button
             is pressed or you pass its id to <code>toasts.dismiss</code>.</p>
         <Code language="ts" caption="browser" code={`
             import { toasts } from '@abide/abide/Toasts.abide'
+            import sendDigest from '../sendDigest.handler.ts'
 
-            const id = toasts.notify('Importing contacts…', { timeout: Infinity })
-            await importContacts({ file })
+            const id = toasts.notify('Sending the digest…', { timeout: Infinity })
+            await sendDigest()
             toasts.dismiss(id)
         `} />
     </Section>
 
     <Section level={3} title="Count the undos people take">
         <p><code>attributes</code> are written onto the notice, for a tag that reads them.
-            <code>onclose</code> is told whether the timeout, a dismissal or the action took the
-            notice down.</p>
+            <code>onclose</code> is told whether the timeout (<code>'timeout'</code>), a dismissal
+            (<code>'dismissed'</code>) or the action (<code>'action'</code>) took the notice
+            down.</p>
         <Code language="ts" caption="browser" code={`
+            import { reactive } from '@abide/abide'
             import { toasts } from '@abide/abide/Toasts.abide'
+            import reopenDeal from '../archive/reopenDeal.handler.ts'
 
-            toasts.notify('Deal archived', {
+            const undos = reactive(0)
+
+            toasts.notify('Analytical Engines pilot archived', {
                 attributes: { 'data-track': 'deal-archived' },
-                action: { label: 'Undo', run: () => restoreDeal({ id }) },
-                onclose: (reason) => track('archive-notice', { reason }),
+                action: { label: 'Undo', run: () => reopenDeal() },
+                onclose: (reason) => {
+                    if (reason === 'action') undos.set(undos() + 1)
+                },
             })
         `} />
     </Section>

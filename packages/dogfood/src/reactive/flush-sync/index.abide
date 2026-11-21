@@ -25,6 +25,7 @@ import Section from '#src/lib/Section.abide'
         <p>A write wakes its effects at the end of the turn, the template's included. Call
             <code>flushSync</code> to run them before the next line asserts.</p>
         <Code language="ts" caption="shared" code={`
+            import { expect, test } from 'bun:test'
             import { flushSync } from '@abide/abide'
             import { mount, settled } from '@abide/harness/abide'
             import DealPicker from './DealPicker.abide'
@@ -43,11 +44,16 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Scroll to a note the moment it renders">
         <p>Flush before a layout read, so the measurement sees the row the write added.</p>
         <Code language="ts" caption="browser" code={`
-            import { flushSync } from '@abide/abide'
+            import { flushSync, reactive } from '@abide/abide'
 
-            notes.patch((all) => all.push(note))
-            flushSync()
-            list.scrollTop = list.scrollHeight
+            const notes = reactive<string[]>([])
+            const list = document.querySelector('ul') as HTMLUListElement
+
+            function addNote(note: string) {
+                notes.patch((all) => all.push(note))
+                flushSync()
+                list.scrollTop = list.scrollHeight
+            }
         `} />
     </Section>
 </Doc>

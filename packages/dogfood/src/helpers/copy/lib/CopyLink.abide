@@ -1,11 +1,11 @@
 <script>
-import { copyText, reactive } from '@abide/abide'
+import { copy, reactive } from '@abide/abide'
 
 let dealId = reactive('ledger-audit')
 const link = () => `${location.origin}/deals/${dealId}`
 </script>
 
 <input bind:value={dealId}>
-<button bind:element={copyText(link, { copiedFor: 3000 })}>
+<button bind:element={copy(link, { copiedFor: 3000 })}>
     Copy link
 </button>

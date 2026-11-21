@@ -1,8 +1,8 @@
 <script>
-import { copyText } from '@abide/abide'
+import { copy } from '@abide/abide'
 </script>
 
-<button class="group" bind:element={copyText('grace@hopper.example')}>
+<button class="group" bind:element={copy('grace@hopper.example')}>
     <span class="group-data-copied:hidden">Copy</span>
     <span class="hidden group-data-copied:inline">Copied</span>
 </button>

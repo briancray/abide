@@ -91,7 +91,7 @@ const WITHOUT_PARTS: Record<string, string> = {
     'Chat.abide':
         'a transcript over the pieces an app has already: `Markdown`, `dropzone`, `followBottom`, `transcript`',
     'Pairing.abide':
-        'a fixed panel showing one command to copy, over `copyText`',
+        'a fixed panel showing one command to copy, over `copy`',
     'Line.abide':
         'a series a `Chart` hands its `chart` parts, with no markup of its own',
     'Column.abide':

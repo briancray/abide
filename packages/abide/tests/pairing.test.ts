@@ -70,8 +70,11 @@ function clipboardWrites(written: string[]): void {
     Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
         value: {
-            writeText: async (text: string) => {
-                written.push(text)
+            write: async (items: ClipboardItem[]) => {
+                for (const item of items)
+                    written.push(
+                        await (await item.getType('text/plain')).text(),
+                    )
             },
         },
     })

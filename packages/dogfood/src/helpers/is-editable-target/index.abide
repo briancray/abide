@@ -18,7 +18,7 @@ import feedKeys from './lib/FeedKeys.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Leave a key to the field the visitor types in">
-        <p>A listener of your own asks first, so <code>j</code> moves through the activity feed
+        <p>A listener of your own asks first, so <code>c</code> logs a call to the activity feed
             everywhere but a text field, a textarea, a select or an editable element.</p>
         <Example code={feedKeys}><FeedKeys /></Example>
     </Section>

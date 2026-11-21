@@ -1,11 +1,11 @@
 <script>
-import { copyText, raw } from '@abide/abide'
+import { copy, raw } from '@abide/abide'
 
 const block = (command: string) =>
     `<pre><code>${command}</code><button data-copy>Copy</button></pre>`
 const noteHtml = block('bun add @abide/abide') + block('bun run dev')
 
-const copyBlock = copyText(
+const copyBlock = copy(
     (button) => button.closest('pre')?.querySelector('code')?.textContent ?? '',
     { selector: '[data-copy]', oncopied: (landed) => console.log(landed) },
 )

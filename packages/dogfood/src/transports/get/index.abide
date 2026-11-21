@@ -76,10 +76,15 @@ import Section from '#src/lib/Section.abide'
             entry that has arrived, and <code>busy()</code> stays true until the stream closes.</p>
         <Code language="ts" caption="server" code={`
             import { GET } from '@abide/abide/server'
-            import { ARCHIVE } from './lib/ARCHIVE.server.ts'
+
+            const OLDER = [
+                { on: '2026-09-02', note: 'Intro call, asked for pricing' },
+                { on: '2026-09-09', note: 'Sent the proposal' },
+                { on: '2026-10-01', note: 'Signed for 40 seats' },
+            ]
 
             export default GET(async function* () {
-                for (const entry of ARCHIVE) {
+                for (const entry of OLDER) {
                     await Bun.sleep(600) // a slow archive
                     yield entry
                 }
@@ -120,6 +125,9 @@ import Section from '#src/lib/Section.abide'
         <p>Pass <code>refresh</code> a pattern of the handler's args, and the entries matching it
             load again while every other stage stays as it is.</p>
         <Code language="ts" caption="browser" code={`
+            import getStage from './getStage.handler.ts'
+            import winDeal from './winDeal.handler.ts'
+
             await winDeal()
             getStage.refresh({ stage: 'lead' })
             getStage.refresh({ stage: 'won' })

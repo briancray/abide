@@ -26,7 +26,9 @@ import Section from '#src/lib/Section.abide'
             back the formatter-per-amount version and returns the undo. <code>worth</code> is
             what that version reports.</p>
         <Code language="ts" caption="server" code={`
+            import { expect } from 'bun:test'
             import { gate } from '@abide/harness/gate'
+            import { money } from './money.ts'
 
             gate(
                 'a won deal is formatted without building a formatter',

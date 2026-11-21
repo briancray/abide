@@ -43,17 +43,24 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Read a stream of deals as they arrive">
+    <Section level={3} title="Read a stream of deal moves as they arrive">
         <p>A JSON Lines or event stream is its chunks, each handed over as it arrives.</p>
         <Code language="ts" caption="shared" code={`
-            const deals = await fetch(feed).then(handle)
-            for await (const deal of deals as AsyncIterable<Deal>) show(deal)
+            import { handle, log } from '@abide/abide'
+            import ticker from './ticker.handler.ts'
+
+            type Move = { account: string; stage: string }
+            const moves = await fetch(ticker.url()).then(handle)
+            for await (const move of moves as AsyncIterable<Move>)
+                log(\`\${move.account} moved to \${move.stage}\`)
         `} />
     </Section>
 
     <Section level={3} title="Tell a refused certificate from a service that is down">
         <p>What <code>fetch</code> throws reaches you untouched, to show as you choose.</p>
         <Code language="ts" caption="shared" code={`
+            import { handle, log } from '@abide/abide'
+
             try {
                 return await fetch(url).then(handle)
             } catch (error) {

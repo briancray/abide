@@ -1040,11 +1040,11 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean; onreject?: (files: File[], event: DragEvent \| ClipboardEvent) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20, 53.46 |
 
-## `copyText`
+## `copy`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copyText` | `(text: string \| ((clicked: Element) => string), options?: { copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45 |
+| `copy` | `(value: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>), options?: { copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text, or a record of MIME type to what it holds, to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45, 53.57, 53.58 |
 
 # Charts
 

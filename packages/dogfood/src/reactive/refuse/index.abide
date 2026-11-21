@@ -25,6 +25,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { jsonSchema, refuse } from '@abide/abide'
             import { PATCH } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
 
             const dealClosed = refuse.named(
                 'DealClosed',
@@ -65,6 +66,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
             import { GET } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
 
             export default GET(async ({ id }: { id: string }) =>
                 DEALS.find((deal) => deal.id === id) ?? refuse(404),

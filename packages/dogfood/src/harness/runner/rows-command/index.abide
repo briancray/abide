@@ -31,14 +31,15 @@ import Section from '#src/lib/Section.abide'
             stdout is the channel.</p>
         <Code language="ts" caption="server" code={`
             import { rowsCommand } from '@abide/harness/runner'
+            import { closedTotals } from '../src/reports/lib/closedTotals.ts'
 
             const reports = [
-                { id: 'forecast', section: 'reports', name: 'Forecast' },
-                { id: 'won', section: 'reports', name: 'Won revenue' },
+                { id: 'week', section: 'reports', name: 'Closed this week', days: 7 },
+                { id: 'month', section: 'reports', name: 'Closed this month', days: 30 },
             ]
             await rowsCommand(reports, async (selected, emit) => {
                 for (const report of selected)
-                    emit({ id: report.id, rows: await build(report.id) })
+                    emit({ id: report.id, totals: closedTotals(report.days) })
             })
         `} />
     </Section>
@@ -49,7 +50,7 @@ import Section from '#src/lib/Section.abide'
             JSON line.</p>
         <Code code={`
             bun scripts/reportRows.ts --list
-            bun scripts/reportRows.ts --scope section:reports --filter won
+            bun scripts/reportRows.ts --scope section:reports --filter month
         `} />
     </Section>
 </Doc>

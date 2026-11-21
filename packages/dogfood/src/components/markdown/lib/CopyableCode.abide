@@ -1,7 +1,7 @@
 <script>
-import { copyText, props } from '@abide/abide'
+import { copy, props } from '@abide/abide'
 
 const { source } = props<{ source: string; info: string }>()
 </script>
 
-<pre><code>{source}</code> <button bind:element={copyText(source)}>Copy</button></pre>
+<pre><code>{source}</code> <button bind:element={copy(source)}>Copy</button></pre>

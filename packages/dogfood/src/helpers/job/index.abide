@@ -45,13 +45,15 @@ import Section from '#src/lib/Section.abide'
         <p>Declare the job at the top of a server file. Nothing runs as the file loads: the first
             run waits for the app to serve, and the app's stop ends the schedule.</p>
         <Code language="ts" caption="server" code={`
-            import { job } from '@abide/abide/server'
+            import { job, log } from '@abide/abide/server'
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
             export const digest = job('digest', {
                 every: 24 * 60 * 60_000,
-                run: async (signal) => {
-                    const leads = await listLeads()
-                    await mailTeam(leads, { signal })
+                run: async () => {
+                    const leads = DEALS.filter((deal) => deal.stage === 'lead')
+                    await Bun.sleep(300) // the mail going out
+                    log.info(\`digest sent: \${leads.length} leads to follow up\`)
                 },
             })
         `} />
@@ -84,6 +86,7 @@ import Section from '#src/lib/Section.abide'
             epoch milliseconds, so a restart waits out the rest of the night.</p>
         <Code language="ts" caption="server" code={`
             import { job } from '@abide/abide/server'
+            import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
 
             job('digest', {
                 every: 24 * 60 * 60_000,

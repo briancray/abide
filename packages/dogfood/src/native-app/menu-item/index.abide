@@ -35,7 +35,7 @@ import Section from '#src/lib/Section.abide'
             const printReport = menuItem({ label: 'Print Report…', key: 'cmd+p' })
 
             onMenu(() => [{ label: 'Reports', items: [printReport] }])
-            printReport.on(() => print())
+            printReport.on(() => window.print())
             </script>
         `} />
     </Section>
@@ -46,10 +46,10 @@ import Section from '#src/lib/Section.abide'
             <code>hotkeys</code>, so one declaration is the menu entry and the shortcut.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { keyLabel, menuItem } from '@abide/abide'
+            import { keyLabel, menuItem, navigate } from '@abide/abide'
 
             const newDeal = menuItem({ label: 'New Deal', key: 'cmd+n' })
-            newDeal.on(() => openNewDeal())
+            newDeal.on(() => navigate('/deals'))
             </script>
 
             <kbd>{keyLabel('mod+n')}</kbd>

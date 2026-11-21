@@ -9,6 +9,8 @@ import CopyEmail from './lib/CopyEmail.abide'
 import copyEmail from './lib/CopyEmail.abide' with { type: 'text' }
 import CopyLink from './lib/CopyLink.abide'
 import copyLink from './lib/CopyLink.abide' with { type: 'text' }
+import CopyRecord from './lib/CopyRecord.abide'
+import copyRecord from './lib/CopyRecord.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -22,8 +24,18 @@ import copyLink from './lib/CopyLink.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: ["test('a record copies as one item holding each type it names"],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
             from: [
-                "test('a page with no clipboard copies through a selected textarea",
+                "test('a page with no clipboard copies through a selected textarea, carrying every string type",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a value holding no string reports not copied where there is no clipboard",
             ],
         },
         {
@@ -41,12 +53,20 @@ import copyLink from './lib/CopyLink.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Copy text that changes, read at the click">
-        <p>Hand <code>copyText</code> a function, and it reads the text when the button is
+        <p>Hand <code>copy</code> a function, and it reads what to copy when the button is
             pressed. <code>copiedFor</code> sets how long the mark stays.</p>
         <Example code={copyLink}><CopyLink /></Example>
     </Section>
+    <Section level={3} title="Copy a link that pastes as the deal's name">
+        <p>Hand <code>copy</code> a record of MIME type to what it holds, and every type lands in
+            one clipboard item. Each place you paste takes the richest type it reads. A doc or a
+            chat takes <code>text/html</code> and shows a link named for the deal. An address
+            bar takes <code>text/plain</code>. A <code>Blob</code> copies an image the same way,
+            as <code>{"{ 'image/png': blob }"}</code>.</p>
+        <Example code={copyRecord}><CopyRecord /></Example>
+    </Section>
     <Section level={3} title="Copy each code block of a rendered note from one binding">
-        <p>Bind <code>copyText</code> to the element holding the buttons and give it a
+        <p>Bind <code>copy</code> to the element holding the buttons and give it a
             <code>selector</code>: a click on a matching button copies, handed that button, and
             only it is marked. Buttons in a <code>raw</code> block are reached the same way.
             <code>oncopied</code> hears whether each copy landed.</p>

@@ -33,6 +33,7 @@ import Section from '#src/lib/Section.abide'
             then by arm.</p>
         <Code language="ts" caption="shared" code={`
             import { batch, type Batched } from '@abide/harness/report'
+            import { pipeline } from './pipeline.ts'
 
             export const CEILINGS = { priced: { 'among 1,000': 1 } }
 

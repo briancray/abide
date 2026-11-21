@@ -48,8 +48,8 @@ export {
     commandPalette,
 } from './commandPalette.ts'
 export { type Cookies, cookies } from './cookies.ts'
-// 53.21-53.23 — the `bind:element` adaptor copying text on a click.
-export { copyText } from './copyText.ts'
+// 53.21-53.23, 53.57 — the `bind:element` adaptor copying on a click.
+export { copy } from './copy.ts'
 export { csp } from './csp.ts'
 // 53.12-53.16 — the `bind:element` adaptor closing a panel from outside it.
 // 50.1-50.4 — a native modal as a part on a `<dialog>` of the app's own.

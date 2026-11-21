@@ -37,6 +37,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { principal, refuse } from '@abide/abide'
             import { POST } from '@abide/abide/server'
+            import { TEAM } from './lib/TEAM.server.ts'
 
             export default POST(async ({ email }: { email: string }) => {
                 const member = TEAM.find((one) => one.email === email)
@@ -54,13 +55,14 @@ import Section from '#src/lib/Section.abide'
             <script>
             import { principal } from '@abide/abide'
             import signOut from './signOut.handler.ts'
+            import SignIn from './lib/SignIn.abide'
             </script>
 
             {#if principal.authenticated()}
                 <p>{principal.resolved().name}</p>
                 <button onclick={() => signOut()}>Sign out</button>
             {:else}
-                <SignInForm />
+                <SignIn />
             {/if}
         `} />
     </Section>
@@ -86,11 +88,16 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { principal, refuse } from '@abide/abide'
             import { GET } from '@abide/abide/server'
+            import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
+
+            const lastExport = new Map<string, number>()
 
             export default GET(async () => {
-                const key = \`exports:\${principal.caller()}\`
-                if (await limiter.exceeded(key)) return refuse(429, 'Try again shortly.')
-                return exportContacts()
+                const caller = principal.caller()
+                if (Date.now() - (lastExport.get(caller) ?? 0) < 60_000)
+                    return refuse(429, 'Try again shortly.')
+                lastExport.set(caller, Date.now())
+                return CONTACTS
             })
         `} />
     </Section>

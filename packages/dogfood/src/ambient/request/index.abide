@@ -31,10 +31,12 @@ import Section from '#src/lib/Section.abide'
             down.</p>
         <Code language="ts" caption="server" code={`
             import { GET, request } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
 
             export default GET(({ id }: { id: string }) => {
-                const locale = request().headers.get('accept-language') ?? 'en'
-                return formatDeal(id, locale)
+                const deal = DEALS.find((each) => each.id === id)
+                const locale = request().headers.get('accept-language')?.split(',')[0]
+                return new Intl.NumberFormat(locale).format(deal?.amount ?? 0)
             })
         `} />
     </Section>

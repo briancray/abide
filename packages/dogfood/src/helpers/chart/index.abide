@@ -143,7 +143,11 @@ import targetBand from './lib/TargetBand.abide' with { type: 'text' }
         <p><code>chart.nearest</code> answers the index of the position nearest <code>x</code>,
             the earlier of two equally near, and <code>-1</code> where there are none.</p>
         <Code language="ts" caption="browser" code={`
-            import { chart } from '@abide/abide'
+            import { chart, reactive } from '@abide/abide'
+
+            const xs = [0, 50, 100, 150, 200]
+            const hovered = reactive(-1)
+            const svg = document.querySelector('svg') as SVGSVGElement
 
             svg.addEventListener('pointermove', (event) => {
                 const x = event.clientX - svg.getBoundingClientRect().left

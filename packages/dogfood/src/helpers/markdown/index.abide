@@ -86,7 +86,7 @@ import pastedNote from './lib/PastedNote.abide' with { type: 'text' }
         `} />
     </Section>
 
-    <Section level={3} title="Draw a chart from a fenced block in a report">
+    <Section level={3} title="Draw bars from a fenced block in a report">
         <p><code>blocks</code> names a function per fence language, handed the block's source and
             the rest of its info. What it answers is written as it is, so escape what it
             writes.</p>
@@ -95,7 +95,13 @@ import pastedNote from './lib/PastedNote.abide' with { type: 'text' }
 
             markdown(report, {
                 blocks: {
-                    chart: (source, info) => drawChart(source.split(','), info),
+                    bars: (source, info) => {
+                        let bars = ''
+                        for (const share of source.split(','))
+                            bars += \`<meter max="100" value="\${Number(share)}"></meter>\`
+                        const caption = markdown(info, { inline: true })
+                        return \`<figure>\${bars}<figcaption>\${caption}</figcaption></figure>\`
+                    },
                 },
             })
         `} />

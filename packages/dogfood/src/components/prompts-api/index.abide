@@ -92,17 +92,18 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
         `} />
     </Section>
 
-    <Section level={3} title="Delete a deal from the dialog, and say why it could not">
+    <Section level={3} title="Mark a deal lost from the dialog, and say why it could not">
         <p>Hand <code>run</code> the call the confirm makes. The dialog stays up with
             <code>data-busy</code> while it runs, closes once it lands, and shows the refusal in its
-            <code>error</code> part.</p>
+            <code>error</code> part: here, that a closed deal does not move.</p>
         <Code language="ts" caption="browser" code={`
             import { prompts } from '@abide/abide/Prompts.abide'
+            import moveDeal from '../moveDeal.handler.ts'
 
             await prompts.confirm({
-                body: 'Delete Engine renewal?',
+                body: 'Mark Engine renewal lost?',
                 danger: true,
-                run: () => deleteDeal({ id }),
+                run: () => moveDeal({ id, stage: 'lost' }),
             })
         `} />
     </Section>
