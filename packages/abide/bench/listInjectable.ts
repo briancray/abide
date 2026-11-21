@@ -18,7 +18,7 @@ import {
 
 import { listCases, type Row } from './listCases.ts'
 
-function run(): Row[] {
+function run(sizing?: { reps: number; warmup: number }): Row[] {
     const rows: Row[] = []
     for (const kase of listCases()) {
         const arms = kase.setup()
@@ -37,6 +37,7 @@ function run(): Row[] {
             emulated: emulatedDom(),
             work,
             budgetNanoseconds,
+            ...sizing,
         })
         const over = batch({
             case: kase.name,
@@ -44,6 +45,7 @@ function run(): Row[] {
             emulated: emulatedDom(),
             work,
             budgetNanoseconds,
+            ...sizing,
         })
         const abide = against.samples.abide as Sample
         const vanilla = against.samples.vanilla as Sample
@@ -78,4 +80,4 @@ function run(): Row[] {
     return rows
 }
 
-;(globalThis as unknown as { __LIST_BENCH__: () => Row[] }).__LIST_BENCH__ = run
+;(globalThis as unknown as { __LIST_BENCH__: typeof run }).__LIST_BENCH__ = run

@@ -15,6 +15,7 @@ import { expect, test } from '@playwright/test'
 import { buildBench, type Report } from '../bench/buildBench.ts'
 import { loadCompiledPage } from '../bench/buildCompiledPage.ts'
 import { type Grid, grid } from '../bench/gridPage.ts'
+import { BENCH_SIZING } from './BENCH_SIZING.ts'
 import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const REPORT = await buildBench('report')
@@ -61,7 +62,7 @@ test('the hydration walk, per scheme, in this engine', async ({
             script: REPORT,
         })
         const measured = await page.evaluate(
-            (variants) => {
+            ({ variants, sizing }) => {
                 const { batch, claimOf, emulatedDom, ratio } = (
                     globalThis as unknown as { __REPORT__: Report }
                 ).__REPORT__
@@ -121,6 +122,7 @@ test('the hydration walk, per scheme, in this engine', async ({
                     emulated: emulatedDom(),
                     work,
                     budgetNanoseconds: 20_000_000_000,
+                    ...sizing,
                 })
                 const base = timed.samples['no-markers'] as Sample
                 const out: {
@@ -151,10 +153,13 @@ test('the hydration walk, per scheme, in this engine', async ({
                     floor: timed.floor,
                 }
             },
-            here.map((built) => ({
-                variant: built.variant,
-                script: built.script,
-            })),
+            {
+                variants: here.map((built) => ({
+                    variant: built.variant,
+                    script: built.script,
+                })),
+                sizing: BENCH_SIZING,
+            },
         )
 
         const cells = here[0]?.cells ?? 0
@@ -195,5 +200,5 @@ test('the hydration walk, per scheme, in this engine', async ({
                 `${variant} at ${cells} slots`,
             ).toBe(cells)
     }
-    console.log(lines.join('\n'))
+    if (!BENCH_SIZING) console.log(lines.join('\n'))
 })

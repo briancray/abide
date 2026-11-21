@@ -8,6 +8,7 @@ import { expect, test } from '@playwright/test'
 import { buildBench, type Report } from '../bench/buildBench.ts'
 import { loadCompiledPage } from '../bench/buildCompiledPage.ts'
 import { type Scheme, type Tree, tree, wide } from '../bench/depthTree.ts'
+import { BENCH_SIZING } from './BENCH_SIZING.ts'
 import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const REPORT = await buildBench('report')
@@ -76,7 +77,7 @@ test('the walk against tree depth, in this engine', async ({
             script: REPORT,
         })
         const measured = await page.evaluate(
-            (schemes) => {
+            ({ schemes, sizing }) => {
                 const { batch, claimOf, emulatedDom, ratio } = (
                     globalThis as unknown as { __REPORT__: Report }
                 ).__REPORT__
@@ -113,6 +114,7 @@ test('the walk against tree depth, in this engine', async ({
                     emulated: emulatedDom(),
                     work,
                     budgetNanoseconds: 20_000_000_000,
+                    ...sizing,
                 })
                 const markers = timed.samples.markers as Sample
                 const cursor = timed.samples.cursor as Sample
@@ -129,10 +131,13 @@ test('the walk against tree depth, in this engine', async ({
                     floor: timed.floor,
                 }
             },
-            here.map((built) => ({
-                scheme: built.scheme,
-                script: built.script,
-            })),
+            {
+                schemes: here.map((built) => ({
+                    scheme: built.scheme,
+                    script: built.script,
+                })),
+                sizing: BENCH_SIZING,
+            },
         )
 
         lines.push(
@@ -147,5 +152,5 @@ test('the walk against tree depth, in this engine', async ({
                 bindings,
             )
     }
-    console.log(lines.join('\n'))
+    if (!BENCH_SIZING) console.log(lines.join('\n'))
 })

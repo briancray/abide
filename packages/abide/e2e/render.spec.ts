@@ -21,6 +21,7 @@ import {
     vanillaMarkup,
     vanillaWire,
 } from '../bench/renderCases.ts'
+import { BENCH_SIZING } from './BENCH_SIZING.ts'
 import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const REPORT = await buildBench('report')
@@ -78,7 +79,7 @@ test('the client mount, against the page wired by hand', async ({
         await page.addScriptTag({ content: built.script })
 
         const measured = (await page.evaluate(
-            ({ markup, vanillaMarkup, vanillaScript, size }) => {
+            ({ markup, vanillaMarkup, vanillaScript, size, sizing }) => {
                 const { batch, claimOf, emulatedDom, ratio } = (
                     globalThis as unknown as { __REPORT__: Report }
                 ).__REPORT__
@@ -167,6 +168,7 @@ test('the client mount, against the page wired by hand', async ({
                         loop: { slotsBound: loopBound },
                     },
                     budgetNanoseconds: 20_000_000_000,
+                    ...sizing,
                 })
                 document.body.replaceChildren()
                 const floor = { floor: timed.floor }
@@ -195,6 +197,7 @@ test('the client mount, against the page wired by hand', async ({
                 vanillaMarkup: built.vanillaMarkup,
                 vanillaScript: built.vanillaScript,
                 size: built.size,
+                sizing: BENCH_SIZING,
             },
         )) as Measured
 
@@ -232,5 +235,5 @@ test('the client mount, against the page wired by hand', async ({
             ? '  The straight-line mount is level with the loop at every size, so the shape is not the cost here.'
             : `  The straight-line mount is apart from the loop at ${apart.map((shape) => `${shape.size} cards (${shape.claim})`).join(', ')}${level.length === 0 ? '' : `, and level at ${level.map((shape) => shape.size).join(', ')}`}.`,
     )
-    console.log(lines.join('\n'))
+    if (!BENCH_SIZING) console.log(lines.join('\n'))
 })

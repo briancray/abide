@@ -64,7 +64,16 @@ async function machinery(): Promise<void> {
         console.log(`  ${entry}: ${exported.join(', ') || '—'}`)
 }
 
-const REPORT_SPECS = ['reactive', 'shared', 'shapes']
+const REPORT_SPECS = [
+    'reactive',
+    'shared',
+    'shapes',
+    'list',
+    'depth',
+    'render',
+    'component',
+    'grid',
+]
 
 /** The report-only browser specs at full size, through playwright, in both engines. */
 async function reportSpecs(): Promise<number> {

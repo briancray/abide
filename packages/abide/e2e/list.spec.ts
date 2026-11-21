@@ -23,6 +23,7 @@ import { expect, test } from '@playwright/test'
 import { openInjected } from '../../harness/scripts/buildInjectable.ts'
 import { buildBench } from '../bench/buildBench.ts'
 import type { Row } from '../bench/listCases.ts'
+import { BENCH_SIZING } from './BENCH_SIZING.ts'
 import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const built = await buildBench('list')
@@ -36,10 +37,14 @@ test('a keyed reorder against the DOM-call floor and against a rebuild', async (
     test.setTimeout(15 * 60 * 1000)
     await openInjected(page, built)
 
-    const rows = (await page.evaluate(() =>
-        (
-            globalThis as unknown as { __LIST_BENCH__: () => Row[] }
-        ).__LIST_BENCH__(),
+    const rows = (await page.evaluate(
+        (sizing) =>
+            (
+                globalThis as unknown as {
+                    __LIST_BENCH__: (sizing?: typeof BENCH_SIZING) => Row[]
+                }
+            ).__LIST_BENCH__(sizing),
+        BENCH_SIZING,
     )) as Row[]
 
     const lines = [`\n=== ${testInfo.project.name} ===`]
@@ -52,7 +57,7 @@ test('a keyed reorder against the DOM-call floor and against a rebuild', async (
         if (row.workDisagreement.length > 0)
             lines.push(`  WORK DISAGREES — ${row.workDisagreement.join('; ')}`)
     }
-    console.log(lines.join('\n'))
+    if (!BENCH_SIZING) console.log(lines.join('\n'))
     // THE ONE ASSERTION, and it is on the output rather than the clock: every arm's host ends
     // in the order it last wrote. The full reverse is the case that catches a transposition
     // that corrupts every reorder a two-row swap reports clean, and only if somebody looks.
