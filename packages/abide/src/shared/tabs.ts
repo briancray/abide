@@ -3,6 +3,7 @@
 // server writes every attribute, so the page is the selected tab's before it hydrates.
 
 import { checkParts } from './checkParts.ts'
+import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
@@ -11,7 +12,7 @@ import { roving } from './roving.ts'
 /** The tabs, and the one selected. */
 export type TabsOptions = {
     /** The tabs' keys, in the order they render; a function is read live. */
-    keys: readonly string[] | (() => readonly string[])
+    keys: Live<readonly string[]>
     /** The selected tab's key, where the app holds it: a `Reactive` to read and set the pick. Held by the parts, and handed back as `selected`, where none is given. A key no tab has selects the first. */
     selected?: Reactive<string | undefined>
 }
@@ -39,7 +40,7 @@ export type Tabs = {
 /** WAI-ARIA's tabs: a list of tabs and the panels they show, as parts to spread. */
 export function tabs(options: TabsOptions): Tabs {
     const { keys } = options
-    const keysOf = typeof keys === 'function' ? keys : () => keys
+    const keysOf = () => live(keys)
     const picked = options.selected ?? reactive<string | undefined>(undefined)
     // 51.36 — a key no tab has selects the first.
     const current = reactive((): string | undefined => {

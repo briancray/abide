@@ -14,7 +14,7 @@ import type { Disposer } from './reactive/watch.ts'
 import { register } from './register.ts'
 
 /** An element `dismissible` is bound to, in the order they were bound: the last is on top. */
-export type Layer = {
+type Layer = {
     element: Element
     dismiss: (event: PointerEvent | KeyboardEvent) => void
     escape: boolean
@@ -61,11 +61,8 @@ export function dismissible(
     }
 }
 
-/**
- * Puts `layer` on top of the stack, and hands back what takes it off: `dismissible` stacks the
- * element it is bound to, and `tooltip.tip` the anchor of the hint it has open (50.25).
- */
-export function stack(layer: Layer): Disposer {
+/** Puts `layer` on top of the stack, and hands back what takes it off. */
+function stack(layer: Layer): Disposer {
     if (layers.peek()?.length === 0) {
         // CAPTURE, so a press an inner handler stops still reaches here.
         document.addEventListener('pointerdown', pressed, true)

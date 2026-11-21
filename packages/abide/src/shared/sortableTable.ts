@@ -5,12 +5,10 @@
 
 import type { Column } from './Column.ts'
 import { itself, type KeyOption } from './itemKey.ts'
+import { type Live, live } from './live.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Sort } from './Sort.ts'
 import { cellText, sortRows } from './sortRows.ts'
-
-/** A value `sortableTable` reads as it is used: the value itself, or a function answering it, read live. */
-type Live<Value> = Value | (() => Value)
 
 /** The rows and columns of a sortable table, how a row is told apart, and its sort and selection. */
 export type SortableTableOptions<Row> = {
@@ -69,9 +67,6 @@ export type SortableTableParts<Row> = {
     readonly selected: Reactive<readonly string[] | undefined>
 }
 
-const read = <Value>(live: Live<Value>): Value =>
-    typeof live === 'function' ? (live as () => Value)() : live
-
 /** A table sorted by its headers and picked by its rows, as parts to spread onto markup of one's own. */
 export function sortableTable<Row>(
     options: SortableTableOptions<Row>,
@@ -80,8 +75,8 @@ export function sortableTable<Row>(
     const sort = options.sort ?? reactive<Sort | undefined>(undefined)
     const selected =
         options.selected ?? reactive<readonly string[] | undefined>(undefined)
-    const rows = () => read(options.rows)
-    const columns = () => read(options.columns)
+    const rows = () => live(options.rows)
+    const columns = () => live(options.columns)
 
     const sorted = reactive(() => sortRows(rows(), columns(), sort()))
 

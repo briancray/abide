@@ -39,7 +39,9 @@ export function time(options: TimeOptions = {}): TimeParts {
         at(value) {
             const at = instant(value)
             return {
-                time: timeOf(at),
+                get time() {
+                    return timeOf(at)
+                },
                 get text() {
                     const locale = live(options.locale)
                     return relative(at, {

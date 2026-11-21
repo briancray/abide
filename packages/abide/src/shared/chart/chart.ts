@@ -8,7 +8,7 @@
 
 import { anchored } from '../anchored.ts'
 import { announce } from '../announce.ts'
-import { stack } from '../dismissible.ts'
+import { dismissible } from '../dismissible.ts'
 import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
 import { size as observeSize } from '../observe/size.ts'
@@ -664,13 +664,9 @@ export function chart(options: ChartOptions): ChartParts {
                     element.setAttribute('data-side', placement.side),
             )
             // 50.25 — an Escape no one prevented takes the crosshair down, as it does a hint.
-            const unstack = stack({
-                element: anchor,
-                dismiss: scrubbing.leave,
-                escape: true,
-                outside: false,
-                inside: [],
-            })
+            const unstack = dismissible(scrubbing.leave, { outside: false })(
+                anchor,
+            )
             return () => {
                 unstack()
                 stop()

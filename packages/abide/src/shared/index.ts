@@ -54,9 +54,9 @@ export { type Cookies, cookies } from './cookies.ts'
 // 53.21-53.23, 53.57 — the `bind:element` adaptor copying on a click.
 export { copy } from './copy.ts'
 export { csp } from './csp.ts'
-// 53.12-53.16 — the `bind:element` adaptor closing a panel from outside it.
 // 50.1-50.4 — a native modal as a part on a `<dialog>` of the app's own.
 export { type DialogOptions, type DialogParts, dialog } from './dialog.ts'
+// 53.12-53.16 — the `bind:element` adaptor closing a panel from outside it.
 export { dismissible } from './dismissible.ts'
 // 53.53 — the `bind:element` adaptor keeping a scrolling element at its bottom.
 export { followBottom } from './followBottom.ts'
@@ -135,7 +135,6 @@ export { onRefusal } from './onRefusal.ts'
 export type { Side } from './place.ts'
 export { type PopoverOptions, popover } from './popover.ts'
 export { type Principal, principal } from './principal.ts'
-// 50.5 — a question or a message shown in the app's `Prompts`, as one namespace.
 export { props } from './props.ts'
 export { Raw, raw } from './Raw.ts'
 export {
@@ -204,5 +203,4 @@ export {
     type Routes,
     url,
 } from './url.ts'
-// 50.12 — notices shown in the app's `Toasts`, as one namespace.
 export { validateJson } from './validateJson.ts'

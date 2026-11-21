@@ -5,6 +5,7 @@
 
 import { checkParts } from './checkParts.ts'
 import { itself, type KeyOption, type LabelOption } from './itemKey.ts'
+import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { roving, typeahead } from './roving.ts'
@@ -12,7 +13,7 @@ import { roving, typeahead } from './roving.ts'
 /** The nodes, how each is told apart and named, and which are open and picked. */
 export type TreeOptions<Node> = {
     /** The top level's nodes, in the order they render; a function is read live. */
-    roots: readonly Node[] | (() => readonly Node[])
+    roots: Live<readonly Node[]>
     /** A node's children, in order; none, or an empty list, for a leaf. */
     children(node: Node): readonly Node[] | undefined
     /** The keys of the nodes expanded, where the app holds them: a `Reactive` to read and set. Held by the parts, none expanded, and handed back as `expanded`, where none is given. */
@@ -61,7 +62,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
     const { roots, children } = options
     const key = itself<Node>(options.key)
     const label = itself<Node>(options.label)
-    const rootsOf = typeof roots === 'function' ? roots : () => roots
+    const rootsOf = () => live(roots)
     const expanded = options.expanded ?? reactive<readonly string[]>([])
     const selected = options.selected ?? reactive<string | undefined>(undefined)
     const typedTo = typeahead()

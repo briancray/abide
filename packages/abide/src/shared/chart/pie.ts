@@ -55,17 +55,17 @@ export function pie(options: PieOptions): PieParts {
     const valueFormat =
         options.valueFormat ?? ((value: number) => number(value))
     // A slice's hint binding, kept while its words stand, so a sweep that eases binds nothing again.
-    const hints = new Map<string, (element: Element) => Disposer>()
+    // Each drawing keeps only the words it drew, so values that move do not pile bindings up.
+    let hints = new Map<string, (element: Element) => Disposer>()
+    let drawing = new Map<string, (element: Element) => Disposer>()
     const hinted = (text: string) => {
-        let bind = hints.get(text)
-        if (bind === undefined) {
-            bind = tip(text)
-            hints.set(text, bind)
-        }
+        const bind = hints.get(text) ?? tip(text)
+        drawing.set(text, bind)
         return bind
     }
 
     const ring = reactive(() => {
+        drawing = new Map()
         const slices = live(options.slices)
         const hole =
             Math.min(Math.max(live(options.inner) ?? 0, 0), 0.95) * CENTER
@@ -107,6 +107,7 @@ export function pie(options: PieOptions): PieParts {
             })
             before += share
         }
+        hints = drawing
         return drawn
     })
 

@@ -8,6 +8,7 @@ import { checkParts } from './checkParts.ts'
 import { dialog } from './dialog.ts'
 import { hotkeys } from './hotkeys.ts'
 import { listbox } from './listbox.ts'
+import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 
@@ -26,7 +27,7 @@ export type Command = {
 /** What the palette lists, what opens it, and what it is called. */
 export type CommandPaletteOptions = {
     /** What the palette can do, in the order it lists them, each told apart by its `label`; a function is read live. */
-    commands: readonly Command[] | (() => readonly Command[])
+    commands: Live<readonly Command[]>
     /** Whether the palette is showing: a `Reactive` to open it from a button of the app's own. One of the palette's own by default. */
     open?: Reactive<boolean>
     /** The binding that opens and shuts it, as `hotkeys` reads one. `'mod+k'` by default. */
@@ -76,8 +77,7 @@ export function commandPalette(
         label = 'Commands',
     } = options
     const open = options.open ?? reactive(false)
-    const commandsOf =
-        typeof commands === 'function' ? commands : () => commands
+    const commandsOf = () => live(commands)
     const inputId = `${id}-input`
     const listId = `${id}-listbox`
     if (process.env.NODE_ENV !== 'production')

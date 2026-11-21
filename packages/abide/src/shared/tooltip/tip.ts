@@ -1,7 +1,7 @@
 // 50.23-50.25 — A TEXT HINT FOR THE ELEMENT IT IS BOUND TO, shown by the `tooltip.host` standing in
 // the page: nothing is added beside the anchor, and one popover serves every hint on the page.
 
-import { stack } from '../dismissible.ts'
+import { dismissible } from '../dismissible.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { hints, type OpenTip, shown, type TooltipOptions } from './tips.ts'
 
@@ -35,13 +35,7 @@ export function tip(
             unstack?.()
             open = { anchor, text, options }
             shown.set(open)
-            unstack = stack({
-                element: anchor,
-                dismiss: hide,
-                escape: true,
-                outside: false,
-                inside: [],
-            })
+            unstack = dismissible(hide, { outside: false })(anchor)
         }
         function hide(): void {
             clearTimeout(timer)
