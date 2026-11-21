@@ -56,6 +56,7 @@ import {
     type Abide,
     abideIn,
     boundInitializer,
+    callReturnOf,
     isReactiveMember,
     unionMembers,
     valueTypeOf,
@@ -707,19 +708,8 @@ async function valueOfRpc(
     checker: Checker,
     rpc: Type,
 ): Promise<Type | undefined> {
-    const [call] = await checker.getSignaturesOfType(rpc, SignatureKind.Call)
-    const returned =
-        call === undefined
-            ? undefined
-            : await checker.getReturnTypeOfSignature(call)
-    if (returned === undefined) return undefined
-    const [read] = await checker.getSignaturesOfType(
-        returned,
-        SignatureKind.Call,
-    )
-    return read === undefined
-        ? undefined
-        : checker.getReturnTypeOfSignature(read)
+    const returned = await callReturnOf(checker, rpc)
+    return returned === undefined ? undefined : callReturnOf(checker, returned)
 }
 
 /**

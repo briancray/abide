@@ -48,10 +48,13 @@ import {
     classifyPropRead,
     classifyRead,
     expressionFacts,
+    isAssigned,
+    isIncrement,
     newRead,
     provePosition,
     type Read,
     TRANSPARENT,
+    unwrapped,
 } from './classifyRead.ts'
 import type { Finding } from './Diagnostics.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -364,9 +367,7 @@ async function bindingsOfReads(
             declaration.initializer === undefined
         )
             continue
-        let call: Node = declaration.initializer
-        while (TRANSPARENT.has(call.kind))
-            call = (call as unknown as { expression: Node }).expression
+        const call = unwrapped(declaration.initializer)
         if (
             !isCallExpression(call) ||
             !answer.holdsRead({ start: call.getStart(), end: call.end })
@@ -767,10 +768,7 @@ async function dropValueHolders(
  */
 function valueLeaves(node: Node, leaves: Node[]): void {
     if (TRANSPARENT.has(node.kind)) {
-        valueLeaves(
-            (node as unknown as { expression: Node }).expression,
-            leaves,
-        )
+        valueLeaves(unwrapped(node), leaves)
         return
     }
     switch (node.kind) {
@@ -929,7 +927,10 @@ async function memberAccesses(
     const targets: number[] = []
     for (let at = 0; at < accesses.length; at += 1) {
         const access = accesses[at] as Node
-        if (isPropertyAccessExpression(access) && isWriteTarget(access))
+        if (
+            isPropertyAccessExpression(access) &&
+            (isAssigned(access.parent, access) || isIncrement(access.parent))
+        )
             targets.push(at)
     }
     if (targets.length > 0) {
@@ -1032,25 +1033,6 @@ async function steppedReactive(
         if (every) reactive.add(at)
     }
     return reactive
-}
-
-/** Whether `node` is what an assignment, a compound assignment or an update writes. */
-function isWriteTarget(node: Node): boolean {
-    const parent = node.parent
-    if (isBinaryExpression(parent))
-        return (
-            parent.left === node &&
-            parent.operatorToken.kind >= SyntaxKind.FirstAssignment &&
-            parent.operatorToken.kind <= SyntaxKind.LastAssignment
-        )
-    return (
-        (parent.kind === SyntaxKind.PrefixUnaryExpression ||
-            parent.kind === SyntaxKind.PostfixUnaryExpression) &&
-        ((parent as unknown as { operator: SyntaxKind }).operator ===
-            SyntaxKind.PlusPlusToken ||
-            (parent as unknown as { operator: SyntaxKind }).operator ===
-                SyntaxKind.MinusMinusToken)
-    )
 }
 
 /** The flags a `Reactive`, or a union or an intersection holding one, can carry. */

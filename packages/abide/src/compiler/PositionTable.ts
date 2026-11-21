@@ -83,13 +83,6 @@ export class PositionTable {
             : position
     }
 
-    /** Whether any position is of a kind `kinds` holds. */
-    has(kinds: ReadonlySet<PositionKind>): boolean {
-        for (const position of this.all)
-            if (kinds.has(position.kind)) return true
-        return false
-    }
-
     /**
      * Each node under `root` that is the whole of a position of a kind `kinds` holds, in order.
      *

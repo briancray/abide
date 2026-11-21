@@ -30,7 +30,14 @@ export async function valueTypeOf(
     node: Node,
 ): Promise<Type | undefined> {
     const type = await checker.getTypeAtLocation(node)
-    if (type === undefined) return undefined
+    return type === undefined ? undefined : callReturnOf(checker, type)
+}
+
+/** What calling `type` hands back, by its first call signature. */
+export async function callReturnOf(
+    checker: Checker,
+    type: Type,
+): Promise<Type | undefined> {
     const [call] = await checker.getSignaturesOfType(type, SignatureKind.Call)
     return call === undefined
         ? undefined

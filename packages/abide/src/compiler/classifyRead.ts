@@ -193,7 +193,10 @@ function suspends(node: Node): boolean {
     return node.forEachChild(suspends) === true
 }
 
-function isAssigned(outer: Node, target: Node): outer is BinaryExpression {
+export function isAssigned(
+    outer: Node,
+    target: Node,
+): outer is BinaryExpression {
     return (
         isBinaryExpression(outer) &&
         outer.left === target &&
@@ -226,7 +229,7 @@ function isDiscarded(expression: Node): boolean {
     return false
 }
 
-function isIncrement(
+export function isIncrement(
     outer: Node,
 ): outer is PrefixUnaryExpression | PostfixUnaryExpression {
     return (
@@ -474,10 +477,7 @@ function rawCall(node: Node): CallExpression | undefined {
  * and is not exempt: what it converts is no one node, and a spread runs an iterator.
  */
 function rawArgument(node: Node): Node | undefined {
-    let inner = node
-    while (TRANSPARENT.has(inner.kind))
-        inner = (inner as unknown as { expression: Node }).expression
-    const call = rawCall(inner)
+    const call = rawCall(unwrapped(node))
     if (call === undefined || call.arguments.length !== 1) return undefined
     const only = call.arguments[0] as Node
     return only.kind === SyntaxKind.SpreadElement ? undefined : only
@@ -539,14 +539,18 @@ export const TRANSPARENT: ReadonlySet<SyntaxKind> = new Set([
     SyntaxKind.TypeAssertionExpression,
 ])
 
+/** `node` past every `TRANSPARENT` wrapper around its value. */
+export function unwrapped(node: Node): Node {
+    let inner = node
+    while (TRANSPARENT.has(inner.kind))
+        inner = (inner as unknown as { expression: Node }).expression
+    return inner
+}
+
 /** Whether syntax proves `node` runs no author code, queuing what the checker must confirm. */
 function proveStatic(node: Node, primitives: Node[], members: Node[]): boolean {
     if (TRANSPARENT.has(node.kind))
-        return proveStatic(
-            (node as unknown as { expression: Node }).expression,
-            primitives,
-            members,
-        )
+        return proveStatic(unwrapped(node), primitives, members)
     switch (node.kind) {
         case SyntaxKind.StringLiteral:
         case SyntaxKind.NumericLiteral:
