@@ -2,7 +2,7 @@
 import { dismissible, reactive, tooltip } from '@abide/abide'
 
 let open = reactive(false)
-const hint = tooltip('Press Escape: this hint closes first', { delay: 0 })
+const hint = tooltip.tip('Press Escape: this hint closes first', { delay: 0 })
 </script>
 
 <button onclick={() => (open = true)}>Quick edit</button>

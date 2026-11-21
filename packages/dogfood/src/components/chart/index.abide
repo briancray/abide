@@ -91,8 +91,7 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
 >
     <Section level={3} title="Plot won revenue against target by month">
         <p>Each child is a series over the chart's x. A pointer over the chart moves a
-            crosshair to the nearest month and opens every series' value there in the page's
-            <code>Tooltips</code>.</p>
+            crosshair to the nearest month and opens every series' value there beside it.</p>
         <Example code={wonAgainstTarget}><WonAgainstTarget /></Example>
     </Section>
 

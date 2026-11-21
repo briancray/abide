@@ -26,22 +26,24 @@ test("every present value is a point at the plot's own x and y", () => {
     }
 })
 
-// 52.80 — A CROSSHAIR IS BOUND ONCE PER X IT STANDS AT: an app keeping it as one element has its readout
-// opened again where it moves to, and a crosshair redrawn at the same x binds nothing again.
-// THE REVERT: hand back one binding for every x — the binding at the second month is the first's.
-test('the crosshair carries one binding per x it stands at', () => {
+// 52.80, 50.47 — THE CROSSHAIR IS BOUND ONCE, at every x, and the chart is described by its readout's
+// `tip` while the crosshair stands. THE REVERT: hand back a binding per x — the second month's is not
+// the first's, and a crosshair kept as one element is unbound and bound again at every move.
+test('the crosshair carries one binding at every x, and the chart is described by its tip', () => {
     const plot = chart({
         label: 'Won',
         series: () => [{ label: 'Won', values: [10, 20, 30] }],
     })
     expect(plot.crosshair()).toBeUndefined()
+    expect(plot.svg['aria-describedby']).toBeUndefined()
     press(plot.svg, 'ArrowRight')
     const first = plot.crosshair()?.line['bind:element']
     expect(plot.crosshair()?.index).toBe(0)
-    expect(plot.crosshair()?.line['bind:element']).toBe(first)
     press(plot.svg, 'ArrowRight')
     expect(plot.crosshair()?.index).toBe(1)
-    expect(plot.crosshair()?.line['bind:element']).not.toBe(first)
+    expect(plot.crosshair()?.line['bind:element']).toBe(first)
+    expect(plot.svg['aria-describedby']).toBe(plot.tip.id)
+    expect(plot.tip.role).toBe('tooltip')
 })
 
 // 52.81 — A SLICE'S HINT IS BOUND ONCE WHILE ITS WORDS STAND: a sweep that eases rewrites the slice's

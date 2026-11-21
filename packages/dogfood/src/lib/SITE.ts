@@ -518,7 +518,7 @@ const WRITTEN: readonly {
                 route: '/components/tooltip',
                 title: '`tooltip`',
                 description:
-                    'Show a hint for the element it is bound to, on hover and on focus, placed where it fits.',
+                    'Show a text hint for the element it is bound to, on hover and on focus, placed where it fits.',
             },
             {
                 route: '/components/menu',

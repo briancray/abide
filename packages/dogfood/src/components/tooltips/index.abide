@@ -23,7 +23,7 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Show every hint of the app in one popover">
         <p>Render <code>Tooltips</code> once, in the root layout, and style it there. Every
-            <code>tooltip</code> on every page opens in it, one at a time, in the top layer, so no
+            <code>tooltip.tip</code> on every page opens in it, one at a time, in the top layer, so no
             scroller clips it.</p>
         <Code language="abide" caption="abide" code={`
             <script>
@@ -42,7 +42,7 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Draw an arrow pointing at the anchor">
         <p>The popover carries the side it took as <code>data-side</code>, and
             <code>--arrow-offset</code> is where along that edge the anchor's middle falls.
-            <code>arrowInset</code> on a <code>tooltip</code> keeps the arrow off the rounded
+            <code>arrowInset</code> on a <code>tooltip.tip</code> keeps the arrow off the rounded
             corners.</p>
         <Code language="abide" caption="abide" code={`
             <script>

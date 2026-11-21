@@ -85,17 +85,6 @@ const plot = chart({
 })
 </script>
 
-{#component Readout()}
-    {#if plot.readout()}
-        <span data-part="readout" data-disabled={plot.readout()?.disabled ? '' : undefined}>
-            <span data-part="readout-x">{plot.readout()?.label}</span>
-            {#for point of plot.readout()?.values ?? []}
-                <span data-part="readout-value" data-series={point.series}>{point.label}: {point.value}</span>
-            {/for}
-        </span>
-    {/if}
-{/component}
-
 <svg {...rest} {...plot.svg}>
     <slot />
     {#for tick of plot.yTicks()}
@@ -120,10 +109,7 @@ const plot = chart({
         {/if}
     {/for}
     {#if plot.readout()}
-        <!-- 50.47 — one crosshair per x it stands at, its readout opened against it. -->
-        {#for at of [plot.readout()?.index] by at}
-            <line {...plot.crosshair(Readout)?.line} />
-        {/for}
+        <line {...plot.crosshair()?.line} />
         {#for point of plot.readout()?.values ?? []}
             {#if point.circle}
                 <circle {...point.circle} />
@@ -131,3 +117,12 @@ const plot = chart({
         {/for}
     {/if}
 </svg>
+{#if plot.readout()}
+    <!-- 50.47 — the readout, opened against the crosshair. -->
+    <span {...plot.tip} data-part="readout" data-disabled={plot.readout()?.disabled ? '' : undefined}>
+        <span data-part="readout-x">{plot.readout()?.label}</span>
+        {#for point of plot.readout()?.values ?? []}
+            <span data-part="readout-value" data-series={point.series}>{point.label}: {point.value}</span>
+        {/for}
+    </span>
+{/if}

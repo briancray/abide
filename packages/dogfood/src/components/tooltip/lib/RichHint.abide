@@ -1,7 +1,0 @@
-<script>
-import { tooltip } from '@abide/abide'
-
-import DealSummary from './DealSummary.abide'
-</script>
-
-<a href="#acme" bind:element={tooltip(DealSummary)}>Acme renewal</a>

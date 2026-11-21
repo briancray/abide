@@ -1,82 +1,55 @@
-// 50.23-50.25, 50.47 — A HINT FOR AN ELEMENT, shown by the `Tooltips` the layout renders:
-// nothing is added beside the anchor, and one popover serves every hint on the page.
+// 50.23-50.25 — A TEXT HINT FOR THE ELEMENT IT IS BOUND TO, shown by the `tooltip.host` standing in
+// the page: nothing is added beside the anchor, and one popover serves every hint on the page.
 
 import { stack } from '../dismissible.ts'
 import type { Disposer } from '../reactive/watch.ts'
-import {
-    type Hint,
-    hints,
-    type OpenTip,
-    shown,
-    type TooltipOptions,
-} from './tips.ts'
+import { hints, type OpenTip, shown, type TooltipOptions } from './tips.ts'
 
 // 50.25 — THE OPEN HINT'S LAYER on `dismissible`'s stack: one, since one hint shows at a time, so a
 // hint another replaces leaves nothing behind to take the next Escape.
 let unstack: Disposer | undefined
 
 /**
- * 50.36, 50.47 — Shows `hint` in the `Tooltips` standing, against `anchor`, until what it hands back
- * runs: what `tooltip` opens on a pointer resting or on focus, and what a `Chart`'s readout opens for
- * as long as its crosshair stands. An Escape no one prevented calls `dismiss`; a press passes over it.
- * `describes` is the element the hint describes while it shows (50.23).
- */
-export function openHint(
-    anchor: Element,
-    hint: Hint,
-    options: TooltipOptions,
-    dismiss: () => void,
-    describes: Element = anchor,
-): Disposer {
-    hints.asked()
-    unstack?.()
-    const open: OpenTip = { anchor, hint, options, describes }
-    shown.set(open)
-    unstack = stack({
-        element: anchor,
-        dismiss,
-        escape: true,
-        outside: false,
-        inside: [],
-    })
-    return () => {
-        if (shown.peek() !== open) return
-        unstack?.()
-        unstack = undefined
-        shown.set(undefined)
-    }
-}
-
-/**
- * The `bind:element` adaptor opening `hint` against the element once a pointer has rested on it for
+ * The `bind:element` adaptor opening `text` against the element once a pointer has rested on it for
  * `delay` milliseconds, and at once when it takes focus the browser shows (`:focus-visible`).
  *
- * @param hint the text, or a component rendered with no props
+ * @param text what the hint says, and what describes the element
  * @param options where it opens, and how long a pointer rests first
  */
-export function tooltip(
-    hint: Hint,
+export function tip(
+    text: string,
     options: TooltipOptions = {},
 ): (anchor: Element) => Disposer {
     const delay = options.delay ?? 300
     return (anchor) => {
-        // 50.23 — text describes its anchor with no element to point at; a component is pointed at
-        // by `Tooltips` while it is open.
+        // 50.23 — the text describes its anchor with no element to point at.
         const description = anchor.getAttribute('aria-description')
-        if (typeof hint === 'string')
-            anchor.setAttribute('aria-description', hint)
+        anchor.setAttribute('aria-description', text)
         let timer: ReturnType<typeof setTimeout> | undefined
-        let close: Disposer | undefined
+        let open: OpenTip | undefined
 
         const show = (): void => {
             clearTimeout(timer)
-            if (shown.peek()?.anchor === anchor) return
-            close = openHint(anchor, hint, options, hide)
+            if (open !== undefined && shown.peek() === open) return
+            hints.asked()
+            unstack?.()
+            open = { anchor, text, options }
+            shown.set(open)
+            unstack = stack({
+                element: anchor,
+                dismiss: hide,
+                escape: true,
+                outside: false,
+                inside: [],
+            })
         }
         function hide(): void {
             clearTimeout(timer)
-            close?.()
-            close = undefined
+            if (open === undefined || shown.peek() !== open) return
+            open = undefined
+            unstack?.()
+            unstack = undefined
+            shown.set(undefined)
         }
         // 50.24 — a click focuses a button too, and a hint opened by it would stand until focus moved.
         const focused = (event: Event): void => {
@@ -100,7 +73,6 @@ export function tooltip(
             anchor.removeEventListener('mouseleave', hide)
             anchor.removeEventListener('focusin', focused)
             anchor.removeEventListener('focusout', hide)
-            if (typeof hint !== 'string') return
             if (description === null) anchor.removeAttribute('aria-description')
             else anchor.setAttribute('aria-description', description)
         }

@@ -28,7 +28,9 @@ import targetBand from './lib/TargetBand.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/chartParts.test.ts',
-            from: ["test('the crosshair carries one binding per x it stands at'"],
+            from: [
+                "test('the crosshair carries one binding at every x, and the chart is described by its tip'",
+            ],
         },
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',

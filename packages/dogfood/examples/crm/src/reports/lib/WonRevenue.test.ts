@@ -44,10 +44,10 @@ test('won revenue is a line broken where a month has no total', async () => {
     ])
 })
 
-// 52.26, 52.27, 50.47 — THE READOUT OPENS IN THE PAGE'S `Tooltips` against the crosshair, beside it on
-// the side with more of the plot. THE REVERTS: open it on the `'top'` side a hint defaults to —
-// `data-side` reads 'top' where 'right' is due; and bind the crosshair to `tooltip` rather than
-// `openHint` — no pointer rests on the crosshair, so the popover never opens.
+// 52.26, 52.27, 50.47 — THE READOUT OPENS IN THE CHART'S `tip` against the crosshair, beside it on the
+// side with more of the plot, and describes the chart. THE REVERTS: open it on the `'top'` side a hint
+// defaults to — `data-side` reads 'top' where 'right' is due; and drop the `tip`'s binding — the
+// popover never opens.
 test('the crosshair reads each line at the nearest month', async () => {
     using _chart = await mount(WonRevenue({}))
     const tip = () => document.querySelector('[role=tooltip]') as HTMLElement
@@ -55,7 +55,7 @@ test('the crosshair reads each line at the nearest month', async () => {
     expect(chart().hasAttribute('data-hovering')).toBe(true)
     expect(tip().matches(':popover-open')).toBe(true)
     expect(tip().getAttribute('data-side')).toBe('right')
-    expect(texts('[role=tooltip] [data-part=readout] > span')).toEqual([
+    expect(texts('[role=tooltip] > span')).toEqual([
         'Jul 2026',
         'Won: $25K',
         'Target: $22K',
@@ -80,7 +80,8 @@ test('the crosshair reads each line at the nearest month', async () => {
     chart().dispatchEvent(new PointerEvent('pointerleave'))
     flushSync()
     expect(chart().hasAttribute('data-hovering')).toBe(false)
-    expect(tip().matches(':popover-open')).toBe(false)
+    // The readout's element leaves with the crosshair.
+    expect(tip()).toBeNull()
 })
 
 // 52.34 — held by `chart.ticks`, which widens a range of no width. THE REVERT: have `ticks` answer
@@ -130,7 +131,8 @@ test('the arrows step the crosshair month by month, and Escape puts it away', as
     expect(month()).toBe('Jun 2026')
     press('Escape')
     expect(chart().hasAttribute('data-hovering')).toBe(false)
-    expect(tip().matches(':popover-open')).toBe(false)
+    // The readout's element leaves with the crosshair.
+    expect(tip()).toBeNull()
     expect(chart().hasAttribute('aria-describedby')).toBe(false)
     press('ArrowLeft')
     expect(month()).toBe('Nov 2026')

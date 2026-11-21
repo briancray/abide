@@ -63,7 +63,7 @@ export function dismissible(
 
 /**
  * Puts `layer` on top of the stack, and hands back what takes it off: `dismissible` stacks the
- * element it is bound to, and `tooltip` the anchor of the hint it has open (50.25).
+ * element it is bound to, and `tooltip.tip` the anchor of the hint it has open (50.25).
  */
 export function stack(layer: Layer): Disposer {
     if (layers.peek()?.length === 0) {

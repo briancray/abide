@@ -1,20 +1,21 @@
 // 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.53, 52.59-52.64, 52.69-52.72 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
 // SVG elements of its own — `{#for point of plot.points()}<circle {...point.circle} r="3" />` — with the
-// `<svg>`'s part measuring it, scrubbing a crosshair by pointer and keyboard and opening its readout in
-// the page's `Tooltips`. `Chart` is default markup over these parts (49.9). Callable, with the
+// `<svg>`'s part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
+// against the crosshair in an element of the app's own. `Chart` is default markup over these parts (49.9). Callable, with the
 // arithmetic it draws with as its members, as `reactive` carries `reactive.share`: `chart.ticks` and the
 // rest are what a chart of one's own draws with where even these parts are too much.
 
+import { anchored } from '../anchored.ts'
 import { announce } from '../announce.ts'
+import { stack } from '../dismissible.ts'
 import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
 import { size as observeSize } from '../observe/size.ts'
-import { reactive } from '../reactive/index.ts'
+import { randomToken } from '../randomToken.ts'
+import { reactive, watch } from '../reactive/index.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { scrub } from '../scrub.ts'
-import type { Hint } from '../tooltip/tips.ts'
-import { openHint } from '../tooltip/tooltip.ts'
 import {
     nearest,
     path,
@@ -178,14 +179,14 @@ export type ChartParts = {
     points(): ChartPoint[]
     /** What the readout reads, while the crosshair stands somewhere. */
     readout(): ChartReadout | undefined
+    /** The crosshair while it stands somewhere: `<line {...plot.crosshair()?.line} />`. */
+    crosshair():
+        { index: number; x: number; line: Record<string, unknown> } | undefined
     /**
-     * The crosshair while it stands somewhere: `<line {...plot.crosshair(Readout)?.line} />`. Its line opens
-     * `hint` — the readout written as text where none is given — in the page's `Tooltips` against itself,
-     * describing the chart (50.47).
+     * 50.47 — the readout's popover, spread onto an element of the app's own outside the `<svg>` and
+     * rendered while `readout()` stands: opened against the crosshair, describing the chart.
      */
-    crosshair(
-        hint?: Hint,
-    ): { index: number; x: number; line: Record<string, unknown> } | undefined
+    readonly tip: Record<string, unknown>
 }
 
 // Room over the top gridline for its label, and under the plot for the x labels.
@@ -611,7 +612,7 @@ export function chart(options: ChartOptions): ChartParts {
         announce(written(read))
     }
 
-    // The readout as text, for a hint no component writes and for the announcement.
+    // The readout as text, for the announcement.
     const written = (read: ChartReadout): string => {
         const parts = [read.label]
         for (const point of read.values)
@@ -619,33 +620,53 @@ export function chart(options: ChartOptions): ChartParts {
         return parts.join(', ')
     }
 
-    // 50.47 — THE READOUT SHOWS AGAINST THE CROSSHAIR, opened by its line's binding: one binding per x it
-    // stands at, so a crosshair an app keeps as one element is bound again at each x and its readout
-    // placed there, and a crosshair keyed by its x is bound once per element. The hint is the latest one
-    // asked for, read as it opens.
-    let hint: Hint | undefined
-    let binding:
-        { index: number; bind: (line: Element) => Disposer } | undefined
-    function bindAt(index: number) {
-        if (binding?.index === index) return binding.bind
-        const bind = (line: Element): Disposer => {
-            const read = readout.peek()
-            // 52.27 — the side with more of the plot.
-            const side =
-                read !== undefined && read.x >= measuredWidth() / 2
-                    ? ('left' as const)
-                    : ('right' as const)
-            return openHint(
-                line,
-                hint ?? (read === undefined ? '' : written(read)),
-                { side },
-                scrubbing.leave,
-                line.closest('svg') ?? line,
-            )
+    // 50.47 — THE READOUT SHOWS AGAINST THE CROSSHAIR: the line standing is held here, so a crosshair an
+    // app keeps as one element and one keyed by its x both carry the readout along, and the readout's
+    // own element is placed against whichever line stands.
+    const line = reactive<Element | undefined>(undefined)
+    const holdLine = (element: Element): Disposer => {
+        line.set(element)
+        return () => {
+            if (line.peek() === element) line.set(undefined)
         }
-        binding = { index, bind }
-        return bind
     }
+    // Hydration runs setup again (41.6), and the chart's `aria-describedby` is bound to it.
+    const tipId = `chart-tip-${randomToken(4, 'hex')}`
+    const holdTip = (element: HTMLElement): Disposer =>
+        watch(() => {
+            const anchor = line()
+            // Read tracked, so a crosshair kept as one element is placed again at each x.
+            const read = readout()
+            if (anchor === undefined) return
+            const stop = anchored(
+                anchor,
+                element,
+                {
+                    // 52.27 — the side with more of the plot.
+                    side:
+                        read !== undefined && read.x >= measuredWidth() / 2
+                            ? 'left'
+                            : 'right',
+                    offset: 8,
+                    // 50.48 — a readout is never the pointer's target.
+                    interactive: false,
+                },
+                (placement) =>
+                    element.setAttribute('data-side', placement.side),
+            )
+            // 50.25 — an Escape no one prevented takes the crosshair down, as it does a hint.
+            const unstack = stack({
+                element: anchor,
+                dismiss: scrubbing.leave,
+                escape: true,
+                outside: false,
+                inside: [],
+            })
+            return () => {
+                unstack()
+                stop()
+            }
+        })
 
     const measure = observeSize(size)
 
@@ -668,6 +689,9 @@ export function chart(options: ChartOptions): ChartParts {
             get 'data-hovering'() {
                 return readout() === undefined ? undefined : ''
             },
+            get 'aria-describedby'() {
+                return readout() === undefined ? undefined : tipId
+            },
             tabindex: '0',
             'bind:element': measure,
             onpointermove: scrubbing.move,
@@ -688,10 +712,15 @@ export function chart(options: ChartOptions): ChartParts {
         bars: () => plot().marks.flatMap((mark) => mark.bars),
         points: () => plot().points,
         readout: () => readout(),
-        crosshair(asked) {
+        tip: {
+            id: tipId,
+            role: 'tooltip',
+            popover: 'manual',
+            'bind:element': holdTip,
+        },
+        crosshair() {
             const read = readout()
             if (read === undefined) return undefined
-            hint = asked
             const { frame } = plot()
             return {
                 index: read.index,
@@ -703,7 +732,7 @@ export function chart(options: ChartOptions): ChartParts {
                     y1: frame.top,
                     y2: frame.bottom,
                     stroke: 'currentColor',
-                    'bind:element': bindAt(read.index),
+                    'bind:element': holdLine,
                 },
             }
         },

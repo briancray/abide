@@ -1,10 +1,9 @@
 <script>
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
-import RichHint from './lib/RichHint.abide'
-import richHint from './lib/RichHint.abide' with { type: 'text' }
 import StageHint from './lib/StageHint.abide'
 import stageHint from './lib/StageHint.abide' with { type: 'text' }
 import StarHint from './lib/StarHint.abide'
@@ -31,7 +30,7 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Explain a pipeline stage on hover and on focus">
-        <p>Bind <code>tooltip</code> to the element it explains. Nothing is written beside it, so it
+        <p>Bind <code>tooltip.tip</code> to the element it explains. Nothing is written beside it, so it
             works in a list, a table row or a flex row alike. Give the element a
             <code>tabindex</code> where it is not focusable, or a keyboard never reaches the
             hint. The hint shows in the page's <code>Tooltips</code>.</p>
@@ -45,9 +44,21 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
         <Example code={starHint}><StarHint /></Example>
     </Section>
 
-    <Section level={3} title="Show more than text in a hint">
-        <p>Hand <code>tooltip</code> a component, and <code>Tooltips</code> renders it. The
-            element is described by the hint for as long as it shows.</p>
-        <Example code={richHint}><RichHint /></Example>
+    <Section level={3} title="Show hints in an element of your own">
+        <p>Call <code>tooltip.host</code> in the script of the one component that shows the hints,
+            spread its <code>hint</code> part onto an element, and write its <code>text</code>
+            inside. <code>Tooltips</code> is this at its plainest; write your own where a hint
+            needs more around its text.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { tooltip } from '@abide/abide'
+
+            const hints = tooltip.host()
+            </script>
+
+            <span {...hints.hint} class="rounded-md px-3 py-2">
+                <kbd>?</kbd> {hints.text()}
+            </span>
+        `} />
     </Section>
 </Doc>
