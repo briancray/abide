@@ -1,4 +1,5 @@
-import { lastAtOrBefore } from './lastAtOrBefore.ts'
+import { lastAtOrBefore } from '#shared/lastAtOrBefore.ts'
+
 import type { Origin, Span } from './projectShadow.ts'
 
 /** What a `.abide`'s checked module is registered with the checker as, beside the `.abide`. */

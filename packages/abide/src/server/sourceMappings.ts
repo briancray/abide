@@ -3,6 +3,8 @@
 // the `.abide` (`installSourceMaps`), and the client build reads bun's to put the two together —
 // bun reads no map it is handed, at run time or in the bundler, so every one of those is ours.
 
+import { lastAtOrBefore } from '#shared/lastAtOrBefore.ts'
+
 /** Where one generated column came from: `[column, source, line, sourceColumn]`, all from 0. */
 export type Segment = [number, number, number, number]
 
@@ -116,12 +118,8 @@ export function segmentAt(
 ): Segment | undefined {
     const segments = lines[line]
     if (segments === undefined || segments.length === 0) return undefined
-    let found = segments[0] as Segment
-    for (const segment of segments) {
-        if (segment[0] > column) break
-        found = segment
-    }
-    return found
+    const at = lastAtOrBefore(segments, (segment) => segment[0], column)
+    return segments[Math.max(at, 0)]
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { Node } from 'typescript/unstable/ast'
 
-import { lastAtOrBefore } from './lastAtOrBefore.ts'
+import { lastAtOrBefore } from '#shared/lastAtOrBefore.ts'
+
 import type { Span } from './projectShadow.ts'
 
 /**

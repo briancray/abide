@@ -1,4 +1,4 @@
-import { lastAtOrBefore } from './lastAtOrBefore.ts'
+import { lastAtOrBefore } from '#shared/lastAtOrBefore.ts'
 
 /** Where each line of `text` starts, ascending — the line index `lineAt` searches. */
 export function lineStarts(text: string): number[] {
