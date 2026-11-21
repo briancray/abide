@@ -1,0 +1,48 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ShowKeywords from './lib/ShowKeywords.abide'
+import showKeywords from './lib/ShowKeywords.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/components/command-palette',
+        '/components/dialog',
+        '/helpers/hotkeys',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
+            from: [
+                "test('Ctrl+K opens the palette with its input focused, and shuts it again'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
+            from: [
+                "test('typing lists the commands whose label or keywords hold every word'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
+            from: [
+                "test('an arrow and Enter run the command, and the palette shuts'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
+            from: ["test('Escape is left to the dialog'"],
+        },
+    ]}
+>
+    <Section level={3} title="Show each command beside the keywords typing matches">
+        <p>Spread the parts onto a <code>Dialog</code> of your own, bound to the <code>open</code>
+            you hand <code>commandPalette</code>: the input, the list, and an option per command in
+            <code>results()</code>, which can hold anything. The parts carry the combobox, the keys,
+            the filtering and the hotkey, here ⌘J.</p>
+        <Example code={showKeywords}><ShowKeywords /></Example>
+    </Section>
+</Doc>

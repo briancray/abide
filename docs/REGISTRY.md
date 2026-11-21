@@ -916,7 +916,16 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `CommandPalette` | `{ commands: readonly { label: string; keywords?: readonly string[]; key?: string; run: () => void }[]; open?: boolean; hotkey?: string; id?: string; label?: string; placeholder?: string } & Attributes<'dialog'>` | A modal search over what an app can do, opened on a key, the component `@abide/abide/CommandPalette.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 50.1, 50.2, 50.3, 50.4, 51.72, 51.73, 51.74, 51.75, 51.76, 51.77, 51.78 |
+| `CommandPalette` | `{ commands: readonly Command[]; open?: boolean; hotkey?: string; id?: string; label?: string; placeholder?: string } & Attributes<'dialog'>` | A modal search over what an app can do, opened on a key, the component `@abide/abide/CommandPalette.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 50.1, 50.2, 50.3, 50.4, 51.72, 51.73, 51.74, 51.75, 51.76, 51.77, 51.78, 49.9 |
+
+## `commandPalette`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `commandPalette` | `(options: CommandPaletteOptions) => CommandPaletteParts` | WAI-ARIA's combobox in a modal dialog over the commands an app can run, as parts an app spreads onto elements of its own. | 51.72, 51.73, 51.74, 51.75, 51.76, 51.77, 51.78, 49.8 |
+| `CommandPaletteOptions` | `{ commands: readonly Command[] \| (() => readonly Command[]); open?: Reactive<boolean>; hotkey?: string; id?: string; label?: string }` | What the palette lists, what opens it, and what it is called. | 51.72, 51.73 |
+| `CommandPaletteParts` | `{ readonly dialog: Record<string, unknown>; readonly input: Record<string, unknown>; readonly listbox: Record<string, unknown>; option(command: Command): Record<string, unknown>; readonly empty: Record<string, unknown>; results(): readonly Command[]; readonly open: Reactive<boolean> }` | The dialog's part, the input's, the list's, a command's option, the empty status, the commands listed and whether it shows. | 32.11, 51.73, 51.74 |
+| `Command` | `{ label: string; keywords?: readonly string[]; key?: string; run: () => void }` | One thing the palette can do: what it is called, the further words typing matches, the key shown beside it and what choosing it does. | 51.73, 51.75, 51.77 |
 
 ## `tabs`
 

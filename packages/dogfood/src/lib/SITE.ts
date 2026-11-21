@@ -564,6 +564,12 @@ const WRITTEN: readonly {
                     'Open a search over what the app can do on one key, and run the command picked.',
             },
             {
+                route: '/helpers/command-palette',
+                title: '`commandPalette`',
+                description:
+                    'Spread a search over commands onto a dialog and a list of your own, opened on one key.',
+            },
+            {
                 route: '/components/tabs',
                 title: '`tabs`',
                 description:

@@ -5297,26 +5297,26 @@ row into view.
 
 51.71 `virtualRows` MUST take every row to be `rowHeight` pixels tall.
 
-51.72 `CommandPalette` MUST open and shut on `hotkey`, wherever focus is, its own input included, and
-MUST open as a modal `Dialog` with focus in its input.
+51.72 `commandPalette` MUST turn `open` on and off on `hotkey`, wherever focus is, its own input
+included, and `CommandPalette` MUST open as a modal `Dialog` with focus in its input.
 
-51.73 `CommandPalette` MUST list each of `commands`, in the order given, whose `label` and `keywords`
-together hold every word typed in its input, ignoring case, and MUST render its children where none
-does.
+51.73 `commandPalette` MUST list each of `commands`, in the order given, whose `label` and `keywords`
+together hold every word typed in its input, ignoring case, and `CommandPalette` MUST render its
+children where none does.
 
-51.74 `CommandPalette` MUST keep and move its active command as a `listbox` over the commands it lists
+51.74 `commandPalette` MUST keep and move its active command as a `listbox` over the commands it lists
 does, its input naming the active command as its `aria-activedescendant`.
 
-51.75 `CommandPalette` MUST run a command chosen by Enter or a click after it has shut, so focus is back
-where it stood when the palette opened before the command moves it.
+51.75 `commandPalette` MUST run a command chosen by Enter or a click after turning `open` off, so focus
+is back where it stood when the palette opened before the command moves it.
 
-51.76 `CommandPalette`'s input MUST leave Escape to the dialog, which shuts on it, and Home and End to
-its caret.
+51.76 `commandPalette`'s input MUST leave Escape to the dialog it is in, which shuts on it, and Home and
+End to its caret.
 
-51.77 `CommandPalette` MUST show a command's `key` beside its label as `keyLabel` writes it, and MUST
-NOT bind it.
+51.77 `CommandPalette` MUST show a command's `key` beside its label as `keyLabel` writes it, and
+`commandPalette` MUST NOT bind it.
 
-51.78 `CommandPalette` MUST list every command again, its input emptied, each time it opens.
+51.78 `commandPalette` MUST list every command again, its input emptied, each time `open` turns on.
 
 51.79 `SortableTable` given `selected` MUST lead each row with a checkbox, named for the row by its
 first column's text, checked while `selected` holds the row's key, and MUST write `data-selected` on

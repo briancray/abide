@@ -10,29 +10,23 @@ import openFromButton from './lib/OpenFromButton.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/helpers/hotkeys', '/components/combobox', '/components/dialog']}
+    seeAlso={[
+        '/helpers/command-palette',
+        '/helpers/hotkeys',
+        '/components/dialog',
+    ]}
     tests={[
         {
-            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealCommands.test.ts',
             from: [
-                "test('Ctrl+K opens the palette with its input focused, and shuts it again'",
+                "test('the shipped CommandPalette opens on its key, lists what is typed and runs it'",
             ],
         },
         {
-            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
+            path: 'packages/dogfood/e2e/commandPalette.spec.ts',
             from: [
-                "test('typing lists the commands whose label or keywords hold every word'",
+                "test('a key opens the palette, Enter runs a command, Escape shuts it, and focus comes back — 51.72, 51.75, 51.76'",
             ],
-        },
-        {
-            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
-            from: [
-                "test('an arrow and Enter run the command, and the palette shuts'",
-            ],
-        },
-        {
-            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
-            from: ["test('Escape is left to the dialog'"],
         },
     ]}
 >

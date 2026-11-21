@@ -34,7 +34,9 @@ test('a key opens the palette, Enter runs a command, Escape shuts it, and focus 
     ])
     await page.keyboard.press('Enter')
     await expect(dialog).toBeHidden()
-    await expect(page.getByText('Ran: Add a deal.')).toBeVisible()
+    await expect(
+        page.locator('.result').getByText('Ran: Add a deal.'),
+    ).toBeVisible()
     await expect(opener).toBeFocused()
 
     await page.keyboard.press(`${mod}+j`)

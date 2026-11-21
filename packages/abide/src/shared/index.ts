@@ -29,6 +29,12 @@ export type { Attributes } from './Attributes.ts'
 export type { Column } from './Column.ts'
 // 52.19-52.23, 52.54-52.58 — the arithmetic under a chart, which `Chart`, `Pie` and `Sparkline` draw with.
 export * as chart from './chart/index.ts'
+export {
+    type Command,
+    type CommandPaletteOptions,
+    type CommandPaletteParts,
+    commandPalette,
+} from './commandPalette.ts'
 export { type Cookies, cookies } from './cookies.ts'
 // 53.21-53.23 — the `bind:element` adaptor copying text on a click.
 export { copyText } from './copyText.ts'

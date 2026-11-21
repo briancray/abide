@@ -31,7 +31,7 @@ function type(text: string) {
 }
 
 // 51.72 — THE BINDING OPENS IT AND SHUTS IT, from the page and from its own input. THE REVERT: drop
-// the `hotkeys` listener from `CommandPalette` — Ctrl+K opens nothing.
+// the `hotkeys` listener from `commandPalette` — Ctrl+K opens nothing.
 test('Ctrl+K opens the palette with its input focused, and shuts it again', async () => {
     using _jump = await mount(JumpTo({}))
     expect(dialog().open).toBe(false)

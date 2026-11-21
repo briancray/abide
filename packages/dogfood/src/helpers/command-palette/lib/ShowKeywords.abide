@@ -1,0 +1,33 @@
+<script>
+import { commandPalette, reactive } from '@abide/abide'
+import Dialog from '@abide/abide/Dialog.abide'
+
+let open = reactive(false)
+let ran = reactive('nothing yet')
+const palette = commandPalette({
+    commands: [
+        {
+            label: 'Contacts',
+            keywords: ['people'],
+            run: () => (ran = 'Contacts'),
+        },
+        { label: 'Deals', keywords: ['pipeline'], run: () => (ran = 'Deals') },
+    ],
+    open,
+    hotkey: 'mod+j',
+})
+</script>
+
+<button onclick={() => (open = true)}>Open the palette</button>
+<p>Ran: {ran}.</p>
+<Dialog bind:open={open} {...palette.dialog} class="palette">
+    <input {...palette.input} data-part="input" placeholder="Go to…">
+    <ul {...palette.listbox} data-part="listbox">
+        {#for command of palette.results() by command.label}
+            <li {...palette.option(command)} data-part="option">
+                {command.label}
+                <small class="text-muted">{command.keywords?.join(', ')}</small>
+            </li>
+        {/for}
+    </ul>
+</Dialog>

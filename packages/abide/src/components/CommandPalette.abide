@@ -1,38 +1,27 @@
 <script>
-// 51.72-51.78 — A MODAL SEARCH OVER WHAT AN APP CAN DO: WAI-ARIA's combobox inside a modal dialog. The
-// dialog is `Dialog`'s native modal, so the page behind it is inert, Escape cancels it and closing it
-// hands focus back to what had it; the keys over the list are `listbox`'s, and the key that opens it
-// is a `hotkeys` binding on the window.
+// 49.9, 51.72-51.78 — `commandPalette`'s default markup: a `Dialog` holding the search input, the list
+// of commands, each with its key shown beside it, and the component's children where nothing matches.
+// Everything it does is the parts'; an app wanting other markup spreads them itself.
 import type { Attributes } from '#shared/Attributes.ts'
-import { hotkeys } from '#shared/hotkeys.ts'
+import { type Command, commandPalette } from '#shared/commandPalette.ts'
 import { keyLabel } from '#shared/keyLabel.ts'
-import { listbox } from '#shared/listbox.ts'
 import { props } from '#shared/props.ts'
-import { reactive } from '#shared/reactive/index.ts'
+import type { Reactive } from '#shared/reactive/index.ts'
 
 import Dialog from './Dialog.abide'
 
 const {
     commands,
     open = false,
-    hotkey = 'mod+k',
+    hotkey,
     id = 'command-palette',
-    label = 'Commands',
+    label,
     placeholder,
     ...rest
 } = props<
     {
         /** What the palette can do, in the order it lists them, each told apart by its `label`. */
-        commands: readonly {
-            /** What the command is called: what it lists as, and what typing matches. */
-            label: string
-            /** Further words typing matches: `['add', 'create']` beside `'New deal'`. */
-            keywords?: readonly string[]
-            /** The binding the app runs the command on elsewhere, shown beside it as `keyLabel` writes it. */
-            key?: string
-            /** What choosing the command does, once the palette has closed. */
-            run: () => void
-        }[]
+        commands: readonly Command[]
         /** Whether the palette is showing. Bind it to open it from a button of the app's own. */
         open?: boolean
         /** The binding that opens and closes it, as `hotkeys` reads one. `'mod+k'` by default. */
@@ -46,80 +35,28 @@ const {
     } & Omit<Attributes<'dialog'>, 'open' | 'id'>
 >()
 
-type Command = (typeof commands)[number]
-
-let query = reactive('')
-
-// 51.73 — a command is listed while every word typed is in its label or one of its keywords.
-const found = reactive(() => {
-    const words = query.toLowerCase().split(/\s+/)
-    const kept: Command[] = []
-    for (const command of commands) {
-        let text = command.label.toLowerCase()
-        for (const keyword of command.keywords ?? [])
-            text += ` ${keyword.toLowerCase()}`
-        if (words.every((word) => text.includes(word))) kept.push(command)
-    }
-    return kept
+// The bound `open` handed over as the `Reactive` `commandPalette` takes, standing in for the three of
+// its members the parts call: read live, and written back to whoever binds it.
+const showing = Object.assign(() => open, {
+    peek: () => open,
+    set: (next: boolean) => {
+        open = next
+    },
 })
-
-const list = listbox({
+const palette = commandPalette({
+    commands: () => commands,
+    open: showing as unknown as Reactive<boolean>,
+    hotkey,
     id,
-    options: () => found,
-    key: (command) => command.label,
-    onpick: run,
+    label,
 })
-
-// 51.72 — the binding toggles, so the key that opened the palette shuts it from inside its input.
-const keys = hotkeys({
-    [hotkey]: { run: () => (open = !open), editable: true },
-})
-
-// 51.75 — shut first, so focus is back where it was before the command moves it.
-function run(command: Command) {
-    open = false
-    command.run()
-}
-
-function keydown(event: KeyboardEvent) {
-    // 51.76 — Escape is the dialog's to cancel, and Home and End move the caret in the text.
-    if (event.key === 'Escape' || event.key === 'Home' || event.key === 'End')
-        return
-    list.keydown(event)
-}
 </script>
 
-<window onkeydown={keys} />
-
-<Dialog {...rest} bind:open={open} aria-label={label} onclose={() => (query = '')}>
-    <input
-        id={`${id}-input`}
-        type="text"
-        role="combobox"
-        autocomplete="off"
-        autofocus
-        aria-label={label}
-        aria-autocomplete="list"
-        aria-expanded="true"
-        aria-controls={`${id}-listbox`}
-        aria-activedescendant={list.activeId()}
-        placeholder={placeholder}
-        data-part="input"
-        bind:value={query}
-        onkeydown={keydown}
-    >
-    <ul id={`${id}-listbox`} role="listbox" aria-label={label} data-part="listbox"
-        onmousedown={(event) => event.preventDefault()}>
-        {#for command of found by command.label}
-            <li
-                id={list.idOf(command.label)}
-                role="option"
-                aria-selected={list.active() === command.label ? 'true' : 'false'}
-                data-part="option"
-                data-active={list.active() === command.label ? '' : undefined}
-                onpointermove={() => list.activate(command.label)}
-                onclick={() => run(command)}
-            >
+<Dialog {...rest} {...palette.dialog} bind:open={open}>
+    <input {...palette.input} placeholder={placeholder} data-part="input">
+    <ul {...palette.listbox} data-part="listbox">
+        {#for command of palette.results() by command.label}
+            <li {...palette.option(command)} data-part="option">
                 <span data-part="label">{command.label}</span>
                 {#if command.key}
                     <kbd data-part="key">{keyLabel(command.key)}</kbd>
@@ -127,7 +64,7 @@ function keydown(event: KeyboardEvent) {
             </li>
         {/for}
     </ul>
-    {#if found.length === 0}
-        <div role="status" data-part="empty"><slot /></div>
+    {#if palette.results().length === 0}
+        <div {...palette.empty} data-part="empty"><slot /></div>
     {/if}
 </Dialog>

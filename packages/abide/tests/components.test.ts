@@ -58,6 +58,10 @@ test('a shipped component writes a style only from a computed value — 49.6', a
 // THE REVERT: write Range's thumbs' `onkeydown` in `Range.abide` again, and it is named.
 const OVER_PARTS: Record<string, { module: string; name: string }> = {
     'Range.abide': { module: 'range.ts', name: 'range' },
+    'CommandPalette.abide': {
+        module: 'commandPalette.ts',
+        name: 'commandPalette',
+    },
 }
 
 test('a component over a parts function renders through it, and does nothing of its own — 49.9', async () => {
@@ -67,9 +71,15 @@ test('a component over a parts function renders through it, and does nothing of 
     const wrong: string[] = []
     for (const [component, { module, name }] of Object.entries(OVER_PARTS)) {
         const text = await Bun.file(`${SOURCE}${component}`).text()
-        if (!text.includes(`import { ${name} } from '#shared/${module}'`))
+        if (
+            !new RegExp(
+                `import \\{[^}]*\\b${name}\\b[^}]*\\} from '#shared/${module}'`,
+            ).test(text)
+        )
             wrong.push(`${component} does not render through ${name}`)
-        if (!new RegExp(`\\b${name} \\} from '\\./${module}'`).test(barrel))
+        if (
+            !new RegExp(`\\b${name},?\\s*\\} from '\\./${module}'`).test(barrel)
+        )
             wrong.push(`${name} is not exported`)
         for (const [attribute] of template(text).matchAll(
             /\s(?:on[a-z]+|role|aria-[a-z]+)=/g,
