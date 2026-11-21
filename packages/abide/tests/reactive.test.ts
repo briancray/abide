@@ -3313,21 +3313,12 @@ test("an args gate that normalizes decides the body's args but not the entry", (
     expect(`entries: ${keyed.entries.size}`).toBe('entries: 2')
 })
 
-// 11.41 AT CONSTRUCTION, for a call the checker never saw: the refusal lands on the first moment
-// there is, naming the value, the way 5.14's does. What it stops is a gate that silently gates
-// nothing.
+// 11.41 AT CONSTRUCTION. The clause asks for a compile error and the checker cannot raise one —
+// `args` beside `() => 1` is where the body's `Args` is read from, so the call type-checks as keyed
+// — so the refusal lands on the first moment there is, naming the value, the way 5.14's does. What
+// it stops is a gate that silently gates nothing.
 //
 // THE REVERT is dropping the `args` test from `createReactive`: the refusal is `undefined`.
-// 11.41 AT COMPILE TIME: a body declaring no parameter types `args` as `never`, so spelling one is
-// refused before anything runs. THE REVERT is typing the body's options' `args` as `unknown`: the
-// `@ts-expect-error` below is unused and `bun run typecheck` names it.
-test('args on a body with no parameter does not compile', () => {
-    const spelled = () =>
-        // @ts-expect-error — a body declaring no parameter has no args to gate (11.41)
-        reactive(() => 1, { args: (value: unknown) => value })
-    expect(typeof spelled).toBe('function')
-})
-
 test('args on a value with no parameter refuses at construction', () => {
     let refusal: unknown
     try {

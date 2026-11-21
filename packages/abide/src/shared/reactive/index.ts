@@ -218,46 +218,33 @@ export type Held<Accepted> = [Accepted] extends [
 ]
     ? never
     : Accepted | (PromiseLike<Accepted> & { invalidate?: never })
-/** What a body's value is: the chunks its generator yields where it streams (9.6), else what it settles to. */
-export type BodyValue<Body extends (args: never) => unknown> =
-    Awaited<ReturnType<Body>> extends AsyncGenerator<infer Chunk>
+/** What a body's value is, read off what it returns: the chunks a generator yields where it streams (9.6), else what it settles to. */
+export type BodyValue<Result> =
+    Awaited<Result> extends AsyncGenerator<infer Chunk>
         ? Chunk[]
-        : Awaited<ReturnType<Body>>
-/**
- * A body's key: its one parameter, optional or not (11.2), or `never` where it declares none. The
- * `any` guard keeps `reactive(x as any)` from reading as keyed.
- */
-export type BodyArgs<Body extends (args: never) => unknown> = 0 extends 1 & Body
-    ? never
-    : Parameters<Body> extends []
-      ? never
-      : Parameters<Body>[0]
+        : Awaited<Result>
 /** What a body streams, chunk by chunk, or what it adopts from a `Reactive` it hands back (11.12). */
-type BodyProduced<Body extends (args: never) => unknown, Otherwise> =
-    Awaited<ReturnType<Body>> extends AsyncGenerator<infer Chunk>
+export type BodyProduced<Result, Otherwise> =
+    Awaited<Result> extends AsyncGenerator<infer Chunk>
         ? Chunk
-        : AdoptedProduced<ReturnType<Body>, Otherwise>
-/** What `reactive` builds from `Body`: a `Keyed` where it takes a key, a `Reactive` where it takes none. */
-export type ReactiveOf<
-    Body extends (args: never) => unknown,
-    Shaped,
-    Gate,
-    ArgsGate,
-> = [BodyArgs<Body>] extends [never]
+        : AdoptedProduced<Result, Otherwise>
+/** What `reactive` builds from a body: a `Keyed` where it takes `Args`, a `Reactive` where it takes none. */
+export type ReactiveOf<Args, Result, Shaped, Gate, ArgsGate> = [Args] extends [
+    never,
+]
     ? Reactive<
           Kept<Shaped>,
-          BodyValue<Body>,
-          | AdoptedFailures<ReturnType<Body>>
-          | Refusals<Shaped, Gate, BodyValue<Body>>,
-          BodyProduced<Body, Kept<Shaped>>
+          BodyValue<Result>,
+          AdoptedFailures<Result> | Refusals<Shaped, Gate, BodyValue<Result>>,
+          BodyProduced<Result, Kept<Shaped>>
       >
     : Keyed<
           Kept<Shaped>,
-          BodyArgs<Body>,
-          BodyValue<Body>,
-          | AdoptedFailures<ReturnType<Body>>
-          | Refusals<Shaped, Gate, BodyValue<Body>, ArgsGate, BodyArgs<Body>>,
-          BodyProduced<Body, Kept<Shaped>>
+          Args,
+          BodyValue<Result>,
+          | AdoptedFailures<Result>
+          | Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>,
+          BodyProduced<Result, Kept<Shaped>>
       >
 
 /**
@@ -281,35 +268,32 @@ export function reactive<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
 ): Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>
 /**
  * A value `body` produces, run again when a value it read changes: keyed where it declares a
- * parameter (11.2, an optional one included), and a stream where it hands back a generator (9.6).
- * What it is, is read off `Body` by `ReactiveOf`, so one signature serves every shape.
+ * parameter, an optional one included (11.2), and a stream where it hands back a generator (9.6).
  *
- * `Value` IS READ ONLY THROUGH `Body`'s DEFAULT: `reactive<number[]>(() => …)` names the value the
- * body produces, and with explicit type arguments the rest take their defaults, so `Body` is `() =>
- * number[]` and the body is checked against it. Inferred, `Value` is never read.
+ * ONE SIGNATURE FOR EVERY SHAPE OF BODY, read off `Args` and `Result` by `ReactiveOf`. `Args` is
+ * inferred from the body's parameter — `X | undefined` for an optional one — or, unannotated, from the
+ * `args` its options declare; a body declaring none infers nothing and takes the default, `never`,
+ * which is what an unkeyed body is.
  *
- * `unknown` FOR THE RETURN IN THE CONSTRAINT: a return type there is a contextual type for the body,
- * and `Promise.reject(…)` in a body inferred its promise as one of a generator from it.
+ * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `reactive<number[]>(() => …)` names the value the
+ * body produces, and with explicit type arguments the rest take their defaults. Inferred, it is
+ * never read.
  *
- * 19.24 — `Body` IS READ OFF THE BODY ALONE, hence `NoInfer` in the options: a `Schema<{ id: number }>`
- * beside an async body would otherwise pull the body's value toward the schema's.
+ * 19.24 — `Result` IS READ OFF THE BODY ALONE, hence `NoInfer` in the options: the checker infers
+ * through `Awaited`, so a `Schema<{ id: number }>` beside an async body put `{ id: number }` in it
+ * and the body's promise no longer fit.
  */
 export function reactive<
     Value = never,
-    Body extends (args: never) => unknown = () => Value,
-    Shaped = BodyValue<Body>,
-    Gate = Schema<BodyValue<Body>>,
-    ArgsGate = Schema<BodyArgs<Body>>,
+    Args = never,
+    Result = Value,
+    Shaped = BodyValue<Result>,
+    Gate = Schema<BodyValue<Result>>,
+    ArgsGate = Schema<Args>,
 >(
-    body: Body,
-    options?: Shaping<
-        BodyValue<NoInfer<Body>>,
-        Shaped,
-        BodyArgs<NoInfer<Body>>,
-        Gate,
-        ArgsGate
-    >,
-): ReactiveOf<Body, Shaped, Gate, ArgsGate>
+    body: (args: Args) => Result,
+    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>,
+): ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>
 /**
  * A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.9).
  *

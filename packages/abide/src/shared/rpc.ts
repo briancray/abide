@@ -36,13 +36,13 @@ import { callLoad } from './reactive/callLoad.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
 import {
     type AdoptedFailures,
-    type AdoptedProduced,
-    type ChunkOf,
+    type BodyProduced,
+    type BodyValue,
     handlerValue,
+    type Held,
     isKeyed,
     type Kept,
     type Keyed,
-    type OptionalParameter,
     type Reactive,
     reactive,
     refresh,
@@ -50,7 +50,6 @@ import {
     type Selection,
     type Shaping,
     STREAMING,
-    type Streams,
 } from './reactive/index.ts'
 import { isThenable } from './reactive/isThenable.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
@@ -279,17 +278,6 @@ type Refreshed = readonly (
  */
 export type Plain = { invalidate?: never }
 
-// The value arm's handler: anything but a function, which is a body, or a `Reactive` or `Keyed`,
-// which has decided its own options. Unguarded, the arm won overload resolution's subtype pass over
-// every function arm, whose `& Plain` only passes assignability. The guard is the whole parameter
-// because `& Plain` kept `GET(0)` the literal `0`, and a bound of `Plain` refuses every primitive.
-// The promise is `Plain` too: a `Reactive` is one (1.4), and `Accepted` inferred through it is the
-// value it holds, which the guard above passes.
-type Held<Accepted> = Accepted extends
-    ((...given: never[]) => unknown) | { invalidate: unknown }
-    ? never
-    : Accepted | (PromiseLike<Accepted> & Plain)
-
 /**
  * What narrows a trigger on an `Rpc` beside its pattern: `caller`, the `principal.caller` of the one
  * browser whose followed copies it reaches (18.37) — `true` for the one making this request (18.39).
@@ -306,150 +294,90 @@ type OptionsOf<
     : Omit<RpcOptions<Args, Answers>, 'refreshes'>
 
 /**
+ * The `Rpc` a `Reactive` or a `Keyed` handed in is served as: as it is, keyed or not, its own options
+ * decided (16.6).
+ */
+type BuiltRpc<Built, Answers extends readonly unknown[]> =
+    Built extends Keyed<
+        infer Stored,
+        infer Args,
+        never,
+        infer Failures,
+        infer Produced
+    >
+        ? Rpc<Stored, Args, Failures | RungRefusals<Answers>, Produced>
+        : Built extends Reactive<
+                infer Stored,
+                never,
+                infer Failures,
+                infer Produced
+            >
+          ? Rpc<Stored, undefined, Failures | RungRefusals<Answers>, Produced>
+          : never
+
+/** The key a `Reactive` or a `Keyed` handed in is called with. */
+type BuiltArgs<Built> =
+    Built extends Keyed<unknown, infer Args, never, unknown, unknown>
+        ? Args
+        : undefined
+
+/**
  * The signature `GET` and the four mutations share: a handler in, its `Rpc` out.
  *
- * ONE CALL SIGNATURE PER HANDLER ARM, shared by all five names. The two `reactive` arms come first:
- * a `Reactive` is itself a `() => Stored`, so the plain-function arm would otherwise swallow it
- * and type the `Rpc` as holding the value's own getter. The plain arms are `reactive`'s own
- * overloads, in its order and for its reason, and take its options beside the address's (16.6) —
- * which is why a value handed in takes the address's alone: it has decided its own.
+ * THREE SIGNATURES, ONE PER IDEA, where each shape of handler was an overload of its own: a value, a
+ * `Reactive` or `Keyed` already built, and a body, which `reactive` reads (`BodyValue`, `ReactiveOf`'s
+ * reading of `Args` and `Result`).
+ *
+ * THE BODY COMES FIRST: a generic call in the options — a rung helper, 16.86 — is resolved once,
+ * against the contextual type of the first signature it is checked under, and that answer is kept
+ * for the rest. The body's `Args` is read off the handler, a `Keyed`'s off its call signature as the
+ * built form would; the value form's would be `undefined`, and every rung helper was typed for it.
+ * The body's `& Plain` turns a `Reactive` or `Keyed` on to the built form, and `Held` every function
+ * off the value form.
  *
  * 16.92 — `Writes` is false for `GET` alone, whose options have no `refreshes`.
  */
 type Declare<Writes extends boolean> = {
+    // 11.2 — keyed where the body declares a parameter, an optional one included; 16.87 — `Args`
+    // read off the `args` the options declare where the parameter carries no annotation. A body
+    // declaring none infers nothing, and `undefined` is the key an unkeyed `Rpc` is called with.
+    // `Args` RAW in the options, never behind a conditional: a generic rung helper listed there
+    // (16.86) infers its own `Args` from them while this one is unfixed, and a conditional is
+    // evaluated then rather than carried — every such rung was typed for `undefined`.
     <
-        Stored,
-        Args,
-        Accepted,
-        Failures,
-        Produced,
-        Answers extends readonly unknown[] = unknown[],
-    >(
-        handler: Keyed<Stored, Args, Accepted, Failures, Produced>,
-        options?: OptionsOf<Writes, Args, Answers>,
-    ): Rpc<Stored, Args, Failures | RungRefusals<Answers>, Produced>
-    <
-        Stored,
-        Accepted,
-        Failures,
-        Produced,
-        Answers extends readonly unknown[] = unknown[],
-    >(
-        handler: Reactive<Stored, Accepted, Failures, Produced>,
-        options?: OptionsOf<Writes, undefined, Answers>,
-    ): Rpc<Stored, undefined, Failures | RungRefusals<Answers>, Produced>
-    // 11.2 — a stream whose parameter is optional is keyed, for `reactive`'s reason.
-    <
-        Body extends (args?: never) => unknown,
-        Shaped = ChunkOf<Body>[],
-        Gate = Schema<ChunkOf<Body>[]>,
-        ArgsGate = Schema<Parameters<Body>[0]>,
-        Answers extends readonly unknown[] = unknown[],
-    >(
-        handler: Body & OptionalParameter<Body> & Streams<Body> & Plain,
-        options?: Shaping<
-            ChunkOf<Body>[],
-            Shaped,
-            Parameters<Body>[0],
-            Gate,
-            ArgsGate
-        > &
-            OptionsOf<Writes, Parameters<Body>[0], Answers>,
-    ): Rpc<
-        Kept<Shaped>,
-        Parameters<Body>[0],
-        | Refusals<Shaped, Gate, ChunkOf<Body>[], ArgsGate, Parameters<Body>[0]>
-        | RungRefusals<Answers>,
-        ChunkOf<Body>
-    >
-    <
-        Chunk,
-        Shaped = Chunk[],
-        Gate = Schema<Chunk[]>,
-        Answers extends readonly unknown[] = unknown[],
-    >(
-        handler: (() =>
-            AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>) &
-            Plain,
-        options?: Shaping<Chunk[], Shaped, never, Gate> &
-            OptionsOf<Writes, undefined, Answers>,
-    ): Rpc<
-        Kept<Shaped>,
-        undefined,
-        Refusals<Shaped, Gate, Chunk[]> | RungRefusals<Answers>,
-        Chunk
-    >
-    <
-        Chunk,
-        Args,
-        Shaped = Chunk[],
-        Gate = Schema<Chunk[]>,
+        Args = undefined,
+        Result = unknown,
+        Shaped = BodyValue<Result>,
+        Gate = Schema<BodyValue<Result>>,
         ArgsGate = Schema<Args>,
         Answers extends readonly unknown[] = unknown[],
     >(
-        handler: ((
-            args: Args,
-        ) => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>) &
-            Plain,
-        options?: Shaping<Chunk[], Shaped, Args, Gate, ArgsGate> &
+        handler: ((args: Args) => Result) & Plain,
+        options?: Shaping<
+            BodyValue<NoInfer<Result>>,
+            Shaped,
+            Args,
+            Gate,
+            ArgsGate
+        > &
             OptionsOf<Writes, Args, Answers>,
     ): Rpc<
         Kept<Shaped>,
         Args,
-        Refusals<Shaped, Gate, Chunk[], ArgsGate, Args> | RungRefusals<Answers>,
-        Chunk
-    >
-    // 11.2 — an optional parameter is keyed, and ahead of the arm below for `reactive`'s reason.
-    <
-        Body extends (args?: never) => unknown,
-        Shaped = Awaited<ReturnType<Body>>,
-        Gate = Schema<Awaited<ReturnType<Body>>>,
-        ArgsGate = Schema<Parameters<Body>[0]>,
-        Answers extends readonly unknown[] = unknown[],
-    >(
-        handler: Body & OptionalParameter<Body> & Plain,
-        options?: Shaping<
-            Awaited<ReturnType<Body>>,
-            Shaped,
-            Parameters<Body>[0],
-            Gate,
-            ArgsGate
-        > &
-            OptionsOf<Writes, Parameters<Body>[0], Answers>,
-    ): Rpc<
-        Kept<Shaped>,
-        Parameters<Body>[0],
-        | AdoptedFailures<ReturnType<Body>>
-        | Refusals<
-              Shaped,
-              Gate,
-              Awaited<ReturnType<Body>>,
-              ArgsGate,
-              Parameters<Body>[0]
-          >
+        | AdoptedFailures<Result>
+        | Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>
         | RungRefusals<Answers>,
-        AdoptedProduced<ReturnType<Body>, Kept<Shaped>>
+        BodyProduced<Result, Kept<Shaped>>
     >
     <
-        Computed,
-        Shaped = Awaited<Computed>,
-        Gate = Schema<Awaited<Computed>>,
+        Built extends ((args: never) => unknown) & { invalidate: unknown },
         Answers extends readonly unknown[] = unknown[],
     >(
-        handler: (() => Computed) & Plain,
-        options?: Shaping<Awaited<Computed>, Shaped, never, Gate> &
-            OptionsOf<Writes, undefined, Answers>,
-    ): Rpc<
-        Kept<Shaped>,
-        undefined,
-        | AdoptedFailures<Computed>
-        | Refusals<Shaped, Gate, Awaited<Computed>>
-        | RungRefusals<Answers>,
-        AdoptedProduced<Computed, Kept<Shaped>>
-    >
-    // 16.1 — a value, `reactive`'s value overload given an address. Ahead of the arm below rather
-    // than last, so a body refused for its options is reported by that arm, naming them, and not as
-    // a value it never was: `Held` already turns every function away.
+        handler: Built,
+        options?: OptionsOf<Writes, BuiltArgs<Built>, Answers>,
+    ): BuiltRpc<Built, Answers>
+    // 16.1 — a value, `reactive`'s value form given an address, which takes its options beside the
+    // address's (16.6).
     <
         Accepted,
         Shaped = Accepted,
@@ -463,25 +391,6 @@ type Declare<Writes extends boolean> = {
         Kept<Shaped>,
         undefined,
         Refusals<Shaped, Gate, Accepted> | RungRefusals<Answers>
-    >
-    <
-        Computed,
-        Args,
-        Shaped = Awaited<Computed>,
-        Gate = Schema<Awaited<Computed>>,
-        ArgsGate = Schema<Args>,
-        Answers extends readonly unknown[] = unknown[],
-    >(
-        handler: ((args: Args) => Computed) & Plain,
-        options?: Shaping<Awaited<Computed>, Shaped, Args, Gate, ArgsGate> &
-            OptionsOf<Writes, Args, Answers>,
-    ): Rpc<
-        Kept<Shaped>,
-        Args,
-        | AdoptedFailures<Computed>
-        | Refusals<Shaped, Gate, Awaited<Computed>, ArgsGate, Args>
-        | RungRefusals<Answers>,
-        AdoptedProduced<Computed, Kept<Shaped>>
     >
 }
 
