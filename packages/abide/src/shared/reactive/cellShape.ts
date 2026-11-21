@@ -454,10 +454,11 @@ export class Cell {
     /** `null` on every value whose body is not an async generator, which is nearly all. */
     declare stream: Stream | null
     /**
-     * Whether a read may ever take the field straight, fixed at construction.
+     * Whether a read may ever take the field straight.
      *
-     * WHETHER A READ MAY EVER TAKE THE FIELD STRAIGHT, fixed at construction: no expiry to
-     * check and no accumulation to materialize. `setDirect` reads this one field where it
+     * WHETHER A READ MAY EVER TAKE THE FIELD STRAIGHT: no expiry to check and no accumulation to
+     * materialize. Derived by `simpleShape`, at construction and where a forwarded stream comes
+     * and goes. `setDirect` reads this one field where it
      * would otherwise read one per mechanism that needs the read to go a frame in.
      */
     declare plain: boolean
@@ -611,9 +612,8 @@ export class Cell {
         this.opens = false
         this.callable = null
         this.stream = streaming ? newStream(null) : null
-        this.plain = this.expiry === null && this.stream === null
-        this.bareWrite =
-            this.schema === null && this.transform === null && !streaming
+        this.plain = false
+        this.bareWrite = false
         this.simple = false
         this.scope = currentScope()
         this.global = options?.global === true
@@ -703,14 +703,19 @@ function comparatorFor(
 }
 
 /**
- * Recomputes `simple`. Re-seating the callable on the prototype that goes with it is `seat`'s.
+ * Recomputes `plain`, `bareWrite` and `simple` from the fields under them. Re-seating the callable on
+ * the prototype that goes with it is `seat`'s.
  *
- * `simple` IN ONE PLACE. A second copy of this conjunction is the drift that would let one of the
+ * THE THREE IN ONE PLACE. A second copy of this conjunction is the drift that would let one of the
  * sites go on reading `true` after the field under it moved — and what the short write would then
  * skip is a cap, a ring or a declared `identity`, silently. The prototype that goes with it is
  * `seat`'s, taken where the transition that moved a field under it ends.
  */
 export function simpleShape(cell: Cell): void {
+    const streamless = cell.stream === null
+    cell.plain = streamless && cell.expiry === null
+    cell.bareWrite =
+        streamless && cell.schema === null && cell.transform === null
     cell.simple =
         cell.bareWrite &&
         // `plain` carries `expiry === null` and `stream === null` already.

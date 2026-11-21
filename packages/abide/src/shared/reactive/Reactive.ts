@@ -345,8 +345,6 @@ export function ownStream(cell: Cell): Stream | null {
 function becomeStream(cell: Cell, source: Cell | null): Stream {
     const stream = newStream(source)
     cell.stream = stream
-    cell.plain = false
-    cell.bareWrite = false
     simpleShape(cell)
     seat(cell)
     cell.direct = false
@@ -555,10 +553,7 @@ export function nameLoad(
     address: string | undefined,
 ): void {
     if (LOAD_NAMES === null || !isReactive(value)) return
-    LOAD_NAMES.set(
-        cellOf(value),
-        `${method} ${address ?? 'a handler'}`,
-    )
+    LOAD_NAMES.set(cellOf(value), `${method} ${address ?? 'a handler'}`)
 }
 
 /** Every value still loading, by name, and the effects queued for the drain. */
@@ -1895,8 +1890,6 @@ function forwardStream(cell: Cell, inner: Cell, adopted: Stream): void {
 
 function stopForwarding(cell: Cell): void {
     cell.stream = null
-    cell.plain = cell.expiry === null
-    cell.bareWrite = cell.schema === null && cell.transform === null
     simpleShape(cell)
     cell.ring = EMPTY_RING
     // The ring is empty and the next production is `ordinal + 1`, at index zero.
@@ -4198,11 +4191,7 @@ const STREAM_PROTOTYPE = brandedPrototype({
         // 11.61: a `Reactive` written is adopted, and on a stream that is a write following it.
         if (isReactive(value)) {
             // 11.66 — a cycle throws, as `setThroughGates` does.
-            const cycle = follow(
-                cell,
-                cell.stream as Stream,
-                cellOf(value),
-            )
+            const cycle = follow(cell, cell.stream as Stream, cellOf(value))
             if (cycle !== undefined) throw cycle
             return undefined
         }
