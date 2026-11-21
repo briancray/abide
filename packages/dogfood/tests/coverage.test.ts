@@ -695,8 +695,8 @@ test("an object a page's call takes is spelled out beneath its syntax", async ()
     const expected: [string, string, string[]][] = [
         [
             '/helpers/dialog',
-            '`options: DialogOptions`',
-            ['`open`', '`modal?`', '`dismissible?`', '`onclose?`'],
+            '`options?: DialogOptions`',
+            ['`open?`', '`modal?`', '`dismissible?`', '`onclose?`'],
         ],
         ['/helpers/tree', '`options: TreeOptions`', ['`children`', '`key`']],
     ]
