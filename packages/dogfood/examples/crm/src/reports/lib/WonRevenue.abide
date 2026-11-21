@@ -1,7 +1,6 @@
 <script>
 import { chart, format, props } from '@abide/abide'
 import Announcer from '@abide/abide/Announcer.abide'
-import Tooltips from '@abide/abide/Tooltips.abide'
 
 const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
 // August's books are not closed yet.
@@ -26,15 +25,6 @@ const plot = chart({
     zero: true,
 })
 </script>
-
-{#component Readout()}
-    <span data-part="readout">
-        <span data-part="readout-x">{plot.readout()?.label}</span>
-        {#for point of plot.readout()?.values ?? []}
-            <span data-part="readout-value">{point.label}: {point.value}</span>
-        {/for}
-    </span>
-{/component}
 
 <svg
     {...plot.svg}
@@ -62,13 +52,19 @@ const plot = chart({
         {/if}
     {/for}
     {#if plot.readout()}
-        {#for at of [plot.readout()?.index] by at}
-            <line {...plot.crosshair(Readout)?.line} />
-        {/for}
+        <line {...plot.crosshair()?.line} />
     {/if}
 </svg>
-<Tooltips
-    class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
-    text-chrome text-ink shadow-sm [&_[data-part=readout-x]]:text-muted"
- />
+{#if plot.readout()}
+    <span
+        {...plot.tip}
+        class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
+        text-chrome text-ink shadow-sm"
+    >
+        <span data-part="readout-x" class="text-muted">{plot.readout()?.label}</span>
+        {#for point of plot.readout()?.values ?? []}
+            <span data-part="readout-value">{point.label}: {point.value}</span>
+        {/for}
+    </span>
+{/if}
 <Announcer class="sr-only" />

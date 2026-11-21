@@ -7,7 +7,7 @@ import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
 import { reactive } from '../reactive/index.ts'
 import type { Disposer } from '../reactive/watch.ts'
-import { tooltip } from '../tooltip/tooltip.ts'
+import { tip } from '../tooltip/tip.ts'
 
 /** What `pie` draws and how. A value is read live where a function is given. */
 export type PieOptions = {
@@ -59,7 +59,7 @@ export function pie(options: PieOptions): PieParts {
     const hinted = (text: string) => {
         let bind = hints.get(text)
         if (bind === undefined) {
-            bind = tooltip(text)
+            bind = tip(text)
             hints.set(text, bind)
         }
         return bind

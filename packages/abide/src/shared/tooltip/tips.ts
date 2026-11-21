@@ -1,12 +1,9 @@
-// 50.23, 50.36 — THE ONE HINT SHOWING, which the `Tooltips` standing in the page renders. Written only in a
-// browser — `tooltip` is a `bind:element` adaptor, which a server never runs.
+// 50.23, 50.36 — THE ONE HINT SHOWING, which the `tooltip.host` standing in the page shows. Written only
+// in a browser — `tooltip.tip` is a `bind:element` adaptor, which a server never runs.
 
 import { outlet } from '../outlet.ts'
 import type { Side } from '../place.ts'
 import { reactive } from '../reactive/index.ts'
-
-/** What a hint shows: text, or a component rendered with no props. */
-export type Hint = string | ((props: Record<string, never>) => unknown)
 
 /** Where a hint opens against its anchor, and how long a pointer rests first. */
 export type TooltipOptions = {
@@ -22,16 +19,14 @@ export type TooltipOptions = {
     delay?: number
 }
 
-/** The hint open, the anchor it is open against, where it opens, and the element it describes. */
+/** The hint open: its text, the anchor it is open against, and where it opens. */
 export type OpenTip = {
     anchor: Element
-    hint: Hint
+    text: string
     options: TooltipOptions
-    /** The anchor, save a `Chart`'s readout, which is placed against its crosshair and describes the chart (50.47). */
-    describes: Element
 }
 
 export const shown = reactive<OpenTip | undefined>(undefined)
 
-// 50.36 — the `Tooltips` standing: the last renders the hint.
+// 50.36 — the hosts standing: the last shows the hint.
 export const hints = outlet('<Tooltips />', 'abide:tooltip')

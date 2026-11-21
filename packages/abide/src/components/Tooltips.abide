@@ -1,80 +1,14 @@
 <script>
-import { anchored } from '#shared/anchored.ts'
-// 50.23-50.27, 50.36 — WHERE `tooltip` SHOWS: rendered once, in the root layout, as the one popover every
-// hint on the page opens in — the top layer, so no stacking context covers it and no scroller
-// clips it.
+// 50.55 — WHERE `tooltip.tip` SHOWS, AT ITS PLAINEST: rendered once, in the root layout, as the one
+// popover every hint on the page opens in. An app wanting more spreads `tooltip.host`'s part onto an
+// element of its own.
 import type { Attributes } from '#shared/Attributes.ts'
-import type { Side } from '#shared/place.ts'
 import { props } from '#shared/props.ts'
-import { randomToken } from '#shared/randomToken.ts'
-import { reactive, watch } from '#shared/reactive/index.ts'
-import { hints, shown } from '#shared/tooltip/tips.ts'
+import { host } from '#shared/tooltip/host.ts'
 
 const { ...rest } = props<Omit<Attributes<'span'>, 'popover' | 'role'>>()
 
-// 50.36 — this host, among the ones standing; the last bound renders the hint.
-const shows = hints.stand()
-let element = reactive<HTMLElement | undefined>(undefined)
-const tip = reactive(() => {
-    const open = shown
-    return shows() ? open : undefined
-})
-const Hint = reactive(() =>
-    typeof tip?.hint === 'function' ? tip.hint : undefined,
-)
-// The side taken, which a flip can change from the one asked for.
-let placed = reactive<Side>('top')
-
-function attach(host: HTMLElement) {
-    element = host
-    if (host.id === '') host.id = `tip-${randomToken(4, 'hex')}`
-    return () => {
-        element = undefined
-    }
-}
-
-watch(() => {
-    const host = element
-    const open = tip
-    if (host === undefined || open === undefined) return
-    const { anchor, hint, options, describes } = open
-    const stop = anchored(
-        anchor,
-        host,
-        {
-            side: options.side ?? 'top',
-            align: options.align ?? 'center',
-            offset: options.offset ?? 8,
-            arrowInset: options.arrowInset ?? 0,
-            // 50.48 — a hint is never the pointer's target.
-            interactive: false,
-        },
-        (placement) => {
-            placed = placement.side
-        },
-    )
-    // 50.23, 50.47 — a component describes its anchor, or the element it names, from here, for as long
-    // as it is open.
-    const described = describes.getAttribute('aria-describedby')
-    if (typeof hint !== 'string')
-        describes.setAttribute(
-            'aria-describedby',
-            described === null ? host.id : `${described} ${host.id}`,
-        )
-    return () => {
-        stop()
-        if (typeof hint === 'string') return
-        if (described === null) describes.removeAttribute('aria-describedby')
-        else describes.setAttribute('aria-describedby', described)
-    }
-})
+const shown = host()
 </script>
 
-<span
-    {...rest}
-    role="tooltip"
-    popover="manual"
-    data-open={tip ? '' : undefined}
-    data-side={placed}
-    bind:element={attach}
->{#if typeof tip?.hint === 'string'}{tip.hint}{:else}<Hint />{/if}</span>
+<span {...rest} {...shown.hint}>{shown.text()}</span>

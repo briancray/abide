@@ -2,8 +2,8 @@
 // under the pointer, and a readout the pointer could land on is a `pointerleave` on the chart that
 // closes it, a `pointerenter` that opens it again, and a flicker for as long as the pointer moves.
 //
-// THE REVERT: drop the `pointer-events` the `Tooltips` writes, and the chart reads a leave and an enter
-// per pixel the pointer moves.
+// THE REVERT: hand the chart's `tip` to `anchored` as `interactive`, and the chart reads a leave and an
+// enter per pixel the pointer moves.
 import { expect, test } from '@playwright/test'
 
 function underMount(address: string): string {
@@ -34,7 +34,7 @@ test("a pointer moving under a chart's readout keeps it open — 50.48", async (
     const y = box.y + box.height / 2
     for (let step = 0; step < 10; step += 1)
         await page.mouse.move(x + (step % 2), y)
-    const tip = page.locator('[role=tooltip]')
+    const tip = page.locator('[role=tooltip]:popover-open')
     await expect(tip).toContainText('Won')
     expect(await chart.getAttribute('data-hovering')).toBe('')
     expect(

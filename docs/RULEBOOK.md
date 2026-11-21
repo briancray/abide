@@ -5021,25 +5021,25 @@ axes, its start edge kept where it does not fit.
 
 50.22 `place` MUST read layout alone, and MUST NOT write to the document.
 
-50.23 `tooltip` MUST describe the element it is bound to by its hint: text through that element's
-`aria-description`, and a component through its `aria-describedby` naming the `Tooltips` showing it,
-for as long as it shows.
+50.23 `tooltip.tip` MUST describe the element it is bound to by its text, through that element's
+`aria-description`, and MUST restore the description it found once unbound.
 
-50.24 `tooltip` MUST open its hint once a pointer has rested on its element for `delay` milliseconds, and at once when its element takes focus that matches `:focus-visible`, and
+50.24 `tooltip.tip` MUST open its hint once a pointer has rested on its element for `delay` milliseconds, and at once when its element takes focus that matches `:focus-visible`, and
 MUST NOT open it for focus that does not.
 
-50.25 `tooltip` MUST close its hint on an Escape no one prevented, as the top layer of `dismissible`'s
+50.25 `tooltip.tip` MUST close its hint on an Escape no one prevented, as the top layer of `dismissible`'s
 stack while it shows (53.14, 53.15), once it is unbound, when the pointer leaves its element and
 when its element loses focus.
 
-50.26 A `Tooltips` showing a hint, the menu of a `menu`, an element `popover` is bound to and a
-`Combobox`'s open list MUST open in the top layer as a popover placed by `place` against their
-anchor, and MUST be placed again while open whenever anything scrolls, the window resizes, or the
-anchor or the popover changes size.
+50.26 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
+the menu of a `menu`, an element `popover` is bound to and a `Combobox`'s open list MUST open in the
+top layer as a popover placed by `place` against their anchor, and MUST be placed again while open
+whenever anything scrolls, the window resizes, or the anchor or the popover changes size.
 
-50.27 A `Tooltips` showing a hint, the menu of a `menu`, an element `popover` is bound to and a
-`Combobox`'s open list MUST write the side `place` took as `data-side`, the `arrow` of its
-`Placement` as the `--arrow-offset` custom property, and the anchor's width as `--anchor-width`.
+50.27 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
+the menu of a `menu`, an element `popover` is bound to and a `Combobox`'s open list MUST write the
+side `place` took as `data-side`, the `arrow` of its `Placement` as the `--arrow-offset` custom
+property, and the anchor's width as `--anchor-width`.
 
 50.28 A `menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
 opened it.
@@ -5066,7 +5066,7 @@ confirming button, and `undefined` where it closed any other way.
 element's facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
 
 50.36 One hint MUST show at a time. The hint, the notices, the prompts and the message `announce`
-gives MUST each show in the last `Tooltips`, `toasts.host`, `prompts.host` and `Announcer` of those
+gives MUST each show in the last `tooltip.host`, `toasts.host`, `prompts.host` and `Announcer` of those
 standing, the others showing none, and a hint, a notice, a prompt or a message asked for with none standing
 MUST warn once, on `abide:tooltip`, `abide:toasts`, `abide:prompts` and `abide:announce`.
 
@@ -5104,12 +5104,11 @@ in its `error` part once it rejects.
 what dismisses it and what runs its action, inside the element carrying the notice's attributes,
 `data-part="toast"` and `data-tone`, and as its text, action and close button otherwise.
 
-50.47 A `Chart`'s readout MUST show in the `Tooltips` standing as a hint does, against the chart's
-crosshair, for as long as the crosshair stands, and MUST describe the chart while it shows, as a
-component hint describes its anchor (50.23).
+50.47 The element carrying a `chart`'s `tip` MUST open against the chart's crosshair for as long as
+the crosshair stands, and the chart's `svg` part MUST name it in `aria-describedby` while it does.
 
-50.48 A `Tooltips` MUST NOT be the target of a pointer event, so a hint open over its anchor never
-takes the pointer from it.
+50.48 The element carrying `tooltip.host`'s `hint` part, and a `chart`'s `tip`, MUST NOT be the
+target of a pointer event, so a hint open over its anchor never takes the pointer from it.
 
 50.49 `popover` MUST show the element it is bound to as a popover, a manual one where the element
 carries no `popover` attribute, for as long as it is bound, and MUST hide it once it is unbound.
@@ -5125,6 +5124,15 @@ other.
 
 50.53 `Announcer` MUST render each message as an element of its own, a message saying the words of
 the one before it among them.
+
+50.54 `tooltip.host`'s `hint` part MUST carry every attribute its element needs as the server writes
+it: `role="tooltip"` and `popover="manual"`, with `data-open` present while a hint shows there.
+
+50.55 `tooltip.host`'s `text` MUST be the text of the hint showing in that host, and absent while none
+does.
+
+50.56 `Tooltips` MUST render one element carrying `tooltip.host`'s `hint` part whose content is its
+`text`.
 
 # 51. Lists and tables
 
@@ -5641,8 +5649,8 @@ not as a hydration mismatch.
 52.79 `chart` MUST hand back a point for each present value of each series, at the x `x` answers for
 its index and the y `y` answers for the value it is drawn at, and none for a missing value.
 
-52.80 `chart`'s crosshair part MUST carry one binding per x position it stands at, the same one while
-it stands at that x, so a crosshair kept as one element opens its readout again where it moves to.
+52.80 `chart`'s crosshair part MUST carry the same binding at every x position it stands at, and
+its `tip` MUST be placed again against the crosshair at each x the crosshair moves to.
 
 52.81 `pie` MUST keep a slice's hint binding while the slice's hint reads the same, however its sweep
 changes.
@@ -5698,9 +5706,10 @@ bound.
 53.14 `dismissible` MUST call its callback on an Escape `keydown` not already `defaultPrevented`, and
 MUST call `preventDefault` on it, save where `escape` is `false`.
 
-53.15 Elements `dismissible` is bound to at once, and the anchor of the hint `tooltip` shows, MUST
-stack in the order they were bound or opened: an Escape dismissing the top one alone, and a press
-dismissing each from the top that it lands outside until the first it lands in.
+53.15 Elements `dismissible` is bound to at once, the anchor of the hint `tooltip.tip` shows, and
+the crosshair of a `chart`'s open `tip`, MUST stack in the order they were bound or opened: an
+Escape dismissing the top one alone, and a press dismissing each from the top that it lands outside
+until the first it lands in.
 
 53.16 `dismissible`'s `Disposer` MUST take its element off the stack, and the last one MUST remove
 the document's listeners.

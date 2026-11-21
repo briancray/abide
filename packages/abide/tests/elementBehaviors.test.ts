@@ -8,8 +8,8 @@ import { dismissible } from '#shared/dismissible.ts'
 import { dropzone } from '#shared/dropzone.ts'
 import { followBottom } from '#shared/followBottom.ts'
 import { imageFiles } from '#shared/imagePiece.ts'
+import { tip } from '#shared/tooltip/tip.ts'
 import { shown } from '#shared/tooltip/tips.ts'
-import { openHint } from '#shared/tooltip/tooltip.ts'
 
 afterEach(() => {
     Reflect.deleteProperty(navigator, 'clipboard')
@@ -114,14 +114,18 @@ test('Escape closes the top panel alone and is prevented, and a field that took 
 // the panel under it — or a `<dialog>` — stays, and the next Escape is the panel's. A hint another
 // replaced leaves no layer behind to take that Escape. THE REVERT: close the hint from a `keydown`
 // listener of its own on the document, as it was — the first Escape closes the panel too.
-test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15', () => {
+test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15', async () => {
     const panel = element()
     const closed: string[] = []
     const stopPanel = dismissible(() => closed.push('panel'))(panel)
     const first = panel.appendChild(document.createElement('button'))
     const second = panel.appendChild(document.createElement('button'))
-    const stopFirst = openHint(first, 'First', {}, () => stopFirst())
-    const stopSecond = openHint(second, 'Second', {}, () => stopSecond())
+    const stopFirst = tip('First', { delay: 0 })(first)
+    const stopSecond = tip('Second', { delay: 0 })(second)
+    first.dispatchEvent(new MouseEvent('mouseenter'))
+    await Bun.sleep(1)
+    second.dispatchEvent(new MouseEvent('mouseenter'))
+    await Bun.sleep(1)
     expect(shown.peek()?.anchor).toBe(second)
     expect(escape()).toBe(true)
     expect(shown.peek()).toBeUndefined()

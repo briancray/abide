@@ -170,8 +170,8 @@ export { type Tree, type TreeOptions, tree } from './tree.ts'
 // 52.73-52.78 — a time that stays current, as parts on a `<time>` of the app's own.
 export { type TimeOptions, type TimeParts, time } from './time.ts'
 export * as transcript from './transcript/index.ts'
-export { type Hint, type TooltipOptions } from './tooltip/tips.ts'
-export { tooltip } from './tooltip/tooltip.ts'
+export * as tooltip from './tooltip/index.ts'
+export { type TooltipOptions } from './tooltip/tips.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 // 8.22, 8.34, 8.37 — the `Store`s, as one namespace: `store.web`, `store.indexedDB`, `store.cookies`.
 // `@abide/abide/server` exports its own over this one, with the two a server alone has.

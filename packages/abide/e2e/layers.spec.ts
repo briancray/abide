@@ -33,7 +33,7 @@ let dialog: HTMLDialogElement | undefined
 
 <button id="open" onclick={() => dialog?.showModal()}>Open</button>
 <dialog bind:element={(element) => { dialog = element as HTMLDialogElement }}>
-    <button id="hinted" bind:element={tooltip('Saves the deal')}>Save</button>
+    <button id="hinted" bind:element={tooltip.tip('Saves the deal')}>Save</button>
 </dialog>`
 
 let server: Subprocess | undefined

@@ -1,7 +1,7 @@
 <script>
 import { tooltip } from '@abide/abide'
 
-const hint = tooltip('Star this contact', {
+const hint = tooltip.tip('Star this contact', {
     side: 'bottom',
     delay: 0,
 })

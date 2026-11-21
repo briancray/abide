@@ -72,6 +72,7 @@ const OVER_PARTS: Record<string, { module: string; name: string }> = {
     // A host's parts are a member of its namespace, exported from the namespace's own index.
     'Toasts.abide': { module: 'toasts/host.ts', name: 'host' },
     'Prompts.abide': { module: 'prompts/host.ts', name: 'host' },
+    'Tooltips.abide': { module: 'tooltip/host.ts', name: 'host' },
     // The chart family's parts live beside the arithmetic they draw with, exported from the barrel.
     'Chart.abide': { module: 'chart/chart.ts', name: 'chart' },
     'Pie.abide': { module: 'chart/pie.ts', name: 'pie' },
@@ -81,8 +82,6 @@ const OVER_PARTS: Record<string, { module: string; name: string }> = {
 // A COMPONENT WITH NO PARTS FUNCTION, each with why: every shipped component is in one list or the
 // other, so a new one is a decision rather than an omission.
 const WITHOUT_PARTS: Record<string, string> = {
-    'Tooltips.abide':
-        'one element whose whole content is the hint, which is already markup of the app (a component hint)',
     'Announcer.abide':
         'two live regions whose shape is how a screen reader hears them, with nothing for an app to lay out',
     'Outlet.abide': 'a place, not a widget: what it renders is the fill',
