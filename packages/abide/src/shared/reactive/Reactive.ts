@@ -137,8 +137,8 @@ export type ReactiveOptions<
     // `number | Failed<…>` and `.data` did not exist on it. The bound is what tells the
     // two halves of that union apart.
     Failures extends Failed<string, unknown> = never,
-    // `never` on every overload but the keyed ones, which is what makes `args` unspellable
-    // on the unkeyed form (11.41): its field type collapses to `never` there.
+    // `never` wherever the body declares no parameter, which is what makes `args` unspellable
+    // there (11.41): its field type collapses to `never`.
     Args = never,
 > = {
     /**
@@ -4502,11 +4502,10 @@ export function createReactive<
     // what its body opens is owned as any body's is, or a rung's `watch` outlives its request.
     cached = false,
 ): Reactive<Stored, Accepted, Failures, Produced> {
-    // 11.41 IS A COMPILE ERROR THE TYPES CANNOT RAISE: a body declaring no parameter is still
-    // assignable to the keyed overload's `(args: Args) => Computed`, so the checker falls through
-    // to it and accepts the call. Like 5.14 it lands at construction instead, the earliest moment
-    // there is — and a keyed value strips `args` before building an entry, so any that arrives
-    // here was spelled on a form that has no args to gate.
+    // 11.41 — the types refuse `args` on a body declaring no parameter, its field `never` there; this
+    // is the same refusal for a call the checker never saw (an `as never`, plain JavaScript). Like
+    // 5.14 it lands at construction, the earliest moment there is — and a keyed value strips `args`
+    // before building an entry, so any that arrives here was spelled on a form with no args to gate.
     if ((options as { args?: unknown } | undefined)?.args !== undefined)
         throw new Error(
             `${label} declares args with no parameter to gate. args belongs to a keyed reactive, whose body declares one.`,

@@ -785,8 +785,8 @@ readers that remain.
 
 11.40 `args` on a `reactive` MUST check `Args`.
 
-11.41 `args` MUST be unspellable on the unkeyed `reactive` overload, and spelling it MUST be a compile
-error naming the overload.
+11.41 `args` MUST be unspellable on a `reactive` whose body declares no parameter: spelling it MUST be
+a compile error, and, where the checker never saw the call, a refusal at construction.
 
 11.42 `store` on a `Keyed` MUST accept a function of the `Args`.
 
