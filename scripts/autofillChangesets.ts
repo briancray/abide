@@ -94,26 +94,48 @@ function classify(subject: string, body: string): { bump: Bump; note: string } {
     return { bump, note: breaking ? `Breaking: ${description}` : description }
 }
 
-// Files (with status) a commit changed, as raw `--name-status` lines.
-async function changedEntries(hash: string): Promise<string[]> {
-    const out = await $`git show --name-status --format= ${hash}`.text()
-    return out
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
+/** Each commit in `range`, oldest first: its hash, subject, body and `--name-status` lines. */
+async function commitsIn(
+    range: string,
+): Promise<
+    { hash: string; subject: string; body: string; entries: string[] }[]
+> {
+    // ONE `git log` for every commit, rather than three spawns per commit: a record opens on NUL,
+    // its fields part on US, and RS ends the body — which may hold newlines — before the
+    // name-status lines git writes after it.
+    const out =
+        await $`git log --no-merges --reverse --name-status --format=%x00%H%x1f%s%x1f%b%x1e ${range}`.text()
+    const commits: {
+        hash: string
+        subject: string
+        body: string
+        entries: string[]
+    }[] = []
+    for (const record of out.split('\0')) {
+        if (record === '') continue
+        const end = record.indexOf('\x1e')
+        const [hash = '', subject = '', body = ''] = record
+            .slice(0, end)
+            .split('\x1f')
+        const entries: string[] = []
+        for (const line of record.slice(end + 1).split('\n')) {
+            const entry = line.trim()
+            if (entry !== '') entries.push(entry)
+        }
+        commits.push({
+            hash,
+            subject: subject.trim(),
+            body: body.trim(),
+            entries,
+        })
+    }
+    return commits
 }
 
 const packages = await publishedPackages()
 const anchor = await lastReleaseCommit(packages.map((pkg) => pkg.manifest))
 const range = anchor ? `${anchor}..HEAD` : 'HEAD'
-const log = await $`git log --no-merges --reverse --format=%H ${range}`.text()
-const hashes = log
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-
-for (const hash of hashes) {
-    const entries = await changedEntries(hash)
+for (const { hash, subject, body, entries } of await commitsIn(range)) {
     // --name-status is tab-separated (`M\tpath`, `R100\told\tnew`). The last field is
     // the path that exists post-commit — the rename destination, or the sole path.
     const paths = entries.map((line) => line.split('\t').at(-1) ?? '')
@@ -143,8 +165,6 @@ for (const hash of hashes) {
     if (await Bun.file(file).exists()) {
         continue
     }
-    const subject = (await $`git log -1 --format=%s ${hash}`.text()).trim()
-    const body = (await $`git log -1 --format=%b ${hash}`.text()).trim()
     const { bump, note } = classify(subject, body)
     const link = `[\`${short}\`](https://github.com/${REPO}/commit/${hash})`
     const frontmatter = owners.map((pkg) => `"${pkg.name}": ${bump}`).join('\n')
