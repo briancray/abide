@@ -7,12 +7,67 @@ const CLOSERS = ')>]}'
 /** The longest a generic stays spelled out, its arguments already short; past it, `Name<…>`. */
 const GENERIC_LENGTH = 40
 
-/** Every backticked span of a REGISTRY cell, in its short form; the prose around them as written. */
-export function shortSignature(cell: string): string {
+/**
+ * Every backticked span of a REGISTRY cell, in its short form; the prose around them as written.
+ * `typed` is the index of a parameter of the signature's call that keeps its type, in short form: the
+ * one telling an overload from the others of its name, which by names alone all read the same.
+ */
+export function shortSignature(cell: string, typed?: number): string {
     return cell.replace(
         /`([^`]+)`/g,
-        (_, code: string) => `\`${shortType(code)}\``,
+        (_, code: string) => `\`${shortType(code, typed)}\``,
     )
+}
+
+/** The parameters of the call a signature is, each as declared, or `undefined` for one that is not a call. */
+function parametersIn(code: string): string[] | undefined {
+    let callable = code.trim()
+    if (callable.startsWith('<'))
+        callable = callable.slice(closing(callable, 0) + 1).trim()
+    if (!callable.startsWith('(')) return undefined
+    const end = closing(callable, 0)
+    if (
+        !callable
+            .slice(end + 1)
+            .trim()
+            .startsWith('=>')
+    )
+        return undefined
+    return splitTop(callable.slice(1, end), ',')
+}
+
+/** A declared parameter's type, in short form, or `''` where it declares none. */
+function typeOf(declared: string): string {
+    const colon = topLevel(declared, ':')[0]
+    return colon === undefined ? '' : shortType(declared.slice(colon + 1))
+}
+
+/**
+ * Of the signatures of one name's overloads, the index of the first parameter whose short type is not
+ * the same in all of them — what tells them apart — or `undefined` where there is one, or none differs.
+ */
+export function discriminating(
+    signatures: readonly string[],
+): number | undefined {
+    if (signatures.length < 2) return undefined
+    const lists: string[][] = []
+    for (const signature of signatures) {
+        const code = /`([^`]+)`/.exec(signature)?.[1]
+        const parameters = code === undefined ? undefined : parametersIn(code)
+        if (parameters === undefined) return undefined
+        lists.push(parameters)
+    }
+    let longest = 0
+    for (const list of lists) longest = Math.max(longest, list.length)
+    for (let index = 0; index < longest; index += 1) {
+        const types = new Set<string>()
+        for (const list of lists) {
+            const declared = list[index]
+            types.add(declared === undefined ? '' : typeOf(declared))
+        }
+        if (types.size > 1) return index
+    }
+    return undefined
 }
 
 function closes(text: string, at: number): boolean {
@@ -85,10 +140,15 @@ function nameOf(declared: string): string {
     return named.split(/\s+extends\s+|\s*=\s*/)[0]?.trim() ?? named
 }
 
-/** `(a: A, b?: B)` as `(a, b?)`. */
-function parametersOf(list: string): string {
+/** `(a: A, b?: B)` as `(a, b?)`, the parameter at `typed` keeping its short type. */
+function parametersOf(list: string, typed?: number): string {
     const names: string[] = []
-    for (const one of splitTop(list, ',')) names.push(nameOf(one))
+    const declared = splitTop(list, ',')
+    for (let index = 0; index < declared.length; index += 1) {
+        const one = declared[index] as string
+        const type = index === typed ? typeOf(one) : ''
+        names.push(type === '' ? nameOf(one) : `${nameOf(one)}: ${type}`)
+    }
     return `(${names.join(', ')})`
 }
 
@@ -105,7 +165,7 @@ function joined(parts: string[], separator: string): string {
     return [...new Set(parts)].join(separator)
 }
 
-function shortType(source: string): string {
+function shortType(source: string, typed?: number): string {
     const text = source.trim()
 
     const assigned = topLevel(text, '=').find((at) => text[at + 1] !== '>')
@@ -122,7 +182,7 @@ function shortType(source: string): string {
         const end = closing(callable, 0)
         const rest = callable.slice(end + 1).trim()
         if (rest.startsWith('=>'))
-            return `${parametersOf(callable.slice(1, end))} => ${shortType(rest.slice(2))}`
+            return `${parametersOf(callable.slice(1, end), typed)} => ${shortType(rest.slice(2))}`
     }
 
     const asked = topLevel(text, '?')[0]

@@ -6,7 +6,7 @@ import REGISTRY from '../../../../docs/REGISTRY.md' with { type: 'text' }
 // Types (40.32). The clause column is left out: the clauses the rows cite are the page's Rules, at
 // its foot (40.11).
 import { registryRows, sectionsOf } from './registryRows.ts'
-import { inSyntax, shortSignature } from './shortSignature.ts'
+import { discriminating, inSyntax, shortSignature } from './shortSignature.ts'
 
 const ROWS = registryRows(REGISTRY)
 const SIGNATURE = 'Signature'
@@ -84,15 +84,23 @@ for (const section of sections) {
     if (tables.length > 0) shown.push({ heading: section.heading, tables })
 }
 
-/** A row's cells as the page shows them, the clause column left out. */
+/**
+ * A row's cells as the page shows them, the clause column left out. A row sharing its name with
+ * others of its table is an overload, and its short form keeps the type that tells it from them.
+ */
 function cellsShown(
     header: readonly string[],
+    rows: readonly { cells: readonly string[] }[],
     cells: readonly string[],
 ): string[] {
     const shown = cells.slice(0, -1)
     if (types) return shown
     const at = header.indexOf(SIGNATURE)
-    if (at >= 0) shown[at] = shortSignature(shown[at] ?? '')
+    if (at < 0) return shown
+    const overloads: string[] = []
+    for (const row of rows)
+        if (row.cells[0] === cells[0]) overloads.push(row.cells[at] ?? '')
+    shown[at] = shortSignature(shown[at] ?? '', discriminating(overloads))
     return shown
 }
 
@@ -120,7 +128,7 @@ headings = [...headings, ...filed]
                         <thead><tr>{#for cell of table.header.slice(0, -1)}<th>{cell}</th>{/for}</tr></thead>
                         <tbody>
                             {#for row of table.rows}
-                                <tr>{#for cell of cellsShown(table.header, row.cells)}<td>{raw(inline(cell))}</td>{/for}</tr>
+                                <tr>{#for cell of cellsShown(table.header, table.rows, row.cells)}<td>{raw(inline(cell))}</td>{/for}</tr>
                             {/for}
                         </tbody>
                     </table>
@@ -140,7 +148,7 @@ headings = [...headings, ...filed]
                         <thead><tr>{#for cell of table.header.slice(0, -1)}<th>{cell}</th>{/for}</tr></thead>
                         <tbody>
                             {#for row of table.rows}
-                                <tr>{#for cell of cellsShown(table.header, row.cells)}<td>{raw(inline(cell))}</td>{/for}</tr>
+                                <tr>{#for cell of cellsShown(table.header, table.rows, row.cells)}<td>{raw(inline(cell))}</td>{/for}</tr>
                             {/for}
                         </tbody>
                     </table>

@@ -8,7 +8,7 @@ import { beforeAll, expect, test } from 'bun:test'
 
 import { cellsOf } from '../src/lib/cellsOf.ts'
 import { registryRows } from '../src/lib/registryRows.ts'
-import { shortSignature } from '../src/lib/shortSignature.ts'
+import { discriminating, shortSignature } from '../src/lib/shortSignature.ts'
 import { SITE } from '../src/lib/SITE.ts'
 import { isFramed } from '../src/lib/sitePages.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
@@ -593,14 +593,26 @@ test('every page renders its parts in the one order', async () => {
 // signature shortens is named for showing it in full above its Examples.
 test('a signature is short above the examples and whole in Types', async () => {
     const full = new Map<string, Set<string>>()
-    for (const row of registryRows(registry)) {
+    // Each signature's short form as its page shows it: an overload's keeps the type telling it apart.
+    const overloads = new Map<string, string[]>()
+    const rows = registryRows(registry)
+    for (const row of rows) {
         const at = row.header.indexOf('Signature')
         const signature = row.cells[at]
         if (at < 0 || signature === undefined) continue
         const signatures = full.get(row.section) ?? new Set<string>()
         signatures.add(signature)
         full.set(row.section, signatures)
+        const name = `${row.section}|${row.subsection ?? ''}|${row.cells[0]}`
+        overloads.set(name, [...(overloads.get(name) ?? []), signature])
     }
+    const short = new Map<string, string>()
+    for (const signatures of overloads.values())
+        for (const signature of signatures)
+            short.set(
+                signature,
+                shortSignature(signature, discriminating(signatures)),
+            )
     const registryOf = new Map<string, string>()
     for (const group of SITE)
         for (const page of group.pages)
@@ -615,14 +627,34 @@ test('a signature is short above the examples and whole in Types', async () => {
             const written = signature.replaceAll('|', '\\|')
             if (!types.includes(written))
                 wrong.push(`${route}: not in Types: ${signature}`)
-            if (
-                shortSignature(signature) !== signature &&
-                above.includes(written)
-            )
+            if (short.get(signature) !== signature && above.includes(written))
                 wrong.push(`${route}: in full above Examples: ${signature}`)
         }
     }
     expect(wrong).toEqual([])
+})
+
+// 40.32 — AN OVERLOAD READS AS ITSELF: rows of one name in one table are its overloads, and a short
+// form by parameter names alone reads the same for every one of them — `GET`'s nine all read
+// `(handler, options?) => Rpc<…>`. So the parameter whose type tells them apart keeps it. Read off
+// each page's tables above its Examples, as a reader sees them. THE REVERT: pass no `typed` to
+// `shortSignature` in `Registry.abide`'s `cellsShown`, and `/transports/get` is named.
+test('no two overloads of a name read the same in a short form', async () => {
+    const same: string[] = []
+    for (const [route, body] of await renderedMarkdown()) {
+        const above = body.split('\n## Examples\n')[0] ?? ''
+        for (const table of above.split(/\n(?!\|)/)) {
+            const seen = new Set<string>()
+            for (const line of table.split('\n')) {
+                const cells = line.split(' | ')
+                if (!line.startsWith('| `') || cells.length < 3) continue
+                const shown = `${cells[0]} | ${cells[1]}`
+                if (seen.has(shown)) same.push(`${route}: ${shown}`)
+                seen.add(shown)
+            }
+        }
+    }
+    expect([...new Set(same)]).toEqual([])
 })
 
 // 40.32 — THE SYNTAX IS WHAT IS CALLED: a type directly under the section — a capitalized name the

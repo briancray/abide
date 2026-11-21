@@ -3970,7 +3970,8 @@ derived from REGISTRY's, and its Types MUST show every row carrying a `Signature
 full, under the heading it sits under; a page whose section carries no `Signature` cell MUST NOT render
 Types. Of the rows carrying a `Signature` cell directly under the section, the Syntax MUST show only
 the name the page documents and every name that is not a type and is called, and a Syntax left with
-no row MUST NOT be rendered.
+no row MUST NOT be rendered. Where rows of one table share a name, the short form MUST keep the type of
+the first parameter whose type differs between them, so no two of them read the same.
 
 # 41. Rendering and hydration
 
