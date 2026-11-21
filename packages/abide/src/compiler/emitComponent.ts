@@ -1,3 +1,5 @@
+import { SyntaxKind } from 'typescript/unstable/ast'
+
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { SERVER_RUNTIME_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
@@ -5,7 +7,6 @@ import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { placed } from './Cursor.ts'
 import { guardedSetup } from './guardedSetup.ts'
 import { abideBindings } from './hookCalls.ts'
-import { IDENTIFIER_PART } from './isNamedAlone.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import { moduleImports } from './moduleImports.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
@@ -21,6 +22,7 @@ import {
 } from './renderMarkup.ts'
 import { insideShare, SETTLED_AT, shareScope } from './shareScope.ts'
 import { holdsStatement, splitImports } from './splitImports.ts'
+import { type Token, tokenize } from './tokenize.ts'
 
 // The name the body is bound to while a component's head contributions land (`HEADS`).
 const BODY = '__body'
@@ -173,20 +175,32 @@ ${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : '
 /**
  * Whether `markup`, a component's emitted head and body, calls `busy` or `ready` with no argument,
  * under any name the file's scripts import either by from `@abide/abide`. A member's (`s.busy()`)
- * is not bare.
+ * is not bare, and neither is the name written in text: the markup's static text is emitted as
+ * string literals, which the tokens step over.
  */
 function readsBareProbe(file: AbideFile, markup: string): boolean {
-    let names = ''
+    const names = new Set<string>()
     for (const [local, imported] of abideBindings(scriptBodies(file)))
-        if (imported === 'busy' || imported === 'ready')
-            names += `${names === '' ? '' : '|'}${RegExp.escape(local)}`
-    return (
-        names !== '' &&
-        new RegExp(
-            `(?<!${IDENTIFIER_PART.source}|\\.)(?:${names})\\(\\s*\\)`,
-            'u',
-        ).test(markup)
-    )
+        if (imported === 'busy' || imported === 'ready') names.add(local)
+    if (names.size === 0) return false
+    const tokens = tokenize(markup)
+    for (let at = 0; at + 2 < tokens.length; at += 1) {
+        const token = tokens[at] as Token
+        if (token.kind !== SyntaxKind.Identifier || !names.has(token.text))
+            continue
+        const before = tokens[at - 1]?.kind
+        if (
+            before === SyntaxKind.DotToken ||
+            before === SyntaxKind.QuestionDotToken
+        )
+            continue
+        if (
+            (tokens[at + 1] as Token).kind === SyntaxKind.OpenParenToken &&
+            (tokens[at + 2] as Token).kind === SyntaxKind.CloseParenToken
+        )
+            return true
+    }
+    return false
 }
 
 /**

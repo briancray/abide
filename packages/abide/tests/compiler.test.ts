@@ -1804,3 +1804,16 @@ test('a script of imports alone opens no setup on either side — 41.6', async (
         counts: server.includes('callsInRender'),
     }).toEqual({ collects: false, tries: false, counts: false })
 })
+
+// 41.28 — A BARE PROBE IS A CALL, NOT THE WORDS: the markup's text is emitted as string literals, and
+// a component that only says "ready()" renders in its own turn. THE REVERT: test the emitted markup
+// with a regex rather than its tokens, and the text alone defers the component.
+test('a bare probe defers a component, and the words in its text do not — 41.28', async () => {
+    const imported = "<script>import { ready } from '@abide/abide'</script>"
+    const said = await serverOf(`${imported}<p>Call ready() now</p>`)
+    const called = await serverOf(`${imported}<p>{ready() ? 'a' : 'b'}</p>`)
+    expect({
+        said: said.includes('__settledAt'),
+        called: called.includes('__settledAt'),
+    }).toEqual({ said: false, called: true })
+})
