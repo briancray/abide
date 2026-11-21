@@ -9,6 +9,7 @@ import QualifyBoard from './lib/QualifyBoard.abide'
 import StageBoard from './lib/StageBoard.abide'
 import StageFilter from './lib/StageFilter.abide'
 import StageHints from './lib/StageHints.abide'
+import StageNotices from './lib/StageNotices.abide'
 import StageTiles from './lib/StageTiles.abide'
 import StaleDeals from './lib/StaleDeals.abide'
 import TeamTarget from './lib/TeamTarget.abide'
@@ -20,6 +21,7 @@ import TeamTarget from './lib/TeamTarget.abide'
     <h1>Pipeline</h1>
     <TeamTarget />
     <StageFilter />
+    <StageNotices />
     <StageBoard />
     <StageHints />
     <QualifyBoard />

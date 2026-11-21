@@ -844,6 +844,9 @@ type Reached = { readonly [REACHED]: true }
 | `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown in the app's `Prompts` until it is closed. | 50.5, 50.7, 50.9, 50.11, 50.36, 11.32 |
 | `prompts.prompt` | `(asked: string \| PromptOptions) => Promise<string \| undefined>` | A line of text asked for in the app's `Prompts`. | 50.5, 50.7, 50.11, 50.33, 50.36, 11.32 |
 | `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string; value?: string; placeholder?: string; signal?: AbortSignal; modal?: boolean; run?: (answer: string) => unknown }` | What a prompt shows, what its buttons say, what withdraws it, whether it is modal, and the call confirming makes. | 50.7, 50.10, 50.34, 50.43, 50.44, 50.45 |
+| `prompts.host` | `() => PromptsHost` | The `<dialog>` the queued prompts show in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.6, 50.8, 50.9, 50.10, 50.34, 50.36, 50.45, 50.1, 50.2, 50.3, 50.4, 49.9 |
+| `PromptsHost` | `{ readonly dialog: Record<string, unknown>; readonly form: Record<string, unknown>; current(): ShownPrompt \| undefined; typing(): boolean; readonly input: Record<string, unknown>; failed(): string \| undefined; readonly error: Record<string, unknown>; readonly confirm: Record<string, unknown>; readonly cancel: Record<string, unknown> }` | The dialog's, the form's, the field's, the error's and the two buttons' parts, the prompt showing, whether it asks for text, and what its `run` failed with. | 32.11, 32.99, 50.6, 50.10, 50.34, 50.45 |
+| `ShownPrompt` | `Readonly<{ title: string \| undefined; body: string; confirm: string; cancel: string; danger: boolean; mustType: string \| undefined; value: string; placeholder: string \| undefined; modal: boolean; kind: 'confirm' \| 'alert' \| 'prompt' }>` | The prompt showing, as markup reads it. | 50.6 |
 
 ## `Toasts`
 
@@ -860,6 +863,9 @@ type Reached = { readonly [REACHED]: true }
 | `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
 | `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
 | `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.41 |
+| `toasts.host` | `(options?: ToastsHostOptions) => ToastsHost` | The live region the notices show in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.17, 50.18, 50.36, 49.9 |
+| `ToastsHostOptions` | `{ label?: string \| (() => string) }` | The region's accessible name. | 50.17 |
+| `ToastsHost` | `{ readonly region: Record<string, unknown>; notices(): readonly Toast[]; notice(toast: Toast): Record<string, unknown>; action(toast: Toast): Record<string, unknown>; close(toast: Toast): Record<string, unknown>; act(toast: Toast): void }` | The region's part, the notices to render, and a notice's, its action's and its close button's parts. | 32.11, 50.17, 50.18, 50.41 |
 
 ## `Tooltips`
 

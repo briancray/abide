@@ -41,6 +41,18 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
                 "test('confirm, alert, prompt and notify throw inside a request",
             ],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/ArchiveDeal.test.ts',
+            from: [
+                "test('the question shows in a dialog of its own markup, named and marked danger'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/ArchiveDeal.test.ts',
+            from: [
+                "test('Archive stays disabled until the word is typed, and then archives'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Ask before deleting a deal">
@@ -114,6 +126,35 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
             import { prompts } from '@abide/abide/Prompts.abide'
 
             await prompts.alert({ body: 'Saved as a draft.', modal: false })
+        `} />
+    </Section>
+
+    <Section level={3} title="Lay out the prompts on a dialog of your own">
+        <p>In place of <code>Prompts</code>, call <code>prompts.host</code> from your root
+            layout's script and spread its parts onto your own <code>&lt;dialog&gt;</code>: the
+            form, the field where <code>typing()</code> holds, the error, and the two buttons.
+            The parts carry the queue, the role, the closing and the answer.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { prompts } from '@abide/abide/Prompts.abide'
+
+            const asked = prompts.host()
+            </script>
+
+            <dialog {...asked.dialog}>
+                {#if asked.current()}
+                    <form {...asked.form}>
+                        <header>{asked.current()?.title}</header>
+                        <small>{asked.current()?.body}</small>
+                        {#if asked.typing()}<input {...asked.input} />{/if}
+                        {#if asked.failed()}<p {...asked.error}>{asked.failed()}</p>{/if}
+                        <button {...asked.confirm}>{asked.current()?.confirm}</button>
+                        {#if asked.current()?.kind !== 'alert'}
+                            <button {...asked.cancel}>{asked.current()?.cancel}</button>
+                        {/if}
+                    </form>
+                {/if}
+            </dialog>
         `} />
     </Section>
 </Doc>

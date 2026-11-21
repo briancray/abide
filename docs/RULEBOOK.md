@@ -4963,8 +4963,9 @@ NOT where it is false.
 50.5 `prompts.confirm`, `prompts.alert` and `prompts.prompt` MUST queue their prompt behind every prompt not yet
 answered.
 
-50.6 `Prompts` MUST show the first prompt of the queue in a `Dialog` whose role is `alertdialog`,
-and the next once that one is answered.
+50.6 `prompts.host` MUST show the first prompt of the queue through its `dialog` part, `dialog`'s part
+with the role `alertdialog`, and the next once that one is answered; `Prompts` MUST render its
+`<dialog>` through it.
 
 50.7 A string handed to `prompts.confirm`, `prompts.alert` or `prompts.prompt` MUST be the
 prompt's `body`.
@@ -4974,7 +4975,7 @@ prompt's `body`.
 
 50.9 `prompts.alert` MUST settle once its prompt closes, however it closed.
 
-50.10 `Prompts` MUST keep the confirming button of a prompt carrying `mustType` disabled until the
+50.10 `prompts.host` MUST keep its `confirm` part disabled for a prompt carrying `mustType` until the
 text typed, trimmed, matches `mustType`, trimmed, ignoring case.
 
 50.11 `prompts.confirm`, `prompts.alert` and `prompts.prompt` MUST throw where `isServer` is true.
@@ -4993,8 +4994,8 @@ MUST keep it there.
 
 50.16 `toasts.notify` MUST throw where `isServer` is true.
 
-50.17 `Toasts` MUST render `toasts.list` in order, keyed by each notice's id, inside an element whose
-role is `status`.
+50.17 `toasts.host`'s `notices` MUST be `toasts.list` in order, and its `region` part MUST carry the
+role `status`; `Toasts` MUST render them keyed by each notice's id inside it.
 
 50.18 A notice's action MUST take the notice out of `toasts.list` and then call its `run`.
 
@@ -5046,15 +5047,16 @@ close it and return focus to its trigger.
 50.33 `prompts.prompt` MUST settle with the text in its input where its prompt closed by the
 confirming button, and `undefined` where it closed any other way.
 
-50.34 `Prompts` MUST show an input for a prompt asked by `prompts.prompt`, starting from its
-`value`, and `''` where it has none.
+50.34 `prompts.host`'s `typing` MUST hold for a prompt asked by `prompts.prompt` or carrying
+`mustType`, and its `input` part MUST start from the prompt's `value`, and `''` where it has none;
+`Prompts` MUST render an input there.
 
 50.35 `place` MUST keep `arrow` at least `arrowInset` pixels from each end of the floating
 element's facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
 
 50.36 One hint MUST show at a time. The hint, the notices, the prompts and the message `announce`
-gives MUST each show in the last `Tooltips`, `Toasts`, `Prompts` and `Announcer` of those standing,
-the others showing none, and a hint, a notice, a prompt or a message asked for with none standing
+gives MUST each show in the last `Tooltips`, `toasts.host`, `prompts.host` and `Announcer` of those
+standing, the others showing none, and a hint, a notice, a prompt or a message asked for with none standing
 MUST warn once, on `abide:tooltip`, `abide:toasts`, `abide:prompts` and `abide:announce`.
 
 50.37 A `menu` MUST write every opening and every closing of its menu, however it happened, to its

@@ -8,142 +8,45 @@ export type { PromptOptions }
 </script>
 
 <script>
-// 50.6, 50.8-50.10, 50.34 — WHERE `prompts.confirm`, `prompts.alert` AND `prompts.prompt` SHOW: rendered once, in the root
-// layout, and showing the queue's first prompt in a `Dialog` until it is answered.
+// 49.9, 50.6, 50.8-50.10, 50.34 — `prompts.host`'s default markup: a `<dialog>` holding the prompt's
+// title, its body, a field where it asks for text, the error its `run` failed with, and its buttons.
+// Everything it does is the parts'; an app wanting other markup spreads them itself.
 import type { Attributes } from '#shared/Attributes.ts'
-import { messageOf } from '#shared/messageOf.ts'
-import { asking, type Prompt, queue } from '#shared/prompts/queue.ts'
+import { host } from '#shared/prompts/host.ts'
 import { props } from '#shared/props.ts'
-import { reactive } from '#shared/reactive/index.ts'
-
-import Dialog from './Dialog.abide'
 
 const { ...rest } =
     props<Omit<Attributes<'dialog'>, 'open' | 'onclose' | 'role'>>()
 
-// 50.36 — this host, among the ones standing; the last shows the queue.
-const shows = asking.stand()
-const current = reactive(() => (shows() ? queue[0] : undefined))
-// Closing writes `false` here; the queue moving on computes it again.
-let showing = reactive(() => shows() && queue.length > 0)
-// Each prompt starts from its own `value`; typing writes over it until the queue moves on.
-let typed = reactive(() => current?.value ?? '')
-const typedRight = reactive(() => {
-    const asked = current?.mustType
-    return (
-        asked === undefined ||
-        typed.trim().toLowerCase() === asked.trim().toLowerCase()
-    )
-})
-
-// 50.45 — a confirm whose `run` is in flight, and what its last run failed with; each prompt starts
-// from neither.
-// Each reads `current` alone so the queue moving on resets it, as `typed` is.
-let busy = reactive((): boolean => {
-    void current
-    return false
-})
-let failure = reactive((): string | undefined => {
-    void current
-    return undefined
-})
-
-// Only the confirming button's `value` confirms; Escape, the backdrop and Cancel decline (50.8).
-function answered(returnValue: string) {
-    const asked = current
-    if (asked === undefined) return
-    settle(asked, returnValue === 'confirm' && typedRight ? typed : undefined)
-}
-
-// The first prompt off the queue, and its caller settled — where it is still the first: a withdrawn
-// prompt (50.43) is gone already, and its close answers nothing.
-function settle(asked: Prompt, answer: string | undefined) {
-    if (queue[0] !== asked) return
-    queue.patch((waiting) => {
-        waiting.shift()
-    })
-    asked.resolve(answer)
-}
-
-// 50.45 — THE CONFIRM IS A CALL: the dialog stays up while it runs, closes on its answer, and shows
-// what it failed with. The form's own close is held back, since it would answer before the call does.
-async function submitted(event: SubmitEvent) {
-    const asked = current
-    const submitter = event.submitter as HTMLButtonElement | null
-    if (asked?.run === undefined || submitter?.value !== 'confirm') return
-    event.preventDefault()
-    if (busy || !typedRight) return
-    const answer = typed
-    busy = true
-    failure = undefined
-    try {
-        await asked.run(answer)
-    } catch (thrown) {
-        if (current === asked) {
-            busy = false
-            failure = messageOf(thrown)
-        }
-        return
-    }
-    settle(asked, answer)
-}
+const asked = host()
 </script>
 
-<Dialog
-    {...rest}
-    role="alertdialog"
-    aria-label={current?.title ?? current?.body}
-    data-danger={current?.danger ? '' : undefined}
-    data-busy={busy ? '' : undefined}
-    modal={current?.modal ?? true}
-    bind:open={showing}
-    onclose={answered}
->
-    {#if current}
-        <form method="dialog" data-part="form" onsubmit={submitted}>
-            {#if current.title}
-                <h2 data-part="title">{current.title}</h2>
+<dialog {...rest} {...asked.dialog}>
+    {#if asked.current()}
+        <form {...asked.form} data-part="form">
+            {#if asked.current()?.title}
+                <h2 data-part="title">{asked.current()?.title}</h2>
             {/if}
-            {#if current.body}
-                <p data-part="body">{current.body}</p>
+            {#if asked.current()?.body}
+                <p data-part="body">{asked.current()?.body}</p>
             {/if}
-            {#if current.mustType !== undefined || current.kind === 'prompt'}
+            {#if asked.typing()}
                 <label data-part="field">
-                    {#if current.mustType !== undefined}
-                        Type {current.mustType} to confirm
+                    {#if asked.current()?.mustType !== undefined}
+                        Type {asked.current()?.mustType} to confirm
                     {/if}
-                    <input
-                        data-part="input"
-                        autocomplete="off"
-                        autofocus
-                        aria-label={current.mustType === undefined
-                            ? (current.title ?? current.body)
-                            : undefined}
-                        placeholder={current.placeholder}
-                        bind:value={typed}
-                    >
+                    <input {...asked.input} data-part="input">
                 </label>
             {/if}
-            {#if failure !== undefined}
-                <p data-part="error" role="alert">{failure}</p>
+            {#if asked.failed() !== undefined}
+                <p {...asked.error} data-part="error">{asked.failed()}</p>
             {/if}
             <div data-part="actions">
-                <button
-                    type="submit"
-                    value="confirm"
-                    data-part="confirm"
-                    disabled={!typedRight || busy}
-                    autofocus={current.kind === 'alert'}
-                >{current.confirm}</button>
-                {#if current.kind !== 'alert'}
-                    <button
-                        type="submit"
-                        value="cancel"
-                        data-part="cancel"
-                        autofocus={current.kind === 'confirm' && current.mustType === undefined}
-                    >{current.cancel}</button>
+                <button {...asked.confirm} data-part="confirm">{asked.current()?.confirm}</button>
+                {#if asked.current()?.kind !== 'alert'}
+                    <button {...asked.cancel} data-part="cancel">{asked.current()?.cancel}</button>
                 {/if}
             </div>
         </form>
     {/if}
-</Dialog>
+</dialog>

@@ -1,5 +1,6 @@
 <script>
 import AmountFilter from './lib/AmountFilter.abide'
+import ArchiveDeal from './lib/ArchiveDeal.abide'
 import DealActions from './lib/DealActions.abide'
 import DealCommands from './lib/DealCommands.abide'
 import DealDetail from './lib/DealDetail.abide'
@@ -31,4 +32,5 @@ import QuickDeal from './lib/QuickDeal.abide'
     <DealActions />
     <DealCommands />
     <DeleteDeal />
+    <ArchiveDeal />
 </main>

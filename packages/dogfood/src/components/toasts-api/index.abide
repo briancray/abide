@@ -34,6 +34,18 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
             path: 'packages/abide/tests/overlays.test.ts',
             from: ["test('a notice tells its onclose once, why it left"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageNotices.test.ts',
+            from: [
+                "test('a notice lands as an item of the list, in a status region'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageNotices.test.ts',
+            from: [
+                "test('Undo puts the stage back and takes the notice down, and Close only takes it down'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Say whether a save landed">
@@ -66,6 +78,32 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
                 action: { label: 'Undo', run: () => restoreDeal({ id }) },
                 onclose: (reason) => track('archive-notice', { reason }),
             })
+        `} />
+    </Section>
+
+    <Section level={3} title="Write the notices as items of a list of your own">
+        <p>In place of <code>Toasts</code>, call <code>toasts.host</code> from your root layout's
+            script and spread its parts: the live region, each notice of
+            <code>notices()</code>, its action and its close button. The parts carry the role,
+            the tone and the closing; the markup is yours.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { toasts } from '@abide/abide/Toasts.abide'
+
+            const shown = toasts.host({ label: 'Stage changes' })
+            </script>
+
+            <ol {...shown.region}>
+                {#for toast of shown.notices() by toast.id}
+                    <li {...shown.notice(toast)}>
+                        {toast.text}
+                        {#if toast.action}
+                            <button {...shown.action(toast)}>{toast.action.label}</button>
+                        {/if}
+                        <button {...shown.close(toast)}>Close</button>
+                    </li>
+                {/for}
+            </ol>
         `} />
     </Section>
 </Doc>

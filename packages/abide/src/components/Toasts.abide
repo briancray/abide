@@ -9,13 +9,15 @@ export type { NotifyOptions, Toast }
 </script>
 
 <script>
-// 50.17, 50.18 — WHERE `toasts.notify` SHOWS: rendered once, in the root layout, as the live region
-// every notice is read out from as it lands.
+// 49.9, 50.17, 50.18 — `toasts.host`'s default markup: the live region, and per notice its text, its
+// action and a close button, or the `Toast` component's content in their place. Everything it does is
+// the parts'; an app wanting other markup spreads them itself.
 import type { Attributes } from '#shared/Attributes.ts'
 import { props } from '#shared/props.ts'
-import { close, dismiss } from '#shared/toasts/dismiss.ts'
+import { dismiss } from '#shared/toasts/dismiss.ts'
+import { host } from '#shared/toasts/host.ts'
 // Named apart from the `Toast` prop: a type annotation naming a prop is read as the prop.
-import { list, notices, type Toast as Notice } from '#shared/toasts/list.ts'
+import type { Toast as Notice } from '#shared/toasts/list.ts'
 
 const {
     label = 'Notices',
@@ -38,31 +40,20 @@ const {
     } & Omit<Attributes<'div'>, 'role'>
 >()
 
-// 50.36 — this host, among the ones standing; the last renders the notices.
-const shows = notices.stand()
-
-function act(toast: Notice) {
-    close(toast.id, 'action')
-    toast.action?.run()
-}
+const shown = host({ label: () => label })
 </script>
 
-<div {...rest} role="status" aria-live="polite" aria-label={label}>
-    {#for toast of shows() ? list : [] by toast.id}
-        <div {...toast.attributes} data-part="toast" data-tone={toast.tone}>
+<div {...rest} {...shown.region}>
+    {#for toast of shown.notices() by toast.id}
+        <div {...shown.notice(toast)} data-part="toast">
             {#if Toast}
-                <Toast toast={toast} dismiss={() => dismiss(toast.id)} act={() => act(toast)} />
+                <Toast toast={toast} dismiss={() => dismiss(toast.id)} act={() => shown.act(toast)} />
             {:else}
                 <span data-part="text">{toast.text}</span>
                 {#if toast.action}
-                    <button type="button" data-part="action" onclick={() => act(toast)}>{toast.action.label}</button>
+                    <button {...shown.action(toast)} data-part="action">{toast.action.label}</button>
                 {/if}
-                <button
-                    type="button"
-                    data-part="close"
-                    aria-label="Dismiss"
-                    onclick={() => dismiss(toast.id)}
-                >×</button>
+                <button {...shown.close(toast)} data-part="close">×</button>
             {/if}
         </div>
     {/for}

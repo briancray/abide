@@ -3,4 +3,5 @@
 // call missing its import fails to compile rather than opening the browser's blocking dialog.
 export { alert } from './alert.ts'
 export { confirm } from './confirm.ts'
+export { host, type PromptsHost, type ShownPrompt } from './host.ts'
 export { prompt } from './prompt.ts'

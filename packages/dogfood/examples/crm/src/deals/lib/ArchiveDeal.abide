@@ -1,0 +1,38 @@
+<script>
+import { reactive } from '@abide/abide'
+import { prompts } from '@abide/abide/Prompts.abide'
+
+const asked = prompts.host()
+let archived = reactive(false)
+
+async function archive() {
+    archived = await prompts.confirm({
+        title: 'Archive Engine renewal?',
+        body: 'Its notes and calls stay; it leaves the pipeline.',
+        mustType: 'archive',
+        confirm: 'Archive',
+        danger: true,
+    })
+}
+</script>
+
+<p class="row">
+    <span>deal</span><strong>{archived ? 'Archived' : 'Engine renewal'}</strong>
+    <button onclick={archive}>Archive</button>
+</p>
+
+<dialog {...asked.dialog} class="m-auto w-96 rounded-xl border border-rule bg-raised p-5">
+    {#if asked.current()}
+        <form {...asked.form} class="flex flex-col gap-snug">
+            <header class="font-medium">{asked.current()?.title}</header>
+            <small class="text-muted">{asked.current()?.body}</small>
+            {#if asked.typing()}
+                <input {...asked.input} placeholder="Type archive">
+            {/if}
+            <footer class="row">
+                <button {...asked.confirm} class="text-bad">{asked.current()?.confirm}</button>
+                <button {...asked.cancel}>{asked.current()?.cancel}</button>
+            </footer>
+        </form>
+    {/if}
+</dialog>
