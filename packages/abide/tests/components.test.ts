@@ -69,7 +69,42 @@ const OVER_PARTS: Record<string, { module: string; name: string }> = {
     'Combobox.abide': { module: 'combobox.ts', name: 'combobox' },
     'Time.abide': { module: 'time.ts', name: 'time' },
     'Dialog.abide': { module: 'dialog.ts', name: 'dialog' },
+    // A host's parts are a member of its namespace, exported from the namespace's own index.
+    'Toasts.abide': { module: 'toasts/host.ts', name: 'host' },
+    'Prompts.abide': { module: 'prompts/host.ts', name: 'host' },
 }
+
+// A COMPONENT WITH NO PARTS FUNCTION, each with why: every shipped component is in one list or the
+// other, so a new one is a decision rather than an omission.
+const WITHOUT_PARTS: Record<string, string> = {
+    'Tooltips.abide':
+        'one element whose whole content is the hint, which is already markup of the app (a component hint)',
+    'Announcer.abide':
+        'two live regions whose shape is how a screen reader hears them, with nothing for an app to lay out',
+    'Outlet.abide': 'a place, not a widget: what it renders is the fill',
+    'Markdown.abide':
+        'its markup is the document it renders, and `markdown` is the function under it',
+    'Chat.abide':
+        'a transcript over the pieces an app has already: `Markdown`, `dropzone`, `followBottom`, `transcript`',
+    'Pairing.abide':
+        'a fixed panel showing one command to copy, over `copyText`',
+    'Chart.abide': 'drawn from its children until `chart` hands back parts',
+    'Line.abide': 'a series a `Chart` draws, with no markup of its own',
+    'Column.abide': 'a series a `Chart` draws, with no markup of its own',
+    'Area.abide': 'a series a `Chart` draws, with no markup of its own',
+    'Pie.abide': 'drawn by its own markup until `chart` hands back parts',
+    'Sparkline.abide': 'drawn by its own markup until `chart` hands back parts',
+}
+
+test('every shipped component renders through parts, or says why it has none — 49.9', async () => {
+    const unlisted: string[] = []
+    for (const { path } of await files('**/*.abide')) {
+        const name = path.split('/').at(-1) ?? path
+        if (!(name in OVER_PARTS) && !(name in WITHOUT_PARTS))
+            unlisted.push(name)
+    }
+    expect(unlisted).toEqual([])
+})
 
 test('a component over a parts function renders through it, and does nothing of its own — 49.9', async () => {
     const barrel = await Bun.file(
@@ -84,8 +119,24 @@ test('a component over a parts function renders through it, and does nothing of 
             ).test(text)
         )
             wrong.push(`${component} does not render through ${name}`)
+        // Exported from the barrel, or, for a host's namespace, from that namespace's own index.
+        const directory = module.includes('/')
+            ? module.split('/')[0]
+            : undefined
+        const exporting =
+            directory === undefined
+                ? barrel
+                : await Bun.file(
+                      new URL(
+                          `../src/shared/${directory}/index.ts`,
+                          import.meta.url,
+                      ).pathname,
+                  ).text()
+        const file = directory === undefined ? module : module.split('/')[1]
         if (
-            !new RegExp(`\\b${name},?\\s*\\} from '\\./${module}'`).test(barrel)
+            !new RegExp(
+                `\\{[^}]*\\b${name}\\b[^}]*\\} from '\\./${file}'`,
+            ).test(exporting)
         )
             wrong.push(`${name} is not exported`)
         for (const [attribute] of template(text).matchAll(
