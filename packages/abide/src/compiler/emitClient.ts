@@ -281,14 +281,16 @@ export function emitClient(
     // component's can still open a watch, write a shared value or listen on the window.
     const live = lines.length > 0
     const setup = splitImports(lowering.scripts())
-    if (!live && fills === '' && setup.body === '') {
+    if (!live && fills === '' && !holdsStatement(setup.body)) {
         const mount = carriesOwnMarkup ? 'export default () => {}\n' : ''
         // 34.2 — A `<script module>` RUNS IN THE BROWSER TOO, live markup or none: its module scope
-        // is the browser's as much as the server's.
-        if (moduleSetup.body === '' && moduleSetup.imports === '') return mount
-        return `${moduleImports(lowering, RUNTIME_SPECIFIER, [moduleSetup])}
-${moduleSetup.body}
-${mount}`
+        // is the browser's as much as the server's. And what a `<script>` of imports alone imports
+        // is still imported, for what importing it does.
+        const moduleRuns = holdsStatement(moduleSetup.body)
+        if (!moduleRuns && moduleSetup.imports === '' && setup.imports === '')
+            return mount
+        return `${moduleImports(lowering, RUNTIME_SPECIFIER, [moduleSetup, setup])}
+${moduleRuns ? `${moduleSetup.body}\n` : ''}${mount}`
     }
 
     // A SCOPE IS WHAT THERE IS TO STOP, so a module with nothing live opens none. A static child
@@ -332,7 +334,7 @@ ${mount}`
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
     // multi-line template literal, so a string constant gains four spaces it never had.
     return `${moduleImports(lowering, RUNTIME_SPECIFIER, [moduleSetup, setup])}
-${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
+${holdsStatement(moduleSetup.body) ? `${moduleSetup.body}\n` : ''}\
 export default function mount(${REGION_ROOT}${routed ? `, ${PROPS} = {}, ${ROUTED}` : lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${opened}${owning.opened}${setup.body}
 ${owning.handed}${markup}${owning.closed}${closed}

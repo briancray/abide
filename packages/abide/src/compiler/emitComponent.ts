@@ -93,10 +93,9 @@ export function emitComponent(
     // file every hook it makes at the file's route (37.1). Its body cannot await at its top level
     // (34.3), so nothing else runs inside the window.
     const serverSetup = splitImports(lowering.servers(), 'source')
-    const serverBody =
-        serverSetup.body === ''
-            ? ''
-            : `${lowering.use('fileRoute')}(${JSON.stringify(route)})
+    const serverBody = !holdsStatement(serverSetup.body)
+        ? ''
+        : `${lowering.use('fileRoute')}(${JSON.stringify(route)})
 ${serverSetup.body}
 ${lowering.use('fileRoute')}(undefined)
 ${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))}`
@@ -166,7 +165,7 @@ ${build}`
     // Before the imports are read off what the lowering was asked for (`setupThrown`).
     const guarded = guardedSetup(lowering, componentBody, level)
     return `${moduleImports(lowering, SERVER_RUNTIME_SPECIFIER, [moduleSetup, serverSetup, setup])}
-${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}${serverBody}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
+${holdsStatement(moduleSetup.body) ? `${moduleSetup.body}\n` : ''}${serverBody}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
 ${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : ''}${opened}${guarded}${closed}
 }
 `

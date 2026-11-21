@@ -53,7 +53,6 @@ import {
     newRead,
     provePosition,
     type Read,
-    TRANSPARENT,
     unwrapped,
 } from './classifyRead.ts'
 import type { Finding } from './Diagnostics.ts'
@@ -766,11 +765,8 @@ async function dropValueHolders(
  * The names and members an initializer's value can BE, as opposed to those it merely uses: `a` in
  * `(a)`, `a as T`, `c ? a : b` and `a ?? b`, and `a.b` itself, but not `a` in `f(a)` or `a.b`.
  */
-function valueLeaves(node: Node, leaves: Node[]): void {
-    if (TRANSPARENT.has(node.kind)) {
-        valueLeaves(unwrapped(node), leaves)
-        return
-    }
+function valueLeaves(written: Node, leaves: Node[]): void {
+    const node = unwrapped(written)
     switch (node.kind) {
         case SyntaxKind.Identifier:
         case SyntaxKind.PropertyAccessExpression:

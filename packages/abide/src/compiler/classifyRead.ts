@@ -548,9 +548,12 @@ export function unwrapped(node: Node): Node {
 }
 
 /** Whether syntax proves `node` runs no author code, queuing what the checker must confirm. */
-function proveStatic(node: Node, primitives: Node[], members: Node[]): boolean {
-    if (TRANSPARENT.has(node.kind))
-        return proveStatic(unwrapped(node), primitives, members)
+function proveStatic(
+    written: Node,
+    primitives: Node[],
+    members: Node[],
+): boolean {
+    const node = unwrapped(written)
     switch (node.kind) {
         case SyntaxKind.StringLiteral:
         case SyntaxKind.NumericLiteral:

@@ -1803,6 +1803,15 @@ test('a script of imports alone opens no setup on either side — 41.6', async (
         tries: client.includes('__inSetup'),
         counts: server.includes('callsInRender'),
     }).toEqual({ collects: false, tries: false, counts: false })
+    // Static, it is the no-op a script-less file is — and its import still runs in the browser.
+    // THE REVERT: test `setup.body === ''` in the static early return -> a mount with a `;` in it.
+    const quiet = await clientOf(
+        "<script>import { TITLE } from './TITLE.ts'</script><p>hi</p>",
+    )
+    expect({
+        imports: quiet.includes("from './TITLE.ts'"),
+        mounts: quiet.includes('function mount'),
+    }).toEqual({ imports: true, mounts: false })
 })
 
 // 41.28 — A BARE PROBE IS A CALL, NOT THE WORDS: the markup's text is emitted as string literals, and

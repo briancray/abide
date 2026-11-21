@@ -832,22 +832,21 @@ function fileComponents(
                     refuseTwice(node.passed, `<${node.tag}>`)
                     // 33.16 — `children` IS NEVER DECLARED, so a caller writing it as an attribute
                     // beside a body is passing the same prop twice; the record would carry the key
-                    // twice and the last one would silently win.
-                    if (
-                        node.children.length > 0 &&
-                        node.attributes.some(
-                            (attribute) => attribute.name === CHILDREN,
-                        )
-                    )
-                        throw new Error(
-                            `abide: <${node.tag}> is given children as an attribute and between its tags. RULEBOOK 33.16.`,
-                        )
-                    for (const passed of node.passed)
-                        for (const attribute of node.attributes)
-                            if (propKeyOf(attribute) === passed.name)
+                    // twice and the last one would silently win. 32.53 — and so is a prop given as
+                    // an attribute and as the `{#component}` between the tags. Both keyed as the
+                    // record is (`propKeyOf`).
+                    for (const attribute of node.attributes) {
+                        const key = propKeyOf(attribute)
+                        if (key === CHILDREN && node.children.length > 0)
+                            throw new Error(
+                                `abide: <${node.tag}> is given children as an attribute and between its tags. RULEBOOK 33.16.`,
+                            )
+                        for (const passed of node.passed)
+                            if (key === passed.name)
                                 throw new Error(
                                     `abide: <${node.tag}> is given ${passed.name} as an attribute and as the {#component ${passed.name}} between its tags — one prop, two values. RULEBOOK 32.53.`,
                                 )
+                    }
                     open(node.children, node.components, false)
                     for (const passed of node.passed) inside(passed)
                 } else {
