@@ -21,6 +21,7 @@ import {
 } from '../Failed.ts'
 import { isAbort } from '../isAbort.ts'
 import { namedLogger } from '../log.ts'
+import { nextTask } from '../nextTask.ts'
 import { refuse } from '../refuse.ts'
 import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { UNEXPECTED } from '../UNEXPECTED.ts'
@@ -2367,38 +2368,6 @@ function wakeStream(cell: Cell, stream: Stream): void {
  */
 function tellOwed(cell: Cell, stream: Stream): void {
     if (stream.waking) wakeStream(cell, stream)
-}
-
-/**
- * Posts a function to the next task; made on first use.
- *
- * THE NEXT TASK. `setImmediate` where the runtime has one — bun, and so every server — and a
- * `MessageChannel` post in a browser, which has none and clamps a nested `setTimeout` to 4 ms.
- * The channel is made on first use, so a page that never streams never opens one.
- */
-let postTask: ((run: () => void) => void) | null = null
-
-function nextTask(run: () => void): void {
-    if (postTask === null) postTask = taskPoster()
-    postTask(run)
-}
-
-function taskPoster(): (run: () => void) => void {
-    if (typeof setImmediate === 'function')
-        return (run) => {
-            setImmediate(run)
-        }
-    const channel = new MessageChannel()
-    let queued: (() => void) | null = null
-    channel.port1.onmessage = (): void => {
-        const run = queued
-        queued = null
-        run?.()
-    }
-    return (run) => {
-        queued = run
-        channel.port2.postMessage(null)
-    }
 }
 
 function landChunks(cell: Cell): void {

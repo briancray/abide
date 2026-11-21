@@ -3,6 +3,7 @@
 // no other: a handler's `wire`, and the principal's document (26.17), which is a handler abide mounts.
 
 import { EARLY_CALLS } from './EARLY_CALLS.ts'
+import { nextTask } from './nextTask.ts'
 
 /**
  * What the early-call script leaves per call: the request in flight, and once it has answered, the
@@ -88,20 +89,7 @@ export function paintedCallsLanded(): Promise<unknown> | undefined {
     }
     return waiting.length === 0
         ? undefined
-        : Promise.all(waiting).then(nextTask)
-}
-
-/**
- * Settles in the next task: a `MessageChannel` post, which a background tab does not throttle as it
- * does a `setTimeout`.
- */
-function nextTask(): Promise<void> {
-    return new Promise((done) => {
-        const channel = new MessageChannel()
-        channel.port1.onmessage = () => {
-            channel.port1.close()
-            done()
-        }
-        channel.port2.postMessage(null)
-    })
+        : Promise.all(waiting).then(
+              () => new Promise<void>((done) => nextTask(done)),
+          )
 }
