@@ -34,18 +34,12 @@ export function asksForMux(
 }
 
 /**
- * The app lane's answer to the mux's upgrade, or `undefined` where `request` is not one.
+ * The app lane's answer to the mux's upgrade (`asksForMux`).
  *
  * 37.3 — arriving at the lane is the app's middleware having let the upgrade through.
  */
-export function muxAdmission(
-    asked: string,
-    request: Request,
-    carried: Carried,
-): Response | undefined {
-    return asksForMux(asked, request, carried)
-        ? new Response(null, { status: MUX_ADMITTED })
-        : undefined
+export function muxAdmitted(): Response {
+    return new Response(null, { status: MUX_ADMITTED })
 }
 
 /**

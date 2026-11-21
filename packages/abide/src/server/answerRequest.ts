@@ -42,7 +42,7 @@ import {
     type LaneRung,
 } from './hooks.ts'
 import { type Mounted, mountedOwn } from './mountHandlers.ts'
-import { asksForMux, muxAdmission } from './muxUpgrade.ts'
+import { asksForMux, muxAdmitted } from './muxUpgrade.ts'
 import { OFFLINE_STANDIN } from './OFFLINE_STANDIN.ts'
 import { beginPageRender } from './PageRender.ts'
 import { plainAnswer } from './plainAnswer.ts'
@@ -166,63 +166,50 @@ export async function answerRequest(
     const asked = url.pathname
     const method = request.method === 'HEAD' ? 'GET' : request.method
 
-    // 25.1, 25.3, 26.17, 44.67 — the principal, the account of the app and the browser's pairing are
-    // handlers abide mounts, answered as the app's are — 21.4, save that none is the app's to keep on
-    // the device.
-    const own = OWN_HANDLERS.get(asked)
-    if (own !== undefined)
-        return own.method === method
-            ? answerRpc(own, {}, url, request, app, false)
-            : methodRefused(app, asked, [own.method], request)
-    // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where it answers nothing.
-    const surface = SURFACES.get(asked)
-    if (surface !== undefined) {
-        const answer = await surface.answer(app, request)
-        if (answer === undefined) return plainAnswer('not found', 404)
-        // 21.4 — an answer about the app's surfaces is never cached.
-        return answerValue(
-            answer,
-            request,
-            new Headers({
-                'content-type': 'application/json',
-                'cache-control': 'no-store',
-            }),
-            200,
-        )
+    const arm = armOf(app, request, asked)
+    switch (arm.kind) {
+        case 'own':
+            return arm.own.method === method
+                ? answerRpc(arm.own, {}, url, request, app, false)
+                : methodRefused(app, asked, [arm.own.method], request)
+        case 'surface': {
+            const answer = await arm.surface.answer(app, request)
+            if (answer === undefined) return plainAnswer('not found', 404)
+            // 21.4 — an answer about the app's surfaces is never cached.
+            return answerValue(
+                answer,
+                request,
+                new Headers({
+                    'content-type': 'application/json',
+                    'cache-control': 'no-store',
+                }),
+                200,
+            )
+        }
+        // 37.3 — THE MUX'S UPGRADE PASSES THE APP LANE as every request does (`muxUpgrade`).
+        case 'mux':
+            return muxAdmitted()
+        case 'framework': {
+            const answer = app.framework(asked, request)
+            if (answer === undefined) return plainAnswer('not found', 404)
+            return readsOnly(request)
+                ? answer
+                : methodRefused(app, asked, READS, request)
+        }
+        case 'file':
+            return readsOnly(request)
+                ? publicResponse(request, arm.file, app.offline)
+                : methodRefused(app, asked, READS, request)
+        // 15.16 — an address that will not percent-decode names nothing, and is the caller's fault.
+        case 'unparsed':
+            return answerFailure(
+                app,
+                asked,
+                refuse(400, 'The address is not a valid path.'),
+                request,
+            )
     }
-    // 37.3 — THE MUX'S UPGRADE PASSES THE APP LANE as every request does (`muxUpgrade`).
-    const admitted = muxAdmission(asked, request, app)
-    if (admitted !== undefined) return admitted
-    if (isFrameworkAddress(asked)) {
-        const answer = app.framework(asked, request)
-        if (answer === undefined) return plainAnswer('not found', 404)
-        return readsOnly(request)
-            ? answer
-            : methodRefused(app, asked, READS, request)
-    }
-
-    // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
-    // before any route is tried. The order is not load-bearing: the compile `abide build` and
-    // `abide dev` share refuses a collision (36.13) over the same two trees before anything is served,
-    // so at run time there can never be a collision to resolve. 36.11 — keyed by its name on disk
-    // and asked for percent-encoded: `my photo.jpg` is `/my%20photo.jpg`.
-    const file = app.published.get(decodedOrKept(asked))
-    if (file !== undefined)
-        return readsOnly(request)
-            ? publicResponse(request, file, app.offline)
-            : methodRefused(app, asked, READS, request)
-
-    // 15.16 — an address that will not percent-decode names nothing, and is the caller's fault.
-    const parts = partsOf(asked)
-    if (parts === undefined)
-        return answerFailure(
-            app,
-            asked,
-            refuse(400, 'The address is not a valid path.'),
-            request,
-        )
-
-    const { found, allowed } = routed(app, parts, request)
+    const { found, allowed } = arm.routing
     if (found === undefined) {
         if (allowed !== undefined)
             return methodRefused(app, asked, [...allowed], request, laneFailure)
@@ -251,25 +238,64 @@ export async function answerRequest(
     })
 }
 
-/**
- * What `answerRequest` would answer `request` with, by the arm of its dispatch it takes. 37.19.
- *
- * ASKED IN THE DISPATCH'S OWN ORDER, over the same tables, so a gate reading it before routing
- * (37.3) is told what routing will choose.
- */
+/** What `answerRequest` answers `request` with, by the arm of its dispatch it takes. 37.19. */
 export function laneOf(app: AppSources, request: Request): Lane {
-    const asked = new URL(request.url).pathname
-    if (OWN_HANDLERS.has(asked)) return 'handler'
+    const arm = armOf(app, request, new URL(request.url).pathname)
+    switch (arm.kind) {
+        case 'own':
+            return 'handler'
+        case 'surface':
+            return arm.surface.lane
+        case 'mux':
+            return 'socket'
+        case 'framework':
+            return 'abide'
+        case 'file':
+            return 'file'
+        case 'unparsed':
+            return 'page'
+        case 'routed':
+            return arm.routing.found?.handler === undefined ? 'page' : 'handler'
+    }
+}
+
+/**
+ * The arm of the dispatch `request` takes, in its one order: abide's own handlers, a surface of
+ * abide's own, the mux's upgrade, abide's own files, a public file, and then the route table.
+ *
+ * ONE ORDER FOR BOTH READERS, so a gate asking `laneOf` before routing (37.3) is told what
+ * `answerRequest` will choose.
+ */
+function armOf(
+    app: AppSources,
+    request: Request,
+    asked: string,
+):
+    | { kind: 'own'; own: NonNullable<ReturnType<typeof OWN_HANDLERS.get>> }
+    | { kind: 'surface'; surface: NonNullable<ReturnType<typeof SURFACES.get>> }
+    | { kind: 'mux' | 'framework' | 'unparsed' }
+    | { kind: 'file'; file: PublicFile }
+    | { kind: 'routed'; routing: ReturnType<typeof routed> } {
+    // 25.1, 25.3, 26.17, 44.67 — the principal, the account of the app and the browser's pairing are
+    // handlers abide mounts, answered as the app's are — 21.4, save that none is the app's to keep on
+    // the device.
+    const own = OWN_HANDLERS.get(asked)
+    if (own !== undefined) return { kind: 'own', own }
+    // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where it answers nothing.
     const surface = SURFACES.get(asked)
-    if (surface !== undefined) return surface.lane
-    if (asksForMux(asked, request, app)) return 'socket'
-    if (isFrameworkAddress(asked)) return 'abide'
-    if (app.published.has(decodedOrKept(asked))) return 'file'
+    if (surface !== undefined) return { kind: 'surface', surface }
+    if (asksForMux(asked, request, app)) return { kind: 'mux' }
+    if (isFrameworkAddress(asked)) return { kind: 'framework' }
+    // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
+    // before any route is tried. The order is not load-bearing: the compile `abide build` and
+    // `abide dev` share refuses a collision (36.13) over the same two trees before anything is served,
+    // so at run time there can never be a collision to resolve. 36.11 — keyed by its name on disk
+    // and asked for percent-encoded: `my photo.jpg` is `/my%20photo.jpg`.
+    const file = app.published.get(decodedOrKept(asked))
+    if (file !== undefined) return { kind: 'file', file }
     const parts = partsOf(asked)
-    if (parts === undefined) return 'page'
-    return routed(app, parts, request).found?.handler === undefined
-        ? 'page'
-        : 'handler'
+    if (parts === undefined) return { kind: 'unparsed' }
+    return { kind: 'routed', routing: routed(app, parts, request) }
 }
 
 /**
