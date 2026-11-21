@@ -56,13 +56,13 @@ const parts = range({
 </script>
 
 <div {...rest} {...parts.root}>
-    <div data-part="track" {...parts.track}>
-        <div data-part="fill" {...parts.fill} />
-        <span data-part="thumb" {...parts.thumb(0)} />
-        <span data-part="thumb" {...parts.thumb(1)} />
+    <div {...parts.track}>
+        <div {...parts.fill} />
+        <span {...parts.end(0).thumb} />
+        <span {...parts.end(1).thumb} />
     </div>
     {#if name !== undefined}
-        <input {...parts.input(0)}>
-        <input {...parts.input(1)}>
+        <input {...parts.end(0).input}>
+        <input {...parts.end(1).input}>
     {/if}
 </div>

@@ -4949,8 +4949,9 @@ while it holds where it has two.
 
 49.3 A shipped component MUST NOT write a `class`.
 
-49.4 An element of a shipped component other than its root that a caller can style MUST carry a
-`data-part` attribute naming it.
+49.4 Every part a parts function hands back for an element MUST carry a `data-part` attribute naming
+the element, and an element of a shipped component other than its root that a caller can style MUST
+carry the `data-part` the part spread on it writes.
 
 49.5 `@abide/abide` MUST NOT ship a stylesheet for a shipped component.
 
@@ -4965,7 +4966,21 @@ parts that names by id an element the document does not hold, and for each of it
 stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry the check.
 
 49.9 A shipped component for a widget a parts function also ships MUST render the widget through that
-parts function, and MUST NOT write a handler, a `role` or an `aria-` attribute of its own for it.
+parts function, and MUST NOT write a handler, a `role`, an `aria-` attribute or a `data-part` of its
+own for it.
+
+49.10 Every option of a parts function an app binds — a `Reactive` the parts read and write — MUST be
+optional, and the parts MUST hand back what they read and write as a `Reactive` member under the
+option's name, the app's where one is given and one of their own from its default where none is; an
+id a parts function writes MUST be optional with one made where none is given, and readable among its
+parts; and its `key` and `label` MUST be optional where an item is a string or a number, which is then
+its own key and label.
+
+49.11 A parts function MUST hand back an element there is one of as a member naming that element, an
+item with one element as a function of the item answering that element's attributes, and an item with
+more than one element, or with data of its own, as a function of the item answering that item's parts
+and data together; what a part reads that changes MUST be a `get` accessor, and no function among the parts
+MUST take an optional argument that changes what it answers, or take none to answer a value.
 
 # 50. Dialogs, toasts and popovers
 
@@ -5247,8 +5262,8 @@ ends.
 51.41 `tabs` MUST give the selected tab a `tabindex` of `0`, and every other tab a `tabindex` of
 `-1`.
 
-51.42 A panel `tabs` hands back for a key MUST be hidden while another tab is selected and MUST keep
-what it holds, and a panel for no key MUST take the id the selected tab's `aria-controls` names and
+51.42 A tab's own panel `tabs` hands back MUST be hidden while another tab is selected and MUST keep
+what it holds, and the one shared panel MUST take the id the selected tab's `aria-controls` names and
 be labelled by that tab; a tab MUST name its panel by `aria-controls` only while it is selected.
 
 51.43 `tabs`'s parts MUST carry every attribute its tabs and panels need as the server writes them,

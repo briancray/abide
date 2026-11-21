@@ -32,14 +32,14 @@ test('a panel per tab is hidden while another is selected, and kept — 51.36, 5
     for (const key of ['details', 'notes']) {
         const tab = document.createElement('button')
         const panel = document.createElement('div')
-        spread(tab, view.tab(key))
-        spread(panel, view.panel(key))
+        spread(tab, view.tab(key).button)
+        spread(panel, view.tab(key).panel)
         panels.set(key, panel)
         document.body.append(tab, panel)
     }
     const hidden = () =>
         [...panels.values()].map((panel) => panel.hasAttribute('hidden'))
-    expect(view.current()).toBe('details')
+    expect(view.selected()).toBe('details')
     expect(hidden()).toEqual([false, true])
     const notes = panels.get('notes') as HTMLElement
     notes.textContent = 'call back Friday'

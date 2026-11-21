@@ -14,13 +14,13 @@ let sent = reactive('')
     }}
 >
     <div class="range" {...filter.root}>
-        <div data-part="track" {...filter.track}>
-            <div data-part="fill" {...filter.fill} />
-            <span data-part="thumb" {...filter.thumb(0)} />
-            <span data-part="thumb" {...filter.thumb(1)} />
+        <div {...filter.track}>
+            <div {...filter.fill} />
+            <span {...filter.end(0).thumb} />
+            <span {...filter.end(1).thumb} />
         </div>
-        <input {...filter.input(0)}>
-        <input {...filter.input(1)}>
+        <input {...filter.end(0).input}>
+        <input {...filter.end(1).input}>
     </div>
     <button>Filter</button>
 </form>

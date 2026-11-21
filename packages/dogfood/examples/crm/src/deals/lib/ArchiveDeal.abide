@@ -22,16 +22,16 @@ async function archive() {
 </p>
 
 <dialog {...asked.dialog} class="m-auto w-96 rounded-xl border border-rule bg-raised p-5">
-    {#if asked.current()}
+    {#if asked.current}
         <form {...asked.form} class="flex flex-col gap-snug">
-            <header class="font-medium">{asked.current()?.title}</header>
-            <small class="text-muted">{asked.current()?.body}</small>
-            {#if asked.typing()}
+            <header class="font-medium">{asked.current?.title}</header>
+            <small class="text-muted">{asked.current?.body}</small>
+            {#if asked.typing}
                 <input {...asked.input} placeholder="Type archive">
             {/if}
             <footer class="row">
-                <button {...asked.confirm} class="text-bad">{asked.current()?.confirm}</button>
-                <button {...asked.cancel}>{asked.current()?.cancel}</button>
+                <button {...asked.confirm} class="text-bad">{asked.current?.confirm}</button>
+                <button {...asked.cancel}>{asked.current?.cancel}</button>
             </footer>
         </form>
     {/if}

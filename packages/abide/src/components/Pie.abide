@@ -41,7 +41,7 @@ const ring = pie({
 </script>
 
 <svg {...rest} {...ring.svg}>
-    {#for slice of ring.slices() by slice.index}
+    {#for slice of ring.slices by slice.index}
         <circle {...slice.circle} />
     {/for}
 </svg>

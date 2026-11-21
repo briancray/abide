@@ -48,18 +48,18 @@ const palette = commandPalette({
 </script>
 
 <dialog {...rest} {...palette.dialog}>
-    <input {...palette.input} placeholder={placeholder} data-part="input">
-    <ul {...palette.listbox} data-part="listbox">
-        {#for command of palette.results() by command.label}
-            <li {...palette.option(command)} data-part="option">
-                <span data-part="label">{command.label}</span>
+    <input {...palette.input} placeholder={placeholder}>
+    <ul {...palette.listbox}>
+        {#for command of palette.results by command.label}
+            <li {...palette.command(command).option}>
+                <span {...palette.command(command).label}>{command.label}</span>
                 {#if command.key}
-                    <kbd data-part="key">{keyLabel(command.key)}</kbd>
+                    <kbd {...palette.command(command).key}>{keyLabel(command.key)}</kbd>
                 {/if}
             </li>
         {/for}
     </ul>
-    {#if palette.results().length === 0}
-        <div {...palette.empty} data-part="empty"><slot /></div>
+    {#if palette.results.length === 0}
+        <div {...palette.empty}><slot /></div>
     {/if}
 </dialog>

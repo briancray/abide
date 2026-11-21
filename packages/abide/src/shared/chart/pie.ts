@@ -43,7 +43,7 @@ export type PieParts = {
     /** The `<svg>`: its square of drawing units, its role and its name (52.29). */
     readonly svg: Record<string, unknown>
     /** The slices drawn, in order. */
-    slices(): PieSlice[]
+    get slices(): PieSlice[]
 }
 
 // The drawing's own units: a ring centered in a square this wide.
@@ -119,13 +119,16 @@ export function pie(options: PieOptions): PieParts {
 
     return {
         svg: {
+            'data-part': 'svg',
             viewBox: `0 0 ${SIZE} ${SIZE}`,
             role: 'img',
             get 'aria-label'() {
                 return live(options.label)
             },
         },
-        slices: () => ring(),
+        get slices() {
+            return ring()
+        },
     }
 }
 

@@ -1,31 +1,33 @@
 import { checkParts } from './checkParts.ts'
+import { itself, type KeyOption } from './itemKey.ts'
+import { randomToken } from './randomToken.ts'
 import { reactive } from './reactive/index.ts'
 import { roving } from './roving.ts'
 
 /** What `listbox` is handed: the options, how each is told apart, and what Enter and Escape do. */
 export type ListboxOptions<Option> = {
-    /** The base every option's element id is derived from; unique on the page. */
-    id: string
+    /** The base every option's element id is derived from; unique on the page. One is made where none is given. */
+    id?: string
     /** The options in the order they render, read live: hand it a function reading a reactive value. */
     options: () => readonly Option[]
-    /** What tells one option from another; the active option follows this key as the list changes. */
-    key: (option: Option) => string
     /** Whether an arrow past either end goes round to the other end. `true` unless set. */
     wrap?: boolean
     /** Called with the active option when Enter is pressed. */
     onpick?: (option: Option) => void
     /** Called when Escape is pressed. */
     onescape?: () => void
-}
+} & KeyOption<Option>
 
 /** The keyboard over a list of options, and which of them is active. */
 export type Listbox<Option> = {
+    /** The base the options' ids are derived from. */
+    readonly id: string
     /** The active option's key, read live; `undefined` while the list is empty. */
-    active: () => string | undefined
+    get active(): string | undefined
     /** The active option itself. */
-    activeOption: () => Option | undefined
+    get activeOption(): Option | undefined
     /** The active option's id, for the focused element's `aria-activedescendant`; `undefined` while none is active. */
-    activeId: () => string | undefined
+    get activeId(): string | undefined
     /** Makes the option with `key` active, as a pointer resting on it does. */
     activate: (key: string) => void
     /** The id the option with `key` renders with, which `aria-activedescendant` names. */
@@ -38,7 +40,9 @@ export type Listbox<Option> = {
 export function listbox<Option>(
     given: ListboxOptions<Option>,
 ): Listbox<Option> {
-    const { id, options, key, wrap = true, onpick, onescape } = given
+    const { options, wrap = true, onpick, onescape } = given
+    const id = given.id ?? `listbox-${randomToken(4, 'hex')}`
+    const key = itself<Option>(given.key)
     if (process.env.NODE_ENV !== 'production') checkParts('listbox', `${id}-`)
     // The key last moved to; what is active is this key while it is listed, and the first otherwise.
     const chosen = reactive<string | undefined>(undefined)
@@ -111,9 +115,14 @@ export function listbox<Option>(
     }
 
     return {
-        active: () => active(),
-        activeOption,
-        activeId: () => {
+        id,
+        get active() {
+            return active()
+        },
+        get activeOption() {
+            return activeOption()
+        },
+        get activeId() {
             const current = active()
             return current === undefined ? undefined : idOf(current)
         },

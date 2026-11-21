@@ -31,4 +31,4 @@ const parts = time({
 })
 </script>
 
-<time {...rest} {...parts.time(value)}>{parts.text(value)}</time>
+<time {...rest} {...parts.at(value).time}>{parts.at(value).text}</time>

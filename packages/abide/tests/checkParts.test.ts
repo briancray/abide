@@ -42,8 +42,8 @@ test('tabs spread whole warn of nothing', async () => {
     const warned = await warnings(() => {
         const view = tabs({ keys: ['notes'] })
         const list = element('div', view.list)
-        list.append(element('button', view.tab('notes')))
-        document.body.append(list, element('div', view.panel('notes')))
+        list.append(element('button', view.tab('notes').button))
+        document.body.append(list, element('div', view.tab('notes').panel))
     })
     expect(warned).toEqual([])
 })
@@ -54,8 +54,8 @@ test('a tab whose panel is not there warns once, however many tabs name one', as
         const view = tabs({ keys: ['notes', 'calls'] })
         const list = element('div', view.list)
         list.append(
-            element('button', view.tab('notes')),
-            element('button', view.tab('calls')),
+            element('button', view.tab('notes').button),
+            element('button', view.tab('calls').button),
         )
         document.body.append(list)
     })
@@ -74,7 +74,7 @@ test('a tree item spread outside any tree warns', async () => {
             key: (name) => name,
             label: (name) => name,
         })
-        document.body.append(element('li', accounts.item('Acme')))
+        document.body.append(element('li', accounts.node('Acme').item))
     })
     expect(warned).toEqual([
         expect.stringContaining('tree: a treeitem stands outside any tree'),

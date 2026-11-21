@@ -12,8 +12,8 @@ import { scrub, type ScrubPosition } from './scrub.ts'
 
 /** The range picked, and the scale it is picked on. */
 export type RangeOptions = {
-    /** The low and the high end of the range picked: hand it a `Reactive` to read and set them. */
-    value: Reactive<readonly [number, number]>
+    /** The low and the high end of the range picked, where the app holds them: a `Reactive` to read and set. Held by the parts, from `min` to `max`, and handed back as `value`, where none is given. */
+    value?: Reactive<readonly [number, number]>
     /** What the range is of, as the group's accessible name: `'Deal amount'`. */
     label: Live<string>
     /** The least value. 0 by default. */
@@ -30,7 +30,15 @@ export type RangeOptions = {
     name?: string
 }
 
-/** The parts `range` hands back, each spread onto an element: `<span {...amount.thumb(0)} />`. */
+/** One end's parts, low (`0`) or high (`1`): its thumb, and the hidden field submitting it. */
+export type RangeEnd = {
+    /** The thumb: its slider role, values, keys and the `style` that places it. */
+    readonly thumb: Record<string, unknown>
+    /** A hidden field submitting the end under `name`. */
+    readonly input: Record<string, unknown>
+}
+
+/** The parts `range` hands back, each spread onto an element: `<span {...amount.end(0).thumb} />`. */
 export type RangeParts = {
     /** The group's role, name and `data-dragging`. */
     readonly root: Record<string, unknown>
@@ -38,16 +46,15 @@ export type RangeParts = {
     readonly track: Record<string, unknown>
     /** The span between the thumbs, as the `style` that places it. */
     readonly fill: Record<string, unknown>
-    /** A thumb, low (`0`) or high (`1`): its slider role, values, keys and the `style` that places it. */
-    thumb(which: 0 | 1): Record<string, unknown>
-    /** A hidden field submitting one end under `name`. */
-    input(which: 0 | 1): Record<string, unknown>
+    /** One end's parts, low (`0`) or high (`1`). */
+    end(which: 0 | 1): RangeEnd
+    /** The low and the high end picked, read and set. */
+    readonly value: Reactive<readonly [number, number]>
 }
 
 /** WAI-ARIA's multi-thumb slider: a low and a high value on one track, as parts to spread. */
 export function range(options: RangeOptions): RangeParts {
     const {
-        value,
         labels = ['Minimum', 'Maximum'],
         format = (each: number) => number(each),
         name,
@@ -55,6 +62,8 @@ export function range(options: RangeOptions): RangeParts {
     const min = () => live(options.min ?? 0)
     const max = () => live(options.max ?? 100)
     const step = () => live(options.step ?? 1)
+    const value =
+        options.value ?? reactive<readonly [number, number]>([min(), max()])
 
     // The values a thumb stops at, by index from `min`.
     const last = reactive(() =>
@@ -161,8 +170,10 @@ export function range(options: RangeOptions): RangeParts {
     const letGo = () => dragging.set(-1)
 
     return {
+        value,
         root: {
             role: 'group',
+            'data-part': 'root',
             get 'aria-label'() {
                 return live(options.label)
             },
@@ -171,6 +182,7 @@ export function range(options: RangeOptions): RangeParts {
             },
         },
         track: {
+            'data-part': 'track',
             onpointerdown: press,
             onpointermove: (event: PointerEvent) => {
                 const held = dragging.peek()
@@ -180,42 +192,47 @@ export function range(options: RangeOptions): RangeParts {
             onlostpointercapture: letGo,
         },
         fill: {
+            'data-part': 'fill',
             // 51.97 — the span between the thumbs, as the computed `left` and `right` placing it.
             get style() {
                 const [low, high] = value()
                 return `left: ${percent(low)}; right: ${percent(max() - high + min())}`
             },
         },
-        thumb: (which) => ({
-            id: thumbId(which),
-            role: 'slider',
-            tabindex: '0',
-            'data-thumb': which === 0 ? 'low' : 'high',
-            'aria-label': labels[which],
-            get 'aria-valuemin'() {
-                return which === 0 ? min() : value()[0]
+        end: (which) => ({
+            thumb: {
+                id: thumbId(which),
+                role: 'slider',
+                'data-part': 'thumb',
+                tabindex: '0',
+                'data-thumb': which === 0 ? 'low' : 'high',
+                'aria-label': labels[which],
+                get 'aria-valuemin'() {
+                    return which === 0 ? min() : value()[0]
+                },
+                get 'aria-valuemax'() {
+                    return which === 0 ? value()[1] : max()
+                },
+                get 'aria-valuenow'() {
+                    return value()[which]
+                },
+                get 'aria-valuetext'() {
+                    return format(value()[which])
+                },
+                'aria-orientation': 'horizontal',
+                // 51.97 — the thumb's computed `left` along the track.
+                get style() {
+                    return `left: ${percent(value()[which])}`
+                },
+                onkeydown: (event: KeyboardEvent) => key(which, event),
             },
-            get 'aria-valuemax'() {
-                return which === 0 ? value()[1] : max()
-            },
-            get 'aria-valuenow'() {
-                return value()[which]
-            },
-            get 'aria-valuetext'() {
-                return format(value()[which])
-            },
-            'aria-orientation': 'horizontal',
-            // 51.97 — the thumb's computed `left` along the track.
-            get style() {
-                return `left: ${percent(value()[which])}`
-            },
-            onkeydown: (event: KeyboardEvent) => key(which, event),
-        }),
-        input: (which) => ({
-            type: 'hidden',
-            name,
-            get value() {
-                return value()[which]
+            input: {
+                type: 'hidden',
+                'data-part': 'input',
+                name,
+                get value() {
+                    return value()[which]
+                },
             },
         }),
     }

@@ -121,6 +121,7 @@ export function menu(options: MenuOptions = {}): Menu {
 
     const trigger = {
         id: triggerId,
+        'data-part': 'trigger',
         'aria-haspopup': 'menu',
         'aria-controls': menuId,
         get 'aria-expanded'() {
@@ -145,6 +146,7 @@ export function menu(options: MenuOptions = {}): Menu {
     const list = {
         id: menuId,
         role: 'menu',
+        'data-part': 'menu',
         popover: 'auto',
         'aria-labelledby': triggerId,
         get 'data-side'() {

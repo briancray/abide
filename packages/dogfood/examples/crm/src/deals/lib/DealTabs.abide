@@ -17,10 +17,10 @@ const deal = reactive(() => getDeal({ id: 'd1' }))
 <div class="flex flex-col gap-snug">
     <div class="tabs" {...view.list}>
         {#for each of VIEWS by each.key}
-            <button {...view.tab(each.key)}>{each.label}</button>
+            <button {...view.tab(each.key).button}>{each.label}</button>
         {/for}
     </div>
-    <ul class="fields" {...view.panel()}>
+    <ul class="fields" {...view.panel}>
         {#if tab === 'details'}
             <li><span>deal</span><strong>{deal.name}</strong></li>
             <li><span>company</span><strong>{deal.company}</strong></li>

@@ -14,12 +14,12 @@ const ring = pie({
 
 <div class="flex items-center gap-6">
     <svg {...ring.svg} class="size-32">
-        {#for slice of ring.slices() by slice.index}
+        {#for slice of ring.slices by slice.index}
             <circle {...slice.circle} />
         {/for}
     </svg>
     <ul>
-        {#for slice of ring.slices() by slice.index}
+        {#for slice of ring.slices by slice.index}
             <li data-series={slice.index}>
                 {slice.label}: {Math.round(slice.share * 100)}%
             </li>

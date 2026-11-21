@@ -43,8 +43,8 @@ import accountsByRegion from './lib/AccountsByRegion.abide' with { type: 'text' 
     ]}
 >
     <Section level={3} title="Browse accounts by region">
-        <p>Spread <code>tree</code> on your list, <code>item</code> on each node and
-            <code>group</code> on the list of its children. Focus an item and the arrows move
+        <p>Spread <code>tree</code> on your list, and each node's <code>node(node).item</code> on
+            it and <code>node(node).group</code> on the list of its children. Focus an item and the arrows move
             through what shows; Right opens a region, Left closes it, and a letter jumps to the next
             name it starts.</p>
         <Example code={accountsByRegion}><AccountsByRegion /></Example>

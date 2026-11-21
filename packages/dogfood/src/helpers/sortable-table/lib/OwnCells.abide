@@ -23,14 +23,16 @@ const table = sortableTable({
     <thead>
         <tr>
             {#for column of COLUMNS by column.key}
-                <th {...table.header(column)}>
-                    <button {...table.sort(column)}>{column.label}</button>
+                <th {...table.column(column).header}>
+                    <button {...table.column(column).sort}>
+                        {column.label}
+                    </button>
                 </th>
             {/for}
         </tr>
     </thead>
     <tbody>
-        {#for deal of table.rows() by deal.id}
+        {#for deal of table.rows by deal.id}
             <tr>
                 <td>
                     <strong>{deal.name}</strong>

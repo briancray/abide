@@ -8,12 +8,12 @@ import type { Side } from '../place.ts'
 import { reactive, watch } from '../reactive/index.ts'
 import { hints, shown } from './tips.ts'
 
-/** The parts `tooltip.host` hands back: `<span {...shown.hint}>{shown.text()}</span>`. */
+/** The parts `tooltip.host` hands back: `<span {...shown.hint}>{shown.text}</span>`. */
 export type TooltipHost = {
     /** The popover: its role, a manual popover, `data-open` while a hint shows, and the side it took. */
     readonly hint: Record<string, unknown>
     /** The text of the hint showing here, or none. */
-    text(): string | undefined
+    get text(): string | undefined
 }
 
 /** The popover `tooltip.tip` shows its hints in, as parts to spread. */
@@ -49,6 +49,7 @@ export function host(): TooltipHost {
         // before the page hydrates.
         hint: {
             role: 'tooltip',
+            'data-part': 'hint',
             popover: 'manual',
             get 'data-open'() {
                 return open() === undefined ? undefined : ''
@@ -61,6 +62,8 @@ export function host(): TooltipHost {
                 return () => element.set(undefined)
             },
         },
-        text: () => open()?.text,
+        get text() {
+            return open()?.text
+        },
     }
 }

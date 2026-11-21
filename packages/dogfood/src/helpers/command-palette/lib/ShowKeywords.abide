@@ -20,10 +20,10 @@ const palette = commandPalette({
 <button onclick={() => (open = true)}>Open the palette</button>
 <p>Ran: {ran}.</p>
 <dialog {...palette.dialog} class="palette">
-    <input {...palette.input} data-part="input" placeholder="Go to…">
-    <ul {...palette.listbox} data-part="listbox">
-        {#for command of palette.results() by command.label}
-            <li {...palette.option(command)} data-part="option">
+    <input {...palette.input} placeholder="Go to…">
+    <ul {...palette.listbox}>
+        {#for command of palette.results by command.label}
+            <li {...palette.command(command).option}>
                 {command.label}
                 <small class="text-muted">{command.keywords?.join(', ')}</small>
             </li>

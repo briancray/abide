@@ -26,13 +26,13 @@ const shown = reactive(() =>
 
 <form class="fields stacked">
     <div class="range" {...slider.root}>
-        <div data-part="track" {...slider.track}>
-            <div data-part="fill" {...slider.fill} />
-            <span data-part="thumb" {...slider.thumb(0)} />
-            <span data-part="thumb" {...slider.thumb(1)} />
+        <div {...slider.track}>
+            <div {...slider.fill} />
+            <span {...slider.end(0).thumb} />
+            <span {...slider.end(1).thumb} />
         </div>
-        <input {...slider.input(0)}>
-        <input {...slider.input(1)}>
+        <input {...slider.end(0).input}>
+        <input {...slider.end(1).input}>
     </div>
 </form>
 <p class="status">

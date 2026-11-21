@@ -41,16 +41,16 @@ import pickRows from './lib/PickRows.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Write each cell yourself, with the headers still sorting">
-        <p>Spread <code>header</code> onto each header and <code>sort</code> onto its button, and
-            walk <code>rows()</code>: the rows come back in the order the sort names. Each cell is
+        <p>Spread a column's <code>header</code> onto its header and its <code>sort</code> onto
+            the button, and walk <code>rows</code>: the rows come back in the order the sort names. Each cell is
             yours, so a deal's owner can sit under its name.</p>
         <Example code={ownCells}><OwnCells /></Example>
     </Section>
 
     <Section level={3} title="Pick rows with a checkbox each, and every row from the header">
-        <p>Hand <code>selected</code> a <code>Reactive</code>. <code>select(row)</code> is a row's
-            checkbox, where a Shift-click picks every row from the last one clicked, and
-            <code>selectAll</code> is the header's, mixed while some rows are picked.</p>
+        <p><code>row(row).checkbox</code> is a row's checkbox, where a Shift-click picks every row
+            from the last one clicked, and <code>selectAll.checkbox</code> is the header's, mixed
+            while some rows are picked. <code>selected</code> holds the keys picked.</p>
         <Example code={pickRows}><PickRows /></Example>
     </Section>
 </Doc>

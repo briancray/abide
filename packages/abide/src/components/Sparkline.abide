@@ -48,7 +48,7 @@ const trend = sparkline({
     {#if kind === 'line'}
         <path {...trend.line} />
     {/if}
-    {#if kind === 'line' && dot && trend.ended()}
+    {#if kind === 'line' && dot && trend.ended}
         <path {...trend.dot} />
     {/if}
 </svg>

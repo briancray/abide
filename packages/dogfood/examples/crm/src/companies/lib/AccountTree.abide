@@ -51,15 +51,15 @@ const accounts = tree({
 <p class="status">{selected ?? 'no account picked'}</p>
 <ul {...accounts.tree} aria-label="Accounts" class="tree">
     {#for region of REGIONS by region.id}
-        <li {...accounts.item(region)}>
+        <li {...accounts.node(region).item}>
             {region.name}
-            <ul {...accounts.group(region)}>
+            <ul {...accounts.node(region).group}>
                 {#for company of region.under by company.id}
-                    <li {...accounts.item(company)}>
+                    <li {...accounts.node(company).item}>
                         {company.name}
-                        <ul {...accounts.group(company)}>
+                        <ul {...accounts.node(company).group}>
                             {#for person of company.under by person.id}
-                                <li {...accounts.item(person)}>{person.name}</li>
+                                <li {...accounts.node(person).item}>{person.name}</li>
                             {/for}
                         </ul>
                     </li>

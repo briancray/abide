@@ -19,40 +19,53 @@ export type TimeOptions = {
     timeZone?: Live<string | undefined>
 }
 
-/** The parts `time` hands back: `<time {...seen.time(at)}>{seen.text(at)}</time>`. */
+/** One time's parts: the `<time>` holding it, and the text it reads as. */
+export type TimeAt = {
+    /** The `<time>`: its `datetime` and `title`, neither where it is no time, and the clock following it while bound. */
+    readonly time: Record<string, unknown>
+    /** How long ago or how soon it is, as the clock reads it now: `—` where it is no time. */
+    get text(): string
+}
+
+/** The parts `time` hands back: `<time {...seen.at(when).time}>{seen.at(when).text}</time>`. */
 export type TimeParts = {
-    /** The `<time>` of `value` — a `Date`, epoch milliseconds or an ISO string: its `datetime` and `title`, neither where it is no time, and the clock following it while bound. */
-    time(value: unknown): Record<string, unknown>
-    /** How long ago or how soon `value` is, as the clock reads it now: `—` where it is no time. */
-    text(value: unknown): string
+    /** The parts of `value` — a `Date`, epoch milliseconds or an ISO string. */
+    at(value: unknown): TimeAt
 }
 
 /** Times that stay current, written as `format.relative` writes them against one clock for the page. */
 export function time(options: TimeOptions = {}): TimeParts {
     return {
-        time(value) {
+        at(value) {
             const at = instant(value)
-            if (at === undefined) return {}
-            const timeZone = live(options.timeZone)
-            const locale = live(options.locale)
             return {
-                datetime: new Date(at).toISOString(),
-                title: date(at, {
-                    style: 'dateTime',
-                    ...(timeZone === undefined ? {} : { timeZone }),
-                    ...(locale === undefined ? {} : { locale }),
-                }),
-                // 52.74 — followed for as long as it is bound, so the clock ticks when its label next changes.
-                'bind:element': () => follow(at),
+                time: timeOf(at),
+                get text() {
+                    const locale = live(options.locale)
+                    return relative(at, {
+                        now: clock(),
+                        style: live(options.style) ?? 'long',
+                        ...(locale === undefined ? {} : { locale }),
+                    })
+                },
             }
         },
-        text(value) {
-            const locale = live(options.locale)
-            return relative(instant(value), {
-                now: clock(),
-                style: live(options.style) ?? 'long',
+    }
+
+    function timeOf(at: number | undefined): Record<string, unknown> {
+        if (at === undefined) return { 'data-part': 'time' }
+        const timeZone = live(options.timeZone)
+        const locale = live(options.locale)
+        return {
+            'data-part': 'time',
+            datetime: new Date(at).toISOString(),
+            title: date(at, {
+                style: 'dateTime',
+                ...(timeZone === undefined ? {} : { timeZone }),
                 ...(locale === undefined ? {} : { locale }),
-            })
-        },
+            }),
+            // 52.74 — followed for as long as it is bound, so the clock ticks when its label next changes.
+            'bind:element': () => follow(at),
+        }
     }
 }

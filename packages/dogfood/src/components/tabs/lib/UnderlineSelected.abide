@@ -5,6 +5,6 @@ const view = tabs({ keys: ['details', 'stage'] })
 </script>
 
 <div class="flex [&_[data-selected]]:border-b-2" {...view.list}>
-    <button {...view.tab('details')}>Details</button>
-    <button {...view.tab('stage')}>Stage</button>
+    <button {...view.tab('details').button}>Details</button>
+    <button {...view.tab('stage').button}>Stage</button>
 </div>

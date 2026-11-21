@@ -44,16 +44,16 @@ const shown = host({ label: () => label })
 </script>
 
 <div {...rest} {...shown.region}>
-    {#for toast of shown.notices() by toast.id}
-        <div {...shown.notice(toast)} data-part="toast">
+    {#for toast of shown.notices by toast.id}
+        <div {...shown.toast(toast).toast}>
             {#if Toast}
-                <Toast toast={toast} dismiss={() => dismiss(toast.id)} act={() => shown.act(toast)} />
+                <Toast toast={toast} dismiss={() => dismiss(toast.id)} act={shown.toast(toast).act} />
             {:else}
-                <span data-part="text">{toast.text}</span>
+                <span {...shown.toast(toast).text}>{toast.text}</span>
                 {#if toast.action}
-                    <button {...shown.action(toast)} data-part="action">{toast.action.label}</button>
+                    <button {...shown.toast(toast).action}>{toast.action.label}</button>
                 {/if}
-                <button {...shown.close(toast)} data-part="close">×</button>
+                <button {...shown.toast(toast).close}>×</button>
             {/if}
         </div>
     {/for}

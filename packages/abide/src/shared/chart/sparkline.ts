@@ -31,9 +31,9 @@ export type SparklineParts = {
     /** `<path {...trend.dot} />`: a mark at the last value. */
     readonly dot: Record<string, unknown>
     /** `up`, `down` or `flat`: the last present value against the first (52.31). */
-    trend(): 'up' | 'down' | 'flat'
+    get trend(): 'up' | 'down' | 'flat'
     /** Whether there is a last value to mark. */
-    ended(): boolean
+    get ended(): boolean
 }
 
 // The drawing's own units. `preserveAspectRatio="none"` stretches them to the box.
@@ -114,6 +114,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
 
     return {
         svg: {
+            'data-part': 'svg',
             viewBox: `0 0 ${SIZE} ${SIZE}`,
             preserveAspectRatio: 'none',
             overflow: 'visible',
@@ -164,7 +165,11 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             'stroke-linecap': 'round',
             'vector-effect': 'non-scaling-stroke',
         },
-        trend: () => drawing().trend,
-        ended: () => drawing().end !== '',
+        get trend() {
+            return drawing().trend
+        },
+        get ended() {
+            return drawing().end !== ''
+        },
     }
 }

@@ -23,7 +23,7 @@ const queue = listbox({
     role="listbox"
     tabindex="0"
     aria-label="Leads to call"
-    aria-activedescendant={queue.activeId()}
+    aria-activedescendant={queue.activeId}
     onkeydown={queue.keydown}
     class="fields rounded-md border border-rule p-2
         [&>[data-active]]:bg-signal/10"
@@ -32,8 +32,8 @@ const queue = listbox({
         <li
             id={queue.idOf(deal.id)}
             role="option"
-            aria-selected={queue.active() === deal.id ? 'true' : 'false'}
-            data-active={queue.active() === deal.id ? '' : undefined}
+            aria-selected={queue.active === deal.id ? 'true' : 'false'}
+            data-active={queue.active === deal.id ? '' : undefined}
             onclick={() => queue.activate(deal.id)}
         >{deal.name}</li>
     {/for}

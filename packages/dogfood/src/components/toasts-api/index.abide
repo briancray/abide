@@ -92,7 +92,8 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
     <Section level={3} title="Write the notices as items of a list of your own">
         <p>In place of <code>Toasts</code>, call <code>toasts.host</code> from your root layout's
             script and spread its parts: the live region, each notice of
-            <code>notices()</code>, its action and its close button. The parts carry the role,
+            <code>notices</code> and its <code>toast(toast)</code> parts: the notice, its action and
+            its close button. The parts carry the role,
             the tone and the closing; the markup is yours.</p>
         <Code language="abide" caption="abide" code={`
             <script>
@@ -102,13 +103,15 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
             </script>
 
             <ol {...shown.region}>
-                {#for toast of shown.notices() by toast.id}
-                    <li {...shown.notice(toast)}>
+                {#for toast of shown.notices by toast.id}
+                    <li {...shown.toast(toast).toast}>
                         {toast.text}
                         {#if toast.action}
-                            <button {...shown.action(toast)}>{toast.action.label}</button>
+                            <button {...shown.toast(toast).action}>
+                                {toast.action.label}
+                            </button>
                         {/if}
-                        <button {...shown.close(toast)}>Close</button>
+                        <button {...shown.toast(toast).close}>Close</button>
                     </li>
                 {/for}
             </ol>

@@ -14,29 +14,30 @@ const box = combobox({
     options: () => contacts,
     key: (each) => each.id,
     label: (each) => each.name,
+    multiple: true,
     value: team,
 })
 </script>
 
 <label for="deal-team">On the deal</label>
 <div {...box.root} class="picker flex-row flex-wrap">
-    {#for contact of box.picks() ?? [] by contact.id}
-        <span class="rounded-md bg-signal/10 px-2" data-part="chip"><span>{contact.name}</span>
-            <button {...box.remove(contact)}>×</button></span>
+    {#for contact of box.picks ?? [] by contact.id}
+        <span {...box.chip(contact).chip} class="rounded-md bg-signal/10 px-2"><span>{contact.name}</span>
+            <button {...box.chip(contact).remove}>×</button></span>
     {/for}
     <input {...box.input} placeholder="Add a contact">
-    {#if box.open()}
-        <div {...box.popup} data-part="popup">
-            <ul {...box.listbox} data-part="listbox">
-                {#for contact of box.items() by contact.id}
-                    <li {...box.option(contact)} data-part="option">
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for contact of box.items by contact.id}
+                    <li {...box.option(contact)}>
                         <span>{contact.name}</span>
                         <small class="block text-muted">{contact.company}</small>
                     </li>
                 {/for}
             </ul>
-            {#if box.nothingFound()}
-                <p {...box.empty} data-part="empty">No contact matches</p>
+            {#if box.nothingFound}
+                <p {...box.empty}>No contact matches</p>
             {/if}
         </div>
     {/if}

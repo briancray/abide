@@ -17,18 +17,18 @@ function press(handler: (event: KeyboardEvent) => void, key: string) {
 test('the active key stays on its option while the list changes — 51.1, 51.2, 51.3', () => {
     const options = reactive(['a', 'b', 'c'])
     const list = listbox({ id: 'letters', options, key: (letter) => letter })
-    expect(list.active()).toBe('a')
+    expect(list.active).toBe('a')
     press(list.keydown, 'End')
-    expect(list.active()).toBe('c')
+    expect(list.active).toBe('c')
     options.set(['b', 'c'])
     flushSync()
-    expect(list.active()).toBe('c')
+    expect(list.active).toBe('c')
     options.set(['a', 'b'])
     flushSync()
-    expect(list.active()).toBe('a')
+    expect(list.active).toBe('a')
     options.set([])
     flushSync()
-    expect([list.active(), list.activeId()]).toEqual([undefined, undefined])
+    expect([list.active, list.activeId]).toEqual([undefined, undefined])
 })
 
 test('the arrows go round the ends unless `wrap` is off — 51.4, 51.5, 51.6', () => {
@@ -39,9 +39,9 @@ test('the arrows go round the ends unless `wrap` is off — 51.4, 51.5, 51.6', (
         key: (letter) => letter,
     })
     press(round.keydown, 'ArrowUp')
-    expect(round.active()).toBe('c')
+    expect(round.active).toBe('c')
     press(round.keydown, 'ArrowDown')
-    expect(round.active()).toBe('a')
+    expect(round.active).toBe('a')
     const held = listbox({
         id: 'held',
         options: () => letters,
@@ -49,12 +49,12 @@ test('the arrows go round the ends unless `wrap` is off — 51.4, 51.5, 51.6', (
         wrap: false,
     })
     press(held.keydown, 'ArrowUp')
-    expect(held.active()).toBe('a')
+    expect(held.active).toBe('a')
     press(held.keydown, 'End')
     press(held.keydown, 'ArrowDown')
-    expect(held.active()).toBe('c')
+    expect(held.active).toBe('c')
     press(held.keydown, 'Home')
-    expect(held.active()).toBe('a')
+    expect(held.active).toBe('a')
 })
 
 // THE REVERT: cancel Enter whether or not `onpick` is given, and the form a list sits in
@@ -94,5 +94,5 @@ test('each key has its own id, and the active one’s is `activeId` — 51.10, 5
     expect(list.idOf('a b')).not.toBe(list.idOf('a-b'))
     expect(list.idOf('a b')).toBe('letters-option-a%20b')
     press(list.keydown, 'End')
-    expect(list.activeId()).toBe(list.idOf('a-b'))
+    expect(list.activeId).toBe(list.idOf('a-b'))
 })

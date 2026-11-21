@@ -4,15 +4,23 @@
 // `listbox` the input's keys move through, opened in the top layer against the input as `popover`
 // opens one. Bound to an array, it picks many: each pick adds an item or takes it out again.
 
+import { itself, type KeyOption, type LabelOption } from './itemKey.ts'
 import { listbox } from './listbox.ts'
 import { popover } from './popover.ts'
+import { randomToken } from './randomToken.ts'
 import { busy, type Reactive, reactive, watch } from './reactive/index.ts'
+import { reactiveOver } from './reactiveOver.ts'
 import { openingEnd } from './roving.ts'
 
+/** What a combobox holds: every item picked where it picks many, else the one picked or none. */
+export type Picked<Item, Multiple extends boolean> = Multiple extends true
+    ? readonly Item[]
+    : Item | undefined
+
 /** What a combobox lists, how an item is told apart and written, and the pick it holds. */
-export type ComboboxOptions<Item> = {
-    /** The input's id, for a `<label for>`; the list's and each option's ids are derived from it. */
-    id: string
+export type ComboboxOptions<Item, Multiple extends boolean = false> = {
+    /** The input's id, for a `<label for>`; the list's and each option's ids are derived from it. One is made where none is given. */
+    id?: string
     /** The items to pick from, narrowed to those whose label holds what was typed: read live. */
     options?: () => readonly Item[]
     /** Finds the items for what was typed, in place of narrowing `options`: a handler call, or any async function. */
@@ -24,38 +32,51 @@ export type ComboboxOptions<Item> = {
         | Reactive<readonly Item[], unknown, unknown, unknown>
     /** Milliseconds typing has to pause before `search` runs again. */
     debounce?: number
-    /** What tells one item from another; unique among the items. */
-    key(item: Item): string
-    /** An item's text: what the input holds once it is picked. */
-    label(item: Item): string
-    /** The item picked, or every item picked where it holds an array (51.61): a `Reactive` to read and set. */
-    value: Reactive<Item | undefined | readonly Item[]>
+    /** 51.61 — whether it picks many: a pick adds an item or takes it out again. `false` by default. */
+    multiple?: Multiple
+    /** The pick, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
+    value?: Reactive<Picked<Item, Multiple>>
+} & KeyOption<Item> &
+    LabelOption<Item>
+
+/** A picked item's chip, where it picks many: the chip, and the button taking the item out (51.62). */
+export type ComboboxChip = {
+    /** The chip's attributes. */
+    readonly chip: Record<string, unknown>
+    /** A button taking the item out. */
+    readonly remove: Record<string, unknown>
 }
 
 /** The parts `combobox` hands back, each spread onto an element: `<li {...box.option(item)}>`. */
-export type ComboboxParts<Item> = {
+export type ComboboxParts<Item, Multiple extends boolean = false> = {
+    /** The input's id, and the base of the list's and the options'. */
+    readonly id: string
     /** The element around the field: `data-open` while the list is, `data-busy` while a search is out. */
     readonly root: Record<string, unknown>
     /** The text field: its combobox role, its states, its keys, and the text it holds. */
     readonly input: Record<string, unknown>
-    /** Whether the list is open, and so whether the popup is to be rendered. */
-    open(): boolean
+    /** Whether the list is open, and so whether the popup is to be rendered; written, it opens or shuts it. */
+    readonly open: Reactive<boolean>
     /** The element holding the list and `empty`, opened in the top layer against the input (51.64). */
     readonly popup: Record<string, unknown>
-    /** The list: its `listbox` role and id, multi-selectable where `value` is an array. */
+    /** The list: its `listbox` role and id, multi-selectable where it picks many. */
     readonly listbox: Record<string, unknown>
     /** The items listed for what was typed: what a keyed `{#for}` over `option` walks. */
-    items(): readonly Item[]
+    get items(): readonly Item[]
     /** An item's option: its role, id, `aria-selected`, `data-active`, `data-selected`, and the press that picks it. */
     option(item: Item): Record<string, unknown>
     /** Whether nothing is listed with no search in flight: where `empty` is rendered. */
-    nothingFound(): boolean
+    get nothingFound(): boolean
     /** The element saying nothing matched: a status. */
     readonly empty: Record<string, unknown>
-    /** The items picked, where `value` is an array; `undefined` where it holds one item. */
-    picks(): readonly Item[] | undefined
-    /** A button taking a picked item out (51.62). */
-    remove(item: Item): Record<string, unknown>
+    /** The pick, read and set: the item, or every item where it picks many. */
+    readonly value: Reactive<Picked<Item, Multiple>>
+    /** The items picked, where it picks many; `undefined` where it picks one. */
+    get picks(): readonly Item[] | undefined
+    /** The element holding the chips, where it picks many. */
+    readonly chips: Record<string, unknown>
+    /** A picked item's chip and the button taking it out (51.62). */
+    chip(item: Item): ComboboxChip
     /** Takes a picked item out, for a chip of one's own. */
     unpick(item: Item): void
 }
@@ -63,18 +84,27 @@ export type ComboboxParts<Item> = {
 const NOTHING: readonly never[] = []
 
 /** WAI-ARIA's combobox with a list popup, as parts to spread onto markup of one's own. */
-export function combobox<Item>(
-    options: ComboboxOptions<Item>,
-): ComboboxParts<Item> {
-    const { id, search, debounce, key, label, value } = options
+export function combobox<Item, Multiple extends boolean = false>(
+    options: ComboboxOptions<Item, Multiple>,
+): ComboboxParts<Item, Multiple> {
+    const { search, debounce } = options
+    const id = options.id ?? `combobox-${randomToken(4, 'hex')}`
+    const key = itself<Item>(options.key)
+    const label = itself<Item>(options.label)
+    const many = options.multiple === true
+    const value = (options.value ??
+        (many
+            ? reactive<readonly Item[]>([])
+            : reactive<Item | undefined>(undefined))) as Reactive<
+        Item | undefined | readonly Item[]
+    >
 
     // What was typed since the last pick; the input shows the pick's label while nothing has been.
     const typed = reactive<string | undefined>(undefined)
-    // 51.61 — the items picked, where `value` is an array; `undefined` where it holds one item.
-    const picks = reactive((): readonly Item[] | undefined => {
-        const held = value()
-        return Array.isArray(held) ? (held as readonly Item[]) : undefined
-    })
+    // 51.61 — the items picked, where it picks many; `undefined` where it picks one.
+    const picks = reactive((): readonly Item[] | undefined =>
+        many ? ((value() ?? []) as readonly Item[]) : undefined,
+    )
     const query = reactive(() => {
         const text = typed()
         const one = value()
@@ -117,15 +147,15 @@ export function combobox<Item>(
 
     function pick(item: Item) {
         typed.set(undefined)
-        const many = picks.peek()
-        if (many === undefined) {
+        const held = picks.peek()
+        if (held === undefined) {
             value.set(item)
             open.set(false)
             return
         }
         const picked = key(item)
-        const kept = many.filter((each) => key(each) !== picked)
-        value.set(kept.length === many.length ? [...many, item] : kept)
+        const kept = held.filter((each) => key(each) !== picked)
+        value.set(kept.length === held.length ? [...held, item] : kept)
     }
 
     function unpick(item: Item) {
@@ -172,13 +202,13 @@ export function combobox<Item>(
         if (event.key === 'Escape' && !open.peek() && query.peek() === '')
             return
         // 51.62 — Backspace in an empty input takes out the last item picked.
-        const many = picks.peek()
+        const held = picks.peek()
         if (
             event.key === 'Backspace' &&
             query.peek() === '' &&
-            many !== undefined
+            held !== undefined
         ) {
-            const last = many.at(-1)
+            const last = held.at(-1)
             if (last !== undefined) unpick(last)
             return
         }
@@ -191,16 +221,18 @@ export function combobox<Item>(
     }
 
     const pickedKeys = reactive(() => {
-        const many = picks()
+        const held = picks()
         const one = value()
         const keys = new Set<string>()
-        if (many !== undefined) for (const each of many) keys.add(key(each))
+        if (held !== undefined) for (const each of held) keys.add(key(each))
         else if (one !== undefined) keys.add(key(one as Item))
         return keys
     })
 
     return {
+        id,
         root: {
+            'data-part': 'root',
             get 'data-open'() {
                 return open() ? '' : undefined
             },
@@ -212,6 +244,7 @@ export function combobox<Item>(
             id,
             type: 'text',
             role: 'combobox',
+            'data-part': 'input',
             autocomplete: 'off',
             'aria-autocomplete': 'list',
             get 'aria-expanded'() {
@@ -221,7 +254,7 @@ export function combobox<Item>(
                 return open() ? `${id}-listbox` : undefined
             },
             get 'aria-activedescendant'() {
-                return open() ? list.activeId() : undefined
+                return open() ? list.activeId : undefined
             },
             // The text a server writes; in a browser the property below is kept in step with it.
             get value() {
@@ -246,9 +279,14 @@ export function combobox<Item>(
                 }
             },
         },
-        open: () => open() && input() !== undefined,
+        // The list is open for the popup once there is an input to open it against.
+        open: reactiveOver(
+            () => open() && input() !== undefined,
+            (next: boolean) => open.set(next),
+        ),
         popup: {
             popover: 'manual',
+            'data-part': 'popup',
             onmousedown: (event: MouseEvent) => event.preventDefault(),
             'bind:element': (element: Element) =>
                 popover(input.peek() as HTMLInputElement, {
@@ -260,19 +298,23 @@ export function combobox<Item>(
         listbox: {
             id: `${id}-listbox`,
             role: 'listbox',
+            'data-part': 'listbox',
             get 'aria-multiselectable'() {
-                return picks() === undefined ? undefined : 'true'
+                return many ? 'true' : undefined
             },
         },
-        items: () => found() as readonly Item[],
+        get items() {
+            return found() as readonly Item[]
+        },
         option: (item) => ({
             id: list.idOf(key(item)),
             role: 'option',
+            'data-part': 'option',
             get 'aria-selected'() {
-                return list.active() === key(item) ? 'true' : 'false'
+                return list.active === key(item) ? 'true' : 'false'
             },
             get 'data-active'() {
-                return list.active() === key(item) ? '' : undefined
+                return list.active === key(item) ? '' : undefined
             },
             get 'data-selected'() {
                 return pickedKeys().has(key(item)) ? '' : undefined
@@ -280,14 +322,23 @@ export function combobox<Item>(
             onpointermove: () => list.activate(key(item)),
             onclick: () => pick(item),
         }),
-        nothingFound: () =>
-            !busy(found) && (found() as readonly Item[]).length === 0,
-        empty: { role: 'status' },
-        picks: () => picks(),
-        remove: (item) => ({
-            type: 'button',
-            'aria-label': `Remove ${label(item)}`,
-            onclick: () => unpick(item),
+        get nothingFound() {
+            return !busy(found) && (found() as readonly Item[]).length === 0
+        },
+        empty: { role: 'status', 'data-part': 'empty' },
+        value: value as Reactive<Picked<Item, Multiple>>,
+        get picks() {
+            return picks()
+        },
+        chips: { 'data-part': 'chips' },
+        chip: (item) => ({
+            chip: { 'data-part': 'chip' },
+            remove: {
+                type: 'button',
+                'data-part': 'remove',
+                'aria-label': `Remove ${label(item)}`,
+                onclick: () => unpick(item),
+            },
         }),
         unpick,
     }

@@ -41,13 +41,13 @@ import underlineSelected from './lib/UnderlineSelected.abide' with { type: 'text
     ]}
 >
     <Section level={3} title="Switch a deal between its details and its stage">
-        <p>Spread <code>list</code> on the row, <code>tab(key)</code> on each tab, and
-            <code>panel()</code> on the one panel, and branch on the selected key in it.</p>
+        <p>Spread <code>list</code> on the row, <code>tab(key).button</code> on each tab, and
+            <code>panel</code> on the one panel, and branch on the selected key in it.</p>
         <Example code={dealTabs}><DealTabs /></Example>
     </Section>
 
     <Section level={3} title="Keep a draft in a tab while another shows">
-        <p>Spread <code>panel(key)</code> on a panel per tab. A panel is hidden while another
+        <p>Spread <code>tab(key).panel</code> on a panel per tab. A panel is hidden while another
             tab is selected, and keeps what it holds.</p>
         <Example code={keepDraft}><KeepDraft /></Example>
     </Section>

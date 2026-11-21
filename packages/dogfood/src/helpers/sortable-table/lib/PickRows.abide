@@ -22,14 +22,18 @@ const table = sortableTable({
 <table>
     <thead>
         <tr>
-            <th><input {...table.selectAll}></th>
+            <th {...table.selectAll.select}>
+                <input {...table.selectAll.checkbox}>
+            </th>
             <th>Deal</th>
         </tr>
     </thead>
     <tbody>
-        {#for deal of table.rows() by deal.id}
-            <tr {...table.row(deal)} class="data-selected:bg-signal/10">
-                <td><input {...table.select(deal)}></td>
+        {#for deal of table.rows by deal.id}
+            <tr {...table.row(deal).row} class="data-selected:bg-signal/10">
+                <td {...table.row(deal).select}>
+                    <input {...table.row(deal).checkbox}>
+                </td>
                 <td>{deal.name}</td>
             </tr>
         {/for}

@@ -13,8 +13,8 @@ const FOLLOW_UPS = [
     {#for followUp of FOLLOW_UPS by followUp.contact}
         <li>
             Call {followUp.contact}
-            <time {...due.time(followUp.at)} class="font-medium text-ink">
-                {due.text(followUp.at)}
+            <time {...due.at(followUp.at).time} class="font-medium text-ink">
+                {due.at(followUp.at).text}
             </time>
         </li>
     {/for}

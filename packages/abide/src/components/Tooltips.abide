@@ -11,4 +11,4 @@ const { ...rest } = props<Omit<Attributes<'span'>, 'popover' | 'role'>>()
 const shown = host()
 </script>
 
-<span {...rest} {...shown.hint}>{shown.text()}</span>
+<span {...rest} {...shown.hint}>{shown.text}</span>

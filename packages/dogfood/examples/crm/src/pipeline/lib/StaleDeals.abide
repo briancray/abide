@@ -60,18 +60,18 @@ function markLost() {
 <table class="[&_[data-selected]]:bg-signal/10">
     <thead>
         <tr>
-            <th><input {...table.selectAll}></th>
+            <th {...table.selectAll.select}><input {...table.selectAll.checkbox}></th>
             {#for column of COLUMNS by column.key}
-                <th {...table.header(column)} class="data-[align=end]:text-right">
-                    <button {...table.sort(column)} class="bg-transparent p-0 text-muted">{column.label}</button>
+                <th {...table.column(column).header} class="data-[align=end]:text-right">
+                    <button {...table.column(column).sort} class="bg-transparent p-0 text-muted">{column.label}</button>
                 </th>
             {/for}
         </tr>
     </thead>
     <tbody>
-        {#for deal of table.rows() by deal.id}
-            <tr {...table.row(deal)}>
-                <td><input {...table.select(deal)}></td>
+        {#for deal of table.rows by deal.id}
+            <tr {...table.row(deal).row}>
+                <td {...table.row(deal).select}><input {...table.row(deal).checkbox}></td>
                 <td>{deal.name}</td>
                 <td>{deal.stage}</td>
                 <td class="text-right">{format.money(deal.amount, { digits: 0 })}</td>

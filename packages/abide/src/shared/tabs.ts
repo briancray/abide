@@ -5,37 +5,46 @@
 import { checkParts } from './checkParts.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
+import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
 
 /** The tabs, and the one selected. */
 export type TabsOptions = {
     /** The tabs' keys, in the order they render; a function is read live. */
     keys: readonly string[] | (() => readonly string[])
-    /** The selected tab's key: hand it a `Reactive` to read and set the pick. A key no tab has selects the first. */
+    /** The selected tab's key, where the app holds it: a `Reactive` to read and set the pick. Held by the parts, and handed back as `selected`, where none is given. A key no tab has selects the first. */
     selected?: Reactive<string | undefined>
 }
 
-/** The parts `tabs` hands back, each spread onto an element: `<button {...view.tab('notes')}>`. */
+/** One tab's parts: its button, and the panel kept for it alone, hidden while another is selected. */
+export type TabParts = {
+    /** The tab's attributes and its click, on a `<button>`. */
+    readonly button: Record<string, unknown>
+    /** The attributes of a panel shown for this tab alone and kept, hidden, while another is selected. */
+    readonly panel: Record<string, unknown>
+}
+
+/** The parts `tabs` hands back, each spread onto an element: `<button {...view.tab('notes').button}>`. */
 export type Tabs = {
     /** The tab list's attributes and its keyboard. */
     readonly list: Record<string, unknown>
-    /** A tab's attributes and its click. */
-    tab(key: string): Record<string, unknown>
-    /** A panel's attributes: the one tab `key` names, hidden while another is selected, or, with no key, whichever is selected. */
-    panel(key?: string): Record<string, unknown>
-    /** The key of the tab selected, the first tab's where `selected` names none. */
-    readonly current: Reactive<string | undefined>
+    /** One tab's parts. */
+    tab(key: string): TabParts
+    /** The attributes of the one panel every tab shows in, holding whichever is selected. */
+    readonly panel: Record<string, unknown>
+    /** The key of the tab selected, the first tab's where none is picked; written, it picks one. */
+    readonly selected: Reactive<string | undefined>
 }
 
 /** WAI-ARIA's tabs: a list of tabs and the panels they show, as parts to spread. */
 export function tabs(options: TabsOptions): Tabs {
     const { keys } = options
     const keysOf = typeof keys === 'function' ? keys : () => keys
-    const selected = options.selected ?? reactive<string | undefined>(undefined)
+    const picked = options.selected ?? reactive<string | undefined>(undefined)
     // 51.36 — a key no tab has selects the first.
     const current = reactive((): string | undefined => {
         const listed = keysOf()
-        const wanted = selected()
+        const wanted = picked()
         for (const each of listed) if (each === wanted) return wanted
         return listed[0]
     })
@@ -48,12 +57,13 @@ export function tabs(options: TabsOptions): Tabs {
 
     // 51.40 — a key that selects moves focus with it.
     const select = (key: string): void => {
-        selected.set(key)
+        picked.set(key)
         globalThis.document?.getElementById(tabId(key))?.focus()
     }
 
     const list = {
         role: 'tablist',
+        'data-part': 'list',
         onkeydown: (event: KeyboardEvent) => {
             const listed = keysOf()
             const key =
@@ -69,53 +79,60 @@ export function tabs(options: TabsOptions): Tabs {
         },
     }
 
-    const tab = (key: string): Record<string, unknown> => ({
-        type: 'button',
-        role: 'tab',
-        id: tabId(key),
-        // 51.42 — only the selected tab names its panel: a panel for no key exists for it alone, so a
-        // tab naming its own while another is selected would name nothing.
-        get 'aria-controls'() {
-            return current() === key ? panelId(key) : undefined
+    const tab = (key: string): TabParts => ({
+        button: {
+            type: 'button',
+            role: 'tab',
+            'data-part': 'tab',
+            id: tabId(key),
+            // 51.42 — only the selected tab names its panel: the shared panel exists for it alone, so a
+            // tab naming its own while another is selected would name nothing.
+            get 'aria-controls'() {
+                return current() === key ? panelId(key) : undefined
+            },
+            get 'aria-selected'() {
+                return current() === key ? 'true' : 'false'
+            },
+            // 51.41 — only the selected tab is in the page's tab order.
+            get tabindex() {
+                return current() === key ? '0' : '-1'
+            },
+            get 'data-selected'() {
+                return current() === key ? '' : undefined
+            },
+            onclick: () => select(key),
         },
-        get 'aria-selected'() {
-            return current() === key ? 'true' : 'false'
+        // 51.42 — a tab's own panel is hidden while another is selected.
+        panel: {
+            role: 'tabpanel',
+            'data-part': 'panel',
+            tabindex: '0',
+            id: panelId(key),
+            'aria-labelledby': tabId(key),
+            get hidden() {
+                return current() !== key
+            },
         },
-        // 51.41 — only the selected tab is in the page's tab order.
-        get tabindex() {
-            return current() === key ? '0' : '-1'
-        },
-        get 'data-selected'() {
-            return current() === key ? '' : undefined
-        },
-        onclick: () => select(key),
     })
 
-    // 51.42 — a panel for one tab is hidden while another is selected; a panel for none takes the
-    // selected tab's id, so that tab's `aria-controls` names it.
-    const panel = (key?: string): Record<string, unknown> =>
-        key === undefined
-            ? {
-                  role: 'tabpanel',
-                  tabindex: '0',
-                  get id() {
-                      const shown = current()
-                      return shown === undefined ? undefined : panelId(shown)
-                  },
-                  get 'aria-labelledby'() {
-                      const shown = current()
-                      return shown === undefined ? undefined : tabId(shown)
-                  },
-              }
-            : {
-                  role: 'tabpanel',
-                  tabindex: '0',
-                  id: panelId(key),
-                  'aria-labelledby': tabId(key),
-                  get hidden() {
-                      return current() !== key
-                  },
-              }
+    // 51.42 — the shared panel takes the selected tab's id, so that tab's `aria-controls` names it.
+    const panel = {
+        role: 'tabpanel',
+        'data-part': 'panel',
+        tabindex: '0',
+        get id() {
+            const shown = current()
+            return shown === undefined ? undefined : panelId(shown)
+        },
+        get 'aria-labelledby'() {
+            const shown = current()
+            return shown === undefined ? undefined : tabId(shown)
+        },
+    }
 
-    return { list, tab, panel, current }
+    const selected = reactiveOver(
+        () => current(),
+        (key: string | undefined) => picked.set(key),
+    )
+    return { list, tab, panel, selected }
 }

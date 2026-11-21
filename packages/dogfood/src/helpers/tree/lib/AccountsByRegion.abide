@@ -32,11 +32,11 @@ const accounts = tree({
 <p>{selected ?? 'Pick an account.'}</p>
 <ul {...accounts.tree} aria-label="Accounts" class="tree">
     {#for region of REGIONS by region.id}
-        <li {...accounts.item(region)}>
+        <li {...accounts.node(region).item}>
             {region.name}
-            <ul {...accounts.group(region)}>
+            <ul {...accounts.node(region).group}>
                 {#for company of region.under by company.id}
-                    <li {...accounts.item(company)}>{company.name}</li>
+                    <li {...accounts.node(company).item}>{company.name}</li>
                 {/for}
             </ul>
         </li>

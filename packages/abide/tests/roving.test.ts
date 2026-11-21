@@ -45,7 +45,7 @@ function walkListbox(): string[] {
     const landed: string[] = []
     for (const step of WALK) {
         press(list.keydown, keyOf(step, true))
-        landed.push(list.active() ?? '')
+        landed.push(list.active ?? '')
     }
     return landed
 }
@@ -78,7 +78,7 @@ function walkTabs(): string[] {
     const view = tabs({ keys: ITEMS })
     for (const key of ITEMS) {
         const tab = document.createElement('button')
-        tab.id = view.tab(key).id as string
+        tab.id = view.tab(key).button.id as string
         document.body.append(tab)
     }
     const landed: string[] = []
@@ -87,7 +87,7 @@ function walkTabs(): string[] {
             view.list.onkeydown as (event: KeyboardEvent) => void,
             keyOf(step, false),
         )
-        landed.push(view.current() ?? '')
+        landed.push(view.selected() ?? '')
     }
     document.body.replaceChildren()
     return landed
@@ -202,7 +202,7 @@ test('a letter walks the items that start with it, in a menu as in a tree — 50
     const root = document.createElement('ul')
     for (const name of NAMES) {
         const item = document.createElement('li')
-        item.id = view.item(name).id as string
+        item.id = view.node(name).item.id as string
         item.textContent = name
         item.tabIndex = -1
         root.append(item)

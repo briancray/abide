@@ -87,19 +87,19 @@ const plot = chart({
 
 <svg {...rest} {...plot.svg}>
     <slot />
-    {#for tick of plot.yTicks()}
+    {#for tick of plot.yTicks}
         <line {...tick.grid} />
         <text {...tick.text}>{tick.label}</text>
     {/for}
-    {#if plot.zero()}
-        <line {...plot.zero()?.line} />
+    {#if plot.zero}
+        <line {...plot.zero?.line} />
     {/if}
-    {#for tick of plot.xTicks()}
+    {#for tick of plot.xTicks}
         <text {...tick.text}>{tick.label}</text>
     {/for}
-    {#for mark of plot.marks() by mark.series}
+    {#for mark of plot.marks by mark.series}
         {#if mark.kind === 'column'}
-            <g data-part="columns" data-series={mark.series}>
+            <g {...mark.columns}>
                 {#for bar of mark.bars by bar.index}
                     <rect {...bar.rect} />
                 {/for}
@@ -108,21 +108,21 @@ const plot = chart({
             <path {...mark.path} />
         {/if}
     {/for}
-    {#if plot.readout()}
-        <line {...plot.crosshair()?.line} />
-        {#for point of plot.readout()?.values ?? []}
+    {#if plot.readout}
+        <line {...plot.crosshair?.line} />
+        {#for point of plot.readout?.values ?? []}
             {#if point.circle}
                 <circle {...point.circle} />
             {/if}
         {/for}
     {/if}
 </svg>
-{#if plot.readout()}
+{#if plot.readout}
     <!-- 50.47 — the readout, opened against the crosshair. -->
-    <span {...plot.tip} data-part="readout" data-disabled={plot.readout()?.disabled ? '' : undefined}>
-        <span data-part="readout-x">{plot.readout()?.label}</span>
-        {#for point of plot.readout()?.values ?? []}
-            <span data-part="readout-value" data-series={point.series}>{point.label}: {point.value}</span>
+    <span {...plot.tip}>
+        <span {...plot.readout?.heading}>{plot.readout?.label}</span>
+        {#for point of plot.readout?.values ?? []}
+            <span {...point.text}>{point.label}: {point.value}</span>
         {/for}
     </span>
 {/if}

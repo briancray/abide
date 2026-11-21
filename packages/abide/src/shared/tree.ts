@@ -4,6 +4,7 @@
 // tree as it stands before it hydrates.
 
 import { checkParts } from './checkParts.ts'
+import { itself, type KeyOption, type LabelOption } from './itemKey.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { roving, typeahead } from './roving.ts'
@@ -14,28 +15,35 @@ export type TreeOptions<Node> = {
     roots: readonly Node[] | (() => readonly Node[])
     /** A node's children, in order; none, or an empty list, for a leaf. */
     children(node: Node): readonly Node[] | undefined
-    /** What tells one node from another. */
-    key(node: Node): string
-    /** The text a node is found by as letters are typed. */
-    label(node: Node): string
-    /** The keys of the nodes expanded: hand it a `Reactive` to read and set them. None by default. */
+    /** The keys of the nodes expanded, where the app holds them: a `Reactive` to read and set. Held by the parts, none expanded, and handed back as `expanded`, where none is given. */
     expanded?: Reactive<readonly string[]>
-    /** The key of the node picked: hand it a `Reactive` to read and set the pick. */
+    /** The key of the node picked, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
     selected?: Reactive<string | undefined>
+} & KeyOption<Node> &
+    LabelOption<Node>
+
+/** One node's parts: its item, the group holding its children, whether it is expanded, and the toggle. */
+export type TreeNode = {
+    /** The node's attributes and its click. */
+    readonly item: Record<string, unknown>
+    /** The attributes of the element holding the node's children, hidden while it is collapsed. */
+    readonly group: Record<string, unknown>
+    /** Whether the node is expanded. */
+    get expanded(): boolean
+    /** Expands the node where it is collapsed, or collapses it where it is expanded. */
+    toggle(): void
 }
 
-/** The parts `tree` hands back, each spread onto an element: `<li {...view.item(node)}>`. */
+/** The parts `tree` hands back, each spread onto an element: `<li {...view.node(node).item}>`. */
 export type Tree<Node> = {
     /** The tree's attributes and its keyboard. */
     readonly tree: Record<string, unknown>
-    /** A node's attributes and its click. */
-    item(node: Node): Record<string, unknown>
-    /** The attributes of the element holding a node's children, hidden while it is collapsed. */
-    group(node: Node): Record<string, unknown>
-    /** Whether a node is expanded. */
-    isExpanded(node: Node): boolean
-    /** Expands a collapsed node, or collapses an expanded one. */
-    toggle(node: Node): void
+    /** One node's parts. */
+    node(node: Node): TreeNode
+    /** The keys of the nodes expanded, read and set. */
+    readonly expanded: Reactive<readonly string[]>
+    /** The key of the node picked, read and set. */
+    readonly selected: Reactive<string | undefined>
 }
 
 // Where a node stands: its depth from 1, how many siblings it has counting itself, its place among
@@ -50,7 +58,9 @@ type Placed = {
 
 /** WAI-ARIA's tree: nested nodes the keys rove and expand, as parts to spread. */
 export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
-    const { roots, children, key, label } = options
+    const { roots, children } = options
+    const key = itself<Node>(options.key)
+    const label = itself<Node>(options.label)
     const rootsOf = typeof roots === 'function' ? roots : () => roots
     const expanded = options.expanded ?? reactive<readonly string[]>([])
     const selected = options.selected ?? reactive<string | undefined>(undefined)
@@ -115,6 +125,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
 
     const root = {
         role: 'tree',
+        'data-part': 'tree',
         onkeydown: (event: KeyboardEvent) => {
             const { placed, shown, labels, open } = walked()
             // The item the key was pressed in, read off the event, so focus put there by any means counts.
@@ -170,6 +181,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
         const place = () => walked().placed.get(each)
         return {
             role: 'treeitem',
+            'data-part': 'item',
             id: itemId(each),
             get 'aria-level'() {
                 return place()?.level
@@ -218,6 +230,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
         const each = key(node)
         return {
             role: 'group',
+            'data-part': 'group',
             get hidden() {
                 return !walked().open.has(each)
             },
@@ -226,12 +239,19 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
 
     return {
         tree: root,
-        item,
-        group,
-        isExpanded: (node) => walked().open.has(key(node)),
-        toggle: (node) => {
+        node: (node) => {
             const each = key(node)
-            setOpen(each, !(expanded.peek() ?? []).includes(each))
+            return {
+                item: item(node),
+                group: group(node),
+                get expanded() {
+                    return walked().open.has(each)
+                },
+                toggle: () =>
+                    setOpen(each, !(expanded.peek() ?? []).includes(each)),
+            }
         },
+        expanded,
+        selected,
     }
 }

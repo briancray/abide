@@ -117,6 +117,8 @@ export type ChartMark = {
     d: string
     /** `<path {...mark.path} />` — for a line or an area. */
     path: Record<string, unknown>
+    /** `<g {...mark.columns}>` — the element holding a `column`'s bars. */
+    columns: Record<string, unknown>
     /** The columns, for a `column`. */
     bars: ChartBar[]
 }
@@ -140,6 +142,8 @@ export type ChartReadout = {
     /** The x, as `xFormat` writes it. */
     label: string
     disabled: boolean
+    /** The element holding the x's label. */
+    heading: Record<string, unknown>
     /** Each series' value there: its label, its value as written, and its point where it has one. */
     values: {
         series: number
@@ -148,6 +152,8 @@ export type ChartReadout = {
         y: number | undefined
         /** The series' point at the crosshair, `undefined` where it has no value there. */
         circle: Record<string, unknown> | undefined
+        /** The element holding the series' label and value. */
+        text: Record<string, unknown>
     }[]
 }
 
@@ -160,31 +166,31 @@ export type ChartParts = {
     /** The y of `value`. */
     y(value: number): number
     /** The edges of the plot. */
-    frame(): ChartFrame
+    get frame(): ChartFrame
     /** The y gridlines and their labels. */
-    yTicks(): ChartYTick[]
+    get yTicks(): ChartYTick[]
     /** The x positions labeled under the plot. */
-    xTicks(): ChartXTick[]
+    get xTicks(): ChartXTick[]
     /** The line at zero, where `zero` is set (52.25). */
-    zero(): { y: number; line: Record<string, unknown> } | undefined
+    get zero(): { y: number; line: Record<string, unknown> } | undefined
     /** Every series' mark in order, the first at the back (52.24). */
-    marks(): ChartMark[]
+    get marks(): ChartMark[]
     /** The marks drawn as lines. */
-    lines(): ChartMark[]
+    get lines(): ChartMark[]
     /** The marks drawn as areas. */
-    areas(): ChartMark[]
+    get areas(): ChartMark[]
     /** Every column of every series. */
-    bars(): ChartBar[]
+    get bars(): ChartBar[]
     /** Every present value of every series. */
-    points(): ChartPoint[]
+    get points(): ChartPoint[]
     /** What the readout reads, while the crosshair stands somewhere. */
-    readout(): ChartReadout | undefined
-    /** The crosshair while it stands somewhere: `<line {...plot.crosshair()?.line} />`. */
-    crosshair():
+    get readout(): ChartReadout | undefined
+    /** The crosshair while it stands somewhere: `<line {...plot.crosshair?.line} />`. */
+    get crosshair():
         { index: number; x: number; line: Record<string, unknown> } | undefined
     /**
      * 50.47 — the readout's popover, spread onto an element of the app's own outside the `<svg>` and
-     * rendered while `readout()` stands: opened against the crosshair, describing the chart.
+     * rendered while `readout` stands: opened against the crosshair, describing the chart.
      */
     readonly tip: Record<string, unknown>
 }
@@ -388,6 +394,7 @@ export function chart(options: ChartOptions): ChartParts {
                               fill: 'currentColor',
                               stroke: 'none',
                           },
+                columns: { 'data-part': 'columns', 'data-series': at },
                 bars,
             })
         }
@@ -567,6 +574,7 @@ export function chart(options: ChartOptions): ChartParts {
                               r: '3',
                               fill: 'currentColor',
                           },
+                text: { 'data-part': 'readout-value', 'data-series': line },
             })
         }
         return {
@@ -574,6 +582,7 @@ export function chart(options: ChartOptions): ChartParts {
             x: at,
             label: xFormat(drawn.positions[index] ?? index),
             disabled: options.disabled?.(index) === true,
+            heading: { 'data-part': 'readout-x' },
             values,
         }
     })
@@ -672,6 +681,7 @@ export function chart(options: ChartOptions): ChartParts {
 
     return {
         svg: {
+            'data-part': 'svg',
             get width() {
                 return size().width
             },
@@ -702,23 +712,47 @@ export function chart(options: ChartOptions): ChartParts {
         },
         x: (index) => plot().xs[index] ?? plot().toX(index),
         y: (value) => plot().toY(value),
-        frame: () => plot().frame,
-        yTicks: () => plot().yTicks,
-        xTicks: () => plot().xTicks,
-        zero: () => plot().zero,
-        marks: () => plot().marks,
-        lines: () => plot().marks.filter((mark) => mark.kind === 'line'),
-        areas: () => plot().marks.filter((mark) => mark.kind === 'area'),
-        bars: () => plot().marks.flatMap((mark) => mark.bars),
-        points: () => plot().points,
-        readout: () => readout(),
+        get frame() {
+            return plot().frame
+        },
+        get yTicks() {
+            return plot().yTicks
+        },
+        get xTicks() {
+            return plot().xTicks
+        },
+        get zero() {
+            return plot().zero
+        },
+        get marks() {
+            return plot().marks
+        },
+        get lines() {
+            return plot().marks.filter((mark) => mark.kind === 'line')
+        },
+        get areas() {
+            return plot().marks.filter((mark) => mark.kind === 'area')
+        },
+        get bars() {
+            return plot().marks.flatMap((mark) => mark.bars)
+        },
+        get points() {
+            return plot().points
+        },
+        get readout() {
+            return readout()
+        },
         tip: {
             id: tipId,
             role: 'tooltip',
             popover: 'manual',
+            'data-part': 'readout',
+            get 'data-disabled'() {
+                return readout()?.disabled === true ? '' : undefined
+            },
             'bind:element': holdTip,
         },
-        crosshair() {
+        get crosshair() {
             const read = readout()
             if (read === undefined) return undefined
             const { frame } = plot()

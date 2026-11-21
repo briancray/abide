@@ -1,5 +1,5 @@
 <script>
-import { combobox, reactive } from '@abide/abide'
+import { combobox } from '@abide/abide'
 
 type Contact = { id: string; name: string; company: string }
 
@@ -8,13 +8,10 @@ const CONTACTS: Contact[] = [
     { id: 'grace', name: 'Grace Hopper', company: 'Hopper & Co' },
     { id: 'katherine', name: 'Katherine Johnson', company: 'Orbit Labs' },
 ]
-let owner = reactive<Contact | undefined>(undefined)
 const box = combobox({
-    id: 'owner',
     options: () => CONTACTS,
     key: (contact) => contact.id,
     label: (contact) => contact.name,
-    value: owner,
 })
 const initials = (name: string) =>
     name
@@ -24,13 +21,13 @@ const initials = (name: string) =>
 </script>
 
 <div class="picker">
-    <label for="owner">Owner</label>
+    <label for={box.id}>Owner</label>
     <input {...box.input} placeholder="Find a contact">
-    {#if box.open()}
-        <div {...box.popup} data-part="popup">
-            <ul {...box.listbox} data-part="listbox">
-                {#for contact of box.items() by contact.id}
-                    <li {...box.option(contact)} data-part="option">
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for contact of box.items by contact.id}
+                    <li {...box.option(contact)}>
                         <b>{initials(contact.name)}</b>
                         {contact.name}
                         <small class="text-muted">{contact.company}</small>
@@ -40,4 +37,4 @@ const initials = (name: string) =>
         </div>
     {/if}
 </div>
-<p>Owner: {owner?.name ?? 'none'}</p>
+<p>Owner: {box.value?.name ?? 'none'}</p>

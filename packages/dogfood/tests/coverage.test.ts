@@ -698,7 +698,7 @@ test("an object a page's call takes is spelled out beneath its syntax", async ()
             '`options?: DialogOptions`',
             ['`open?`', '`modal?`', '`dismissible?`', '`onclose?`'],
         ],
-        ['/helpers/tree', '`options: TreeOptions`', ['`children`', '`key`']],
+        ['/helpers/tree', '`options: TreeOptions`', ['`children`', '`key?`']],
     ]
     const pages = await renderedMarkdown()
     const wrong: string[] = []

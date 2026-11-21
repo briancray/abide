@@ -38,6 +38,7 @@ export function dialog(options: DialogOptions = {}): DialogParts {
     return {
         open,
         dialog: {
+            'data-part': 'dialog',
             get 'data-open'() {
                 return open() ? '' : undefined
             },

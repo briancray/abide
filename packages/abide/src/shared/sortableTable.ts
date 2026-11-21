@@ -4,6 +4,7 @@
 // that is mixed while some rows are picked. The app writes every cell.
 
 import type { Column } from './Column.ts'
+import { itself, type KeyOption } from './itemKey.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Sort } from './Sort.ts'
 import { cellText, sortRows } from './sortRows.ts'
@@ -17,32 +18,55 @@ export type SortableTableOptions<Row> = {
     rows: Live<readonly Row[]>
     /** The columns: what each sorts by, shows and lines up on. */
     columns: Live<readonly Column<Row>[]>
-    /** What tells one row from another, so a re-sort moves each row rather than rewriting it. */
-    key(row: Row): string
     /** The column sorted by and its direction: hand it a `Reactive` to read and set the sort. */
     sort?: Reactive<Sort | undefined>
     /** The keys of the rows picked: hand it a `Reactive` to read and set the selection (51.79). */
     selected?: Reactive<readonly string[] | undefined>
+} & KeyOption<Row>
+
+/** One column's parts: its header cell, the button in it that sorts, and its body cells. */
+export type SortableTableColumn = {
+    /** The header cell: its `scope`, `aria-sort`, `data-sort` and `data-align`. */
+    readonly header: Record<string, unknown>
+    /** The button in the header that sorts by the column (51.53). */
+    readonly sort: Record<string, unknown>
+    /** A body cell of the column: its `data-align`. */
+    readonly cell: Record<string, unknown>
 }
 
-/** The parts `sortableTable` hands back, each spread onto an element: `<tr {...deals.row(deal)}>`. */
+/** One row's parts: the row, the cell holding its checkbox, the checkbox, and a detail row under it. */
+export type SortableTableRow = {
+    /** The row: `data-selected` while it is picked. */
+    readonly row: Record<string, unknown>
+    /** The cell holding the row's checkbox. */
+    readonly select: Record<string, unknown>
+    /** The row's checkbox: checked while the row is picked, a Shift-click picking the run from the last (51.81). */
+    readonly checkbox: Record<string, unknown>
+    /** A row of detail shown under it. */
+    readonly detail: Record<string, unknown>
+}
+
+/** The parts `sortableTable` hands back, each spread onto an element: `<tr {...deals.row(deal).row}>`. */
 export type SortableTableParts<Row> = {
+    /** The table. */
+    readonly table: Record<string, unknown>
     /** The rows in the order the sort names: what a keyed `{#for}` walks. */
-    rows(): readonly Row[]
-    /** A header cell: its `scope`, `aria-sort`, `data-sort` and `data-align`. */
-    header(column: Column<Row>): Record<string, unknown>
-    /** The button in a header that sorts by its column (51.53). */
-    sort(column: Column<Row>): Record<string, unknown>
-    /** A row: `data-selected` while it is picked. */
-    row(row: Row): Record<string, unknown>
-    /** A body cell: its `data-align`. */
-    cell(column: Column<Row>): Record<string, unknown>
+    get rows(): readonly Row[]
+    /** One column's parts. */
+    column(column: Column<Row>): SortableTableColumn
+    /** One row's parts. */
+    row(row: Row): SortableTableRow
     /** The text a cell shows for a column: its `format`, or its value's own. */
     text(row: Row, column: Column<Row>): string
-    /** A row's checkbox: checked while the row is picked, a Shift-click picking the run from the last (51.81). */
-    select(row: Row): Record<string, unknown>
-    /** The header's checkbox: checked where every row is picked, mixed where some are (51.82). */
-    readonly selectAll: Record<string, unknown>
+    /** The header's cell holding the checkbox, and the checkbox: checked where every row is picked, mixed where some are (51.82). */
+    readonly selectAll: {
+        readonly select: Record<string, unknown>
+        readonly checkbox: Record<string, unknown>
+    }
+    /** The column sorted by and its direction, read and set. */
+    readonly sort: Reactive<Sort | undefined>
+    /** The keys of the rows picked, read and set. */
+    readonly selected: Reactive<readonly string[] | undefined>
 }
 
 const read = <Value>(live: Live<Value>): Value =>
@@ -52,7 +76,7 @@ const read = <Value>(live: Live<Value>): Value =>
 export function sortableTable<Row>(
     options: SortableTableOptions<Row>,
 ): SortableTableParts<Row> {
-    const { key } = options
+    const key = itself<Row>(options.key)
     const sort = options.sort ?? reactive<Sort | undefined>(undefined)
     const selected =
         options.selected ?? reactive<readonly string[] | undefined>(undefined)
@@ -126,52 +150,71 @@ export function sortableTable<Row>(
     }
 
     return {
-        rows: () => sorted(),
-        header: (column) => ({
-            scope: 'col',
-            get 'aria-sort'() {
-                return directionOf(column)
+        table: { 'data-part': 'table' },
+        get rows() {
+            return sorted()
+        },
+        column: (column) => ({
+            header: {
+                scope: 'col',
+                'data-part': 'header',
+                get 'aria-sort'() {
+                    return directionOf(column)
+                },
+                get 'data-sort'() {
+                    return directionOf(column)
+                },
+                'data-align': column.align,
             },
-            get 'data-sort'() {
-                return directionOf(column)
+            sort: {
+                type: 'button',
+                'data-part': 'sort',
+                onclick: () => sortBy(column),
             },
-            'data-align': column.align,
-        }),
-        sort: (column) => ({
-            type: 'button',
-            onclick: () => sortBy(column),
+            cell: { 'data-part': 'cell', 'data-align': column.align },
         }),
         row: (row) => ({
-            get 'data-selected'() {
-                return picked().has(key(row)) ? '' : undefined
+            row: {
+                'data-part': 'row',
+                get 'data-selected'() {
+                    return picked().has(key(row)) ? '' : undefined
+                },
             },
+            select: { 'data-part': 'select' },
+            checkbox: {
+                type: 'checkbox',
+                'data-part': 'checkbox',
+                get 'aria-label'() {
+                    const first = columns()[0]
+                    return `Select ${first === undefined ? key(row) : cellText(row, first)}`
+                },
+                get checked() {
+                    return picked().has(key(row))
+                },
+                onclick: (event: MouseEvent) => toggle(row, event),
+            },
+            detail: { 'data-part': 'detail' },
         }),
-        cell: (column) => ({ 'data-align': column.align }),
         text: cellText,
-        select: (row) => ({
-            type: 'checkbox',
-            get 'aria-label'() {
-                const first = columns()[0]
-                return `Select ${first === undefined ? key(row) : cellText(row, first)}`
-            },
-            get checked() {
-                return picked().has(key(row))
-            },
-            onclick: (event: MouseEvent) => toggle(row, event),
-        }),
         selectAll: {
-            type: 'checkbox',
-            'aria-label': 'Select every row',
-            get checked() {
-                return every()
+            select: { scope: 'col', 'data-part': 'select' },
+            checkbox: {
+                type: 'checkbox',
+                'data-part': 'checkbox',
+                'aria-label': 'Select every row',
+                get checked() {
+                    return every()
+                },
+                // 51.82 — the header's box, toggling every row.
+                onclick: () => selected.set(every() ? [] : rows().map(key)),
+                // Mixed is a property with no attribute, so it is set on the element itself.
+                'bind:element': (input: HTMLInputElement) =>
+                    watch(() => {
+                        input.indeterminate = some()
+                    }),
             },
-            // 51.82 — the header's box, toggling every row.
-            onclick: () => selected.set(every() ? [] : rows().map(key)),
-            // Mixed is a property with no attribute, so it is set on the element itself.
-            'bind:element': (input: HTMLInputElement) =>
-                watch(() => {
-                    input.indeterminate = some()
-                }),
         },
+        sort,
+        selected,
     }
 }

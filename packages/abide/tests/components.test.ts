@@ -54,8 +54,9 @@ test('a shipped component writes a style only from a computed value — 49.6', a
 
 // 49.9 — A COMPONENT OVER PARTS renders its widget through the parts function an app can spread
 // itself, exported beside it, and its own markup does nothing for the widget: no handler, no role and
-// no `aria-` attribute of its own, every one of them the parts'.
-// THE REVERT: write Range's thumbs' `onkeydown` in `Range.abide` again, and it is named.
+// no `aria-` attribute and no `data-part` of its own, every one of them the parts' (49.4).
+// THE REVERT: write Range's thumbs' `onkeydown` in `Range.abide` again, or `data-part="thumb"` beside
+// their spread, and it is named.
 const OVER_PARTS: Record<string, { module: string; name: string }> = {
     'Range.abide': { module: 'range.ts', name: 'range' },
     'CommandPalette.abide': {
@@ -143,7 +144,7 @@ test('a component over a parts function renders through it, and does nothing of 
         )
             wrong.push(`${name} is not exported`)
         for (const [attribute] of template(text).matchAll(
-            /\s(?:on[a-z]+|role|aria-[a-z]+)=/g,
+            /\s(?:on[a-z]+|role|aria-[a-z]+|data-part)=/g,
         ))
             wrong.push(`${component} writes${attribute} of its own`)
     }

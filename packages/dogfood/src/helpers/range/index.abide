@@ -38,13 +38,14 @@ import submitBothEnds from './lib/SubmitBothEnds.abide' with { type: 'text' }
 >
     <Section level={3} title="Write each thumb as a tag showing its value">
         <p>Spread the parts onto markup of your own: the group, the track, the span between the
-            thumbs, and each thumb, which can hold anything. The parts carry the roles, the keys,
+            thumbs, and each end's thumb, <code>end(0).thumb</code> and
+            <code>end(1).thumb</code>, which can hold anything. The parts carry the roles, the keys,
             the dragging and the <code>style</code> placing the span and the thumbs.</p>
         <Example code={labelledThumbs}><LabelledThumbs /></Example>
     </Section>
 
     <Section level={3} title="Submit both ends of the range with a form">
-        <p>Given <code>name</code>, <code>input(0)</code> and <code>input(1)</code> are hidden fields
+        <p>Given <code>name</code>, <code>end(0).input</code> and <code>end(1).input</code> are hidden fields
             holding the low and the high end, submitted in that order under the name.</p>
         <Example code={submitBothEnds}><SubmitBothEnds /></Example>
     </Section>

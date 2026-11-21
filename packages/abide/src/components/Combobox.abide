@@ -60,33 +60,35 @@ const box = combobox({
     debounce,
     key,
     label,
+    // 51.61 — bound to an array, it picks many.
+    multiple: Array.isArray(value),
     value: reactiveOver(
         () => value,
         (next) => {
             value = next
         },
     ),
-})
+} as Parameters<typeof combobox<Item, boolean>>[0])
 </script>
 
 <div {...rest} {...box.root}>
-    {#if box.picks()}
-        <span data-part="chips">
-            {#for item of box.picks() ?? [] by key(item)}
+    {#if box.picks}
+        <span {...box.chips}>
+            {#for item of box.picks ?? [] by key(item)}
                 {#if Chip}
                     <Chip item={item} remove={() => box.unpick(item)} />
                 {:else}
-                    <span data-part="chip">{label(item)}<button {...box.remove(item)} data-part="remove">×</button></span>
+                    <span {...box.chip(item).chip}>{label(item)}<button {...box.chip(item).remove}>×</button></span>
                 {/if}
             {/for}
         </span>
     {/if}
-    <input {...box.input} placeholder={placeholder} data-part="input">
-    {#if box.open()}
-        <div {...box.popup} data-part="popup">
-            <ul {...box.listbox} data-part="listbox">
-                {#for item of box.items() by key(item)}
-                    <li {...box.option(item)} data-part="option">
+    <input {...box.input} placeholder={placeholder}>
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for item of box.items by key(item)}
+                    <li {...box.option(item)}>
                         {#if Option}
                             <Option item={item} />
                         {:else}
@@ -95,8 +97,8 @@ const box = combobox({
                     </li>
                 {/for}
             </ul>
-            {#if box.nothingFound()}
-                <div {...box.empty} data-part="empty"><slot /></div>
+            {#if box.nothingFound}
+                <div {...box.empty}><slot /></div>
             {/if}
         </div>
     {/if}

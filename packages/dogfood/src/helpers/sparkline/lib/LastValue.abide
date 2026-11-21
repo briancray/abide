@@ -9,5 +9,5 @@ const trend = sparkline({ label: 'Won revenue, 4 months', values: won })
     <svg {...trend.svg} class="h-6 w-24">
         <path {...trend.line} />
     </svg>
-    <span>{won.at(-1)}K, {trend.trend()}</span>
+    <span>{won.at(-1)}K, {trend.trend}</span>
 </span>

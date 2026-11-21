@@ -37,14 +37,17 @@ export {
     sparkline,
 } from './chart/sparkline.ts'
 export {
+    type ComboboxChip,
     type ComboboxOptions,
     type ComboboxParts,
     combobox,
+    type Picked,
 } from './combobox.ts'
 export {
     type Command,
     type CommandPaletteOptions,
     type CommandPaletteParts,
+    type CommandParts,
     commandPalette,
 } from './commandPalette.ts'
 export { type Cookies, cookies } from './cookies.ts'
@@ -155,20 +158,27 @@ export {
     type Transformer,
     watch,
 } from './reactive/index.ts'
-export { type RangeOptions, type RangeParts, range } from './range.ts'
+export {
+    type RangeEnd,
+    type RangeOptions,
+    type RangeParts,
+    range,
+} from './range.ts'
 export { refuse } from './refuse.ts'
 // 44.51 — what a conversation's calls to one handler answered.
 export { resultsOf } from './resultsOf.ts'
 export { route } from './route.ts'
 export {
+    type SortableTableColumn,
     type SortableTableOptions,
     type SortableTableParts,
+    type SortableTableRow,
     sortableTable,
 } from './sortableTable.ts'
-export { type Tabs, type TabsOptions, tabs } from './tabs.ts'
-export { type Tree, type TreeOptions, tree } from './tree.ts'
+export { type TabParts, type Tabs, type TabsOptions, tabs } from './tabs.ts'
+export { type Tree, type TreeNode, type TreeOptions, tree } from './tree.ts'
 // 52.73-52.78 — a time that stays current, as parts on a `<time>` of the app's own.
-export { type TimeOptions, type TimeParts, time } from './time.ts'
+export { type TimeAt, type TimeOptions, type TimeParts, time } from './time.ts'
 export * as transcript from './transcript/index.ts'
 export * as tooltip from './tooltip/index.ts'
 export { type TooltipOptions } from './tooltip/tips.ts'

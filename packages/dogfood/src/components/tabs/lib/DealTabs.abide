@@ -6,9 +6,9 @@ const view = tabs({ keys: ['details', 'stage'], selected: tab })
 </script>
 
 <div {...view.list}>
-    <button {...view.tab('details')}>Details</button>
-    <button {...view.tab('stage')}>Stage</button>
+    <button {...view.tab('details').button}>Details</button>
+    <button {...view.tab('stage').button}>Stage</button>
 </div>
-<div {...view.panel()}>
+<div {...view.panel}>
     {#if tab === 'details'}<p>Acme renewal, $42K</p>{:else}<p>proposal</p>{/if}
 </div>

@@ -22,29 +22,29 @@ const asked = host()
 </script>
 
 <dialog {...rest} {...asked.dialog}>
-    {#if asked.current()}
-        <form {...asked.form} data-part="form">
-            {#if asked.current()?.title}
-                <h2 data-part="title">{asked.current()?.title}</h2>
+    {#if asked.current}
+        <form {...asked.form}>
+            {#if asked.current?.title}
+                <h2 {...asked.title}>{asked.current?.title}</h2>
             {/if}
-            {#if asked.current()?.body}
-                <p data-part="body">{asked.current()?.body}</p>
+            {#if asked.current?.body}
+                <p {...asked.body}>{asked.current?.body}</p>
             {/if}
-            {#if asked.typing()}
-                <label data-part="field">
-                    {#if asked.current()?.mustType !== undefined}
-                        Type {asked.current()?.mustType} to confirm
+            {#if asked.typing}
+                <label {...asked.field}>
+                    {#if asked.current?.mustType !== undefined}
+                        Type {asked.current?.mustType} to confirm
                     {/if}
-                    <input {...asked.input} data-part="input">
+                    <input {...asked.input}>
                 </label>
             {/if}
-            {#if asked.failed() !== undefined}
-                <p {...asked.error} data-part="error">{asked.failed()}</p>
+            {#if asked.failed !== undefined}
+                <p {...asked.error}>{asked.failed}</p>
             {/if}
-            <div data-part="actions">
-                <button {...asked.confirm} data-part="confirm">{asked.current()?.confirm}</button>
-                {#if asked.current()?.kind !== 'alert'}
-                    <button {...asked.cancel} data-part="cancel">{asked.current()?.cancel}</button>
+            <div {...asked.actions}>
+                <button {...asked.confirm}>{asked.current?.confirm}</button>
+                {#if asked.current?.kind !== 'alert'}
+                    <button {...asked.cancel}>{asked.current?.cancel}</button>
                 {/if}
             </div>
         </form>

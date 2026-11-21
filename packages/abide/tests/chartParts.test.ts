@@ -17,7 +17,7 @@ test("every present value is a point at the plot's own x and y", () => {
         label: 'Won',
         series: () => [{ label: 'Won', values: [10, null, 30, 20] }],
     })
-    const points = plot.points()
+    const points = plot.points
     expect(points.map((point) => point.index)).toEqual([0, 2, 3])
     for (const point of points) {
         expect(point.x).toBe(plot.x(point.index))
@@ -34,14 +34,14 @@ test('the crosshair carries one binding at every x, and the chart is described b
         label: 'Won',
         series: () => [{ label: 'Won', values: [10, 20, 30] }],
     })
-    expect(plot.crosshair()).toBeUndefined()
+    expect(plot.crosshair).toBeUndefined()
     expect(plot.svg['aria-describedby']).toBeUndefined()
     press(plot.svg, 'ArrowRight')
-    const first = plot.crosshair()?.line['bind:element']
-    expect(plot.crosshair()?.index).toBe(0)
+    const first = plot.crosshair?.line['bind:element']
+    expect(plot.crosshair?.index).toBe(0)
     press(plot.svg, 'ArrowRight')
-    expect(plot.crosshair()?.index).toBe(1)
-    expect(plot.crosshair()?.line['bind:element']).toBe(first)
+    expect(plot.crosshair?.index).toBe(1)
+    expect(plot.crosshair?.line['bind:element']).toBe(first)
     expect(plot.svg['aria-describedby']).toBe(plot.tip.id)
     expect(plot.tip.role).toBe('tooltip')
 })
@@ -59,9 +59,9 @@ test("a slice's hint binding stands while its words do", () => {
         ],
         inner: () => inner(),
     })
-    const before = ring.slices()[0]?.circle
+    const before = ring.slices[0]?.circle
     inner.set(0.6)
-    const after = ring.slices()[0]?.circle
+    const after = ring.slices[0]?.circle
     expect(after?.['stroke-width']).not.toBe(before?.['stroke-width'])
     expect(after?.['bind:element']).toBe(before?.['bind:element'])
 })

@@ -37,6 +37,16 @@ export type CommandPaletteOptions = {
     label?: string
 }
 
+/** One command's parts: its option, and the label and the key written in it. */
+export type CommandParts = {
+    /** The option: its id, whether it is active, and its click. */
+    readonly option: Record<string, unknown>
+    /** The element holding the command's label. */
+    readonly label: Record<string, unknown>
+    /** The element showing the command's key. */
+    readonly key: Record<string, unknown>
+}
+
 /** The parts `commandPalette` hands back, each spread onto an element: `<input {...palette.input} />`. */
 export type CommandPaletteParts = {
     /** The `<dialog>`: `dialog`'s part, opened modal by `open`, and the palette's accessible name. */
@@ -45,12 +55,12 @@ export type CommandPaletteParts = {
     readonly input: Record<string, unknown>
     /** The list of commands listed. */
     readonly listbox: Record<string, unknown>
-    /** A command's option: its id, whether it is active, and its click. */
-    option(command: Command): Record<string, unknown>
+    /** A command's parts: its option, and the label and key shown in it. */
+    command(command: Command): CommandParts
     /** What shows where nothing typed matches a command: a status a screen reader reads. */
     readonly empty: Record<string, unknown>
     /** The commands listed for what is typed, in the order given. */
-    results(): readonly Command[]
+    get results(): readonly Command[]
     /** Whether the palette is showing: the `open` handed in, or one of the palette's own. */
     readonly open: Reactive<boolean>
 }
@@ -121,6 +131,7 @@ export function commandPalette(
         dialog: shown,
         input: {
             id: inputId,
+            'data-part': 'input',
             type: 'text',
             role: 'combobox',
             autocomplete: 'off',
@@ -130,7 +141,7 @@ export function commandPalette(
             'aria-expanded': 'true',
             'aria-controls': listId,
             get 'aria-activedescendant'() {
-                return list.activeId()
+                return list.activeId
             },
             // 51.78 — every command is listed again, the input emptied, each time the palette opens: the
             // field's own value too, which no attribute written to it would change once something was
@@ -157,23 +168,31 @@ export function commandPalette(
         listbox: {
             id: listId,
             role: 'listbox',
+            'data-part': 'listbox',
             'aria-label': label,
             onmousedown: (event: MouseEvent) => event.preventDefault(),
         },
-        option: (command) => ({
-            id: list.idOf(command.label),
-            role: 'option',
-            get 'aria-selected'() {
-                return list.active() === command.label ? 'true' : 'false'
+        command: (command) => ({
+            option: {
+                id: list.idOf(command.label),
+                role: 'option',
+                'data-part': 'option',
+                get 'aria-selected'() {
+                    return list.active === command.label ? 'true' : 'false'
+                },
+                get 'data-active'() {
+                    return list.active === command.label ? '' : undefined
+                },
+                onpointermove: () => list.activate(command.label),
+                onclick: () => run(command),
             },
-            get 'data-active'() {
-                return list.active() === command.label ? '' : undefined
-            },
-            onpointermove: () => list.activate(command.label),
-            onclick: () => run(command),
+            label: { 'data-part': 'label' },
+            key: { 'data-part': 'key' },
         }),
-        empty: { role: 'status' },
-        results: () => found(),
+        empty: { role: 'status', 'data-part': 'empty' },
+        get results() {
+            return found()
+        },
         open,
     }
 }

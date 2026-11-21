@@ -19,19 +19,27 @@ export type PromptsHost = {
     /** The `<form method="dialog">` its buttons submit. */
     readonly form: Record<string, unknown>
     /** The prompt showing, or none. */
-    current(): ShownPrompt | undefined
+    get current(): ShownPrompt | undefined
     /** Whether it asks for text: a `prompts.prompt`, or a prompt with `mustType`. */
-    typing(): boolean
+    get typing(): boolean
+    /** The prompt's title. */
+    readonly title: Record<string, unknown>
+    /** The prompt's body. */
+    readonly body: Record<string, unknown>
+    /** The label holding the text field. */
+    readonly field: Record<string, unknown>
     /** The text field, holding what is typed. */
     readonly input: Record<string, unknown>
     /** What the prompt's `run` last failed with, while it shows. */
-    failed(): string | undefined
+    get failed(): string | undefined
     /** The line `failed` is written in: an alert a screen reader reads out. */
     readonly error: Record<string, unknown>
     /** The confirming button, disabled until `mustType` is typed and while `run` is in flight. */
     readonly confirm: Record<string, unknown>
     /** The declining button; an alert has none to render. */
     readonly cancel: Record<string, unknown>
+    /** The element holding the buttons. */
+    readonly actions: Record<string, unknown>
 }
 
 /** The `<dialog>` the queued prompts show in, as parts to spread. */
@@ -130,16 +138,22 @@ export function host(): PromptsHost {
 
     return {
         dialog: shown,
-        form: { method: 'dialog', onsubmit: submitted },
-        current: () => current(),
-        typing: () => {
+        form: { method: 'dialog', 'data-part': 'form', onsubmit: submitted },
+        get current() {
+            return current()
+        },
+        get typing() {
             const asked = current()
             return (
                 asked !== undefined &&
                 (asked.mustType !== undefined || asked.kind === 'prompt')
             )
         },
+        title: { 'data-part': 'title' },
+        body: { 'data-part': 'body' },
+        field: { 'data-part': 'field' },
         input: {
+            'data-part': 'input',
             autocomplete: 'off',
             autofocus: true,
             get 'aria-label'() {
@@ -160,10 +174,13 @@ export function host(): PromptsHost {
                     if (field.value !== text) field.value = text
                 }),
         },
-        failed: () => failure(),
-        error: { role: 'alert' },
+        get failed() {
+            return failure()
+        },
+        error: { role: 'alert', 'data-part': 'error' },
         confirm: {
             type: 'submit',
+            'data-part': 'confirm',
             value: 'confirm',
             get disabled() {
                 return !typedRight() || busy()
@@ -174,11 +191,13 @@ export function host(): PromptsHost {
         },
         cancel: {
             type: 'submit',
+            'data-part': 'cancel',
             value: 'cancel',
             get autofocus() {
                 const asked = current()
                 return asked?.kind === 'confirm' && asked.mustType === undefined
             },
         },
+        actions: { 'data-part': 'actions' },
     }
 }

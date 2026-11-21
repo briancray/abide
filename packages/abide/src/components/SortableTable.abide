@@ -59,31 +59,31 @@ const table = sortableTable({
 })
 </script>
 
-<table {...rest}>
+<table {...rest} {...table.table}>
     <thead>
         <tr>
             {#if selected !== undefined}
-                <th scope="col" data-part="select"><input {...table.selectAll}></th>
+                <th {...table.selectAll.select}><input {...table.selectAll.checkbox}></th>
             {/if}
             {#for column of columns by column.key}
-                <th {...table.header(column)} data-part="header">
+                <th {...table.column(column).header}>
                     {#if column.sortable === false}
                         {column.label}
                     {:else}
-                        <button {...table.sort(column)} data-part="sort">{column.label}</button>
+                        <button {...table.column(column).sort}>{column.label}</button>
                     {/if}
                 </th>
             {/for}
         </tr>
     </thead>
     <tbody>
-        {#for row of table.rows() by key(row)}
-            <tr {...rowAttributes?.(row)} {...table.row(row)} data-part="row">
+        {#for row of table.rows by key(row)}
+            <tr {...rowAttributes?.(row)} {...table.row(row).row}>
                 {#if selected !== undefined}
-                    <td data-part="select"><input {...table.select(row)}></td>
+                    <td {...table.row(row).select}><input {...table.row(row).checkbox}></td>
                 {/if}
                 {#for column of columns by column.key}
-                    <td {...table.cell(column)} data-part="cell">
+                    <td {...table.column(column).cell}>
                         {#if Cell}
                             <Cell row={row} column={column} text={table.text(row, column)} />
                         {:else}
@@ -93,7 +93,7 @@ const table = sortableTable({
                 {/for}
             </tr>
             {#if Detail}
-                <tr data-part="detail">
+                <tr {...table.row(row).detail}>
                     <td colspan={columns.length + (selected === undefined ? 0 : 1)}><Detail row={row} /></td>
                 </tr>
             {/if}

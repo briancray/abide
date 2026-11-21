@@ -133,7 +133,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
     <Section level={3} title="Lay out the prompts on a dialog of your own">
         <p>In place of <code>Prompts</code>, call <code>prompts.host</code> from your root
             layout's script and spread its parts onto your own <code>&lt;dialog&gt;</code>: the
-            form, the field where <code>typing()</code> holds, the error, and the two buttons.
+            form, the field where <code>typing</code> holds, the error, and the two buttons.
             The parts carry the queue, the role, the closing and the answer.</p>
         <Code language="abide" caption="abide" code={`
             <script>
@@ -143,15 +143,15 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
             </script>
 
             <dialog {...asked.dialog}>
-                {#if asked.current()}
+                {#if asked.current}
                     <form {...asked.form}>
-                        <header>{asked.current()?.title}</header>
-                        <small>{asked.current()?.body}</small>
-                        {#if asked.typing()}<input {...asked.input} />{/if}
-                        {#if asked.failed()}<p {...asked.error}>{asked.failed()}</p>{/if}
-                        <button {...asked.confirm}>{asked.current()?.confirm}</button>
-                        {#if asked.current()?.kind !== 'alert'}
-                            <button {...asked.cancel}>{asked.current()?.cancel}</button>
+                        <header>{asked.current?.title}</header>
+                        <small>{asked.current?.body}</small>
+                        {#if asked.typing}<input {...asked.input} />{/if}
+                        {#if asked.failed}<p {...asked.error}>{asked.failed}</p>{/if}
+                        <button {...asked.confirm}>{asked.current?.confirm}</button>
+                        {#if asked.current?.kind !== 'alert'}
+                            <button {...asked.cancel}>{asked.current?.cancel}</button>
                         {/if}
                     </form>
                 {/if}

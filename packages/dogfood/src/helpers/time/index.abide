@@ -25,9 +25,9 @@ import dueDates from './lib/DueDates.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Write each row's due date on a time of your own">
-        <p>One set of parts serves a whole list: spread <code>time(at)</code> onto a
+        <p>One set of parts serves a whole list: spread <code>at(when).time</code> onto a
             <code>&lt;time&gt;</code> of your own for its <code>datetime</code> and its
-            <code>title</code>, and write <code>text(at)</code> inside it. Each time is kept
+            <code>title</code>, and write <code>at(when).text</code> inside it. Each time is kept
             current by the page's one clock for as long as it stands.</p>
         <Example code={dueDates}><DueDates /></Example>
     </Section>

@@ -8,10 +8,10 @@ const plot = chart({
 </script>
 
 <svg {...plot.svg} class="h-48 w-full">
-    {#for tick of plot.yTicks()}
+    {#for tick of plot.yTicks}
         <line {...tick.grid} />
     {/for}
-    {#for bar of plot.bars() by bar.key}
+    {#for bar of plot.bars by bar.key}
         <rect {...bar.rect} />
         <text
             x={bar.x + bar.width / 2}

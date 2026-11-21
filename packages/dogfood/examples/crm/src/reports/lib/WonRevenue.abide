@@ -33,37 +33,37 @@ const plot = chart({
         [&_[data-series='0']]:stroke-signal
         [&_[data-part=line][data-series='1']]:[stroke-dasharray:4_4]"
 >
-    {#for tick of plot.yTicks()}
+    {#for tick of plot.yTicks}
         <line {...tick.grid} />
         <text {...tick.text}>{tick.label}</text>
     {/for}
-    {#if plot.zero()}
-        <line {...plot.zero()?.line} />
+    {#if plot.zero}
+        <line {...plot.zero?.line} />
     {/if}
-    {#for tick of plot.xTicks()}
+    {#for tick of plot.xTicks}
         <text {...tick.text}>{tick.label}</text>
     {/for}
-    {#for line of plot.lines() by line.series}
+    {#for line of plot.lines by line.series}
         <path {...line.path} />
     {/for}
-    {#for point of plot.points() by point.key}
+    {#for point of plot.points by point.key}
         {#if point.series === 0}
             <circle {...point.circle} r="3" />
         {/if}
     {/for}
-    {#if plot.readout()}
-        <line {...plot.crosshair()?.line} />
+    {#if plot.readout}
+        <line {...plot.crosshair?.line} />
     {/if}
 </svg>
-{#if plot.readout()}
+{#if plot.readout}
     <span
         {...plot.tip}
         class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
         text-chrome text-ink shadow-sm"
     >
-        <span data-part="readout-x" class="text-muted">{plot.readout()?.label}</span>
-        {#for point of plot.readout()?.values ?? []}
-            <span data-part="readout-value">{point.label}: {point.value}</span>
+        <span {...plot.readout?.heading} class="text-muted">{plot.readout?.label}</span>
+        {#for point of plot.readout?.values ?? []}
+            <span {...point.text}>{point.label}: {point.value}</span>
         {/for}
     </span>
 {/if}

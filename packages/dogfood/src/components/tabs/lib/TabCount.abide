@@ -6,6 +6,8 @@ const view = tabs({ keys: ['details', 'notes'] })
 </script>
 
 <div {...view.list}>
-    <button {...view.tab('details')}>Details</button>
-    <button {...view.tab('notes')}>Notes <span>{notes.length}</span></button>
+    <button {...view.tab('details').button}>Details</button>
+    <button {...view.tab('notes').button}>
+        Notes <span>{notes.length}</span>
+    </button>
 </div>
