@@ -6,22 +6,19 @@
 import { anchored } from './anchored.ts'
 import { checkParts } from './checkParts.ts'
 import type { Side } from './place.ts'
+import type { PopoverOptions } from './popover.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { openingEnd, roving, typeahead } from './roving.ts'
 
-/** Where a menu opens against its trigger, and what hears it open and close. */
-export type MenuOptions = {
+/** Where a menu opens against its trigger, placed as a `popover` is, and what hears it open and close. */
+export type MenuOptions = Omit<PopoverOptions, 'align' | 'offset'> & {
     /** Whether the menu is open: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. */
     open?: Reactive<boolean>
-    /** The side of the trigger the menu opens on, flipped to the opposite one where it has no room. Default `'bottom'`. Written as `data-side` on the menu. */
-    side?: Side
     /** Which edge of the trigger the menu lines up with. Default `'start'`. */
     align?: 'start' | 'center' | 'end'
     /** Pixels between the trigger and the menu. Default `4`. */
     offset?: number
-    /** Pixels the arrow's `--arrow-offset` keeps from each end of the menu's facing edge. Default `0`. */
-    arrowInset?: number
     /** 50.37 — called each time the menu opens. */
     onopen?: () => void
     /** 50.37 — called each time the menu closes, however it closed. */
@@ -44,14 +41,14 @@ const ITEM =
 
 /** WAI-ARIA's menu button: a trigger and the menu it opens, as two parts to spread. */
 export function menu(options: MenuOptions = {}): Menu {
-    const {
-        side = 'bottom',
-        align = 'start',
-        offset = 4,
-        arrowInset = 0,
-        onopen,
-        onclose,
-    } = options
+    const { side = 'bottom', onopen, onclose } = options
+    // Every placement option a `popover` takes, under a menu's own defaults (50.19-50.21).
+    const placing = {
+        ...options,
+        side,
+        align: options.align ?? 'start',
+        offset: options.offset ?? 4,
+    }
     const open = options.open ?? reactive(false)
     const placed = reactive<Side>(side)
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the two
@@ -92,11 +89,8 @@ export function menu(options: MenuOptions = {}): Menu {
         if ((event as ToggleEvent).newState === 'open') {
             const button = triggerOf()
             if (button !== null)
-                stop = anchored(
-                    button,
-                    list,
-                    { side, align, offset, arrowInset },
-                    (placement) => placed.set(placement.side),
+                stop = anchored(button, list, placing, (placement) =>
+                    placed.set(placement.side),
                 )
             if (!open.peek()) open.set(true)
             const listed = items()

@@ -13,7 +13,7 @@ export type ToastsHostOptions = {
     label?: Live<string>
 }
 
-/** One notice's parts: its element, its text, its action and close buttons, and what runs its action. */
+/** One notice's parts: its element, its text, its action and close buttons, and what runs its action or closes it. */
 export type ToastParts = {
     /** The notice's element: the attributes `notify` was handed, and its tone as `data-tone`. */
     readonly toast: Record<string, unknown>
@@ -25,6 +25,8 @@ export type ToastParts = {
     readonly close: Record<string, unknown>
     /** Closes the notice and runs its action, for markup that calls it rather than spreading `action`. */
     act(): void
+    /** Closes the notice, for markup that calls it rather than spreading `close`. */
+    dismiss(): void
 }
 
 /** The parts `toasts.host` hands back: `<div {...shown.region}>`, a notice per `shown.notices`. */
@@ -76,6 +78,7 @@ export function host(options: ToastsHostOptions = {}): ToastsHost {
                 onclick: () => dismiss(toast.id),
             },
             act: () => act(toast),
+            dismiss: () => dismiss(toast.id),
         }),
     }
 }

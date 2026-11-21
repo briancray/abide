@@ -863,7 +863,7 @@ type Reached = { readonly [REACHED]: true }
 | `toasts.host` | `(options?: ToastsHostOptions) => ToastsHost` | The live region the notices show in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.17, 50.18, 50.36, 49.9 |
 | `ToastsHostOptions` | `{ label?: string \| (() => string) }` | The region's accessible name. | 50.17 |
 | `ToastsHost` | `{ readonly region: Record<string, unknown>; get notices(): readonly Toast[]; toast(toast: Toast): ToastParts }` | The region's part, the notices to render, and a notice's parts. | 32.11, 50.17, 50.18, 50.41, 49.4, 49.11 |
-| `ToastParts` | `{ readonly toast: Record<string, unknown>; readonly text: Record<string, unknown>; readonly action: Record<string, unknown>; readonly close: Record<string, unknown>; act(): void }` | A notice's, its text's, its action's and its close button's parts, and what runs its action. | 50.17, 50.18, 50.41, 49.4, 49.11 |
+| `ToastParts` | `{ readonly toast: Record<string, unknown>; readonly text: Record<string, unknown>; readonly action: Record<string, unknown>; readonly close: Record<string, unknown>; act(): void; dismiss(): void }` | A notice's, its text's, its action's and its close button's parts, and what runs its action or closes it. | 50.15, 50.17, 50.18, 50.41, 49.4, 49.11 |
 
 ## `Tooltips`
 
@@ -885,7 +885,7 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.35, 50.37, 50.38, 50.39, 50.40, 49.8 |
-| `MenuOptions` | `{ open?: Reactive<boolean>; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, and what hears it open and close. | 50.35, 50.37 |
+| `MenuOptions` | `Omit<PopoverOptions, 'align' \| 'offset'> & { open?: Reactive<boolean>; align?: 'start' \| 'center' \| 'end'; offset?: number; onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, placed as a `popover` is, and what hears it open and close. | 50.19, 50.20, 50.21, 50.35, 50.37 |
 | `Menu` | `{ readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38, 49.4, 49.10, 49.11 |
 
 ## `dismissible`

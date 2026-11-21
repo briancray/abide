@@ -14,7 +14,6 @@ export type { NotifyOptions, Toast }
 // the parts'; an app wanting other markup spreads them itself.
 import type { Attributes } from '#shared/Attributes.ts'
 import { props } from '#shared/props.ts'
-import { dismiss } from '#shared/toasts/dismiss.ts'
 import { host } from '#shared/toasts/host.ts'
 // Named apart from the `Toast` prop: a type annotation naming a prop is read as the prop.
 import type { Toast as Notice } from '#shared/toasts/list.ts'
@@ -47,7 +46,7 @@ const shown = host({ label: () => label })
     {#for toast of shown.notices by toast.id}
         <div {...shown.toast(toast).toast}>
             {#if Toast}
-                <Toast toast={toast} dismiss={() => dismiss(toast.id)} act={shown.toast(toast).act} />
+                <Toast toast={toast} dismiss={shown.toast(toast).dismiss} act={shown.toast(toast).act} />
             {:else}
                 <span {...shown.toast(toast).text}>{toast.text}</span>
                 {#if toast.action}
