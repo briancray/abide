@@ -112,6 +112,15 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(answer(event))
 })
 
+// A refresh, or a load after invalidate: a request that asks past every cache.
+function asksPastCache(request) {
+    return (
+        request.cache === 'no-cache' ||
+        request.cache === 'reload' ||
+        request.cache === 'no-store'
+    )
+}
+
 // 45.25, 45.28 — A PAGE OPENS FROM THE DEVICE, and the page asked for behind it is the copy the next
 // load opens. A reload asks the network first, as 45.20 has a call do, so the reload after a deploy is
 // the new build — with the copy still standing in offline (RULEBOOK 45.19).
@@ -120,11 +129,7 @@ async function opened(event) {
     const since = drops
     const saved = await savedCopy(request)
     const life = saved === undefined ? undefined : lifeOf(saved)
-    const reloading =
-        request.cache === 'no-cache' ||
-        request.cache === 'reload' ||
-        request.cache === 'no-store'
-    if (life !== undefined && standsIn(life) && !reloading) {
+    if (life !== undefined && standsIn(life) && !asksPastCache(request)) {
         // ASKED AS A PAGE KEPT, NOT OFF THE PRELOAD: webkit never settles a preload the worker
         // answered ahead of, and a wait on it is a worker that never goes idle — the next build's
         // left waiting behind it for good.
@@ -177,11 +182,7 @@ async function revalidated(request, response, since) {
 // after invalidate) is the network's alone.
 async function answer(event) {
     const request = event.request
-    const bypass =
-        request.cache === 'no-cache' ||
-        request.cache === 'reload' ||
-        request.cache === 'no-store'
-    const saved = bypass ? undefined : await savedCopy(request)
+    const saved = asksPastCache(request) ? undefined : await savedCopy(request)
     const life = saved === undefined ? undefined : lifeOf(saved)
     if (life !== undefined) {
         if (life.age < life.fresh) return marked(saved)

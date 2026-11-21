@@ -183,7 +183,7 @@ function shellHeadOf(document: string, headAt: number): ShellHead {
 /** How many times each key stands at the top of `markup`'s head. */
 function keyCounts(markup: string): Map<string, number> {
     const counts = new Map<string, number>()
-    dropAtHeadTop(new HTMLRewriter(), markup, (key) => {
+    dropAtHeadTop(markup, (key) => {
         if (key !== undefined) counts.set(key, (counts.get(key) ?? 0) + 1)
         return false
     })
@@ -201,7 +201,7 @@ function mergeKeyed(markup: string): string {
 /** `markup` with each key's elements at the top of its head dropped but the last of `total`. */
 function dropShadowed(markup: string, total: Map<string, number>): string {
     const passed = new Map<string, number>()
-    return dropAtHeadTop(new HTMLRewriter(), markup, (key) => {
+    return dropAtHeadTop(markup, (key) => {
         if (key === undefined) return false
         const at = (passed.get(key) ?? 0) + 1
         passed.set(key, at)
@@ -210,35 +210,33 @@ function dropShadowed(markup: string, total: Map<string, number>): string {
 }
 
 /**
- * `markup` through `rewriter`, with each element at the top of the head removed where `drop`
- * answers true for its key — `undefined` for an element with none. `top` is the depth the walk is
- * at, for a caller's own handlers to read.
+ * `markup` with each element at the top of the head removed where `drop` answers true for its
+ * key — `undefined` for an element with none.
  *
  * `<html>` and `<head>` are the shell's frame and open no depth. A keyed element never holds an
  * element (a `<title>` holds text), so a dropped one takes no depth with it.
  */
 function dropAtHeadTop(
-    rewriter: HTMLRewriter,
     markup: string,
     drop: (key: string | undefined) => boolean,
-    top = { depth: 0 },
 ): string {
-    return rewriter
+    let depth = 0
+    return new HTMLRewriter()
         .on('*', {
             element(element) {
                 const tag = element.tagName
                 if (tag === 'html' || tag === 'head') return
                 if (
-                    top.depth === 0 &&
+                    depth === 0 &&
                     drop(headKeyOf(tag, (name) => element.getAttribute(name)))
                 ) {
                     element.remove()
                     return
                 }
                 if (element.canHaveContent && !element.selfClosing) {
-                    top.depth += 1
+                    depth += 1
                     element.onEndTag(() => {
-                        top.depth -= 1
+                        depth -= 1
                     })
                 }
             },

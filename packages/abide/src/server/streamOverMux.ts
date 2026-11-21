@@ -35,6 +35,7 @@ const HEAD_HEADERS = ['content-type', 'cache-control', VERSION_HEADER]
 
 const END = new Frame('end', undefined, undefined, undefined)
 const HTTP = new Frame('http', undefined, undefined, undefined)
+const ERROR = new Frame('error', undefined, undefined, undefined)
 
 /** What a stream is pumped onto: the connection's peer, and a wait for its socket to drain. */
 type Carrier = {
@@ -97,7 +98,7 @@ export async function streamOverMux(
         carrier.peer.send(
             id,
             token === undefined
-                ? new Frame('error', undefined, undefined, undefined)
+                ? ERROR
                 : new Frame(
                       'http',
                       undefined,
@@ -147,11 +148,7 @@ export async function streamOverMux(
         carrier.peer.send(id, END)
     } catch {
         // A body that broke is a connection that broke, to its reader: no end is sent.
-        if (!signal.aborted)
-            carrier.peer.send(
-                id,
-                new Frame('error', undefined, undefined, undefined),
-            )
+        if (!signal.aborted) carrier.peer.send(id, ERROR)
     } finally {
         signal.removeEventListener('abort', cancel)
     }

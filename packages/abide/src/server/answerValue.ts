@@ -26,11 +26,11 @@ const ENCODER = new TextEncoder()
 export function isValues(
     value: unknown,
 ): value is AsyncIterable<unknown> | ReadableStream<unknown> {
+    // A `ReadableStream` is async-iterable in bun, as `chunksOf` reads it.
     return (
-        value instanceof ReadableStream ||
-        (value !== null &&
-            typeof value === 'object' &&
-            Symbol.asyncIterator in (value as object))
+        value !== null &&
+        typeof value === 'object' &&
+        Symbol.asyncIterator in (value as object)
     )
 }
 
