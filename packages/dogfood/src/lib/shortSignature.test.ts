@@ -3,7 +3,12 @@
 
 import { expect, test } from 'bun:test'
 
-import { inSyntax, shortSignature } from './shortSignature.ts'
+import {
+    inSyntax,
+    membersOf,
+    parametersNamed,
+    shortSignature,
+} from './shortSignature.ts'
 
 const CASES: [string, string][] = [
     // A call: parameters by name, generics dropped, a long return by its name.
@@ -79,4 +84,32 @@ test('the syntax is the documented name and what is called, a type left to Types
     for (const [name, signature, section, shown] of rows)
         if (inSyntax(name, signature, section) !== shown) wrong.push(name)
     expect(wrong).toEqual([])
+})
+
+// THE REVERT: return `undefined` from `membersOf`, and every object is named; return `[]` from
+// `parametersNamed`, and every call is.
+test('a parameter typed by a name is read by its name, and an object type by its members — 40.33', () => {
+    expect(
+        parametersNamed(
+            '`<Item>(options: ComboboxOptions<Item>, extra?: readonly Extra, rest: { a: A }) => Parts`',
+        ),
+    ).toEqual([
+        { parameter: 'options', type: 'ComboboxOptions' },
+        { parameter: 'extra?', type: 'Extra' },
+    ])
+    expect(parametersNamed('`{ ui?: boolean }`')).toEqual([])
+    expect(
+        membersOf(
+            '`<Node>{ roots: readonly Node[] | (() => readonly Node[]); children?(node: Node): Node[]; onpick?: (node: Node) => void }`',
+        ),
+    ).toEqual([
+        { name: 'roots', type: 'readonly Node[] | (() => readonly Node[])' },
+        { name: 'children?', type: '(node: Node) => Node[]' },
+        { name: 'onpick?', type: '(node: Node) => void' },
+    ])
+    expect(membersOf('`ListboxOptions<Option> = { id: string }`')).toEqual([
+        { name: 'id', type: 'string' },
+    ])
+    expect(membersOf("`{ label: string } & Attributes<'div'>`")).toBeUndefined()
+    expect(membersOf('`(options: Options) => Parts`')).toBeUndefined()
 })

@@ -687,6 +687,31 @@ test('the syntax shows what is called, a type being in Types alone', async () =>
     expect(wrong).toEqual([])
 })
 
+// 40.33 — AN OBJECT A CALL TAKES IS SPELLED OUT UNDER ITS SYNTAX, a row per member, so a reader of
+// `(options) => DialogParts` sees what `options` holds without leaving the Syntax. Read off the
+// markdown above the Examples, with the expected members named here. THE REVERT: drop the
+// `{#for option of optioned.get(table) ?? []}` block from `Registry.abide`, and both pages are named.
+test("an object a page's call takes is spelled out beneath its syntax", async () => {
+    const expected: [string, string, string[]][] = [
+        [
+            '/helpers/dialog',
+            '`options: DialogOptions`',
+            ['`open`', '`modal?`', '`dismissible?`', '`onclose?`'],
+        ],
+        ['/helpers/tree', '`options: TreeOptions`', ['`children`', '`key`']],
+    ]
+    const pages = await renderedMarkdown()
+    const wrong: string[] = []
+    for (const [route, heading, members] of expected) {
+        const above = pages.get(route)?.split('\n## Examples\n')[0] ?? ''
+        const part = above.split(`\n### ${heading}\n`)[1] ?? ''
+        for (const member of members)
+            if (!part.includes(`\n| ${member} | `))
+                wrong.push(`${route}: ${heading} ${member}`)
+    }
+    expect(wrong).toEqual([])
+})
+
 // 40.12 — EVERY PAGE SHOWS ITS SUBJECT IN USE: an Examples part with at least one example under a
 // heading of its own. THE REVERT: empty `/reactive/watch`'s slot, and it is named.
 test('every page carries at least one example', async () => {

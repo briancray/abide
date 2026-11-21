@@ -267,3 +267,65 @@ export function inSyntax(
     const last = names[0]?.split('.').at(-1) ?? ''
     return !/^[A-Z][a-z]/.test(last) && CALLED.test(signature)
 }
+
+/**
+ * The parameters of the call a signature cell is, each by its name and the name of its type — `options:
+ * ComboboxOptions<Item>` as `options` and `ComboboxOptions` — or none, for a cell that is not a call.
+ */
+export function parametersNamed(
+    signature: string,
+): { parameter: string; type: string }[] {
+    const code = /`([^`]+)`/.exec(signature)?.[1]
+    const named: { parameter: string; type: string }[] = []
+    for (const declared of (code === undefined
+        ? undefined
+        : parametersIn(code)) ?? []) {
+        const colon = topLevel(declared, ':')[0]
+        if (colon === undefined) continue
+        const type = /^(?:readonly\s+)?(\w+)(?:<.*>)?$/s.exec(
+            declared.slice(colon + 1).trim(),
+        )?.[1]
+        if (type !== undefined)
+            named.push({ parameter: nameOf(declared), type })
+    }
+    return named
+}
+
+/**
+ * The members of the object type a signature cell spells — `{ a: A; b?(x: X): B }`, behind a generic's
+ * parameters or `Name<…> =` where it has them — each by its key and its type in full, a method's as an
+ * arrow. `undefined` for a cell spelling anything else.
+ */
+export function membersOf(
+    signature: string,
+): { name: string; type: string }[] | undefined {
+    let code = /^`([^`]+)`$/.exec(signature.trim())?.[1]?.trim()
+    if (code === undefined) return undefined
+    const assigned = topLevel(code, '=').find((at) => code?.[at + 1] !== '>')
+    if (assigned !== undefined) code = code.slice(assigned + 1).trim()
+    if (code.startsWith('<')) code = code.slice(closing(code, 0) + 1).trim()
+    if (!code.startsWith('{') || closing(code, 0) !== code.length - 1)
+        return undefined
+    const members: { name: string; type: string }[] = []
+    for (const member of splitTop(code.slice(1, -1), ';')) {
+        const colon = topLevel(member, ':')[0]
+        const head = (
+            colon === undefined ? member : member.slice(0, colon)
+        ).trim()
+        if (!head.endsWith(')')) {
+            members.push({
+                name: head,
+                type: colon === undefined ? '' : member.slice(colon + 1).trim(),
+            })
+            continue
+        }
+        const open = opening(head)
+        const returned =
+            colon === undefined ? 'void' : member.slice(colon + 1).trim()
+        members.push({
+            name: head.slice(0, open).replace(/<.*>$/, ''),
+            type: `${head.slice(open)} => ${returned}`,
+        })
+    }
+    return members
+}

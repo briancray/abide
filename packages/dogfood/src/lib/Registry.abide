@@ -2,11 +2,17 @@
 import REGISTRY from '../../../../docs/REGISTRY.md' with { type: 'text' }
 // A PAGE'S SYNTAX, read off docs/REGISTRY.md as it renders (40.10): the rows directly under the
 // page's `##` as its Syntax, then each `###` under it as a heading of its own, every signature in its
-// short form — and, given `types`, the same rows again with the signatures in full, as the page's
-// Types (40.32). The clause column is left out: the clauses the rows cite are the page's Rules, at
+// short form, each object a row's parameter is typed by spelled out beneath its table (40.33) — and,
+// given `types`, the same rows again with the signatures in full, as the page's Types (40.32). The clause column is left out: the clauses the rows cite are the page's Rules, at
 // its foot (40.11).
 import { registryRows, sectionsOf } from './registryRows.ts'
-import { discriminating, inSyntax, shortSignature } from './shortSignature.ts'
+import {
+    discriminating,
+    inSyntax,
+    membersOf,
+    parametersNamed,
+    shortSignature,
+} from './shortSignature.ts'
 
 const ROWS = registryRows(REGISTRY)
 const SIGNATURE = 'Signature'
@@ -84,6 +90,46 @@ for (const section of sections) {
     if (tables.length > 0) shown.push({ heading: section.heading, tables })
 }
 
+// A parameter typed by an object the section spells is shown beneath the table of the row declaring
+// it, a row per member (40.33), once per parameter and type however many rows declare it.
+const spelled = new Map<string, string>()
+for (const row of ROWS)
+    if (row.section === page.registry) {
+        const at = row.header.indexOf(SIGNATURE)
+        if (at >= 0)
+            spelled.set(
+                (row.cells[0] ?? '').replaceAll('`', ''),
+                row.cells[at] ?? '',
+            )
+    }
+const listed = new Set<string>()
+/** The objects the rows of `table` take, each by the parameter it is passed as and its members. */
+function optionsOf(table: (typeof sections)[number]['tables'][number]) {
+    const options: {
+        id: string
+        title: string
+        members: { name: string; type: string }[]
+    }[] = []
+    const at = table.header.indexOf(SIGNATURE)
+    if (at < 0) return options
+    for (const row of table.rows)
+        for (const { parameter, type } of parametersNamed(
+            row.cells[at] ?? '',
+        )) {
+            const members = membersOf(spelled.get(type) ?? '')
+            const key = `${parameter}: ${type}`
+            if (members === undefined || listed.has(key)) continue
+            listed.add(key)
+            options.push({ id: slugify(key), title: `\`${key}\``, members })
+        }
+    return options
+}
+const optioned = new Map<object, ReturnType<typeof optionsOf>>()
+if (!types)
+    for (const section of shown)
+        for (const table of section.tables)
+            optioned.set(table, optionsOf(table))
+
 /**
  * A row's cells as the page shows them, the clause column left out. A row sharing its name with
  * others of its table is an overload, and its short form keeps the type that tells it from them.
@@ -112,6 +158,9 @@ if (!types)
         const title =
             section.heading === page.registry ? SYNTAX : section.heading
         filed.push({ id: slugify(title), title, level: 2 })
+        for (const table of section.tables)
+            for (const option of optioned.get(table) ?? [])
+                filed.push({ id: option.id, title: option.title, level: 3 })
     }
 headings = [...headings, ...filed]
 </script>
@@ -152,6 +201,17 @@ headings = [...headings, ...filed]
                             {/for}
                         </tbody>
                     </table>
+                    {#for option of optioned.get(table) ?? []}
+                        <h3 id={option.id}>{raw(inline(option.title))}</h3>
+                        <table>
+                            <thead><tr><th>Name</th><th>Type</th></tr></thead>
+                            <tbody>
+                                {#for member of option.members}
+                                    <tr><td>{raw(inline(`\`${member.name}\``))}</td><td>{raw(inline(`\`${member.type}\``))}</td></tr>
+                                {/for}
+                            </tbody>
+                        </table>
+                    {/for}
                 {/for}
             </div></section>
     {/for}
