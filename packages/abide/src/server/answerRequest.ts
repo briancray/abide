@@ -238,8 +238,8 @@ export async function answerRequest(
 }
 
 /** The lane a routed request is answered on: a handler's, or a page's. */
-function routedLane(found: { handler: Mounted | undefined }): Lane {
-    return found.handler === undefined ? 'page' : 'handler'
+function routedLane(found: { handler: Mounted | undefined } | undefined): Lane {
+    return found?.handler === undefined ? 'page' : 'handler'
 }
 
 /** What `answerRequest` answers `request` with, by the arm of its dispatch it takes. 37.19. */
@@ -259,9 +259,7 @@ export function laneOf(app: AppSources, request: Request): Lane {
         case 'unparsed':
             return 'page'
         case 'routed':
-            return arm.routing.found === undefined
-                ? 'page'
-                : routedLane(arm.routing.found)
+            return routedLane(arm.routing.found)
     }
 }
 

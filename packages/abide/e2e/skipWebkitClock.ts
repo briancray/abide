@@ -16,6 +16,6 @@ import { test } from '@playwright/test'
 export function skipWebkitClock(): void {
     test.skip(
         ({ browserName }) => browserName === 'webkit',
-        'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside a gate budget',
+        'webkit coarsens its clock to 1 ms; 43.11 cannot be met inside any budget',
     )
 }
