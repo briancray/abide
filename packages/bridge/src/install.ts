@@ -215,7 +215,7 @@ async function installMac(
             '-json',
             JSON.stringify([
                 {
-                    CFBundleURLName: 'abide bridge pairing',
+                    CFBundleURLName: `${APP_NAME} pairing`,
                     CFBundleURLSchemes: [PAIRING_SCHEME],
                 },
             ]),

@@ -17,7 +17,7 @@ import { skipWebkitClock } from './skipWebkitClock.ts'
 
 const built = await buildBench('reactive')
 
-// Under `bun run bench` too, where "construct a keyed value" spends its 20 s budget at
+// Under `bun run bench` too: there "construct a keyed value" spent its 20 s budget at
 // n=21,748,243 after 1 of 10 reps.
 skipWebkitClock()
 

@@ -10,6 +10,7 @@
 
 import {
     batch,
+    type BatchSpec,
     claimOf,
     emulatedDom,
     ratio,
@@ -18,7 +19,7 @@ import {
 
 import { listCases, type Row } from './listCases.ts'
 
-function run(sizing?: { reps: number; warmup: number }): Row[] {
+function run(sizing?: Pick<BatchSpec, 'reps' | 'warmup'>): Row[] {
     const rows: Row[] = []
     for (const kase of listCases()) {
         const arms = kase.setup()
