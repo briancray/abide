@@ -558,6 +558,12 @@ const WRITTEN: readonly {
                     'Pick one item from a list narrowed or searched on the server as someone types.',
             },
             {
+                route: '/helpers/combobox',
+                title: '`combobox`',
+                description:
+                    'Spread a field that lists what matches onto markup of your own, each option and chip written by you.',
+            },
+            {
                 route: '/components/command-palette',
                 title: '`CommandPalette`',
                 description:

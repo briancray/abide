@@ -30,6 +30,11 @@ export type { Column } from './Column.ts'
 // 52.19-52.23, 52.54-52.58 — the arithmetic under a chart, which `Chart`, `Pie` and `Sparkline` draw with.
 export * as chart from './chart/index.ts'
 export {
+    type ComboboxOptions,
+    type ComboboxParts,
+    combobox,
+} from './combobox.ts'
+export {
     type Command,
     type CommandPaletteOptions,
     type CommandPaletteParts,

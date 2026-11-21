@@ -5143,59 +5143,59 @@ for each key.
 
 51.12 `listbox` MUST scroll an option its keys make active into view.
 
-51.13 `Combobox` MUST open its list when its input is typed in.
+51.13 `combobox` MUST open its list when its input is typed in.
 
-51.14 `Combobox` MUST open its list on ArrowDown or ArrowUp in its input while the list is shut.
+51.14 `combobox` MUST open its list on ArrowDown or ArrowUp in its input while the list is shut.
 
-51.15 `Combobox` MUST list the items `search` answers for its input's text, where `search` is given.
+51.15 `combobox` MUST list the items `search` answers for its input's text, where `search` is given.
 
-51.16 `Combobox` MUST list each of `options` whose `label` holds its input's text, ignoring case,
+51.16 `combobox` MUST list each of `options` whose `label` holds its input's text, ignoring case,
 where `search` is not given.
 
-51.17 `Combobox` MUST NOT call `search` while its list is shut.
+51.17 `combobox` MUST NOT call `search` while its list is shut.
 
-51.18 `Combobox` MUST hold a call of `search` back until its input's text has stopped changing for
+51.18 `combobox` MUST hold a call of `search` back until its input's text has stopped changing for
 `debounce` milliseconds, where `debounce` is given.
 
-51.19 `Combobox` MUST keep listing the items it last listed while a call of `search` is in flight.
+51.19 `combobox` MUST keep listing the items it last listed while a call of `search` is in flight.
 
-51.20 `Combobox` MUST keep and move its active item as a `listbox` over the items it lists does, save
+51.20 `combobox` MUST keep and move its active item as a `listbox` over the items it lists does, save
 on Home and End.
 
-51.21 `Combobox` MUST leave Home and End to its input's caret.
+51.21 `combobox` MUST leave Home and End to its input's caret.
 
-51.22 `Combobox` MUST pick the active item on Enter.
+51.22 `combobox` MUST pick the active item on Enter.
 
-51.23 `Combobox` MUST pick an item whose option is clicked.
+51.23 `combobox` MUST pick an item whose option is clicked.
 
-51.24 A pick in a `Combobox` MUST set `value` to the item picked.
+51.24 A pick in a `combobox` MUST set `value` to the item picked.
 
-51.25 A pick in a `Combobox` MUST shut its list.
+51.25 A pick in a `combobox` MUST shut its list.
 
-51.26 `Combobox`'s input MUST hold the text typed in it since the last pick, and the `label` of
+51.26 `combobox`'s input MUST hold the text typed in it since the last pick, and the `label` of
 `value` where none has been typed.
 
-51.27 `Combobox` MUST shut its list on Escape where the list is open.
+51.27 `combobox` MUST shut its list on Escape where the list is open.
 
-51.28 `Combobox` MUST clear `value` and the typed text on Escape where its list is shut and its
+51.28 `combobox` MUST clear `value` and the typed text on Escape where its list is shut and its
 input holds text, and MUST NOT prevent the default of an Escape where its list is shut and its
 input is empty.
 
-51.29 `Combobox` MUST shut its list when its input loses focus.
+51.29 `combobox` MUST shut its list when its input loses focus.
 
 51.30 `Combobox` MUST render an option's content through `Option` where it is given, and as the
 item's `label` otherwise.
 
-51.31 `Combobox` MUST render its children where its list is open, lists no item and waits on no call
-of `search`.
+51.31 `Combobox` MUST render its children where `combobox`'s `nothingFound` holds: its list open,
+listing no item and waiting on no call of `search`.
 
-51.32 `Combobox` MUST write `data-open` on its root while its list is open.
+51.32 `combobox` MUST write `data-open` on its `root` part while its list is open.
 
-51.33 `Combobox` MUST write `data-busy` on its root while its open list waits on a call of `search`.
+51.33 `combobox` MUST write `data-busy` on its `root` part while its open list waits on a call of `search`.
 
-51.34 `Combobox` MUST write `data-active` on the active item's option.
+51.34 `combobox` MUST write `data-active` on the active item's option.
 
-51.35 `Combobox` MUST write `data-selected` on the option of `value`.
+51.35 `combobox` MUST write `data-selected` on the option of `value`.
 
 51.36 `tabs` MUST select the first of `keys` where `selected` names none of them.
 
@@ -5265,20 +5265,20 @@ a blank value.
 
 51.60 `SortableTable` MUST spread what `rowAttributes` hands back for a row onto that row's `<tr>`.
 
-51.61 A `Combobox` whose `value` is an array MUST add an item picked to it, or take the item out
+51.61 A `combobox` whose `value` is an array MUST add an item picked to it, or take the item out
 where it holds it already, MUST keep its list open and clear the typed text on a pick, MUST write
 `data-selected` on the option of every item it holds, and MUST NOT clear it on Escape.
 
-51.62 A `Combobox` whose `value` is an array MUST render each item it holds through `Chip` where it is
-given, handed the item and what takes it out, and as its `label` beside a remove button otherwise,
-and Backspace in its empty input MUST take out the last item it holds.
+51.62 A `Combobox` whose `value` is an array MUST render each item it holds through `Chip` where it
+is given, handed the item and what takes it out, and as its `label` beside `combobox`'s `remove`
+part otherwise, and Backspace in `combobox`'s empty input MUST take out the last item it holds.
 
 51.63 `SortableTable` given `Detail` MUST render, after each row, a row of its own whose
 `data-part` is `detail` and whose one cell spans every column and holds `Detail` handed that row.
 
-51.64 `Combobox` MUST hold its open list, and the children 51.31 renders, in one `data-part="popup"`
-element opened against its input as `popover` opens one, and a press inside that element MUST NOT
-take focus from its input.
+51.64 `combobox`'s `popup` part MUST open the element it is spread on against its input as `popover`
+opens one, and a press inside it MUST NOT take focus from its input, and `Combobox` MUST hold its open
+list, and the children 51.31 renders, in one `data-part="popup"` element carrying it.
 
 51.65 `virtualRows` MUST answer as `start` and `end` the rows of its list from `overscan` rows before
 the first row its viewport shows to `overscan` rows past the last, and as `before` and `after` the

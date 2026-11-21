@@ -1,0 +1,43 @@
+<script>
+import { combobox, reactive } from '@abide/abide'
+
+type Contact = { id: string; name: string; company: string }
+
+const CONTACTS: Contact[] = [
+    { id: 'ada', name: 'Ada Lovelace', company: 'Analytical Co' },
+    { id: 'grace', name: 'Grace Hopper', company: 'Hopper & Co' },
+    { id: 'katherine', name: 'Katherine Johnson', company: 'Orbit Labs' },
+]
+let owner = reactive<Contact | undefined>(undefined)
+const box = combobox({
+    id: 'owner',
+    options: () => CONTACTS,
+    key: (contact) => contact.id,
+    label: (contact) => contact.name,
+    value: owner,
+})
+const initials = (name: string) =>
+    name
+        .split(' ')
+        .map((word) => word[0])
+        .join('')
+</script>
+
+<div class="picker">
+    <label for="owner">Owner</label>
+    <input {...box.input} placeholder="Find a contact">
+    {#if box.open()}
+        <div {...box.popup} data-part="popup">
+            <ul {...box.listbox} data-part="listbox">
+                {#for contact of box.items() by contact.id}
+                    <li {...box.option(contact)} data-part="option">
+                        <b>{initials(contact.name)}</b>
+                        {contact.name}
+                        <small class="text-muted">{contact.company}</small>
+                    </li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>
+<p>Owner: {owner?.name ?? 'none'}</p>

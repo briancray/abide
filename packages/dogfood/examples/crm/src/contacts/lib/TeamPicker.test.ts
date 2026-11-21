@@ -27,7 +27,7 @@ function press(key: string) {
 
 function option(name: string) {
     return [...document.querySelectorAll<HTMLElement>('[role=option]')].find(
-        (each) => each.textContent?.trim() === name,
+        (each) => each.firstElementChild?.textContent === name,
     ) as HTMLElement
 }
 

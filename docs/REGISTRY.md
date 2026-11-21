@@ -910,7 +910,15 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item \| readonly Item[]; Option?: (props: { item: Item }) => unknown; Chip?: (props: { item: Item; remove: () => void }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62, 50.26, 50.27, 51.64 |
+| `Combobox` | `<Item>{ id: string; options?: readonly Item[]; search?: (query: string) => readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key: (item: Item) => string; label: (item: Item) => string; value?: Item \| readonly Item[]; Option?: (props: { item: Item }) => unknown; Chip?: (props: { item: Item; remove: () => void }) => unknown; placeholder?: string } & Attributes<'div'>` | A text input over a list of items it narrows or searches as someone types, the component `@abide/abide/Combobox.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62, 50.26, 50.27, 51.64, 49.9 |
+
+## `combobox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `combobox` | `<Item>(options: ComboboxOptions<Item>) => ComboboxParts<Item>` | WAI-ARIA's combobox with a list popup as parts an app spreads onto an input, a popup and options of its own. | 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.32, 51.33, 51.34, 51.35, 51.61, 51.62, 51.64, 49.8 |
+| `ComboboxOptions` | `<Item>{ id: string; options?: () => readonly Item[]; search?(query: string): readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key(item: Item): string; label(item: Item): string; value: Reactive<Item \| undefined \| readonly Item[]> }` | What a combobox lists, how an item is told apart and written, and the pick it holds. | 51.15, 51.16, 51.18, 51.24, 51.61 |
+| `ComboboxParts` | `<Item>{ readonly root: Record<string, unknown>; readonly input: Record<string, unknown>; open(): boolean; readonly popup: Record<string, unknown>; readonly listbox: Record<string, unknown>; items(): readonly Item[]; option(item: Item): Record<string, unknown>; nothingFound(): boolean; readonly empty: Record<string, unknown>; picks(): readonly Item[] \| undefined; remove(item: Item): Record<string, unknown>; unpick(item: Item): void }` | The parts `combobox` hands back: the field's wrapper, the input, the popup, the list, an option, the empty status, the items picked and what takes one out. | 51.26, 51.31, 51.32, 51.33, 51.62, 51.64, 32.99 |
 
 ## `CommandPalette`
 
@@ -961,7 +969,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; selected?: readonly string[]; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown; rowAttributes?: (row: Row) => Attributes<'tr'> } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60, 51.63, 51.79, 51.80, 51.81, 51.82, 51.83 |
+| `SortableTable` | `<Row>{ rows: readonly Row[]; columns: readonly Column<Row>[]; key: (row: Row) => string; sort?: Sort; selected?: readonly string[]; Cell?: (props: { row: Row; column: Column<Row>; text: string }) => unknown; Detail?: (props: { row: Row }) => unknown; rowAttributes?: (row: Row) => Attributes<'tr'> } & Attributes<'table'>` | A table whose headers sort its rows, the component `@abide/abide/SortableTable.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.51, 51.52, 51.53, 51.54, 51.55, 51.56, 51.57, 51.58, 51.59, 51.60, 51.63, 51.79, 51.80, 51.81, 51.82, 51.83, 49.9 |
 
 ## `sortableTable`
 

@@ -1,0 +1,35 @@
+<script>
+import { combobox, reactive } from '@abide/abide'
+
+const STAGES = ['Lead', 'Qualified', 'Proposal', 'Won', 'Lost']
+let stages = reactive<readonly string[]>(['Proposal'])
+const box = combobox({
+    id: 'stages',
+    options: () => STAGES,
+    key: (stage) => stage,
+    label: (stage) => stage,
+    value: stages,
+})
+</script>
+
+<div class="picker">
+    <label for="stages">Stages</label>
+    <div {...box.root} class="flex flex-wrap gap-1">
+        {#for stage of box.picks() ?? [] by stage}
+            <span class="rounded-full border px-2 [&_button]:bg-transparent">
+                {stage}
+                <button {...box.remove(stage)}>✕</button>
+            </span>
+        {/for}
+        <input {...box.input} placeholder="Add a stage">
+    </div>
+    {#if box.open()}
+        <div {...box.popup} data-part="popup">
+            <ul {...box.listbox} data-part="listbox">
+                {#for stage of box.items() by stage}
+                    <li {...box.option(stage)} data-part="option">{stage}</li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>

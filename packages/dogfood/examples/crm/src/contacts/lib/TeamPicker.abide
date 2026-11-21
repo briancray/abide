@@ -1,6 +1,5 @@
 <script>
-import { reactive } from '@abide/abide'
-import Combobox from '@abide/abide/Combobox.abide'
+import { combobox, reactive } from '@abide/abide'
 
 import listContacts from '../listContacts.handler.ts'
 
@@ -8,20 +7,39 @@ type Contact = { id: string; name: string; company: string }
 
 const contacts = reactive(() => listContacts())
 let team = reactive<Contact[]>([])
+// The picker as parts on markup of the page's own: each option names the contact's company under
+// them, and each chip is the contact's name with its own remove button.
+const box = combobox({
+    id: 'deal-team',
+    options: () => contacts,
+    key: (each) => each.id,
+    label: (each) => each.name,
+    value: team,
+})
 </script>
 
 <label for="deal-team">On the deal</label>
-<Combobox
-    id="deal-team"
-    options={contacts}
-    key={(each: Contact) => each.id}
-    label={(each: Contact) => each.name}
-    bind:value={team}
-    placeholder="Add a contact"
-    class="picker flex-row flex-wrap [&_[data-part=chip]]:rounded-md
-        [&_[data-part=chip]]:bg-signal/10 [&_[data-part=chip]]:px-2"
->
-    No contact matches
-</Combobox>
+<div {...box.root} class="picker flex-row flex-wrap">
+    {#for contact of box.picks() ?? [] by contact.id}
+        <span class="rounded-md bg-signal/10 px-2" data-part="chip"><span>{contact.name}</span>
+            <button {...box.remove(contact)}>×</button></span>
+    {/for}
+    <input {...box.input} placeholder="Add a contact">
+    {#if box.open()}
+        <div {...box.popup} data-part="popup">
+            <ul {...box.listbox} data-part="listbox">
+                {#for contact of box.items() by contact.id}
+                    <li {...box.option(contact)} data-part="option">
+                        <span>{contact.name}</span>
+                        <small class="block text-muted">{contact.company}</small>
+                    </li>
+                {/for}
+            </ul>
+            {#if box.nothingFound()}
+                <p {...box.empty} data-part="empty">No contact matches</p>
+            {/if}
+        </div>
+    {/if}
+</div>
 
 <p class="status">{team.length} on the deal</p>

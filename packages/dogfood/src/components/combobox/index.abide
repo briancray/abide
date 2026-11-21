@@ -19,6 +19,7 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
+        '/helpers/combobox',
         '/helpers/listbox',
         '/reactive/reactive',
         '/components/menu',
