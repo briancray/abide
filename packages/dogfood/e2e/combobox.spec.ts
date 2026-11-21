@@ -45,3 +45,24 @@ test('a combobox in a box that clips it opens its list past the box — 51.64', 
     )
     expect(listed).toBeGreaterThan(clip.y + clip.height)
 })
+
+// 51.99 — ONE PRESS IS ONE GESTURE: the mousedown that focuses the field and the click that follows
+// open the list once, and a second press shuts it. THE REVERT: open on the input's mousedown as well as
+// toggling on its click — the click shuts what the mousedown opened, and the list never shows.
+test('a press on the field opens its list once, and a second press shuts it — 51.99', async ({
+    page,
+}) => {
+    await page.goto(underMount('components/combobox'), {
+        waitUntil: 'networkidle',
+    })
+    const input = page.locator('#deal-team')
+    await input.scrollIntoViewIfNeeded()
+    const options = page.locator('#deal-team-listbox [role=option]')
+    await input.click()
+    await expect(options).toHaveCount(3)
+    await page.waitForTimeout(200)
+    await expect(options).toHaveCount(3)
+    await expect(input).toBeFocused()
+    await input.click()
+    await expect(options).toHaveCount(0)
+})

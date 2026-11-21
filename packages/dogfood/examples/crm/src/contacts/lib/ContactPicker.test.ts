@@ -77,3 +77,59 @@ test('Escape shuts, then clears, then is left to the page', async () => {
     expect(input().value).toBe('')
     expect(escape()).toBe(false)
 })
+
+function key(name: string, alt = false) {
+    input().dispatchEvent(
+        new KeyboardEvent('keydown', {
+            key: name,
+            altKey: alt,
+            cancelable: true,
+        }),
+    )
+    flushSync()
+}
+const shut = () => document.querySelector('[role=listbox]') === null
+const active = () =>
+    document.querySelector('[role=option][data-active]')?.textContent
+
+// 51.99 — A PRESS ASKS FOR THE LIST, FOCUS DOES NOT: Tab reaching the field opens nothing, a click
+// lists every contact, and a second click shuts it, as a press on a menu's trigger does. THE REVERT:
+// drop `onclick` from the input part — a click lists nothing; open on `focus` too — Tab opens it.
+test('a press lists every contact and a second shuts it, and focus opens nothing', async () => {
+    using _picker = await mount(ContactPicker({}))
+    await settled()
+    input().dispatchEvent(new FocusEvent('focus'))
+    input().dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    flushSync()
+    expect(shut()).toBe(true)
+    input().click()
+    flushSync()
+    await settled()
+    expect(names()).toEqual([
+        'Ada Lovelace',
+        'Grace Hopper',
+        'Katherine Johnson',
+    ])
+    input().click()
+    flushSync()
+    expect(shut()).toBe(true)
+})
+
+// 51.100 — ALT WITH AN ARROW OPENS OR SHUTS, AND NEVER STEPS: Alt+ArrowDown opens the list, again on
+// the open list it leaves the active contact where it stands, and Alt+ArrowUp shuts it. THE REVERT:
+// hand Alt+arrows to the list as plain arrows — the second Alt+ArrowDown steps to Grace, and
+// Alt+ArrowUp steps rather than shutting.
+test('Alt+ArrowDown opens the list without stepping, and Alt+ArrowUp shuts it', async () => {
+    using _picker = await mount(ContactPicker({}))
+    await settled()
+    key('ArrowDown', true)
+    await settled()
+    expect(shut()).toBe(false)
+    expect(active()).toBe('Ada Lovelace')
+    key('ArrowDown', true)
+    expect(active()).toBe('Ada Lovelace')
+    key('ArrowUp', true)
+    expect(shut()).toBe(true)
+    key('ArrowUp', true)
+    expect(shut()).toBe(true)
+})

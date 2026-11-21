@@ -24,6 +24,30 @@ import ownOptions from './lib/OwnOptions.abide' with { type: 'text' }
                 "test('Backspace in an empty input takes out the last contact, and a chip takes out its own'",
             ],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
+            from: [
+                "test('a press lists every contact and a second shuts it, and focus opens nothing'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyPicker.test.ts',
+            from: [
+                "test('a press on an empty search field opens nothing, and with text lists what it finds'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
+            from: [
+                "test('Alt+ArrowDown opens the list without stepping, and Alt+ArrowUp shuts it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/e2e/combobox.spec.ts',
+            from: [
+                "test('a press on the field opens its list once, and a second press shuts it — 51.99'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Show each contact with their initials and company">

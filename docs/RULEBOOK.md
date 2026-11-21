@@ -5180,7 +5180,8 @@ for each key.
 
 51.13 `combobox` MUST open its list when its input is typed in.
 
-51.14 `combobox` MUST open its list on ArrowDown or ArrowUp in its input while the list is shut.
+51.14 `combobox` MUST open its list on ArrowDown, and on ArrowUp without Alt, in its input while the list
+is shut.
 
 51.15 `combobox` MUST list the items `search` answers for its input's text, where `search` is given.
 
@@ -5423,6 +5424,13 @@ thumbs, and the fill part between them, as `style`.
 
 51.98 `range` given `name` MUST submit its low and then its high value with a form its two field
 parts are in, each as a field of that name.
+
+51.99 A press on `combobox`'s input MUST open its list where it is shut, save where `search` is given
+and the input holds no text, and MUST shut it where it is open; focus reaching the input MUST NOT open
+it.
+
+51.100 Alt+ArrowDown in `combobox`'s input MUST open its list where it is shut, and Alt+ArrowUp MUST
+shut it where it is open, and each MUST leave its active item where it stands.
 
 # 52. Formatting, markdown and charts
 

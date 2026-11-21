@@ -106,3 +106,21 @@ test('a search in flight keeps the last companies listed', async () => {
         'Langley Research',
     )
 })
+
+// 51.99 — A SEARCH OPENS ON A PRESS ONLY ONCE THERE IS TEXT TO SEARCH FOR: nothing has been searched
+// for an empty field. THE REVERT: open on a press whatever the field holds — an empty list opens.
+test('a press on an empty search field opens nothing, and with text lists what it finds', async () => {
+    using _picker = await mount(CompanyPicker({}))
+    input().click()
+    flushSync()
+    expect(document.querySelector('[data-open]')).toBeNull()
+    await type('ar')
+    press('Escape')
+    expect(document.querySelector('[data-open]')).toBeNull()
+    input().click()
+    await settled()
+    expect(options().map((option) => option.name)).toEqual([
+        'Hopper & Co · Arlington',
+        'Langley Research · Hampton',
+    ])
+})

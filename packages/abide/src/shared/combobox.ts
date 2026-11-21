@@ -142,9 +142,31 @@ export function combobox<Item>(
         }
     }
 
+    // 51.99 — a press opens a shut list and shuts an open one, as a press on a `menu`'s trigger does
+    // (50.32). A press is a click, never focus: Tab reaching the input opens nothing. A search opens
+    // only once there is text to search for, since nothing has been searched yet.
+    function press() {
+        if (open.peek()) {
+            open.set(false)
+            return
+        }
+        if (search !== undefined && query.peek() === '') return
+        open.set(true)
+    }
+
     function keydown(event: KeyboardEvent) {
         // Home and End move the caret in the text, not the active option.
         if (event.key === 'Home' || event.key === 'End') return
+        // 51.100 — Alt with an arrow opens or shuts the list and never steps its active option.
+        if (
+            event.altKey &&
+            (event.key === 'ArrowDown' || event.key === 'ArrowUp')
+        ) {
+            event.preventDefault()
+            if (event.key === 'ArrowDown') open.set(true)
+            else if (open.peek()) open.set(false)
+            return
+        }
         // 51.28 — an Escape with nothing to shut or clear is left to whatever holds the input: a
         // `<dialog>` cancels only on an Escape no one prevented.
         if (event.key === 'Escape' && !open.peek() && query.peek() === '')
@@ -208,6 +230,7 @@ export function combobox<Item>(
             oninput: (event: Event) =>
                 write((event.currentTarget as HTMLInputElement).value),
             onkeydown: keydown,
+            onclick: press,
             onblur: () => open.set(false),
             // 32.5 — the field's text is its `value` property, which an attribute stops reaching once
             // it is typed in: written whenever the query moves away from what the field holds.

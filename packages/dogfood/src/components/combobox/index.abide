@@ -54,11 +54,36 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
             from: ["test('Escape shuts, then clears, then is left to the page'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
+            from: [
+                "test('a press lists every contact and a second shuts it, and focus opens nothing'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyPicker.test.ts',
+            from: [
+                "test('a press on an empty search field opens nothing, and with text lists what it finds'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
+            from: [
+                "test('Alt+ArrowDown opens the list without stepping, and Alt+ArrowUp shuts it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/e2e/combobox.spec.ts',
+            from: [
+                "test('a press on the field opens its list once, and a second press shuts it — 51.99'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Pick a contact from a list narrowed by typing">
         <p>Given <code>options</code>, the list keeps the items whose label holds what was typed,
-            ignoring case. The children show when nothing matches.</p>
+            ignoring case. The children show when nothing matches. A press on the field lists every
+            contact, and a second shuts the list; Tab reaching the field opens nothing.</p>
         <Example code={pickContact}><PickContact /></Example>
     </Section>
 
