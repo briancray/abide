@@ -8,7 +8,11 @@ import { beforeAll, expect, test } from 'bun:test'
 
 import { cellsOf } from '../src/lib/cellsOf.ts'
 import { registryRows } from '../src/lib/registryRows.ts'
-import { discriminating, shortSignature } from '../src/lib/shortSignature.ts'
+import {
+    discriminating,
+    membersOf,
+    shortSignature,
+} from '../src/lib/shortSignature.ts'
 import { SITE } from '../src/lib/SITE.ts'
 import { isFramed } from '../src/lib/sitePages.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
@@ -762,4 +766,24 @@ test("a page's rules are every clause its rows cite", async () => {
             )
     }
     expect(wrong).toEqual([])
+})
+
+// 40.33 — AN INTERSECTION'S MEMBERS ARE ONE PER NAME, and rows spelling each other resolve to none rather
+// than recursing without end. THE REVERT: key the merge by the name with its `?`, and `side` is listed
+// twice; drop the visited set, and the second case overflows the stack.
+test('an intersection lists a member once, and rows spelling each other resolve to nothing', () => {
+    const rows = new Map([
+        ['A', "`{ side?: Side; align?: 'start' }`"],
+        ['B', '`C & { b: number }`'],
+        ['C', '`B & { c: number }`'],
+    ])
+    const spelledAs = (name: string) => rows.get(name)
+    expect(membersOf("`Omit<A, 'align'> & { side: Side }`", spelledAs)).toEqual(
+        [{ name: 'side', type: 'Side' }],
+    )
+    expect(membersOf('`A & { side: Side }`', spelledAs)).toEqual([
+        { name: 'align?', type: "'start'" },
+        { name: 'side', type: 'Side' },
+    ])
+    expect(membersOf('`B`', spelledAs)).toBeUndefined()
 })

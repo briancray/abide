@@ -299,6 +299,7 @@ export function parametersNamed(
 export function membersOf(
     signature: string,
     spelledAs?: (name: string) => string | undefined,
+    visiting: ReadonlySet<string> = new Set(),
 ): { name: string; type: string }[] | undefined {
     let code = /^`([^`]+)`$/.exec(signature.trim())?.[1]?.trim()
     if (code === undefined) return undefined
@@ -310,18 +311,18 @@ export function membersOf(
     const parts = splitTop(code, '&')
     if (parts.length > 1 || !code.startsWith('{')) {
         if (spelledAs === undefined) return undefined
-        const merged = new Map<string, string>()
+        // Keyed by the bare name, so `side` and `side?` are one member, the later spelling kept.
+        const merged = new Map<string, { name: string; type: string }>()
         for (const part of parts) {
-            const members = partMembers(part, spelledAs)
+            const members = partMembers(part, spelledAs, visiting)
             if (members === undefined) return undefined
             for (const member of members) {
-                merged.delete(member.name)
-                merged.set(member.name, member.type)
+                const bare = member.name.replace(/\?$/, '')
+                merged.delete(bare)
+                merged.set(bare, member)
             }
         }
-        const members: { name: string; type: string }[] = []
-        for (const [name, type] of merged) members.push({ name, type })
-        return members
+        return [...merged.values()]
     }
     if (closing(code, 0) !== code.length - 1) return undefined
     const members: { name: string; type: string }[] = []
@@ -352,14 +353,18 @@ export function membersOf(
 function partMembers(
     part: string,
     spelledAs: (name: string) => string | undefined,
+    visiting: ReadonlySet<string>,
 ): { name: string; type: string }[] | undefined {
     if (part.startsWith('{')) return membersOf(`\`${part}\``)
     const omitted = /^Omit<(\w+),\s*(.+)>$/s.exec(part)
     const name = omitted?.[1] ?? /^\w+$/.exec(part)?.[0]
-    if (name === undefined) return undefined
+    // Two rows spelling each other have no members to show, rather than a stack with no floor.
+    if (name === undefined || visiting.has(name)) return undefined
     const spelled = spelledAs(name)
     const members =
-        spelled === undefined ? undefined : membersOf(spelled, spelledAs)
+        spelled === undefined
+            ? undefined
+            : membersOf(spelled, spelledAs, new Set([...visiting, name]))
     if (members === undefined || omitted === null) return members
     const dropped = new Set<string>()
     for (const key of (omitted[2] ?? '').matchAll(/'([^']+)'/g))
