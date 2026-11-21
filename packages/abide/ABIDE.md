@@ -222,8 +222,9 @@ table.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `form` (a `<form>` over a handler, checked against its args before the call),
   `markdown`, `chart`, `place`, `listbox`, `menu`, `tabs`, `tree`, `commandPalette`, `range`,
-  `sortableTable` and `combobox` (a widget's parts, spread on markup of your own; `CommandPalette`,
-  `Range`, `SortableTable` and `Combobox` are default markup over the last four), `sortRows`, `virtualRows`, `hotkeys` and `keyLabel`, and
+  `sortableTable`, `combobox` and `time` (a widget's parts, spread on markup of your own;
+  `CommandPalette`, `Range`, `SortableTable`, `Combobox` and `Time` are default markup over the last
+  five), `sortRows`, `virtualRows`, `hotkeys` and `keyLabel`, and
   the `bind:element` adaptors `dismissible`, `dropzone`, `copyText`, `popover` (an app's own panel in
   the top layer, against its anchor) and `tooltip` (shown by the root layout's `Tooltips`) beside
   `observe`.

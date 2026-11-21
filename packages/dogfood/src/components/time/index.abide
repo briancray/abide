@@ -10,7 +10,7 @@ import shortLabel from './lib/ShortLabel.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/helpers/format', '/ambient/media']}
+    seeAlso={['/helpers/time', '/helpers/format', '/ambient/media']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/activity/lib/LastTouched.test.ts',

@@ -2,6 +2,7 @@
 import AccountFeed from './lib/AccountFeed.abide'
 import ActivityHistory from './lib/ActivityHistory.abide'
 import CsvExport from './lib/CsvExport.abide'
+import FollowUps from './lib/FollowUps.abide'
 import QuickLog from './lib/QuickLog.abide'
 import RecentActivity from './lib/RecentActivity.abide'
 import Wallboard from './lib/Wallboard.abide'
@@ -16,6 +17,8 @@ import Wallboard from './lib/Wallboard.abide'
     <RecentActivity />
     <h2>Hopper &amp; Co, in every tab</h2>
     <AccountFeed />
+    <h2>Follow-ups due</h2>
+    <FollowUps />
     <h2>Older activity</h2>
     <ActivityHistory />
     <h2>Export</h2>

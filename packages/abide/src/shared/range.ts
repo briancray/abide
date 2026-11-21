@@ -5,12 +5,10 @@
 
 import { checkParts } from './checkParts.ts'
 import { number } from './format/index.ts'
+import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { scrub, type ScrubPosition } from './scrub.ts'
-
-/** A value `range` reads as it is used: the value itself, or a function answering it, read live. */
-type Live<Value> = Value | (() => Value)
 
 /** The range picked, and the scale it is picked on. */
 export type RangeOptions = {
@@ -46,9 +44,6 @@ export type RangeParts = {
     input(which: 0 | 1): Record<string, unknown>
 }
 
-const read = <Value>(live: Live<Value>): Value =>
-    typeof live === 'function' ? (live as () => Value)() : live
-
 /** WAI-ARIA's multi-thumb slider: a low and a high value on one track, as parts to spread. */
 export function range(options: RangeOptions): RangeParts {
     const {
@@ -57,9 +52,9 @@ export function range(options: RangeOptions): RangeParts {
         format = (each: number) => number(each),
         name,
     } = options
-    const min = () => read(options.min ?? 0)
-    const max = () => read(options.max ?? 100)
-    const step = () => read(options.step ?? 1)
+    const min = () => live(options.min ?? 0)
+    const max = () => live(options.max ?? 100)
+    const step = () => live(options.step ?? 1)
 
     // The values a thumb stops at, by index from `min`.
     const last = reactive(() =>
@@ -169,7 +164,7 @@ export function range(options: RangeOptions): RangeParts {
         root: {
             role: 'group',
             get 'aria-label'() {
-                return read(options.label)
+                return live(options.label)
             },
             get 'data-dragging'() {
                 return dragging() === -1 ? undefined : ''

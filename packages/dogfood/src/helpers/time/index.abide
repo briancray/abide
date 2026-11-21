@@ -1,0 +1,34 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import DueDates from './lib/DueDates.abide'
+import dueDates from './lib/DueDates.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/components/time', '/helpers/format']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/activity/lib/FollowUps.test.ts',
+            from: [
+                "test('each follow-up reads how soon it is due, on a time of its own'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/activity/lib/FollowUps.test.ts',
+            from: [
+                "test('the clock follows a row while it stands, and stops with the last'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Write each row's due date on a time of your own">
+        <p>One set of parts serves a whole list: spread <code>time(at)</code> onto a
+            <code>&lt;time&gt;</code> of your own for its <code>datetime</code> and its
+            <code>title</code>, and write <code>text(at)</code> inside it. Each time is kept
+            current by the page's one clock for as long as it stands.</p>
+        <Example code={dueDates}><DueDates /></Example>
+    </Section>
+</Doc>

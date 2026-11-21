@@ -747,6 +747,12 @@ const WRITTEN: readonly {
                     'Show how long ago or how soon a time is, kept current by one clock for the whole page.',
             },
             {
+                route: '/helpers/time',
+                title: '`time`',
+                description:
+                    'Spread a time kept current onto a `<time>` of your own, one per row of a list.',
+            },
+            {
                 route: '/helpers/follow-bottom',
                 title: '`followBottom`',
                 description:

@@ -1,13 +1,9 @@
 <script>
-// 52.73-52.78 — A TIME THAT STAYS CURRENT: how long ago or how soon it is, as `format.relative` writes
-// it, in a `<time>` whose `datetime` a machine reads and whose `title` is the date in full. Every
-// `Time` on the page is ticked by one clock, at the moment its label next reads differently.
+// 49.9, 52.73-52.78 — `time`'s default markup: a `<time>` holding the label. Everything it does is the
+// parts'; an app wanting other markup spreads them itself.
 import type { Attributes } from '#shared/Attributes.ts'
-import { clock, follow } from '#shared/clock.ts'
-import { date, relative } from '#shared/format/index.ts'
-import { instant } from '#shared/format/instant.ts'
 import { props } from '#shared/props.ts'
-import { reactive, watch } from '#shared/reactive/index.ts'
+import { time } from '#shared/time.ts'
 
 const {
     value,
@@ -28,19 +24,11 @@ const {
     } & Omit<Attributes<'time'>, 'datetime' | 'title'>
 >()
 
-const time = reactive(() => instant(value))
-
-// 52.74 — followed for as long as it stands, so the one clock ticks when this label next changes.
-watch(() => {
-    const at = time
-    return at === undefined ? undefined : follow(at)
+const parts = time({
+    style: () => style,
+    locale: () => locale,
+    timeZone: () => timeZone,
 })
 </script>
 
-<time
-    {...rest}
-    datetime={time === undefined ? undefined : new Date(time).toISOString()}
-    title={time === undefined
-        ? undefined
-        : date(time, { style: 'dateTime', timeZone, locale })}
->{relative(time, { now: clock(), style, locale })}</time>
+<time {...rest} {...parts.time(value)}>{parts.text(value)}</time>

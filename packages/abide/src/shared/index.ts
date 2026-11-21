@@ -158,6 +158,8 @@ export {
 } from './sortableTable.ts'
 export { type Tabs, type TabsOptions, tabs } from './tabs.ts'
 export { type Tree, type TreeOptions, tree } from './tree.ts'
+// 52.73-52.78 — a time that stays current, as parts on a `<time>` of the app's own.
+export { type TimeOptions, type TimeParts, time } from './time.ts'
 export * as transcript from './transcript/index.ts'
 export { type Hint, type TooltipOptions } from './tooltip/tips.ts'
 export { tooltip } from './tooltip/tooltip.ts'

@@ -5601,23 +5601,25 @@ save where `disabled` holds for that index.
 52.72 `Chart` MUST `announce` the x its crosshair stands at and every series' value there each time a
 key moves the crosshair, and MUST NOT for a move of the pointer.
 
-52.73 `Time` MUST write `format.relative` of `value` in a `<time>` whose `datetime` is `value` as an ISO
-string and whose `title` is `format.date` of it in the `dateTime` style, and MUST write `—` with
-neither attribute where `value` names no time.
+52.73 `time`'s `text` of a value MUST be `format.relative` of it, and its `time` part of a value MUST
+carry it as an ISO string as `datetime` and `format.date` of it in the `dateTime` style as `title`;
+where the value names no time, the text MUST be `—` and the part MUST carry neither attribute. `Time`
+MUST write them on a `<time>`.
 
-52.74 Every `Time` standing in a browser MUST be ticked by one timer, set for the soonest moment any of
-their labels next reads differently, and no timer MUST stand while no `Time` does.
+52.74 Every `time` part bound to an element in a browser MUST be ticked by one timer, set for the
+soonest moment any of their labels next reads differently, and no timer MUST stand while none is
+bound.
 
-52.75 A `Time`'s label MUST be ticked when `format.relative` next writes it differently: half a unit past
+52.75 A `time`'s label MUST be ticked when `format.relative` next writes it differently: half a unit past
 where its rounded count stands, or where its unit turns, and, under a minute either side of now, once a
 minute has passed.
 
-52.76 No `Time`'s timer MUST stand while the page is hidden, and the time MUST be read again as the
+52.76 No `time`'s timer MUST stand while the page is hidden, and the time MUST be read again as the
 page is shown.
 
 52.77 A tick MUST write only the labels it changed.
 
-52.78 A `Time` MUST write its label from the time it renders at on a server and from the time it
+52.78 A `time` MUST write its label from the time it renders at on a server and from the time it
 hydrates at in a browser, a label a boundary passed between the two being written as changed text and
 not as a hydration mismatch.
 

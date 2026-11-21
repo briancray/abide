@@ -1,0 +1,26 @@
+<script>
+import { reactive, time } from '@abide/abide'
+
+const DAY = 86_400_000
+const now = Date.now()
+const due = time({ style: 'short' })
+
+let followUps = reactive([
+    { contact: 'Ada Lovelace', at: now + 2 * DAY },
+    { contact: 'Grace Hopper', at: now + 5 * DAY },
+])
+
+function done(contact: string) {
+    followUps = followUps.filter((each) => each.contact !== contact)
+}
+</script>
+
+<ul class="fields">
+    {#for followUp of followUps by followUp.contact}
+        <li>
+            <span>Call {followUp.contact}</span>
+            <strong><time {...due.time(followUp.at)}>{due.text(followUp.at)}</time></strong>
+            <button onclick={() => done(followUp.contact)}>Done</button>
+        </li>
+    {/for}
+</ul>

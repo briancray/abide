@@ -1,0 +1,21 @@
+<script>
+import { time } from '@abide/abide'
+
+const DAY = 86_400_000
+const due = time({ style: 'short' })
+const FOLLOW_UPS = [
+    { contact: 'Ada', at: Date.now() + 2 * DAY },
+    { contact: 'Grace', at: Date.now() - 3 * DAY },
+]
+</script>
+
+<ul>
+    {#for followUp of FOLLOW_UPS by followUp.contact}
+        <li>
+            Call {followUp.contact}
+            <time {...due.time(followUp.at)} class="font-medium text-ink">
+                {due.text(followUp.at)}
+            </time>
+        </li>
+    {/for}
+</ul>

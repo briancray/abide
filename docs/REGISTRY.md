@@ -1128,7 +1128,15 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Time` | `{ value: unknown; style?: 'long' \| 'short' \| 'narrow'; locale?: string; timeZone?: string } & Attributes<'time'>` | How long ago or how soon a time is, kept current, the component `@abide/abide/Time.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.1, 52.2, 52.3, 52.5, 52.73, 52.74, 52.75, 52.76, 52.77, 52.78 |
+| `Time` | `{ value: unknown; style?: 'long' \| 'short' \| 'narrow'; locale?: string; timeZone?: string } & Attributes<'time'>` | How long ago or how soon a time is, kept current, the component `@abide/abide/Time.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.1, 52.2, 52.3, 52.5, 52.73, 52.74, 52.75, 52.76, 52.77, 52.78, 49.9 |
+
+## `time`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `time` | `(options?: TimeOptions) => TimeParts` | Times kept current as parts an app spreads onto a `<time>` of its own, one per value: its `datetime` and `title`, and its label. | 52.1, 52.2, 52.3, 52.5, 52.73, 52.74, 52.75, 52.76, 52.77, 52.78 |
+| `TimeOptions` | `{ style?: 'long' \| 'short' \| 'narrow' \| (() => 'long' \| 'short' \| 'narrow'); locale?: string \| undefined \| (() => string \| undefined); timeZone?: string \| undefined \| (() => string \| undefined) }` | How a time is written, each read live where a function is given. | 52.73 |
+| `TimeParts` | `{ time(value: unknown): Record<string, unknown>; text(value: unknown): string }` | A value's `<time>` attributes and its label. | 32.11, 32.99, 52.73, 52.74 |
 
 ## `followBottom`
 

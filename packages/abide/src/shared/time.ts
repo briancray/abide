@@ -1,0 +1,58 @@
+// 52.73-52.78 — A TIME THAT STAYS CURRENT, as parts an app spreads onto a `<time>` of its own: how long
+// ago or how soon it is, as `format.relative` writes it, its `datetime` for a machine and its `title` the
+// date in full. One set of parts serves every time a list writes — `seen.time(row.at)` per row — and
+// each `<time>` is followed by the one clock (`clock.ts`) for as long as its element is bound, so the
+// clock ticks at the moment the soonest label next reads differently.
+
+import { clock, follow } from './clock.ts'
+import { date, relative } from './format/index.ts'
+import { instant } from './format/instant.ts'
+import { type Live, live } from './live.ts'
+
+/** How a time is written. Each is read live where a function is given. */
+export type TimeOptions = {
+    /** `'long'` (`12 minutes ago`), `'short'` (`12 min. ago`) or `'narrow'` (`12m ago`). `'long'` by default. */
+    style?: Live<'long' | 'short' | 'narrow'>
+    /** The BCP 47 locale it is written in. `'en-US'` by default. */
+    locale?: Live<string | undefined>
+    /** The zone the `title` writes the date in, as `format.date` takes one. */
+    timeZone?: Live<string | undefined>
+}
+
+/** The parts `time` hands back: `<time {...seen.time(at)}>{seen.text(at)}</time>`. */
+export type TimeParts = {
+    /** The `<time>` of `value` — a `Date`, epoch milliseconds or an ISO string: its `datetime` and `title`, neither where it is no time, and the clock following it while bound. */
+    time(value: unknown): Record<string, unknown>
+    /** How long ago or how soon `value` is, as the clock reads it now: `—` where it is no time. */
+    text(value: unknown): string
+}
+
+/** Times that stay current, written as `format.relative` writes them against one clock for the page. */
+export function time(options: TimeOptions = {}): TimeParts {
+    return {
+        time(value) {
+            const at = instant(value)
+            if (at === undefined) return {}
+            const timeZone = live(options.timeZone)
+            const locale = live(options.locale)
+            return {
+                datetime: new Date(at).toISOString(),
+                title: date(at, {
+                    style: 'dateTime',
+                    ...(timeZone === undefined ? {} : { timeZone }),
+                    ...(locale === undefined ? {} : { locale }),
+                }),
+                // 52.74 — followed for as long as it is bound, so the clock ticks when its label next changes.
+                'bind:element': () => follow(at),
+            }
+        },
+        text(value) {
+            const locale = live(options.locale)
+            return relative(instant(value), {
+                now: clock(),
+                style: live(options.style) ?? 'long',
+                ...(locale === undefined ? {} : { locale }),
+            })
+        },
+    }
+}
