@@ -12,6 +12,7 @@
 // (7.26, 7.27), aborting `stopSignal` first (7.38). Filed here rather than on the cell, for the same
 // reason.
 
+import { type Live, live } from '../live.ts'
 import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
 import type { Cell } from './cellShape.ts'
 import { armTimer } from './Expiry.ts'
@@ -25,7 +26,7 @@ export type Poll =
     | {
           every: number
           after?: 'tick' | 'settle'
-          delay?: number | (() => number)
+          delay?: Live<number>
       }
 
 type Polled = Pick<Reactive<unknown>, 'busy' | 'refresh' | 'then'>
@@ -35,7 +36,7 @@ class Clock {
     readonly every: number
     /** 7.33 — whether each refresh is spaced from the previous run's end rather than from a tick. */
     readonly settle: boolean
-    readonly delay: number | (() => number) | undefined
+    readonly delay: Live<number> | undefined
     readonly values: () => Iterable<Polled>
     /** Whether the clock is running — a timer armed, or a settle being waited on (7.33). */
     running = false
@@ -185,8 +186,7 @@ export function startUnownedPolls(): void {
         const first = clock.first
         if (first === null) start(clock)
         else if (clock.delayTimer === undefined) {
-            const delay =
-                typeof clock.delay === 'function' ? clock.delay() : clock.delay
+            const delay = live<number | undefined>(clock.delay)
             // A refresh settles the reload the value owes, which is `firstRunStarted`'s cue.
             if (delay === undefined || !(delay > 0)) first.refresh()
             else {

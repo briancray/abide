@@ -432,7 +432,7 @@ function seat(cell: Cell): void {
  * THE EFFECT QUEUE. A mark walk runs no body, so something has to run the ones that
  * must: every EFFECT the walk reached lands here and is resolved by the drain at the end of
  * the turn. Derived values are NOT queued — nothing runs them until something reads them,
- * which is the whole of push-pull — save 2.13's aborted body, see `drainPending`.
+ * which is the whole of push-pull — save a body a probe reads (2.13, 3.2), which `markReaders` queues.
  *
  * An array and a read cursor rather than `shift()`: an effect that writes appends to the
  * queue the drain is already walking, and shifting would move every remaining entry per
@@ -2047,7 +2047,8 @@ Cell.prototype.notify = function notify(this: Cell): void {
  * Leaves a run that read a value which had not landed owing the rest of itself (2.13).
  *
  * BUSY, because what it waits on is loading. The mark a source's production makes is what finishes
- * the run, and `markReaders` queues it rather than leaving it for a read that may never come. And
+ * the run: a read of the value pulls it, and where a probe reads it `markReaders` queues it rather
+ * than leaving it for a read that may never come. And
  * NOT EVERYTHING IT READS IS READY, so neither is this — 11.58, and the same sentence 11.16 makes
  * for a re-adoption. It stops serving rather than handing back a figure it computed from a source
  * that has since gone away, and that is a move its readers have to hear even though the aborted run

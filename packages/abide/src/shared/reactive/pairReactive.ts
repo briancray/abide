@@ -8,8 +8,7 @@
 // leaves a seat it does not own alone, and the adoption path reaches this `set` through the
 // callable it adopted.
 
-import { CELL } from './CELL.ts'
-import type { Callable } from './cellShape.ts'
+import { cellOf } from './cellShape.ts'
 import { reactive } from './index.ts'
 import { brandedPrototype, type Reactive } from './Reactive.ts'
 
@@ -40,8 +39,7 @@ export function pairReactive(
         () => pair.get(),
         identity === undefined ? undefined : { identity },
     )
-    const callable = (over as unknown as Callable)[CELL]
-        .callable as unknown as {
+    const callable = cellOf(over).callable as unknown as {
         [PAIR]: Pair
     }
     Object.setPrototypeOf(callable, PAIR_PROTOTYPE)
