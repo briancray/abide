@@ -4,10 +4,8 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { emitComponent } from '#compiler'
 import { REACTIVE_MEMBERS } from '#compiler/REACTIVE_MEMBERS.ts'
-import { ROUTE_MEMBERS } from '#compiler/ROUTE_MEMBERS.ts'
 import { tokenize } from '#compiler/tokenize.ts'
-import { isReactive, reactive } from '#shared'
-import { route } from '#shared/route.ts'
+import { reactive } from '#shared'
 import { writePath } from '#shared/writePath.ts'
 
 import { closeTyped, lower, refusal, typed } from './typed.ts'
@@ -94,6 +92,105 @@ test('a write used as a value is worth what it stored — 31.4', async () => {
     expect(await lower('f()\na = 1, b = 2', A)).toBe('f()\na.set(1), b.set(2)')
     expect(await lower('s.count = 1', A)).toBe(
         's.set(__writePath(s(), ["count"], 1))',
+    )
+})
+
+// 31.15 — A MEMBER TYPED AS A `Reactive` IS READ AND WRITTEN AS A NAME IS, told by its type and not
+// by its owner: what a parts function hands back is a `readonly` member, which the checker types as
+// an error where it is assigned, so the write is typed by its declaration. An access ON a
+// `Reactive` stays 31.5's. THE REVERT: have `memberAccesses` find nothing; the 5 member reads and
+// writes below are left as written, and `ask.open ? 'yes' : 'no'` tests an object, which is always
+// true.
+const PARTS =
+    "import { reactive, type Reactive } from '@abide/abide'\nconst ask: { readonly open: Reactive<boolean>; readonly inner: { readonly open: Reactive<boolean> } } = { open: reactive(false), inner: { open: reactive(false) } }\n"
+test('a member typed as a Reactive is read and written by name — 31.15', async () => {
+    const lowered = async (script: string): Promise<string> =>
+        (await lower(`${PARTS}${script}`)).slice(PARTS.length)
+    expect(await lowered("const shown = ask.open ? 'yes' : 'no'")).toBe(
+        "const shown = ask.open() ? 'yes' : 'no'",
+    )
+    expect(await lowered('const deep = !ask.inner.open')).toBe(
+        'const deep = !ask.inner.open()',
+    )
+    expect(await lowered('ask.open = true')).toBe('ask.open.set(true)')
+    expect(await lowered('ask.inner.open = !ask.open')).toBe(
+        'ask.inner.open.set(!ask.open())',
+    )
+    // 31.7 and 31.5 — the explicit forms, and the `Reactive`'s own members, are left alone.
+    expect(
+        await lowered('ask.open.set(false); ask.open(); ask.open.peek()'),
+    ).toBe('ask.open.set(false); ask.open(); ask.open.peek()')
+})
+
+// 31.15 — AN ACCESS THE PROJECTION CANNOT TYPE IS STEPPED DOWN FROM ITS RECEIVER: in the shadow a read
+// is still its `Reactive`, so `rows[at]` indexes by one and `box.lid` asks a `Reactive` for a member
+// only its value declares. The receiver lowers too, so the key is read. THE REVERT: have
+// `steppedReactive` step nothing; both reads are left as written, and `rows[at()] + 1` adds 1 to an
+// object.
+test('a member reached through a read is read by name — 31.15', async () => {
+    const script =
+        "import { reactive, type Reactive } from '@abide/abide'\nconst rows: Reactive<number>[] = [reactive(1)]\nlet at = reactive(0)\nconst box = reactive({ lid: reactive(true) })\n"
+    const lowered = async (line: string): Promise<string> =>
+        (await lower(`${script}${line}`)).slice(script.length)
+    expect(await lowered('const next = rows[at] + 1')).toBe(
+        'const next = rows[at()]() + 1',
+    )
+    expect(await lowered('const shut = !box.lid')).toBe(
+        'const shut = !box().lid()',
+    )
+})
+
+// Runs a lowered script against abide's own `reactive`, its types stripped, collecting `out`.
+const stripTypes = new Bun.Transpiler({ loader: 'ts' })
+async function ran(script: string): Promise<unknown[]> {
+    const lowered = await lower(script)
+    const body = stripTypes.transformSync(lowered).replace(/^import .*$/gm, '')
+    return new Function('reactive', `const out = []\n${body}\nreturn out`)(
+        reactive,
+    ) as unknown[]
+}
+
+// 31.20 — A `Reactive` ASSIGNED WHERE NONE IS YET IS BOUND, as `=` binds any other object: a name
+// declared with none, a member a constructor sets, a key a record has not got. Where one is held,
+// the assignment is 31.4's write, which loads from it. THE REVERT: never set `fills` in `readsIn`;
+// each of the three is `undefined.set(…)` and the script throws before it reports.
+test('a Reactive assigned where none is yet is bound to it — 31.20', async () => {
+    const out =
+        await ran(`import { reactive, type Reactive } from '@abide/abide'
+let later: Reactive<number>
+later = reactive(1)
+class Box { lid: Reactive<boolean>; constructor() { this.lid = reactive(true) } }
+const box = new Box()
+const counts: Record<string, Reactive<number>> = {}
+counts.calls = reactive(3)
+counts.calls = 4
+out.push(later, box.lid, counts.calls)
+later = reactive(2)
+out.push(later)
+`)
+    expect(out).toEqual([1, true, 4, 2])
+    // A read on the right is a value, and is written as one.
+    expect(
+        await lower(
+            "import { reactive, type Reactive } from '@abide/abide'\nlet a = reactive(1)\nlet b = reactive(2)\na = b",
+        ),
+    ).toEndWith('\na.set(b())')
+})
+
+// 31.21 — A READ OF WHAT MAY HOLD NO `Reactive` READS `undefined` THERE: an option a caller left out.
+// 31.19 — and an operand of `??` stands where the whole does, so a default keeps the `Reactive`.
+// THE REVERT: never set `optional` in `readsIn`; `options.open()` throws on the option left out.
+// For 31.19, drop `handsOn` from `declaredType`; the default is `options.open?.() ?? reactive(false)`,
+// a boolean or a `Reactive`.
+test('a read of what may hold no Reactive reads undefined — 31.21, 31.19', async () => {
+    const script = `import { reactive, type Reactive } from '@abide/abide'
+const options: { open?: Reactive<boolean> } = {}
+const open: Reactive<boolean> = options.open ?? reactive(false)
+out.push(options.open ? 'given' : 'left out', open)
+`
+    expect(await ran(script)).toEqual(['left out', false])
+    expect(await lower(script)).toContain(
+        'const open: Reactive<boolean> = options.open ?? reactive(false)',
     )
 })
 
@@ -402,13 +499,12 @@ test('an imported Reactive is read and written by name — 31.1', async () => {
     expect(await lower(`${through}const t = greeting.text`)).toBe(
         `${through}const t = greeting().text`,
     )
-    // NOT A NAME: a namespace's member is a property access on the namespace, which is not
-    // bound to a `Reactive`, so `conversations.onboarding` is the `Reactive` and is read
-    // explicitly. And an import that is not a `Reactive` is left alone.
+    // A NAMESPACE'S MEMBER IS NO NAME, but a member typed as a `Reactive` is read as one is
+    // (31.15). And an import that is not a `Reactive` is left alone.
     const namespace = "import * as conversations from './conversations.ts'\n"
     expect(
         await lower(`${namespace}const t = conversations.onboarding.text`),
-    ).toBe(`${namespace}const t = conversations.onboarding.text`)
+    ).toBe(`${namespace}const t = conversations.onboarding().text`)
     const plain = "import { plain } from './conversations.ts'\n"
     expect(await lower(`${plain}const t = plain.text`)).toBe(
         `${plain}const t = plain.text`,
@@ -1025,15 +1121,4 @@ test('the compiler’s member list is the runtime’s', () => {
     expect(Object.getOwnPropertyNames(prototype).sort()).toEqual(
         [...REACTIVE_MEMBERS].sort(),
     )
-})
-
-// 31.15 — `ROUTE_MEMBERS` IS A COPY OF `route`'s OWN VALUES, for the reason above: a value added to
-// `route` without it lowers `route.newValue` as a plain member read, handing the author the
-// `Reactive` where the value was meant. `route.query` is a function, called rather than read (30.41).
-// THE REVERT: drop 'index' from `ROUTE_MEMBERS`; this reports 4 against 5.
-test('the compiler’s route members are route’s', () => {
-    const values = Object.keys(route).filter((name) =>
-        isReactive(route[name as keyof typeof route]),
-    )
-    expect(values.sort()).toEqual([...ROUTE_MEMBERS].sort())
 })

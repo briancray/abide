@@ -7,6 +7,7 @@ import {
     isBinaryExpression,
     isCallExpression,
     isClassDeclaration,
+    isConditionalExpression,
     isElementAccessExpression,
     isEnumDeclaration,
     isExpressionStatement,
@@ -72,7 +73,6 @@ import {
     valueTypeOf,
 } from './reactiveTypes.ts'
 import { referencesIn } from './referencesIn.ts'
-import { ROUTE_MEMBERS } from './ROUTE_MEMBERS.ts'
 import { sharedModuleWrites } from './sharedModuleWrites.ts'
 import { trackingWarnings } from './trackingWarnings.ts'
 
@@ -190,7 +190,7 @@ export async function readsIn(
     // Awaited after the round trips below, so a 33.14 refusal would reject with nothing
     // listening and be reported unhandled; `await props` still throws it.
     props.catch(() => {})
-    const params = routeReads(checker, abide, sourceFile)
+    const members = memberAccesses(checker, abide, sourceFile)
     const rows = rowReads(
         checker,
         sourceFile,
@@ -210,7 +210,10 @@ export async function readsIn(
                 : undefined,
         ),
     )
-    await dropValueHolders(checker, names, reactive)
+    const memberNodes = await members
+    const memberSpans = new Set<string>()
+    for (const node of memberNodes) memberSpans.add(spanKey(node))
+    await dropValueHolders(checker, names, reactive, memberSpans)
     for (let at = 0; at < names.length; at += 1)
         if (
             reactive[at] === undefined &&
@@ -234,10 +237,11 @@ export async function readsIn(
     const nodes = await Promise.all(
         reactive.map((symbol) => referencesIn(checker, shadowPath, symbol)),
     )
-    const owned = await ownMembers(checker, nodes.flat(), (node) =>
+    const occurrences = [...nodes.flat(), ...memberNodes]
+    const owned = await ownMembers(checker, occurrences, (node) =>
         valueTypeOf(checker, node),
     )
-    const lifted = await liftedMutators(checker, nodes.flat(), (node) =>
+    const lifted = await liftedMutators(checker, occurrences, (node) =>
         valueTypeOf(checker, node),
     )
     const holding: Promise<void>[] = []
@@ -256,10 +260,28 @@ export async function readsIn(
             if (read.shape === 'value' || read.shape === 'shorthand')
                 holding.push(holdIn(checker, abide, node, read))
         }
+    for (const node of memberNodes) {
+        const read = classifyRead(node, owned.has(node), lifted.has(node))
+        if (read === undefined) continue
+        read.member = true
+        read.local = true
+        if (read.shape === 'value' || read.shape === 'shorthand')
+            holding.push(holdIn(checker, abide, node, read))
+        holding.push(
+            isRouteParams(checker, abide, node).then((params) => {
+                read.routeParams = params
+            }),
+        )
+        named.push(read)
+        located.push({ node, read })
+    }
     await Promise.all(holding)
+    await Promise.all([
+        fills(checker, abide, located),
+        optionalReads(checker, located),
+    ])
     const reads = [
         ...(await props),
-        ...(await params),
         ...(await rows),
         ...(await configs),
         ...named,
@@ -479,7 +501,8 @@ async function declaredType(
     let top = node
     while (
         isArrayLiteralExpression(top.parent) ||
-        isParenthesizedExpression(top.parent)
+        isParenthesizedExpression(top.parent) ||
+        handsOn(top)
     )
         top = top.parent
     const parent = top.parent
@@ -537,6 +560,24 @@ async function declaredType(
     if (isArrowFunction(parent) && parent.body === top)
         return annotated(checker, parent.type)
     return undefined
+}
+
+/**
+ * 31.3 — whether `node`'s value can BE its parent's, as `valueLeaves` reads one: either side of
+ * `??`, `||` and `&&`, and either arm of a conditional. So `open ?? reactive(false)` stands where
+ * the whole does, and holds where a `Reactive` is due.
+ */
+function handsOn(node: Node): boolean {
+    const parent = node.parent
+    if (isConditionalExpression(parent))
+        return parent.whenTrue === node || parent.whenFalse === node
+    if (!isBinaryExpression(parent)) return false
+    const operator = parent.operatorToken.kind
+    return (
+        operator === SyntaxKind.QuestionQuestionToken ||
+        operator === SyntaxKind.BarBarToken ||
+        operator === SyntaxKind.AmpersandAmpersandToken
+    )
 }
 
 function annotated(
@@ -681,6 +722,7 @@ async function dropValueHolders(
     checker: Checker,
     names: readonly Node[],
     reactive: (CheckedSymbol | undefined)[],
+    memberSpans: ReadonlySet<string>,
 ): Promise<void> {
     const reactiveIds = new Set<number>()
     for (const symbol of reactive)
@@ -696,9 +738,19 @@ async function dropValueHolders(
             declaration.initializer === undefined
         )
             continue
-        const before = leaves.length
-        valueLeaves(declaration.initializer, leaves)
-        for (let leaf = before; leaf < leaves.length; leaf += 1) owners.push(at)
+        const own: Node[] = []
+        valueLeaves(declaration.initializer, own)
+        // 31.15 — a member read hands on its value as a name's does.
+        let readsMember = false
+        for (const leaf of own) readsMember ||= memberSpans.has(spanKey(leaf))
+        if (readsMember) {
+            reactive[at] = undefined
+            continue
+        }
+        for (const leaf of own) {
+            leaves.push(leaf)
+            owners.push(at)
+        }
     }
     if (leaves.length === 0) return
     const symbols = await checker.getSymbolAtLocation(leaves)
@@ -710,8 +762,8 @@ async function dropValueHolders(
 }
 
 /**
- * The names an initializer's value can BE, as opposed to names it merely uses: `a` in `(a)`,
- * `a as T`, `c ? a : b` and `a ?? b`, but not in `f(a)` or `a.b`.
+ * The names and members an initializer's value can BE, as opposed to those it merely uses: `a` in
+ * `(a)`, `a as T`, `c ? a : b` and `a ?? b`, and `a.b` itself, but not `a` in `f(a)` or `a.b`.
  */
 function valueLeaves(node: Node, leaves: Node[]): void {
     if (TRANSPARENT.has(node.kind)) {
@@ -723,6 +775,8 @@ function valueLeaves(node: Node, leaves: Node[]): void {
     }
     switch (node.kind) {
         case SyntaxKind.Identifier:
+        case SyntaxKind.PropertyAccessExpression:
+        case SyntaxKind.ElementAccessExpression:
             leaves.push(node)
             return
         case SyntaxKind.ConditionalExpression: {
@@ -759,57 +813,269 @@ function valueLeaves(node: Node, leaves: Node[]): void {
     }
 }
 
+/** A node's span as a key, matching a `Read`'s own `start` and `end`. */
+function spanKey(node: Node): string {
+    return `${node.getStart()}:${node.end}`
+}
+
 /**
- * 31.15 — `route`'s five values, each read by name as a name bound to a `Reactive` is.
- *
- * `route.params.id` reads `route.params().id`, and the explicit call keeps compiling (31.7). Told
- * by the symbol, as `props` is, so an app's own `route` is not abide's.
- *
- * READ AS A CALL RATHER THAN THROUGH THE CHECKER'S VALUES RECORD (`local`): the record is keyed by
- * a name, and this read is spelled as a member.
- *
- * 23.9 — AND `route.params` IS MARKED, for a checked lowering of a page or a layout to type by what
- * the file's own route promises (`Lowering`): the file is the route, and the running module reads
- * the one `route` every page shares.
+ * 31.4 — marks each whole write whose value is a `Reactive` as `fills`: where the target holds no
+ * `Reactive` yet — `let later: Reactive<number>`, a member a constructor sets, a key a record has
+ * not got — it is assigned the one written, and where it holds one it loads from it as before.
+ * Asked only of a plain `=`: `+=` and its kin compute from the value.
  */
-async function routeReads(
+async function fills(
+    checker: Checker,
+    abide: Abide,
+    located: readonly { node: Node; read: Read }[],
+): Promise<void> {
+    const reading = new Set<string>()
+    for (const { read } of located)
+        if (read.shape !== 'write') reading.add(`${read.start}:${read.end}`)
+    const writes: { read: Read; value: Node }[] = []
+    for (const { node, read } of located) {
+        if (
+            read.shape !== 'write' ||
+            read.operator !== '' ||
+            read.path.length > 0
+        )
+            continue
+        const assignment = node.parent
+        if (!isBinaryExpression(assignment)) continue
+        // A value that can BE a read's is a value: `later = total` writes what `total` holds.
+        const leaves: Node[] = []
+        valueLeaves(assignment.right, leaves)
+        let readsOne = false
+        for (const leaf of leaves) readsOne ||= reading.has(spanKey(leaf))
+        if (!readsOne) writes.push({ read, value: assignment.right })
+    }
+    if (writes.length === 0) return
+    const types = await checker.getTypeAtLocation(
+        writes.map((write) => write.value),
+    )
+    await Promise.all(
+        writes.map(async ({ read }, at) => {
+            const type = types[at]
+            if (type !== undefined)
+                read.fills = await isReactiveType(checker, abide, type, false)
+        }),
+    )
+}
+
+/**
+ * 31.1 — marks each read whose type admits `undefined` or `null` as `optional`, which lowers to
+ * `n?.()`: an option a caller may leave out is no `Reactive` to call. Narrowed where it is read, so
+ * inside `if (n)` it is a plain read.
+ */
+async function optionalReads(
+    checker: Checker,
+    located: readonly { node: Node; read: Read }[],
+): Promise<void> {
+    const asked: { node: Node; read: Read }[] = []
+    for (const one of located)
+        if (one.read.shape === 'value' || one.read.shape === 'shorthand')
+            asked.push(one)
+    if (asked.length === 0) return
+    const types = await checker.getTypeAtLocation(asked.map((one) => one.node))
+    await Promise.all(
+        asked.map(async ({ read }, at) => {
+            const type = types[at]
+            if (type === undefined) return
+            for (const member of await unionMembers(type))
+                if ((member.flags & ABSENT) !== 0) {
+                    read.optional = true
+                    return
+                }
+        }),
+    )
+}
+
+const ABSENT = TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void
+
+/**
+ * 31.15 — every property or element access whose declared type is a `Reactive`, read and written
+ * as a name bound to one is: `ask.open`, `rows[at]`, `route.url`.
+ *
+ * TOLD BY THE MEMBER'S TYPE, NOT BY ITS OWNER: what a parts function hands back, a record of
+ * `Reactive`s and `route`'s five values are one case. An access on a `Reactive` is none of these —
+ * `n.ready` is the `Reactive`'s own member (31.5).
+ *
+ * AN ACCESS THE PROJECTION CANNOT TYPE is stepped down from its receiver's type instead, as
+ * `liftedMutators` steps: in the shadow a read is still its `Reactive`, so `deal.owner` asks a
+ * `Reactive` for a member only its value declares, and `rows[at]` indexes by one. Innermost first,
+ * so `deal.owner.open` steps from what `deal.owner` stepped to.
+ *
+ * ONE ROUND TRIP FOR THE TYPES, and the `Reactive` question asked only of an object's: a string
+ * or a number is answered by its flags.
+ */
+async function memberAccesses(
     checker: Checker,
     abide: Abide,
     sourceFile: Node,
-): Promise<Read[]> {
-    const reads: Read[] = []
-    if (abide.route === undefined) return reads
+): Promise<Node[]> {
+    const found: Node[] = []
+    if (abide.reactive === undefined) return found
     const accesses: Node[] = []
-    const owners: Node[] = []
     const visit = (node: Node): void => {
-        if (
-            isPropertyAccessExpression(node) &&
-            isIdentifier(node.expression) &&
-            isIdentifier(node.name) &&
-            ROUTE_MEMBERS.has(node.name.text)
-        ) {
+        if (isPropertyAccessExpression(node) || isElementAccessExpression(node))
             accesses.push(node)
-            owners.push(node.expression)
-        }
         node.forEachChild(visit)
     }
     sourceFile.forEachChild(visit)
-    if (owners.length === 0) return reads
-    const symbols = await checker.getSymbolAtLocation(owners)
+    if (accesses.length === 0) return found
+    const types = await checker.getTypeAtLocation(accesses)
+    // A WRITE TARGET IS TYPED BY ITS DECLARATION: the checker types `ask.open = true` on a
+    // `readonly` member as an error, and that write is the one the clause is for.
+    const targets: number[] = []
     for (let at = 0; at < accesses.length; at += 1) {
-        const symbol = symbols[at]
-        if (symbol === undefined) continue
-        const declared = await aliasedSymbol(checker, symbol)
-        if (declared.valueDeclaration?.path !== abide.route) continue
         const access = accesses[at] as Node
-        const read = classifyRead(access)
-        if (read === undefined) continue
-        read.local = true
-        read.routeParams =
-            (access as { name?: { text: string } }).name?.text === 'params'
-        reads.push(read)
+        if (isPropertyAccessExpression(access) && isWriteTarget(access))
+            targets.push(at)
     }
-    return reads
+    if (targets.length > 0) {
+        const symbols = await checker.getSymbolAtLocation(
+            targets.map(
+                (at) => (accesses[at] as unknown as { name: Node }).name,
+            ),
+        )
+        await Promise.all(
+            targets.map(async (at, index) => {
+                const symbol = symbols[index]
+                if (symbol !== undefined)
+                    types[at] = await checker.getTypeOfSymbol(symbol)
+            }),
+        )
+    }
+    const untyped: number[] = []
+    const reactive = await Promise.all(
+        accesses.map(async (_, at) => {
+            const type = types[at]
+            if (type === undefined) return false
+            if ((type.flags & TypeFlags.Any) !== 0) {
+                untyped.push(at)
+                return false
+            }
+            return (
+                (type.flags & MAYBE_REACTIVE) !== 0 &&
+                isReactiveType(checker, abide, type, false)
+            )
+        }),
+    )
+    const stepped = await steppedReactive(checker, abide, accesses, untyped)
+    const receivers: number[] = []
+    for (let at = 0; at < accesses.length; at += 1)
+        if (reactive[at]) receivers.push(at)
+        else if (stepped.has(at)) found.push(accesses[at] as Node)
+    if (receivers.length === 0) return found
+    const receiverTypes = await checker.getTypeAtLocation(
+        receivers.map((at) => receiverOf(accesses[at] as Node)),
+    )
+    await Promise.all(
+        receivers.map(async (at, index) => {
+            const receiver = receiverTypes[index]
+            if (
+                receiver === undefined ||
+                !(await isReactiveType(checker, abide, receiver, false))
+            )
+                found.push(accesses[at] as Node)
+        }),
+    )
+    return found
+}
+
+function receiverOf(access: Node): Node {
+    return (access as unknown as { expression: Node }).expression
+}
+
+/**
+ * 31.15 — which of the `untyped` accesses step down to a `Reactive` from their receiver: from a
+ * `Reactive`'s value where the receiver is one, from its own type otherwise, and from what an
+ * inner access stepped to where that was untyped too.
+ */
+async function steppedReactive(
+    checker: Checker,
+    abide: Abide,
+    accesses: readonly Node[],
+    untyped: readonly number[],
+): Promise<Set<number>> {
+    const reactive = new Set<number>()
+    if (untyped.length === 0) return reactive
+    const receivers = await checker.getTypeAtLocation(
+        untyped.map((at) => receiverOf(accesses[at] as Node)),
+    )
+    const steppedTo = new Map<string, Type[]>()
+    // `accesses` is in pre-order, so an inner access comes after the one it stands in.
+    for (let index = untyped.length - 1; index >= 0; index -= 1) {
+        const at = untyped[index] as number
+        const access = accesses[at] as Node
+        const receiver = receiverOf(access)
+        let base = steppedTo.get(spanKey(receiver))
+        if (base === undefined) {
+            const type = receivers[index]
+            if (type === undefined) continue
+            const value = (await isReactiveType(checker, abide, type, false))
+                ? await valueTypeOf(checker, receiver)
+                : type
+            if (value === undefined) continue
+            base = await presentMembers(value)
+        }
+        const types = await stepTypes(
+            checker,
+            base,
+            isPropertyAccessExpression(access) ? access.name.text : undefined,
+        )
+        steppedTo.set(spanKey(access), types)
+        if (types.length === 0) continue
+        let every = true
+        for (const type of types)
+            every &&= await isReactiveType(checker, abide, type, false)
+        if (every) reactive.add(at)
+    }
+    return reactive
+}
+
+/** Whether `node` is what an assignment, a compound assignment or an update writes. */
+function isWriteTarget(node: Node): boolean {
+    const parent = node.parent
+    if (isBinaryExpression(parent))
+        return (
+            parent.left === node &&
+            parent.operatorToken.kind >= SyntaxKind.FirstAssignment &&
+            parent.operatorToken.kind <= SyntaxKind.LastAssignment
+        )
+    return (
+        (parent.kind === SyntaxKind.PrefixUnaryExpression ||
+            parent.kind === SyntaxKind.PostfixUnaryExpression) &&
+        ((parent as unknown as { operator: SyntaxKind }).operator ===
+            SyntaxKind.PlusPlusToken ||
+            (parent as unknown as { operator: SyntaxKind }).operator ===
+                SyntaxKind.MinusMinusToken)
+    )
+}
+
+/** The flags a `Reactive`, or a union or an intersection holding one, can carry. */
+const MAYBE_REACTIVE =
+    TypeFlags.Object | TypeFlags.Union | TypeFlags.Intersection
+
+/**
+ * 23.9 — whether `access` is abide's `route.params`, which a page or a layout types by its route.
+ */
+async function isRouteParams(
+    checker: Checker,
+    abide: Abide,
+    access: Node,
+): Promise<boolean> {
+    if (
+        abide.route === undefined ||
+        !isPropertyAccessExpression(access) ||
+        !isIdentifier(access.expression) ||
+        access.name.text !== 'params'
+    )
+        return false
+    const [symbol] = await checker.getSymbolAtLocation([access.expression])
+    if (symbol === undefined) return false
+    const declared = await aliasedSymbol(checker, symbol)
+    return declared.valueDeclaration?.path === abide.route
 }
 
 /**
@@ -1464,7 +1730,13 @@ function isBindOperand(positions: PositionTable, node: Node): boolean {
  * which comes first to the order the two passes happened to push in.
  */
 function byPosition(left: Read, right: Read): number {
-    return left.start - right.start || side(left) - side(right)
+    // 31.15 — a member read and its receiver's name start together, and the member, longer, lowers
+    // the name inside itself (`Lowering.nameOf`).
+    return (
+        left.start - right.start ||
+        side(left) - side(right) ||
+        right.end - left.end
+    )
 }
 
 function side(read: Read): number {

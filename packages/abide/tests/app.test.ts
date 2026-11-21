@@ -562,7 +562,7 @@ test('a server-rendered page reads route and online — 23.1, 23.8', async () =>
 })
 
 // 31.15 — `route`'s FIVE VALUES ARE READ BY NAME, each as a name bound to a `Reactive` is: a member
-// after one reaches the value. THE REVERT: drop `routeReads` from the classify pass; `route.name`
+// after one reaches the value. THE REVERT: drop `memberAccesses` from the classify pass; `route.name`
 // is handed on as the `Reactive`, `toUpperCase` is not a member of one, and the page answers 500.
 // 23.29 — and the index a server renders is 0.
 test('route.name, params, url, navigating and index are read by name — 31.15, 23.29', async () => {

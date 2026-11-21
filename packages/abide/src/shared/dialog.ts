@@ -6,12 +6,12 @@
 // usable around the dialog.
 
 import { type Live, live } from './live.ts'
-import { type Reactive, watch } from './reactive/index.ts'
+import { type Reactive, reactive, watch } from './reactive/index.ts'
 
 /** Whether the dialog shows, and how it opens and closes. */
 export type DialogOptions = {
-    /** Whether the dialog is showing: every way it closes writes `false` to it. */
-    open: Reactive<boolean>
+    /** Whether the dialog is showing: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. One of the dialog's own by default. */
+    open?: Reactive<boolean>
     /** Whether it opens modal, over an inert page, or beside the page with `show`. `true` by default. */
     modal?: Live<boolean>
     /** Whether Escape and a click on the backdrop close it. `true` by default. */
@@ -20,19 +20,23 @@ export type DialogOptions = {
     onclose?: (returnValue: string) => void
 }
 
-/** The part `dialog` hands back: `<dialog {...edit.dialog}>`. */
+/** The part `dialog` hands back, `<dialog {...edit.dialog}>`, and whether it is showing. */
 export type DialogParts = {
     /** The `<dialog>`'s opening and closing, its dismissal and `data-open`. */
     readonly dialog: Record<string, unknown>
+    /** Whether the dialog is showing — the `open` it was handed, or one of its own. */
+    readonly open: Reactive<boolean>
 }
 
 /** A native `<dialog>` opened and closed by `open`, as a part to spread. */
-export function dialog(options: DialogOptions): DialogParts {
-    const { open, onclose } = options
+export function dialog(options: DialogOptions = {}): DialogParts {
+    const { onclose } = options
+    const open = options.open ?? reactive(false)
     const modal = () => live(options.modal ?? true)
     const dismissible = () => live(options.dismissible ?? true)
 
     return {
+        open,
         dialog: {
             get 'data-open'() {
                 return open() ? '' : undefined

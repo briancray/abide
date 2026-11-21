@@ -20,8 +20,8 @@ import archiveDeal from './lib/ArchiveDeal.abide' with { type: 'text' }
 >
     <Section level={3} title="Ask before archiving, on a dialog of your own">
         <p>Spread <code>dialog</code>'s part onto your own <code>&lt;dialog&gt;</code>. It opens
-            modal while <code>open</code> is true, every close writes <code>false</code> back, and
-            <code>onclose</code> hands you the <code>value</code> of the button that closed it.
+            modal while <code>ask.open</code> is true, every close writes <code>false</code> back,
+            and <code>onclose</code> hands you the <code>value</code> of the button that closed it.
             With <code>dismissible: false</code>, Escape and the backdrop leave it open.</p>
         <Example code={archiveDeal}><ArchiveDeal /></Example>
     </Section>

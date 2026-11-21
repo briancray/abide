@@ -57,15 +57,16 @@ with no stylesheet: a caller styles one by the `data-` attributes and the `data-
 
 | Spelling | Means | Rules |
 | --- | --- | --- |
-| `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.10 |
-| `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, object literal member, return or `bind:` operand | the `Reactive` | 31.3 |
+| `foo` wherever the declared type of its position is not a `Reactive` | a live read | 31.1, 31.2, 31.10, 31.21 |
+| `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, object literal member, return or `bind:` operand | the `Reactive` | 31.3, 31.19 |
 | `await foo` | the settling of the `Reactive`, which is its value | 1.4, 2.7, 31.3 |
 | `refresh(foo)` / a `Selection`-typed parameter | the `Reactive` | 31.13 |
-| `foo = bar` | a write | 31.4, 11.61, 31.18 |
+| `foo = bar` | a write, or where `foo` holds nothing yet and `bar` is a `Reactive`, a binding to it | 31.4, 11.61, 31.18, 31.20 |
 | `foo.bar = v` | a write through a path | 31.8, 31.14, 31.16 |
 | `foo.push(v)` | a write through a path, run on a copy of the array | 31.8, 31.9 |
 | `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
 | `const { a, b: c } = bar()` where a member is a `Reactive` | a name bound to that `Reactive` | 31.17 |
+| `bar.a` / `bar[k]` where the member is a `Reactive` | read and written as `foo` is | 31.15 |
 | `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one the value does not | 31.5 |
 | `foo.bar(…)` | a call of the value's `bar`, or of the `Reactive`'s own `bar` where it declares one the value does not | 31.6 |
 | `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.11 |
@@ -822,9 +823,9 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `dialog` | `(options: DialogOptions) => DialogParts` | A native modal as a part an app spreads onto a `<dialog>` of its own, opened and closed by `open`. | 50.1, 50.2, 50.3, 50.4 |
-| `DialogOptions` | `{ open: Reactive<boolean>; modal?: boolean \| (() => boolean); dismissible?: boolean \| (() => boolean); onclose?: (returnValue: string) => void }` | Whether the dialog shows, and how it opens and closes. | 50.1, 50.2, 50.3 |
-| `DialogParts` | `{ readonly dialog: Record<string, unknown> }` | The `<dialog>`'s part. | 32.11, 32.99 |
+| `dialog` | `(options?: DialogOptions) => DialogParts` | A native modal as a part an app spreads onto a `<dialog>` of its own, opened and closed by `open`. | 50.1, 50.2, 50.3, 50.4 |
+| `DialogOptions` | `{ open?: Reactive<boolean>; modal?: boolean \| (() => boolean); dismissible?: boolean \| (() => boolean); onclose?: (returnValue: string) => void }` | Whether the dialog shows, and how it opens and closes. | 50.1, 50.2, 50.3 |
+| `DialogParts` | `{ readonly dialog: Record<string, unknown>; readonly open: Reactive<boolean> }` | The `<dialog>`'s part, and whether it is showing. | 32.11, 32.99 |
 
 ## `Prompts`
 
