@@ -6,7 +6,7 @@ import type { Attributes } from '#shared/Attributes.ts'
 import { type Command, commandPalette } from '#shared/commandPalette.ts'
 import { keyLabel } from '#shared/keyLabel.ts'
 import { props } from '#shared/props.ts'
-import type { Reactive } from '#shared/reactive/index.ts'
+import { reactiveOver } from '#shared/reactiveOver.ts'
 
 import Dialog from './Dialog.abide'
 
@@ -35,17 +35,14 @@ const {
     } & Omit<Attributes<'dialog'>, 'open' | 'id'>
 >()
 
-// The bound `open` handed over as the `Reactive` `commandPalette` takes, standing in for the three of
-// its members the parts call: read live, and written back to whoever binds it.
-const showing = Object.assign(() => open, {
-    peek: () => open,
-    set: (next: boolean) => {
-        open = next
-    },
-})
 const palette = commandPalette({
     commands: () => commands,
-    open: showing as unknown as Reactive<boolean>,
+    open: reactiveOver(
+        () => open,
+        (next) => {
+            open = next
+        },
+    ),
     hotkey,
     id,
     label,

@@ -2,8 +2,10 @@
 // watch keeps writing it, removing an attribute the value no longer carries, and an `on<event>`
 // listener becomes the element's, with its options (32.4), replaced when the value hands over another.
 
-import { spreadEntries } from '#shared/spread.ts'
+import type { Disposer } from '#shared/reactive/watch.ts'
+import { BIND_ELEMENT, spreadEntries } from '#shared/spread.ts'
 
+import { bindElement } from './bindElement.ts'
 import { listen, unlisten } from './listen.ts'
 import type { Scope } from './Scope.ts'
 import { writeAttribute } from './setAttribute.ts'
@@ -42,4 +44,38 @@ export function bindSpread(
                 listeners.delete(event)
             }
     })
+}
+
+/**
+ * 32.99 — A SPREAD'S ELEMENT BINDING, handed the element as `bind:element` hands it: at the region's
+ * mount, once the element is connected (32.68), bound again only when the value carries another, and
+ * its `Disposer` run when it is replaced or the region is torn down. What lets a parts function carry
+ * behavior an attribute cannot — a property to set, a popover to place — inside the one spread.
+ *
+ * A SPREAD CARRYING NONE AT MOUNT PAYS NOTHING: no watch is made for it. A parts value's shape is
+ * fixed when it is made, so one that carries no binding at mount never comes to, and a spread in a
+ * row of a long list costs no watch per row for a binding it does not have.
+ */
+export function bindSpreadElement(
+    element: Element,
+    read: () => unknown,
+    scope: Scope,
+): void {
+    if (memberOf(read()) === undefined) return
+    let bound: unknown
+    let disposer: Disposer | undefined
+    scope.watch(() => {
+        const next = memberOf(read())
+        if (next === bound) return
+        disposer?.()
+        bound = next
+        disposer = next === undefined ? undefined : bindElement(element, next)
+    })
+    scope.stops.push(() => disposer?.())
+}
+
+function memberOf(value: unknown): unknown {
+    return value !== null && typeof value === 'object'
+        ? (value as Record<string, unknown>)[BIND_ELEMENT]
+        : undefined
 }

@@ -1,0 +1,43 @@
+<script>
+import { type Column, format, sortableTable } from '@abide/abide'
+
+type Deal = { id: string; name: string; owner: string; amount: number }
+
+const DEALS: Deal[] = [
+    { id: 'hopper', name: 'Hopper renewal', owner: 'Ada', amount: 48_000 },
+    { id: 'turing', name: 'Turing seats', owner: 'Grace', amount: 22_000 },
+    { id: 'noether', name: 'Noether pilot', owner: 'Ada', amount: 6_500 },
+]
+const COLUMNS: Column<Deal>[] = [
+    { key: 'name', label: 'Deal' },
+    { key: 'amount', label: 'Amount', align: 'end' },
+]
+const table = sortableTable({
+    rows: DEALS,
+    columns: COLUMNS,
+    key: (deal) => deal.id,
+})
+</script>
+
+<table class="w-full [&_[data-align=end]]:text-right">
+    <thead>
+        <tr>
+            {#for column of COLUMNS by column.key}
+                <th {...table.header(column)}>
+                    <button {...table.sort(column)}>{column.label}</button>
+                </th>
+            {/for}
+        </tr>
+    </thead>
+    <tbody>
+        {#for deal of table.rows() by deal.id}
+            <tr>
+                <td>
+                    <strong>{deal.name}</strong>
+                    <small class="block text-muted">{deal.owner}</small>
+                </td>
+                <td class="text-right">{format.money(deal.amount)}</td>
+            </tr>
+        {/for}
+    </tbody>
+</table>

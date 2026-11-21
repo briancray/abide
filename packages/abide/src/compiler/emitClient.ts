@@ -808,10 +808,15 @@ function elementUnits(
                 `${lowering.use('bindProperty')}(${element}, ${JSON.stringify(one.bind)}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
             )
         // 32.11 — THE SPREAD, KEPT WRITTEN: an attribute it stops carrying is removed.
-        else if (one.kind === 'spread')
+        else if (one.kind === 'spread') {
             spreads.push(
                 `${lowering.use('bindSpread')}(${element}, () => (${lowering.expression(one.attribute)}), ${JSON.stringify(one.explicit)}, ${SCOPE})`,
             )
+            // 32.99 — and its element binding, handed over at mount as `bind:element`'s is (32.68).
+            elements.push(
+                `${lowering.use('bindSpreadElement')}(${element}, () => (${lowering.expression(one.attribute)}), ${SCOPE})`,
+            )
+        }
         // 32.9 — THE NODE, HANDED OVER, once. Not a watch: what the value takes is the element,
         // which is the same node on every run a watch would have made — and the callback
         // form's `Disposer` goes on this region's scope, so a widget it set up is torn down

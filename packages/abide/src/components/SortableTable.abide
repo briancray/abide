@@ -1,10 +1,13 @@
 <script generics="Row">
+// 49.9, 51.45-51.60, 51.79-51.83 — `sortableTable`'s default markup: a header per column with a sort
+// button, a row per row with a cell per column, a checkbox column while `selected` is given, and a
+// detail row where `Detail` is. Everything it does is the parts'; an app wanting its own cells spreads them.
 import type { Attributes } from '#shared/Attributes.ts'
 import type { Column } from '#shared/Column.ts'
 import { props } from '#shared/props.ts'
-import { reactive, watch } from '#shared/reactive/index.ts'
+import { reactiveOver } from '#shared/reactiveOver.ts'
 import type { Sort } from '#shared/Sort.ts'
-import { cellText, sortRows } from '#shared/sortRows.ts'
+import { sortableTable } from '#shared/sortableTable.ts'
 
 const {
     rows,
@@ -37,126 +40,54 @@ const {
     } & Attributes<'table'>
 >()
 
-const sorted = reactive(() => sortRows(rows, columns, sort))
-
-// 51.53 — a header pressed again turns its direction round; a new one sorts its first direction.
-function sortBy(column: Column<Row>) {
-    sort =
-        sort?.key === column.key
-            ? {
-                  key: column.key,
-                  direction:
-                      sort.direction === 'ascending'
-                          ? 'descending'
-                          : 'ascending',
-              }
-            : {
-                  key: column.key,
-                  direction: column.firstDirection ?? 'ascending',
-              }
-}
-
-const directionOf = (column: Column<Row>) =>
-    sort?.key === column.key ? sort.direction : undefined
-
-// 51.79-51.83 — ROWS PICKED BY NATIVE CHECKBOXES: a table is no grid, so each row's checkbox is in the
-// page's tab order and Space toggles it as the browser does, with nothing to rove.
-const picked = reactive(() => new Set(selected))
-// Read only where the header's box renders, so a table with nothing selectable holds no value that
-// waits on its rows.
-const every = () =>
-    sorted.length > 0 && sorted.every((row) => picked.has(key(row)))
-const some = () => !every() && sorted.some((row) => picked.has(key(row)))
-// The row a click last checked or cleared, which a Shift-click runs a range from (51.81).
-let anchor: string | undefined
-
-function toggle(row: Row, event: MouseEvent) {
-    const checked = !picked.has(key(row))
-    const at = sorted.findIndex((each) => key(each) === key(row))
-    const from =
-        event.shiftKey && anchor !== undefined
-            ? sorted.findIndex((each) => key(each) === anchor)
-            : -1
-    const keys =
-        from === -1
-            ? [key(row)]
-            : sorted.slice(Math.min(from, at), Math.max(from, at) + 1).map(key)
-    anchor = key(row)
-    const next = new Set(picked)
-    for (const each of keys) {
-        if (checked) next.add(each)
-        else next.delete(each)
-    }
-    // 51.80 — the selection keeps the rows' order.
-    selected = rows.map(key).filter((each) => next.has(each))
-}
-
-// 51.82 — the header's box is checked where every row is, and mixed where some are.
-function toggleEvery() {
-    selected = every() ? [] : rows.map(key)
-}
-
-function mixed(input: HTMLInputElement) {
-    return watch(() => {
-        input.indeterminate = some()
-    })
-}
+const table = sortableTable({
+    rows: () => rows,
+    columns: () => columns,
+    key,
+    sort: reactiveOver(
+        () => sort,
+        (next) => {
+            sort = next
+        },
+    ),
+    selected: reactiveOver(
+        () => selected,
+        (next) => {
+            selected = next
+        },
+    ),
+})
 </script>
 
 <table {...rest}>
     <thead>
         <tr>
             {#if selected !== undefined}
-                <th scope="col" data-part="select">
-                    <input
-                        type="checkbox"
-                        aria-label="Select every row"
-                        checked={every()}
-                        bind:element={mixed}
-                        onclick={toggleEvery}
-                    >
-                </th>
+                <th scope="col" data-part="select"><input {...table.selectAll}></th>
             {/if}
             {#for column of columns by column.key}
-                <th
-                    scope="col"
-                    aria-sort={directionOf(column)}
-                    data-part="header"
-                    data-sort={directionOf(column)}
-                    data-align={column.align}
-                >
+                <th {...table.header(column)} data-part="header">
                     {#if column.sortable === false}
                         {column.label}
                     {:else}
-                        <button type="button" data-part="sort" onclick={() => sortBy(column)}>{column.label}</button>
+                        <button {...table.sort(column)} data-part="sort">{column.label}</button>
                     {/if}
                 </th>
             {/for}
         </tr>
     </thead>
     <tbody>
-        {#for row of sorted by key(row)}
-            <tr
-                {...rowAttributes?.(row)}
-                data-part="row"
-                data-selected={picked.has(key(row)) ? '' : undefined}
-            >
+        {#for row of table.rows() by key(row)}
+            <tr {...rowAttributes?.(row)} {...table.row(row)} data-part="row">
                 {#if selected !== undefined}
-                    <td data-part="select">
-                        <input
-                            type="checkbox"
-                            aria-label="Select {cellText(row, columns[0] as Column<Row>)}"
-                            checked={picked.has(key(row))}
-                            onclick={(event) => toggle(row, event)}
-                        >
-                    </td>
+                    <td data-part="select"><input {...table.select(row)}></td>
                 {/if}
                 {#for column of columns by column.key}
-                    <td data-part="cell" data-align={column.align}>
+                    <td {...table.cell(column)} data-part="cell">
                         {#if Cell}
-                            <Cell row={row} column={column} text={cellText(row, column)} />
+                            <Cell row={row} column={column} text={table.text(row, column)} />
                         {:else}
-                            {cellText(row, column)}
+                            {table.text(row, column)}
                         {/if}
                     </td>
                 {/for}

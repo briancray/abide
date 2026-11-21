@@ -600,6 +600,12 @@ const WRITTEN: readonly {
                     'Show rows in a table whose headers sort them, moving rows rather than rebuilding them.',
             },
             {
+                route: '/helpers/sortable-table',
+                title: '`sortableTable`',
+                description:
+                    'Spread a sortable table onto markup of your own, writing every cell, with rows picked by checkbox.',
+            },
+            {
                 route: '/helpers/listbox',
                 title: '`listbox`',
                 description:

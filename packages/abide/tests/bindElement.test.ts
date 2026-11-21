@@ -302,3 +302,35 @@ test('bind:element on a component is refused — 32.69', () => {
     }
     expect(refused).toContain('RULEBOOK 32.69')
 })
+
+// 32.99 — A SPREAD CARRIES AN ELEMENT BINDING under `bind:element`: handed the connected node at mount,
+// written as no attribute, and its `Disposer` run when the region leaves — what lets a parts function
+// set a property or place a popover from inside the one spread. THE REVERT: drop the
+// `bindSpreadElement` call `emitClient` makes for a spread; the log stays `` where `c` is due.
+test("a spread's bind:element is handed the node, and its disposer runs when it leaves — 32.99", async () => {
+    ;(globalThis as { __SPREAD__?: string }).__SPREAD__ = ''
+    const { html } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let open = reactive(true)
+const parts = {
+    'data-part': 'box',
+    'bind:element': (node: Element) => {
+        ;(globalThis as { __SPREAD__?: string }).__SPREAD__ += node.isConnected ? 'c' : 'x'
+        return () => { (globalThis as { __SPREAD__?: string }).__SPREAD__ += 'C' }
+    },
+}
+</script>
+
+<button id="toggle" onclick={() => { open = !open }}>toggle</button>
+{#if open}<div id="widget" {...parts}>widget</div>{/if}`)
+
+    expect(html).not.toContain('bind:element')
+    flushSync()
+    expect(document.querySelector('#widget')?.getAttribute('data-part')).toBe(
+        'box',
+    )
+    expect((globalThis as { __SPREAD__?: string }).__SPREAD__).toBe('c')
+    click('#toggle')
+    expect((globalThis as { __SPREAD__?: string }).__SPREAD__).toBe('cC')
+})

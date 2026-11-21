@@ -5,7 +5,7 @@
 import type { Attributes } from '#shared/Attributes.ts'
 import { props } from '#shared/props.ts'
 import { range } from '#shared/range.ts'
-import type { Reactive } from '#shared/reactive/index.ts'
+import { reactiveOver } from '#shared/reactiveOver.ts'
 
 const {
     value,
@@ -38,16 +38,13 @@ const {
     } & Omit<Attributes<'div'>, 'role'>
 >()
 
-// The bound `value` handed over as the `Reactive` `range` takes, standing in for the three of its members
-// `range` calls: read live, and written back to whoever binds it.
-const ends = Object.assign(() => value, {
-    peek: () => value,
-    set: (next: readonly [number, number]) => {
-        value = next
-    },
-})
 const parts = range({
-    value: ends as unknown as Reactive<readonly [number, number]>,
+    value: reactiveOver(
+        () => value,
+        (next) => {
+            value = next
+        },
+    ),
     label: () => label,
     min: () => min,
     max: () => max,

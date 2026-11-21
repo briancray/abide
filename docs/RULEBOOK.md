@@ -2658,6 +2658,10 @@ naming 32.22.
 each be made by the first of its kind bound while it observes no element,
 from the `ResizeObserver` or `IntersectionObserver` the document holds then.
 
+32.99 A function, a `Reactive` or a list a `{...expr}` spread onto an element carries under
+`bind:element` MUST be handed that element as `bind:element` hands it (32.9, 32.68), bound again when
+the value carries another, and MUST NOT be written as an attribute.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -5232,32 +5236,32 @@ the row's field its `key` names otherwise.
 
 51.50 `sortRows` MUST hand back `rows` itself where `sort` is `undefined` or names no column.
 
-51.51 `SortableTable` MUST render its rows in the order `sortRows` hands back for its `rows`,
-`columns` and `sort`.
+51.51 `sortableTable`'s `rows` MUST answer, and `SortableTable` MUST render, its rows in the order
+`sortRows` hands back for its `rows`, `columns` and `sort`.
 
 51.52 `SortableTable` MUST render each header's `label` in a button that sorts by its column, save a
 `Column` whose `sortable` is `false`.
 
-51.53 `SortableTable` MUST turn the direction round on a column whose button is pressed while it is
-sorted by that column, and MUST otherwise sort by the column in its `firstDirection`, ascending where
-it has none.
+51.53 A press on `sortableTable`'s `sort` part for a column MUST turn the direction round where `sort`
+names that column, and MUST otherwise sort by the column in its `firstDirection`, ascending where it
+has none.
 
-51.54 `SortableTable` MUST write the direction of `sort` as `aria-sort` on the sorted column's
-header, and on no other header.
+51.54 `sortableTable`'s `header` part MUST write the direction of `sort` as `aria-sort` on the sorted
+column's header, and on no other header.
 
-51.55 `SortableTable` MUST write the direction of `sort` as `data-sort` on the sorted column's
-header, and on no other header.
+51.55 `sortableTable`'s `header` part MUST write the direction of `sort` as `data-sort` on the sorted
+column's header, and on no other header.
 
 51.56 `SortableTable` MUST keep each row's element across a change of `sort`, keyed by `key`.
 
 51.57 `SortableTable` MUST render a cell's content through `Cell` where it is given, and as the
 cell's text otherwise.
 
-51.58 `SortableTable` MUST give a cell as its text what the column's `format` hands back where the
-column has one, and otherwise the value's own text, or none for a blank value.
+51.58 `sortableTable`'s `text`, and `SortableTable` for a cell, MUST give as a cell's text what the
+column's `format` hands back where the column has one, and otherwise the value's own text, or none for
+a blank value.
 
-51.59 `SortableTable` MUST write a `Column`'s `align` as `data-align` on its header and on each of
-its cells.
+51.59 `sortableTable`'s `header` and `cell` parts MUST write a `Column`'s `align` as `data-align`.
 
 51.60 `SortableTable` MUST spread what `rowAttributes` hands back for a row onto that row's `<tr>`.
 
@@ -5318,20 +5322,23 @@ End to its caret.
 
 51.78 `commandPalette` MUST list every command again, its input emptied, each time `open` turns on.
 
-51.79 `SortableTable` given `selected` MUST lead each row with a checkbox, named for the row by its
-first column's text, checked while `selected` holds the row's key, and MUST write `data-selected` on
-each such row; given none, it MUST render no checkbox.
+51.79 `sortableTable`'s `select` part MUST be a checkbox named for its row by the first column's text
+and checked while `selected` holds the row's key, and its `row` part MUST write `data-selected` on such
+a row; `SortableTable` given `selected` MUST lead each row with that checkbox, and given none MUST
+render no checkbox.
 
-51.80 A row's checkbox pressed in a `SortableTable` MUST add the row's key to `selected` or take it
+51.80 A press on `sortableTable`'s `select` part MUST add its row's key to `selected` or take it
 out, `selected` keeping the order of `rows`.
 
-51.81 A row's checkbox pressed with Shift in a `SortableTable` MUST check or clear, as it turns, every
+51.81 A press with Shift on `sortableTable`'s `select` part MUST check or clear, as it turns, every
 row from the row whose checkbox was pressed last to it, in the order the rows show.
 
-51.82 `SortableTable` given `selected` MUST head its checkboxes with one checked while every row is
-selected and mixed while some are, whose press selects every row or, where every row is, none.
+51.82 `sortableTable`'s `selectAll` part MUST be a checkbox checked while every row is selected and
+mixed while some are, whose press selects every row or, where every row is, none, and
+`SortableTable` given `selected` MUST head its checkboxes with it.
 
-51.83 `SortableTable` MUST write a change of `selected` it makes back to a `selected` bound to it.
+51.83 `sortableTable` MUST write a change of the selection it makes to `selected`, and
+`SortableTable` back to a `selected` bound to it.
 
 51.84 `tree` MUST give its tree `role="tree"`, each node's item `role="treeitem"` with the node's depth
 as `aria-level` and its count and place among its siblings as `aria-setsize` and `aria-posinset`, and

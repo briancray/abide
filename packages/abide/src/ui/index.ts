@@ -36,7 +36,7 @@ export { bindElement } from './bindElement.ts'
 export { bindFiles } from './bindFiles.ts'
 export { bindGroup } from './bindGroup.ts'
 export { bindProperty } from './bindProperty.ts'
-export { bindSpread } from './bindSpread.ts'
+export { bindSpread, bindSpreadElement } from './bindSpread.ts'
 // A run's dynamic part on the CLIENT, written through `data` rather than parsed — so not escaped,
 // where the server's `escapeText` is: escaping here would put `&lt;` on the screen where the server
 // put `<`. A name of its own, so the emitted run reads the same on both sides with one difference.

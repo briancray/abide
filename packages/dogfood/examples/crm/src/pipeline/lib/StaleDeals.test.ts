@@ -77,3 +77,32 @@ test('marking the selected deals lost clears the pick', async () => {
     )
     expect(stages).toEqual(['lost', 'proposal', 'proposal', 'lost'])
 })
+
+// 51.51, 51.53, 51.54 — THE PARTS SORT THE ROWS THE PAGE WRITES: a header's button sorts by its column,
+// a second press turns it round, and the header carries `aria-sort` while it is the one sorted by.
+// THE REVERT: have `sort`'s press always set the first direction, and the second press leaves the rows
+// ascending.
+test('a header press sorts the rows you wrote, and again turns them round', async () => {
+    using _deals = await mount(StaleDeals({}))
+    const names = () =>
+        [...document.querySelectorAll('tbody tr')].map(
+            (row) => row.children[1]?.textContent,
+        )
+    const amount = () =>
+        [...document.querySelectorAll('thead th')].find((header) =>
+            header.textContent?.includes('Amount'),
+        ) as HTMLElement
+    ;(amount().querySelector('button') as HTMLButtonElement).click()
+    flushSync()
+    expect(amount().getAttribute('aria-sort')).toBe('ascending')
+    expect(names()).toEqual([
+        'Noether pilot',
+        'Lovelace audit',
+        'Turing seats',
+        'Hopper renewal',
+    ])
+    ;(amount().querySelector('button') as HTMLButtonElement).click()
+    flushSync()
+    expect(amount().getAttribute('aria-sort')).toBe('descending')
+    expect(names()?.[0]).toBe('Hopper renewal')
+})

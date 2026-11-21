@@ -1,18 +1,12 @@
 <script>
-import { type Column, format, reactive } from '@abide/abide'
-import SortableTable from '@abide/abide/SortableTable.abide'
+import { type Column, format, reactive, sortableTable } from '@abide/abide'
 
 type Deal = { id: string; name: string; amount: number; stage: string }
 
 const COLUMNS: Column<Deal>[] = [
     { key: 'name', label: 'Deal' },
     { key: 'stage', label: 'Stage' },
-    {
-        key: 'amount',
-        label: 'Amount',
-        align: 'end',
-        format: (amount) => format.money(Number(amount), { digits: 0 }),
-    },
+    { key: 'amount', label: 'Amount', align: 'end' },
 ]
 
 let deals = reactive<Deal[]>([
@@ -42,6 +36,13 @@ let deals = reactive<Deal[]>([
     },
 ])
 let selected = reactive<readonly string[]>([])
+// The table as parts on markup of the page's own: an amount written as money.
+const table = sortableTable({
+    rows: () => deals,
+    columns: COLUMNS,
+    key: (deal) => deal.id,
+    selected,
+})
 
 // A bulk action over the rows picked: each goes to lost, and the pick is cleared.
 function markLost() {
@@ -56,11 +57,25 @@ function markLost() {
     <span class="status">{selected.length} selected</span>
     <button onclick={markLost} disabled={selected.length === 0}>Mark lost</button>
 </div>
-<SortableTable
-    rows={deals}
-    columns={COLUMNS}
-    key={(deal: Deal) => deal.id}
-    bind:selected={selected}
-    class="[&_[data-align=end]]:text-right [&_[data-selected]]:bg-signal/10
-        [&_th_button]:bg-transparent [&_th_button]:p-0 [&_th_button]:text-muted"
- />
+<table class="[&_[data-selected]]:bg-signal/10">
+    <thead>
+        <tr>
+            <th><input {...table.selectAll}></th>
+            {#for column of COLUMNS by column.key}
+                <th {...table.header(column)} class="data-[align=end]:text-right">
+                    <button {...table.sort(column)} class="bg-transparent p-0 text-muted">{column.label}</button>
+                </th>
+            {/for}
+        </tr>
+    </thead>
+    <tbody>
+        {#for deal of table.rows() by deal.id}
+            <tr {...table.row(deal)}>
+                <td><input {...table.select(deal)}></td>
+                <td>{deal.name}</td>
+                <td>{deal.stage}</td>
+                <td class="text-right">{format.money(deal.amount, { digits: 0 })}</td>
+            </tr>
+        {/for}
+    </tbody>
+</table>

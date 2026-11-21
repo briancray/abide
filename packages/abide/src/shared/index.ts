@@ -146,6 +146,11 @@ export { refuse } from './refuse.ts'
 // 44.51 — what a conversation's calls to one handler answered.
 export { resultsOf } from './resultsOf.ts'
 export { route } from './route.ts'
+export {
+    type SortableTableOptions,
+    type SortableTableParts,
+    sortableTable,
+} from './sortableTable.ts'
 export { type Tabs, type TabsOptions, tabs } from './tabs.ts'
 export { type Tree, type TreeOptions, tree } from './tree.ts'
 export * as transcript from './transcript/index.ts'

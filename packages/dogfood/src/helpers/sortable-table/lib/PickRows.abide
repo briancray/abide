@@ -1,0 +1,37 @@
+<script>
+import { type Column, reactive, sortableTable } from '@abide/abide'
+
+type Deal = { id: string; name: string }
+
+const DEALS: Deal[] = [
+    { id: 'hopper', name: 'Hopper renewal' },
+    { id: 'turing', name: 'Turing seats' },
+    { id: 'noether', name: 'Noether pilot' },
+]
+const COLUMNS: Column<Deal>[] = [{ key: 'name', label: 'Deal' }]
+let selected = reactive<readonly string[]>([])
+const table = sortableTable({
+    rows: DEALS,
+    columns: COLUMNS,
+    key: (deal) => deal.id,
+    selected,
+})
+</script>
+
+<p>{selected.length} picked</p>
+<table>
+    <thead>
+        <tr>
+            <th><input {...table.selectAll}></th>
+            <th>Deal</th>
+        </tr>
+    </thead>
+    <tbody>
+        {#for deal of table.rows() by deal.id}
+            <tr {...table.row(deal)} class="data-selected:bg-signal/10">
+                <td><input {...table.select(deal)}></td>
+                <td>{deal.name}</td>
+            </tr>
+        {/for}
+    </tbody>
+</table>
