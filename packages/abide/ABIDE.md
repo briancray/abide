@@ -222,7 +222,7 @@ table.
   `Column` and `Area` children), `Pie`, `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `form` (a `<form>` over a handler, checked against its args before the call),
-  `markdown`, `place`, `listbox`, `menu`, `tabs`, `tree`, `commandPalette`, `range`,
+  `markdown`, `listbox`, `menu`, `tabs`, `tree`, `commandPalette`, `range`,
   `sortableTable`, `combobox`, `time`, `dialog`, `chart`, `pie` and `sparkline` (a widget's parts,
   spread on markup of your own; `CommandPalette`, `Range`, `SortableTable`, `Combobox`, `Time`,
   `Dialog`, `Chart`, `Pie` and `Sparkline` are default markup over the last nine, and `chart` carries

@@ -17,7 +17,7 @@ import quickEdit from './lib/QuickEdit.abide' with { type: 'text' }
     seeAlso={[
         '/helpers/observe',
         '/helpers/hotkeys',
-        '/helpers/place',
+        '/helpers/popover',
         '/components/dialog',
         '/components/menu',
     ]}

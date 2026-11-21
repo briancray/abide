@@ -16,7 +16,7 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/tooltip', '/helpers/place', '/helpers/hotkeys']}
+    seeAlso={['/components/tooltip', '/helpers/popover', '/helpers/hotkeys']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',

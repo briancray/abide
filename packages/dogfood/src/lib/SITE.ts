@@ -533,12 +533,6 @@ const WRITTEN: readonly {
                     'Close a panel or popover when someone presses outside it or hits Escape.',
             },
             {
-                route: '/helpers/place',
-                title: '`place`',
-                description:
-                    'Work out where a popover or hint sits beside its anchor, flipped and kept inside the viewport, without writing to the page.',
-            },
-            {
                 route: '/helpers/popover',
                 title: '`popover`',
                 description:

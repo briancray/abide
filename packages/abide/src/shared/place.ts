@@ -1,6 +1,7 @@
-// 50.19-50.22 — WHERE A FLOATING ELEMENT SITS BESIDE ITS ANCHOR: the placement `Tooltip` and `Menu`
-// open at, and one an app's own overlay can take. It READS and never writes (50.22), so a caller
-// placing several reads every one before writing any, and one forced layout pays for all of them.
+// 50.19-50.22 — WHERE AN ANCHORED LAYER SITS BESIDE ITS ANCHOR: internal, under `anchored` and so under
+// `Tooltips`, `menu`, `popover` and `Combobox`'s list; an app reaches it through `popover`. It READS and
+// never writes (50.22), so a caller placing several reads every one before writing any, and one forced
+// layout pays for all of them.
 
 /** A side of the anchor a floating element can sit on. */
 export type Side = 'top' | 'bottom' | 'left' | 'right'

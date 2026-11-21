@@ -12,7 +12,7 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/tooltips', '/components/menu', '/helpers/place']}
+    seeAlso={['/components/tooltips', '/components/menu', '/helpers/popover']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageHints.test.ts',

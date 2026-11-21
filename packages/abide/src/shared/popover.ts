@@ -1,4 +1,4 @@
-// 50.26, 50.27, 50.49 — AN APP'S OWN OVERLAY HELD AGAINST AN ANCHOR: the anchored layer `Tooltips` and
+// 50.19-50.22, 50.26, 50.27, 50.49 — AN APP'S OWN OVERLAY HELD AGAINST AN ANCHOR: the anchored layer `Tooltips` and
 // `menu` open in, bound to an element of the app's. Open for exactly as long as it is bound, so an
 // `{#if}` around the element is what opens and closes it, and closing it from outside or on Escape is
 // `dismissible`'s, bound beside it.
@@ -6,6 +6,9 @@
 import { anchored } from './anchored.ts'
 import type { PlaceOptions } from './place.ts'
 import type { Disposer } from './reactive/watch.ts'
+
+/** 50.19-50.21, 50.35 — the side a popover opens on, the edge it lines up with, and the gaps it keeps. */
+export type PopoverOptions = PlaceOptions
 
 /**
  * The `bind:element` adaptor showing the element in the top layer, placed against `anchor` and
@@ -16,7 +19,7 @@ import type { Disposer } from './reactive/watch.ts'
  */
 export function popover(
     anchor: Element,
-    options: PlaceOptions = {},
+    options: PopoverOptions = {},
 ): (element: Element) => Disposer {
     return (element) => {
         const floating = element as HTMLElement

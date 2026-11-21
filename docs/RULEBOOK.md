@@ -5021,16 +5021,18 @@ role `status`; `Toasts` MUST render them keyed by each notice's id inside it.
 
 50.18 A notice's action MUST take the notice out of `toasts.list` and then call its `run`.
 
-50.19 `place` MUST put the floating element on `side`, `offset` pixels from its anchor, lined up
-along it as `align` names.
+50.19 An anchored layer — a `Tooltips` showing a hint, the menu of a `menu`, an element `popover` is
+bound to and a `Combobox`'s open list — MUST sit on `side`, `offset` pixels from its anchor, lined
+up along it as `align` names.
 
-50.20 `place` MUST take the side opposite `side` where `side` leaves less room than the floating
-element needs and the opposite side leaves more.
+50.20 An anchored layer MUST take the side opposite `side` where `side` leaves less room than the
+layer needs and the opposite side leaves more.
 
-50.21 `place` MUST keep the floating element at least `margin` pixels inside the viewport on both
-axes, its start edge kept where it does not fit.
+50.21 An anchored layer MUST stay at least `margin` pixels inside the viewport on both axes, its
+start edge kept where it does not fit.
 
-50.22 `place` MUST read layout alone, and MUST NOT write to the document.
+50.22 Placing an anchored layer MUST read every box it is placed by before it writes the layer's
+place.
 
 50.23 `tooltip` MUST describe the element it is bound to by its hint: text through that element's
 `aria-description`, and a component through its `aria-describedby` naming the `Tooltips` showing it,
@@ -5044,13 +5046,14 @@ stack while it shows (53.14, 53.15), once it is unbound, when the pointer leaves
 when its element loses focus.
 
 50.26 A `Tooltips` showing a hint, the menu of a `menu`, an element `popover` is bound to and a
-`Combobox`'s open list MUST open in the top layer as a popover placed by `place` against their
-anchor, and MUST be placed again while open whenever anything scrolls, the window resizes, or the
+`Combobox`'s open list MUST open in the top layer as a popover placed against their anchor as
+50.19-50.21 state, and MUST be placed again while open whenever anything scrolls, the window resizes, or the
 anchor or the popover changes size.
 
 50.27 A `Tooltips` showing a hint, the menu of a `menu`, an element `popover` is bound to and a
-`Combobox`'s open list MUST write the side `place` took as `data-side`, the `arrow` of its
-`Placement` as the `--arrow-offset` custom property, and the anchor's width as `--anchor-width`.
+`Combobox`'s open list MUST write the side it took as `data-side`, how far along its facing edge
+the anchor's middle falls as the `--arrow-offset` custom property, and the anchor's width as
+`--anchor-width`.
 
 50.28 A `menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
 opened it.
@@ -5073,8 +5076,8 @@ confirming button, and `undefined` where it closed any other way.
 `mustType`, and its `input` part MUST start from the prompt's `value`, and `''` where it has none;
 `Prompts` MUST render an input there.
 
-50.35 `place` MUST keep `arrow` at least `arrowInset` pixels from each end of the floating
-element's facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
+50.35 An anchored layer MUST keep its `--arrow-offset` at least `arrowInset` pixels from each end of
+its facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
 
 50.36 One hint MUST show at a time. The hint, the notices, the prompts and the message `announce`
 gives MUST each show in the last `Tooltips`, `toasts.host`, `prompts.host` and `Announcer` of those

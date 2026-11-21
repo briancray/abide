@@ -868,7 +868,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.23, 50.26, 50.27, 50.35, 50.36, 50.48, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
+| `Tooltips` | `Omit<Attributes<'span'>, 'popover' \| 'role'>` | The popover every hint `tooltip` opens shows in, rendered once and imported from `@abide/abide/Tooltips.abide`. | 50.19, 50.20, 50.21, 50.22, 50.23, 50.26, 50.27, 50.35, 50.36, 50.48, 49.1, 49.2, 49.3, 49.5, 49.6, 49.7 |
 
 ## `tooltip`
 
@@ -882,7 +882,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40, 49.8 |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.35, 50.37, 50.38, 50.39, 50.40, 49.8 |
 | `MenuOptions` | `{ open?: Reactive<boolean>; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, and what hears it open and close. | 50.35, 50.37 |
 | `Menu` | `{ readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38 |
 
@@ -892,20 +892,13 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: { escape?: boolean; outside?: boolean; inside?: readonly (Element \| null \| undefined)[] }) => (element: Element) => Disposer` | The `bind:element` adaptor closing an element on a press outside it or on Escape. | 32.9, 53.12, 53.13, 53.14, 53.15, 53.16 |
 
-## `place`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `place` | `(anchor: Element, floating: Element, options?: PlaceOptions) => Placement` | Where a floating element sits beside its anchor, in viewport pixels. | 50.19, 50.20, 50.21, 50.22 |
-| `PlaceOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number; arrowInset?: number }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners. | 50.19, 50.20, 50.21, 50.35 |
-| `Placement` | `{ x: number; y: number; side: Side; arrow: number }` | The left and top edges `place` chose, the side it took, and where along the facing edge the anchor's middle falls. | 50.19, 50.27 |
-| `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
-
 ## `popover`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `popover` | `(anchor: Element, options?: PlaceOptions) => (element: Element) => Disposer` | The `bind:element` adaptor showing an element in the top layer against an anchor for as long as it is bound. | 50.26, 50.27, 50.49 |
+| `popover` | `(anchor: Element, options?: PopoverOptions) => (element: Element) => Disposer` | The `bind:element` adaptor showing an element in the top layer against an anchor for as long as it is bound. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.49 |
+| `PopoverOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; margin?: number; arrowInset?: number }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners. | 50.19, 50.20, 50.21, 50.35 |
+| `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
 # Input and lists
 
