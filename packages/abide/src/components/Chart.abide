@@ -1,31 +1,19 @@
 <script>
-// The series its `Line`, `Column` and `Area` children declare, over one pair of axes, drawn in SVG at
-// the size the chart is laid out at: the drawing is measured rather than stretched, so its labels are
-// never distorted, and a pointer over it — or the arrows, once it has focus — moves a crosshair to an
-// x and opens a readout of every series there in the page's `Tooltips`.
-import { announce } from '#shared/announce.ts'
+// 49.9 — `chart`'s default markup: the gridlines and their labels, the x labels, every series' mark in
+// order, and the crosshair with its points and its readout while it stands. Everything it draws and
+// does is the parts'; an app wanting other markup — a dot at every point, a label on every bar — spreads
+// them itself. Its `Line`, `Column` and `Area` children are the series it hands the parts.
 import type { Attributes } from '#shared/Attributes.ts'
+import { chart } from '#shared/chart/chart.ts'
 import type { ChartChild } from '#shared/chart/children.ts'
-import {
-    nearest,
-    path,
-    scale,
-    type Series,
-    stack as stackSeries,
-    ticks,
-} from '#shared/chart/index.ts'
-import { number, percent } from '#shared/format/index.ts'
-import { size as observeSize } from '#shared/observe/size.ts'
 import { props } from '#shared/props.ts'
 import { reactive } from '#shared/reactive/index.ts'
-import { scrub } from '#shared/scrub.ts'
-import { openHint } from '#shared/tooltip/tooltip.ts'
 
 const {
     label,
     x,
-    xFormat = (value: number) => number(value),
-    yFormat = (value: number) => number(value),
+    xFormat,
+    yFormat,
     xTicks = 5,
     yTicks = 4,
     zero = false,
@@ -73,362 +61,72 @@ const {
     } & Omit<Attributes<'svg'>, 'x' | 'width' | 'height'>
 >()
 
-// Room over the top gridline for its label, and under the plot for the x labels.
-const TOP = 16
-const BOTTOM = 24
-// The room left of the plot per character of the longest y label, and between that label and the plot:
-// a label is laid out before the chart can measure its text, so the room is the width of a character in
-// the small type a chart is set in, and a longer one runs into the plot rather than being cut off.
-const CHARACTER = 7
-const GUTTER = 8
-// The share of an x's slot its columns fill, the rest the gap between one x and the next.
-const BAND = 0.8
-
+// The children's series, shared from here where the compiler sees the call and opens its scope (10.5).
 const children = reactive.share('abide:chart', () =>
     reactive<readonly ChartChild[]>([]),
 )
-const size = reactive({ width, height })
-let hovered = reactive(-1)
 
-const plot = reactive(() => {
-    const series: Series[] = []
-    for (const child of children) series.push(child.series())
-    const placed = stackSeries(series, { stack, normalize })
-    let length = 0
-    for (const each of series) length = Math.max(length, each.values.length)
-    const positions: number[] = []
-    for (let index = 0; index < length; index += 1)
-        positions.push(x?.[index] ?? index)
-    // 52.34, 52.37 — zero is in the range where it is asked for and where a column rises from it.
-    let low = Number.POSITIVE_INFINITY
-    let high = Number.NEGATIVE_INFINITY
-    let columns = false
-    for (let at = 0; at < series.length; at += 1) {
-        if (series[at]?.kind === 'column') columns = true
-        const { low: lows, high: highs } = placed[at] as (typeof placed)[0]
-        for (let index = 0; index < length; index += 1) {
-            for (const value of [lows[index], highs[index]]) {
-                if (value === undefined) continue
-                if (value < low) low = value
-                if (value > high) high = value
-            }
-        }
-    }
-    if (zero || columns) {
-        low = Math.min(low, 0)
-        high = Math.max(high, 0)
-    }
-    if (low > high) {
-        low = 0
-        high = 1
-    }
-    // 52.62 — bounds span the axis exactly, and the gridlines are the round values inside them.
-    const yBounds = bounds?.y
-    let gridValues = ticks(yBounds?.[0] ?? low, yBounds?.[1] ?? high, yTicks)
-    if (yBounds !== undefined)
-        gridValues = gridValues.filter(
-            (value) => value >= yBounds[0] && value <= yBounds[1],
-        )
-    const floor = yBounds?.[0] ?? gridValues[0] ?? low
-    const ceiling = yBounds?.[1] ?? gridValues.at(-1) ?? high
-    const bottom = size.height - BOTTOM
-    // 52.60 — under `normalize` the axis is shares, whatever the values are written as.
-    const gridLabels: string[] = []
-    let longest = 0
-    for (const value of gridValues) {
-        const label = normalize ? percent(value) : yFormat(value)
-        gridLabels.push(label)
-        longest = Math.max(longest, label.length)
-    }
-    // 52.69 — the plot starts right of the y labels, so no mark is drawn over one.
-    const left = longest === 0 ? 0 : longest * CHARACTER + GUTTER
-    // Columns are centered on their x, so the first and last stand a half slot in from the edges.
-    const slot = (size.width - left) / Math.max(1, length)
-    const inset = columns ? slot / 2 : 0
-    const toX = scale(bounds?.x ?? [positions[0] ?? 0, positions.at(-1) ?? 0], [
-        left + inset,
-        size.width - inset,
-    ])
-    const toY = scale([floor, ceiling], [bottom, TOP])
-    const xs: number[] = []
-    for (const position of positions) xs.push(toX(position))
-    // Where a column rises from and an area in no stack fills down to: zero, or the edge nearer it.
-    const base = toY(Math.min(Math.max(0, floor), ceiling))
-    // 52.37 — A BAND OF EACH X'S SLOT PER STACK OF COLUMNS, and one per column in none.
-    const bands = new Map<string, number>()
-    let bandCount = 0
-    for (let at = 0; at < series.length; at += 1) {
-        if (series[at]?.kind !== 'column') continue
-        const key = placed[at]?.stack
-        if (key === undefined) bandCount += 1
-        else if (!bands.has(key)) bands.set(key, bandCount++)
-    }
-    const bandWidth = bandCount === 0 ? 0 : (slot * BAND) / bandCount
-    const marks: {
-        series: number
-        kind: 'line' | 'column' | 'area'
-        path: string
-        bars: { index: number; transform: string }[]
-        ys: (number | undefined)[]
-    }[] = []
-    let ownBand = bands.size
-    for (let at = 0; at < series.length; at += 1) {
-        const each = series[at] as Series
-        const {
-            low: lows,
-            high: highs,
-            stack: key,
-        } = placed[at] as (typeof placed)[0]
-        const kind = each.kind ?? 'line'
-        // The readout's point stands at the series' own value: none where it is missing.
-        const ys: (number | undefined)[] = []
-        for (let index = 0; index < length; index += 1) {
-            const value = each.values[index]
-            const top = highs[index]
-            ys.push(
-                value === null || value === undefined || top === undefined
-                    ? undefined
-                    : toY(top),
-            )
-        }
-        const bars: { index: number; transform: string }[] = []
-        let drawn = ''
-        if (kind === 'line') drawn = path(xs, ys)
-        else if (kind === 'area') {
-            // 52.52 — a stacked area closes onto the series under it, through a missing value too.
-            if (key === undefined) drawn = path(xs, ys, base)
-            else {
-                const tops: number[] = []
-                const floors: number[] = []
-                for (let index = 0; index < length; index += 1) {
-                    tops.push(toY(highs[index] ?? 0))
-                    floors.push(toY(lows[index] ?? 0))
-                }
-                drawn = path(xs, tops, floors)
-            }
-        } else {
-            const band =
-                key === undefined ? ownBand++ : (bands.get(key) as number)
-            for (let index = 0; index < length; index += 1) {
-                const top = ys[index]
-                if (top === undefined) continue
-                const from =
-                    lows[index] === undefined
-                        ? base
-                        : toY(lows[index] as number)
-                const left =
-                    (xs[index] ?? 0) - (slot * BAND) / 2 + band * bandWidth
-                // 52.64 — a unit rect placed and sized by a transform, which a CSS transition eases.
-                bars.push({
-                    index,
-                    transform: `translate(${left}px, ${Math.min(top, from)}px) scale(${bandWidth}, ${Math.abs(from - top)})`,
-                })
-            }
-        }
-        marks.push({ series: at, kind, path: drawn, bars, ys })
-    }
-    const grid: { y: number; label: string }[] = []
-    for (let index = 0; index < gridValues.length; index += 1)
-        grid.push({
-            y: toY(gridValues[index] as number),
-            label: gridLabels[index] as string,
-        })
-    const labeled: { x: number; label: string; anchor: string }[] = []
-    const shown = Math.min(length, Math.max(1, xTicks))
-    for (let step = 0; step < shown; step += 1) {
-        const index =
-            shown === 1 ? 0 : Math.round((step * (length - 1)) / (shown - 1))
-        labeled.push({
-            x: xs[index] ?? 0,
-            label: xFormat(positions[index] ?? index),
-            anchor:
-                shown === 1 || columns
-                    ? 'middle'
-                    : step === 0
-                      ? 'start'
-                      : step === shown - 1
-                        ? 'end'
-                        : 'middle',
-        })
-    }
-    return {
-        series,
-        placed,
-        positions,
-        xs,
-        marks,
-        grid,
-        labeled,
-        bottom,
-        left,
-        zeroY: zero ? toY(0) : undefined,
-    }
+const plot = chart({
+    label: () => label,
+    series: () => children.map((child) => child.series()),
+    x: () => x,
+    xFormat: xFormat && ((value) => xFormat(value)),
+    yFormat: yFormat && ((value) => yFormat(value)),
+    xTicks: () => xTicks,
+    yTicks: () => yTicks,
+    zero: () => zero,
+    stack: () => stack,
+    normalize: () => normalize,
+    bounds: () => bounds,
+    width,
+    height,
+    onpick: onpick && ((index) => onpick(index)),
+    disabled: disabled && ((index) => disabled(index)),
 })
-
-// What the readout reads at the x the crosshair is on, and the side of it the readout opens on.
-const readout = reactive(() => {
-    const index = hovered
-    const drawn = plot
-    if (index < 0 || index >= drawn.xs.length) return undefined
-    const at = drawn.xs[index] ?? 0
-    const values: { label: string; value: string; y: number | undefined }[] = []
-    for (let line = 0; line < drawn.series.length; line += 1) {
-        const value = drawn.series[line]?.values[index]
-        const place = drawn.placed[line]
-        let written =
-            value === null || value === undefined ? '—' : yFormat(value)
-        // 52.61 — a stacked value under `normalize` reads its share beside it.
-        if (normalize && place?.stack !== undefined && written !== '—')
-            written += ` (${percent(Math.abs((place.high[index] ?? 0) - (place.low[index] ?? 0)))})`
-        values.push({
-            label: drawn.series[line]?.label ?? '',
-            value: written,
-            y: drawn.marks[line]?.ys[index],
-        })
-    }
-    return {
-        index,
-        at,
-        disabled: disabled?.(index) === true,
-        // 52.27 — the side with more of the plot.
-        side: at < size.width / 2 ? ('right' as const) : ('left' as const),
-        x: xFormat(drawn.positions[index] ?? index),
-        values,
-    }
-})
-
-// 52.26, 52.70 — the crosshair's x, picked by the pointer or the arrows.
-const scrubbing = scrub(
-    // Written through by name: a `ScrubPosition` is no `Reactive`, so `hovered` alone would hand over
-    // its value (31.3).
-    { peek: () => hovered, set: (index) => (hovered = index) },
-    {
-        count: () => plot.xs.length,
-        nearest: (fraction) => nearest(plot.xs, fraction * size.width),
-    },
-)
-
-// 52.38, 52.71 — a click picks the x nearest it, read again from the click's own position, and Enter
-// the x the crosshair stands at.
-function pick(index: number | undefined) {
-    if (onpick === undefined) return
-    if (index === undefined || index < 0 || disabled?.(index) === true) return
-    onpick(index)
-}
-
-function key(event: KeyboardEvent) {
-    if (event.key === 'Enter') return pick(hovered)
-    const before = hovered
-    scrubbing.key(event)
-    // 52.72 — a move the keys make is read out, its readout being nowhere the reader is: a pointer's
-    // move is not, since the pointer's own readout is in front of it and a sweep would read every x.
-    const read = readout
-    if (hovered === before || read === undefined) return
-    const parts = [read.x]
-    for (const point of read.values)
-        parts.push(`${point.label}: ${point.value}`)
-    announce(parts.join(', '))
-}
 </script>
 
 {#component Readout()}
-    {#if readout}
-        <span data-part="readout" data-disabled={readout.disabled ? '' : undefined}>
-            <span data-part="readout-x">{readout.x}</span>
-            {#for point, index of readout.values}
-                <span data-part="readout-value" data-series={index}>{point.label}: {point.value}</span>
+    {#if plot.readout()}
+        <span data-part="readout" data-disabled={plot.readout()?.disabled ? '' : undefined}>
+            <span data-part="readout-x">{plot.readout()?.label}</span>
+            {#for point of plot.readout()?.values ?? []}
+                <span data-part="readout-value" data-series={point.series}>{point.label}: {point.value}</span>
             {/for}
         </span>
     {/if}
 {/component}
 
-<svg
-    {...rest}
-    width={size.width}
-    height={size.height}
-    viewBox="0 0 {size.width} {size.height}"
-    role="img"
-    aria-label={label}
-    data-hovering={readout ? '' : undefined}
-    tabindex="0"
-    bind:element={observeSize(size)}
-    onpointermove={scrubbing.move}
-    onpointerleave={scrubbing.leave}
-    onfocusout={scrubbing.leave}
-    onkeydown={key}
-    onclick={(event) => pick(scrubbing.indexAt(event))}
->
+<svg {...rest} {...plot.svg}>
     <slot />
-    {#for line of plot.grid}
-        <line data-part="grid" x1={plot.left} x2={size.width} y1={line.y} y2={line.y} stroke="currentColor" stroke-opacity="0.2" />
-        <text data-part="tick" data-axis="y" x="0" y={line.y} dominant-baseline="middle" fill="currentColor">{line.label}</text>
+    {#for tick of plot.yTicks()}
+        <line {...tick.grid} />
+        <text {...tick.text}>{tick.label}</text>
     {/for}
-    {#if plot.zeroY !== undefined}
-        <line data-part="zero" x1={plot.left} x2={size.width} y1={plot.zeroY} y2={plot.zeroY} stroke="currentColor" />
+    {#if plot.zero()}
+        <line {...plot.zero()?.line} />
     {/if}
-    {#for tick of plot.labeled}
-        <text
-            data-part="tick"
-            data-axis="x"
-            x={tick.x}
-            y={plot.bottom + 6}
-            text-anchor={tick.anchor}
-            dominant-baseline="hanging"
-            fill="currentColor"
-        >{tick.label}</text>
+    {#for tick of plot.xTicks()}
+        <text {...tick.text}>{tick.label}</text>
     {/for}
-    {#for mark of plot.marks by mark.series}
+    {#for mark of plot.marks() by mark.series}
         {#if mark.kind === 'column'}
             <g data-part="columns" data-series={mark.series}>
                 {#for bar of mark.bars by bar.index}
-                    <rect
-                        data-part="bar"
-                        data-series={mark.series}
-                        data-disabled={disabled?.(bar.index) ? '' : undefined}
-                        width="1"
-                        height="1"
-                        style:transform={bar.transform}
-                        fill="currentColor"
-                     />
+                    <rect {...bar.rect} />
                 {/for}
             </g>
-        {:else if mark.kind === 'area'}
-            <path data-part="area" data-series={mark.series} d={mark.path} fill="currentColor" stroke="none" />
         {:else}
-            <path
-                data-part="line"
-                data-series={mark.series}
-                d={mark.path}
-                fill="none"
-                stroke="currentColor"
-                stroke-linejoin="round"
-                stroke-linecap="round"
-             />
+            <path {...mark.path} />
         {/if}
     {/for}
-    {#if readout}
-        <!-- 50.47 — the readout shows in the page's `Tooltips` against the crosshair, one per x it stands at, and describes the chart while it shows. -->
-        {#for crosshair of [readout.index] by crosshair}
-            <line
-                data-part="crosshair"
-                x1={readout.at}
-                x2={readout.at}
-                y1={TOP}
-                y2={plot.bottom}
-                stroke="currentColor"
-                bind:element={(crosshair) =>
-                    openHint(
-                        crosshair,
-                        Readout,
-                        { side: readout.side },
-                        scrubbing.leave,
-                        crosshair.closest('svg') ?? crosshair,
-                    ),}
-             />
+    {#if plot.readout()}
+        <!-- 50.47 — one crosshair per x it stands at, its readout opened against it. -->
+        {#for at of [plot.readout()?.index] by at}
+            <line {...plot.crosshair(Readout)?.line} />
         {/for}
-        {#for point, index of readout.values}
-            {#if point.y !== undefined}
-                <circle data-part="point" data-series={index} cx={readout.at} cy={point.y} r="3" fill="currentColor" />
+        {#for point of plot.readout()?.values ?? []}
+            {#if point.circle}
+                <circle {...point.circle} />
             {/if}
         {/for}
     {/if}

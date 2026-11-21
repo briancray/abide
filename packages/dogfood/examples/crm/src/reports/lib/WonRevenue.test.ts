@@ -179,3 +179,34 @@ test('the same words said twice land twice, each replacing the last', async () =
     flushSync()
     expect([said('polite'), said('assertive')]).toEqual(['', 'Connection lost'])
 })
+
+// 52.79 — AN APP'S OWN MARKS OVER `chart`'S PARTS: a dot at every month won, standing on the line the
+// parts draw, and none for August's open books.
+// THE REVERT: hand back a point for a missing value too — six dots where five are due.
+test('every month won is marked by a dot of its own, on the line', async () => {
+    using _chart = await mount(WonRevenue({}))
+    const dots = [
+        ...chart().querySelectorAll("circle[data-part=point][data-series='0']"),
+    ]
+    expect(dots).toHaveLength(5)
+    // The path's corners, which it writes to two places.
+    const corners = [
+        ...(
+            chart()
+                .querySelector("[data-part=line][data-series='0']")
+                ?.getAttribute('d') ?? ''
+        ).matchAll(/(-?[\d.]+),(-?[\d.]+)/g),
+    ].map((match) => [Number(match[1]), Number(match[2])])
+    for (const dot of dots) {
+        const [x, y] = [
+            Number(dot.getAttribute('cx')),
+            Number(dot.getAttribute('cy')),
+        ]
+        expect(
+            corners.some(
+                ([cx = 0, cy = 0]) =>
+                    Math.abs(cx - x) < 0.01 && Math.abs(cy - y) < 0.01,
+            ),
+        ).toBe(true)
+    }
+})

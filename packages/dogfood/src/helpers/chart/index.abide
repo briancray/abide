@@ -1,12 +1,41 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import BarLabels from './lib/BarLabels.abide'
+import barLabels from './lib/BarLabels.abide' with { type: 'text' }
+import PointsOverLines from './lib/PointsOverLines.abide'
+import pointsOverLines from './lib/PointsOverLines.abide' with { type: 'text' }
+import TargetBand from './lib/TargetBand.abide'
+import targetBand from './lib/TargetBand.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/chart', '/components/sparkline', '/helpers/format']}
+    seeAlso={[
+        '/components/chart',
+        '/helpers/pie',
+        '/helpers/sparkline',
+        '/helpers/format',
+    ]}
     tests={[
+        {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: [
+                'test("every present value is a point at the plot\'s own x and y"',
+            ],
+        },
+        {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: ["test('the crosshair carries one binding per x it stands at'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: [
+                "test('every month won is marked by a dot of its own, on the line'",
+            ],
+        },
         {
             path: 'packages/abide/tests/chart.test.ts',
             from: ["test('ticks are round and enclose the range"],
@@ -33,6 +62,23 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
+    <Section level={3} title="Mark every point of a line with a dot of your own">
+        <p><code>chart</code> hands back each mark as data with a part to spread, so the markup is
+            yours: here a circle at every value <code>points</code> answers, over the lines.</p>
+        <Example code={pointsOverLines}><PointsOverLines /></Example>
+    </Section>
+
+    <Section level={3} title="Write each column's value above the column">
+        <p>A bar carries where it is drawn, so a label of your own stands at its top.</p>
+        <Example code={barLabels}><BarLabels /></Example>
+    </Section>
+
+    <Section level={3} title="Shade a target band behind the line">
+        <p><code>y</code> maps a value onto the plot and <code>frame</code> answers its edges, so a
+            drawing of your own lines up with the marks the parts draw.</p>
+        <Example code={targetBand}><TargetBand /></Example>
+    </Section>
+
     <Section level={3} title="Draw won revenue by month, with a gap for a month not closed">
         <p><code>chart.scale</code> maps a value onto the drawing, and <code>chart.path</code>
             breaks the line at a <code>null</code> rather than drawing it down to zero.</p>

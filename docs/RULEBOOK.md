@@ -5627,6 +5627,20 @@ page is shown.
 hydrates at in a browser, a label a boundary passed between the two being written as changed text and
 not as a hydration mismatch.
 
+52.79 `chart` MUST hand back a point for each present value of each series, at the x `x` answers for
+its index and the y `y` answers for the value it is drawn at, and none for a missing value.
+
+52.80 `chart`'s crosshair part MUST carry one binding per x position it stands at, the same one while
+it stands at that x, so a crosshair kept as one element opens its readout again where it moves to.
+
+52.81 `pie` MUST keep a slice's hint binding while the slice's hint reads the same, however its sweep
+changes.
+
+52.82 `chart`, `pie` and `sparkline` MUST hand back as parts every mark, attribute and handler `Chart`,
+`Pie` and `Sparkline` draw with, and every clause naming one of those components MUST hold of what its
+parts function hands back where an app spreads it, save 52.24 and 52.53, which hold of `Chart`'s
+children: `chart` draws the series its `series` answers, in that order.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

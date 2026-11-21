@@ -27,8 +27,15 @@ export type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 export type { Attributes } from './Attributes.ts'
 // 51.31-51.43 — a sortable table's columns, its sort, and the order its rows are in.
 export type { Column } from './Column.ts'
-// 52.19-52.23, 52.54-52.58 — the arithmetic under a chart, which `Chart`, `Pie` and `Sparkline` draw with.
-export * as chart from './chart/index.ts'
+// 52.19-52.23, 52.54-52.58 — a chart as parts, with the arithmetic under it as its members; and a pie
+// and a sparkline as parts. `Chart`, `Pie` and `Sparkline` are default markup over them (49.9).
+export { type ChartOptions, type ChartParts, chart } from './chart/chart.ts'
+export { type PieOptions, type PieParts, pie } from './chart/pie.ts'
+export {
+    type SparklineOptions,
+    type SparklineParts,
+    sparkline,
+} from './chart/sparkline.ts'
 export {
     type ComboboxOptions,
     type ComboboxParts,

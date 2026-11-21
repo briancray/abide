@@ -701,7 +701,19 @@ const WRITTEN: readonly {
                 route: '/helpers/chart',
                 title: '`chart`',
                 description:
-                    'Compute round ticks, linear scales, SVG paths with gaps, and the point nearest the pointer for a chart of your own.',
+                    'Draw a chart in markup of your own from the geometry and parts it hands back, or compute its ticks, scales and paths yourself.',
+            },
+            {
+                route: '/helpers/pie',
+                title: '`pie`',
+                description:
+                    'Draw shares of a whole in markup of your own from the slices and parts it hands back.',
+            },
+            {
+                route: '/helpers/sparkline',
+                title: '`sparkline`',
+                description:
+                    'Draw a trend with no axes in markup of your own from the parts it hands back.',
             },
         ],
     },

@@ -14,7 +14,7 @@ import trendColors from './lib/TrendColors.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/chart', '/helpers/chart', '/helpers/format']}
+    seeAlso={['/helpers/sparkline', '/components/chart', '/helpers/format']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/RepTrends.test.ts',

@@ -1,10 +1,10 @@
 <script>
-// A trend with no axes, drawn into whatever box the caller gives it: the drawing stretches to the
-// box, and a stroke that does not scale keeps the line and the end dot their own width.
+// 49.9 — `sparkline`'s default markup: the line, or the bars, an area under the line where `area` is
+// set and a dot at the last value where `dot` is. Everything it draws is the parts'; an app wanting
+// other markup spreads them itself.
 import type { Attributes } from '#shared/Attributes.ts'
-import { path, scale } from '#shared/chart/index.ts'
+import { sparkline } from '#shared/chart/sparkline.ts'
 import { props } from '#shared/props.ts'
-import { reactive } from '#shared/reactive/index.ts'
 
 const {
     values,
@@ -31,106 +31,24 @@ const {
     } & Omit<Attributes<'svg'>, 'values'>
 >()
 
-// The drawing's own units. `preserveAspectRatio="none"` stretches them to the box.
-const SIZE = 100
-
-const drawing = reactive(() => {
-    let low = zero ? 0 : Number.POSITIVE_INFINITY
-    let high = zero ? 0 : Number.NEGATIVE_INFINITY
-    let first: number | undefined
-    let last: number | undefined
-    let lastIndex = -1
-    for (let index = 0; index < values.length; index += 1) {
-        const value = values[index]
-        if (value === null || value === undefined || !Number.isFinite(value))
-            continue
-        if (value < low) low = value
-        if (value > high) high = value
-        first ??= value
-        last = value
-        lastIndex = index
-    }
-    // 52.34 — a range of zero alone has no width, and is drawn as zero to one.
-    if (zero && low === high) high = 1
-    const x = scale([0, Math.max(1, values.length - 1)], [0, SIZE])
-    // 52.33 — a bar is read by its length, so zero is on the scale however far the values sit from it.
-    const y =
-        kind === 'bar'
-            ? scale([Math.min(low, 0), Math.max(high, 0)], [SIZE, 0])
-            : scale([low, high], [SIZE, 0])
-    let bars = ''
-    if (kind === 'bar' && values.length > 0) {
-        const band = SIZE / values.length
-        const gap = band * 0.2
-        const baseline = y(0)
-        for (let index = 0; index < values.length; index += 1) {
-            const value = values[index]
-            if (
-                value === null ||
-                value === undefined ||
-                !Number.isFinite(value)
-            )
-                continue
-            const left = index * band + gap / 2
-            bars += `M${left},${baseline}H${left + band - gap}V${y(value)}H${left}Z`
-        }
-    }
-    const xs: number[] = []
-    const ys: (number | undefined)[] = []
-    for (let index = 0; index < values.length; index += 1) {
-        const value = values[index]
-        xs.push(x(index))
-        ys.push(value === null || value === undefined ? undefined : y(value))
-    }
-    return {
-        bars,
-        line: path(xs, ys),
-        area: path(xs, ys, SIZE),
-        end: last === undefined ? '' : `M${x(lastIndex)},${y(last)}Z`,
-        trend:
-            first === undefined || last === undefined || last === first
-                ? 'flat'
-                : last > first
-                  ? 'up'
-                  : 'down',
-    }
+const trend = sparkline({
+    values: () => values,
+    label: () => label,
+    zero: () => zero,
+    kind: () => kind,
 })
 </script>
 
-<svg
-    {...rest}
-    viewBox="0 0 {SIZE} {SIZE}"
-    preserveAspectRatio="none"
-    overflow="visible"
-    role="img"
-    aria-label={label}
-    data-trend={drawing.trend}
->
+<svg {...rest} {...trend.svg}>
     {#if kind === 'bar'}
-        <path data-part="bar" d={drawing.bars} fill="currentColor" stroke="none" />
+        <path {...trend.bars} />
     {:else if area}
-        <path data-part="area" d={drawing.area} fill="currentColor" fill-opacity="0.15" stroke="none" />
+        <path {...trend.area} />
     {/if}
     {#if kind === 'line'}
-        <path
-            data-part="line"
-            d={drawing.line}
-            fill="none"
-            stroke="currentColor"
-            stroke-linejoin="round"
-            stroke-linecap="round"
-            vector-effect="non-scaling-stroke"
-         />
+        <path {...trend.line} />
     {/if}
-    {#if kind === 'line' && dot && drawing.end !== ''}
-        <path
-            data-part="dot"
-            d={drawing.end}
-            fill="none"
-            stroke="currentColor"
-            stroke-width="4"
-            stroke-linecap="round"
-            vector-effect="non-scaling-stroke"
-         />
+    {#if kind === 'line' && dot && trend.ended()}
+        <path {...trend.dot} />
     {/if}
 </svg>

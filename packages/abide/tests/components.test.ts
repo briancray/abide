@@ -72,6 +72,10 @@ const OVER_PARTS: Record<string, { module: string; name: string }> = {
     // A host's parts are a member of its namespace, exported from the namespace's own index.
     'Toasts.abide': { module: 'toasts/host.ts', name: 'host' },
     'Prompts.abide': { module: 'prompts/host.ts', name: 'host' },
+    // The chart family's parts live beside the arithmetic they draw with, exported from the barrel.
+    'Chart.abide': { module: 'chart/chart.ts', name: 'chart' },
+    'Pie.abide': { module: 'chart/pie.ts', name: 'pie' },
+    'Sparkline.abide': { module: 'chart/sparkline.ts', name: 'sparkline' },
 }
 
 // A COMPONENT WITH NO PARTS FUNCTION, each with why: every shipped component is in one list or the
@@ -88,12 +92,12 @@ const WITHOUT_PARTS: Record<string, string> = {
         'a transcript over the pieces an app has already: `Markdown`, `dropzone`, `followBottom`, `transcript`',
     'Pairing.abide':
         'a fixed panel showing one command to copy, over `copyText`',
-    'Chart.abide': 'drawn from its children until `chart` hands back parts',
-    'Line.abide': 'a series a `Chart` draws, with no markup of its own',
-    'Column.abide': 'a series a `Chart` draws, with no markup of its own',
-    'Area.abide': 'a series a `Chart` draws, with no markup of its own',
-    'Pie.abide': 'drawn by its own markup until `chart` hands back parts',
-    'Sparkline.abide': 'drawn by its own markup until `chart` hands back parts',
+    'Line.abide':
+        'a series a `Chart` hands its `chart` parts, with no markup of its own',
+    'Column.abide':
+        'a series a `Chart` hands its `chart` parts, with no markup of its own',
+    'Area.abide':
+        'a series a `Chart` hands its `chart` parts, with no markup of its own',
 }
 
 test('every shipped component renders through parts, or says why it has none — 49.9', async () => {
@@ -120,9 +124,10 @@ test('a component over a parts function renders through it, and does nothing of 
         )
             wrong.push(`${component} does not render through ${name}`)
         // Exported from the barrel, or, for a host's namespace, from that namespace's own index.
-        const directory = module.includes('/')
-            ? module.split('/')[0]
-            : undefined
+        const directory =
+            module.includes('/') && !barrel.includes(`from './${module}'`)
+                ? module.split('/')[0]
+                : undefined
         const exporting =
             directory === undefined
                 ? barrel

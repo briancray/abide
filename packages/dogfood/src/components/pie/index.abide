@@ -16,7 +16,7 @@ import stageMix from './lib/StageMix.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/chart', '/components/tooltips', '/helpers/format']}
+    seeAlso={['/helpers/pie', '/components/chart', '/components/tooltips']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineMix.test.ts',

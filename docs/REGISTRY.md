@@ -1055,7 +1055,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 50.47, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64, 52.69, 52.70, 52.71, 52.72 |
+| `Chart` | `{ label: string; x?: readonly number[]; xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number; yTicks?: number; zero?: boolean; stack?: boolean; normalize?: boolean; bounds?: { x?: readonly [number, number]; y?: readonly [number, number] }; width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'x' \| 'width' \| 'height'>` | The series its `Line`, `Column` and `Area` children declare, over one pair of axes in an `svg`, the component `@abide/abide/Chart.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 50.47, 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 52.51, 52.52, 52.53, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64, 52.69, 52.70, 52.71, 52.72, 49.9, 52.82 |
 
 ## `Line`, `Column` and `Area`
 
@@ -1067,25 +1067,43 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Pie` | `{ slices: readonly { label: string; value: number \| null \| undefined }[]; label: string; inner?: number; valueFormat?: (value: number) => string; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'values'>` | Shares of a whole as the slices of a ring in an `svg`, a pie or a donut, the component `@abide/abide/Pie.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.29, 52.30, 52.38, 52.39, 52.63, 52.64, 52.65, 52.66, 52.67, 52.68 |
+| `Pie` | `{ slices: readonly { label: string; value: number \| null \| undefined }[]; label: string; inner?: number; valueFormat?: (value: number) => string; onpick?: (index: number) => void; disabled?: (index: number) => boolean } & Omit<Attributes<'svg'>, 'values'>` | Shares of a whole as the slices of a ring in an `svg`, a pie or a donut, the component `@abide/abide/Pie.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.29, 52.30, 52.38, 52.39, 52.63, 52.64, 52.65, 52.66, 52.67, 52.68, 49.9, 52.82 |
 
 ## `Sparkline`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean; kind?: 'line' \| 'bar' } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line, or as bars, with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.33, 52.34 |
+| `Sparkline` | `{ values: readonly (number \| null \| undefined)[]; label: string; area?: boolean; dot?: boolean; zero?: boolean; kind?: 'line' \| 'bar' } & Omit<Attributes<'svg'>, 'values'>` | A trend drawn as a line, or as bars, with no axes in an `svg` stretched to its box, the component `@abide/abide/Sparkline.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 52.21, 52.29, 52.30, 52.31, 52.33, 52.34, 49.9, 52.82 |
 
 ## `chart`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `chart` | `{ ticks; scale; path; stack; nearest }` | The arithmetic under a chart, as one namespace. | 52.19, 52.20, 52.21, 52.22, 52.23, 52.54 |
+| `chart` | `(options: ChartOptions) => ChartParts` | A chart over one pair of axes as its geometry and parts an app spreads onto SVG elements of its own, with the arithmetic under it as its members. | 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 50.47, 52.51, 52.52, 52.59, 52.60, 52.61, 52.62, 52.63, 52.64, 52.69, 52.70, 52.71, 52.72, 52.79, 52.80, 52.82, 52.19, 52.20, 52.21, 52.22, 52.23, 52.54 |
+| `ChartOptions` | `{ label: string \| (() => string); series: () => readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false }[]; x?: readonly number[] \| (() => readonly number[] \| undefined); xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number \| (() => number); yTicks?: number \| (() => number); zero?: boolean \| (() => boolean); stack?: boolean \| (() => boolean); normalize?: boolean \| (() => boolean); bounds?: { x?: readonly [number, number]; y?: readonly [number, number] } \| (() => { x?: readonly [number, number]; y?: readonly [number, number] } \| undefined); width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean }` | What `chart` draws and how, each value read live where a function is given. | 52.24, 52.62 |
+| `ChartParts` | `{ readonly svg: Record<string, unknown>; x(index: number): number; y(value: number): number; frame(): { left: number; top: number; right: number; bottom: number }; yTicks(): { value: number; y: number; label: string; grid: Record<string, unknown>; text: Record<string, unknown> }[]; xTicks(): { index: number; x: number; label: string; text: Record<string, unknown> }[]; zero(): { y: number; line: Record<string, unknown> } \| undefined; marks(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; lines(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; areas(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; bars(): { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[]; points(): { key: string; series: number; index: number; value: number; x: number; y: number; circle: Record<string, unknown> }[]; readout(): { index: number; x: number; label: string; disabled: boolean; values: { series: number; label: string; value: string; y: number \| undefined; circle: Record<string, unknown> \| undefined }[] } \| undefined; crosshair(hint?: Hint): { index: number; x: number; line: Record<string, unknown> } \| undefined }` | The `<svg>`'s part, the plot's scales and edges, and every tick, mark, point and the crosshair as data with a part to spread. | 52.79, 52.80, 52.82 |
 | `chart.ticks` | `(min: number, max: number, count?: number) => number[]` | Round values for an axis from `min` to `max`, about `count` intervals apart. | 52.19 |
 | `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
 | `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], baseline?: number \| readonly number[]) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`. | 52.21, 52.22 |
 | `chart.stack` | `<Each extends { values: readonly (number \| null \| undefined)[]; stack?: string \| false }>(series: readonly Each[], options?: { stack?: boolean; normalize?: boolean }) => { low: (number \| undefined)[]; high: (number \| undefined)[]; stack: string \| undefined }[]` | Where each series stands at each x once its stack is piled, and the stack it joined. | 52.54, 52.55, 52.56, 52.57, 52.58 |
 | `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
 | `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false }` | One series of a chart: what it is called, its values in x order, how it is drawn, and the stack it piles into. | 52.21, 52.24, 52.55 |
+
+## `pie`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `pie` | `(options: PieOptions) => PieParts` | Shares of a whole as the slices of a pie or a donut, as parts an app spreads onto SVG elements of its own. | 52.29, 52.30, 52.38, 52.39, 52.63, 52.64, 52.65, 52.66, 52.67, 52.68, 52.81, 52.82 |
+| `PieOptions` | `{ slices: readonly { label: string; value: number \| null \| undefined }[] \| (() => readonly { label: string; value: number \| null \| undefined }[]); label: string \| (() => string); inner?: number \| (() => number); valueFormat?: (value: number) => string; onpick?: (index: number) => void; disabled?: (index: number) => boolean }` | What `pie` draws, each value read live where a function is given. | 52.67 |
+| `PieParts` | `{ readonly svg: Record<string, unknown>; slices(): { index: number; label: string; value: number; share: number; hint: string; circle: Record<string, unknown> }[] }` | The `<svg>`'s part and every slice drawn as data with its circle's part. | 52.65, 52.81 |
+
+## `sparkline`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `sparkline` | `(options: SparklineOptions) => SparklineParts` | A trend with no axes, stretched to its box, as parts an app spreads onto SVG elements of its own. | 52.29, 52.30, 52.31, 52.33, 52.34, 52.82 |
+| `SparklineOptions` | `{ values: readonly (number \| null \| undefined)[] \| (() => readonly (number \| null \| undefined)[]); label: string \| (() => string); zero?: boolean \| (() => boolean); kind?: 'line' \| 'bar' \| (() => 'line' \| 'bar') }` | What `sparkline` draws, each value read live where a function is given. | 52.33, 52.34 |
+| `SparklineParts` | `{ readonly svg: Record<string, unknown>; readonly line: Record<string, unknown>; readonly area: Record<string, unknown>; readonly bars: Record<string, unknown>; readonly dot: Record<string, unknown>; trend(): 'up' \| 'down' \| 'flat'; ended(): boolean }` | The `<svg>`'s part, the line, the area, the bars and the end dot as parts, and the trend. | 52.31 |
 
 # Content
 

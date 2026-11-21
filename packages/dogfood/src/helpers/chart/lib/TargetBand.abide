@@ -1,0 +1,27 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Won revenue against a target band',
+    series: () => [{ label: 'Won', values: [18_000, 24_500, 31_000, 27_000] }],
+    zero: true,
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    <rect
+        x={plot.frame().left}
+        width={plot.frame().right - plot.frame().left}
+        y={plot.y(30_000)}
+        height={plot.y(20_000) - plot.y(30_000)}
+        fill="currentColor"
+        opacity="0.1"
+     />
+    {#for tick of plot.yTicks()}
+        <line {...tick.grid} />
+        <text {...tick.text}>{tick.label}</text>
+    {/for}
+    {#for line of plot.lines() by line.series}
+        <path {...line.path} />
+    {/for}
+</svg>

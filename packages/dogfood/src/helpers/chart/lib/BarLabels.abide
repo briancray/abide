@@ -1,0 +1,23 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Deals won by month',
+    series: () => [{ label: 'Won', values: [4, 6, 5, 8], kind: 'column' }],
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    {#for tick of plot.yTicks()}
+        <line {...tick.grid} />
+    {/for}
+    {#for bar of plot.bars() by bar.key}
+        <rect {...bar.rect} />
+        <text
+            x={bar.x + bar.width / 2}
+            y={bar.y - 6}
+            text-anchor="middle"
+            fill="currentColor"
+        >{bar.value}</text>
+    {/for}
+</svg>
