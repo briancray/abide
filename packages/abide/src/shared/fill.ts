@@ -10,6 +10,12 @@
 // built above it: in the browser that is the next turn, and on the server the `Outlet` has been
 // written by then (35.23).
 //
+// NOT `outlet.ts`, though both show the last of those standing and warn once where none does: a
+// fill is made in SETUP, before the `Outlet` it names is built, so its warning is looked at once the
+// page is built — at the server render's teardown, a task on in the browser — against a
+// process-wide record of names. `outlet`'s look a microtask on would warn before the layout's
+// `Outlet` stood.
+//
 // NOT A PORTAL. Moving the nodes a component rendered to somewhere else in the document would leave
 // hydration walking a tree whose nodes are not where the server wrote them; handing over the
 // component, and rendering it in place, leaves every node where both renders put it.
