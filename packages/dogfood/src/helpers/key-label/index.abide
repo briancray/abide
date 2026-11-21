@@ -1,7 +1,13 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import KeyCaps from './lib/KeyCaps.abide'
+import keyCaps from './lib/KeyCaps.abide' with { type: 'text' }
+import SaveLabel from './lib/SaveLabel.abide'
+import saveLabel from './lib/SaveLabel.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -29,17 +35,7 @@ import Section from '#src/lib/Section.abide'
         <p>Write the hint from the same binding <code>hotkeys</code> matches, so it never names a
             key the binding does not take. The label reads ⌘↩ on a Mac and Ctrl+Enter on
             Windows.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { hotkeys, keyLabel } from '@abide/abide'
-
-            const SAVE = 'mod+Enter'
-            const keys = hotkeys({ [SAVE]: { run: save, editable: true } })
-            </script>
-
-            <textarea bind:value={note} onkeydown={keys}></textarea>
-            <kbd>{keyLabel(SAVE)}</kbd>
-        `} />
+        <Example code={saveLabel}><SaveLabel /></Example>
     </Section>
 
     <Section level={3} title="Render the same label on the server and in the browser">
@@ -57,12 +53,6 @@ import Section from '#src/lib/Section.abide'
         <p><code>keyLabel.parts</code> answers the keys apart, so each gets a
             <code>&lt;kbd&gt;</code> of its own. Pass <code>apple</code> to write a Mac's keys
             whatever the visitor's platform is.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { keyLabel } from '@abide/abide'
-            </script>
-
-            {#for cap of keyLabel.parts('mod+shift+k')}<kbd>{cap}</kbd>{/for}
-        `} />
+        <Example code={keyCaps}><KeyCaps /></Example>
     </Section>
 </Doc>

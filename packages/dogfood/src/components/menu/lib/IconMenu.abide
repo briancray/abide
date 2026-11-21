@@ -1,0 +1,11 @@
+<script>
+import { menu } from '@abide/abide'
+
+const more = menu({ side: 'bottom', align: 'end' })
+</script>
+
+<button type="button" aria-label="More" {...more.trigger}>⋯</button>
+<div {...more.menu}>
+    <button role="menuitem">Archive</button>
+    <button role="menuitem">Duplicate</button>
+</div>

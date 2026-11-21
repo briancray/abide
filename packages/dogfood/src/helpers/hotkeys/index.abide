@@ -1,7 +1,13 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import NewDealKey from './lib/NewDealKey.abide'
+import newDealKey from './lib/NewDealKey.abide' with { type: 'text' }
+import SaveNote from './lib/SaveNote.abide'
+import saveNote from './lib/SaveNote.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -44,21 +50,7 @@ import Section from '#src/lib/Section.abide'
         <p>Put the listener on <code>&lt;window onkeydown&gt;</code> to hear the whole page. It
             leaves with the component. A bare <code>n</code> stands aside while the visitor types
             in a field.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { hotkeys, reactive } from '@abide/abide'
-
-            let adding = reactive(false)
-            let listing = reactive(false)
-
-            const keys = hotkeys({
-                n: () => (adding = true),
-                '?': () => (listing = !listing),
-            })
-            </script>
-
-            <window onkeydown={keys} />
-        `} />
+        <Example code={newDealKey}><NewDealKey /></Example>
     </Section>
 
     <Section level={3} title="Close a form with Escape from inside its field">
@@ -98,15 +90,7 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Save a note with ⌘↩ on a Mac and Ctrl+Enter elsewhere">
         <p><code>mod</code> is ⌘ on Apple platforms and Ctrl on any other. On an element, the
             listener hears only the keys pressed inside it.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { hotkeys } from '@abide/abide'
-
-            const keys = hotkeys({ 'mod+Enter': { run: save, editable: true } })
-            </script>
-
-            <textarea bind:value={note} onkeydown={keys}></textarea>
-        `} />
+        <Example code={saveNote}><SaveNote /></Example>
     </Section>
     <Section level={3} title="Bind the shortcut a native menu names">
         <p>A binding reads <code>cmd</code> and <code>command</code> as <code>meta</code>,

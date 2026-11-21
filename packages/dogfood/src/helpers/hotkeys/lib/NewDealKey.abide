@@ -1,0 +1,16 @@
+<script>
+import { hotkeys, reactive } from '@abide/abide'
+
+let adding = reactive(false)
+let listing = reactive(false)
+
+const keys = hotkeys({
+    n: () => (adding = true),
+    '?': () => (listing = !listing),
+})
+</script>
+
+<window onkeydown={keys} />
+<p>Press n to add a deal, ? to list the keys.</p>
+{#if adding}<p>Adding a deal…</p>{/if}
+{#if listing}<p>n: new deal · ?: these keys</p>{/if}

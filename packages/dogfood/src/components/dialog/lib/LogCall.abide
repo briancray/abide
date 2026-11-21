@@ -1,0 +1,27 @@
+<script server>
+import { POST } from '@abide/abide/server'
+
+const logCall = POST(({ note }: { note: string }) => note)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+import Dialog from '@abide/abide/Dialog.abide'
+
+let logging = reactive(false)
+let note = reactive('')
+
+function closed(returnValue: string) {
+    if (returnValue === 'log') logCall({ note })
+    note = ''
+}
+</script>
+
+<button onclick={() => (logging = true)}>Log a call</button>
+<Dialog bind:open={logging} onclose={closed}>
+    <form method="dialog">
+        <textarea bind:value={note} autofocus></textarea>
+        <button value="log">Log call</button>
+        <button value="cancel">Cancel</button>
+    </form>
+</Dialog>

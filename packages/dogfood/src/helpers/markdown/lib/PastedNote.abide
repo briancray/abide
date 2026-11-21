@@ -1,0 +1,7 @@
+<script>
+import { markdown, raw } from '@abide/abide'
+
+const note = '# Call with Ada\n\n- wants the **annual** plan\n- signs Friday'
+</script>
+
+<div>{raw(markdown(note, { headingLevel: 3 }))}</div>

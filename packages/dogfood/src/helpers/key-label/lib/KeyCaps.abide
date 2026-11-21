@@ -1,0 +1,5 @@
+<script>
+import { keyLabel } from '@abide/abide'
+</script>
+
+{#for cap of keyLabel.parts('mod+shift+k')}<kbd>{cap}</kbd>{/for}

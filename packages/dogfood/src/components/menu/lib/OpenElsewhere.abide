@@ -1,0 +1,15 @@
+<script>
+import { menu, reactive } from '@abide/abide'
+
+let choosing = reactive(false)
+const move = menu({
+    open: choosing,
+    onclose: () => console.log('closed'),
+})
+</script>
+
+<button onclick={() => (choosing = true)}>Choose a stage</button>
+<div {...move.menu}>
+    <button role="menuitem">lead</button>
+    <button role="menuitem">won</button>
+</div>

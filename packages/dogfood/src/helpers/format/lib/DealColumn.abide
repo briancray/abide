@@ -1,0 +1,20 @@
+<script>
+import { format } from '@abide/abide'
+
+const deals = [
+    { name: 'Acme renewal', amount: 42_000, probability: 0.6 },
+    { name: 'Engines upgrade', amount: 18_500, probability: 0.25 },
+]
+</script>
+
+<table>
+    <tbody>
+        {#for deal of deals by deal.name}
+            <tr>
+                <td>{deal.name}</td>
+                <td>{format.money(deal.amount, { digits: 0 })}</td>
+                <td>{format.percent(deal.probability)}</td>
+            </tr>
+        {/for}
+    </tbody>
+</table>

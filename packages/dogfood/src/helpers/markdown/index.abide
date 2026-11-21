@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import PastedNote from './lib/PastedNote.abide'
+import pastedNote from './lib/PastedNote.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -45,13 +49,7 @@ import Section from '#src/lib/Section.abide'
         <p>The HTML <code>markdown</code> answers is safe to hand <code>raw</code>.
             <code>headingLevel</code> sets the level a <code>#</code> heading renders at, so a
             note's headings sit under the page's own.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { markdown, raw } from '@abide/abide'
-            </script>
-
-            <div>{raw(markdown(note, { headingLevel: 3 }))}</div>
-        `} />
+        <Example code={pastedNote}><PastedNote /></Example>
     </Section>
 
     <Section level={3} title="Keep a pasted script tag and a javascript link inert">

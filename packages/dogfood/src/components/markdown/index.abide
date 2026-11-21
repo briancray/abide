@@ -1,7 +1,20 @@
 <script>
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import CopyCommands from './lib/CopyCommands.abide'
+import copyCommands from './lib/CopyCommands.abide' with { type: 'text' }
+import InsideLinks from './lib/InsideLinks.abide'
+import insideLinks from './lib/InsideLinks.abide' with { type: 'text' }
+import NestedHeadings from './lib/NestedHeadings.abide'
+import nestedHeadings from './lib/NestedHeadings.abide' with { type: 'text' }
+import OutsideTab from './lib/OutsideTab.abide'
+import outsideTab from './lib/OutsideTab.abide' with { type: 'text' }
+import PreviewNote from './lib/PreviewNote.abide'
+import previewNote from './lib/PreviewNote.abide' with { type: 'text' }
+import StreamSummary from './lib/StreamSummary.abide'
+import streamSummary from './lib/StreamSummary.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -38,92 +51,38 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Preview a deal note as it is typed">
         <p>HTML in the source renders as text, and a link to a scheme outside
             <code>schemes</code> renders as its words.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            import Markdown from '@abide/abide/Markdown.abide'
-
-            let note = reactive('**Ada** wants the annual plan.')
-            </script>
-
-            <textarea bind:value={note}></textarea>
-            <Markdown source={note} aria-label="Preview" />
-        `} />
+        <Example code={previewNote}><PreviewNote /></Example>
     </Section>
 
     <Section level={3} title="Render a note's headings under the page's own">
         <p>A <code>#</code> heading renders at <code>headingLevel</code>, and each deeper one a level
             under the last.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Markdown from '@abide/abide/Markdown.abide'
-            </script>
-
-            <h2>Notes</h2>
-            <Markdown source={note} headingLevel={3} />
-        `} />
+        <Example code={nestedHeadings}><NestedHeadings /></Example>
     </Section>
 
     <Section level={3} title="Render a summary as it streams in">
         <p>Hand <code>source</code> the text received until now. A section the stream has moved past keeps
             its nodes, so a chunk renders only the section still growing.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            import Markdown from '@abide/abide/Markdown.abide'
-
-            const summary = reactive(() => summarizeDeal())
-            </script>
-
-            <Markdown source={summary.join('')} />
-        `} />
+        <Example code={streamSummary}><StreamSummary /></Example>
     </Section>
 
     <Section level={3} title="Keep a note's links inside the CRM">
         <p><code>href</code> rewrites each link's address. A link it answers
             <code>undefined</code> for renders as its text.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Markdown from '@abide/abide/Markdown.abide'
-
-            const inside = (address: string) =>
-                address.startsWith('https://crm.example.com/') ? address : undefined
-            </script>
-
-            <Markdown source={note} href={inside} />
-        `} />
+        <Example code={insideLinks}><InsideLinks /></Example>
     </Section>
 
     <Section level={3} title="Open a note's outside links in a tab of their own">
         <p><code>href</code> may answer the address with the <code>target</code> and
             <code>rel</code> the link opens with.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Markdown from '@abide/abide/Markdown.abide'
-
-            const linkTo = (address: string) =>
-                address.startsWith('/')
-                    ? address
-                    : { href: address, target: '_blank', rel: 'noopener' }
-            </script>
-
-            <Markdown source={note} href={linkTo} />
-        `} />
+        <Example code={outsideTab}><OutsideTab /></Example>
     </Section>
 
     <Section level={3} title="Put a Copy button beside each shell command">
         <p><code>blocks</code> names a component per fence language. A fenced block whose
             language is one of them renders as that component, handed its <code>source</code>
             and the rest of its <code>info</code>, once its fence closes.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Markdown from '@abide/abide/Markdown.abide'
-
-            import CopyableCode from './CopyableCode.abide'
-            </script>
-
-            <Markdown source={note} blocks={{ sh: CopyableCode }} />
-        `} />
+        <Example code={copyCommands}><CopyCommands /></Example>
     </Section>
 
     <Section level={3} title="Name a link once and use it anywhere in a note">

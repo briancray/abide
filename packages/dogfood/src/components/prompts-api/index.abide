@@ -1,7 +1,13 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import ConfirmDelete from './lib/ConfirmDelete.abide'
+import confirmDelete from './lib/ConfirmDelete.abide' with { type: 'text' }
+import RenameDeal from './lib/RenameDeal.abide'
+import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -40,22 +46,7 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Ask before deleting a deal">
         <p><code>prompts.confirm</code> settles <code>true</code> only when the confirming button
             closed it. Cancel, Escape and the backdrop settle <code>false</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { prompts } from '@abide/abide/Prompts.abide'
-            import deleteDeal from './deleteDeal.handler.ts'
-
-            async function remove(deal: Deal) {
-                const sure = await prompts.confirm({
-                    title: \`Delete \${deal.name}?\`,
-                    body: 'Its notes and its stage history go with it.',
-                    confirm: 'Delete',
-                    danger: true,
-                })
-                if (sure) await deleteDeal({ id: deal.id })
-            }
-            </script>
-        `} />
+        <Example code={confirmDelete}><ConfirmDelete /></Example>
     </Section>
 
     <Section level={3} title="Make the company name be typed before a delete">
@@ -76,19 +67,7 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Ask for a deal's new name">
         <p><code>prompts.prompt</code> settles with the text typed, or <code>undefined</code> when
             declined. The input starts from <code>value</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            import { prompts } from '@abide/abide/Prompts.abide'
-
-            let deal = reactive('Engine renewal')
-
-            async function rename() {
-                const name = await prompts.prompt({ title: 'Rename deal', value: deal })
-                if (name?.trim()) deal = name.trim()
-            }
-            </script>
-        `} />
+        <Example code={renameDeal}><RenameDeal /></Example>
     </Section>
 
     <Section level={3} title="Tell the person something and wait for the close">

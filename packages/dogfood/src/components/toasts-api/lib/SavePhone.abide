@@ -1,0 +1,30 @@
+<script server>
+import { POST } from '@abide/abide/server'
+
+const savePhone = POST(({ phone }: { phone: string }) => {
+    if (!/^[\d ]+$/.test(phone)) throw new Error('A phone is digits')
+    return phone
+})
+</script>
+
+<script>
+import { reactive, report } from '@abide/abide'
+import { toasts } from '@abide/abide/Toasts.abide'
+
+let phone = reactive('555 0100')
+
+async function save() {
+    try {
+        await savePhone({ phone })
+        toasts.notify('Phone saved', { tone: 'success' })
+    } catch (refused) {
+        toasts.notify((refused as Error).message, {
+            tone: 'error',
+            action: { label: 'Report', run: () => report().open() },
+        })
+    }
+}
+</script>
+
+<input bind:value={phone}>
+<button onclick={save}>Save</button>

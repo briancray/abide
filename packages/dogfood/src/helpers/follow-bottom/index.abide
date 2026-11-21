@@ -1,7 +1,10 @@
 <script>
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import ActivityLog from './lib/ActivityLog.abide'
+import activityLog from './lib/ActivityLog.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -19,21 +22,6 @@ import Section from '#src/lib/Section.abide'
         <p>Bind the scrolling element to <code>followBottom</code>, and each entry added scrolls
             it down. Scroll up to read an earlier entry and it stays put, until you scroll back to
             the bottom.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { followBottom, reactive } from '@abide/abide'
-
-            let activity = reactive(['Ledger audit opened'])
-            </script>
-
-            <ol class="h-64 overflow-y-auto" bind:element={followBottom}>
-                {#for entry of activity by entry}
-                    <li>{entry}</li>
-                {/for}
-            </ol>
-            <button onclick={() => {
-                activity = [...activity, \`Call \${activity.length} logged\`]
-            }}>Log a call</button>
-        `} />
+        <Example code={activityLog}><ActivityLog /></Example>
     </Section>
 </Doc>

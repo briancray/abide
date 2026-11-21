@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import SavePhone from './lib/SavePhone.abide'
+import savePhone from './lib/SavePhone.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -35,27 +39,7 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Say whether a save landed">
         <p>A notice takes itself down after three seconds, and an error's after ten, long enough
             to reach its action.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive, report } from '@abide/abide'
-            import { toasts } from '@abide/abide/Toasts.abide'
-            import savePhone from '../savePhone.handler.ts'
-
-            let phone = reactive('555 0100')
-
-            async function save() {
-                try {
-                    await savePhone({ phone })
-                    toasts.notify('Phone saved', { tone: 'success' })
-                } catch (refused) {
-                    toasts.notify((refused as Error).message, {
-                        tone: 'error',
-                        action: { label: 'Report', run: () => report().open() },
-                    })
-                }
-            }
-            </script>
-        `} />
+        <Example code={savePhone}><SavePhone /></Example>
     </Section>
 
     <Section level={3} title="Keep a notice up until the import finishes">

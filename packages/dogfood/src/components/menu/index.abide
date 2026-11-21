@@ -1,7 +1,18 @@
 <script>
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import IconMenu from './lib/IconMenu.abide'
+import iconMenu from './lib/IconMenu.abide' with { type: 'text' }
+import MoveStage from './lib/MoveStage.abide'
+import moveStage from './lib/MoveStage.abide' with { type: 'text' }
+import OpenElsewhere from './lib/OpenElsewhere.abide'
+import openElsewhere from './lib/OpenElsewhere.abide' with { type: 'text' }
+import OpenLayout from './lib/OpenLayout.abide'
+import openLayout from './lib/OpenLayout.abide' with { type: 'text' }
+import PinDeal from './lib/PinDeal.abide'
+import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -38,83 +49,33 @@ import Section from '#src/lib/Section.abide'
             the items. Each child carrying <code>role="menuitem"</code> is an item. A disabled
             one is passed over by the arrow keys, and a pick runs its own
             <code>onclick</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { menu, reactive } from '@abide/abide'
-
-            const STAGES = ['lead', 'qualified', 'proposal', 'won']
-            let stage = reactive('proposal')
-            const move = menu()
-            </script>
-
-            <button type="button" {...move.trigger}>Move to…</button>
-            <div {...move.menu}>
-                {#for next of STAGES}
-                    <button
-                        role="menuitem"
-                        disabled={next === stage}
-                        onclick={() => (stage = next)}
-                    >{next}</button>
-                {/for}
-            </div>
-        `} />
+        <Example code={moveStage}><MoveStage /></Example>
     </Section>
 
     <Section level={3} title="Open a menu from an icon">
         <p>The trigger is your own element, so it holds anything, and its
             <code>aria-label</code> names the menu.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { menu } from '@abide/abide'
-
-            const more = menu({ side: 'bottom', align: 'end' })
-            </script>
-
-            <button type="button" aria-label="More" {...more.trigger}>⋯</button>
-            <div {...more.menu}>…</div>
-        `} />
+        <Example code={iconMenu}><IconMenu /></Example>
     </Section>
 
     <Section level={3} title="Pin a deal from a menu that stays open">
         <p>An item carrying <code>role="menuitemcheckbox"</code> or
             <code>role="menuitemradio"</code> leaves the menu open. Write its
             <code>aria-checked</code> from your own state.</p>
-        <Code language="abide" caption="abide" code={`
-            <button
-                role="menuitemcheckbox"
-                aria-checked={pinned ? 'true' : 'false'}
-                onclick={() => (pinned = !pinned)}
-            >pin to the top</button>
-        `} />
+        <Example code={pinDeal}><PinDeal /></Example>
     </Section>
 
     <Section level={3} title="Open a menu from somewhere else">
         <p>Hand <code>menu</code> a <code>Reactive</code> as <code>open</code>. Writing it opens
             and closes the menu, and every way the menu closes writes it back.
             <code>onopen</code> and <code>onclose</code> hear each.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { menu, reactive } from '@abide/abide'
-
-            let choosing = reactive(false)
-            const move = menu({
-                open: choosing,
-                onclose: () => console.log('closed'),
-            })
-            </script>
-
-            <button onclick={() => (choosing = true)}>Choose a stage</button>
-        `} />
+        <Example code={openElsewhere}><OpenElsewhere /></Example>
     </Section>
 
     <Section level={3} title="Lay out an open menu while a closed menu stays hidden">
         <p>The menu is a popover. A <code>display</code> class beats the browser's hiding of a
             closed popover, so set it behind <code>open:</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <div {...move.menu} class="m-0 flex-col rounded-lg open:flex">
-                …
-            </div>
-        `} />
+        <Example code={openLayout}><OpenLayout /></Example>
     </Section>
 
     <Section level={3} title="Jump to an item by typing">

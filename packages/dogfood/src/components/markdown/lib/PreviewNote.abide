@@ -1,0 +1,9 @@
+<script>
+import { reactive } from '@abide/abide'
+import Markdown from '@abide/abide/Markdown.abide'
+
+let note = reactive('**Ada** wants the annual plan.')
+</script>
+
+<textarea bind:value={note}></textarea>
+<Markdown source={note} aria-label="Preview" />

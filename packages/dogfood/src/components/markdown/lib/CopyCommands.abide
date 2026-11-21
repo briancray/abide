@@ -1,0 +1,9 @@
+<script>
+import Markdown from '@abide/abide/Markdown.abide'
+
+import CopyableCode from './CopyableCode.abide'
+
+const note = 'Install it:\n\n```sh\nbun add @abide/abide\n```'
+</script>
+
+<Markdown source={note} blocks={{ sh: CopyableCode }} />

@@ -1,0 +1,15 @@
+<script>
+import { menu, reactive } from '@abide/abide'
+
+let pinned = reactive(false)
+const actions = menu()
+</script>
+
+<button type="button" {...actions.trigger}>Deal…</button>
+<div {...actions.menu}>
+    <button
+        role="menuitemcheckbox"
+        aria-checked={pinned ? 'true' : 'false'}
+        onclick={() => (pinned = !pinned)}
+    >pin to the top</button>
+</div>

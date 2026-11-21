@@ -4,8 +4,20 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import ContactUnder from './lib/ContactUnder.abide'
+import contactUnder from './lib/ContactUnder.abide' with { type: 'text' }
+import LinkNames from './lib/LinkNames.abide'
+import linkNames from './lib/LinkNames.abide' with { type: 'text' }
+import PickByRow from './lib/PickByRow.abide'
+import pickByRow from './lib/PickByRow.abide' with { type: 'text' }
 import PickRows from './lib/PickRows.abide'
 import pickRows from './lib/PickRows.abide' with { type: 'text' }
+import SortArrows from './lib/SortArrows.abide'
+import sortArrows from './lib/SortArrows.abide' with { type: 'text' }
+import SortCompanies from './lib/SortCompanies.abide'
+import sortCompanies from './lib/SortCompanies.abide' with { type: 'text' }
+import SortedByClose from './lib/SortedByClose.abide'
+import sortedByClose from './lib/SortedByClose.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -70,25 +82,7 @@ import pickRows from './lib/PickRows.abide' with { type: 'text' }
         <p>Each header is a button. Pressing it sorts ascending, and pressing it again turns the
             direction round. <code>key</code> lets a re-sort move rows rather than rewrite
             them.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { type Column, reactive } from '@abide/abide'
-            import SortableTable from '@abide/abide/SortableTable.abide'
-            import listCompanies from '../listCompanies.handler.ts'
-
-            const COLUMNS: Column<Company>[] = [
-                { key: 'name', label: 'Company' },
-                { key: 'city', label: 'City' },
-            ]
-            const companies = reactive(() => listCompanies())
-            </script>
-
-            <SortableTable
-                rows={companies}
-                columns={COLUMNS}
-                key={(company: Company) => company.id}
-            />
-        `} />
+        <Example code={sortCompanies}><SortCompanies /></Example>
     </Section>
 
     <Section level={3} title="Sort stages in pipeline order, and show amounts as money">
@@ -118,39 +112,13 @@ import pickRows from './lib/PickRows.abide' with { type: 'text' }
     <Section level={3} title="Open the table sorted by close date">
         <p>Bind <code>sort</code> to set the sort it opens with and to read the one picked
             since.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive, type Sort } from '@abide/abide'
-            import SortableTable from '@abide/abide/SortableTable.abide'
-
-            let sort = reactive<Sort | undefined>({
-                key: 'closes',
-                direction: 'ascending',
-            })
-            </script>
-
-            <SortableTable rows={deals} columns={COLUMNS} key={keyOf} bind:sort={sort} />
-        `} />
+        <Example code={sortedByClose}><SortedByClose /></Example>
     </Section>
 
     <Section level={3} title="Link each company's name to its page">
         <p>A <code>Cell</code> component renders a cell's content, handed the row, the column and
             the formatted text.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import SortableTable from '@abide/abide/SortableTable.abide'
-            </script>
-
-            <SortableTable rows={companies} columns={COLUMNS} key={keyOf}>
-                {#component Cell({ row, column, text }: CellProps)}
-                    {#if column.key === 'name'}
-                        <a href={\`/companies/\${row.id}\`}>{text}</a>
-                    {:else}
-                        {text}
-                    {/if}
-                {/component}
-            </SortableTable>
-        `} />
+        <Example code={linkNames}><LinkNames /></Example>
     </Section>
 
     <Section level={3} title="Sort amounts largest first on the first press">
@@ -167,52 +135,20 @@ import pickRows from './lib/PickRows.abide' with { type: 'text' }
         <p><code>rowAttributes</code> is handed each row and answers the attributes its
             <code>&lt;tr&gt;</code> carries: a <code>class</code>, a <code>data-</code> state,
             an <code>onclick</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <SortableTable
-                rows={deals}
-                columns={COLUMNS}
-                key={(deal: Deal) => deal.id}
-                rowAttributes={(deal: Deal) => ({
-                    'data-stage': deal.stage,
-                    onclick: () => (picked = deal.name),
-                })}
-                class="[&_[data-stage=won]]:font-semibold"
-            />
-        `} />
+        <Example code={pickByRow}><PickByRow /></Example>
     </Section>
 
     <Section level={3} title="Show each company's contact in a row under the company">
         <p>A <code>Detail</code> component renders a row of its own under each row, one cell
             spanning every column, and it moves with its row when the table sorts.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import SortableTable from '@abide/abide/SortableTable.abide'
-            </script>
-
-            <SortableTable rows={companies} columns={COLUMNS} key={keyOf}>
-                {#component Detail({ row }: { row: Company })}
-                    <span class="text-muted">Contact: {row.contact}</span>
-                {/component}
-            </SortableTable>
-        `} />
+        <Example code={contactUnder}><ContactUnder /></Example>
     </Section>
 
     <Section level={3} title="Mark the sorted column's direction with an arrow">
         <p>The sorted header carries <code>data-sort</code>, <code>ascending</code> or
             <code>descending</code>, and a column's <code>align</code> is
             <code>data-align</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import SortableTable from '@abide/abide/SortableTable.abide'
-            </script>
-
-            <SortableTable
-                class="[&_[data-align=end]]:text-right
-                [&_[data-sort=ascending]_button]:after:content-['_↑']
-                [&_[data-sort=descending]_button]:after:content-['_↓']"
-                …
-            />
-        `} />
+        <Example code={sortArrows}><SortArrows /></Example>
     </Section>
     <Section level={3} title="Pick deals to act on together">
         <p>Bind <code>selected</code> to the keys of the rows picked, and a checkbox leads each row,

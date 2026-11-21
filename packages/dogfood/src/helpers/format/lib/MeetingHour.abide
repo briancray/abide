@@ -1,0 +1,13 @@
+<script>
+import { format } from '@abide/abide'
+
+const meeting = { at: Date.UTC(2026, 11, 15, 14, 30) }
+</script>
+
+{#for part of format.dateParts(meeting.at, { style: 'dateTime' })}
+    {#if part.type === 'hour'}
+        <strong>{part.value}</strong>
+    {:else}
+        {part.value}
+    {/if}
+{/for}

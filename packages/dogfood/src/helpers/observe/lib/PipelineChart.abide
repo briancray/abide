@@ -1,0 +1,10 @@
+<script>
+import { props } from '@abide/abide'
+
+const { width, height } = props<{ width: number; height: number }>()
+</script>
+
+<svg width={width} height={height} class="block">
+    <rect width={width * 0.6} height={height} fill="currentColor" />
+    <text x="8" y="20" fill="var(--color-paper)">{width} × {height}</text>
+</svg>

@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import LargestFirst from './lib/LargestFirst.abide'
+import largestFirst from './lib/LargestFirst.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -76,17 +80,6 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Render a list in the order a sort names">
         <p>With no <code>sort</code>, or one naming no column, the rows come back as they are, the
             same array.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive, type Sort, sortRows } from '@abide/abide'
-
-            let sort = reactive<Sort | undefined>(undefined)
-            const sorted = reactive(() => sortRows(deals, COLUMNS, sort))
-            </script>
-
-            <button onclick={() => (sort = { key: 'amount', direction: 'descending' })}>
-                Largest first</button>
-            <ol>{#for deal of sorted by deal.name}<li>{deal.name}</li>{/for}</ol>
-        `} />
+        <Example code={largestFirst}><LargestFirst /></Example>
     </Section>
 </Doc>

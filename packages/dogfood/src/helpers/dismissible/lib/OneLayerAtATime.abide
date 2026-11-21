@@ -1,0 +1,13 @@
+<script>
+import { dismissible, reactive, tooltip } from '@abide/abide'
+
+let open = reactive(false)
+const hint = tooltip('Press Escape: this hint closes first', { delay: 0 })
+</script>
+
+<button onclick={() => (open = true)}>Quick edit</button>
+{#if open}
+    <form bind:element={dismissible(() => (open = false))}>
+        <input value="Analytical Engines" bind:element={hint}>
+    </form>
+{/if}

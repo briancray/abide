@@ -1,0 +1,10 @@
+<script>
+import Markdown from '@abide/abide/Markdown.abide'
+
+const note =
+    '[Acme](https://crm.example.com/deals/acme), [elsewhere](https://x.example)'
+const inside = (address: string) =>
+    address.startsWith('https://crm.example.com/') ? address : undefined
+</script>
+
+<Markdown source={note} href={inside} />

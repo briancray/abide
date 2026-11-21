@@ -1,0 +1,11 @@
+<script>
+import { tabs } from '@abide/abide'
+
+const notes = ['Called Ada', 'Sent the quote']
+const view = tabs({ keys: ['details', 'notes'] })
+</script>
+
+<div {...view.list}>
+    <button {...view.tab('details')}>Details</button>
+    <button {...view.tab('notes')}>Notes <span>{notes.length}</span></button>
+</div>

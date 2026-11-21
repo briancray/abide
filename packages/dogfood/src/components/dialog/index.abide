@@ -1,11 +1,16 @@
 <script>
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
 import DealDrawer from './lib/DealDrawer.abide'
 import dealDrawer from './lib/DealDrawer.abide' with { type: 'text' }
+import LogCall from './lib/LogCall.abide'
+import logCall from './lib/LogCall.abide' with { type: 'text' }
+import SignFirst from './lib/SignFirst.abide'
+import signFirst from './lib/SignFirst.abide' with { type: 'text' }
+import StyledDialog from './lib/StyledDialog.abide'
+import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -42,64 +47,20 @@ import dealDrawer from './lib/DealDrawer.abide' with { type: 'text' }
         <p>Bind <code>open</code> to a value of yours. A <code>&lt;form method="dialog"&gt;</code>
             closes it, and <code>onclose</code> gets the <code>value</code> of the button that
             submitted it.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            import Dialog from '@abide/abide/Dialog.abide'
-            import logCall from './logCall.handler.ts'
-
-            let logging = reactive(false)
-            let note = reactive('')
-
-            function closed(returnValue: string) {
-                if (returnValue === 'log') logCall({ note })
-                note = ''
-            }
-            </script>
-
-            <button onclick={() => (logging = true)}>Log a call</button>
-            <Dialog bind:open={logging} onclose={closed}>
-                <form method="dialog">
-                    <textarea bind:value={note} autofocus></textarea>
-                    <button value="log">Log call</button>
-                    <button value="cancel">Cancel</button>
-                </form>
-            </Dialog>
-        `} />
+        <Example code={logCall}><LogCall /></Example>
     </Section>
 
     <Section level={3} title="Keep a dialog open until its form submits">
         <p>Set <code>dismissible</code> to <code>false</code> and Escape and a backdrop click
             leave the dialog showing.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Dialog from '@abide/abide/Dialog.abide'
-            </script>
-
-            <Dialog bind:open={signing} dismissible={false}>
-                <form method="dialog">
-                    <button value="sign">Sign the contract</button>
-                </form>
-            </Dialog>
-        `} />
+        <Example code={signFirst}><SignFirst /></Example>
     </Section>
 
     <Section level={3} title="Style the dialog box and the veil behind the dialog">
         <p>Your <code>class</code> lands on the <code>&lt;dialog&gt;</code>. The
             <code>backdrop:</code> variant reaches the veil, and <code>data-open</code> is present
             while it shows.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Dialog from '@abide/abide/Dialog.abide'
-            </script>
-
-            <Dialog
-                bind:open={logging}
-                class="m-auto w-96 rounded-xl p-5 backdrop:bg-paper/70"
-            >
-                …
-            </Dialog>
-        `} />
+        <Example code={styledDialog}><StyledDialog /></Example>
     </Section>
     <Section level={3} title="Slide a deal's details in from the side">
         <p>A drawer is a <code>Dialog</code> laid out at an edge by its own classes: modal the same

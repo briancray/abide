@@ -24,6 +24,8 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 <script>
 import { onMenu, url } from '@abide/abide'
 import Announcer from '@abide/abide/Announcer.abide'
+import Prompts from '@abide/abide/Prompts.abide'
+import Toasts from '@abide/abide/Toasts.abide'
 import Tooltips from '@abide/abide/Tooltips.abide'
 
 import DocsNav from '#src/lib/DocsNav.abide'
@@ -67,6 +69,9 @@ onMenu(() => MENUS)
         >Skip to content</a>
 <!-- Ahead of the page, so an example's own Announcer, standing after it, is the one that shows (50.36). -->
 <Announcer class="sr-only" />
+<!-- The hosts an example's notices and prompts show in, ahead of the page for the same reason. -->
+<Toasts class="fixed right-5 bottom-5 z-10 flex flex-col gap-2 *:flex *:items-center *:gap-3 *:rounded-lg *:border *:border-rule *:bg-raised *:px-4 *:py-2 *:text-chrome *:shadow-sm *:data-[tone=error]:border-bad *:data-[tone=success]:border-good" />
+<Prompts class="m-auto w-96 rounded-xl border border-rule bg-raised p-5 text-ink backdrop:bg-ink/30 [&_[data-part=actions]]:mt-4 [&_[data-part=actions]]:flex [&_[data-part=actions]]:justify-end [&_[data-part=actions]]:gap-2 [&_[data-part=form]]:flex [&_[data-part=form]]:flex-col [&_[data-part=form]]:gap-2" />
 <UpdateBanner />
 <SiteBar />
 <DocsNav />

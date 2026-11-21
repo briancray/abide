@@ -1,0 +1,14 @@
+<script>
+import { reactive } from '@abide/abide'
+import Dialog from '@abide/abide/Dialog.abide'
+
+let logging = reactive(false)
+</script>
+
+<button onclick={() => (logging = true)}>Log a call</button>
+<Dialog
+    bind:open={logging}
+    class="m-auto w-96 rounded-xl p-5 backdrop:bg-paper/70"
+>
+    <form method="dialog"><button>Done</button></form>
+</Dialog>

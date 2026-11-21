@@ -1,7 +1,14 @@
 <script>
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import CardRect from './lib/CardRect.abide'
+import cardRect from './lib/CardRect.abide' with { type: 'text' }
+import LoadMore from './lib/LoadMore.abide'
+import loadMore from './lib/LoadMore.abide' with { type: 'text' }
+import SizeToPanel from './lib/SizeToPanel.abide'
+import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -26,48 +33,20 @@ import Section from '#src/lib/Section.abide'
         <p>Hand <code>bind:element</code> the adaptor and a reactive value. The browser writes
             the size after each layout, and until the first one the value holds what you gave
             it.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { observe, reactive } from '@abide/abide'
-
-            let box = reactive({ width: 0, height: 0 })
-            </script>
-
-            <section bind:element={observe.size(box)}>
-                <PipelineChart width={box.width} height={box.height} />
-            </section>
-        `} />
+        <Example code={sizeToPanel}><SizeToPanel /></Example>
     </Section>
 
     <Section level={3} title="Load more activity when the end of the feed scrolls into view">
         <p><code>observe.visible</code> writes whether the element is in the viewport, or inside
             the element <code>in</code> names. A function in place of the value is called with
             each reading.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { observe } from '@abide/abide'
-            </script>
-
-            <ol>{#for item of activity by item.id}<li>{item.text}</li>{/for}</ol>
-            <div bind:element={observe.visible((seen) => seen && loadMore())}></div>
-        `} />
+        <Example code={loadMore}><LoadMore /></Example>
     </Section>
 
     <Section level={3} title="Measure the size and the position of one card">
         <p>A list in <code>bind:element</code> applies each adaptor. <code>observe.rect</code>
             writes the rectangle <code>getBoundingClientRect</code> reports, read again at most
             once a frame as the page scrolls or the card moves.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { observe, reactive } from '@abide/abide'
-
-            let placed = reactive({ top: 0, left: 0, width: 0, height: 0 })
-            let box = reactive({ width: 0, height: 0 })
-            </script>
-
-            <article bind:element={[observe.rect(placed), observe.size(box)]}>
-                {placed.top}px from the top, {box.width}px wide
-            </article>
-        `} />
+        <Example code={cardRect}><CardRect /></Example>
     </Section>
 </Doc>

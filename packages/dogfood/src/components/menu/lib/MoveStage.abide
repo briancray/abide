@@ -1,0 +1,19 @@
+<script>
+import { menu, reactive } from '@abide/abide'
+
+const STAGES = ['lead', 'qualified', 'proposal', 'won']
+let stage = reactive('proposal')
+const move = menu()
+</script>
+
+<button type="button" {...move.trigger}>Move to…</button>
+<div {...move.menu}>
+    {#for next of STAGES}
+        <button
+            role="menuitem"
+            disabled={next === stage}
+            onclick={() => (stage = next)}
+        >{next}</button>
+    {/for}
+</div>
+<p>Stage: {stage}</p>

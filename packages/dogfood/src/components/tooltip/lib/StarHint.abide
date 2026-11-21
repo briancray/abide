@@ -1,0 +1,10 @@
+<script>
+import { tooltip } from '@abide/abide'
+
+const hint = tooltip('Star this contact', {
+    side: 'bottom',
+    delay: 0,
+})
+</script>
+
+<button aria-label="Star" bind:element={hint}>★</button>

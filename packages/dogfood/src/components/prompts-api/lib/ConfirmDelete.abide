@@ -1,0 +1,24 @@
+<script server>
+import { POST } from '@abide/abide/server'
+
+const deleteDeal = POST(({ id }: { id: string }) => id)
+</script>
+
+<script>
+import { prompts } from '@abide/abide/Prompts.abide'
+
+type Deal = { id: string; name: string }
+const deal: Deal = { id: 'acme', name: 'Acme renewal' }
+
+async function remove(deal: Deal) {
+    const sure = await prompts.confirm({
+        title: `Delete ${deal.name}?`,
+        body: 'Its notes and its stage history go with it.',
+        confirm: 'Delete',
+        danger: true,
+    })
+    if (sure) await deleteDeal({ id: deal.id })
+}
+</script>
+
+<button onclick={() => remove(deal)}>Delete Acme renewal</button>

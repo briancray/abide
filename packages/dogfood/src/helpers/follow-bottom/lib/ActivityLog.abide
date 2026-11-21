@@ -1,0 +1,14 @@
+<script>
+import { followBottom, reactive } from '@abide/abide'
+
+let activity = reactive(['Ledger audit opened'])
+</script>
+
+<ol class="h-32 overflow-y-auto" bind:element={followBottom}>
+    {#for entry of activity by entry}
+        <li>{entry}</li>
+    {/for}
+</ol>
+<button onclick={() => {
+    activity = [...activity, `Call ${activity.length} logged`]
+}}>Log a call</button>

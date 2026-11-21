@@ -1,0 +1,20 @@
+<script>
+import { observe, reactive } from '@abide/abide'
+
+let activity = reactive(
+    Array.from({ length: 8 }, (_, id) => ({ id, text: `Entry ${id + 1}` })),
+)
+const loadMore = () =>
+    (activity = [
+        ...activity,
+        ...Array.from({ length: 8 }, (_, at) => ({
+            id: activity.length + at,
+            text: `Entry ${activity.length + at + 1}`,
+        })),
+    ])
+</script>
+
+<div class="h-40 overflow-y-auto">
+    <ol>{#for item of activity by item.id}<li>{item.text}</li>{/for}</ol>
+    <div bind:element={observe.visible((seen) => seen && loadMore())}></div>
+</div>

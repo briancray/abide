@@ -1,0 +1,12 @@
+<script>
+import { hotkeys, keyLabel, reactive } from '@abide/abide'
+
+let note = reactive('')
+const save = () => console.log('saved', note)
+
+const SAVE = 'mod+Enter'
+const keys = hotkeys({ [SAVE]: { run: save, editable: true } })
+</script>
+
+<textarea bind:value={note} onkeydown={keys}></textarea>
+<kbd>{keyLabel(SAVE)}</kbd>

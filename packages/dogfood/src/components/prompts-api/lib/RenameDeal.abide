@@ -1,0 +1,13 @@
+<script>
+import { reactive } from '@abide/abide'
+import { prompts } from '@abide/abide/Prompts.abide'
+
+let deal = reactive('Engine renewal')
+
+async function rename() {
+    const name = await prompts.prompt({ title: 'Rename deal', value: deal })
+    if (name?.trim()) deal = name.trim()
+}
+</script>
+
+<button onclick={rename}>{deal}</button>

@@ -1,0 +1,29 @@
+<script>
+import { listbox, reactive } from '@abide/abide'
+
+type Deal = { id: string; name: string }
+const leads: Deal[] = [
+    { id: 'a', name: 'Acme renewal' },
+    { id: 'b', name: 'Engines upgrade' },
+    { id: 'c', name: 'Hopper & Co' },
+]
+let calling = reactive('')
+const queue = listbox({
+    id: 'leads',
+    options: () => leads,
+    key: (deal: Deal) => deal.id,
+    onpick: (deal) => (calling = deal.name),
+})
+</script>
+
+<ul role="listbox" tabindex="0" onkeydown={queue.keydown}
+    class="[&_[data-active]]:bg-signal/10"
+    aria-activedescendant={queue.activeId()}>
+    {#for deal of leads by deal.id}
+        <li id={queue.idOf(deal.id)} role="option"
+            aria-selected={queue.active() === deal.id ? 'true' : 'false'}
+            data-active={queue.active() === deal.id ? '' : undefined}
+            onclick={() => queue.activate(deal.id)}>{deal.name}</li>
+    {/for}
+</ul>
+<p>Calling: {calling || 'nobody yet'}</p>

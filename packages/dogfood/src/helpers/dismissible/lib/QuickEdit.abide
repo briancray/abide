@@ -1,0 +1,13 @@
+<script>
+import { dismissible, reactive } from '@abide/abide'
+
+let open = reactive(false)
+let company = reactive('Analytical Engines')
+</script>
+
+<button onclick={() => (open = true)}>Quick edit</button>
+{#if open}
+    <form bind:element={dismissible(() => (open = false))}>
+        <input bind:value={company}>
+    </form>
+{/if}

@@ -1,0 +1,18 @@
+<script>
+import { type Column } from '@abide/abide'
+import SortableTable from '@abide/abide/SortableTable.abide'
+
+type Company = { id: string; name: string; contact: string }
+const companies: Company[] = [
+    { id: 'acme', name: 'Acme', contact: 'Ada Lovelace' },
+    { id: 'hopper', name: 'Hopper & Co', contact: 'Grace Hopper' },
+]
+const COLUMNS: Column<Company>[] = [{ key: 'name', label: 'Company' }]
+const keyOf = (company: Company) => company.id
+</script>
+
+<SortableTable rows={companies} columns={COLUMNS} key={keyOf}>
+    {#component Detail({ row }: { row: Company })}
+        <span class="text-muted">Contact: {row.contact}</span>
+    {/component}
+</SortableTable>

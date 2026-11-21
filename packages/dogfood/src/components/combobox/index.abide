@@ -1,11 +1,20 @@
 <script>
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import ActiveOption from './lib/ActiveOption.abide'
+import activeOption from './lib/ActiveOption.abide' with { type: 'text' }
+import CityBeside from './lib/CityBeside.abide'
+import cityBeside from './lib/CityBeside.abide' with { type: 'text' }
+import DealTeam from './lib/DealTeam.abide'
+import dealTeam from './lib/DealTeam.abide' with { type: 'text' }
 import ListOverClip from './lib/ListOverClip.abide'
 import listOverClip from './lib/ListOverClip.abide' with { type: 'text' }
+import PickContact from './lib/PickContact.abide'
+import pickContact from './lib/PickContact.abide' with { type: 'text' }
+import SearchCompanies from './lib/SearchCompanies.abide'
+import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -49,97 +58,31 @@ import listOverClip from './lib/ListOverClip.abide' with { type: 'text' }
     <Section level={3} title="Pick a contact from a list narrowed by typing">
         <p>Given <code>options</code>, the list keeps the items whose label holds what was typed,
             ignoring case. The children show when nothing matches.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            import Combobox from '@abide/abide/Combobox.abide'
-            import listContacts from '../listContacts.handler.ts'
-
-            const contacts = reactive(() => listContacts())
-            let contact = reactive<Contact | undefined>(undefined)
-            </script>
-
-            <label for="deal-contact">Contact</label>
-            <Combobox
-                id="deal-contact"
-                options={contacts}
-                key={(each: Contact) => each.id}
-                label={(each: Contact) => each.name}
-                bind:value={contact}
-            >No contact matches</Combobox>
-        `} />
+        <Example code={pickContact}><PickContact /></Example>
     </Section>
 
     <Section level={3} title="Put several contacts on a deal">
         <p>Bind <code>value</code> to an array, and each pick adds a contact or takes it out
             again, with the list left open. Each one picked is a <code>chip</code> with a remove
             button, and Backspace in the empty input takes out the last.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            import Combobox from '@abide/abide/Combobox.abide'
-
-            let team = reactive<Contact[]>([])
-            </script>
-
-            <Combobox
-                id="deal-team"
-                options={contacts}
-                key={(each: Contact) => each.id}
-                label={(each: Contact) => each.name}
-                bind:value={team}
-            />
-        `} />
+        <Example code={dealTeam}><DealTeam /></Example>
     </Section>
 
     <Section level={3} title="Search companies on the server as someone types">
         <p>Pass <code>search</code> in place of <code>options</code>. A search in flight keeps
             the last results listed, and <code>debounce</code> waits for typing to pause.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Combobox from '@abide/abide/Combobox.abide'
-            </script>
-
-            <Combobox
-                id="works-at"
-                search={(q: string) => searchCompanies({ q })}
-                debounce={200}
-                key={(found: Company) => found.id}
-                label={(found: Company) => found.name}
-                bind:value={company}
-            />
-        `} />
+        <Example code={searchCompanies}><SearchCompanies /></Example>
     </Section>
 
     <Section level={3} title="Show a company's city beside its name in each option">
         <p>An <code>Option</code> component renders each option's content, handed the item.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Combobox from '@abide/abide/Combobox.abide'
-            </script>
-
-            <Combobox id="works-at" search={find} key={keyOf} label={nameOf}>
-                {#component Option({ item }: { item: Company })}
-                    {item.name} · {item.city}
-                {/component}
-                No company matches
-            </Combobox>
-        `} />
+        <Example code={cityBeside}><CityBeside /></Example>
     </Section>
 
     <Section level={3} title="Highlight the option the arrow keys are on">
         <p>The active option carries <code>data-active</code>, and the picked one
             <code>data-selected</code>. The list is <code>data-part="listbox"</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import Combobox from '@abide/abide/Combobox.abide'
-            </script>
-
-            <Combobox
-                class="[&_[data-part=listbox]]:list-none [&_[data-active]]:bg-signal/10"
-                …
-            />
-        `} />
+        <Example code={activeOption}><ActiveOption /></Example>
     </Section>
     <Section level={3} title="Open the list over a box that clips its input">
         <p>The list opens in the top layer under its input, as <code>popover</code> opens one, so

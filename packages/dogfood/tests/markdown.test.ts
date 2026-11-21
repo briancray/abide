@@ -125,10 +125,8 @@ test('no page ships markdown it did not render', async () => {
             .slice(document.indexOf('<main'), document.indexOf('</main>'))
             .replace(/<pre[\s\S]*?<\/pre>/g, '')
             .replace(/<code[\s\S]*?<\/code>/g, '')
-            .replace(
-                /<div class="ex-render">[\s\S]*?<div class="ex-files"/g,
-                '',
-            )
+            // a field's value is what someone typed, markdown included, not the page's prose
+            .replace(/<textarea[\s\S]*?<\/textarea>/g, '')
         if (prose.includes('**')) literal.push(`${route}: emphasis`)
         if (prose.includes('](')) literal.push(`${route}: link`)
     }

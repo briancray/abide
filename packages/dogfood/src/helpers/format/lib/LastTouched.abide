@@ -1,0 +1,15 @@
+<script>
+import { format, reactive, watch } from '@abide/abide'
+
+const touch = { contact: 'Ada Lovelace', at: Date.now() - 3 * 3_600_000 }
+
+let now = reactive(Date.now())
+watch(() => {
+    const timer = setInterval(() => (now = Date.now()), 60_000)
+    return () => clearInterval(timer)
+})
+</script>
+
+<strong title={format.date(touch.at, { style: 'dateTime' })}>
+    {touch.contact}, {format.relative(touch.at, { now })}
+</strong>

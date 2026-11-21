@@ -1,0 +1,13 @@
+<script>
+import Combobox from '@abide/abide/Combobox.abide'
+
+const STAGES = ['lead', 'qualified', 'proposal', 'won']
+</script>
+
+<Combobox
+    class="[&_[data-part=listbox]]:list-none [&_[data-active]]:bg-signal/10"
+    id="stage"
+    options={STAGES}
+    key={(stage: string) => stage}
+    label={(stage: string) => stage}
+ />

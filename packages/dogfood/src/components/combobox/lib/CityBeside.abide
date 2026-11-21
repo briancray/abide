@@ -1,0 +1,22 @@
+<script>
+import Combobox from '@abide/abide/Combobox.abide'
+
+type Company = { id: string; name: string; city: string }
+const COMPANIES: Company[] = [
+    { id: 'acme', name: 'Acme', city: 'Leeds' },
+    { id: 'engines', name: 'Analytical Engines', city: 'London' },
+]
+const find = async (q: string) =>
+    COMPANIES.filter((each) =>
+        each.name.toLowerCase().includes(q.toLowerCase()),
+    )
+const keyOf = (company: Company) => company.id
+const nameOf = (company: Company) => company.name
+</script>
+
+<Combobox id="works-at" search={find} key={keyOf} label={nameOf}>
+    {#component Option({ item }: { item: Company })}
+        {item.name} · {item.city}
+    {/component}
+    No company matches
+</Combobox>

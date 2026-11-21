@@ -1,7 +1,17 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import DealColumn from './lib/DealColumn.abide'
+import dealColumn from './lib/DealColumn.abide' with { type: 'text' }
+import LastTouched from './lib/LastTouched.abide'
+import lastTouched from './lib/LastTouched.abide' with { type: 'text' }
+import MeetingHour from './lib/MeetingHour.abide'
+import meetingHour from './lib/MeetingHour.abide' with { type: 'text' }
+import VisitorTime from './lib/VisitorTime.abide'
+import visitorTime from './lib/VisitorTime.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -52,19 +62,7 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Write deal amounts and chances in a table column">
         <p>Each formatter takes <code>unknown</code>, so a lead with no amount yet reads as
             <code>—</code> rather than <code>$NaN</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { format } from '@abide/abide'
-            </script>
-
-            {#for deal of deals by deal.name}
-                <tr>
-                    <td>{deal.name}</td>
-                    <td>{format.money(deal.amount, { digits: 0 })}</td>
-                    <td>{format.percent(deal.probability)}</td>
-                </tr>
-            {/for}
-        `} />
+        <Example code={dealColumn}><DealColumn /></Example>
     </Section>
 
     <Section level={3} title="Summarize a pipeline in a tile">
@@ -85,51 +83,19 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Say how long ago a contact was last touched">
         <p>Pass <code>now</code> from a reactive value so the words follow it.
             <code>format.date</code> writes UTC unless you pass a <code>timeZone</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { format, reactive, watch } from '@abide/abide'
-
-            let now = reactive(Date.now())
-            watch(() => {
-                const timer = setInterval(() => (now = Date.now()), 60_000)
-                return () => clearInterval(timer)
-            })
-            </script>
-
-            <strong title={format.date(touch.at, { style: 'dateTime' })}>
-                {touch.contact}, {format.relative(touch.at, { now })}
-            </strong>
-        `} />
+        <Example code={lastTouched}><LastTouched /></Example>
     </Section>
 
     <Section level={3} title="Set a meeting's hour apart from its date">
         <p><code>format.dateParts</code> answers what <code>format.date</code> writes as named
             pieces, so the hour can carry a style of its own.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { format } from '@abide/abide'
-            </script>
-
-            {#for part of format.dateParts(meeting.at, { style: 'dateTime' })}
-                {#if part.type === 'hour'}
-                    <strong>{part.value}</strong>
-                {:else}
-                    {part.value}
-                {/if}
-            {/for}
-        `} />
+        <Example code={meetingHour}><MeetingHour /></Example>
     </Section>
     <Section level={3} title="Show a meeting in the visitor's own time">
         <p>A date with no <code>timeZone</code> is written in the visitor's zone: UTC on the
             server and while the page hydrates, so the two agree, and the browser's own once it
             has, every date written again.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { format } from '@abide/abide'
-            </script>
-
-            <time>{format.date(meeting.at, { style: 'dateTime' })}</time>
-        `} />
+        <Example code={visitorTime}><VisitorTime /></Example>
     </Section>
 
     <Section level={3} title="Write every date in the rep's own zone">
