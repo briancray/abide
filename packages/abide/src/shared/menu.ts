@@ -4,6 +4,7 @@
 // attribute, so the menu is shut before the page hydrates.
 
 import { anchored } from './anchored.ts'
+import { checkParts } from './checkParts.ts'
 import type { Side } from './place.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -55,9 +56,9 @@ export function menu(options: MenuOptions = {}): Menu {
     const placed = reactive<Side>(side)
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the two
     // ids are rewritten together.
-    const base = randomToken(4, 'hex')
-    const triggerId = `menu-trigger-${base}`
-    const menuId = `menu-${base}`
+    const menuId = `menu-${randomToken(4, 'hex')}`
+    const triggerId = `${menuId}-trigger`
+    if (process.env.NODE_ENV !== 'production') checkParts('menu', menuId)
     const triggerOf = () => document.getElementById(triggerId)
     const menuOf = () => document.getElementById(menuId)
     let stop: (() => void) | undefined

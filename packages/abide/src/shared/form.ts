@@ -9,6 +9,7 @@
 // no script at all (16.38). A page holding a value per field still can; the form does not ask for one.
 
 import { ARGS_DOCUMENT } from './ARGS_DOCUMENT.ts'
+import { checkParts } from './checkParts.ts'
 import { coerceArgs, collapsed, type Document } from './coerceArgs.ts'
 import type { Issues } from './Issues.ts'
 import { jsonSchema } from './jsonSchema.ts'
@@ -67,6 +68,7 @@ export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
     // rewritten together.
     const base = `form-${randomToken(4, 'hex')}`
     const errorId = (name: string) => `${base}-${encodeURIComponent(name)}`
+    if (process.env.NODE_ENV !== 'production') checkParts('form', base)
     let shown: HTMLFormElement | undefined
     let focusing = false
 

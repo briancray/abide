@@ -1,0 +1,98 @@
+// 49.8 — A PARTS FUNCTION CHECKS THE MARKUP IT WAS SPREAD ON, while developing: a reference naming an
+// element that is not there, and a part outside the role WAI-ARIA requires around it, each warn once
+// on `abide:parts` — and a build carries none of it.
+
+import { afterEach, expect, test } from 'bun:test'
+
+import { tabs } from '#shared/tabs.ts'
+import { tree } from '#shared/tree.ts'
+
+// A part spread as the template does: every attribute its record carries, read through its getters.
+function element(tag: string, parts: Record<string, unknown>): HTMLElement {
+    const made = document.createElement(tag)
+    for (const [name, value] of Object.entries(parts)) {
+        if (name.startsWith('on') || value === undefined || value === false)
+            continue
+        made.setAttribute(name, value === true ? '' : String(value))
+    }
+    return made
+}
+
+async function warnings(body: () => void): Promise<string[]> {
+    const warned: string[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]): void => {
+        const line = args.join(' ')
+        if (line.includes('abide:parts')) warned.push(line)
+    }
+    try {
+        body()
+        await new Promise((settle) => setTimeout(settle, 1))
+    } finally {
+        console.warn = warn
+    }
+    return warned
+}
+
+afterEach(() => {
+    document.body.replaceChildren()
+})
+
+test('tabs spread whole warn of nothing', async () => {
+    const warned = await warnings(() => {
+        const view = tabs({ keys: ['notes'] })
+        const list = element('div', view.list)
+        list.append(element('button', view.tab('notes')))
+        document.body.append(list, element('div', view.panel('notes')))
+    })
+    expect(warned).toEqual([])
+})
+
+// THE REVERT: drop the check from `tabs`, and a tab naming a panel nobody rendered is said nothing of.
+test('a tab whose panel is not there warns once, however many tabs name one', async () => {
+    const warned = await warnings(() => {
+        const view = tabs({ keys: ['notes', 'calls'] })
+        const list = element('div', view.list)
+        list.append(
+            element('button', view.tab('notes')),
+            element('button', view.tab('calls')),
+        )
+        document.body.append(list)
+    })
+    expect(warned).toHaveLength(1)
+    expect(warned[0]).toContain(
+        'tabs: aria-controls names an element that is not there',
+    )
+})
+
+// THE REVERT: drop the role check from `partsProblems`, and an item rendered outside its tree passes.
+test('a tree item spread outside any tree warns', async () => {
+    const warned = await warnings(() => {
+        const accounts = tree<string>({
+            roots: ['Acme'],
+            children: () => undefined,
+            key: (name) => name,
+            label: (name) => name,
+        })
+        document.body.append(element('li', accounts.item('Acme')))
+    })
+    expect(warned).toEqual([
+        expect.stringContaining('tree: a treeitem stands outside any tree'),
+    ])
+})
+
+// THE REVERT: guard the call with a test made as it runs (`typeof document !== 'undefined'`) rather
+// than `NODE_ENV`, and the build keeps the check, since no bundler can fold that.
+test('a build carries no check', async () => {
+    const built = await Bun.build({
+        entrypoints: [
+            new URL('../src/shared/tabs.ts', import.meta.url).pathname,
+        ],
+        target: 'browser',
+        define: { 'process.env.NODE_ENV': '"production"' },
+        minify: { whitespace: true, syntax: true, identifiers: true },
+    })
+    const source = await (built.outputs[0] as Blob).text()
+    expect(source).toContain('tablist')
+    expect(source).not.toContain('abide:parts')
+})

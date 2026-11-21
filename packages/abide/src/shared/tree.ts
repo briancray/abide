@@ -3,6 +3,7 @@
 // node's children are not among them — and the server writes every attribute, so the page is the
 // tree as it stands before it hydrates.
 
+import { checkParts } from './checkParts.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { roving, typeahead } from './roving.ts'
@@ -101,6 +102,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
 
     const base = `tree-${randomToken(4, 'hex')}`
     const itemId = (each: string) => `${base}-${encodeURIComponent(each)}`
+    if (process.env.NODE_ENV !== 'production') checkParts('tree', base)
     const focus = (each: string): void => {
         focused.set(each)
         globalThis.document?.getElementById(itemId(each))?.focus()

@@ -1,3 +1,4 @@
+import { checkParts } from './checkParts.ts'
 import { reactive } from './reactive/index.ts'
 import { roving } from './roving.ts'
 
@@ -38,6 +39,7 @@ export function listbox<Option>(
     given: ListboxOptions<Option>,
 ): Listbox<Option> {
     const { id, options, key, wrap = true, onpick, onescape } = given
+    if (process.env.NODE_ENV !== 'production') checkParts('listbox', `${id}-`)
     // The key last moved to; what is active is this key while it is listed, and the first otherwise.
     const chosen = reactive<string | undefined>(undefined)
     const active = reactive(() => {

@@ -871,7 +871,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40 |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40, 49.8 |
 | `MenuOptions` | `{ open?: Reactive<boolean>; side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, and what hears it open and close. | 50.35, 50.37 |
 | `Menu` | `{ readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38 |
 
@@ -902,7 +902,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `form` | `<Handler extends Rpc<any, any, any, any>>(handler: Handler) => Form<Handler>` | A form over a handler as parts an app spreads onto a `<form>` and fields of its own, checked against the handler's args document before the call is made. | 56.1, 56.2, 56.3, 56.4, 56.5, 56.6, 56.7, 56.8, 56.12, 19.13 |
+| `form` | `<Handler extends Rpc<any, any, any, any>>(handler: Handler) => Form<Handler>` | A form over a handler as parts an app spreads onto a `<form>` and fields of its own, checked against the handler's args document before the call is made. | 56.1, 56.2, 56.3, 56.4, 56.5, 56.6, 56.7, 56.8, 56.12, 19.13, 49.8 |
 | `FieldName` | `Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? keyof NonNullable<Args> & string : string` | The names a form's fields post under: the members of its handler's args. | 56.1 |
 | `Form` | `{ readonly element: Record<string, unknown>; field(name: FieldName<Handler>): Record<string, unknown>; error(name: FieldName<Handler>): Record<string, unknown>; message(name: FieldName<Handler> \| ''): string \| undefined; submit(): Record<string, unknown>; issues(): Issues<Handler> \| undefined; readonly call: ReturnType<Handler> }` | The form's part, a field's, a field message's and a submit button's, what is wrong with the form, and the last call it made. | 32.11, 56.4, 56.9, 56.10, 56.11 |
 
@@ -922,7 +922,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `tabs` | `(options: TabsOptions) => Tabs` | WAI-ARIA's tabs as parts an app spreads onto elements of its own: a tab list, a tab per key, and a panel. | 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44 |
+| `tabs` | `(options: TabsOptions) => Tabs` | WAI-ARIA's tabs as parts an app spreads onto elements of its own: a tab list, a tab per key, and a panel. | 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 51.43, 51.44, 49.8 |
 | `TabsOptions` | `{ keys: readonly string[] \| (() => readonly string[]); selected?: Reactive<string \| undefined> }` | The tabs' keys in order, and the key of the one selected. | 51.36, 51.37 |
 | `Tabs` | `{ readonly list: Record<string, unknown>; tab(key: string): Record<string, unknown>; panel(key?: string): Record<string, unknown>; readonly current: Reactive<string \| undefined> }` | The list's part, a tab's, a panel's, and the key of the tab selected. | 32.11, 51.36, 51.42, 51.43 |
 
@@ -930,7 +930,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `tree` | `<Node>(options: TreeOptions<Node>) => Tree<Node>` | WAI-ARIA's tree as parts an app spreads onto elements of its own: the tree, an item per node, and the group holding a node's children. | 51.84, 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91 |
+| `tree` | `<Node>(options: TreeOptions<Node>) => Tree<Node>` | WAI-ARIA's tree as parts an app spreads onto elements of its own: the tree, an item per node, and the group holding a node's children. | 51.84, 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91, 49.8 |
 | `TreeOptions` | `<Node>{ roots: readonly Node[] \| (() => readonly Node[]); children(node: Node): readonly Node[] \| undefined; key(node: Node): string; label(node: Node): string; expanded?: Reactive<readonly string[]>; selected?: Reactive<string \| undefined> }` | The nodes, how each is told apart and named, and which are expanded and which is selected. | 51.84, 51.86, 51.89, 51.90 |
 | `Tree` | `<Node>{ readonly tree: Record<string, unknown>; item(node: Node): Record<string, unknown>; group(node: Node): Record<string, unknown>; isExpanded(node: Node): boolean; toggle(node: Node): void }` | The parts `tree` hands back, and whether a node is expanded. | 51.84, 51.85, 51.91 |
 
@@ -950,7 +950,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `listbox` | `<Option>(options: ListboxOptions<Option>) => Listbox<Option>` | A keyboard controller over a list of keyed options, for markup the app writes itself. | 51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7, 51.8, 51.9, 51.10, 51.11, 51.12 |
+| `listbox` | `<Option>(options: ListboxOptions<Option>) => Listbox<Option>` | A keyboard controller over a list of keyed options, for markup the app writes itself. | 51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7, 51.8, 51.9, 51.10, 51.11, 51.12, 49.8 |
 | `ListboxOptions` | `ListboxOptions<Option> = { id: string; options: () => readonly Option[]; key: (option: Option) => string; wrap?: boolean; onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10 |
 | `Listbox` | `Listbox<Option> = { active: () => string \| undefined; activeOption: () => Option \| undefined; activeId: () => string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; keydown: (event: KeyboardEvent) => void }` | What `listbox` hands back: the active key and option, and the ids and the listener the markup takes. | 51.1, 51.2, 51.3, 51.10, 51.11 |
 

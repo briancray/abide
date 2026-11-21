@@ -4934,6 +4934,10 @@ one a clause of its own requires.
 49.7 A shipped component rendering a widget WAI-ARIA gives a pattern for MUST carry the roles and
 the states that pattern names.
 
+49.8 A parts function MUST, in development, warn once on `abide:parts` for each attribute among its
+parts that names by id an element the document does not hold, and for each of its parts whose role
+stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry the check.
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `Dialog` MUST hold its `<dialog>` open while `open` is true, with `showModal`, or with `show`
@@ -5202,7 +5206,7 @@ ends.
 
 51.42 A panel `tabs` hands back for a key MUST be hidden while another tab is selected and MUST keep
 what it holds, and a panel for no key MUST take the id the selected tab's `aria-controls` names and
-be labelled by that tab.
+be labelled by that tab; a tab MUST name its panel by `aria-controls` only while it is selected.
 
 51.43 `tabs`'s parts MUST carry every attribute its tabs and panels need as the server writes them,
 `role`, `aria-selected`, `aria-controls` and `aria-labelledby` included.

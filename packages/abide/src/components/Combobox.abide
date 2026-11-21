@@ -176,7 +176,7 @@ const pickedKeys = reactive(() => {
         autocomplete="off"
         aria-autocomplete="list"
         aria-expanded={open ? 'true' : 'false'}
-        aria-controls={`${id}-listbox`}
+        aria-controls={open ? `${id}-listbox` : undefined}
         aria-activedescendant={open ? list.activeId() : undefined}
         placeholder={placeholder}
         data-part="input"

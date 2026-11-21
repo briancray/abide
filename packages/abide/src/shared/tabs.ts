@@ -2,6 +2,7 @@
 // tab per key, and a panel — one following the selection, or one per tab, kept while hidden. The
 // server writes every attribute, so the page is the selected tab's before it hydrates.
 
+import { checkParts } from './checkParts.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { roving } from './roving.ts'
@@ -43,6 +44,7 @@ export function tabs(options: TabsOptions): Tabs {
     const base = `tabs-${randomToken(4, 'hex')}`
     const tabId = (key: string) => `${base}-tab-${encodeURIComponent(key)}`
     const panelId = (key: string) => `${base}-panel-${encodeURIComponent(key)}`
+    if (process.env.NODE_ENV !== 'production') checkParts('tabs', base)
 
     // 51.40 — a key that selects moves focus with it.
     const select = (key: string): void => {
@@ -71,7 +73,11 @@ export function tabs(options: TabsOptions): Tabs {
         type: 'button',
         role: 'tab',
         id: tabId(key),
-        'aria-controls': panelId(key),
+        // 51.42 — only the selected tab names its panel: a panel for no key exists for it alone, so a
+        // tab naming its own while another is selected would name nothing.
+        get 'aria-controls'() {
+            return current() === key ? panelId(key) : undefined
+        },
         get 'aria-selected'() {
             return current() === key ? 'true' : 'false'
         },
