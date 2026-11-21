@@ -168,10 +168,12 @@ export async function answerRequest(
 
     const arm = armOf(app, request, asked)
     switch (arm.kind) {
+        // Answered as the app's handlers are — 21.4, save that none is the app's to keep on the device.
         case 'own':
             return arm.own.method === method
                 ? answerRpc(arm.own, {}, url, request, app, false)
                 : methodRefused(app, asked, [arm.own.method], request)
+        // A 404 where the surface answers nothing.
         case 'surface': {
             const answer = await arm.surface.answer(app, request)
             if (answer === undefined) return plainAnswer('not found', 404)
@@ -232,10 +234,12 @@ export async function answerRequest(
     const answer = found.route.answers.get(
         found.handler ?? (found.route.page as Ranked),
     ) as (ctx: AppContext) => Promise<Response>
-    return answer({
-        request,
-        lane: found.handler === undefined ? 'page' : 'handler',
-    })
+    return answer({ request, lane: routedLane(found) })
+}
+
+/** The lane a routed request is answered on: a handler's, or a page's. */
+function routedLane(found: { handler: Mounted | undefined }): Lane {
+    return found.handler === undefined ? 'page' : 'handler'
 }
 
 /** What `answerRequest` answers `request` with, by the arm of its dispatch it takes. 37.19. */
@@ -255,7 +259,9 @@ export function laneOf(app: AppSources, request: Request): Lane {
         case 'unparsed':
             return 'page'
         case 'routed':
-            return arm.routing.found?.handler === undefined ? 'page' : 'handler'
+            return arm.routing.found === undefined
+                ? 'page'
+                : routedLane(arm.routing.found)
     }
 }
 
@@ -271,17 +277,16 @@ function armOf(
     request: Request,
     asked: string,
 ):
-    | { kind: 'own'; own: NonNullable<ReturnType<typeof OWN_HANDLERS.get>> }
+    | { kind: 'own'; own: Mounted }
     | { kind: 'surface'; surface: NonNullable<ReturnType<typeof SURFACES.get>> }
     | { kind: 'mux' | 'framework' | 'unparsed' }
     | { kind: 'file'; file: PublicFile }
     | { kind: 'routed'; routing: ReturnType<typeof routed> } {
     // 25.1, 25.3, 26.17, 44.67 — the principal, the account of the app and the browser's pairing are
-    // handlers abide mounts, answered as the app's are — 21.4, save that none is the app's to keep on
-    // the device.
+    // handlers abide mounts.
     const own = OWN_HANDLERS.get(asked)
     if (own !== undefined) return { kind: 'own', own }
-    // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where it answers nothing.
+    // 20.5, 20.9, 36.7 — a surface of abide's own.
     const surface = SURFACES.get(asked)
     if (surface !== undefined) return { kind: 'surface', surface }
     if (asksForMux(asked, request, app)) return { kind: 'mux' }

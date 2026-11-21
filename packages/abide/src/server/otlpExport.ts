@@ -7,7 +7,7 @@
 // is no second place a span or a line is made.
 //
 // BATCHED, BOUNDED, NEVER WAITED ON: a line is queued and sent with the rest each second, or as soon as
-// a batch fills; past the queue's bound the oldest go. ONE SEND AT A TIME, so what a slow collector
+// a batch fills with no send out; past the queue's bound the oldest go. ONE SEND AT A TIME, so what a slow collector
 // has not taken yet WAITS IN THE QUEUE, where the bound reaches it — a send chained per batch would
 // hold every batch in the chain instead, past any bound. A send has the OTLP exporter's default
 // deadline, so a collector that never answers holds a stop no longer than that. A failed send is said
@@ -116,6 +116,9 @@ export async function stopExporting(): Promise<void> {
     clearInterval(timer)
     timer = undefined
     EXPORT.record = undefined
+    // WHAT ARRIVED DURING THE LAST SEND IS DROPPED, not left queued past the stop for the next app
+    // this process boots to send under its own name.
+    queued = []
     destination = undefined
     failing = false
 }

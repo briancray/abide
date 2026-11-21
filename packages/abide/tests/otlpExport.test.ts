@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import { GET, log, trace } from '#server'
-import { exporting, flushExports } from '#server/otlpExport.ts'
+import { exporting, flushExports, stopExporting } from '#server/otlpExport.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -21,8 +21,12 @@ const saved = Object.fromEntries(
     VARIABLES.map((name) => [name, process.env[name]]),
 )
 const unstubbedFetch = globalThis.fetch
-let posted: { url: string; headers: Headers; body: Record<string, unknown> }[] =
-    []
+let posted: {
+    url: string
+    headers: Headers
+    body: Record<string, unknown>
+    signal: AbortSignal | null | undefined
+}[] = []
 let collectorStatus = 200
 // A send the collector holds without answering until this settles; the first post takes it.
 let held: Promise<void> | undefined
@@ -39,6 +43,7 @@ beforeEach(() => {
             url,
             headers: new Headers(init?.headers),
             body: JSON.parse(String(init?.body)),
+            signal: init?.signal,
         })
         const holding = held
         held = undefined
@@ -238,4 +243,64 @@ test('lines a collector has not taken yet wait in the queue, 4096 at most, the o
     expect(after).toHaveLength(4096)
     expect(after.at(-1)).toBe('line 5999')
     expect(after[0]).toBe('line 1904')
+})
+
+/** Every log record's text across `posts`, in the order posted. */
+function linesIn(posts: typeof posted): string[] {
+    const lines: string[] = []
+    for (const each of posts)
+        for (const resource of (each.body.resourceLogs ?? []) as {
+            scopeLogs: { logRecords: { body: { stringValue: string } }[] }[]
+        }[])
+            for (const scope of resource.scopeLogs)
+                for (const record of scope.logRecords)
+                    lines.push(record.body.stringValue)
+    return lines
+}
+
+// 36.23 — A SEND HAS A DEADLINE, so a collector that never answers holds a stop no longer than OTLP's
+// default. THE REVERT: drop `signal` from `post`'s fetch -> no signal goes with the send.
+test('a send goes out with a deadline it is abandoned at — 36.23', async () => {
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://collector.test'
+    await using _app = await inMemoryApp(probe)
+    log('one line')
+    await flushExports()
+    expect(posted.at(-1)?.signal instanceof AbortSignal).toBe(true)
+    expect(posted.at(-1)?.signal?.aborted).toBe(false)
+})
+
+// 36.23 — A STOP LEAVES NOTHING QUEUED: a line written while its last send is out is not left for the
+// next app this process boots, to be sent under that app's name. THE REVERT: drop `queued = []` from
+// `stopExporting` -> the next app's collector is sent 'during the last send'.
+test("a line written during a stop's last send is not sent by the next app — 36.23", async () => {
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://collector.test'
+    const release: (() => void)[] = []
+    const hold = (): void => {
+        held = new Promise<void>((resolve) => release.push(resolve))
+    }
+    const first = await inMemoryApp(probe)
+    const unspied = console.log
+    console.log = () => {}
+    try {
+        log('a send out before the stop')
+        hold()
+        void flushExports()
+        await Bun.sleep(0)
+        const stopping = stopExporting()
+        log("the stop's last send")
+        hold()
+        ;(release.shift() as () => void)()
+        await Bun.sleep(0)
+        log('during the last send')
+        ;(release.shift() as () => void)()
+        await stopping
+    } finally {
+        console.log = unspied
+    }
+    await first[Symbol.asyncDispose]()
+    const before = posted.length
+    await using _next = await inMemoryApp(probe)
+    await flushExports()
+    expect(linesIn(posted.slice(0, before))).toContain("the stop's last send")
+    expect(linesIn(posted.slice(before))).not.toContain('during the last send')
 })
