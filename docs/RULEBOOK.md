@@ -4938,6 +4938,9 @@ the states that pattern names.
 parts that names by id an element the document does not hold, and for each of its parts whose role
 stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry the check.
 
+49.9 A shipped component for a widget a parts function also ships MUST render the widget through that
+parts function, and MUST NOT write a handler, a `role` or an `aria-` attribute of its own for it.
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `Dialog` MUST hold its `<dialog>` open while `open` is true, with `showModal`, or with `show`
@@ -5355,27 +5358,28 @@ item and `data-selected` on the one selected.
 
 51.91 `tree` MUST hide the element holding a node's children while the node is collapsed.
 
-51.92 `Range` MUST render a `role="group"` named by `label` holding two thumbs, each `role="slider"`
+51.92 `range`'s parts MUST be a `role="group"` named by `label` and two thumbs, each `role="slider"`
 named by its entry of `labels`, with its value as `aria-valuenow`, what `format` writes for it as
 `aria-valuetext`, and the bounds the other thumb leaves it as `aria-valuemin` and `aria-valuemax`.
 
-51.93 `Range` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
+51.93 `range` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
 low, each at a whole number of `step`s from `min`, within `min` and `max`.
 
-51.94 A thumb of a `Range` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown and
+51.94 A thumb of a `range` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown and
 ArrowLeft, by a tenth of the way on Page Up and Page Down, and to the least and the greatest value it
 can take on Home and End, as a `Chart`'s crosshair steps (52.70).
 
-51.95 A press on a `Range`'s track MUST move the thumb nearer it to the value nearest the press and
+51.95 A press on a `range`'s track MUST move the thumb nearer it to the value nearest the press and
 focus it, and the thumb MUST follow the pointer until it lets go.
 
-51.96 `Range` MUST write each change of `value` it makes back to a `value` bound to it.
+51.96 `range` MUST write each change it makes to `value`, and `Range` each one back to a `value`
+bound to it.
 
-51.97 `Range` MUST write `data-dragging` on its root while a pointer holds a thumb, and place its
-thumbs, and its `data-part="fill"` between them, as `style` properties.
+51.97 `range` MUST write `data-dragging` on its root part while a pointer holds a thumb, and place its
+thumbs, and the fill part between them, as `style`.
 
-51.98 `Range` given `name` MUST submit its low and then its high value with a form it is in, each as
-a field of that name.
+51.98 `range` given `name` MUST submit its low and then its high value with a form its two field
+parts are in, each as a field of that name.
 
 # 52. Formatting, markdown and charts
 

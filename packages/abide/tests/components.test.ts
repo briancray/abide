@@ -51,3 +51,30 @@ test('a shipped component writes a style only from a computed value — 49.6', a
         if (/\sstyle(?::[\w-]+)?=["']/.test(template(text))) fixed.push(path)
     expect(fixed).toEqual([])
 })
+
+// 49.9 — A COMPONENT OVER PARTS renders its widget through the parts function an app can spread
+// itself, exported beside it, and its own markup does nothing for the widget: no handler, no role and
+// no `aria-` attribute of its own, every one of them the parts'.
+// THE REVERT: write Range's thumbs' `onkeydown` in `Range.abide` again, and it is named.
+const OVER_PARTS: Record<string, { module: string; name: string }> = {
+    'Range.abide': { module: 'range.ts', name: 'range' },
+}
+
+test('a component over a parts function renders through it, and does nothing of its own — 49.9', async () => {
+    const barrel = await Bun.file(
+        new URL('../src/shared/index.ts', import.meta.url).pathname,
+    ).text()
+    const wrong: string[] = []
+    for (const [component, { module, name }] of Object.entries(OVER_PARTS)) {
+        const text = await Bun.file(`${SOURCE}${component}`).text()
+        if (!text.includes(`import { ${name} } from '#shared/${module}'`))
+            wrong.push(`${component} does not render through ${name}`)
+        if (!new RegExp(`\\b${name} \\} from '\\./${module}'`).test(barrel))
+            wrong.push(`${name} is not exported`)
+        for (const [attribute] of template(text).matchAll(
+            /\s(?:on[a-z]+|role|aria-[a-z]+)=/g,
+        ))
+            wrong.push(`${component} writes${attribute} of its own`)
+    }
+    expect(wrong).toEqual([])
+})

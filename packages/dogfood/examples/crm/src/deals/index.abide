@@ -9,6 +9,7 @@ import DeleteDeal from './lib/DeleteDeal.abide'
 import ExportDeals from './lib/ExportDeals.abide'
 import NewDeal from './lib/NewDeal.abide'
 import Pipeline from './lib/Pipeline.abide'
+import ProbabilityFilter from './lib/ProbabilityFilter.abide'
 import QuickDeal from './lib/QuickDeal.abide'
 </script>
 
@@ -18,6 +19,7 @@ import QuickDeal from './lib/QuickDeal.abide'
     <h1>Deals</h1>
     <Pipeline />
     <AmountFilter />
+    <ProbabilityFilter />
     <DealDetail />
     <DealDrawer />
     <DealNotes />

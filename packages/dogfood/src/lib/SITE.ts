@@ -576,6 +576,12 @@ const WRITTEN: readonly {
                     'Pick a low and a high value on one track, by dragging either thumb or with the arrow keys.',
             },
             {
+                route: '/helpers/range',
+                title: '`range`',
+                description:
+                    'Spread a two-thumb range onto markup of your own: the group, the track, the span and each thumb.',
+            },
+            {
                 route: '/helpers/tree',
                 title: '`tree`',
                 description:

@@ -1,6 +1,5 @@
 <script>
-import { format, reactive } from '@abide/abide'
-import Range from '@abide/abide/Range.abide'
+import { format, range, reactive } from '@abide/abide'
 
 const DEALS = [
     { id: 'noether-pilot', name: 'Noether pilot', amount: 6_500 },
@@ -10,6 +9,14 @@ const DEALS = [
 ]
 
 let amount = reactive<readonly [number, number]>([0, 50_000])
+const slider = range({
+    value: amount,
+    label: 'Deal amount',
+    max: 50_000,
+    step: 500,
+    name: 'amount',
+    format: (each) => format.money(each, { compact: true }),
+})
 const shown = reactive(() =>
     DEALS.filter(
         (deal) => deal.amount >= amount[0] && deal.amount <= amount[1],
@@ -18,15 +25,15 @@ const shown = reactive(() =>
 </script>
 
 <form class="fields stacked">
-    <Range
-        bind:value={amount}
-        label="Deal amount"
-        max={50_000}
-        step={500}
-        name="amount"
-        format={(each) => format.money(each, { compact: true })}
-        class="range"
-     />
+    <div class="range" {...slider.root}>
+        <div data-part="track" {...slider.track}>
+            <div data-part="fill" {...slider.fill} />
+            <span data-part="thumb" {...slider.thumb(0)} />
+            <span data-part="thumb" {...slider.thumb(1)} />
+        </div>
+        <input {...slider.input(0)}>
+        <input {...slider.input(1)}>
+    </div>
 </form>
 <p class="status">
     {format.money(amount[0], { compact: true })} to {format.money(amount[1], { compact: true })}

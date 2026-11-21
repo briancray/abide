@@ -1,0 +1,31 @@
+<script>
+import { reactive } from '@abide/abide'
+import Range from '@abide/abide/Range.abide'
+
+const DEALS = [
+    { id: 'noether-pilot', name: 'Noether pilot', probability: 20 },
+    { id: 'turing-seats', name: 'Turing seats', probability: 55 },
+    { id: 'hopper-renewal', name: 'Hopper renewal', probability: 90 },
+]
+
+let likely = reactive<readonly [number, number]>([50, 100])
+const shown = reactive(() =>
+    DEALS.filter(
+        (deal) =>
+            deal.probability >= likely[0] && deal.probability <= likely[1],
+    ),
+)
+</script>
+
+<Range
+    bind:value={likely}
+    label="Win probability"
+    step={5}
+    format={(each) => `${each}%`}
+    class="range"
+ />
+<ul>
+    {#for deal of shown by deal.id}
+        <li>{deal.name}</li>
+    {/for}
+</ul>

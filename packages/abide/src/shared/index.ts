@@ -135,6 +135,7 @@ export {
     type Transformer,
     watch,
 } from './reactive/index.ts'
+export { type RangeOptions, type RangeParts, range } from './range.ts'
 export { refuse } from './refuse.ts'
 // 44.51 — what a conversation's calls to one handler answered.
 export { resultsOf } from './resultsOf.ts'

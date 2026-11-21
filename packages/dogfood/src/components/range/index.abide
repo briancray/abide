@@ -8,28 +8,12 @@ import priceBand from './lib/PriceBand.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/helpers/form', '/components/chart', '/helpers/format']}
+    seeAlso={['/helpers/range', '/helpers/form', '/helpers/format']}
     tests={[
         {
-            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            path: 'packages/dogfood/examples/crm/src/deals/lib/ProbabilityFilter.test.ts',
             from: [
-                "test('each thumb is a slider bounded by the other, its value written as money'",
-            ],
-        },
-        {
-            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
-            from: [
-                "test('the keys step a thumb, and the low one stops at the high'",
-            ],
-        },
-        {
-            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
-            from: ["test('a press takes the nearer thumb, and dragging moves it'"],
-        },
-        {
-            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
-            from: [
-                "test('a form holding the range submits both ends under its name'",
+                "test('the shipped Range is a group holding the track, the span and two thumbs the keys move'",
             ],
         },
         {
@@ -40,7 +24,9 @@ import priceBand from './lib/PriceBand.abide' with { type: 'text' }
 >
     <Section level={3} title="Pick a band of prices with two thumbs">
         <p>Bind <code>value</code> to the low and the high end. Drag either thumb, or focus one and
-            step it with the arrow keys; neither passes the other.</p>
+            step it with the arrow keys; neither passes the other. <code>Range</code> is
+            <code>range</code>'s parts spread on default markup, so anything else it should look like
+            is the parts spread on yours.</p>
         <Example code={priceBand}><PriceBand /></Example>
     </Section>
 </Doc>

@@ -1,0 +1,27 @@
+<script>
+import { range, reactive } from '@abide/abide'
+
+let amount = reactive<readonly [number, number]>([10, 40])
+const filter = range({ value: amount, label: 'Amount', name: 'amount' })
+let sent = reactive('')
+</script>
+
+<form
+    onsubmit={(event) => {
+        event.preventDefault()
+        const fields = new FormData(event.currentTarget as HTMLFormElement)
+        sent = fields.getAll('amount').join(' to ')
+    }}
+>
+    <div class="range" {...filter.root}>
+        <div data-part="track" {...filter.track}>
+            <div data-part="fill" {...filter.fill} />
+            <span data-part="thumb" {...filter.thumb(0)} />
+            <span data-part="thumb" {...filter.thumb(1)} />
+        </div>
+        <input {...filter.input(0)}>
+        <input {...filter.input(1)}>
+    </div>
+    <button>Filter</button>
+</form>
+<p>{sent === '' ? 'Nothing sent yet.' : `Sent ${sent}.`}</p>

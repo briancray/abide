@@ -1,0 +1,51 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import LabelledThumbs from './lib/LabelledThumbs.abide'
+import labelledThumbs from './lib/LabelledThumbs.abide' with { type: 'text' }
+import SubmitBothEnds from './lib/SubmitBothEnds.abide'
+import submitBothEnds from './lib/SubmitBothEnds.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/components/range', '/helpers/form', '/components/tabs']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            from: [
+                "test('each thumb is a slider bounded by the other, its value written as money'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            from: [
+                "test('the keys step a thumb, and the low one stops at the high'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            from: ["test('a press takes the nearer thumb, and dragging moves it'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
+            from: [
+                "test('a form holding the range submits both ends under its name'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Write each thumb as a tag showing its value">
+        <p>Spread the parts onto markup of your own: the group, the track, the span between the
+            thumbs, and each thumb, which can hold anything. The parts carry the roles, the keys,
+            the dragging and the <code>style</code> placing the span and the thumbs.</p>
+        <Example code={labelledThumbs}><LabelledThumbs /></Example>
+    </Section>
+
+    <Section level={3} title="Submit both ends of the range with a form">
+        <p>Given <code>name</code>, <code>input(0)</code> and <code>input(1)</code> are hidden fields
+            holding the low and the high end, submitted in that order under the name.</p>
+        <Example code={submitBothEnds}><SubmitBothEnds /></Example>
+    </Section>
+</Doc>

@@ -1,7 +1,7 @@
 // 51.95 — A THUMB PRESSED KEEPS FOCUS, so the keys step the thumb the pointer just moved: the
 // press's own focusing would put focus back on the page, a track being nothing that takes it.
 //
-// THE REVERT: drop the `preventDefault` from `Range`'s press, and the arrows after a drag step nothing.
+// THE REVERT: drop the `preventDefault` from `range`'s press, and the arrows after a drag step nothing.
 import { expect, test } from '@playwright/test'
 
 function underMount(address: string): string {

@@ -938,7 +938,15 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Range` | `{ value: readonly [number, number]; label: string; min?: number; max?: number; step?: number; labels?: readonly [string, string]; format?: (value: number) => string; name?: string } & Omit<Attributes<'div'>, 'role'>` | A range between two thumbs on one track, the component `@abide/abide/Range.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.92, 51.93, 51.94, 51.95, 51.96, 51.97, 51.98 |
+| `Range` | `{ value: readonly [number, number]; label: string; min?: number; max?: number; step?: number; labels?: readonly [string, string]; format?: (value: number) => string; name?: string } & Omit<Attributes<'div'>, 'role'>` | A range between two thumbs on one track, the component `@abide/abide/Range.abide` exports. | 49.1, 49.2, 49.3, 49.4, 49.5, 49.6, 49.7, 51.92, 51.93, 51.94, 51.95, 51.96, 51.97, 51.98, 49.9 |
+
+## `range`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `range` | `(options: RangeOptions) => RangeParts` | WAI-ARIA's multi-thumb slider as parts an app spreads onto elements of its own: a group, a track, the span between the thumbs, two thumbs and a field for each. | 51.92, 51.93, 51.94, 51.95, 51.96, 51.97, 51.98, 49.8 |
+| `RangeOptions` | `{ value: Reactive<readonly [number, number]>; label: string \| (() => string); min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); labels?: readonly [string, string]; format?: (value: number) => string; name?: string }` | The range picked, and the scale it is picked on. | 51.92, 51.93, 51.98 |
+| `RangeParts` | `{ readonly root: Record<string, unknown>; readonly track: Record<string, unknown>; readonly fill: Record<string, unknown>; thumb(which: 0 \| 1): Record<string, unknown>; input(which: 0 \| 1): Record<string, unknown> }` | The group's part, the track's, the span's, a thumb's and a field's. | 32.11, 51.97 |
 
 ## `SortableTable`
 
