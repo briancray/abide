@@ -10,7 +10,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, reactive } from '#server'
+import { cookies, GET, reactive } from '#server'
 import type { App } from '#server/createApp.ts'
 import { streamOverMux } from '#server/streamOverMux.ts'
 import { PARKED_ADDRESS } from '#shared/ADDRESSES.ts'
@@ -264,4 +264,43 @@ test('a run failing as it yields its last chunk throws after every chunk it prod
     expect(`thrown: ${await reading}, read: ${JSON.stringify(read)}`).toBe(
         'thrown: the feed broke, read: [0,1,2]',
     )
+})
+
+// 16.97 — A STREAM WHOSE HANDLER WROTE A COOKIE STAYS ON HTTP, written through `cookies()` as much as
+// on the answer it built: the rest parked under the caller as it was would be taken by a browser the
+// cookie has since moved. THE REVERT: read only `answer.headers` in `answerRpc`'s handoff test, and the
+// early call is handed to the mux with its cookie never laid on.
+test('an early call whose handler wrote a cookie is answered whole over http — 16.97', async () => {
+    await using app = await inMemoryApp({
+        'feed/flavor.handler.ts': {
+            default: GET(() => {
+                cookies().set('flavor', 'mint')
+                return current
+            }),
+        },
+    })
+    const { value, release } = gatedStream(2)
+    current = value
+    void (value as PromiseLike<unknown>).then(undefined, () => {})
+    release(0)
+    await nextTask()
+    const http = await app.fetch(
+        new Request(`${ORIGIN}/feed/flavor`, {
+            headers: {
+                accept: 'application/x-ndjson',
+                cookie: COOKIE,
+                [CONTINUE_HEADER]: '1',
+            },
+        }),
+    )
+    // The second chunk is not ready with the first, so the first alone goes over http.
+    const reading = http.text()
+    await nextTask()
+    release(1)
+    const text = await reading
+    expect({
+        handedOff: text.includes(CONTINUE_KEY),
+        cookie: http.headers.get('set-cookie')?.startsWith('flavor=mint'),
+        lines: parsedLines(text),
+    }).toEqual({ handedOff: false, cookie: true, lines: [0, 1] })
 })

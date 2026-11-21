@@ -14,12 +14,11 @@
 import { carriesBytes } from '#shared/framing.ts'
 import type { StreamHead } from '#shared/muxFrames.ts'
 import { PARKED_HEADER } from '#shared/PARKED_HEADER.ts'
-import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 
 import { Frame, type Peer } from './Followers.ts'
 import { park } from './parkedAnswers.ts'
-import { receivedAsUpgrade } from './requestScope.ts'
+import { changesWhoAsked, receivedAsUpgrade } from './requestScope.ts'
 
 // The upgrade's own headers, which say nothing about a `GET` made from it.
 const UPGRADE_HEADERS = [
@@ -87,8 +86,7 @@ export async function streamOverMux(
     if (signal.aborted) return void response.body?.cancel()
     const { status } = response
     if (
-        response.headers.has('set-cookie') ||
-        response.headers.has(PRINCIPAL_HEADER) ||
+        changesWhoAsked(response.headers) ||
         (status >= 300 && status < 400) ||
         (status < 300 && carriesBytes(response.headers.get('content-type')))
     ) {

@@ -15,6 +15,7 @@ import { Cookies } from '#shared/cookies.ts'
 import type { Framed } from '#shared/framing.ts'
 import type { Params } from '#shared/matchRoute.ts'
 import type { Principal } from '#shared/principal.ts'
+import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { type Scope, SCOPING } from '#shared/reactive/scoping.ts'
 import { settingUp } from '#shared/reactive/watch.ts'
 
@@ -426,6 +427,19 @@ export function applyWritten(headers: Headers): number {
         if (name === 'set-cookie') headers.append(name, value)
         else headers.set(name, value)
     return scope.response.status
+}
+
+/**
+ * Whether an answer writes a cookie or signs someone in or out: on its own `headers`, or through
+ * `response` where `applyWritten` has not laid those on yet. 16.97 — such an answer reaches the
+ * browser over http, whole.
+ */
+export function changesWhoAsked(headers: Headers): boolean {
+    if (headers.has('set-cookie') || headers.has(PRINCIPAL_HEADER)) return true
+    const scope = STORAGE.getStore()
+    if (scope === undefined || scope.applied) return false
+    const written = scope.response.headers
+    return written.has('set-cookie') || written.has(PRINCIPAL_HEADER)
 }
 
 /**

@@ -11,7 +11,6 @@ import { type Failed, isFailed } from '#shared/Failed.ts'
 import { framingOf } from '#shared/framing.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
-import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { deadlineOf } from '#shared/reactive/producer.ts'
 import { refuse } from '#shared/refuse.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
@@ -35,7 +34,12 @@ import { type Invocation, invokeHandler, originGate } from './invokeHandler.ts'
 import type { Mounted } from './mountHandlers.ts'
 import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
 import { prefers } from './prefers.ts'
-import { currentRequestScope, unreap, writtenStatus } from './requestScope.ts'
+import {
+    changesWhoAsked,
+    currentRequestScope,
+    unreap,
+    writtenStatus,
+} from './requestScope.ts'
 import type { Outcome } from './seedBuffer.ts'
 import { versionOf } from './versionOf.ts'
 
@@ -111,8 +115,7 @@ export async function answerRpc(
             answer.body !== null &&
             framingOf(answer.headers.get('content-type')) === 'jsonl' &&
             callerCookieOf(request) !== undefined &&
-            !answer.headers.has('set-cookie') &&
-            !answer.headers.has(PRINCIPAL_HEADER)
+            !changesWhoAsked(answer.headers)
             ? handedOff(answer, request)
             : answer,
         admitted,
