@@ -7,7 +7,6 @@ import {
     reactive,
     url,
 } from '@abide/abide'
-import Dialog from '@abide/abide/Dialog.abide'
 
 // Where a command goes: the router's `navigate`, or a test's own record of it.
 const { go = (address: string) => void navigate(address) } = props<{
@@ -40,7 +39,7 @@ const palette = commandPalette({
 })
 </script>
 
-<Dialog bind:open={open} {...palette.dialog} class="palette">
+<dialog {...palette.dialog} class="palette">
     <input
         {...palette.input}
         placeholder="Go to a page or run a command"
@@ -59,4 +58,4 @@ const palette = commandPalette({
     {#if palette.results().length === 0}
         <p {...palette.empty} data-part="empty">Nothing matches.</p>
     {/if}
-</Dialog>
+</dialog>

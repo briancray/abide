@@ -1,0 +1,21 @@
+<script>
+import { dialog, reactive } from '@abide/abide'
+
+let open = reactive(false)
+let answer = reactive('nothing yet')
+const ask = dialog({
+    open,
+    dismissible: false,
+    onclose: (returnValue) => (answer = returnValue || 'nothing'),
+})
+</script>
+
+<button onclick={() => (open = true)}>Archive the deal</button>
+<p>Answered: {answer}.</p>
+<dialog {...ask.dialog} class="rounded-lg border border-rule bg-raised p-5">
+    <p>Archive Hopper &amp; Co renewal?</p>
+    <form method="dialog" class="row">
+        <button value="archive">Archive</button>
+        <button value="keep" autofocus>Keep it</button>
+    </form>
+</dialog>

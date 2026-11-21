@@ -1,10 +1,11 @@
 // 51.72-51.78 — A MODAL SEARCH OVER WHAT AN APP CAN DO: WAI-ARIA's combobox inside a modal dialog, as
-// parts an app spreads onto elements of its own. The dialog is the app's `Dialog`, its `open` the one
-// handed here, so the page behind it is inert, Escape cancels it and closing it hands focus back to
-// what had it; the keys over the list are `listbox`'s, and the key that opens it is a `hotkeys` binding
+// parts an app spreads onto elements of its own. The dialog is `dialog`'s parts on the app's own
+// `<dialog>`, opened modal by the `open` handed here, so the page behind it is inert, Escape cancels it
+// and closing it hands focus back to what had it; the keys over the list are `listbox`'s, and the key that opens it is a `hotkeys` binding
 // on the window, listened to for as long as the setup that made the parts stands.
 
 import { checkParts } from './checkParts.ts'
+import { dialog } from './dialog.ts'
 import { hotkeys } from './hotkeys.ts'
 import { listbox } from './listbox.ts'
 import { randomToken } from './randomToken.ts'
@@ -26,7 +27,7 @@ export type Command = {
 export type CommandPaletteOptions = {
     /** What the palette can do, in the order it lists them, each told apart by its `label`; a function is read live. */
     commands: readonly Command[] | (() => readonly Command[])
-    /** Whether the palette is showing: hand it the `Reactive` the app's `Dialog` binds as `open`. */
+    /** Whether the palette is showing: a `Reactive` to open it from a button of the app's own. One of the palette's own by default. */
     open?: Reactive<boolean>
     /** The binding that opens and shuts it, as `hotkeys` reads one. `'mod+k'` by default. */
     hotkey?: string
@@ -38,7 +39,7 @@ export type CommandPaletteOptions = {
 
 /** The parts `commandPalette` hands back, each spread onto an element: `<input {...palette.input} />`. */
 export type CommandPaletteParts = {
-    /** The dialog's accessible name, for the app's `Dialog`. */
+    /** The `<dialog>`: `dialog`'s part, opened modal by `open`, and the palette's accessible name. */
     readonly dialog: Record<string, unknown>
     /** The search input: a combobox naming the active command, and its typing and keys. */
     readonly input: Record<string, unknown>
@@ -110,17 +111,14 @@ export function commandPalette(
         return () => window.removeEventListener('keydown', keys)
     })
 
-    // 51.78 — every command is listed again, the input emptied, each time the palette opens: the field's
-    // own value too, which no attribute written to it would change once something was typed in it.
-    watch(() => {
-        if (!open()) return
-        query.set('')
-        const field = globalThis.document?.getElementById(inputId)
-        if (field instanceof HTMLInputElement) field.value = ''
-    })
+    // The palette's dialog is `dialog`'s parts, its accessible name written beside them.
+    const shown = Object.defineProperties(
+        { 'aria-label': label },
+        Object.getOwnPropertyDescriptors(dialog({ open }).dialog),
+    )
 
     return {
-        dialog: { 'aria-label': label },
+        dialog: shown,
         input: {
             id: inputId,
             type: 'text',
@@ -134,6 +132,15 @@ export function commandPalette(
             get 'aria-activedescendant'() {
                 return list.activeId()
             },
+            // 51.78 — every command is listed again, the input emptied, each time the palette opens: the
+            // field's own value too, which no attribute written to it would change once something was
+            // typed in it.
+            'bind:element': (field: HTMLInputElement) =>
+                watch(() => {
+                    if (!open()) return
+                    query.set('')
+                    field.value = ''
+                }),
             oninput: (event: Event) =>
                 query.set((event.currentTarget as HTMLInputElement).value),
             // 51.76 — Escape is the dialog's to cancel, and Home and End move the caret in the text.

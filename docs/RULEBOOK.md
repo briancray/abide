@@ -4947,17 +4947,18 @@ parts function, and MUST NOT write a handler, a `role` or an `aria-` attribute o
 
 # 50. Dialogs, toasts and popovers
 
-50.1 `Dialog` MUST hold its `<dialog>` open while `open` is true, with `showModal`, or with `show`
-where `modal` is `false`, and closed while `open` is false.
+50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with
+`showModal`, or with `show` where `modal` is `false`, and closed while `open` is false; `Dialog` MUST
+render its `<dialog>` through it.
 
-50.2 Every close of a `Dialog`, whatever closed it, MUST write `false` to `open` and then call
+50.2 Every close of a `dialog`'s `<dialog>`, whatever closed it, MUST write `false` to `open` and then call
 `onclose` with the `returnValue` that close set, and `''` where it set none, save that a close
 reported after the dialog has opened again MUST leave `open` true.
 
-50.3 Escape and a click on a `Dialog`'s backdrop MUST close it where `dismissible` is true, and MUST
+50.3 Escape and a click on a `dialog`'s backdrop MUST close it where `dismissible` is true, and MUST
 NOT where it is false.
 
-50.4 A `Dialog` MUST focus the element inside it carrying `autofocus` as it opens.
+50.4 A `dialog`'s `<dialog>` MUST focus the element inside it carrying `autofocus` as it opens.
 
 50.5 `prompts.confirm`, `prompts.alert` and `prompts.prompt` MUST queue their prompt behind every prompt not yet
 answered.
@@ -5302,7 +5303,8 @@ row into view.
 51.71 `virtualRows` MUST take every row to be `rowHeight` pixels tall.
 
 51.72 `commandPalette` MUST turn `open` on and off on `hotkey`, wherever focus is, its own input
-included, and `CommandPalette` MUST open as a modal `Dialog` with focus in its input.
+included; its `dialog` part MUST be `dialog`'s, opened modal by `open`, so `CommandPalette` opens as a
+modal `<dialog>` with focus in its input.
 
 51.73 `commandPalette` MUST list each of `commands`, in the order given, whose `label` and `keywords`
 together hold every word typed in its input, ignoring case, and `CommandPalette` MUST render its

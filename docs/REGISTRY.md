@@ -820,7 +820,15 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Dialog` | `{ open?: boolean; modal?: boolean; dismissible?: boolean; onclose?: (returnValue: string) => void } & Omit<Attributes<'dialog'>, 'open' \| 'onclose'>` | A native modal `<dialog>` whose children are its content, imported from `@abide/abide/Dialog.abide`. | 50.1, 50.2, 50.3, 50.4, 49.1, 49.2, 49.3, 49.5, 49.7 |
+| `Dialog` | `{ open?: boolean; modal?: boolean; dismissible?: boolean; onclose?: (returnValue: string) => void } & Omit<Attributes<'dialog'>, 'open' \| 'onclose'>` | A native modal `<dialog>` whose children are its content, imported from `@abide/abide/Dialog.abide`. | 50.1, 50.2, 50.3, 50.4, 49.1, 49.2, 49.3, 49.5, 49.7, 49.9 |
+
+## `dialog`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `dialog` | `(options: DialogOptions) => DialogParts` | A native modal as a part an app spreads onto a `<dialog>` of its own, opened and closed by `open`. | 50.1, 50.2, 50.3, 50.4 |
+| `DialogOptions` | `{ open: Reactive<boolean>; modal?: boolean \| (() => boolean); dismissible?: boolean \| (() => boolean); onclose?: (returnValue: string) => void }` | Whether the dialog shows, and how it opens and closes. | 50.1, 50.2, 50.3 |
+| `DialogParts` | `{ readonly dialog: Record<string, unknown> }` | The `<dialog>`'s part. | 32.11, 32.99 |
 
 ## `Prompts`
 
@@ -930,7 +938,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `commandPalette` | `(options: CommandPaletteOptions) => CommandPaletteParts` | WAI-ARIA's combobox in a modal dialog over the commands an app can run, as parts an app spreads onto elements of its own. | 51.72, 51.73, 51.74, 51.75, 51.76, 51.77, 51.78, 49.8 |
+| `commandPalette` | `(options: CommandPaletteOptions) => CommandPaletteParts` | WAI-ARIA's combobox in a modal dialog over the commands an app can run, as parts an app spreads onto elements of its own. | 51.72, 51.73, 51.74, 51.75, 51.76, 51.77, 51.78, 49.8, 50.1, 50.2, 50.3, 50.4 |
 | `CommandPaletteOptions` | `{ commands: readonly Command[] \| (() => readonly Command[]); open?: Reactive<boolean>; hotkey?: string; id?: string; label?: string }` | What the palette lists, what opens it, and what it is called. | 51.72, 51.73 |
 | `CommandPaletteParts` | `{ readonly dialog: Record<string, unknown>; readonly input: Record<string, unknown>; readonly listbox: Record<string, unknown>; option(command: Command): Record<string, unknown>; readonly empty: Record<string, unknown>; results(): readonly Command[]; readonly open: Reactive<boolean> }` | The dialog's part, the input's, the list's, a command's option, the empty status, the commands listed and whether it shows. | 32.11, 51.73, 51.74 |
 | `Command` | `{ label: string; keywords?: readonly string[]; key?: string; run: () => void }` | One thing the palette can do: what it is called, the further words typing matches, the key shown beside it and what choosing it does. | 51.73, 51.75, 51.77 |

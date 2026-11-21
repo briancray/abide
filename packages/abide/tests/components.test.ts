@@ -68,6 +68,7 @@ const OVER_PARTS: Record<string, { module: string; name: string }> = {
     },
     'Combobox.abide': { module: 'combobox.ts', name: 'combobox' },
     'Time.abide': { module: 'time.ts', name: 'time' },
+    'Dialog.abide': { module: 'dialog.ts', name: 'dialog' },
 }
 
 test('a component over a parts function renders through it, and does nothing of its own — 49.9', async () => {

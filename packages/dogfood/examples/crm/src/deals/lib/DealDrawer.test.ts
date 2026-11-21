@@ -11,9 +11,9 @@ const button = (name: string) =>
         (each) => each.textContent === name,
     ) as HTMLButtonElement
 
-// 50.1, 50.2 — A DRAWER IS A `Dialog` laid out at a side by its own classes: the deal picked opens in
-// it, and its Close button's `<form method="dialog">` shuts it and writes `false` back. THE REVERT: take
-// the `<form method="dialog">` off the Close button, and the drawer stays open.
+// 50.1, 50.2 — A DRAWER IS A `<dialog>` of one's own over `dialog`'s part, laid out at a side by its own
+// classes: the deal picked opens in it, and its Close button's `<form method="dialog">` shuts it and
+// writes `false` back. THE REVERT: drop the part's `onclose` writing `false` — `data-open` stays.
 test("a deal's details open in a modal drawer, and Close shuts it", async () => {
     using _drawer = await mount(DealDrawer({}))
     expect(dialog().open).toBe(false)

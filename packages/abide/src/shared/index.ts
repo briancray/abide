@@ -45,6 +45,8 @@ export { type Cookies, cookies } from './cookies.ts'
 export { copyText } from './copyText.ts'
 export { csp } from './csp.ts'
 // 53.12-53.16 — the `bind:element` adaptor closing a panel from outside it.
+// 50.1-50.4 — a native modal as a part on a `<dialog>` of the app's own.
+export { type DialogOptions, type DialogParts, dialog } from './dialog.ts'
 export { dismissible } from './dismissible.ts'
 // 53.53 — the `bind:element` adaptor keeping a scrolling element at its bottom.
 export { followBottom } from './followBottom.ts'

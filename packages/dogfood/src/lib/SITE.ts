@@ -479,6 +479,12 @@ const WRITTEN: readonly {
                     'Open a native modal dialog from a value you bind, and learn which button closed it.',
             },
             {
+                route: '/helpers/dialog',
+                title: '`dialog`',
+                description:
+                    'Spread a native modal onto a `<dialog>` of your own, opened and closed by a value you hold.',
+            },
+            {
                 route: '/components/prompts',
                 title: '`Prompts`',
                 description:

@@ -15,6 +15,7 @@ import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
+        '/helpers/dialog',
         '/components/prompts-api',
         '/components/prompts',
         '/helpers/dismissible',
@@ -33,12 +34,6 @@ import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/contacts/lib/LogCallDialog.test.ts',
             from: [
                 "test('a dialog opened again before its close is reported stays open'",
-            ],
-        },
-        {
-            path: 'packages/dogfood/examples/crm/src/deals/lib/DealDrawer.test.ts',
-            from: [
-                'test("a deal\'s details open in a modal drawer, and Close shuts it"',
             ],
         },
     ]}

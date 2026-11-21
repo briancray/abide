@@ -1,6 +1,5 @@
 <script>
-import { format, reactive } from '@abide/abide'
-import Dialog from '@abide/abide/Dialog.abide'
+import { dialog, format, reactive } from '@abide/abide'
 
 const DEALS = [
     {
@@ -19,6 +18,7 @@ const DEALS = [
 
 let shown = reactive<(typeof DEALS)[number] | undefined>(undefined)
 let open = reactive(false)
+const drawer = dialog({ open })
 
 function show(deal: (typeof DEALS)[number]) {
     shown = deal
@@ -31,8 +31,8 @@ function show(deal: (typeof DEALS)[number]) {
         <li><button onclick={() => show(deal)}>{deal.name}</button></li>
     {/for}
 </ul>
-<Dialog
-    bind:open={open}
+<dialog
+    {...drawer.dialog}
     aria-labelledby="deal-drawer-title"
     class="m-0 ms-auto h-dvh max-h-none w-80 max-w-full translate-x-full border-0
     border-l border-rule bg-raised p-6 transition-[translate,display,overlay]
@@ -44,4 +44,4 @@ function show(deal: (typeof DEALS)[number]) {
         <p>{format.money(shown.amount)} · {shown.stage}</p>
     {/if}
     <form method="dialog"><button>Close</button></form>
-</Dialog>
+</dialog>

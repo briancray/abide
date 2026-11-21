@@ -1,0 +1,28 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ArchiveDeal from './lib/ArchiveDeal.abide'
+import archiveDeal from './lib/ArchiveDeal.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/components/dialog', '/helpers/command-palette', '/helpers/form']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealDrawer.test.ts',
+            from: [
+                'test("a deal\'s details open in a modal drawer, and Close shuts it"',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Ask before archiving, on a dialog of your own">
+        <p>Spread <code>dialog</code>'s part onto your own <code>&lt;dialog&gt;</code>. It opens
+            modal while <code>open</code> is true, every close writes <code>false</code> back, and
+            <code>onclose</code> hands you the <code>value</code> of the button that closed it.
+            With <code>dismissible: false</code>, Escape and the backdrop leave it open.</p>
+        <Example code={archiveDeal}><ArchiveDeal /></Example>
+    </Section>
+</Doc>
