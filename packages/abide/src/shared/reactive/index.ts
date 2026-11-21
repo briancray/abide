@@ -161,27 +161,6 @@ export type Refusals<
     ArgsGate = Schema<never>,
     Args = never,
 > = Refused<Shaped> | Gated<Gate, Stored> | Gated<ArgsGate, Args>
-/**
- * `unknown` where `Body`'s one parameter is optional, and `never` otherwise — `any` included, which
- * would otherwise distribute to both and take every `reactive(x as any)` for a keyed body.
- */
-export type OptionalParameter<Body> = 0 extends 1 & Body
-    ? never
-    : Body extends (...given: infer Given) => unknown
-      ? Given extends []
-          ? never
-          : [] extends Given
-            ? unknown
-            : never
-      : never
-/** What a streaming body's generator yields. */
-export type ChunkOf<Body extends (...given: never[]) => unknown> =
-    Awaited<ReturnType<Body>> extends AsyncGenerator<infer Chunk>
-        ? Chunk
-        : never
-/** `unknown` where `Body` hands back a generator or a promise of one, and `never` otherwise. */
-export type Streams<Body extends (...given: never[]) => unknown> =
-    Awaited<ReturnType<Body>> extends AsyncGenerator<unknown> ? unknown : never
 /** The failures a body handing back a `Reactive` adopts from it (11.12). */
 export type AdoptedFailures<Computed> =
     Computed extends Reactive<unknown, never, infer Failures, unknown>
@@ -208,7 +187,7 @@ type StoredOf<Calls> =
         : never
 /**
  * What `reactive` holds rather than runs: anything but a function, which is a body, or a `Reactive` or
- * `Keyed`, which is called as one. The promise is `Plain`, since a `Reactive` is one too (1.4), and
+ * `Keyed`, which is called as one. The promise turns a `Reactive` away too, being one (1.4), and
  * `Accepted` read through it is the value it settles to. NOT DISTRIBUTED: `Held<number | undefined>`
  * spread over the union is `PromiseLike<number> | PromiseLike<undefined>`, and a
  * `Promise<number | undefined>` is neither.
