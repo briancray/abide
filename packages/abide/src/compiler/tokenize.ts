@@ -68,6 +68,16 @@ export function nesting(kind: SyntaxKind): number {
     }
 }
 
+/** The index of the token closing the opener at `open`, or -1 where nothing closes it. */
+export function closerOf(tokens: readonly Token[], open: number): number {
+    let depth = 0
+    for (let at = open; at < tokens.length; at += 1) {
+        depth += nesting((tokens[at] as Token).kind)
+        if (depth === 0) return at
+    }
+    return -1
+}
+
 /**
  * The index of the `}` closing the template slot opened at `open`, or the source's length.
  *

@@ -1526,6 +1526,13 @@ const k = Promise.resolve(1)
     expect(client).toContain('{ "body": () => (__raw(html)) }')
     expect(client).toContain('= (x, __at) => raw(String(x))')
     expect(client).toContain('addEventListener("click", () => raw(html))')
+    // THE REVERT: drop `isFunctionLiteral`'s depth counter past a return type and this throws a
+    // ReferenceError rather than binding.
+    expect(
+        await clientOf(
+            '<script>const go = (): void => {}</script><button onclick={(event): void => go()}>b</button>',
+        ),
+    ).toContain('.addEventListener("click"')
     expect(await serverOf(RAW_EVERYWHERE)).toContain(
         '{ "body": () => (__raw(html)) }',
     )

@@ -75,7 +75,7 @@ import type {
     Setup,
     TemplateNode,
 } from './TemplateNode.ts'
-import { nesting, type Token, tokenize } from './tokenize.ts'
+import { closerOf, nesting, type Token, tokenize } from './tokenize.ts'
 
 // The client half of one `.abide`. WHERE A NODE STANDS IS DECIDED ONCE, by `placeTemplate`, and the
 // server's markup is rendered from the same positions this module walks, builds and fills from. So
@@ -485,8 +485,8 @@ ${fill}${captured}${bindings}${owning.closed}${closed}
 /**
  * Whether a placed region reads anything that moves.
  *
- * 39.13 — by `emitRegion`'s own rule: a nested region, a live text run, or an attribute
- * `lowering.isLive` says is.
+ * 39.13 — a nested region, a live text run, or an attribute whose value moves (`live`). Not
+ * `emitRegion`'s `isBound`, which also counts a handler or a bind whatever its liveness.
  */
 function readsLive(sink: Cursor, lowering: Lowering): boolean {
     for (const at of sink.positions) {
@@ -911,15 +911,11 @@ function isFunctionLiteral(source: string): boolean {
         return tokens[at + 1]?.kind === SyntaxKind.EqualsGreaterThanToken
     if (first?.kind !== SyntaxKind.OpenParenToken) return false
     // The parameters' close, then `=>` — past a return type where one is written.
-    let depth = 0
-    let closed = -1
-    for (let index = at; index < tokens.length && closed === -1; index += 1) {
-        depth += nesting((tokens[index] as Token).kind)
-        if (depth === 0) closed = index
-    }
+    const closed = closerOf(tokens, at)
     const after = tokens[closed + 1]?.kind
     if (after === SyntaxKind.EqualsGreaterThanToken) return true
     if (closed === -1 || after !== SyntaxKind.ColonToken) return false
+    let depth = 0
     for (let index = closed + 2; index < tokens.length; index += 1) {
         const kind = (tokens[index] as Token).kind
         depth += nesting(kind)

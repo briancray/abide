@@ -31,7 +31,7 @@ import type {
     Setup,
     TemplateNode,
 } from './TemplateNode.ts'
-import { nesting, type Token, tokenize } from './tokenize.ts'
+import { closerOf, nesting, type Token, tokenize } from './tokenize.ts'
 
 export type Span = { start: number; end: number }
 
@@ -855,12 +855,10 @@ function refusedModuleExport(
         return 'abide: a <script module> cannot export a default — the component is the file’s default export. Export it by name. RULEBOOK 34.34.'
     if (head === '*') return REEXPORT_REFUSAL
     if (head !== '{') return undefined
-    let depth = 0
-    for (; at < tokens.length; at++) {
-        depth += nesting((tokens[at] as Token).kind)
-        if (depth === 0) break
-    }
-    return tokens[at + 1]?.text === 'from' ? REEXPORT_REFUSAL : undefined
+    const close = closerOf(tokens, at)
+    return close !== -1 && tokens[close + 1]?.text === 'from'
+        ? REEXPORT_REFUSAL
+        : undefined
 }
 
 const REEXPORT_REFUSAL =

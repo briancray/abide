@@ -19,7 +19,7 @@ import {
     type Setup,
     type TemplateNode,
 } from './TemplateNode.ts'
-import { nesting, type Token, tokenize } from './tokenize.ts'
+import { closerOf, nesting, type Token, tokenize } from './tokenize.ts'
 
 // 31.1 and 31.4 — inside a `.abide` a name bound to a `Reactive` is READ where it stands and
 // WRITTEN where it is assigned.
@@ -432,13 +432,8 @@ export class Lowering {
                 continue
             }
             if (token.kind !== SyntaxKind.OpenBracketToken) return undefined
-            let depth = 1
-            let close = at + 1
-            for (; close < tokens.length; close += 1) {
-                depth += nesting((tokens[close] as Token).kind)
-                if (depth === 0) break
-            }
-            if (depth > 0 || close === at + 1) return undefined
+            const close = closerOf(tokens, at)
+            if (close === -1 || close === at + 1) return undefined
             segments.push(
                 this.lower({
                     start: read.to + token.end,
