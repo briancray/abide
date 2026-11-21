@@ -7,8 +7,12 @@
 // is no second place a span or a line is made.
 //
 // BATCHED, BOUNDED, NEVER WAITED ON: a line is queued and sent with the rest each second, or as soon as
-// a batch fills; past the queue's bound the oldest go. A failed send is said once per outage, on
-// stderr and not through `log` — a line about the exporter fed back into it would be exported in turn.
+// a batch fills; past the queue's bound the oldest go. ONE SEND AT A TIME, so what a slow collector
+// has not taken yet WAITS IN THE QUEUE, where the bound reaches it — a send chained per batch would
+// hold every batch in the chain instead, past any bound. A send has the OTLP exporter's default
+// deadline, so a collector that never answers holds a stop no longer than that. A failed send is said
+// once per outage, on stderr and not through `log` — a line about the exporter fed back into it would
+// be exported in turn.
 
 import { EXPORT, type LogRecord, type Span } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
@@ -19,6 +23,8 @@ import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 const FLUSH_MILLISECONDS = 1000
 const BATCH = 512
 const QUEUED_AT_MOST = 4096
+// OTLP's `OTEL_EXPORTER_OTLP_TIMEOUT` default.
+const SEND_MILLISECONDS = 10_000
 
 // 36.21 — OTLP's severity numbers, the first of each band.
 const SEVERITY: Record<LogRecord['level'], [number, string]> = {
@@ -37,7 +43,7 @@ type Destination = {
 let destination: Destination | undefined
 let queued: LogRecord[] = []
 let timer: ReturnType<typeof setInterval> | undefined
-let sending: Promise<void> = Promise.resolve()
+let sending: Promise<void> | undefined
 let failing = false
 
 /** Whether lines and spans are being exported: `OTEL_EXPORTER_OTLP_ENDPOINT` or a signal's own is set. */
@@ -79,19 +85,28 @@ export function startExporting(): void {
         queued.push(record)
         if (queued.length > QUEUED_AT_MOST)
             queued.splice(0, queued.length - QUEUED_AT_MOST)
-        if (queued.length >= BATCH) void flushExports()
+        if (queued.length >= BATCH) void sendQueued()
     }
-    timer = setInterval(() => void flushExports(), FLUSH_MILLISECONDS)
+    timer = setInterval(() => void sendQueued(), FLUSH_MILLISECONDS)
     timer.unref()
 }
 
 /** Sends everything queued, after whatever send is under way; settles once it is sent or refused. */
-export function flushExports(): Promise<void> {
-    if (destination === undefined || queued.length === 0) return sending
+export async function flushExports(): Promise<void> {
+    await sending
+    await sendQueued()
+}
+
+/** Sends what is queued unless a send is under way, which leaves it queued for the next. */
+function sendQueued(): Promise<void> {
+    if (sending !== undefined) return sending
+    if (destination === undefined || queued.length === 0)
+        return Promise.resolve()
     const batch = queued
     queued = []
-    const to = destination
-    sending = sending.then(() => send(batch, to))
+    sending = send(batch, destination).finally(() => {
+        sending = undefined
+    })
     return sending
 }
 
@@ -144,6 +159,7 @@ async function post(
             method: 'POST',
             headers,
             body: JSON.stringify(body),
+            signal: AbortSignal.timeout(SEND_MILLISECONDS),
         })
         if (!answer.ok) throw new Error(`${url} answered ${answer.status}`)
         failing = false

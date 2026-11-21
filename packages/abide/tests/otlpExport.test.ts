@@ -24,10 +24,13 @@ const unstubbedFetch = globalThis.fetch
 let posted: { url: string; headers: Headers; body: Record<string, unknown> }[] =
     []
 let collectorStatus = 200
+// A send the collector holds without answering until this settles; the first post takes it.
+let held: Promise<void> | undefined
 
 beforeEach(() => {
     posted = []
     collectorStatus = 200
+    held = undefined
     globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input.url
         if (!url.startsWith('http://collector.test/'))
@@ -37,6 +40,9 @@ beforeEach(() => {
             headers: new Headers(init?.headers),
             body: JSON.parse(String(init?.body)),
         })
+        const holding = held
+        held = undefined
+        await holding
         return new Response(null, { status: collectorStatus })
     }) as typeof fetch
 })
@@ -197,4 +203,39 @@ test('a collector that refuses is said once per outage, on stderr — 36.23', as
     )
     expect(failures).toHaveLength(1)
     expect(posted.length).toBeGreaterThan(1)
+})
+
+// THE REVERT: chain a send per batch onto the last (`sending = sending.then(() => send(batch, to))`)
+// and every batch waits in the chain rather than the queue — 5,120 lines in the posts after the held
+// one, against the 4,096 the bound keeps.
+test('lines a collector has not taken yet wait in the queue, 4096 at most, the oldest dropped — 36.23', async () => {
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://collector.test'
+    let answer = (): void => {}
+    held = new Promise<void>((resolve) => {
+        answer = resolve
+    })
+    await using _app = await inMemoryApp(probe)
+    const unspied = console.log
+    console.log = () => {}
+    try {
+        for (let at = 0; at < 6000; at += 1) log(`line ${at}`)
+    } finally {
+        console.log = unspied
+    }
+    await Bun.sleep(0)
+    const heldPosts = posted.length
+    answer()
+    await flushExports()
+    const after: string[] = []
+    for (const each of posted.slice(heldPosts))
+        for (const resource of each.body.resourceLogs as {
+            scopeLogs: { logRecords: { body: { stringValue: string } }[] }[]
+        }[])
+            for (const scope of resource.scopeLogs)
+                for (const record of scope.logRecords)
+                    after.push(record.body.stringValue)
+    expect(heldPosts).toBe(1)
+    expect(after).toHaveLength(4096)
+    expect(after.at(-1)).toBe('line 5999')
+    expect(after[0]).toBe('line 1904')
 })

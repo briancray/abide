@@ -2989,9 +2989,10 @@ error and any other left unset.
 36.22 Every export MUST name the app as `service.name` — `OTEL_SERVICE_NAME`, or else `APP_NAME` —
 and `APP_VERSION` as `service.version`.
 
-36.23 An export MUST NOT hold back an answer or a stop past sending what is queued, MUST keep no more
-than 4096 records waiting, dropping the oldest, and MUST report a failed send on stderr once until a
-send succeeds, and never through `log`.
+36.23 An export MUST NOT hold back an answer or a stop past sending what is queued, MUST give up a
+send the collector has not answered within OTLP's default 10 seconds, MUST keep no more than 4096
+records waiting, dropping the oldest — counting those a collector has not yet taken while one send is
+out — and MUST report a failed send on stderr once until a send succeeds, and never through `log`.
 
 # 37. Lifecycle hooks
 
