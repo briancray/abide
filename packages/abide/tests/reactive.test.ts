@@ -1853,8 +1853,8 @@ test('a read a ready guard admitted does not throw — 3.2', () => {
 // to pull the body forward — and what changed was an INPUT, which marks the body and moves no probe.
 // The drain pulls a marked body a guard is asking about, and the guard wakes once, onto false.
 //
-// THE REVERT: queue only an ABORTED body in `markReaders` (the `below.aborted &&` it had); the guard
-// reads `true` for the life of the page. Drop the `CLEAN` return from `resolveEffect` and the guard
+// THE REVERT: queue only a body whose last run aborted in `markReaders`; the guard reads `true` for
+// the life of the page. Drop the `CLEAN` return from `resolveEffect` and the guard
 // is woken a second time onto the `false` it already showed.
 test('a guard on ready hears an input move the body to a load — 3.2', () => {
     const playing = reactive(false)

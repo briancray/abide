@@ -408,16 +408,6 @@ export class Cell {
     declare state: number
     declare running: boolean
     /**
-     * Whether the last run aborted on a value that had not landed.
-     *
-     * 2.13: A RUN THAT ABORTED ON A VALUE THAT HAD NOT LANDED, and is owed the rest of itself
-     * when that value arrives. Push-pull leaves a marked body for the read that wants it, and
-     * that is right for a body which RAN — this one did not, so nothing downstream can pull it:
-     * a reader guarding on `ready()` asks the probe edge and never the value, and the guard would
-     * answer false for as long as nobody read through it.
-     */
-    declare aborted: boolean
-    /**
      * The value this one adopted, or `null`.
      *
      * WHAT THIS VALUE'S BODY HANDED BACK, where it handed back another `Reactive`
@@ -583,7 +573,6 @@ export class Cell {
         this.alive = true
         this.state = CLEAN
         this.running = false
-        this.aborted = false
         this.adoption = null
         this.cap = capFor(label, options?.throttle, options?.debounce)
         const tags = options?.tags

@@ -31,6 +31,7 @@ import {
     type Callable,
     type Cap,
     Cell,
+    cellOf,
     EMPTY_RING,
     newStream,
     OWES_ABOVE,
@@ -555,7 +556,7 @@ export function nameLoad(
 ): void {
     if (LOAD_NAMES === null || !isReactive(value)) return
     LOAD_NAMES.set(
-        (value as unknown as Callable)[CELL],
+        cellOf(value),
         `${method} ${address ?? 'a handler'}`,
     )
 }
@@ -903,7 +904,7 @@ export function rowItem(value: unknown): () => unknown {
  * what a patch that wrote inside it is (32.33).
  */
 export function moveItem(item: () => unknown, value: unknown): void {
-    const cell = (item as unknown as Callable)[CELL]
+    const cell = cellOf(item)
     cell.value = value
     cascade(cell)
 }
@@ -1958,7 +1959,6 @@ function run(cell: Cell): void {
         return
     }
     TRACKING.reader = previous
-    cell.aborted = false
     // A body that read FEWER values than last time leaves a tail nothing reads, and
     // that is the only thing the truncation has to do — so the test is here and the call
     // is the rare arm.
@@ -2062,7 +2062,6 @@ Cell.prototype.notify = function notify(this: Cell): void {
 function abortRun(cell: Cell): void {
     cell.loading = true
     if (LOADS !== null) keepLoad(cell)
-    cell.aborted = true
     if (cell.servable) unserve(cell)
     else probesMoved(cell)
 }
@@ -2073,7 +2072,7 @@ function abortRun(cell: Cell): void {
  * 11.66 — a body's answer that 11.65 refuses is the body's failure.
  */
 function adoptAnswer(cell: Cell, produced: unknown): void {
-    const cycle = adopt(cell, (produced as Callable)[CELL])
+    const cycle = adopt(cell, cellOf(produced))
     if (cycle !== undefined) refused(cell, cycle)
 }
 
@@ -2565,7 +2564,7 @@ async function* producedRun(cell: Cell): AsyncGenerator<unknown> {
  * that run (9.16) and throwing what it failed on (9.15).
  */
 export function chunksOfStream(value: unknown): AsyncGenerator<unknown> {
-    return runChunks((value as Callable)[CELL], true)
+    return runChunks(cellOf(value), true)
 }
 
 /**
@@ -2669,6 +2668,12 @@ function standingLive(cell: Cell, expiry: Expiry): boolean {
     return stream === null || stream.closed
 }
 
+/** Drops the standing production once it has outlived its expiry's `ms`. */
+function dropIfPast(cell: Cell, expiry: Expiry): void {
+    if (standingLive(cell, expiry) && Date.now() - expiry.at >= expiry.ms)
+        dropStanding(cell, expiry)
+}
+
 /**
  * Drops what has expired and re-arms against the nearest deadline.
  *
@@ -2681,8 +2686,7 @@ function sweepExpiry(cell: Cell): void {
     const expiry = cell.expiry
     if (expiry === null) return
     expiry.timer = null
-    if (standingLive(cell, expiry) && Date.now() - expiry.at >= expiry.ms)
-        dropStanding(cell, expiry)
+    dropIfPast(cell, expiry)
     armNext(cell, expiry)
 }
 
@@ -2702,8 +2706,7 @@ function sweepExpiry(cell: Cell): void {
 function expire(cell: Cell): void {
     if (!reloads(cell)) return
     const expiry = cell.expiry as Expiry
-    if (standingLive(cell, expiry) && Date.now() - expiry.at >= expiry.ms)
-        dropStanding(cell, expiry)
+    dropIfPast(cell, expiry)
     // 6.6: THE PRODUCER RUNS ON THE READ THAT FOLLOWS, and `dropped` is what tells this
     // from an `invalidate` whose load is still in flight. No combination of the cell's own
     // fields separates them — both are unservable with a body — and reading it wrong runs
@@ -3049,7 +3052,7 @@ export function answeredAtOnce(): void {
  * arriving over the mux is a production of the copy, not a write made here (18.10).
  */
 export function produceInto(value: Reactive<unknown>, next: unknown): void {
-    const cell = (value as unknown as Callable)[CELL]
+    const cell = cellOf(value)
     // A stream's write stands over its accumulation (9.11), as `STREAM_PROTOTYPE.set` makes it.
     if (ownStream(cell) !== null) writeStream(cell, next)
     else {
@@ -3064,7 +3067,7 @@ export function patchInto(
     value: Reactive<unknown>,
     mutate: (value: unknown) => void,
 ): void {
-    const cell = (value as unknown as Callable)[CELL]
+    const cell = cellOf(value)
     patchCell(cell, mutate)
     producedAgain(cell)
 }
@@ -3074,7 +3077,7 @@ export function patchInto(
  * stand-in that the server refused once it was delivered.
  */
 export function refuseInto(value: Reactive<unknown>, failure: unknown): void {
-    refused((value as unknown as Callable)[CELL], failure)
+    refused(cellOf(value), failure)
 }
 
 /**
@@ -3409,7 +3412,7 @@ function setThroughGates(cell: Cell, value: unknown): unknown {
     // frame at all, and what does is a thenable or a callable.
     if (isReactive(value)) {
         // 11.66 — a write that would close a cycle throws, as misuse rather than a refusal of data.
-        const cycle = adopt(cell, (value as unknown as Callable)[CELL])
+        const cycle = adopt(cell, cellOf(value))
         if (cycle !== undefined) throw cycle
         return undefined
     }
@@ -3433,7 +3436,7 @@ function open(cell: Cell, initial: unknown): void {
         absorb(cell, initial, false)
         return
     }
-    const cycle = adopt(cell, (initial as unknown as Callable)[CELL])
+    const cycle = adopt(cell, cellOf(initial))
     if (cycle !== undefined) throw cycle
 }
 
@@ -3444,7 +3447,7 @@ function open(cell: Cell, initial: unknown): void {
  * the window's call. Starting runs the producer the reach would have run.
  */
 export function startDeferred(value: unknown): void {
-    startProducer((value as Callable)[CELL])
+    startProducer(cellOf(value))
 }
 
 /**
@@ -3454,7 +3457,7 @@ export function startDeferred(value: unknown): void {
  * and a reader still holding it hears that.
  */
 export function abandonDeferred(value: unknown): void {
-    endLoad((value as Callable)[CELL], false)
+    endLoad(cellOf(value), false)
 }
 
 // ── `store` ──────────────────────────────────────────────────────────────────────────────
@@ -3620,7 +3623,7 @@ function watchStore(cell: Cell, persisted: Persisted, cached: boolean): void {
 
 /** Stops the store's `watch` on `value`, once (8.21). */
 export function unwatchStore(value: unknown): void {
-    const persisted = (value as Callable)[CELL].store
+    const persisted = cellOf(value).store
     if (persisted === null || persisted.unwatch === null) return
     const unwatch = persisted.unwatch
     persisted.unwatch = null
@@ -3813,7 +3816,7 @@ function refreshIn(cell: Cell, tags: string[] | null): void {
  * followed (47.22's poll) asks before it does the work.
  */
 export function isSubscribed(value: unknown): boolean {
-    return subscribed((value as Callable)[CELL])
+    return subscribed(cellOf(value))
 }
 
 function subscribed(cell: Cell): boolean {
@@ -4037,19 +4040,13 @@ const ANSWERED = new WeakSet<object>()
  * joined (1.8), and a `ttl` the handler declared still holds.
  */
 export function dropAnswered(value: unknown): void {
-    const cell = (value as Callable)[CELL]
+    const cell = cellOf(value)
     if (!ANSWERED.has(cell)) {
         ANSWERED.add(cell)
         return
     }
     const expiry = cell.expiry
-    if (
-        expiry !== null &&
-        !cell.loading &&
-        standingLive(cell, expiry) &&
-        Date.now() - expiry.at >= expiry.ms
-    )
-        dropStanding(cell, expiry)
+    if (expiry !== null && !cell.loading) dropIfPast(cell, expiry)
 }
 
 /**
@@ -4062,7 +4059,7 @@ export function dropAnswered(value: unknown): void {
  * answered with, where it was answered with one: asking sooner is what it said not to do.
  */
 export function failedTransiently(value: unknown): boolean {
-    const cell = (value as Callable)[CELL]
+    const cell = cellOf(value)
     const failure = cell.failure
     if (cell.loading || failure === undefined) return false
     if (!isFailed(failure)) return true
@@ -4079,7 +4076,7 @@ export function failedTransiently(value: unknown): boolean {
  * with `failure` — which leaves what it held being served (2.4), a stream's chunks so far included.
  */
 export function abandonLoad(value: unknown, failure: unknown): void {
-    const cell = (value as Callable)[CELL]
+    const cell = cellOf(value)
     if (!cell.loading) return
     supersede(cell)
     refused(cell, failure)
@@ -4093,7 +4090,7 @@ export function abandonLoad(value: unknown, failure: unknown): void {
  * answered which it was, rather than asking `isStreaming` after and reading a later turn's state.
  */
 export function streamingOrSettled(value: unknown): Promise<unknown> {
-    return settled((value as Callable)[CELL], true)
+    return settled(cellOf(value), true)
 }
 
 /**
@@ -4204,7 +4201,7 @@ const STREAM_PROTOTYPE = brandedPrototype({
             const cycle = follow(
                 cell,
                 cell.stream as Stream,
-                (value as unknown as Callable)[CELL],
+                cellOf(value),
             )
             if (cycle !== undefined) throw cycle
             return undefined
@@ -4473,7 +4470,6 @@ function releaseOrphan(cell: Cell): void {
     const own = ownStream(cell)
     if (own !== null) stopStream(own)
     dropAdoption(cell)
-    cell.aborted = false
     // OWED A RUN, so a read that reaches it again runs it — and `run` revives it first. No `body`
     // test: only a value with one is ever orphaned (`createReactive`).
     tombstone(cell as unknown as Subscriber)
