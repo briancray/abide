@@ -7,6 +7,11 @@
 // `__HARNESS_MEASURE__` off the page. Built in memory rather than into `dist/`: every
 // spec loads in both engine projects at once, and two workers writing one file is a
 // reader that can catch it half-written.
+//
+// A SCRIPT, NOT AN ENTRY: abide's browser specs import it by path, and it stays out of `exports`
+// because no app measuring itself injects a lane by hand — `@abide/harness/abide`'s preload does
+// that for one — so an entry would be public surface, with its clauses and its pages, for this
+// repo's specs alone.
 
 import type { Page } from '@playwright/test'
 
