@@ -52,8 +52,9 @@ const CENTER = SIZE / 2
 
 /** Shares of a whole as the slices of a pie or a donut, as parts to spread. */
 export function pie(options: PieOptions): PieParts {
-    const valueFormat =
-        options.valueFormat ?? ((value: number) => number(value))
+    // Read as it is used, so an option handed as an accessor stays live (33.5).
+    const valueFormat = (value: number) =>
+        (options.valueFormat ?? number)(value)
     // A slice's hint binding, kept while its words stand, so a sweep that eases binds nothing again.
     // Each drawing keeps only the words it drew, so values that move do not pile bindings up.
     let hints = new Map<string, (element: Element) => Disposer>()

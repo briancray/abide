@@ -66,12 +66,17 @@ const children = reactive.share('abide:chart', () =>
     reactive<readonly ChartChild[]>([]),
 )
 
+// The function props as accessors, so one that arrives or changes after mount reaches the chart (33.5).
 const plot = chart({
     label: () => label,
     series: () => children.map((child) => child.series()),
     x: () => x,
-    xFormat: xFormat && ((value) => xFormat(value)),
-    yFormat: yFormat && ((value) => yFormat(value)),
+    get xFormat() {
+        return xFormat
+    },
+    get yFormat() {
+        return yFormat
+    },
     xTicks: () => xTicks,
     yTicks: () => yTicks,
     zero: () => zero,
@@ -80,8 +85,12 @@ const plot = chart({
     bounds: () => bounds,
     width,
     height,
-    onpick: onpick && ((index) => onpick(index)),
-    disabled: disabled && ((index) => disabled(index)),
+    get onpick() {
+        return onpick
+    },
+    get disabled() {
+        return disabled
+    },
 })
 </script>
 

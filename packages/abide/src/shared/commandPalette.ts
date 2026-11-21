@@ -71,12 +71,10 @@ export type CommandPaletteParts = {
 export function commandPalette(
     options: CommandPaletteOptions,
 ): CommandPaletteParts {
-    const {
-        commands,
-        hotkey = 'mod+k',
-        id = `palette-${randomToken(4, 'hex')}`,
-        label = 'Commands',
-    } = options
+    const { commands, id = `palette-${randomToken(4, 'hex')}` } = options
+    // Read as they are used, so options handed as accessors stay live (33.5); the id is the
+    // ids' base, fixed for the life of the parts.
+    const label = () => options.label ?? 'Commands'
     const open = options.open ?? reactive(false)
     const commandsOf = () => live(commands)
     const inputId = `${id}-input`
@@ -113,17 +111,28 @@ export function commandPalette(
     })
 
     // 51.72 — the binding toggles, so the key that opened the palette shuts it from inside its input.
-    const keys = hotkeys({
-        [hotkey]: { run: () => open.set(!open.peek()), editable: true },
-    })
+    // Bound again where the hotkey handed in changes.
     watch(() => {
         if (typeof window === 'undefined') return
+        const keys = hotkeys({
+            [options.hotkey ?? 'mod+k']: {
+                run: () => open.set(!open.peek()),
+                editable: true,
+            },
+        })
         window.addEventListener('keydown', keys)
         return () => window.removeEventListener('keydown', keys)
     })
 
     // The palette's dialog is `dialog`'s parts, its accessible name written beside them.
-    const shown = withPart({ 'aria-label': label }, dialog({ open }).dialog)
+    const shown = withPart(
+        {
+            get 'aria-label'() {
+                return label()
+            },
+        },
+        dialog({ open }).dialog,
+    )
 
     return {
         dialog: shown,
@@ -134,7 +143,9 @@ export function commandPalette(
             role: 'combobox',
             autocomplete: 'off',
             autofocus: true,
-            'aria-label': label,
+            get 'aria-label'() {
+                return label()
+            },
             'aria-autocomplete': 'list',
             'aria-expanded': 'true',
             'aria-controls': listId,
@@ -167,7 +178,9 @@ export function commandPalette(
             id: listId,
             role: 'listbox',
             'data-part': 'listbox',
-            'aria-label': label,
+            get 'aria-label'() {
+                return label()
+            },
             onmousedown: (event: MouseEvent) => event.preventDefault(),
         },
         command: (command) => ({

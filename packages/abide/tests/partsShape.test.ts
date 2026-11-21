@@ -317,3 +317,47 @@ test('every option an app binds is optional and handed back, and every id is mad
         keys.idOf('a').replace(keys.id, `${box.id}`),
     )
 })
+
+// 33.5 — AN OPTION HANDED AS AN ACCESSOR STAYS LIVE: a shipped component hands its props over as
+// accessors, and the parts read them as they are used, so a prop that changes after mount reaches
+// the markup. THE REVERT: destructure `labels` in `range` (or `label` in `commandPalette`, or `key` in
+// `combobox`) at setup -> the old value stays.
+test('options handed as accessors are read as they are used — 33.5', () => {
+    let labels: readonly [string, string] = ['Least', 'Most']
+    let named = 'Commands'
+    let keyOf = (item: string) => item
+    const slider = range({
+        label: 'Amount',
+        get labels() {
+            return labels
+        },
+    })
+    const palette = commandPalette({
+        commands: [COMMAND],
+        get label() {
+            return named
+        },
+    })
+    const box = combobox({
+        options: () => ['a'],
+        get key() {
+            return keyOf
+        },
+    })
+    const before = [
+        slider.end(0).thumb['aria-label'],
+        palette.listbox['aria-label'],
+        box.option('a').id,
+    ]
+    labels = ['Floor', 'Ceiling']
+    named = 'Actions'
+    keyOf = (item) => `${item}-moved`
+    const after = [
+        slider.end(0).thumb['aria-label'],
+        palette.listbox['aria-label'],
+        box.option('a').id,
+    ]
+    expect(before.slice(0, 2)).toEqual(['Least', 'Commands'])
+    expect(after.slice(0, 2)).toEqual(['Floor', 'Actions'])
+    expect(after[2]).not.toBe(before[2])
+})

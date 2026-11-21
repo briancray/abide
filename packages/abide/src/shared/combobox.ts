@@ -4,7 +4,7 @@
 // `listbox` the input's keys move through, opened in the top layer against the input as `popover`
 // opens one. Bound to an array, it picks many: each pick adds an item or takes it out again.
 
-import { itself, type KeyOption, type LabelOption } from './itemKey.ts'
+import type { KeyOption, LabelOption } from './itemKey.ts'
 import { listbox } from './listbox.ts'
 import { popover } from './popover.ts'
 import { randomToken } from './randomToken.ts'
@@ -88,10 +88,14 @@ const NOTHING: readonly never[] = []
 export function combobox<Item, Multiple extends boolean = false>(
     options: ComboboxOptions<Item, Multiple>,
 ): ComboboxParts<Item, Multiple> {
-    const { search, debounce } = options
+    const { debounce } = options
     const id = options.id ?? `combobox-${randomToken(4, 'hex')}`
-    const key = itself<Item>(options.key)
-    const label = itself<Item>(options.label)
+    // Read as they are used, so options handed as accessors stay live (33.5). The id, the debounce
+    // and whether it picks many are fixed for the life of the parts.
+    const key = (item: Item) =>
+        options.key === undefined ? String(item) : options.key(item)
+    const label = (item: Item) =>
+        options.label === undefined ? String(item) : options.label(item)
     const many = options.multiple === true
     const value = (options.value ??
         (many
@@ -123,6 +127,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         () => {
             if (!open()) return NOTHING as readonly Item[]
             const text = query()
+            const search = options.search
             if (search !== undefined) return search(text)
             const lowered = text.toLowerCase()
             const kept: Item[] = []
@@ -181,7 +186,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             open.set(false)
             return
         }
-        if (search !== undefined && query.peek() === '') return
+        if (options.search !== undefined && query.peek() === '') return
         open.set(true)
     }
 

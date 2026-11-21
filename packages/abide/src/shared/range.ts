@@ -52,13 +52,13 @@ export type RangeParts = {
     readonly value: Reactive<readonly [number, number]>
 }
 
+const DEFAULT_LABELS = ['Minimum', 'Maximum'] as const
+
 /** WAI-ARIA's multi-thumb slider: a low and a high value on one track, as parts to spread. */
 export function range(options: RangeOptions): RangeParts {
-    const {
-        labels = ['Minimum', 'Maximum'],
-        format = (each: number) => number(each),
-        name,
-    } = options
+    // Read as they are used, so options handed as accessors stay live (33.5).
+    const labelOf = (which: 0 | 1) => (options.labels ?? DEFAULT_LABELS)[which]
+    const format = (each: number) => (options.format ?? number)(each)
     const min = () => live(options.min ?? 0)
     const max = () => live(options.max ?? 100)
     const step = () => live(options.step ?? 1)
@@ -206,7 +206,9 @@ export function range(options: RangeOptions): RangeParts {
                 'data-part': 'thumb',
                 tabindex: '0',
                 'data-thumb': which === 0 ? 'low' : 'high',
-                'aria-label': labels[which],
+                get 'aria-label'() {
+                    return labelOf(which)
+                },
                 get 'aria-valuemin'() {
                     return which === 0 ? min() : value()[0]
                 },
@@ -229,7 +231,9 @@ export function range(options: RangeOptions): RangeParts {
             input: {
                 type: 'hidden',
                 'data-part': 'input',
-                name,
+                get name() {
+                    return options.name
+                },
                 get value() {
                     return value()[which]
                 },

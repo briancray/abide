@@ -41,9 +41,14 @@ const palette = commandPalette({
             open = next
         },
     ),
-    hotkey,
+    // Accessors, so a prop that changes reaches the parts (33.5); the id is fixed.
+    get hotkey() {
+        return hotkey
+    },
     id,
-    label,
+    get label() {
+        return label
+    },
 })
 </script>
 

@@ -208,8 +208,9 @@ const BAND = 0.8
 
 /** A chart over one pair of axes, as its geometry and the parts to draw it with. */
 export function chart(options: ChartOptions): ChartParts {
-    const xFormat = options.xFormat ?? ((value: number) => number(value))
-    const yFormat = options.yFormat ?? ((value: number) => number(value))
+    // Read as they are used, so options handed as accessors stay live (33.5).
+    const xFormat = (value: number) => (options.xFormat ?? number)(value)
+    const yFormat = (value: number) => (options.yFormat ?? number)(value)
     const size = reactive({
         width: options.width ?? 600,
         height: options.height ?? 240,
