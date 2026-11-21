@@ -42,17 +42,19 @@ import Section from '#src/lib/Section.abide'
             closed it. Cancel, Escape and the backdrop settle <code>false</code>.</p>
         <Code language="abide" caption="abide" code={`
             <script>
+            import { reactive } from '@abide/abide'
             import { prompts } from '@abide/abide/Prompts.abide'
-            import deleteDeal from './deleteDeal.handler.ts'
 
-            async function remove(deal: Deal) {
+            let deals = reactive(['Engine renewal', 'Compiler pilot'])
+
+            async function remove(deal: string) {
                 const sure = await prompts.confirm({
-                    title: \`Delete \${deal.name}?\`,
+                    title: \`Delete \${deal}?\`,
                     body: 'Its notes and its stage history go with it.',
                     confirm: 'Delete',
                     danger: true,
                 })
-                if (sure) await deleteDeal({ id: deal.id })
+                if (sure) deals.splice(deals.indexOf(deal), 1)
             }
             </script>
         `} />
@@ -101,17 +103,18 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Delete a deal from the dialog, and say why it could not">
+    <Section level={3} title="Mark a deal lost from the dialog, and say why it could not">
         <p>Hand <code>run</code> the call the confirm makes. The dialog stays up with
             <code>data-busy</code> while it runs, closes once it lands, and shows the refusal in its
-            <code>error</code> part.</p>
+            <code>error</code> part: here, that a closed deal does not move.</p>
         <Code language="ts" caption="browser" code={`
             import { prompts } from '@abide/abide/Prompts.abide'
+            import moveDeal from '../moveDeal.handler.ts'
 
             await prompts.confirm({
-                body: 'Delete Engine renewal?',
+                body: 'Mark Engine renewal lost?',
                 danger: true,
-                run: () => deleteDeal({ id }),
+                run: () => moveDeal({ id, stage: 'lost' }),
             })
         `} />
     </Section>

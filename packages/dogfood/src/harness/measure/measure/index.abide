@@ -56,8 +56,8 @@ import Section from '#src/lib/Section.abide'
             import { measure } from '@abide/harness/measure'
 
             const work = measure(() => {
-                feed.appendChild(document.createComment('anchor'))
-                feed.appendChild(document.createElement('article'))
+                document.body.appendChild(document.createComment('anchor'))
+                document.body.appendChild(document.createElement('article'))
             })
             work.elementsMoved // 1
             work.markersMoved // 1

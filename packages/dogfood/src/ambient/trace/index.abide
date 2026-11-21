@@ -34,6 +34,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { log } from '@abide/abide'
             import { POST, trace } from '@abide/abide/server'
+            import { billing } from './lib/billing.ts'
 
             export default POST(async ({ id }: { id: string }) => {
                 log(\`contact \${id} loaded\`)
@@ -50,9 +51,8 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { trace } from '@abide/abide/server'
 
-            await trace.span('billing', () => billing.post(contact), {
-                timing: true,
-            })
+            // The billing service, slow enough to see in the panel.
+            await trace.span('billing', () => Bun.sleep(150), { timing: true })
         `} />
     </Section>
 

@@ -138,8 +138,8 @@ export function renderedMarkdown(): Promise<Map<string, string>> {
     return markdown
 }
 
-/** A `<Code>` block a page writes by hand. */
-export type Fence = { language: string; caption: string }
+/** A `<Code>` block a page writes by hand, `code` as the template literal spells it, unescaped. */
+export type Fence = { language: string; caption: string; code: string }
 
 /**
  * Where the self-closing tag opening at `from` ends, past its `/>` — stepping over quotes and braces,
@@ -164,6 +164,22 @@ function tagEnd(source: string, from: number): number {
     return source.length
 }
 
+/** The text of the `code={`…`}` in `tag`, its escapes undone — `''` where it has none. */
+function codeIn(tag: string): string {
+    const open = tag.indexOf('code={`')
+    if (open === -1) return ''
+    let code = ''
+    for (let at = open + 'code={`'.length; at < tag.length; at += 1) {
+        const character = tag[at] as string
+        if (character === '`') break
+        if (character === '\\') {
+            at += 1
+            code += tag[at] ?? ''
+        } else code += character
+    }
+    return code
+}
+
 // A page writes `language` and `caption` as plain quoted text.
 const attributeIn = (tag: string, name: string): string =>
     new RegExp(`\\b${name}="([^"]*)"`).exec(tag)?.[1] ?? ''
@@ -179,6 +195,7 @@ export function fencesOf(page: DocsPage): Fence[] {
         fences.push({
             language: attributeIn(tag, 'language'),
             caption: attributeIn(tag, 'caption'),
+            code: codeIn(tag),
         })
         tags.lastIndex = end
     }

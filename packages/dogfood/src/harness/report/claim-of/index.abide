@@ -28,6 +28,7 @@ import Section from '#src/lib/Section.abide'
             number.</p>
         <Code language="ts" caption="shared" code={`
             import { claimOf, ratio } from '@abide/harness/report'
+            import { priced } from './Forecast.bench.ts'
 
             const run = priced()
             const verdict = ratio(

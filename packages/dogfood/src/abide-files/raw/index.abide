@@ -29,7 +29,7 @@ import Section from '#src/lib/Section.abide'
             it as markup. Without <code>raw</code> the same string shows as text.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { markdown } from '@abide/abide'
+            import { markdown, raw } from '@abide/abide'
             </script>
 
             <article>{raw(markdown(note.body))}</article>

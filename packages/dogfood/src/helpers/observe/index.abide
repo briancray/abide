@@ -22,7 +22,7 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
-    <Section level={3} title="Size a pipeline chart to its panel">
+    <Section level={3} title="Size a chart to its panel">
         <p>Hand <code>bind:element</code> the adaptor and a reactive value. The browser writes
             the size after each layout, and until the first one the value holds what you gave
             it.</p>
@@ -34,22 +34,29 @@ import Section from '#src/lib/Section.abide'
             </script>
 
             <section bind:element={observe.size(box)}>
-                <PipelineChart width={box.width} height={box.height} />
+                <svg width={box.width} height={box.height}></svg>
             </section>
         `} />
     </Section>
 
-    <Section level={3} title="Load more activity when the end of the feed scrolls into view">
+    <Section level={3} title="Read the older activity when the end of the feed scrolls into view">
         <p><code>observe.visible</code> writes whether the element is in the viewport, or inside
             the element <code>in</code> names. A function in place of the value is called with
             each reading.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { observe } from '@abide/abide'
+            import { observe, reactive } from '@abide/abide'
+            import ActivityHistory from './lib/ActivityHistory.abide'
+            import RecentActivity from './lib/RecentActivity.abide'
+
+            let reached = reactive(false)
             </script>
 
-            <ol>{#for item of activity by item.id}<li>{item.text}</li>{/for}</ol>
-            <div bind:element={observe.visible((seen) => seen && loadMore())}></div>
+            <RecentActivity />
+            {#if reached}<ActivityHistory />{/if}
+            <div bind:element={observe.visible((seen) => {
+                if (seen) reached = true
+            })}></div>
         `} />
     </Section>
 

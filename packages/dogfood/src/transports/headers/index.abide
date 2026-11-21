@@ -40,14 +40,15 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Let a browser keep the pipeline totals for a minute">
+    <Section level={3} title="Let a browser keep the month's closed totals for a minute">
         <p>Declare the read over a <code>global</code> value with a <code>ttl</code>. Its answer
             says how long the production has left, in place of <code>no-store</code>.</p>
         <Code language="ts" caption="server" code={`
             import { reactive } from '@abide/abide'
             import { GET } from '@abide/abide/server'
+            import { closedTotals } from './lib/closedTotals.ts'
 
-            const totals = reactive(() => sumPipeline(), {
+            const totals = reactive(() => closedTotals(30), {
                 global: true,
                 ttl: 60_000,
             })
@@ -60,10 +61,11 @@ import Section from '#src/lib/Section.abide'
             the default.</p>
         <Code language="ts" caption="server" code={`
             import { GET, response } from '@abide/abide/server'
+            import { COMPANIES } from './lib/COMPANIES.server.ts'
 
             export default GET(() => {
                 response().headers.set('cache-control', 'public, max-age=300')
-                return listCompanies()
+                return COMPANIES
             })
         `} />
     </Section>

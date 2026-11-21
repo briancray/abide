@@ -85,6 +85,7 @@ import Section from '#src/lib/Section.abide'
             reloaded on its own.</p>
         <Code language="ts" caption="shared" code={`
             import { reactive } from '@abide/abide'
+            import getStage from './getStage.handler.ts'
 
             const stageTotals = reactive(({ stage }: { stage: string }) =>
                 getStage({ stage }),
@@ -100,6 +101,7 @@ import Section from '#src/lib/Section.abide'
             busy until the generator ends.</p>
         <Code language="ts" caption="shared" code={`
             import { reactive } from '@abide/abide'
+            import listDeals from './listDeals.handler.ts'
 
             const waiting = reactive(async function* () {
                 for (const deal of await listDeals())

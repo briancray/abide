@@ -14,19 +14,20 @@ import Section from '#src/lib/Section.abide'
     ]}
 >
     <Section level={3} title="Leave a key to the field the visitor types in">
-        <p>A listener of your own asks first, so <code>j</code> moves through the activity feed
+        <p>A listener of your own asks first, so <code>c</code> logs a call to the activity feed
             everywhere but a text field, a textarea, a select or an editable element.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { isEditableTarget } from '@abide/abide'
+            import { logActivity } from './lib/activity.ts'
 
-            function moveThroughFeed(event: KeyboardEvent) {
+            function logCall(event: KeyboardEvent) {
                 if (isEditableTarget(event.target)) return
-                if (event.key === 'j') selectNextActivity()
+                if (event.key === 'c') logActivity('Ada Lovelace', 'Call')
             }
             </script>
 
-            <window onkeydown={moveThroughFeed} />
+            <window onkeydown={logCall} />
         `} />
     </Section>
 

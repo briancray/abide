@@ -32,7 +32,7 @@ import Section from '#src/lib/Section.abide'
             </script>
 
             {#if !native()}
-                <button onclick={() => print()}>Print report</button>
+                <button onclick={() => window.print()}>Print report</button>
             {/if}
         `} />
         <p>Any client can send that user agent, so let it decide what a page shows, never who

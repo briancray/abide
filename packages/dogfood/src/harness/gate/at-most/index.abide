@@ -33,8 +33,16 @@ import Section from '#src/lib/Section.abide'
         <p>Name a ceiling for each counter you can be blamed for. The failure names every field
             over its ceiling, with what it reported.</p>
         <Code language="ts" caption="shared" code={`
+            import { test } from 'bun:test'
             import { measure, mount } from '@abide/harness/abide'
             import { atMost } from '@abide/harness/gate'
+            import DealActions from './DealActions.abide'
+
+            const menu = () => document.querySelector('[role=menu]') as HTMLElement
+            const key = (target: Element, name: string) =>
+                target.dispatchEvent(
+                    new KeyboardEvent('keydown', { key: name, bubbles: true }),
+                )
 
             test('moving focus in the menu writes nothing', async () => {
                 using _actions = await mount(DealActions({}))

@@ -44,11 +44,15 @@ import Section from '#src/lib/Section.abide'
             build, naming it. OpenAPI, MCP and the command line still list it.</p>
         <Code language="ts" caption="server" code={`
             import { POST } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
 
             export default POST(
-                ({ invoice }: { invoice: string }) => markPaid(invoice),
+                ({ id }: { id: string }) => {
+                    const deal = DEALS.find((each) => each.id === id)
+                    if (deal) deal.stage = 'won'
+                },
                 {
-                    description: 'Marks an invoice paid, from the bank.',
+                    description: 'Wins a deal, from the e-signature service.',
                     clients: { ui: false },
                 },
             )

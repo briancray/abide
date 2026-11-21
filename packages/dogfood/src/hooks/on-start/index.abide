@@ -44,10 +44,10 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script server>
             import { onStart } from '@abide/abide/server'
-            import { migrate } from './lib/migrate.server.ts'
+            import { crmDatabase } from './pipeline/lib/crmDatabase.server.ts'
 
             onStart(async (start) => {
-                await migrate()
+                crmDatabase() // opens the file, and runs the migrations it has not
                 await start()
             })
             </script>

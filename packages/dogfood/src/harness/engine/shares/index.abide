@@ -34,6 +34,14 @@ import Section from '#src/lib/Section.abide'
         <p>The code names its layer with <code>performance.measure</code>. Ranking five thousand
             deals marks the sort.</p>
         <Code language="ts" caption="browser" code={`
+            const DEALS: { company: string; amount: number; idle: number }[] = []
+            for (let at = 0; at < 5000; at += 1)
+                DEALS.push({
+                    company: \`Company \${at}\`,
+                    amount: (at * 7919) % 50_000,
+                    idle: (at * 104_729) % 90,
+                })
+
             export function topFive(by: 'amount' | 'idle') {
                 performance.mark('sort:start')
                 const ranked = [...DEALS].sort((a, b) => b[by] - a[by]).slice(0, 5)
@@ -52,7 +60,8 @@ import Section from '#src/lib/Section.abide'
             const trace = await traceOp(page, 'rank by idle', async () => {
                 await page.evaluate(async () => {
                     performance.mark('click:start')
-                    clickRanking('Most idle')
+                    for (const button of document.querySelectorAll('button'))
+                        if (button.textContent?.trim() === 'Most idle') button.click()
                     await new Promise((done) =>
                         requestAnimationFrame(() => requestAnimationFrame(done)),
                     )

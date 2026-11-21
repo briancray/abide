@@ -27,6 +27,7 @@ import Section from '#src/lib/Section.abide'
         <p><code>batch</code> throws inside a parallel worker, so a test about its other
             refusals runs the call in a child bun with no DOM and no worker mark.</p>
         <Code language="ts" caption="server" code={`
+            import { expect } from 'bun:test'
             import { inAFreshProcess } from '@abide/harness/gate'
 
             const run = await inAFreshProcess(\`
@@ -41,6 +42,7 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Run the source as a parallel worker would">
         <p>Pass a <code>workerId</code> to mark the child as that worker.</p>
         <Code language="ts" caption="server" code={`
+            import { expect } from 'bun:test'
             import { inAFreshProcess } from '@abide/harness/gate'
 
             const marked = await inAFreshProcess(source, '3')

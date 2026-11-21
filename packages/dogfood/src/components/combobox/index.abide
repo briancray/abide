@@ -94,6 +94,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import Combobox from '@abide/abide/Combobox.abide'
+            import searchCompanies from '../searchCompanies.handler.ts'
             </script>
 
             <Combobox

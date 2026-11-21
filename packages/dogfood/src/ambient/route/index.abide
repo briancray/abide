@@ -49,12 +49,14 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { route } from '@abide/abide'
+            import DealFeed from './lib/DealFeed.abide'
+            import DealNotes from './lib/DealNotes.abide'
 
             const query = route.query({ tab: 'deals' })
             </script>
 
             <button onclick={() => (query.tab = 'notes')}>Notes</button>
-            {#if query.tab === 'notes'}<Notes />{:else}<Deals />{/if}
+            {#if query.tab === 'notes'}<DealNotes />{:else}<DealFeed />{/if}
         `} />
     </Section>
 

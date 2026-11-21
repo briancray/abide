@@ -42,6 +42,9 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { retainedPerRun } from '@abide/harness/server'
 
+            const companies = new Map<string, { name: string }>()
+            const lookup = (name: string) =>
+                companies.get(name) ?? companies.set(name, { name }).get(name)
             const answer = retainedPerRun(() => lookup('acme'))
             answer.growth // {} when every run keeps the same
         `} />

@@ -61,6 +61,7 @@ import Section from '#src/lib/Section.abide'
         <p><code>app.run</code> hands its <code>principal</code> claims to the hook as a sealed
             cookie's are.</p>
         <Code language="ts" caption="server" code={`
+            import { expect } from 'bun:test'
             import { principal } from '@abide/abide'
             import { createApp } from '@abide/abide/server'
 

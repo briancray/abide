@@ -28,8 +28,18 @@ import Section from '#src/lib/Section.abide'
         <p>Mount the component, then wrap the op. The record carries the DOM work and abide's
             <code>wakes</code>, <code>bindingRuns</code> and <code>descents</code>.</p>
         <Code language="ts" caption="shared" code={`
+            import { test } from 'bun:test'
+            import { flushSync } from '@abide/abide'
             import { measure, mount } from '@abide/harness/abide'
             import { atMost } from '@abide/harness/gate'
+            import ProfileSummary from './ProfileSummary.abide'
+
+            function type(index: number, text: string) {
+                const field = document.querySelectorAll('input')[index] as HTMLInputElement
+                field.value = text
+                field.dispatchEvent(new Event('input'))
+                flushSync()
+            }
 
             test('a phone edit reruns the count, not the initials', async () => {
                 using _summary = await mount(ProfileSummary({}))
@@ -43,6 +53,7 @@ import Section from '#src/lib/Section.abide'
         <p>An update lands on the next flush. Call <code>flushSync</code> inside the body so
             the work is counted.</p>
         <Code language="ts" caption="shared" code={`
+            import { expect } from 'bun:test'
             import { flushSync } from '@abide/abide'
             import { measure } from '@abide/harness/abide'
 

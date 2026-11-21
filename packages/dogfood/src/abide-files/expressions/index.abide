@@ -35,6 +35,10 @@ import Section from '#src/lib/Section.abide'
         <p>An expression in braces fills text, a whole attribute, or part of a quoted one, and
             follows what it reads. Text is escaped.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import logCall from '../logCall.handler.ts'
+            </script>
+
             <h2>{contact.name}</h2>
             <a href={\`mailto:\${contact.email}\`} title="Email {contact.name}">
                 {contact.email}

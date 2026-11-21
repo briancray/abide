@@ -31,6 +31,7 @@ import Section from '#src/lib/Section.abide'
             as its own control, and grows each sample until the clock can resolve it.</p>
         <Code language="ts" caption="shared" code={`
             import { batch, type Batched } from '@abide/harness/report'
+            import { pipeline } from './pipeline.ts'
 
             export function priced(): Batched {
                 return batch({
@@ -49,6 +50,8 @@ import Section from '#src/lib/Section.abide'
         <p>Each arm's <code>Sample</code> carries its fastest time per operation in nanoseconds.
             <code>floor</code> is how far the control drifted from the first arm.</p>
         <Code language="ts" caption="shared" code={`
+            import { priced } from './Forecast.bench.ts'
+
             const run = priced()
             const large = run.samples['among 1,000']
             console.log(large.nanoseconds, large.n, run.floor)

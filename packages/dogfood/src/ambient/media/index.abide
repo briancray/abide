@@ -17,16 +17,18 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
-    <Section level={3} title="Swap the pipeline board for a list on a narrow screen">
+    <Section level={3} title="Swap the stage board for the deal feed on a narrow screen">
         <p>Bind the query once and read it by name. The page follows the window as it resizes.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { media } from '@abide/abide'
+            import DealFeed from './lib/DealFeed.abide'
+            import StageBoard from './lib/StageBoard.abide'
 
             const narrow = media('(max-width: 760px)')
             </script>
 
-            {#if narrow}<DealList />{:else}<PipelineBoard />{/if}
+            {#if narrow}<DealFeed />{:else}<StageBoard />{/if}
         `} />
     </Section>
 
@@ -38,7 +40,11 @@ import Section from '#src/lib/Section.abide'
             import { media } from '@abide/abide'
 
             const still = media('(prefers-reduced-motion: reduce)')
-            card.animate(KEYFRAMES, { duration: still() ? 0 : 200 })
+
+            function fadeOut(element: Element) {
+                const duration = still() ? 0 : 200
+                return element.animate([{ opacity: 1 }, { opacity: 0 }], { duration })
+            }
         `} />
     </Section>
 </Doc>

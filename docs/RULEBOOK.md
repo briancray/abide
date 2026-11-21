@@ -3934,6 +3934,12 @@ link to an address other than a page of the site, an anchor, a web address or a 
 40.30 The documentation site's native app MUST file every page in its menu bar through `onMenu`,
 grouped as the sidebar groups them.
 
+40.31 An example MUST NOT call a name its fence neither imports nor declares, save a global of the
+side its code runs on.
+
+40.32 An example's relative import MUST name a file of the example app, and a name that file
+exports.
+
 # 41. Rendering and hydration
 
 41.1 `render` MUST send nothing until the page and every layout around it are set up and built, and a

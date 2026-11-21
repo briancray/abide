@@ -37,6 +37,8 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive, tabs } from '@abide/abide'
+            import DealDetail from './lib/DealDetail.abide'
+            import DealStage from './lib/DealStage.abide'
 
             let tab = reactive<string | undefined>('details')
             const view = tabs({ keys: ['details', 'stage'], selected: tab })
@@ -47,7 +49,7 @@ import Section from '#src/lib/Section.abide'
                 <button {...view.tab('stage')}>Stage</button>
             </div>
             <div {...view.panel()}>
-                {#if tab === 'details'}<DealDetails />{:else}<DealStage />{/if}
+                {#if tab === 'details'}<DealDetail />{:else}<DealStage />{/if}
             </div>
         `} />
     </Section>
@@ -56,7 +58,7 @@ import Section from '#src/lib/Section.abide'
         <p>Spread <code>panel(key)</code> on a panel per tab. A panel is hidden while another
             tab is selected, and keeps what it holds.</p>
         <Code language="abide" caption="abide" code={`
-            <div {...view.panel('details')}><DealDetails /></div>
+            <div {...view.panel('details')}><DealDetail /></div>
             <div {...view.panel('notes')}><textarea></textarea></div>
         `} />
     </Section>

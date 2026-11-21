@@ -97,6 +97,10 @@ import Section from '#src/lib/Section.abide'
             <code>disabled</code> holds for takes no pick, and its bars and readout carry
             <code>data-disabled</code>.</p>
         <Code language="abide" caption="abide" code={`
+            <script>
+            import { navigate } from '@abide/abide'
+            </script>
+
             <LineChart
                 series={[{ label: 'Won', values: WON }]}
                 label="Won revenue, June to November"

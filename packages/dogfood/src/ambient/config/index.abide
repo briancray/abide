@@ -72,7 +72,8 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { config } from '@abide/abide/server'
 
-            Bun.env.BILLING_KEY = await vault.read('billing')
+            const secret = Bun.file('/run/secrets/billing_key')
+            Bun.env.BILLING_KEY = (await secret.text()).trim()
             config.invalidate()
         `} />
     </Section>

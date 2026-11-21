@@ -37,8 +37,11 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { POST, response } from '@abide/abide/server'
 
+            let nextId = 4031
+
             export default POST(async ({ name }: { name: string }) => {
-                const contact = await contacts.add({ name })
+                const contact = { id: String(nextId), name }
+                nextId += 1
                 response().status = 201
                 response().headers.set('location', \`/contacts/\${contact.id}\`)
                 return contact
@@ -51,10 +54,14 @@ import Section from '#src/lib/Section.abide'
             <code>undefined</code>. The status is 302 unless you name another.</p>
         <Code language="ts" caption="server" code={`
             import { POST, response } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
 
-            export default POST(async ({ title }: { title: string }) => {
-                const deal = await deals.add({ title })
-                return response.redirect(\`/deals/\${deal.id}\`, 303)
+            type NewDeal = { name: string; company: string; amount: number }
+
+            export default POST(({ name, company, amount }: NewDeal) => {
+                const id = \`d\${DEALS.length + 1}\`
+                DEALS.push({ id, name, company, amount, stage: 'lead' })
+                return response.redirect(\`/deals/\${id}\`, 303)
             })
         `} />
     </Section>
@@ -65,8 +72,9 @@ import Section from '#src/lib/Section.abide'
             to fix the framing.</p>
         <Code language="ts" caption="server" code={`
             import { GET, response } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
 
-            export default GET(() => response.jsonl(deals.all()))
+            export default GET(() => response.jsonl(DEALS))
         `} />
     </Section>
 
@@ -75,11 +83,13 @@ import Section from '#src/lib/Section.abide'
             <code>text/html</code>. It renders nothing itself.</p>
         <Code language="ts" caption="server" code={`
             import { GET, render, response } from '@abide/abide/server'
-            import Statement from './lib/Statement.abide'
+            import { COMPANIES } from './lib/COMPANIES.server.ts'
+            import CompanySheet from './lib/CompanySheet.abide'
 
-            export default GET(async ({ id }: { id: string }) =>
-                response.page(await render(Statement({ id }))),
-            )
+            export default GET(async ({ id }: { id: string }) => {
+                const company = COMPANIES.find((one) => one.id === id)
+                return response.page(await render(CompanySheet({ company })))
+            })
         `} />
     </Section>
 </Doc>
