@@ -20,7 +20,7 @@ import {
     SERVER_LANE,
 } from './renderMarkup.ts'
 import { insideShare, SETTLED_AT, shareScope } from './shareScope.ts'
-import { splitImports } from './splitImports.ts'
+import { holdsStatement, splitImports } from './splitImports.ts'
 
 // The name the body is bound to while a component's head contributions land (`HEADS`).
 const BODY = '__body'
@@ -151,7 +151,7 @@ ${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))
     const probes =
         !settles &&
         readsBareProbe(file, `${head}\n${declared}\n${body.join('\n')}`)
-    const waits = !settles && !probes && componentBody.trim() !== ''
+    const waits = !settles && !probes && holdsStatement(componentBody)
     const level =
         settles || probes
             ? deferred()

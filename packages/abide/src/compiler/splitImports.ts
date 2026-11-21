@@ -58,6 +58,17 @@ export function splitImports(
     return { imports, body: body + script.slice(at) }
 }
 
+/**
+ * Whether a script body holds a statement: anything but the empty statements an excised import
+ * leaves (and comments). A `<script>` of imports alone is no setup to run.
+ */
+export function holdsStatement(body: string): boolean {
+    if (/^[\s;]*$/.test(body)) return false
+    for (const token of tokenize(body))
+        if (token.kind !== SyntaxKind.SemicolonToken) return true
+    return false
+}
+
 /** How many line breaks `text` holds between `start` and `end`. */
 export function newlinesIn(text: string, start: number, end: number): number {
     let count = 0

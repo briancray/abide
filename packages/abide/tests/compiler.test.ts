@@ -1788,3 +1788,19 @@ test('a slot holding a comma or a trailing comment is one expression', async () 
     }
     expect(rendered).toEqual(['second', 'second'])
 })
+
+// 41.6 — A `<script>` OF IMPORTS ALONE IS NO SETUP: what is left once they are excised is the empty
+// statements standing in for them (38.97), and a mount pays nothing for those. THE REVERT: read any
+// non-blank body as a setup (`body.trim() !== ''`) and the client mount opens a `Scope`, collects
+// watches and wraps a `try` per instance, and the server counts calls around a build it writes twice.
+test('a script of imports alone opens no setup on either side — 41.6', async () => {
+    const source =
+        "<script>import Card from './Card.abide'</script><div><Card /></div>"
+    const client = await clientOf(source)
+    const server = await serverOf(source)
+    expect({
+        collects: client.includes('collectWatches'),
+        tries: client.includes('__inSetup'),
+        counts: server.includes('callsInRender'),
+    }).toEqual({ collects: false, tries: false, counts: false })
+})

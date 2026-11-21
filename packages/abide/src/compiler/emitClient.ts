@@ -66,7 +66,7 @@ import {
     SETTLED_AT,
     shareScope,
 } from './shareScope.ts'
-import { splitImports } from './splitImports.ts'
+import { holdsStatement, splitImports } from './splitImports.ts'
 import type {
     Attribute,
     ElementNode,
@@ -357,7 +357,7 @@ function scopedSetup(
      */
     resumes = false,
 ): { opened: string; handed: string; closed: string; declared: boolean } {
-    if (body === '')
+    if (!holdsStatement(body))
         return { opened: '', handed: '', closed: '', declared: false }
     const collect = lowering.use('collectWatches')
     const share = resumes ? resumedShare(lowering, SHARE_AT) : undefined

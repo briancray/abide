@@ -3,6 +3,7 @@
 // its own would hide them; a flag cleared between the two is what says which of them threw.
 
 import type { Lowering } from './Lowering.ts'
+import { holdsStatement } from './splitImports.ts'
 
 /** The flag a setup's `try` reads to tell a throw from the setup apart from one after it. */
 export const IN_SETUP = '__inSetup'
@@ -18,7 +19,7 @@ export function guardedSetup(
     setup: string,
     rest: string,
 ): string {
-    if (setup.trim() === '') return rest
+    if (!holdsStatement(setup)) return rest
     return `let ${IN_SETUP} = true
 try {
 ${setup}
