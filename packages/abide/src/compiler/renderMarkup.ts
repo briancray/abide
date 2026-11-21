@@ -445,16 +445,6 @@ function invocationMarkup(
     at: PlacedNode,
     lowering: Lowering,
 ): string {
-    // 33.16 — `children` IS NEVER DECLARED, so a caller writing it as an attribute beside a body
-    // is passing the same prop twice; the record would carry the key twice and the last one
-    // would silently win.
-    if (
-        node.children.length > 0 &&
-        node.attributes.some((attribute) => attribute.name === CHILDREN)
-    )
-        throw new Error(
-            `abide: <${node.tag}> is given children as an attribute and between its tags. RULEBOOK 33.16.`,
-        )
     const props = invocationProps(node, lowering)
     // THE CALLER WRITES THE ANCHORS AND THE CHILD FILLS THEM: here by calling the child, and in the
     // browser by the child's own module (`MarkupLane`).

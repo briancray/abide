@@ -9,7 +9,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
-import { emitComponent, parseAbide } from '#compiler'
+import { parseAbide } from '#compiler'
 
 import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -118,8 +118,8 @@ import Note from './Note.abide'
 </script>
 
 <Note children="one">two</Note>`
-    const file = parseAbide(source)
-    expect(() => emitComponent(file)).toThrow('RULEBOOK 33.16')
+    // Refused as the file is read, so the formatter and the language server see it too.
+    expect(() => parseAbide(source)).toThrow('RULEBOOK 33.16')
 })
 
 test('a child grown in the browser fills its slot from the caller — 32.17, 32.18', async () => {

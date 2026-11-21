@@ -137,7 +137,6 @@ export function classifyAttributes(
         readsAnItem(holder: object): boolean
     },
 ): ClassifiedAttribute[] {
-    refuseBinds(node)
     const groups = mergeGroupsOf(node)
     const sharing: ReturnType<typeof sharingOf>[] = []
     for (const group of groups) sharing.push(sharingOf(group, lowering))
@@ -365,7 +364,7 @@ function heldClasses(groups: MergeGroup[]): string[] {
  * `<option selected>` inside a `<select bind:value>`, and a `<textarea bind:value>`'s text. Two
  * owners of one value render whichever the browser keeps and move with whichever wrote last.
  */
-function refuseBinds(node: ElementNode): void {
+export function refuseBinds(node: ElementNode): void {
     for (const attribute of node.attributes) {
         const lower = attribute.lowerName
         const measured = MEASURED.get(lower)

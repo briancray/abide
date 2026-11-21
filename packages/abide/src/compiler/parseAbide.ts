@@ -1,9 +1,15 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
+import { CHILDREN } from '#shared/CHILDREN.ts'
 import { isEventName } from '#shared/isEventName.ts'
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
 
-import { isComponentTag, isSlot, propKeyOf } from './classifyTemplate.ts'
+import {
+    isComponentTag,
+    isSlot,
+    propKeyOf,
+    refuseBinds,
+} from './classifyTemplate.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
 import { lineOf } from './lineOf.ts'
@@ -824,6 +830,18 @@ function fileComponents(
                 else if (isComponentTag(node.tag)) {
                     node.passed = declared.get(node.children) ?? []
                     refuseTwice(node.passed, `<${node.tag}>`)
+                    // 33.16 — `children` IS NEVER DECLARED, so a caller writing it as an attribute
+                    // beside a body is passing the same prop twice; the record would carry the key
+                    // twice and the last one would silently win.
+                    if (
+                        node.children.length > 0 &&
+                        node.attributes.some(
+                            (attribute) => attribute.name === CHILDREN,
+                        )
+                    )
+                        throw new Error(
+                            `abide: <${node.tag}> is given children as an attribute and between its tags. RULEBOOK 33.16.`,
+                        )
                     for (const passed of node.passed)
                         for (const attribute of node.attributes)
                             if (propKeyOf(attribute) === passed.name)
@@ -832,7 +850,11 @@ function fileComponents(
                                 )
                     open(node.children, node.components, false)
                     for (const passed of node.passed) inside(passed)
-                } else collect(node.children, scope, true)
+                } else {
+                    // 32.72, 32.74, 32.91 — what an element's binds refuse, once per element.
+                    refuseBinds(node)
+                    collect(node.children, scope, true)
+                }
                 continue
             }
             for (const body of bodiesOf(node))
