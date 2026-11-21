@@ -15,10 +15,10 @@
 
 import { rm } from 'node:fs/promises' // bun has no recursive remove of its own
 
+import { APP_NAME } from './APP_NAME.ts'
 import type { HandlerSettings } from './opened.ts'
 import { PAIRING_SCHEME } from './PAIRING_SCHEME.ts'
 
-const APP_NAME = 'abide bridge'
 export const IDENTIFIER = 'abide.bridge'
 const DESKTOP_ENTRY = 'abide-bridge.desktop'
 const LAUNCH_SERVICES =
@@ -126,7 +126,7 @@ function appletSource(bun: string, directory: string): string {
 end open location
 
 on run
-\tdisplay dialog "abide bridge opens the pairing links abide sites show, so your Claude Code can be their assistant. There is nothing to do here." buttons {"OK"} default button "OK" with title "abide bridge"
+\tdisplay dialog "${APP_NAME} opens the pairing links abide sites show, so your Claude Code can be their assistant. There is nothing to do here." buttons {"OK"} default button "OK" with title "${APP_NAME}"
 end run
 `
 }

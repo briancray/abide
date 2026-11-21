@@ -10,7 +10,7 @@ import { scratchDirectory } from './scratchDirectory.ts'
 
 const PROTOCOL_VERSION = '2025-06-18'
 /** How long a `headersHelper` has to write its headers, as Claude Code gives one. */
-const HEADERS_HELPER_MS = 10_000
+const HEADERS_HELPER_MILLISECONDS = 10_000
 
 /** A server as an MCP config's `mcpServers` holds it: a command run over stdio, or an http address. */
 type ServerConfiguration = {
@@ -39,14 +39,6 @@ type Session = {
         params?: unknown
     }): Promise<RpcMessage | undefined>
     close(): Promise<void>
-}
-
-type McpPiece = {
-    type: string
-    text?: string
-    data?: string
-    mimeType?: string
-    resource?: { text?: string }
 }
 
 /**
@@ -119,7 +111,13 @@ export async function callTool(
 /** An MCP tool result as a `ToolAnswer`: text and images as they are, anything else as its text or JSON. */
 function answerOf(result: unknown): ToolAnswer {
     const { content, structuredContent, isError } = (result ?? {}) as {
-        content?: McpPiece[]
+        content?: {
+            type: string
+            text?: string
+            data?: string
+            mimeType?: string
+            resource?: { text?: string }
+        }[]
         structuredContent?: unknown
         isError?: boolean
     }
@@ -260,7 +258,7 @@ async function helpedHeaders(
         },
         stdout: 'pipe',
         stderr: 'pipe',
-        timeout: HEADERS_HELPER_MS,
+        timeout: HEADERS_HELPER_MILLISECONDS,
         signal,
     })
     const [written, said, exited] = await Promise.all([

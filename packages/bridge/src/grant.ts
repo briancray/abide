@@ -169,8 +169,8 @@ export function grantOf(
 
 /**
  * What a site asking for `asked` is given by a visitor who passed `claudeArgs`, beside those args with
- * `--tools` and `--mcp-config` taken out — every tool asked, where the bridge runs `full` (44.82). The
- * visitor's servers are read only where an MCP tool is asked.
+ * `--tools` and `--mcp-config` taken out — every tool asked, and the args untouched, where the bridge
+ * runs `full` (44.82). The visitor's servers are read only where an MCP tool is asked.
  *
  * Throws where an `--mcp-config` they named cannot be read, unless `unreadable` is given: then that is
  * said to it, and the grant is of no server.
@@ -195,7 +195,10 @@ export async function grantFor(
             if (unreadable === undefined) throw thrown
             unreadable(messageOf(thrown))
         }
-    return { grant: grantOf(asked, granted, configured), args }
+    return {
+        grant: grantOf(asked, granted, configured),
+        args: full ? [...claudeArgs] : args,
+    }
 }
 
 /** The servers `unserved` tools are of, as one list to name in a sentence. */
@@ -267,9 +270,7 @@ export async function callGrant(
     const { grant, args } = await grantFor([tool], claudeArgs, full)
     if (grant.mcp.length === 0)
         return { refused: withheldNotices(grant).join(' ') }
-    // 44.82 — a full bridge's options as the visitor gave them.
-    const given = full ? [...claudeArgs] : args
-    const denied = takeFlag(given, ['--disallowedTools', '--disallowed-tools'])
+    const denied = takeFlag(args, ['--disallowedTools', '--disallowed-tools'])
     if (namesTool(denied, tool, server))
         return {
             refused: `The site called ${tool}, which this bridge’s --disallowedTools names.`,

@@ -7,10 +7,9 @@
 // 44.64 — A QUESTION THAT CANNOT BE SHOWN IS A NO: a Linux desktop with neither `zenity` nor `kdialog`
 // pairs nothing from a link.
 
-import { rm } from 'node:fs/promises' // bun has no remove of its own
-import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
-
+import { APP_NAME } from './APP_NAME.ts'
 import { macAlert } from './macAlert.ts'
+import { scratchDirectory } from './scratchDirectory.ts'
 
 /**
  * What the visitor answered: don't pair, pair as the link asks, or — offered only where it asks for full
@@ -29,7 +28,6 @@ export type Question = {
     icon: Uint8Array | undefined
 }
 
-const TITLE = 'abide bridge'
 const DENY = 'Don’t Allow'
 const ALLOW = 'Allow'
 const SITE_TOOLS = 'Only Site Tools'
@@ -121,14 +119,15 @@ async function ran(
     }
 }
 
-/** Writes `icon` where a dialog can read it as a file, answering where, or `undefined` for none. */
+/** Writes `icon` where a dialog can read it as a file: the file, and its removal, or `undefined`. */
 async function iconFile(
     icon: Uint8Array | undefined,
-): Promise<string | undefined> {
+): Promise<{ file: string; remove: () => Promise<void> } | undefined> {
     if (icon === undefined) return undefined
-    const file = `${tmpdir()}/abide-bridge-icon-${crypto.randomUUID()}.png`
+    const { directory, remove } = await scratchDirectory()
+    const file = `${directory}/icon.png`
     await Bun.write(file, icon)
-    return file
+    return { file, remove }
 }
 
 /**
@@ -221,7 +220,7 @@ export async function ask(
                     ABIDE_BRIDGE_TITLE: question.title,
                     ABIDE_BRIDGE_HEADLINE: question.headline,
                     ABIDE_BRIDGE_BODY: question.body,
-                    ABIDE_BRIDGE_ICON: icon ?? '',
+                    ABIDE_BRIDGE_ICON: icon?.file ?? '',
                     ABIDE_BRIDGE_BUTTONS: buttons.join('\n'),
                 },
             )
@@ -233,7 +232,7 @@ export async function ask(
             question,
             offerSiteTools,
             (tool) => Bun.which(tool) !== null,
-            icon,
+            icon?.file,
         )
         if (command === undefined) return 'deny'
         const shown = await ran(command)
@@ -245,7 +244,7 @@ export async function ask(
             return shown.printed === SITE_TOOLS ? 'siteTools' : 'deny'
         return shown.code === 1 ? 'siteTools' : 'deny'
     } finally {
-        if (icon !== undefined) await rm(icon, { force: true })
+        await icon?.remove()
     }
 }
 
@@ -257,11 +256,11 @@ export async function notify(line: string): Promise<void> {
             '-e',
             'on run argv',
             '-e',
-            `display notification (item 1 of argv) with title "${TITLE}"`,
+            `display notification (item 1 of argv) with title "${APP_NAME}"`,
             '-e',
             'end run',
             line,
         ])
     else if (process.platform === 'linux' && Bun.which('notify-send') !== null)
-        await ran(['notify-send', TITLE, line])
+        await ran(['notify-send', APP_NAME, line])
 }

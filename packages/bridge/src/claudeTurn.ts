@@ -132,9 +132,8 @@ async function launchFlags(
     full: boolean,
 ): Promise<{ flags: string[]; grant: Grant }> {
     const { tools: asked, ...options } = config
-    const { grant, args } = await grantFor(asked ?? [], visitor, full)
     // 44.82 — the visitor's options as they gave them, and Claude Code's own settings and servers.
-    const given = full ? [...visitor] : args
+    const { grant, args: given } = await grantFor(asked ?? [], visitor, full)
     const allowed = takeFlag(given, ['--allowedTools', '--allowed-tools'])
     const sources = full ? [] : takeFlag(given, ['--setting-sources'])
     const flags = [

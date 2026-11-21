@@ -29,8 +29,7 @@ export type Shares = {
     /**
      * The share, which is also the CPU ceiling.
      *
-     * An optimization is capped by the fraction of the op it touches. One number, not two — the
-     * sketch returned the fraction twice, once as `layer` and once as `ceilingCpu`.
+     * An optimization is capped by the fraction of the op it touches.
      */
     ceilingCpu: number
     /**

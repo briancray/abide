@@ -428,10 +428,9 @@ function counting(
     original: AnyFunction,
 ): AnyFunction {
     return function (this: unknown, ...args: unknown[]): unknown {
-        // Nested inside an already-counted call: the outermost one has already said
-        // what this op did.
-        if (depth > 0) return original.apply(this, args)
-        if (!armed) return original.apply(this, args)
+        // Nested inside an already-counted call, the outermost one has already said what this
+        // op did.
+        if (depth > 0 || !armed) return original.apply(this, args)
         depth = 1
         try {
             tallyBefore(role, this, args, member)
