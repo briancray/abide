@@ -15,6 +15,7 @@
 import { chromium } from '@playwright/test'
 
 import { servedFixture } from '../e2e/servedFixture.ts'
+import { scrollFrames, settle, taskDurationOf } from './mainThread.ts'
 import { median, percent, spread } from './median.ts'
 
 const SIZES =
@@ -104,24 +105,9 @@ try {
                         .__RECT_WRITES__ ?? 0) >= expected,
                 count,
             )
-            await tab.evaluate(
-                () =>
-                    new Promise((resolve) =>
-                        setTimeout(() => requestAnimationFrame(resolve), 200),
-                    ),
-            )
+            await settle(tab)
             const session = await context.newCDPSession(tab)
-            await session.send('Performance.enable')
-            const taskDuration = async (): Promise<number> => {
-                const answer = (await session.send(
-                    'Performance.getMetrics',
-                )) as { metrics: { name: string; value: number }[] }
-                return (
-                    answer.metrics.find(
-                        (metric) => metric.name === 'TaskDuration',
-                    )?.value ?? 0
-                )
-            }
+            const taskDuration = await taskDurationOf(session)
             const before = await tab.evaluate(() => {
                 const state = globalThis as {
                     __ARMS__?: { made: number; armMs: number }
@@ -135,25 +121,7 @@ try {
             })
             const taskBefore = await taskDuration()
             // 60 FRAMES OF SCROLL, one step per frame, then two quiet frames for the settle.
-            await tab.evaluate(
-                (frames) =>
-                    new Promise<void>((resolve) => {
-                        let left = frames
-                        const step = (): void => {
-                            if (left === 0) {
-                                requestAnimationFrame(() =>
-                                    requestAnimationFrame(() => resolve()),
-                                )
-                                return
-                            }
-                            left -= 1
-                            scrollBy(0, 4)
-                            requestAnimationFrame(step)
-                        }
-                        requestAnimationFrame(step)
-                    }),
-                FRAMES,
-            )
+            await scrollFrames(tab, FRAMES, 4)
             const taskAfter = await taskDuration()
             const after = await tab.evaluate(() => {
                 const state = globalThis as {

@@ -12,6 +12,7 @@
 import { chromium } from '@playwright/test'
 
 import { servedFixture } from '../e2e/servedFixture.ts'
+import { scrollFrames, settle, taskDurationOf } from './mainThread.ts'
 import { median, spread } from './median.ts'
 
 const SIZES =
@@ -171,27 +172,9 @@ try {
                 })
                 const tab = await context.newPage()
                 await tab.goto(`${base}/`, { waitUntil: 'load' })
-                await tab.evaluate(
-                    () =>
-                        new Promise((resolve) =>
-                            setTimeout(
-                                () => requestAnimationFrame(resolve),
-                                200,
-                            ),
-                        ),
-                )
+                await settle(tab)
                 const session = await context.newCDPSession(tab)
-                await session.send('Performance.enable')
-                const taskDuration = async (): Promise<number> => {
-                    const answer = (await session.send(
-                        'Performance.getMetrics',
-                    )) as { metrics: { name: string; value: number }[] }
-                    return (
-                        answer.metrics.find(
-                            (metric) => metric.name === 'TaskDuration',
-                        )?.value ?? 0
-                    )
-                }
+                const taskDuration = await taskDurationOf(session)
                 const mountBefore = await taskDuration()
                 // A click, then two frames for its render, style, layout and paint.
                 await tab.evaluate(
@@ -213,28 +196,7 @@ try {
                             ?.getElementsByTagName('*').length ?? 0,
                 )
                 const scrollBefore = await taskDuration()
-                await tab.evaluate(
-                    (frames) =>
-                        new Promise<void>((resolve) => {
-                            const viewport = document.getElementById(
-                                'viewport',
-                            ) as HTMLElement
-                            let left = frames
-                            const step = (): void => {
-                                if (left === 0) {
-                                    requestAnimationFrame(() =>
-                                        requestAnimationFrame(() => resolve()),
-                                    )
-                                    return
-                                }
-                                left -= 1
-                                viewport.scrollTop += 8
-                                requestAnimationFrame(step)
-                            }
-                            requestAnimationFrame(step)
-                        }),
-                    FRAMES,
-                )
+                await scrollFrames(tab, FRAMES, 8, 'viewport')
                 const scrollAfter = await taskDuration()
                 rows.push({
                     mountMs: (mountAfter - mountBefore) * 1000,
