@@ -587,7 +587,13 @@ export class Lowering {
      * and a rewritten one as a run of no length at the read it replaced, so anything inside the
      * rewrite is placed at the read. `base` is where the output lands in the text it is added to.
      */
-    lower(span: Span, holds = false, origins?: Origin[], base = 0): string {
+    lower(
+        span: Span,
+        holds = false,
+        origins?: Origin[],
+        base = 0,
+        skip?: Read,
+    ): string {
         const from = span.start
         const to = span.end
         const source = this.projection.text
@@ -624,7 +630,7 @@ export class Lowering {
         for (; read < reads.length; read += 1) {
             const current = reads[read] as Read
             if (current.start >= to) break
-            if (current.start < at) continue
+            if (current.start < at || current === skip) continue
             // 32.67 — a row's item is the value wherever its row is not being mounted.
             if (current.item !== -1) {
                 const rewritten = this.itemRead(current)
@@ -652,11 +658,13 @@ export class Lowering {
             if (current.shape === 'write' && current.path.length === 0) {
                 const [open, close] =
                     this.checkedWriteParts(current) ??
-                    writeParts(
-                        this.nameOf(current),
-                        current.operator,
-                        current.discarded,
-                    )
+                    (current.fills && !this.checking
+                        ? fillParts(this.nameOf(current), current.discarded)
+                        : writeParts(
+                              this.nameOf(current),
+                              current.operator,
+                              current.discarded,
+                          ))
                 const value = current.value as Span
                 copy(current.from)
                 pin(current.from)
@@ -748,7 +756,10 @@ export class Lowering {
      * `Reactive` is due, a cell over its accessor.
      */
     private nameOf(read: Read): string {
-        const spelled = this.projection.text.slice(read.start, read.end)
+        // 31.15 — a member's `Reactive` is its receiver, lowered: `rows[at]` reads `at`.
+        const spelled = read.member
+            ? this.lower(read, false, undefined, 0, read).trim()
+            : this.projection.text.slice(read.start, read.end)
         // 23.9 — WHAT THIS PAGE'S OWN ROUTE PROMISES, for the checker alone: the running module
         // reads the one `route` every page shares.
         if (this.routed !== undefined && read.routeParams)
@@ -957,7 +968,8 @@ export class Lowering {
     /** A read of the value: `name()`, or `__values.name` where the checker is asked. */
     private valueOf(spelled: string, read: Read, name: string): string {
         const record = this.recordOf(spelled, read)
-        return record === undefined ? `${name}()` : `${record}.${spelled}`
+        if (record !== undefined) return `${record}.${spelled}`
+        return read.optional ? `${name}?.()` : `${name}()`
     }
 
     /**
@@ -969,7 +981,8 @@ export class Lowering {
      * a prop narrows under an `{#if}` as a page's own value does; called, it would not narrow at all.
      */
     private recordOf(spelled: string, read: Read): string | undefined {
-        if (!this.checking) return undefined
+        // 31.1 — a read of what may be no `Reactive` is `n?.()`, typed as it runs.
+        if (!this.checking || read.optional) return undefined
         if (!read.local) {
             this.values.set(spelled, read.through)
             return CHECKED_VALUES
@@ -1131,6 +1144,18 @@ function writeParts(
     if (op === '') return [open, ')']
     if (SHORT_CIRCUIT.has(op)) return [`${name}() ${op} ${open}`, ')']
     return [`${open}${name}() ${op} (`, '))']
+}
+
+/**
+ * 31.4 — a write of a `Reactive` into a target that may hold none yet: assigned where it is
+ * `undefined`, loaded from where it holds one. The checker reads it as the write it otherwise is.
+ */
+function fillParts(name: string, discarded: boolean): [string, string] {
+    // A statement must not open on `(`, which continues a line with no semicolon as a call.
+    return [
+        `${discarded ? 'void ' : ''}((${STORED}) => ${name} === undefined ? (${name} = ${STORED}) : (${name}.set(${STORED}), ${STORED}))(`,
+        ')',
+    ]
 }
 
 // What a read write binds: the value it stored, or — a postfix update — the value it read. Under

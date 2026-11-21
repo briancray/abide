@@ -39,11 +39,15 @@ export type CheckedShadow = {
     refusals: Finding[]
 }
 
-/** What `name` holds when it is read: what calling it hands back, and through a props accessor, what calling that does. */
+/**
+ * What `name` holds when it is read: what calling it hands back, and through a props accessor, what
+ * calling that does. 31.1 — a name that may hold no `Reactive` is read `n?.()`, never through here,
+ * so what it holds is its `Reactive`'s.
+ */
 function valueType(name: string, through: boolean): string {
     return through
         ? `ReturnType<ReturnType<typeof ${name}>>`
-        : `ReturnType<typeof ${name}>`
+        : `ReturnType<NonNullable<typeof ${name}>>`
 }
 
 /**

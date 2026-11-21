@@ -17,12 +17,11 @@ const DEALS = [
 ]
 
 let shown = reactive<(typeof DEALS)[number] | undefined>(undefined)
-let open = reactive(false)
-const drawer = dialog({ open })
+const drawer = dialog()
 
 function show(deal: (typeof DEALS)[number]) {
     shown = deal
-    open = true
+    drawer.open = true
 }
 </script>
 

@@ -122,6 +122,21 @@ export type Read = {
     /** 23.9 — the read is abide's `route.params`, which a page or a layout types by its route. */
     routeParams: boolean
     /**
+     * 31.15 — the occurrence is a property or an element access whose declared type is a
+     * `Reactive`, so the `Reactive` it reaches is its receiver lowered, rather than a name.
+     */
+    member: boolean
+    /**
+     * 31.1 — the occurrence's type admits `undefined` or `null`, so a read of it is `n?.()`: there
+     * may be no `Reactive` to call.
+     */
+    optional: boolean
+    /**
+     * 31.4 — a whole write whose value is a `Reactive`: where the target holds none yet, it is
+     * assigned the one written rather than written.
+     */
+    fills: boolean
+    /**
      * 32.67 — a read of a `{#for}` row's item: where that row's item binding starts in the
      * projection, or -1 for every other read.
      */
@@ -160,6 +175,9 @@ export function newRead(
         declaredAt: -1,
         keys: [],
         routeParams: false,
+        member: false,
+        optional: false,
+        fills: false,
         item: -1,
     }
 }

@@ -2318,8 +2318,9 @@ type parameter constrained by one.
 array or an object whose prototype is `Object.prototype` or `null` — MUST assign on that value itself, MUST NOT
 copy it or any level above it, and MUST NOT wake a reader.
 
-31.15 `route.url`, `route.params`, `route.name`, `route.index` and `route.navigating` MUST each be
-read and written as a name bound to a `Reactive` is, per 31.1 to 31.7.
+31.15 Inside a `.abide` file a property access or an element access whose declared type is a
+`Reactive` MUST be read and written as a name bound to a `Reactive` is, per 31.1 to 31.7, save an
+access on a `Reactive`, which 31.5 governs.
 
 31.16 `abide check` MUST hold a write through a member path — an assignment, a compound assignment
 or an update, at any depth and through a computed key — to the type of the member it writes, on the
@@ -2332,6 +2333,15 @@ declaration binds to it is, per 31.1 to 31.7, save a name a `props` pattern bind
 31.18 `abide check` MUST hold a write to such a name — an assignment, a compound assignment or a
 logical assignment — to the type its `Reactive`'s `set` takes, an object literal written as the
 value refused a property that type does not declare, on the `.abide` line.
+
+31.19 An operand of `??`, `||` or `&&`, and an arm of a conditional, MUST stand in the position of
+the expression it is part of, for 31.3.
+
+31.20 Assignment of a `Reactive` to such a name, or to an access 31.15 governs, MUST bind it to that
+`Reactive` where it holds `undefined`, and MUST be the write 31.4 makes where it holds a `Reactive`.
+
+31.21 A read of such a name, or of an access 31.15 governs, whose declared type admits `undefined` or
+`null` MUST read `undefined` where it holds no `Reactive`.
 
 # 32. Templating
 
