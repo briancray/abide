@@ -5,6 +5,11 @@ import type { Subprocess } from 'bun'
 
 import { addressOf } from '../tests/builtApp.ts'
 
+// NOT `tests/builtApp.ts`'s `serveApp`, though it does the same three steps, because the invariants
+// differ: a spec's app sits in a directory it NAMES (one per playwright project) so it can rebuild
+// and restart it in place on the port it had; the CLI may be another checkout's (`repo`); and the
+// spec owns the server process — pausing it, killing it — where `startApp` keeps it and its mkdtemp
+// directory is a bun:test hook's to remove.
 const REPO = new URL('../../../', import.meta.url).pathname
 const cliOf = (repo: string): string =>
     join(repo, 'packages/abide/bin/abide.ts')
