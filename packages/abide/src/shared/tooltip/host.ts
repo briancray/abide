@@ -33,10 +33,10 @@ export function host(): TooltipHost {
             tip.anchor,
             popover,
             {
+                // Every placement option the tip was given, as `popover` takes them; `delay` is the
+                // tip's own and `place` reads past it.
+                ...tip.options,
                 side: tip.options.side ?? 'top',
-                align: tip.options.align ?? 'center',
-                offset: tip.options.offset ?? 8,
-                arrowInset: tip.options.arrowInset ?? 0,
                 // 50.48 — a hint is never the pointer's target.
                 interactive: false,
             },

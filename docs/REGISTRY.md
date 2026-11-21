@@ -877,7 +877,7 @@ type Reached = { readonly [REACHED]: true }
 | `tooltip.tip` | `(text: string, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a text hint for the element it is bound to, shown by the page's `tooltip.host`. | 32.9, 50.23, 50.24, 50.25, 50.36, 53.15 |
 | `tooltip.host` | `() => TooltipHost` | The popover every hint shows in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.36, 50.48, 50.54, 49.9 |
 | `TooltipHost` | `{ readonly hint: Record<string, unknown>; text(): string \| undefined }` | The popover's part, and the text of the hint showing in it. | 32.11, 50.54, 50.55 |
-| `TooltipOptions` | `{ side?: Side; align?: 'start' \| 'center' \| 'end'; offset?: number; arrowInset?: number; delay?: number }` | Where a hint opens against its anchor, and how long a pointer rests first. | 50.24, 50.26, 50.35 |
+| `TooltipOptions` | `Omit<PopoverOptions, 'side'> & { side?: Side; delay?: number }` | Where a hint opens against its anchor, placed as a `popover` is, and how long a pointer rests first. | 50.19, 50.20, 50.21, 50.24, 50.26, 50.35 |
 
 ## `menu`
 

@@ -3,18 +3,16 @@
 
 import { outlet } from '../outlet.ts'
 import type { Side } from '../place.ts'
+import type { PopoverOptions } from '../popover.ts'
 import { reactive } from '../reactive/index.ts'
 
-/** Where a hint opens against its anchor, and how long a pointer rests first. */
-export type TooltipOptions = {
+/**
+ * Where a hint opens against its anchor — `popover`'s placement, every option of it, so the two cannot
+ * drift — and how long a pointer rests first. Only the side's default is a hint's own.
+ */
+export type TooltipOptions = Omit<PopoverOptions, 'side'> & {
     /** The side of the anchor the hint opens on, flipped to the opposite one where it has no room. Default `'top'`. */
     side?: Side
-    /** Which edge of the anchor the hint lines up with. Default `'center'`. */
-    align?: 'start' | 'center' | 'end'
-    /** Pixels between the anchor and the hint. Default `8`. */
-    offset?: number
-    /** Pixels the arrow's `--arrow-offset` keeps from each end of the hint's facing edge. Default `0`. */
-    arrowInset?: number
     /** Milliseconds a pointer rests on the anchor before the hint opens. Default `300`. */
     delay?: number
 }
