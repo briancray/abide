@@ -7,7 +7,6 @@
 // two arms running byte-identical source differed 4.5x because only one shipped a stylesheet.
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
-import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its own
 import { resolve } from 'node:path' // bun has no path helpers of its own
 
 import {
@@ -212,13 +211,4 @@ export async function loadCompiledPage(
     await page.evaluate(() => {
         ;(globalThis as unknown as { __MOUNT__?: () => void }).__MOUNT__?.()
     })
-}
-
-if (import.meta.main) {
-    const page = await buildCompiledPage(
-        await Bun.file(`${REPO}${Bun.argv[2] ?? ''}`).text(),
-    )
-    const out = mkdtempSync(`${tmpdir()}/abide-page-`)
-    writeFileSync(`${out}/page.json`, JSON.stringify(page))
-    console.log(`${out}/page.json`)
 }

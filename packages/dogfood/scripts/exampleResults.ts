@@ -13,8 +13,8 @@ async function testsOf(app: string): Promise<Record<string, TestRow>> {
     const child = Bun.spawn({
         cmd: [
             process.execPath,
-            Bun.fileURLToPath(new URL('exampleTests.ts', import.meta.url)),
-            app,
+            // The script a reader of the downloaded app runs, so the rows are the ones they see.
+            Bun.fileURLToPath(new URL(`${app}/scripts/testRows.ts`, EXAMPLES)),
             '--scope',
             'all',
         ],

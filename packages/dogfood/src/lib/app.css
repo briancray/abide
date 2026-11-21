@@ -132,7 +132,7 @@
 }
 
 /* THE GENERATED DOCS MARKUP — what the pages script writes from markdown and example JSON, which
-   carries a class because nothing can carry a utility: `.flow`, `.toc`, `.snippet`, `.tip`,
+   carries a class because nothing can carry a utility: `.flow`, `.toc`, `.snippet`,
    `.rules` and the rest. Each name is also a hook (`installDocs.ts`, the e2e specs), so it stays
    a name. Pseudo-elements, a mix of two tokens and a transition on one property stay declarations:
    no utility says them more shortly. */
@@ -304,43 +304,6 @@
 
     .t-num {
         @apply text-syn-num;
-    }
-
-    /* A TIP is the DOCUMENTATION SPEAKING, and it means that wherever it appears: annotating
-       a render inside the result frame, or standing on its own in prose. One rule for both,
-       so an aside cannot come to mean one thing in the page and another in an example. */
-    .tip {
-        @apply relative rounded-md border bg-signal/7 py-3 pr-4 pl-10 font-sans text-chrome/5 font-normal text-muted;
-    }
-
-    /* its own rule for the reason the chat bubble's is */
-    .tip {
-        border-color: color-mix(in srgb, var(--color-signal) 28%, var(--color-rule));
-    }
-
-    /* THE MARK IS INSIDE THE TEXT, not beside it, so it is placed rather than gapped: a flex
-       row would put it at the top of the BOX, and it belongs on the first LINE. It IS that line —
-       the mark is one line box tall, so its inset is the padding and there is no half-difference
-       to center it by, and a tip grown to three lines keeps its mark on the sentence it belongs
-       to. The glyph is 800 because an `i` at this size is two strokes and loses one. */
-    .tip::before {
-        content: 'i';
-        @apply absolute top-3 left-3 size-5 rounded-full bg-signal text-center font-sans text-chrome/5 font-extrabold tracking-normal text-paper;
-    }
-
-    /* A control the DOCUMENTATION offers, not one the app renders — anything the example's
-       own files do not produce belongs in here, where it is already marked as us talking.
-       Outlined rather than filled, so it never reads as the page's own button. */
-    .tip button {
-        @apply cursor-pointer appearance-none rounded-sm border border-signal bg-transparent px-2 py-1 font-mono text-chrome/4 font-medium text-signal;
-    }
-
-    .tip button:hover {
-        @apply bg-signal/12;
-    }
-
-    .tip code {
-        @apply rounded-xs bg-ink/8 p-1 font-mono text-chrome/3 font-normal text-ink;
     }
 
     /* A PAGE'S RULES: each clause quoted under its number, the number the link to it. */
