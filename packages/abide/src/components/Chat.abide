@@ -189,6 +189,9 @@ async function attach(files: File[]) {
         }
 }
 
+// 53.17-53.20 — the composer takes images dropped on it or pasted into it, its part named `composer`.
+const drop = dropzone({ accept: imageFiles, paste: true, onfiles: attach })
+
 async function answer(id: string, allow: boolean) {
     turns.patch((all) => {
         for (const each of all)
@@ -260,8 +263,7 @@ const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
         {/for}
     </ol>
 
-    <form data-part="composer" onsubmit={submit}
-        bind:element={dropzone(attach, { accept: imageFiles, paste: true })}>
+    <form {...drop.host} data-part="composer" onsubmit={submit}>
         {#if attached.length > 0}
             <div data-part="attachments">
                 {#for image, at of attached}

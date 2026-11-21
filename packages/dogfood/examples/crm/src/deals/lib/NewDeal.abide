@@ -6,15 +6,15 @@ import createDeal from '../createDeal.handler.ts'
 const deal = form(createDeal)
 </script>
 
-<form {...deal.element} class="row">
-    <label>name <input {...deal.field('name')} value="Ledger audit"></label>
-    <label>company <input {...deal.field('company')}></label>
-    <label>amount <input type="number" {...deal.field('amount')} value="0"></label>
-    <button {...deal.submit()}>Add deal</button>
+<form {...deal.form} class="row">
+    <label>name <input {...deal.field('name').input} value="Ledger audit"></label>
+    <label>company <input {...deal.field('company').input}></label>
+    <label>amount <input type="number" {...deal.field('amount').input} value="0"></label>
+    <button {...deal.submit}>Add deal</button>
 </form>
 
 <ul class="fields">
     {#for name of ['name', 'company', 'amount'] as const}
-        <li {...deal.error(name)}><span>{name}</span><strong>{deal.message(name)}</strong></li>
+        <li {...deal.field(name).error}><span>{name}</span><strong>{deal.field(name).message}</strong></li>
     {/for}
 </ul>

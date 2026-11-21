@@ -1,14 +1,10 @@
 <script>
-import { dropzone, reactive } from '@abide/abide'
+import { dropzone } from '@abide/abide'
 
-let contracts = reactive<string[]>([])
-
-function attach(files: File[]) {
-    for (const file of files) contracts.push(file.name)
-}
+const drop = dropzone({ accept: '.pdf' })
+const names = (files: readonly File[]) =>
+    files.map((file) => file.name).join(', ')
 </script>
 
-<div bind:element={dropzone(attach, { accept: '.pdf' })}>
-    Drop the signed contract here, as a PDF.
-</div>
-<p>Attached: {contracts.join(', ') || 'none'}</p>
+<div {...drop.host}>Drop the signed contract here, as a PDF.</div>
+<p>Attached: {names(drop.files()) || 'none'}</p>

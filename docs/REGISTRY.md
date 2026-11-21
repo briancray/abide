@@ -908,9 +908,10 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `form` | `<Handler extends Rpc<any, any, any, any>>(handler: Handler) => Form<Handler>` | A form over a handler as parts an app spreads onto a `<form>` and fields of its own, checked against the handler's args document before the call is made. | 56.1, 56.2, 56.3, 56.4, 56.5, 56.6, 56.7, 56.8, 56.12, 19.13, 49.8 |
+| `form` | `<Handler extends Rpc<any, any, any, any>>(handler: Handler) => Form<Handler>` | A form over a handler as parts an app spreads onto a `<form>` and fields of its own, checked against the handler's args document before the call is made. | 56.1, 56.2, 56.3, 56.4, 56.5, 56.6, 56.7, 56.8, 56.12, 19.13, 49.4, 49.8, 49.11 |
 | `FieldName` | `Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? keyof NonNullable<Args> & string : string` | The names a form's fields post under: the members of its handler's args. | 56.1 |
-| `Form` | `{ readonly element: Record<string, unknown>; field(name: FieldName<Handler>): Record<string, unknown>; error(name: FieldName<Handler>): Record<string, unknown>; message(name: FieldName<Handler> \| ''): string \| undefined; submit(): Record<string, unknown>; issues(): Issues<Handler> \| undefined; readonly call: ReturnType<Handler> }` | The form's part, a field's, a field message's and a submit button's, what is wrong with the form, and the last call it made. | 32.11, 56.4, 56.9, 56.10, 56.11 |
+| `Form` | `{ readonly form: Record<string, unknown>; field(name: FieldName<Handler>): FormField; readonly error: Record<string, unknown>; readonly message: string \| undefined; readonly submit: Record<string, unknown>; readonly issues: Issues<Handler> \| undefined; readonly call: ReturnType<Handler> }` | The form's part, a field's parts by name, the form's own message and its element, a submit button's part, what is wrong with the form, and the last call it made. | 32.11, 56.4, 56.10, 56.11, 56.13, 49.11 |
+| `FormField` | `{ readonly input: Record<string, unknown>; readonly error: Record<string, unknown>; readonly message: string \| undefined; readonly invalid: boolean }` | One field's parts — the field's and its message element's — with its first message and whether it has one. | 56.9, 56.10, 56.13, 49.11 |
 
 ## `Combobox`
 
@@ -1041,7 +1042,9 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `dropzone` | `(onFiles: (files: File[], event: DragEvent \| ClipboardEvent) => void, options?: { accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean; onreject?: (files: File[], event: DragEvent \| ClipboardEvent) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor taking the files dropped on an element, or pasted into it. | 32.9, 53.17, 53.18, 53.19, 53.20, 53.46 |
+| `dropzone` | `(options?: DropzoneOptions) => DropzoneParts` | Files dropped on an element, pasted into it, or picked through a file input, as parts an app spreads onto a host and an input of its own. | 53.17, 53.18, 53.19, 53.20, 53.46, 53.59, 53.60, 49.4, 49.10, 49.11 |
+| `DropzoneOptions` | `{ accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean; multiple?: boolean; files?: Reactive<readonly File[]>; onfiles?: (files: File[], event: Event) => void; onreject?: (files: File[], event: Event) => void }` | Which files a drop, a paste or a pick takes, the files it binds, and what hears them. | 53.19, 53.20, 53.46, 53.59, 49.10 |
+| `DropzoneParts` | `{ readonly host: Record<string, unknown>; readonly input: Record<string, unknown>; readonly files: Reactive<readonly File[]>; readonly rejected: readonly File[] }` | The drop target's part, a file input's part, the files taken last, and the files turned away last. | 53.17, 53.18, 53.46, 53.59, 53.60, 49.4, 49.11 |
 
 ## `copy`
 

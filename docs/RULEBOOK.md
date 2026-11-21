@@ -5750,14 +5750,14 @@ until the first it lands in.
 53.16 `dismissible`'s `Disposer` MUST take its element off the stack, and the last one MUST remove
 the document's listeners.
 
-53.17 `dropzone` MUST write `data-dragging` on its element while a drag carrying files is over it, and
-MUST remove it once the drag leaves or drops.
+53.17 `dropzone`'s `host` MUST carry `data-dragging` while a drag carrying files is over its element,
+and MUST NOT once the drag leaves or drops.
 
 53.18 `dropzone` MUST refuse the default of a `dragover` and a `drop` carrying files, whatever
 `accept` takes.
 
-53.19 `dropzone` MUST hand its callback the files a drop carries that `accept` takes, the first alone
-where `multiple` is `false`, and MUST NOT call it where it takes none.
+53.19 `dropzone` MUST take the files a drop carries that `accept` takes, the first alone where
+`multiple` is `false`, handing them to `onfiles`, and MUST NOT call `onfiles` where it takes none.
 
 53.20 `dropzone` with `paste` MUST take a `paste` carrying files `accept` takes as a drop, and MUST
 leave a paste carrying none to the browser.
@@ -5833,7 +5833,8 @@ nothing for a click on no such element.
 53.45 `copy` MUST call `oncopied` once a click's copy has landed or failed, with whether it
 landed and the element clicked.
 
-53.46 `dropzone` MUST hand `onreject` the files a drop or a paste carries that it does not take,
+53.46 `dropzone` MUST hand `onreject`, and hold as `rejected`, the files a drop, a paste or a pick
+carries that it does not take,
 `accept` refusing them or `multiple` being `false`, and MUST NOT call it where it takes every one. A
 transfer whose `files` hold none carries the files in its `items`, for what it takes and turns away
 alike.
@@ -5872,6 +5873,12 @@ for any other where it is `false`, whatever 53.3 reads.
 MIME type the record names.
 
 53.58 `copy` MUST report a value holding no string as not copied where 53.22 copies.
+
+53.59 What a drop, a paste or a pick `dropzone` takes MUST replace its `files`, and one taking none
+MUST leave them as they are.
+
+53.60 A pick through `dropzone`'s `input` MUST be taken as a drop is, a function `accept` handed a
+transfer of the files picked, and the input MUST be emptied after it.
 
 # 54. Guards, fetches and jobs
 
@@ -6058,11 +6065,15 @@ that check finds.
 56.8 A `form` over a `POST` MUST write `method="post"` on its `<form>`, and the handler's address as
 its `action`.
 
-56.9 `form`'s `field` MUST carry `aria-invalid="true"` while its field has a message, and MUST name
-the element `error` writes the id of in `aria-describedby`.
+56.9 The `input` of a `form`'s `field` MUST carry `aria-invalid="true"` while its field has a message,
+and MUST name the element its `error` writes the id of in `aria-describedby`.
 
-56.10 `form`'s `error` MUST be `hidden` while its field has no message.
+56.10 The `error` of a `form`'s `field` MUST be `hidden` while its field has no message, and the
+form's own `error` while the form has none.
 
 56.11 `form`'s `submit` MUST be disabled while the form's last call is in flight.
 
 56.12 A `form` whose `<form>` holds a file in a field MUST throw at its submit, naming the field.
+
+56.13 A `form`'s `message` MUST be the first of its issues no field owns, those under `''`, and a
+`field`'s `message` the first of that field's.

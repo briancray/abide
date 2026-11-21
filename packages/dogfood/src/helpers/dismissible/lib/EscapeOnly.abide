@@ -4,13 +4,17 @@ import { dismissible, dropzone, reactive } from '@abide/abide'
 let open = reactive(true)
 let files = reactive<string[]>([])
 const close = () => (open = false)
-const attach = (dropped: File[]) =>
-    (files = [...files, ...dropped.map((file) => file.name)])
-const panel = [dismissible(close, { outside: false }), dropzone(attach)]
+const panel = dismissible(close, { outside: false })
+const drop = dropzone({
+    onfiles: (dropped) =>
+        (files = [...files, ...dropped.map((file) => file.name)]),
+})
 </script>
 
 {#if open}
-    <aside bind:element={panel}>Drop files: {files.join(', ') || 'none'}</aside>
+    <aside {...drop.host} bind:element={panel}>
+        Drop files: {files.join(', ') || 'none'}
+    </aside>
 {:else}
     <button onclick={() => (open = true)}>Open</button>
 {/if}

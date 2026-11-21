@@ -33,20 +33,32 @@ export type FieldName<Handler> =
         ? keyof NonNullable<Args> & string
         : string
 
-/** The parts `form` hands back, each spread onto an element: `<input {...deal.field('name')}>`. */
+/** One field's parts and what is wrong with it: `<input {...deal.field('title').input}>`. */
+export type FormField = {
+    /** The field's attributes: the name it posts under, whether it is invalid, and its message's id. */
+    readonly input: Record<string, unknown>
+    /** The attributes of the element showing the field's message, hidden while it has none. */
+    readonly error: Record<string, unknown>
+    /** The field's first message, or `undefined` where it has none. */
+    readonly message: string | undefined
+    /** Whether the field has a message. */
+    readonly invalid: boolean
+}
+
+/** The parts `form` hands back, each spread onto an element: `<form {...deal.form}>`. */
 export type Form<Handler extends AnyRpc> = {
     /** The `<form>`'s attributes and its submit. */
-    readonly element: Record<string, unknown>
-    /** A field's attributes: the name it posts under, whether it is invalid, and its message's id. */
-    field(name: FieldName<Handler>): Record<string, unknown>
-    /** The attributes of the element showing a field's message, hidden while it has none. */
-    error(name: FieldName<Handler>): Record<string, unknown>
-    /** A field's first message, or the whole form's under `''`, or `undefined` where it has none. */
-    message(name: FieldName<Handler> | ''): string | undefined
+    readonly form: Record<string, unknown>
+    /** A field's parts and its message, by the name it posts under. */
+    field(name: FieldName<Handler>): FormField
+    /** The attributes of the element showing the whole form's message, hidden while it has none. */
+    readonly error: Record<string, unknown>
+    /** The whole form's first message — one no field owns — or `undefined` where it has none. */
+    readonly message: string | undefined
     /** A submit button's attributes: disabled while the call is in flight. */
-    submit(): Record<string, unknown>
+    readonly submit: Record<string, unknown>
     /** What is wrong with the form: the check's findings, or else the last call's refusal. */
-    issues(): Issues<Handler> | undefined
+    readonly issues: Issues<Handler> | undefined
     /** The last call the form made, `busy` while it is in flight. */
     readonly call: ReturnType<Handler>
 }
@@ -157,23 +169,51 @@ export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
                   action: handler.url(),
                   onsubmit: submitted,
                   oninput: edited,
+                  'data-part': 'form',
               }
-            : { onsubmit: submitted, oninput: edited }
+            : { onsubmit: submitted, oninput: edited, 'data-part': 'form' }
+    // The element a message shows in: the whole form's under `''`, which no field posts under.
+    const errorOf = (name: string): Record<string, unknown> => ({
+        id: errorId(name),
+        get hidden() {
+            return message(name) === undefined
+        },
+        'data-part': 'error',
+    })
 
     return {
-        element,
+        form: element,
         field: (name) => ({
-            name,
-            'aria-invalid': message(name) === undefined ? undefined : 'true',
-            'aria-describedby': errorId(name),
+            input: {
+                name,
+                get 'aria-invalid'() {
+                    return message(name) === undefined ? undefined : 'true'
+                },
+                'aria-describedby': errorId(name),
+                'data-part': 'input',
+            },
+            error: errorOf(name),
+            get message() {
+                return message(name)
+            },
+            get invalid() {
+                return message(name) !== undefined
+            },
         }),
-        error: (name) => ({
-            id: errorId(name),
-            hidden: message(name) === undefined,
-        }),
-        message,
-        submit: () => ({ type: 'submit', disabled: call.busy() }),
-        issues: issues as () => Issues<Handler> | undefined,
+        error: errorOf(''),
+        get message() {
+            return message('')
+        },
+        submit: {
+            type: 'submit',
+            get disabled() {
+                return call.busy()
+            },
+            'data-part': 'submit',
+        },
+        get issues() {
+            return issues() as Issues<Handler> | undefined
+        },
         call,
     }
 }

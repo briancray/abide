@@ -41,6 +41,7 @@ export const BUILTIN_TYPES = new Set([
     'Document',
     'DragEvent',
     'Element',
+    'Event',
     'EventTarget',
     'File',
     'HTMLButtonElement',

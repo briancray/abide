@@ -2,10 +2,12 @@
 // than an omission: each element's part names it as `data-part` (49.4), each option an app binds is
 // optional and handed back (49.10), and the parts are a member per element there is one of and a
 // function per item, never a reader taking no argument or an optional one that changes the answer
-// (49.11). `form` and `dropzone` are reshaped apart and join the lists when they are.
+// (49.11).
 
 import { afterEach, expect, test } from 'bun:test'
 
+import { POST } from '#server'
+import { addressed } from '#server/addressed.ts'
 import {
     chart,
     type ChartParts,
@@ -17,6 +19,11 @@ import {
     type CommandParts,
     dialog,
     type DialogParts,
+    dropzone,
+    type DropzoneParts,
+    type Form,
+    form,
+    type FormField,
     type Listbox,
     listbox,
     type Menu,
@@ -68,6 +75,9 @@ type Row = { id: string; name: string }
 const COLUMN = { key: 'name', label: 'Name' } as const
 const ROW: Row = { id: 'ada', name: 'Ada' }
 const COMMAND = { label: 'Open', run: () => {} }
+// A handler, as `form` is handed one: what it posts to and how it is called.
+const ADD = POST((args: { name: string }) => args)
+addressed(ADD, '/deals/shape')
 
 // 49.11 — the members a parts type may not have: a function taking nothing that answers a value, or
 // one whose first argument is optional, so calling it two ways answers two things. A `Reactive`
@@ -118,6 +128,9 @@ test('every part is a member, a function of its item, or an action — 49.11', (
     shaped<ChartParts>()
     shaped<PieParts>()
     shaped<SparklineParts>()
+    shaped<Form<typeof ADD>>()
+    shaped<FormField>()
+    shaped<DropzoneParts>()
     expect(true).toBe(true)
 })
 
@@ -145,6 +158,8 @@ function elementParts(): Record<string, unknown> {
     })
     const ring = pie({ label: 'Mix', slices: [{ label: 'a', value: 1 }] })
     const trend = sparkline({ label: 'Trend', values: [1, 2] })
+    const deal = form(ADD)
+    const drop = dropzone()
     const toast = {
         id: 1,
         text: 'Saved',
@@ -225,6 +240,13 @@ function elementParts(): Record<string, unknown> {
         'sparkline.area': trend.area,
         'sparkline.bars': trend.bars,
         'sparkline.dot': trend.dot,
+        'form.form': deal.form,
+        'form.error': deal.error,
+        'form.submit': deal.submit,
+        'form.field.input': deal.field('name').input,
+        'form.field.error': deal.field('name').error,
+        'dropzone.host': drop.host,
+        'dropzone.input': drop.input,
     }
 }
 
@@ -261,6 +283,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     })
     const modal = dialog()
     const keys = listbox({ options: () => ['a'] })
+    const drop = dropzone()
     const handed: Record<string, unknown> = {
         'tabs.selected': view.selected,
         'menu.open': opener.open,
@@ -272,6 +295,7 @@ test('every option an app binds is optional and handed back, and every id is mad
         'sortableTable.sort': table.sort,
         'sortableTable.selected': table.selected,
         'dialog.open': modal.open,
+        'dropzone.files': drop.files,
     }
     const missing: string[] = []
     for (const [name, value] of Object.entries(handed))
@@ -283,6 +307,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     expect(view.selected()).toBe('b')
     expect(slider.value()).toEqual([10, 40])
     expect(box.value()).toBeUndefined()
+    expect(drop.files()).toEqual([])
     // An id made where none was given, readable among the parts.
     expect(box.id).toMatch(/^combobox-/)
     expect(box.input.id).toBe(box.id)

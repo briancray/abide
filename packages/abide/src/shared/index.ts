@@ -61,7 +61,11 @@ export { dismissible } from './dismissible.ts'
 // 53.53 — the `bind:element` adaptor keeping a scrolling element at its bottom.
 export { followBottom } from './followBottom.ts'
 // 53.17-53.20 — the `bind:element` adaptor taking dropped and pasted files.
-export { dropzone } from './dropzone.ts'
+export {
+    type DropzoneOptions,
+    type DropzoneParts,
+    dropzone,
+} from './dropzone.ts'
 // 38.141 — which native window the work running is for.
 export { native } from './native.ts'
 // 38.148 — the update the native app's window has staged.
@@ -77,7 +81,7 @@ export * as format from './format/index.ts'
 // 25 — the account of the app.
 export type { FetchFailed } from './fetchFailed.ts'
 // 56.1-56.12 — a form over a handler, checked against its args document before the call.
-export { type FieldName, type Form, form } from './form.ts'
+export { type FieldName, type Form, type FormField, form } from './form.ts'
 export { handle } from './handle.ts'
 export { type Health, health } from './health.ts'
 // 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.

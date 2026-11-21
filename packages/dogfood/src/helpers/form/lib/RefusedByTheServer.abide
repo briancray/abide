@@ -17,10 +17,12 @@ import { form } from '@abide/abide'
 const deal = form(addDeal)
 </script>
 
-<form {...deal.element} class="flex flex-col items-start gap-2">
-    <label>name <input {...deal.field('name')} value="Ledger audit"></label>
-    <small {...deal.error('name')} class="text-bad">
-        {deal.message('name')}
+<form {...deal.form} class="flex flex-col items-start gap-2">
+    <label>
+        name <input {...deal.field('name').input} value="Ledger audit">
+    </label>
+    <small {...deal.field('name').error} class="text-bad">
+        {deal.field('name').message}
     </small>
-    <button {...deal.submit()}>Add deal</button>
+    <button {...deal.submit}>Add deal</button>
 </form>

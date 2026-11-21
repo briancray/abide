@@ -1,112 +1,149 @@
-// 53.17-53.20, 53.46 — FILES DROPPED ON AN ELEMENT, or pasted into it, filtered as a file input filters.
+// 53.17-53.20, 53.46, 53.59, 53.60 — FILES DROPPED ON AN ELEMENT, pasted into it, or picked through a file
+// input, filtered as a file input filters, as parts an app spreads onto a host and an input of its own.
 
 import { filesOf } from './filesOf.ts'
-import type { Disposer } from './reactive/watch.ts'
+import { type Reactive, reactive } from './reactive/index.ts'
+
+/** What `dropzone` takes, and what hears it. */
+export type DropzoneOptions = {
+    /**
+     * The files taken. A string is written as an `<input type="file">`'s `accept`: MIME types,
+     * `image/*` wildcards and `.pdf` extensions, separated by commas. A function is handed the
+     * transfer and answers the files it takes, as `imageFiles` does for the images a model is
+     * shown; a pick through `input` is handed to it as a transfer of the files picked. Every file
+     * by default.
+     */
+    accept?: string | ((data: DataTransfer | null) => File[])
+    /** Whether a paste of files into the host is taken as a drop. `false` by default. */
+    paste?: boolean
+    /** Whether more than the first accepted file is taken. `true` by default. */
+    multiple?: boolean
+    /** 49.10 — the files taken last, to read, clear or bind; one of the parts' own by default. */
+    files?: Reactive<readonly File[]>
+    /** Handed the files a drop, a paste or a pick took, where it took any. */
+    onfiles?: (files: File[], event: Event) => void
+    /** 53.46 — handed the files a drop, a paste or a pick carried that were not taken, where there are any. */
+    onreject?: (files: File[], event: Event) => void
+}
+
+/** The parts `dropzone` hands back: `<div {...drop.host}>`, `<input {...drop.input}>`. */
+export type DropzoneParts = {
+    /** The drop target's attributes: its drag and drop, its paste where `paste` says so, and `data-dragging`. */
+    readonly host: Record<string, unknown>
+    /** A file input's attributes: the way in by keyboard and screen reader, filtered as a drop is. */
+    readonly input: Record<string, unknown>
+    /** The files the last drop, paste or pick took. */
+    readonly files: Reactive<readonly File[]>
+    /** The files the last drop, paste or pick turned away. */
+    readonly rejected: readonly File[]
+}
 
 /**
- * The `bind:element` adaptor taking files dropped on the element, and pasted into it where `paste`
- * says so. It writes `data-dragging` on the element while files are dragged over it.
+ * Files dropped on an element, pasted into it where `paste` says so, or picked through a file input,
+ * as parts: the host to drop on, the input to pick with, and the files each took.
  *
- * @param onFiles what takes the accepted files, handed the `drop` or `paste` that carried them; not
- *   called where none was accepted
- * @param options which files are taken, whether a paste is a drop, and what hears the files turned away
+ * @param options which files are taken, whether a paste is a drop, and what hears the files
  */
-export function dropzone(
-    onFiles: (files: File[], event: DragEvent | ClipboardEvent) => void,
-    options: {
-        /**
-         * The files taken. A string is written as an `<input type="file">`'s `accept`: MIME types,
-         * `image/*` wildcards and `.pdf` extensions, separated by commas. A function is handed the
-         * transfer and answers the files it takes, as `imageFiles` does for the images a model is
-         * shown. Every file by default.
-         */
-        accept?: string | ((data: DataTransfer | null) => File[])
-        /** Whether a paste of files into the element is taken as a drop. `false` by default. */
-        paste?: boolean
-        /** Whether more than the first accepted file is taken. `true` by default. */
-        multiple?: boolean
-        /** 53.46 — handed the files a drop or a paste carried that were not taken, where there are any. */
-        onreject?: (files: File[], event: DragEvent | ClipboardEvent) => void
-    } = {},
-): (element: Element) => Disposer {
-    const { accept = '', paste = false, multiple = true, onreject } = options
+export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
+    const {
+        accept = '',
+        paste = false,
+        multiple = true,
+        onfiles,
+        onreject,
+    } = options
     const select =
         typeof accept === 'function' ? accept : acceptedBy(acceptOf(accept))
     const taken = (data: DataTransfer | null): File[] => {
         const files = select(data)
         return multiple || files.length < 2 ? files : files.slice(0, 1)
     }
-    const rejected = (
-        data: DataTransfer | null,
-        files: File[],
-        event: DragEvent | ClipboardEvent,
-    ): void => {
-        if (onreject === undefined || data === null) return
+    const files = options.files ?? reactive<readonly File[]>([])
+    const turnedAway = reactive<readonly File[]>([])
+    // A drag crossing into a child enters it before it leaves the parent: entries count, so the
+    // attribute stays until the drag has left them all.
+    const entered = reactive(0)
+
+    // 53.59 — what a drop, a paste or a pick took replaces the files, as a file input's own pick does.
+    const took = (data: DataTransfer | null, event: Event): File[] => {
+        const kept = taken(data)
         // Matched one for one, so the second of two identical files is turned away where one was taken.
-        const unmatched = [...files]
-        const turnedAway: File[] = []
+        const unmatched = [...kept]
+        const away: File[] = []
         for (const file of filesOf(data)) {
             const at = unmatched.indexOf(file)
-            if (at === -1) turnedAway.push(file)
+            if (at === -1) away.push(file)
             else unmatched.splice(at, 1)
         }
-        if (turnedAway.length > 0) onreject(turnedAway, event)
-    }
-    return (element) => {
-        // A drag crossing into a child enters it before it leaves the parent: entries count, so the
-        // attribute stays until the drag has left them all.
-        let entered = 0
-        const enter = (event: Event): void => {
-            if (!carriesFiles(event as DragEvent)) return
-            event.preventDefault()
-            entered += 1
-            if (entered === 1) element.setAttribute('data-dragging', '')
+        turnedAway.set(away)
+        if (away.length > 0) onreject?.(away, event)
+        if (kept.length > 0) {
+            files.set(kept)
+            onfiles?.(kept, event)
         }
-        const over = (event: Event): void => {
-            if (!carriesFiles(event as DragEvent)) return
+        return kept
+    }
+
+    const host: Record<string, unknown> = {
+        ondragenter: (event: DragEvent) => {
+            if (!carriesFiles(event)) return
+            event.preventDefault()
+            entered.set((entered.peek() ?? 0) + 1)
+        },
+        ondragover: (event: DragEvent) => {
+            if (!carriesFiles(event)) return
             // A drop lands only where `dragover` was refused its default.
             event.preventDefault()
-            const transfer = (event as DragEvent).dataTransfer
-            if (transfer !== null) transfer.dropEffect = 'copy'
-        }
-        const leave = (event: Event): void => {
-            if (!carriesFiles(event as DragEvent) || entered === 0) return
-            entered -= 1
-            if (entered === 0) element.removeAttribute('data-dragging')
-        }
-        const drop = (event: Event): void => {
-            if (!carriesFiles(event as DragEvent)) return
+            if (event.dataTransfer !== null)
+                event.dataTransfer.dropEffect = 'copy'
+        },
+        ondragleave: (event: DragEvent) => {
+            if (!carriesFiles(event) || !entered.peek()) return
+            entered.set((entered.peek() ?? 1) - 1)
+        },
+        ondrop: (event: DragEvent) => {
+            if (!carriesFiles(event)) return
             // 53.18 — refused even with nothing accepted, or the browser opens the file in the tab.
             event.preventDefault()
-            entered = 0
-            element.removeAttribute('data-dragging')
-            const transfer = (event as DragEvent).dataTransfer
-            const files = taken(transfer)
-            if (files.length > 0) onFiles(files, event as DragEvent)
-            rejected(transfer, files, event as DragEvent)
-        }
-        const pasted = (event: Event): void => {
-            const transfer = (event as ClipboardEvent).clipboardData
-            const files = taken(transfer)
-            rejected(transfer, files, event as ClipboardEvent)
+            entered.set(0)
+            took(event.dataTransfer, event)
+        },
+        get 'data-dragging'() {
+            return entered() > 0 ? '' : undefined
+        },
+        'data-part': 'host',
+    }
+    if (paste)
+        host.onpaste = (event: ClipboardEvent) => {
             // Words pasted alone paste as they always do.
-            if (files.length === 0) return
-            event.preventDefault()
-            onFiles(files, event as ClipboardEvent)
+            if (took(event.clipboardData, event).length > 0)
+                event.preventDefault()
         }
-        element.addEventListener('dragenter', enter)
-        element.addEventListener('dragover', over)
-        element.addEventListener('dragleave', leave)
-        element.addEventListener('drop', drop)
-        if (paste) element.addEventListener('paste', pasted)
-        return () => {
-            element.removeEventListener('dragenter', enter)
-            element.removeEventListener('dragover', over)
-            element.removeEventListener('dragleave', leave)
-            element.removeEventListener('drop', drop)
-            element.removeEventListener('paste', pasted)
-            element.removeAttribute('data-dragging')
-        }
+
+    // 53.60 — a pick through the input is taken as a drop is, and the input emptied after, so the
+    // same file picked again is a pick again and what shows is `files`.
+    const input: Record<string, unknown> = {
+        type: 'file',
+        accept:
+            typeof accept === 'string' && accept !== '' ? accept : undefined,
+        multiple,
+        onchange: (event: Event) => {
+            const picker = event.currentTarget as HTMLInputElement
+            const transfer = new DataTransfer()
+            for (const file of picker.files ?? []) transfer.items.add(file)
+            took(transfer, event)
+            picker.value = ''
+        },
+        'data-part': 'input',
+    }
+
+    return {
+        host,
+        input,
+        files,
+        get rejected() {
+            return turnedAway()
+        },
     }
 }
 

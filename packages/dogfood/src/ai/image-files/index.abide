@@ -46,12 +46,16 @@ import Section from '#src/lib/Section.abide'
             import { dropzone, imageFiles, imagePiece, reactive } from '@abide/abide'
 
             let attached = reactive<{ data: string; mimeType: string }[]>([])
-            async function attach(files: File[]) {
-                for (const file of files) attached.push(await imagePiece(file))
-            }
+            const drop = dropzone({
+                accept: imageFiles,
+                paste: true,
+                onfiles: async (files) => {
+                    for (const file of files) attached.push(await imagePiece(file))
+                },
+            })
             </script>
 
-            <form bind:element={dropzone(attach, { accept: imageFiles, paste: true })}>
+            <form {...drop.host}>
                 <textarea></textarea>
             </form>
         `} />

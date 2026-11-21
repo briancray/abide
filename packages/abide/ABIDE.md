@@ -223,12 +223,13 @@ table.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `form` (a `<form>` over a handler, checked against its args before the call),
   `markdown`, `listbox`, `menu`, `tabs`, `tree`, `commandPalette`, `range`,
-  `sortableTable`, `combobox`, `time`, `dialog`, `chart`, `pie` and `sparkline` (a widget's parts,
+  `sortableTable`, `combobox`, `time`, `dialog`, `dropzone` (a host to drop or paste files on, and a
+  file input to pick them with), `chart`, `pie` and `sparkline` (a widget's parts,
   spread on markup of your own; `CommandPalette`, `Range`, `SortableTable`, `Combobox`, `Time`,
   `Dialog`, `Chart`, `Pie` and `Sparkline` are default markup over the last nine, and `chart` carries
   the arithmetic under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and
   `chart.nearest`), `sortRows`, `virtualRows`, `hotkeys` and `keyLabel`, and
-  the `bind:element` adaptors `dismissible`, `dropzone`, `copy`, `popover` (an app's own panel in
+  the `bind:element` adaptors `dismissible`, `copy`, `popover` (an app's own panel in
   the top layer, against its anchor) and `tooltip.tip` (shown by the root layout's `Tooltips`, or by
   `tooltip.host` on markup of the app's own) beside `observe`.
 - From `@abide/abide/server`: the rungs `signedIn`, `requireRole` and `readOnly`, `fetchJson` /

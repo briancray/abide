@@ -22,16 +22,16 @@ import { form } from '@abide/abide'
 const deal = form(addDeal)
 </script>
 
-<form {...deal.element} class="flex flex-col items-start gap-2">
-    <label>name <input {...deal.field('name')}></label>
-    <small {...deal.error('name')} class="text-bad">
-        {deal.message('name')}
+<form {...deal.form} class="flex flex-col items-start gap-2">
+    <label>name <input {...deal.field('name').input}></label>
+    <small {...deal.field('name').error} class="text-bad">
+        {deal.field('name').message}
     </small>
     <label>
-        amount <input type="number" {...deal.field('amount')} value="0">
+        amount <input type="number" {...deal.field('amount').input} value="0">
     </label>
-    <small {...deal.error('amount')} class="text-bad">
-        {deal.message('amount')}
+    <small {...deal.field('amount').error} class="text-bad">
+        {deal.field('amount').message}
     </small>
-    <button {...deal.submit()}>Add deal</button>
+    <button {...deal.submit}>Add deal</button>
 </form>

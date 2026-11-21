@@ -1,9 +1,8 @@
 <script>
 import { dropzone } from '@abide/abide'
 
-const attach = (files: File[]) => console.log(files)
+const drop = dropzone({ accept: '.pdf' })
 </script>
 
 <div class="border border-dashed p-4 data-dragging:border-signal
-    data-dragging:bg-signal/10"
-    bind:element={dropzone(attach, { accept: '.pdf' })}>Drop a PDF here</div>
+    data-dragging:bg-signal/10" {...drop.host}>Drop a PDF here</div>

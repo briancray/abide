@@ -13,9 +13,11 @@ import { form } from '@abide/abide'
 const deal = form(addDeal)
 </script>
 
-<form {...deal.element} class="row">
-    <label>name <input {...deal.field('name')} value="Ledger audit"></label>
-    <button {...deal.submit()}>
+<form {...deal.form} class="row">
+    <label>
+        name <input {...deal.field('name').input} value="Ledger audit">
+    </label>
+    <button {...deal.submit}>
         {deal.call.busy() ? 'Adding…' : 'Add deal'}
     </button>
 </form>

@@ -1,0 +1,13 @@
+<script>
+import { dropzone } from '@abide/abide'
+
+const drop = dropzone({ accept: '.pdf' })
+const names = (files: readonly File[]) =>
+    files.map((file) => file.name).join(', ')
+</script>
+
+<label class="block border border-dashed p-4" {...drop.host}>
+    Drop the contract here, or choose it: <input {...drop.input} />
+</label>
+<p>Attached: {names(drop.files()) || 'none'}</p>
+<p>Turned away: {names(drop.rejected) || 'none'}</p>

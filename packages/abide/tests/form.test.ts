@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 
 import { POST } from '#server'
 import { addressed } from '#server/addressed.ts'
-import { flushSync, form } from '#shared'
+import { flushSync, form, refuse } from '#shared'
 import { ARGS_DOCUMENT } from '#shared/ARGS_DOCUMENT.ts'
 import type { StandardSchemaV1 } from '#shared/Schema.ts'
 
@@ -38,10 +38,10 @@ function rendered(
 ): HTMLFormElement {
     document.body.innerHTML = ''
     const element = document.createElement('form')
-    spread(element, parts.element)
+    spread(element, parts.form)
     for (const [name, value] of Object.entries(values)) {
         const input = document.createElement('input')
-        spread(input, parts.field(name as never))
+        spread(input, parts.field(name as never).input)
         input.value = value
         element.append(input)
     }
@@ -78,13 +78,13 @@ test('a submit the check refuses makes no call, and one it passes calls with the
     const element = rendered(deal, { company: '', amount: '0' })
     await submitted(element)
     expect(reached).toEqual([])
-    expect(deal.message('company')).toBe('must be at least 2 characters')
+    expect(deal.field('company').message).toBe('must be at least 2 characters')
     ;(element.elements.namedItem('company') as HTMLInputElement).value =
         'Hopper & Co'
     ;(element.elements.namedItem('amount') as HTMLInputElement).value = '4000'
     await submitted(element)
     expect(reached).toEqual([{ company: 'Hopper & Co', amount: 4000 }])
-    expect(deal.issues()).toBeUndefined()
+    expect(deal.issues).toBeUndefined()
 })
 
 // A gate the build cannot read: another library's schema, here spelled by hand.
@@ -114,7 +114,7 @@ test('a handler with no document is called unchecked, and its refusal shows and 
     const company = form(save)
     const element = rendered(company, { company: '' })
     await submitted(element)
-    expect(company.message('company')).toBe('needs a company')
+    expect(company.field('company').message).toBe('needs a company')
     expect(document.activeElement).toBe(
         element.elements.namedItem('company') as HTMLInputElement,
     )
@@ -136,14 +136,14 @@ test('a submit while the call is in flight calls nothing, and the button says so
     const company = form(slow)
     const element = rendered(company, { company: 'Hopper & Co' })
     await submitted(element)
-    expect(company.submit().disabled).toBe(true)
+    expect(company.submit.disabled).toBe(true)
     ;(element.elements.namedItem('company') as HTMLInputElement).value =
         'Analytical Engines'
     await submitted(element)
     expect(calls).toBe(1)
     answer({ company: 'Hopper & Co' })
     await Bun.sleep(10)
-    expect(company.submit().disabled).toBe(false)
+    expect(company.submit.disabled).toBe(false)
 })
 
 // 56.12 — A FILE IN A FIELD IS REFUSED BY NAME rather than sent as the `{}` JSON makes of it. THE
@@ -157,11 +157,51 @@ test('a field holding a file throws at the submit, naming it — 56.12', () => {
     file.type = 'file'
     file.name = 'contract'
     element.append(file)
-    const onsubmit = deal.element.onsubmit as (event: Event) => void
+    const onsubmit = deal.form.onsubmit as (event: Event) => void
     expect(() =>
         onsubmit({
             preventDefault() {},
             currentTarget: element,
         } as unknown as Event),
     ).toThrow("the field 'contract' holds a file")
+})
+
+// 49.11, 56.9 — A FIELD'S PARTS AND WHAT IS WRONG WITH IT ARE ONE GROUP: its message and whether it is
+// invalid read beside the attributes it spreads, live as the check changes them. THE REVERT: hand back
+// `message` as a value read once rather than an accessor — the field reads no message after the submit.
+test("a field's group carries its message and whether it is invalid — 49.11, 56.9", async () => {
+    const add = holding(
+        POST((args: { company: string; amount: number }) => args),
+    )
+    addressed(add, '/deals/grouped')
+    const deal = form(add)
+    const company = deal.field('company')
+    expect(company.message).toBeUndefined()
+    expect(company.invalid).toBe(false)
+    await submitted(rendered(deal, { company: '', amount: '4' }))
+    expect(company.message).toBe('must be at least 2 characters')
+    expect(company.invalid).toBe(true)
+    expect(company.input['aria-invalid']).toBe('true')
+    expect(company.error.hidden).toBe(false)
+    expect(deal.field('amount').invalid).toBe(false)
+})
+
+// 56.4 — A REFUSAL NO FIELD OWNS IS THE WHOLE FORM'S: the server's `''` message shows as the form's
+// `message`, its element shown, while every field reads none. THE REVERT: have the form's `message`
+// answer nothing — `deal.message` reads `undefined` where the server's message is due.
+test("a refusal no field owns shows as the form's own message — 56.4", async () => {
+    const book = POST((args: { company: string }) =>
+        args.company === 'open'
+            ? args
+            : refuse.validation<{ company: string }>({
+                  '': ['the books are closed'],
+              }),
+    )
+    addressed(book, '/deals/closed')
+    const deal = form(book)
+    expect(deal.error.hidden).toBe(true)
+    await submitted(rendered(deal, { company: 'Hopper & Co' }))
+    expect(deal.message).toBe('the books are closed')
+    expect(deal.error.hidden).toBe(false)
+    expect(deal.field('company').message).toBeUndefined()
 })

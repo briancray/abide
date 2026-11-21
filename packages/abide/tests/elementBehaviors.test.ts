@@ -3,6 +3,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
+import { flushSync, watch } from '#shared'
 import { copy } from '#shared/copy.ts'
 import { dismissible } from '#shared/dismissible.ts'
 import { dropzone } from '#shared/dropzone.ts'
@@ -160,6 +161,34 @@ function drag(target: Element, type: string, files: File[]): boolean {
     return event.defaultPrevented
 }
 
+/**
+ * `dropzone`'s host spread on `zone` as a template spreads it: a listener per `on…`, and
+ * `data-dragging` written as it changes. Hands back the parts and the stop.
+ */
+function hosted(
+    zone: Element,
+    parts: ReturnType<typeof dropzone>,
+): ReturnType<typeof dropzone> & { stop: () => void } {
+    const listeners: [string, EventListener][] = []
+    for (const [name, value] of Object.entries(parts.host))
+        if (name.startsWith('on')) {
+            zone.addEventListener(name.slice(2), value as EventListener)
+            listeners.push([name.slice(2), value as EventListener])
+        }
+    const unwatch = watch(() => {
+        if (parts.host['data-dragging'] === undefined)
+            zone.removeAttribute('data-dragging')
+        else zone.setAttribute('data-dragging', '')
+    })
+    return Object.assign(parts, {
+        stop: () => {
+            for (const [type, listener] of listeners)
+                zone.removeEventListener(type, listener)
+            unwatch()
+        },
+    })
+}
+
 const CONTRACT = new File(['%PDF'], 'ledger-audit.pdf', {
     type: 'application/pdf',
 })
@@ -168,12 +197,14 @@ const PHOTO = new File(['png'], 'signing.png', { type: 'image/png' })
 test('data-dragging stays while a drag crosses into a child, and leaves with it — 53.17', () => {
     const zone = element()
     const child = zone.appendChild(document.createElement('p'))
-    const stop = dropzone(() => {})(zone)
+    const { stop } = hosted(zone, dropzone())
     drag(zone, 'dragenter', [CONTRACT])
     drag(child, 'dragenter', [CONTRACT])
     drag(zone, 'dragleave', [CONTRACT])
+    flushSync()
     expect(zone.hasAttribute('data-dragging')).toBe(true)
     drag(child, 'dragleave', [CONTRACT])
+    flushSync()
     expect(zone.hasAttribute('data-dragging')).toBe(false)
     stop()
 })
@@ -183,9 +214,12 @@ test('a drop takes what accept takes, by type, extension or function — 53.18, 
     const taken: string[][] = []
     const take = (files: File[]) => taken.push(files.map((file) => file.name))
     const stops = [
-        dropzone(take, { accept: '.pdf' })(zone),
-        dropzone(take, { accept: 'image/*', multiple: false })(zone),
-        dropzone(take, { accept: imageFiles })(zone),
+        hosted(zone, dropzone({ onfiles: take, accept: '.pdf' })).stop,
+        hosted(
+            zone,
+            dropzone({ onfiles: take, accept: 'image/*', multiple: false }),
+        ).stop,
+        hosted(zone, dropzone({ onfiles: take, accept: imageFiles })).stop,
     ]
     expect(drag(zone, 'dragover', [CONTRACT, PHOTO])).toBe(true)
     expect(drag(zone, 'drop', [CONTRACT, PHOTO, PHOTO])).toBe(true)
@@ -208,12 +242,11 @@ test('the files a drop carries and does not take are handed to onreject — 53.4
     const reject = (files: File[]) =>
         turnedAway.push(files.map((file) => file.name))
     const stops = [
-        dropzone(() => {}, {
-            accept: 'image/*',
-            multiple: false,
-            onreject: reject,
-        })(zone),
-        dropzone(() => {}, { onreject: reject })(zone),
+        hosted(
+            zone,
+            dropzone({ accept: 'image/*', multiple: false, onreject: reject }),
+        ).stop,
+        hosted(zone, dropzone({ onreject: reject })).stop,
     ]
     drag(zone, 'drop', [CONTRACT, PHOTO, PHOTO])
     expect(turnedAway).toEqual([['ledger-audit.pdf', 'signing.png']])
@@ -223,7 +256,10 @@ test('the files a drop carries and does not take are handed to onreject — 53.4
 test('a paste of files is a drop, and words pasted alone paste — 53.20', () => {
     const zone = element('textarea')
     const taken: File[][] = []
-    const stop = dropzone((files) => taken.push(files), { paste: true })(zone)
+    const { stop } = hosted(
+        zone,
+        dropzone({ onfiles: (files) => taken.push(files), paste: true }),
+    )
     const paste = (files: File[]) => {
         const event = new Event('paste', { bubbles: true, cancelable: true })
         Object.defineProperty(event, 'clipboardData', {
@@ -245,15 +281,16 @@ test('a paste carrying its files in items alone takes and turns away as a drop d
     const zone = element('textarea')
     const taken: string[][] = []
     const turnedAway: string[][] = []
-    const stop = dropzone(
-        (files) => taken.push(files.map((file) => file.name)),
-        {
+    const { stop } = hosted(
+        zone,
+        dropzone({
+            onfiles: (files) => taken.push(files.map((file) => file.name)),
             paste: true,
             accept: 'image/*',
             onreject: (files) =>
                 turnedAway.push(files.map((file) => file.name)),
-        },
-    )(zone)
+        }),
+    )
     const item = (file: File) => ({
         kind: 'file',
         type: file.type,
@@ -269,6 +306,60 @@ test('a paste carrying its files in items alone takes and turns away as a drop d
         turnedAway: [['ledger-audit.pdf']],
     })
     stop()
+})
+
+/** A pick of `files` through a file input carrying `dropzone`'s `input` part. */
+function picked(
+    parts: ReturnType<typeof dropzone>,
+    files: File[],
+): HTMLInputElement {
+    const input = document.body.appendChild(document.createElement('input'))
+    input.type = 'file'
+    Object.defineProperty(input, 'files', { configurable: true, value: files })
+    Object.defineProperty(input, 'value', {
+        configurable: true,
+        writable: true,
+        value: files[0]?.name ?? '',
+    })
+    input.addEventListener('change', parts.input.onchange as EventListener)
+    input.dispatchEvent(new Event('change'))
+    return input
+}
+
+// 53.60 — A PICK THROUGH THE INPUT IS TAKEN AS A DROP IS: filtered by `accept`, a function's handed a
+// transfer of the files picked, and the input emptied so the same file picked again is a pick again.
+// THE REVERT: write the picked files into `files` unfiltered — the contract lands beside the photo.
+test('a pick through the input lands in files, filtered as a drop is — 53.60', () => {
+    const byType = dropzone({ accept: 'image/*' })
+    const input = picked(byType, [CONTRACT, PHOTO])
+    expect(byType.files().map((file) => file.name)).toEqual(['signing.png'])
+    expect(byType.rejected.map((file) => file.name)).toEqual([
+        'ledger-audit.pdf',
+    ])
+    expect(input.value).toBe('')
+    expect(byType.input.accept).toBe('image/*')
+    const byFunction = dropzone({ accept: imageFiles })
+    picked(byFunction, [CONTRACT, PHOTO])
+    expect(byFunction.files().map((file) => file.name)).toEqual(['signing.png'])
+    expect(byFunction.input.accept).toBeUndefined()
+})
+
+// 53.59 — WHAT A DROP TAKES REPLACES THE FILES, one under `multiple: false`, and a drop taking nothing
+// leaves them. THE REVERT: append each take to `files` — the second drop reads three files.
+test('a drop replaces the files, keeps one under multiple false, and one taking none leaves them — 53.59', () => {
+    const zone = element()
+    const drop = hosted(zone, dropzone({ accept: '.pdf,image/*' }))
+    drag(zone, 'drop', [CONTRACT, PHOTO])
+    drag(zone, 'drop', [PHOTO])
+    expect(drop.files().map((file) => file.name)).toEqual(['signing.png'])
+    drag(zone, 'drop', [new File(['x'], 'notes.txt')])
+    expect(drop.files().map((file) => file.name)).toEqual(['signing.png'])
+    expect(drop.rejected.map((file) => file.name)).toEqual(['notes.txt'])
+    drop.stop()
+    const one = hosted(zone, dropzone({ multiple: false }))
+    drag(zone, 'drop', [CONTRACT, PHOTO])
+    expect(one.files().map((file) => file.name)).toEqual(['ledger-audit.pdf'])
+    one.stop()
 })
 
 /** A clipboard recording each item written to it as `type: text` per type, until the test ends. */
