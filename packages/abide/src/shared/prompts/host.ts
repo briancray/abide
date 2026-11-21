@@ -7,6 +7,7 @@
 import { dialog } from '../dialog.ts'
 import { messageOf } from '../messageOf.ts'
 import { reactive, watch } from '../reactive/index.ts'
+import { withPart } from '../withPart.ts'
 import { asking, type Prompt, queue } from './queue.ts'
 
 /** The prompt showing, as markup reads it: what it says and what its buttons say. */
@@ -114,7 +115,7 @@ export function host(): PromptsHost {
         settle(asked, answer)
     }
 
-    const shown = Object.defineProperties(
+    const shown = withPart(
         {
             role: 'alertdialog',
             get 'aria-label'() {
@@ -127,13 +128,12 @@ export function host(): PromptsHost {
                 return busy() ? '' : undefined
             },
         },
-        Object.getOwnPropertyDescriptors(
-            dialog({
-                open: showing,
-                modal: () => current()?.modal ?? true,
-                onclose: answered,
-            }).dialog,
-        ),
+
+        dialog({
+            open: showing,
+            modal: () => current()?.modal ?? true,
+            onclose: answered,
+        }).dialog,
     )
 
     return {

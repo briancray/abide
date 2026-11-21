@@ -5449,6 +5449,10 @@ it.
 51.100 Alt+ArrowDown in `combobox`'s input MUST open its list where it is shut, and Alt+ArrowUp MUST
 shut it where it is open, and each MUST leave its active item where it stands.
 
+51.101 `Listbox`'s `option` MUST answer the option of a key with the id `idOf` derives for it,
+`aria-selected` and `data-active` saying whether that key is the active one, and a pointer moving
+over it making that key active.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

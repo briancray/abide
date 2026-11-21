@@ -1000,7 +1000,7 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `listbox` | `<Option>(options: ListboxOptions<Option>) => Listbox<Option>` | A keyboard controller over a list of keyed options, for markup the app writes itself. | 51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7, 51.8, 51.9, 51.10, 51.11, 51.12, 49.8 |
 | `ListboxOptions` | `ListboxOptions<Option> = { id?: string; options: () => readonly Option[]; key?: (option: Option) => string; wrap?: boolean; onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10, 49.10 |
-| `Listbox` | `Listbox<Option> = { readonly id: string; readonly active: string \| undefined; readonly activeOption: Option \| undefined; readonly activeId: string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; keydown: (event: KeyboardEvent) => void }` | What `listbox` hands back: its id, the active key and option, and the ids and the listener the markup takes. | 51.1, 51.2, 51.3, 51.10, 51.11, 49.10, 49.11 |
+| `Listbox` | `Listbox<Option> = { readonly id: string; readonly active: string \| undefined; readonly activeOption: Option \| undefined; readonly activeId: string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; keydown: (event: KeyboardEvent) => void; readonly listbox: Record<string, unknown>; option(key: string): Record<string, unknown> }` | What `listbox` hands back: its id, the active key and option, the ids and the listener the markup takes, and the list's part and an option's. | 51.1, 51.2, 51.3, 51.10, 51.11, 51.101, 49.4, 49.10, 49.11 |
 
 ## `virtualRows`
 

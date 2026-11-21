@@ -34,6 +34,10 @@ export type Listbox<Option> = {
     idOf: (key: string) => string
     /** The listener a focused element hands its `keydown` to. */
     keydown: (event: KeyboardEvent) => void
+    /** The list's part: its role. */
+    readonly listbox: Record<string, unknown>
+    /** The option of `key`'s part: its id, role, `aria-selected`, `data-active`, and the pointer resting on it activating it. */
+    option(key: string): Record<string, unknown>
 }
 
 /** A keyboard controller over a list of keyed options, for markup the app writes itself. */
@@ -129,5 +133,18 @@ export function listbox<Option>(
         activate: (each) => chosen.set(each),
         idOf,
         keydown,
+        listbox: { role: 'listbox', 'data-part': 'listbox' },
+        option: (each) => ({
+            id: idOf(each),
+            role: 'option',
+            'data-part': 'option',
+            get 'aria-selected'() {
+                return active() === each ? 'true' : 'false'
+            },
+            get 'data-active'() {
+                return active() === each ? '' : undefined
+            },
+            onpointermove: () => chosen.set(each),
+        }),
     }
 }

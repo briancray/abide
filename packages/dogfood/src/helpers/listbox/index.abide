@@ -39,13 +39,13 @@ import callQueue from './lib/CallQueue.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Mark the active lead, and activate one on a click">
-        <p><code>idOf(key)</code> is the id an option renders with, and <code>active()</code> is
-            the active key. The roles are yours to write.</p>
+        <p>Spread <code>listbox</code> on the list and <code>option(key)</code> on each option:
+            the option carries its id, its role, <code>aria-selected</code> and
+            <code>data-active</code>, and a pointer resting on it makes it active.
+            <code>idOf(key)</code> and <code>active</code> stay for markup of your own.</p>
         <Code language="abide" caption="abide" code={`
             {#for deal of leads by deal.id}
-                <li id={queue.idOf(deal.id)} role="option"
-                    aria-selected={queue.active === deal.id ? 'true' : 'false'}
-                    data-active={queue.active === deal.id ? '' : undefined}
+                <li {...queue.option(deal.id)}
                     onclick={() => queue.activate(deal.id)}>{deal.name}</li>
             {/for}
         `} />

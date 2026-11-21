@@ -11,6 +11,7 @@ import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
+import { withPart } from './withPart.ts'
 
 /** One thing the palette can do. */
 export type Command = {
@@ -122,10 +123,7 @@ export function commandPalette(
     })
 
     // The palette's dialog is `dialog`'s parts, its accessible name written beside them.
-    const shown = Object.defineProperties(
-        { 'aria-label': label },
-        Object.getOwnPropertyDescriptors(dialog({ open }).dialog),
-    )
+    const shown = withPart({ 'aria-label': label }, dialog({ open }).dialog)
 
     return {
         dialog: shown,
@@ -173,19 +171,9 @@ export function commandPalette(
             onmousedown: (event: MouseEvent) => event.preventDefault(),
         },
         command: (command) => ({
-            option: {
-                id: list.idOf(command.label),
-                role: 'option',
-                'data-part': 'option',
-                get 'aria-selected'() {
-                    return list.active === command.label ? 'true' : 'false'
-                },
-                get 'data-active'() {
-                    return list.active === command.label ? '' : undefined
-                },
-                onpointermove: () => list.activate(command.label),
+            option: withPart(list.option(command.label), {
                 onclick: () => run(command),
-            },
+            }),
             label: { 'data-part': 'label' },
             key: { 'data-part': 'key' },
         }),

@@ -1,4 +1,4 @@
-// `listbox`, the keyboard over a list of keyed options (RULEBOOK 51.1-51.12). What `Combobox`
+// `listbox`, the keyboard over a list of keyed options (RULEBOOK 51.1-51.12, 51.101). What `Combobox`
 // renders over it is the CRM's tests', which mount it.
 
 import { expect, test } from 'bun:test'
@@ -95,4 +95,31 @@ test('each key has its own id, and the active one’s is `activeId` — 51.10, 5
     expect(list.idOf('a b')).toBe('letters-option-a%20b')
     press(list.keydown, 'End')
     expect(list.activeId).toBe(list.idOf('a-b'))
+})
+
+// THE REVERT: read `data-active` off the key the part was built for rather than the active one, and
+// every option reads active.
+test('an option’s part carries its id and whether it is active, and a pointer on it activates it — 51.101', () => {
+    const list = listbox({ id: 'letters', options: () => ['a', 'b'] })
+    const a = list.option('a')
+    const b = list.option('b')
+    expect([a.id, a.role, a['data-part'], list.listbox.role]).toEqual([
+        'letters-option-a',
+        'option',
+        'option',
+        'listbox',
+    ])
+    expect([a['aria-selected'], a['data-active'], b['data-active']]).toEqual([
+        'true',
+        '',
+        undefined,
+    ])
+    ;(b.onpointermove as () => void)()
+    flushSync()
+    // Read again, not rebuilt: the part's getters answer what is active now (49.11).
+    expect([a['aria-selected'], b['aria-selected'], b['data-active']]).toEqual([
+        'false',
+        'true',
+        '',
+    ])
 })

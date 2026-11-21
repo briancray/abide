@@ -20,7 +20,7 @@ const queue = listbox({
 </script>
 
 <ul
-    role="listbox"
+    {...queue.listbox}
     tabindex="0"
     aria-label="Leads to call"
     aria-activedescendant={queue.activeId}
@@ -30,10 +30,7 @@ const queue = listbox({
 >
     {#for deal of leads by deal.id}
         <li
-            id={queue.idOf(deal.id)}
-            role="option"
-            aria-selected={queue.active === deal.id ? 'true' : 'false'}
-            data-active={queue.active === deal.id ? '' : undefined}
+            {...queue.option(deal.id)}
             onclick={() => queue.activate(deal.id)}
         >{deal.name}</li>
     {/for}
