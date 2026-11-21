@@ -102,6 +102,14 @@ for (const row of ROWS)
                 row.cells[at] ?? '',
             )
     }
+// Every type REGISTRY spells, by name, so an intersection naming a row of another section resolves.
+const everyType = new Map<string, string>()
+for (const row of ROWS) {
+    const at = row.header.indexOf(SIGNATURE)
+    const name = (row.cells[0] ?? '').replaceAll('`', '')
+    if (at >= 0 && /^[A-Z]\w*$/.test(name) && !everyType.has(name))
+        everyType.set(name, row.cells[at] ?? '')
+}
 const listed = new Set<string>()
 /** The objects the rows of `table` take, each by the parameter it is passed as and its members. */
 function optionsOf(table: (typeof sections)[number]['tables'][number]) {
@@ -116,7 +124,9 @@ function optionsOf(table: (typeof sections)[number]['tables'][number]) {
         for (const { parameter, type } of parametersNamed(
             row.cells[at] ?? '',
         )) {
-            const members = membersOf(spelled.get(type) ?? '')
+            const members = membersOf(spelled.get(type) ?? '', (name) =>
+                everyType.get(name),
+            )
             const key = `${parameter}: ${type}`
             if (members === undefined || listed.has(key)) continue
             listed.add(key)

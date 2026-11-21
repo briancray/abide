@@ -3984,9 +3984,10 @@ no row MUST NOT be rendered. Where rows of one table share a name, the short for
 the first parameter whose type differs between them, so no two of them read the same.
 
 40.33 Where a row a page's Syntax or a heading under it shows declares, in its `Signature` cell, a
-parameter whose type is a row of the same section spelling an object, the page MUST show that
-object's members beneath the row's table under the parameter's name and type, a row per member with
-its type in full, once per parameter and type.
+parameter whose type is a row of the same section spelling an object, or an intersection of objects
+spelled there, rows of any section, or `Omit` of one, the page MUST show that object's members beneath
+the row's table under the parameter's name and type, a row per member with its type in full, a later
+part's member standing for an earlier one of its name, once per parameter and type.
 
 40.34 An example MUST NOT call a name its fence neither imports nor declares, save a global of the
 side its code runs on.

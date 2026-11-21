@@ -298,14 +298,32 @@ export function parametersNamed(
  */
 export function membersOf(
     signature: string,
+    spelledAs?: (name: string) => string | undefined,
 ): { name: string; type: string }[] | undefined {
     let code = /^`([^`]+)`$/.exec(signature.trim())?.[1]?.trim()
     if (code === undefined) return undefined
     const assigned = topLevel(code, '=').find((at) => code?.[at + 1] !== '>')
     if (assigned !== undefined) code = code.slice(assigned + 1).trim()
     if (code.startsWith('<')) code = code.slice(closing(code, 0) + 1).trim()
-    if (!code.startsWith('{') || closing(code, 0) !== code.length - 1)
-        return undefined
+    // An intersection of objects — a named row, `Omit<Name, 'key'>` of one, or one spelled here — is
+    // the members of each in order, a later one standing for an earlier of its name as it narrows it.
+    const parts = splitTop(code, '&')
+    if (parts.length > 1 || !code.startsWith('{')) {
+        if (spelledAs === undefined) return undefined
+        const merged = new Map<string, string>()
+        for (const part of parts) {
+            const members = partMembers(part, spelledAs)
+            if (members === undefined) return undefined
+            for (const member of members) {
+                merged.delete(member.name)
+                merged.set(member.name, member.type)
+            }
+        }
+        const members: { name: string; type: string }[] = []
+        for (const [name, type] of merged) members.push({ name, type })
+        return members
+    }
+    if (closing(code, 0) !== code.length - 1) return undefined
     const members: { name: string; type: string }[] = []
     for (const member of splitTop(code.slice(1, -1), ';')) {
         const colon = topLevel(member, ':')[0]
@@ -328,4 +346,26 @@ export function membersOf(
         })
     }
     return members
+}
+
+/** The members of one part of an intersection: an object spelled out, a named row's, or `Omit` of one. */
+function partMembers(
+    part: string,
+    spelledAs: (name: string) => string | undefined,
+): { name: string; type: string }[] | undefined {
+    if (part.startsWith('{')) return membersOf(`\`${part}\``)
+    const omitted = /^Omit<(\w+),\s*(.+)>$/s.exec(part)
+    const name = omitted?.[1] ?? /^\w+$/.exec(part)?.[0]
+    if (name === undefined) return undefined
+    const spelled = spelledAs(name)
+    const members =
+        spelled === undefined ? undefined : membersOf(spelled, spelledAs)
+    if (members === undefined || omitted === null) return members
+    const dropped = new Set<string>()
+    for (const key of (omitted[2] ?? '').matchAll(/'([^']+)'/g))
+        dropped.add(key[1] as string)
+    const kept: { name: string; type: string }[] = []
+    for (const member of members)
+        if (!dropped.has(member.name.replace(/\?$/, ''))) kept.push(member)
+    return kept
 }

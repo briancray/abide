@@ -699,6 +699,12 @@ test("an object a page's call takes is spelled out beneath its syntax", async ()
             ['`open?`', '`modal?`', '`dismissible?`', '`onclose?`'],
         ],
         ['/helpers/tree', '`options: TreeOptions`', ['`children`', '`key?`']],
+        // An intersection: `Omit<PopoverOptions, 'side'> & { side?; delay? }`, a row of another section.
+        [
+            '/components/tooltip',
+            '`options?: TooltipOptions`',
+            ['`margin?`', '`side?`', '`delay?`'],
+        ],
     ]
     const pages = await renderedMarkdown()
     const wrong: string[] = []
