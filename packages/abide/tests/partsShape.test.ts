@@ -21,6 +21,8 @@ import {
     type DialogParts,
     dropzone,
     type DropzoneParts,
+    type FollowBottom,
+    followBottom,
     type Form,
     form,
     type FormField,
@@ -131,6 +133,7 @@ test('every part is a member, a function of its item, or an action — 49.11', (
     shaped<Form<typeof ADD>>()
     shaped<FormField>()
     shaped<DropzoneParts>()
+    shaped<FollowBottom>()
     expect(true).toBe(true)
 })
 
@@ -160,6 +163,7 @@ function elementParts(): Record<string, unknown> {
     const trend = sparkline({ label: 'Trend', values: [1, 2] })
     const deal = form(ADD)
     const drop = dropzone()
+    const follow = followBottom()
     const toast = {
         id: 1,
         text: 'Saved',
@@ -247,6 +251,8 @@ function elementParts(): Record<string, unknown> {
         'form.field.error': deal.field('name').error,
         'dropzone.host': drop.host,
         'dropzone.input': drop.input,
+        'followBottom.host': follow.host,
+        'followBottom.jump': follow.jump,
     }
 }
 
@@ -284,6 +290,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     const modal = dialog()
     const keys = listbox({ options: () => ['a'] })
     const drop = dropzone()
+    const follow = followBottom()
     const handed: Record<string, unknown> = {
         'tabs.selected': view.selected,
         'menu.open': opener.open,
@@ -296,6 +303,7 @@ test('every option an app binds is optional and handed back, and every id is mad
         'sortableTable.selected': table.selected,
         'dialog.open': modal.open,
         'dropzone.files': drop.files,
+        'followBottom.following': follow.following,
     }
     const missing: string[] = []
     for (const [name, value] of Object.entries(handed))

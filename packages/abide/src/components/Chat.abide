@@ -4,7 +4,7 @@
 // rewrites the part it lands in and nothing before it.
 //
 // STYLED BY WHAT IT WRITES (49.2, 49.4): the root carries `data-streaming`; its `data-part`s are
-// `transcript`, `turn` (`data-speaker`, `data-streaming`, `data-stop`, `data-failed`), `speaker`,
+// `transcript` (`data-following`), `jump` (`hidden` while following, `data-unseen`), `turn` (`data-speaker`, `data-streaming`, `data-stop`, `data-failed`), `speaker`,
 // `text`, `image`, `tool` (`data-status`) holding `tool-name`, `tool-input` and `tool-result`,
 // `permission` (`data-answer`) holding `permission-name`, `permission-input`, `allow` and `deny`,
 // `failure`, `actions`, and `composer` (`data-dragging`) holding `attachments`, `attachment`,
@@ -202,6 +202,9 @@ async function answer(id: string, allow: boolean) {
     await permit?.({ id, allow })
 }
 
+// 53.40 — the transcript kept at its bottom, and the button taking a reader who scrolled up back down.
+const follow = followBottom()
+
 const statusOf = (part: ToolPart) =>
     part.result === undefined ? 'running' : part.failed ? 'failed' : 'done'
 const answerOf = (part: Permission) =>
@@ -211,7 +214,7 @@ const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
 
 <section {...rest} data-streaming={streaming ? '' : undefined}>
     <ol data-part="transcript" role="log" aria-live="polite"
-        bind:element={followBottom}>
+        {...follow.host}>
         {#for turn, index of turns by turn}
             <li data-part="turn"
                 data-speaker={turn.role === 'user' ? 'you' : 'assistant'}
@@ -262,6 +265,7 @@ const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
             </li>
         {/for}
     </ol>
+    <button {...follow.jump}>↓ Latest</button>
 
     <form {...drop.host} data-part="composer" onsubmit={submit}>
         {#if attached.length > 0}

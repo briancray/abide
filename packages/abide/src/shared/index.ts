@@ -58,8 +58,12 @@ export { csp } from './csp.ts'
 export { type DialogOptions, type DialogParts, dialog } from './dialog.ts'
 // 53.12-53.16 — the `bind:element` adaptor closing a panel from outside it.
 export { dismissible } from './dismissible.ts'
-// 53.53 — the `bind:element` adaptor keeping a scrolling element at its bottom.
-export { followBottom } from './followBottom.ts'
+// 53.53, 53.61-53.63 — a scrolling element kept at its bottom, and the button taking a reader back down.
+export {
+    type FollowBottom,
+    type FollowBottomOptions,
+    followBottom,
+} from './followBottom.ts'
 // 53.17-53.20 — the `bind:element` adaptor taking dropped and pasted files.
 export {
     type DropzoneOptions,

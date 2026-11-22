@@ -432,6 +432,11 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply flex flex-col gap-flow;
     }
 
+    /* Shown only once the reader has scrolled the transcript up (53.62). */
+    .conversation [data-part="jump"] {
+        @apply self-center rounded-full border border-rule bg-raised px-3 py-1 text-chrome text-muted hover:text-ink;
+    }
+
     .conversation [data-part="speaker"] {
         @apply sr-only;
     }

@@ -1178,7 +1178,9 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `followBottom` | `(element: Element) => Disposer` | The `bind:element` adaptor keeping a scrolling element at its bottom as what it holds grows. | 32.9, 53.53 |
+| `followBottom` | `(options?: FollowBottomOptions) => FollowBottom` | A scrolling element kept at its bottom as what it holds grows, until the reader scrolls up, and a button taking them back down, as parts to spread. | 32.99, 53.53, 53.61, 53.62, 53.63, 49.4, 49.10 |
+| `FollowBottomOptions` | `{ following?: Reactive<boolean>; threshold?: number \| (() => number); behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. | 53.61, 53.63, 49.10, 49.12, 49.13 |
+| `FollowBottom` | `{ readonly host: Record<string, unknown>; readonly jump: Record<string, unknown>; readonly following: Reactive<boolean>; toBottom(): void }` | The scroller's part, the jump button's part, whether it is following, and what takes it back down. | 53.53, 53.62, 53.63, 49.11 |
 
 ## `observe`
 

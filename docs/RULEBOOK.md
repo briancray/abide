@@ -5828,7 +5828,7 @@ answer, and MUST disable the part's buttons where `permit` is absent or the part
 53.39 `Chat` MUST render an assistant's text part through `Text` where one is given, handed the
 text, the part and its turn, and as text where none is.
 
-53.40 `Chat`'s transcript MUST be bound to `followBottom`.
+53.40 `Chat`'s transcript MUST be `followBottom`'s `host`, and `Chat` MUST render its `jump` part.
 
 53.41 `Chat`'s transcript MUST carry `role="log"` and `aria-live="polite"`.
 
@@ -5869,8 +5869,8 @@ offering a retry that calls `pairing`'s `retry`.
 53.52 `Pairing` MUST render a step's message through `Message` where one is given, handed the
 step, and in its own words where none is.
 
-53.53 `followBottom` MUST keep the element it is bound to scrolled to its bottom as what the element
-holds changes, save while the reader has scrolled up from that bottom.
+53.53 `followBottom`'s `host` MUST keep the element it is spread on scrolled to its bottom as what the
+element holds changes, while `following` is true.
 
 53.54 `keyLabel` writing for an Apple platform MUST write Enter as ↩, Escape as ⎋, Backspace as ⌫,
 Delete as ⌦ and Tab as ⇥.
@@ -5891,6 +5891,16 @@ MUST leave them as they are.
 
 53.60 A pick through `dropzone`'s `input` MUST be taken as a drop is, a function `accept` handed a
 transfer of the files picked, and the input MUST be emptied after it.
+
+53.61 `followBottom` MUST set `following` to false when the reader scrolls its `host` further than
+`threshold` pixels from the bottom, and to true when they scroll back within it.
+
+53.62 `followBottom`'s `jump` part MUST be hidden while `following` is true, and MUST carry
+`data-unseen` once what the `host` holds changes while `following` is false, until `following` is
+true again.
+
+53.63 `FollowBottom`'s `toBottom` MUST scroll the `host` to its bottom as `behavior` names, and MUST
+set `following` to true.
 
 # 54. Guards, fetches and jobs
 

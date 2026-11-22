@@ -531,26 +531,59 @@ test('a value holding no string reports not copied where there is no clipboard �
     }
 })
 
-// THE REVERT: drop the `following` check in `followBottom` — the reader scrolled up to 0 is pulled
-// back to 180 by the next line.
-test('a scrolling element follows its bottom until the reader scrolls up, and again once back — 53.53', async () => {
+// THE REVERT: drop the `following` check in `followBottom`'s observer — the reader scrolled up to 0
+// is pulled back to 180 by the next line, and the jump never reads unseen.
+test('a scroller follows its bottom until the reader scrolls up, and the jump takes them back — 53.53, 53.61-53.63', async () => {
     const log = element()
     // The emulator lays nothing out: the element is 100px tall and grows 40px a line.
     let height = 100
     Object.defineProperty(log, 'clientHeight', { get: () => 100 })
     Object.defineProperty(log, 'scrollHeight', { get: () => height })
-    const stop = followBottom(log)
+    // The emulator scrolls nowhere: a jump lands where it was asked to, at once.
+    log.scrollTo = ((to: ScrollToOptions) => {
+        log.scrollTop = to.top ?? 0
+        log.dispatchEvent(new Event('scroll'))
+    }) as typeof log.scrollTo
+    const follow = followBottom()
+    const stop = (
+        follow.host['bind:element'] as (element: Element) => () => void
+    )(log)
     const line = async (): Promise<void> => {
         height += 40
         log.append(document.createElement('p'))
         await Bun.sleep(0)
     }
+    const jump = () => ({
+        hidden: follow.jump.hidden,
+        unseen: follow.jump['data-unseen'],
+    })
     await line()
-    expect(log.scrollTop).toBe(140)
+    expect([log.scrollTop, follow.following(), jump()]).toEqual([
+        140,
+        true,
+        { hidden: true, unseen: undefined },
+    ])
+    // 53.61 — scrolled up past the threshold, it stops following.
     log.scrollTop = 0
     log.dispatchEvent(new Event('scroll'))
     await line()
-    expect(log.scrollTop).toBe(0)
+    // 53.62 — and the line that landed meanwhile shows the jump, unseen.
+    expect([log.scrollTop, follow.following(), jump()]).toEqual([
+        0,
+        false,
+        { hidden: false, unseen: '' },
+    ])
+    // 53.63 — the jump takes the reader down and follows again.
+    ;(follow.jump.onclick as () => void)()
+    await line()
+    expect([log.scrollTop, follow.following(), jump()]).toEqual([
+        height,
+        true,
+        { hidden: true, unseen: undefined },
+    ])
+    // 53.61 — scrolled back within the threshold by the reader, it follows again too.
+    log.scrollTop = 0
+    log.dispatchEvent(new Event('scroll'))
     log.scrollTop = height - 100
     log.dispatchEvent(new Event('scroll'))
     await line()
