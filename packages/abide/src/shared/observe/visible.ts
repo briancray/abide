@@ -43,7 +43,7 @@ class Rooted {
 /**
  * The part writing whether an element intersects the viewport into `target`.
  *
- * 32.80 — against the viewport, or 32.89 the root `in` holds; 32.83 — the `Disposer` it hands back
+ * 32.80 — against the viewport, or 32.89 the root `in` holds; 32.83 — its binding's `Disposer`
  * stops observing, and 32.100 `once` stops it after the first `true`.
  *
  * 32.82 — nothing is read at bind time (`size`'s reason): the observer's first delivery says where

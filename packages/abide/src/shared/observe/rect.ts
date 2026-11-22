@@ -59,7 +59,7 @@ class Placed extends Measured {
  * The part writing an element's rectangle in the viewport into `target`
  * whenever a resize of it, a scroll or a window resize may have moved it.
  *
- * 32.84; 32.83 — the `Disposer` it hands back stops observing.
+ * 32.84; 32.83 — its binding's `Disposer` stops observing.
  *
  * 32.87 — NOTHING IS READ HERE: binding schedules the frame every bound element is read in, so a
  * mount of a hundred rows is one batch of reads in one frame rather than a forced layout per row.

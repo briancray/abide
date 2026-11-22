@@ -14,8 +14,8 @@ const bound = new WeakSet<Element>()
 /**
  * The part writing an element's size into `target` as it is laid out.
  *
- * 32.79 — the content box, or 32.90 the border box where `box` says `"border"`; 32.83 — the
- * `Disposer` it hands back stops observing.
+ * 32.79 — the content box, or 32.90 the border box where `box` says `"border"`; 32.83 — its
+ * binding's `Disposer` stops observing.
  *
  * 32.82 — NOTHING IS READ HERE: a size read at bind time would force the layout the mount just
  * invalidated, and the observer's first delivery, which every observed element is owed, comes
