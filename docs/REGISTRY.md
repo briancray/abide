@@ -876,7 +876,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `tooltip.tip` | `(text: string, options?: TooltipOptions) => (anchor: Element) => Disposer` | The `bind:element` adaptor opening a text hint for the element it is bound to, shown by the page's `tooltip.host`. | 32.9, 50.23, 50.24, 50.25, 50.36, 53.15 |
+| `tooltip.tip` | `(text: string, options?: TooltipOptions) => Record<string, unknown>` | The part opening a text hint for the element it is spread on, shown by the page's `tooltip.host`. | 32.99, 50.23, 50.24, 50.25, 50.36, 53.15, 49.4, 49.14 |
 | `tooltip.host` | `() => TooltipHost` | The popover every hint shows in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.36, 50.48, 50.54, 49.9 |
 | `TooltipHost` | `{ readonly hint: Record<string, unknown>; get text(): string \| undefined }` | The popover's part, and the text of the hint showing in it. | 32.11, 50.54, 50.55, 49.4, 49.11 |
 | `TooltipOptions` | `Omit<PopoverOptions, 'side'> & { side?: Side \| (() => Side); delay?: number \| (() => number) }` | Where a hint opens against its anchor, placed as a `popover` is, and how long a pointer rests first. | 50.19, 50.20, 50.21, 50.24, 50.26, 50.35, 49.12, 49.13 |
@@ -893,13 +893,13 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: { escape?: boolean; outside?: boolean; inside?: readonly (Element \| null \| undefined)[] }) => (element: Element) => Disposer` | The `bind:element` adaptor closing an element on a press outside it or on Escape. | 32.9, 53.12, 53.13, 53.14, 53.15, 53.16 |
+| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: { escape?: boolean; outside?: boolean; inside?: readonly (Element \| null \| undefined)[] }) => Record<string, unknown>` | The part closing the element it is spread on, on a press outside it or on Escape. | 32.99, 53.12, 53.13, 53.14, 53.15, 53.16, 49.4, 49.14 |
 
 ## `popover`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `popover` | `(anchor: Element, options?: PopoverOptions) => (element: Element) => Disposer` | The `bind:element` adaptor showing an element in the top layer against an anchor for as long as it is bound. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.49 |
+| `popover` | `(anchor: Element \| undefined, options?: PopoverOptions) => Record<string, unknown>` | The part showing the element it is spread on in the top layer against an anchor for as long as it is bound. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.49, 32.99, 49.4, 49.14 |
 | `PopoverOptions` | `{ side?: Side \| (() => Side); align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number) }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners. | 50.19, 50.20, 50.21, 50.35, 49.12, 49.13 |
 | `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
@@ -1063,7 +1063,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45, 53.57, 53.58, 53.74 |
+| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.22, 53.23, 53.44, 53.45, 53.57, 53.58, 53.74, 49.4, 49.14 |
 
 # Charts
 
@@ -1212,15 +1212,15 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `scrollEdges` | `(element: Element) => Disposer` | The `bind:element` adaptor marking a scrolling element with the edges it can still scroll toward. | 32.9, 32.101, 32.102, 32.103, 32.104, 32.105, 32.106, 32.107, 32.108 |
+| `scrollEdges` | `() => Record<string, unknown>` | The part marking the scrolling element it is spread on with the edges it can still scroll toward. | 32.99, 32.101, 32.102, 32.103, 32.104, 32.105, 32.106, 32.107, 32.108, 49.4, 49.14 |
 
 ## `observe`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `observe.size` | `{ (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): (element: Element) => Disposer; (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: 'content' \| 'border' }): (element: Element) => Disposer; (target: ((size: { width: number; height: number }) => void), options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): (element: Element) => Disposer; (target: ((size: { width: number; height: number }) => void), options?: { box?: 'content' \| 'border' }): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's size. | 32.79, 32.81, 32.82, 32.83, 32.90, 32.91, 32.92, 32.98 |
-| `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): (element: Element) => Disposer; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document; once?: boolean }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): (element: Element) => Disposer; (target: ((visible: boolean) => void), options?: { in?: Element \| Document; once?: boolean }): (element: Element) => Disposer }` | The `bind:element` adaptor writing whether an element is in view. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92, 32.98, 32.100 |
-| `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): (element: Element) => Disposer; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): (element: Element) => Disposer }` | The `bind:element` adaptor writing an element's rectangle in the viewport. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92, 32.98 |
+| `observe.size` | `{ (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): Record<string, unknown>; (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: 'content' \| 'border' }): Record<string, unknown>; (target: ((size: { width: number; height: number }) => void), options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): Record<string, unknown>; (target: ((size: { width: number; height: number }) => void), options?: { box?: 'content' \| 'border' }): Record<string, unknown> }` | The part writing the size of the element it is spread on. | 32.79, 32.81, 32.82, 32.83, 32.90, 32.91, 32.92, 32.98, 32.99, 49.4, 49.14 |
+| `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): Record<string, unknown>; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document; once?: boolean }): Record<string, unknown>; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): Record<string, unknown>; (target: ((visible: boolean) => void), options?: { in?: Element \| Document; once?: boolean }): Record<string, unknown> }` | The part writing whether the element it is spread on is in view. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92, 32.98, 32.100, 32.99, 49.4, 49.14 |
+| `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): Record<string, unknown>; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): Record<string, unknown> }` | The part writing the rectangle, in the viewport, of the element it is spread on. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92, 32.98, 32.99, 49.4, 49.14 |
 
 # Data and I/O
 

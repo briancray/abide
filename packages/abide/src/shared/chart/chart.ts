@@ -8,10 +8,10 @@
 
 import { anchored } from '../anchored.ts'
 import { announce } from '../announce.ts'
-import { dismissible } from '../dismissible.ts'
+import { dismissing } from '../dismissible.ts'
 import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
-import { size as observeSize } from '../observe/size.ts'
+import { sizeBinding } from '../observe/size.ts'
 import { randomToken } from '../randomToken.ts'
 import { reactive, watch } from '../reactive/index.ts'
 import type { Disposer } from '../reactive/watch.ts'
@@ -670,7 +670,7 @@ export function chart(options: ChartOptions): ChartParts {
                     element.setAttribute('data-side', placement.side),
             )
             // 50.25 — an Escape no one prevented takes the crosshair down, as it does a hint.
-            const unstack = dismissible(scrubbing.leave, { outside: false })(
+            const unstack = dismissing(scrubbing.leave, { outside: false })(
                 anchor,
             )
             return () => {
@@ -679,7 +679,7 @@ export function chart(options: ChartOptions): ChartParts {
             }
         })
 
-    const measure = observeSize(size)
+    const measure = sizeBinding(size)
 
     return {
         id: base,

@@ -13,6 +13,7 @@ import { emitClient, parseAbide } from '#compiler'
 import { flushSync, observe, reactive } from '#shared'
 import { anchored } from '#shared/anchored.ts'
 
+import { bindPart } from './bindPart.ts'
 import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage } from './typed.ts'
@@ -80,7 +81,7 @@ const sizeOf = (target: Element, width: number, height: number) => ({
 })
 
 // 32.82 — THE VALUE HOLDS WHAT THE AUTHOR GAVE IT UNTIL THE FIRST DELIVERY, and a delivery writes
-// it. A `bind:element` list hands the element to both adaptors (32.9).
+// it. Two spreads each hand the element to their part (32.99).
 test('a delivery writes the value, and nothing before it does — 32.79, 32.80, 32.82', async () => {
     const { html } = await mountPage(`<script>
 import { observe, reactive } from '@abide/abide'
@@ -89,7 +90,7 @@ let box = reactive({ width: 0, height: 0 })
 let seen = reactive(false)
 </script>
 
-<div id="panel" bind:element={[observe.size(box), observe.visible(seen)]}></div>
+<div id="panel" {...observe.size(box)} {...observe.visible(seen)}></div>
 <p id="out">{box.width}x{box.height} {seen}</p>`)
     expect(html).not.toContain('bind:')
     expect(html).toContain('<p id="out">0x0 false</p>')
@@ -107,7 +108,7 @@ let rows = reactive(Array.from({ length: 50 }, (_, index) => ({ id: index, box: 
 </script>
 
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
-{#for row of rows by row.id}<div class="row" bind:element={[observe.size(row.box), observe.visible(row.seen)]}>{row.id}</div>{/for}`
+{#for row of rows by row.id}<div class="row" {...observe.size(row.box)} {...observe.visible(row.seen)}>{row.id}</div>{/for}`
 
 // 32.81 — ONE OBSERVER EACH FOR FIFTY ELEMENTS, and every element observed by it. THE REVERT:
 // make the observer per call in `resized` / `visible` (`const observer = new ResizeObserver(…)`
@@ -170,8 +171,8 @@ const area = reactive(() => {
 })
 </script>
 
-<div id="sized" bind:element={observe.size(box)}></div>
-<div id="called" bind:element={observe.size(() => { calls = calls + 1 })}></div>
+<div id="sized" {...observe.size(box)}></div>
+<div id="called" {...observe.size(() => { calls = calls + 1 })}></div>
 <p id="area">{area}</p>
 <p id="calls">{calls}</p>`)
     const sized = document.getElementById('sized') as Element
@@ -188,7 +189,7 @@ const area = reactive(() => {
     ).toBe('area computed 1 times')
 })
 
-// 32.91 — A MEASUREMENT WRITTEN AS AN ATTRIBUTE IS REFUSED, naming the adaptor that is one. THE
+// 32.91 — A MEASUREMENT WRITTEN AS AN ATTRIBUTE IS REFUSED, naming the part that is one. THE
 // REVERT: empty `MEASURED` in `classifyTemplate.ts`; every spelling below compiles, `bind:size`
 // refused only as a bind of nothing (32.74) and `visibleIn` written as an attribute.
 test('a measured bind or option is refused with the observe spelling — 32.91', () => {
@@ -201,13 +202,13 @@ test('a measured bind or option is refused with the observe spelling — 32.91',
         return 'compiled'
     }
     expect(refusedFor('<input size="20" bind:size={box}>')).toContain(
-        '`bind:size={x}` is `bind:element={observe.size(x)}`',
+        '`bind:size={x}` is `{...observe.size(x)}`',
     )
     expect(refusedFor('<div bind:visible={seen}></div>')).toContain(
-        '`bind:visible={x}` is `bind:element={observe.visible(x)}`',
+        '`bind:visible={x}` is `{...observe.visible(x)}`',
     )
     expect(refusedFor('<div bind:rect={placed}></div>')).toContain(
-        '`bind:rect={x}` is `bind:element={observe.rect(x)}`',
+        '`bind:rect={x}` is `{...observe.rect(x)}`',
     )
     expect(refusedFor('<p visibleIn={box}></p>')).toContain(
         'observe.visible(x, { in: root })',
@@ -218,9 +219,7 @@ test('a measured bind or option is refused with the observe spelling — 32.91',
     expect(refusedFor('<div bind:sizes={box}></div>')).toContain(
         'RULEBOOK 32.74',
     )
-    expect(refusedFor('<div bind:element={observe.size(box)}></div>')).toBe(
-        'compiled',
-    )
+    expect(refusedFor('<div {...observe.size(box)}></div>')).toBe('compiled')
 })
 
 const ROOTED = `<script>
@@ -235,7 +234,7 @@ let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, seen:
 <button id="unroot" onclick={() => { rooted = !rooted }}>unroot</button>
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
 <div id="scroller" bind:element={scroller}>
-    {#for row of rows by row.id}<p class="row" bind:element={observe.visible(row.seen, { in: root })}>{row.id}</p>{/for}
+    {#for row of rows by row.id}<p class="row" {...observe.visible(row.seen, { in: root })}>{row.id}</p>{/for}
 </div>`
 
 // 32.81 — ONE OBSERVER FOR EVERY RESIZE IN THE DOCUMENT: an `observe.size`, an `observe.rect` and a
@@ -252,8 +251,8 @@ test('an observe.size, an observe.rect and a followed popover share one ResizeOb
     document.body.append(sized, placed, anchor, floating)
     const box = reactive({ width: 0, height: 0 })
     const stops = [
-        observe.size(box)(sized),
-        observe.rect(reactive())(placed),
+        bindPart(observe.size(box), sized),
+        bindPart(observe.rect(reactive()), placed),
         anchored(anchor, floating, {}, () => {}),
     ]
     try {
@@ -328,8 +327,8 @@ const box = reactive(() => (content ? 'content' : 'border') as 'content' | 'bord
 </script>
 
 <button id="toggle" onclick={() => { content = !content }}>toggle</button>
-<div id="flat" bind:element={observe.size(flat, { box })}></div>
-<div id="upright" style="writing-mode: vertical-rl" bind:element={observe.size(upright, { box: 'border' })}></div>
+<div id="flat" {...observe.size(flat, { box })}></div>
+<div id="upright" style="writing-mode: vertical-rl" {...observe.size(upright, { box: 'border' })}></div>
 <p id="out">{flat.width}x{flat.height} {upright.width}x{upright.height}</p>`)
     const flat = document.getElementById('flat') as Element
     const upright = document.getElementById('upright') as Element
@@ -356,10 +355,21 @@ const box = reactive(() => (content ? 'content' : 'border') as 'content' | 'bord
 test('a second observe.size on one element throws — 32.92', async () => {
     const { observe } = await import('#shared')
     const element = document.createElement('div')
-    const stop = observe.size(() => {})(element)
-    expect(() => observe.size(() => {})(element)).toThrow('RULEBOOK 32.92')
+    const stop = bindPart(
+        observe.size(() => {}),
+        element,
+    )
+    expect(() =>
+        bindPart(
+            observe.size(() => {}),
+            element,
+        ),
+    ).toThrow('RULEBOOK 32.92')
     stop()
-    observe.size(() => {})(element)()
+    bindPart(
+        observe.size(() => {}),
+        element,
+    )()
 })
 
 // 32.100 — `once` RENDERS WHAT IT GATES THE FIRST TIME THE ELEMENT IS SEEN AND KEEPS IT: the first
@@ -370,6 +380,7 @@ test('a second observe.size on one element throws — 32.92', async () => {
 test('once: the first sighting is kept, and the element unobserved — 32.100', async () => {
     await mountPage(`<script>
 import { observe, reactive } from '@abide/abide'
+import { bindPart } from './bindPart.ts'
 
 let seen = reactive(false)
 let scroller = reactive<HTMLElement>()
@@ -377,8 +388,8 @@ let inside = reactive(false)
 </script>
 
 <div id="scroller" bind:element={scroller}>
-    <section id="lazy" bind:element={observe.visible(seen, { once: true })}>{#if seen}<p id="chart">chart</p>{/if}</section>
-    <section id="lazy-in" bind:element={observe.visible(inside, { in: scroller, once: true })}>{inside}</section>
+    <section id="lazy" {...observe.visible(seen, { once: true })}>{#if seen}<p id="chart">chart</p>{/if}</section>
+    <section id="lazy-in" {...observe.visible(inside, { in: scroller, once: true })}>{inside}</section>
 </div>`)
     flushSync()
     const lazy = document.getElementById('lazy') as Element

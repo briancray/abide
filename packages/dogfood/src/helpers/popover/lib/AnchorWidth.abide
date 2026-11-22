@@ -11,7 +11,7 @@ let typed = reactive('')
     <ul
         class="m-0 w-(--anchor-width) list-none rounded-md border border-rule
         bg-raised p-2"
-        bind:element={popover(field, { align: 'start', offset: 4 })}
+        {...popover(field, { align: 'start', offset: 4 })}
     >
         <li>{typed} Ltd</li>
         <li>{typed} & Co</li>

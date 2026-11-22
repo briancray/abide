@@ -2,7 +2,7 @@
 import { copy } from '@abide/abide'
 </script>
 
-<button class="group" bind:element={copy({ value: 'grace@hopper.example' })}>
+<button class="group" {...copy({ value: 'grace@hopper.example' })}>
     <span class="group-data-copied:hidden">Copy</span>
     <span class="hidden group-data-copied:inline">Copied</span>
 </button>

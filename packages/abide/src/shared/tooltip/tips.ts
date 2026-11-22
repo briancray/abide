@@ -1,5 +1,5 @@
 // 50.23, 50.36 — THE ONE HINT SHOWING, which the `tooltip.host` standing in the page shows. Written only
-// in a browser — `tooltip.tip` is a `bind:element` adaptor, which a server never runs.
+// in a browser — by `tooltip.tip`'s element binding, which a server never runs.
 
 import type { Live } from '../live.ts'
 import { outlet } from '../outlet.ts'

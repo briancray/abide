@@ -12,7 +12,7 @@ type Box = 'content' | 'border'
 const bound = new WeakSet<Element>()
 
 /**
- * The `bind:element` callback writing an element's size into `target` as it is laid out.
+ * The part writing an element's size into `target` as it is laid out.
  *
  * 32.79 — the content box, or 32.90 the border box where `box` says `"border"`; 32.83 — the
  * `Disposer` it hands back stops observing.
@@ -28,20 +28,31 @@ const bound = new WeakSet<Element>()
 export function size(
     target: Reactive<unknown, Size, unknown, unknown>,
     options?: { box?: Reactive<Box, never, unknown, unknown> },
-): (element: Element) => Disposer
+): Record<string, unknown>
 export function size(
     target: Reactive<unknown, Size, unknown, unknown>,
     options?: { box?: Box },
-): (element: Element) => Disposer
+): Record<string, unknown>
 export function size(
     target: (size: Size) => void,
     options?: { box?: Reactive<Box, never, unknown, unknown> },
-): (element: Element) => Disposer
+): Record<string, unknown>
 export function size(
     target: (size: Size) => void,
     options?: { box?: Box },
-): (element: Element) => Disposer
+): Record<string, unknown>
 export function size(
+    target: unknown,
+    options?: { box?: unknown },
+): Record<string, unknown> {
+    return {
+        'data-observe': 'host',
+        'bind:element': sizeBinding(target, options),
+    }
+}
+
+/** `observe.size`'s binding alone, for a part of the framework's own that measures an element it holds. */
+export function sizeBinding(
     target: unknown,
     options?: { box?: unknown },
 ): (element: Element) => Disposer {

@@ -10,6 +10,8 @@ import { collectWatches } from '#shared/reactive/watch.ts'
 import { host } from '#shared/tooltip/host.ts'
 import { tip } from '#shared/tooltip/tip.ts'
 
+import { bindPart } from './bindPart.ts'
+
 afterEach(() => document.body.replaceChildren())
 
 // A host standing as a component's setup stands it: its watches collected, and stopped as it leaves.
@@ -28,7 +30,7 @@ function standing() {
 
 async function opened(text: string): Promise<() => void> {
     const anchor = document.body.appendChild(document.createElement('button'))
-    const unbind = tip(text, { delay: 0 })(anchor)
+    const unbind = bindPart(tip(text, { delay: 0 }), anchor)
     anchor.dispatchEvent(new MouseEvent('mouseenter'))
     await Bun.sleep(1)
     flushSync()
@@ -82,7 +84,7 @@ test('a hint keeps the margin it is given from the viewport — 50.21', async ()
     const anchor = document.body.appendChild(document.createElement('button'))
     anchor.getBoundingClientRect = () =>
         DOMRect.fromRect({ x: 0, y: 100, width: 20, height: 20 })
-    const unbind = tip('Signed.', { delay: 0, margin: 30 })(anchor)
+    const unbind = bindPart(tip('Signed.', { delay: 0, margin: 30 }), anchor)
     anchor.dispatchEvent(new MouseEvent('mouseenter'))
     await Bun.sleep(1)
     flushSync()

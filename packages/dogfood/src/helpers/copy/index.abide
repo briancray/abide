@@ -82,7 +82,7 @@ import copyRecord from './lib/CopyRecord.abide' with { type: 'text' }
         <Example code={copyRecord}><CopyRecord /></Example>
     </Section>
     <Section level={3} title="Copy each code block of a rendered note from one binding">
-        <p>Bind <code>copy</code> to the element holding the buttons and give it a
+        <p>Spread <code>copy</code> on the element holding the buttons and give it a
             <code>selector</code>: a click on a matching button copies, handed that button, and
             only it is marked. Buttons in a <code>raw</code> block are reached the same way.
             <code>oncopied</code> hears whether each copy landed.</p>

@@ -7,7 +7,7 @@ let company = reactive('Analytical Engines')
 
 <button onclick={() => (open = true)}>Quick edit</button>
 {#if open}
-    <form bind:element={dismissible(() => (open = false))}>
+    <form {...dismissible(() => (open = false))}>
         <input bind:value={company}>
     </form>
 {/if}

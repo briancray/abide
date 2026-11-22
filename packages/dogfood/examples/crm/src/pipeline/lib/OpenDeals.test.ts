@@ -20,7 +20,7 @@ const frame = () =>
     new Promise((done) => requestAnimationFrame(() => done(undefined)))
 
 // 32.101, 32.103 — THE DEALS THAT LAND PAST THE LIST'S HEIGHT MARK ITS BOTTOM, and scrolling to the
-// end moves the mark to its top. THE REVERT: drop `bind:element={scrollEdges}`; the list carries no
+// end moves the mark to its top. THE REVERT: drop `{...scrollEdges()}`; the list carries no
 // `data-scrollable` and nothing fades.
 test("deals past the list's height mark its bottom, and scrolling to the end its top", async () => {
     using _deals = await mount(OpenDeals({}))

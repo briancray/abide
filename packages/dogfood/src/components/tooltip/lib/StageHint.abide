@@ -4,4 +4,4 @@ import { tooltip } from '@abide/abide'
 const hint = tooltip.tip('A quote is out, waiting on an answer.')
 </script>
 
-<span tabindex="0" bind:element={hint}>proposal</span>
+<span tabindex="0" {...hint}>proposal</span>

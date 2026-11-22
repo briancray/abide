@@ -30,15 +30,15 @@ let tall = reactive(false)
 <main>
     <button id="add" onclick={() => { rows = [...rows, rows.length + 1] }}>add</button>
     <button id="grow" onclick={() => { tall = true }}>grow</button>
-    <ol id="list" bind:element={scrollEdges}>
+    <ol id="list" {...scrollEdges()}>
         {#for row of rows by row}<li>{row}</li>{/for}
     </ol>
-    <div id="grown" bind:element={scrollEdges}><p class:tall={tall}>content</p></div>
-    <div id="ltr" class="wide" bind:element={scrollEdges}><p></p></div>
-    <div id="rtl" class="wide" dir="rtl" bind:element={scrollEdges}><p></p></div>
+    <div id="grown" {...scrollEdges()}><p class:tall={tall}>content</p></div>
+    <div id="ltr" class="wide" {...scrollEdges()}><p></p></div>
+    <div id="rtl" class="wide" dir="rtl" {...scrollEdges()}><p></p></div>
     <details id="folded">
         <summary>more</summary>
-        <div id="inside" bind:element={scrollEdges}><p class:tall={tall}>content</p></div>
+        <div id="inside" {...scrollEdges()}><p class:tall={tall}>content</p></div>
     </details>
 </main>
 

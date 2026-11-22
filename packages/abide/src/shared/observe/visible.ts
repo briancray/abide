@@ -41,7 +41,7 @@ class Rooted {
 }
 
 /**
- * The `bind:element` callback writing whether an element intersects the viewport into `target`.
+ * The part writing whether an element intersects the viewport into `target`.
  *
  * 32.80 — against the viewport, or 32.89 the root `in` holds; 32.83 — the `Disposer` it hands back
  * stops observing, and 32.100 `once` stops it after the first `true`.
@@ -57,23 +57,34 @@ export function visible(
         in?: Reactive<Root | null | undefined, never, unknown, unknown>
         once?: boolean
     },
-): (element: Element) => Disposer
+): Record<string, unknown>
 export function visible(
     target: Reactive<unknown, boolean, unknown, unknown>,
     options?: { in?: Root; once?: boolean },
-): (element: Element) => Disposer
+): Record<string, unknown>
 export function visible(
     target: (visible: boolean) => void,
     options?: {
         in?: Reactive<Root | null | undefined, never, unknown, unknown>
         once?: boolean
     },
-): (element: Element) => Disposer
+): Record<string, unknown>
 export function visible(
     target: (visible: boolean) => void,
     options?: { in?: Root; once?: boolean },
-): (element: Element) => Disposer
+): Record<string, unknown>
 export function visible(
+    target: unknown,
+    options?: { in?: unknown; once?: boolean },
+): Record<string, unknown> {
+    return {
+        'data-observe': 'host',
+        'bind:element': visibleBinding(target, options),
+    }
+}
+
+// The binding the part carries.
+function visibleBinding(
     target: unknown,
     options?: { in?: unknown; once?: boolean },
 ): (element: Element) => Disposer {

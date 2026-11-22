@@ -15,7 +15,7 @@ const MEANING: Record<string, string> = {
 <ul class="row list-none p-0">
     {#for stage of STAGES}
         <li>
-            <span tabindex="0" class="font-mono uppercase" bind:element={tooltip.tip(MEANING[stage] ?? '')}>{stage}</span>
+            <span tabindex="0" class="font-mono uppercase" {...tooltip.tip(MEANING[stage] ?? '')}>{stage}</span>
         </li>
     {/for}
 </ul>

@@ -9,7 +9,7 @@ const close = () => (open = false)
 <button bind:element={opener} onclick={() => (open = !open)}>
     {open ? 'Done' : 'Quick edit'}</button>
 {#if open}
-    <form bind:element={dismissible(close, { inside: [opener] })}>
+    <form {...dismissible(close, { inside: [opener] })}>
         <input value="Analytical Engines">
     </form>
 {/if}

@@ -17,7 +17,7 @@ const close = () => (open = false)
 
 {#if open}
     <form class="row rounded-md border border-rule bg-raised p-snug"
-        bind:element={dismissible(close, { inside: [opener] })}>
+        {...dismissible(close, { inside: [opener] })}>
         <label>company <input bind:value={company}></label>
     </form>
 {/if}

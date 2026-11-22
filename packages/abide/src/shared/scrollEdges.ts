@@ -44,7 +44,7 @@ const read: Edged[] = []
 const readings: string[] = []
 
 /**
- * The `bind:element` callback writing on a scrolling element, as `data-scrollable`, which of its
+ * The part writing on the scrolling element it is spread on, as `data-scrollable`, which of its
  * edges content lies beyond — `top`, `bottom`, `start`, `end` — as it scrolls, resizes or its
  * content changes.
  *
@@ -56,7 +56,11 @@ const readings: string[] = []
  * at 3.2x the hand-written arm's main thread per idle frame on a 1000-row list — paid every frame
  * whether or not anything changed, where a mutation costs only when one happens.
  */
-export function scrollEdges(element: Element): Disposer {
+export function scrollEdges(): Record<string, unknown> {
+    return { 'data-scroll-edges': 'host', 'bind:element': edgesOf }
+}
+
+function edgesOf(element: Element): Disposer {
     if (bound.has(element))
         throw new Error(
             `abide: <${element.localName}> is bound to scrollEdges twice — one element takes one scrollEdges. RULEBOOK 32.108.`,

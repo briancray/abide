@@ -229,9 +229,10 @@ table.
   `Dialog`, `Chart`, `Pie` and `Sparkline` are default markup over the last nine, and `chart` carries
   the arithmetic under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and
   `chart.nearest`), `sortBy`, `virtualList`, `hotkeys` and `keyLabel`, and
-  the `bind:element` adaptors `dismissible`, `copy`, `popover` (an app's own panel in
-  the top layer, against its anchor) and `tooltip.tip` (shown by the root layout's `Tooltips`, or by
-  `tooltip.host` on markup of the app's own) beside `observe`.
+  the one-element parts `dismissible`, `copy`, `popover` (an app's own panel in the top layer,
+  against its anchor), `scrollEdges` and `tooltip.tip` (shown by the root layout's `Tooltips`, or by
+  `tooltip.host` on markup of the app's own) beside `observe` — every behavior on an element is a
+  part, spread as `{...copy()}`, and several spread on one element each bind it.
 - From `@abide/abide/server`: the rungs `signedIn`, `requireRole` and `readOnly`, `fetchJson` /
   `fetchText` (a deadline, retries worth retrying, a cache), and `job` (work on a schedule, one run at
   a time).

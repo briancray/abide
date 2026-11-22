@@ -10,7 +10,7 @@ const contentOf = (clicked: Element): Copyable => ({
 })
 
 /**
- * The `bind:element` adaptor copying to the clipboard when the element is clicked — its own text
+ * The part copying to the clipboard when the element it is spread on is clicked — its own text
  * and markup by default, or a `value`: text, or a record of MIME type to what it holds (`text/html`
  * beside `text/plain`, `image/png`) — and writing `data-copied` on it for `copiedFor` milliseconds
  * once the copy landed.
@@ -32,9 +32,9 @@ export function copy(
         /** 53.45 — called once a click's copy has landed or failed, with whether it landed and the element clicked. */
         oncopied?: (copied: boolean, clicked: Element) => void
     } = {},
-): (element: Element) => Disposer {
+): Record<string, unknown> {
     const { value = contentOf, copiedFor = 1500, selector, oncopied } = options
-    return (element) => {
+    const bind = (element: Element): Disposer => {
         const clearing = new Map<Element, ReturnType<typeof setTimeout>>()
         let bound = true
         const click = async (event: Event): Promise<void> => {
@@ -69,4 +69,5 @@ export function copy(
             for (const timer of clearing.values()) clearTimeout(timer)
         }
     }
+    return { 'data-copy': 'host', 'bind:element': bind }
 }

@@ -370,7 +370,7 @@ export function refuseBinds(node: ElementNode): void {
         const measured = MEASURED.get(lower)
         if (measured !== undefined)
             throw new Error(
-                `abide: <${node.tag}> has ${attribute.name}, and an element is measured by an adaptor its bind:element takes — ${measured}. RULEBOOK 32.91.`,
+                `abide: <${node.tag}> has ${attribute.name}, and an element is measured by an observe part spread on it — ${measured}. RULEBOOK 32.91.`,
             )
         if (!lower.startsWith('bind:') || lower === 'bind:element') continue
         if (valueBindOf(lower) === undefined)
@@ -485,12 +485,9 @@ type ValueBind = (typeof VALUE_BINDS)[number]
  * is one: refused with it rather than written as an attribute nothing reads.
  */
 const MEASURED = new Map<string, string>([
-    ['bind:size', '`bind:size={x}` is `bind:element={observe.size(x)}`'],
-    [
-        'bind:visible',
-        '`bind:visible={x}` is `bind:element={observe.visible(x)}`',
-    ],
-    ['bind:rect', '`bind:rect={x}` is `bind:element={observe.rect(x)}`'],
+    ['bind:size', '`bind:size={x}` is `{...observe.size(x)}`'],
+    ['bind:visible', '`bind:visible={x}` is `{...observe.visible(x)}`'],
+    ['bind:rect', '`bind:rect={x}` is `{...observe.rect(x)}`'],
     ['visiblein', '`visibleIn={root}` is `observe.visible(x, { in: root })`'],
     ['sizebox', '`sizeBox="border"` is `observe.size(x, { box: \'border\' })`'],
 ])

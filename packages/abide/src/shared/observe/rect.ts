@@ -56,7 +56,7 @@ class Placed extends Measured {
 }
 
 /**
- * The `bind:element` callback writing an element's rectangle in the viewport into `target`
+ * The part writing an element's rectangle in the viewport into `target`
  * whenever a resize of it, a scroll or a window resize may have moved it.
  *
  * 32.84; 32.83 — the `Disposer` it hands back stops observing.
@@ -68,11 +68,13 @@ class Placed extends Measured {
  */
 export function rect(
     target: Reactive<unknown, Rect, unknown, unknown>,
-): (element: Element) => Disposer
-export function rect(
-    target: (rect: Rect) => void,
-): (element: Element) => Disposer
-export function rect(target: unknown): (element: Element) => Disposer {
+): Record<string, unknown>
+export function rect(target: unknown): Record<string, unknown> {
+    return { 'data-observe': 'host', 'bind:element': rectBinding(target) }
+}
+
+// The binding the part carries.
+function rectBinding(target: unknown): (element: Element) => Disposer {
     return (element) => {
         if (bound.has(element)) observedTwice('rect', element)
         if (bound.size === 0) {

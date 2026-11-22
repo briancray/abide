@@ -18,10 +18,8 @@ function choose(chosen: string) {
 {#if open && opener}
     <div
         class="m-0 flex flex-col rounded-md border border-rule bg-raised p-1 shadow-sm"
-        bind:element={[
-            popover(opener, { align: 'start', offset: 4 }),
-            dismissible(() => (open = false), { inside: [opener] }),
-        ]}
+        {...popover(opener, { align: 'start', offset: 4 })}
+        {...dismissible(() => (open = false), { inside: [opener] })}
     >
         {#for each of STAGES}
             <button

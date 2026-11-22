@@ -1037,12 +1037,12 @@ let sizes = reactive<('s' | 'm')[]>([])
     ])
 }, 60_000)
 
-// 31.3 — AN `observe` ADAPTOR IS HELD TO WHAT IT WRITES, its target and its options alike, a
+// 31.3 — AN `observe` PART IS HELD TO WHAT IT WRITES, its target and its options alike, a
 // `Reactive` where a form takes one and a callback's parameter typed by the measurement. The four
 // above the line check clean; the four below it are a target taking a measurement it cannot hold,
 // and a box that is neither. THE REVERT: type the target of `size`'s callback forms `unknown`; the
 // `Reactive` of a string on line 14 checks clean, and lines 10 and 13 lose `next`'s type (7006).
-test('an observe adaptor is held to what it writes — 31.3', async () => {
+test('an observe part is held to what it writes — 31.3', async () => {
     const measured = appFixture({
         'tsconfig.json': JSON.stringify({
             compilerOptions: {
@@ -1065,21 +1065,21 @@ let name = reactive('ada')
 let border = reactive<'content' | 'border'>('border')
 let placed = reactive<{ top: number; left: number }>()
 </script>
-<div bind:element={[box, observe.size(name.length > 0 ? (next) => { placed = { top: next.height, left: next.width } } : () => {}, { box: border })]}></div>
-<p bind:element={observe.visible(seen, { in: box })}></p>
-<p bind:element={observe.rect(placed)}></p>
-<p bind:element={observe.size((next) => { placed = { top: next.height, left: 0 } }, { box: 'border' })}></p>
-<div bind:element={observe.size(name)}></div>
-<div bind:element={observe.visible(name)}></div>
-<div bind:element={observe.rect(seen)}></div>
-<div bind:element={observe.size(() => {}, { box: 'margin' })}></div>`,
+<div bind:element={box} {...observe.size(name.length > 0 ? (next) => { placed = { top: next.height, left: next.width } } : () => {}, { box: border })}></div>
+<p {...observe.visible(seen, { in: box })}></p>
+<p {...observe.rect(placed)}></p>
+<p {...observe.size((next) => { placed = { top: next.height, left: 0 } }, { box: 'border' })}></p>
+<div {...observe.size(name)}></div>
+<div {...observe.visible(name)}></div>
+<div {...observe.rect(seen)}></div>
+<div {...observe.size(() => {}, { box: 'margin' })}></div>`,
     })
     expect(
         (await checkApp(measured)).map(({ line, code }) => ({ line, code })),
     ).toEqual([
         { line: 14, code: 2769 },
         { line: 15, code: 2769 },
-        { line: 16, code: 2769 },
+        { line: 16, code: 2345 },
         { line: 17, code: 2769 },
     ])
 }, 60_000)

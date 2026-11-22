@@ -44,11 +44,11 @@ const narrow = media('(max-width: 600px)')
     <button id="grow" onclick={() => { tall = true }}>grow</button>
     <div class:tall={tall}></div>
     <div class="half"></div>
-    <div id="placed" bind:element={observe.rect(placed)}></div>
-    <div id="box" class:wide={wide} bind:element={observe.size(box)}></div>
-    {#for row of rows by row}<div class="row" bind:element={observe.size((next) => { sizes = { ...sizes, [row]: next.width } })}></div>{/for}
+    <div id="placed" {...observe.rect(placed)}></div>
+    <div id="box" class:wide={wide} {...observe.size(box)}></div>
+    {#for row of rows by row}<div class="row" {...observe.size((next) => { sizes = { ...sizes, [row]: next.width } })}></div>{/for}
     <div class="spacer"></div>
-    <div id="far" bind:element={observe.visible(seen)}>far</div>
+    <div id="far" {...observe.visible(seen)}>far</div>
 </main>
 
 <style>
@@ -82,17 +82,17 @@ let upright = reactive<{ width: number; height: number }>()
     <p id="inside-seen">{String(inside)} {String(insideViewport)}</p>
     <p id="bordered">{bordered === undefined ? 'unmeasured' : bordered.width + 'x' + bordered.height}</p>
     <p id="upright">{upright === undefined ? 'unmeasured' : upright.width + 'x' + upright.height}</p>
-    <div id="sized" bind:element={observe.size(bordered, { box: 'border' })}></div>
-    <div id="sized-upright" bind:element={observe.size(upright, { box: 'border' })}></div>
+    <div id="sized" {...observe.size(bordered, { box: 'border' })}></div>
+    <div id="sized-upright" {...observe.size(upright, { box: 'border' })}></div>
     <div id="scroller" bind:element={scroller}>
-        <p id="head" bind:element={observe.visible(head, { in: scroller })}>head</p>
+        <p id="head" {...observe.visible(head, { in: scroller })}>head</p>
         <div class="gap"></div>
-        <p id="tail" bind:element={observe.visible(tail, { in: scroller })}>tail</p>
+        <p id="tail" {...observe.visible(tail, { in: scroller })}>tail</p>
     </div>
     <div class="fold"></div>
     <div id="low" bind:element={low}>
-        <p bind:element={observe.visible(inside, { in: low })}>inside</p>
-        <p bind:element={observe.visible(insideViewport)}>inside</p>
+        <p {...observe.visible(inside, { in: low })}>inside</p>
+        <p {...observe.visible(insideViewport)}>inside</p>
     </div>
 </main>
 

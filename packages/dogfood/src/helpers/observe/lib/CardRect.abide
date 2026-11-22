@@ -5,6 +5,6 @@ let placed = reactive({ top: 0, left: 0, width: 0, height: 0 })
 let box = reactive({ width: 0, height: 0 })
 </script>
 
-<article bind:element={[observe.rect(placed), observe.size(box)]}>
+<article {...observe.rect(placed)} {...observe.size(box)}>
     {placed.top}px from the top, {box.width}px wide
 </article>

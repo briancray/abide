@@ -35,7 +35,7 @@ import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Size a chart to its panel">
-        <p>Hand <code>bind:element</code> the adaptor and a reactive value. The browser writes
+        <p>Spread the part on the element, handed a reactive value. The browser writes
             the size after each layout, and until the first one the value holds what you gave
             it.</p>
         <Example code={sizeToPanel}><SizeToPanel /></Example>
@@ -61,14 +61,14 @@ import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
             let seen = reactive(false)
             </script>
 
-            <section class="min-h-60" bind:element={observe.visible(seen, { once: true })}>
+            <section class="min-h-60" {...observe.visible(seen, { once: true })}>
                 {#if seen}<PipelineTrend />{/if}
             </section>
         `} />
     </Section>
 
     <Section level={3} title="Measure the size and the position of one card">
-        <p>A list in <code>bind:element</code> applies each adaptor. <code>observe.rect</code>
+        <p>Spread two parts and each measures the element. <code>observe.rect</code>
             writes the rectangle <code>getBoundingClientRect</code> reports, read again at most
             once a frame as the page scrolls or the card moves.</p>
         <Example code={cardRect}><CardRect /></Example>

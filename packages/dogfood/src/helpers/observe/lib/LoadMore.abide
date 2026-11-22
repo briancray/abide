@@ -16,5 +16,5 @@ const loadMore = () =>
 
 <div class="h-40 overflow-y-auto">
     <ol>{#for item of activity by item.id}<li>{item.text}</li>{/for}</ol>
-    <div bind:element={observe.visible((seen) => seen && loadMore())}></div>
+    <div {...observe.visible((seen) => seen && loadMore())}></div>
 </div>

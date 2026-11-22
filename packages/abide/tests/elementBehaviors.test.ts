@@ -12,6 +12,8 @@ import { imageFiles } from '#shared/imagePiece.ts'
 import { tip } from '#shared/tooltip/tip.ts'
 import { shown } from '#shared/tooltip/tips.ts'
 
+import { bindPart } from './bindPart.ts'
+
 afterEach(() => {
     Reflect.deleteProperty(navigator, 'clipboard')
     document.body.replaceChildren()
@@ -45,9 +47,12 @@ test('a press outside closes, a press inside or on what `inside` holds does not 
     const opener = element('button')
     const elsewhere = element('p')
     const closed: string[] = []
-    const stop = dismissible((event) => closed.push(event.type), {
-        inside: [opener, undefined],
-    })(panel)
+    const stop = bindPart(
+        dismissible((event) => closed.push(event.type), {
+            inside: [opener, undefined],
+        }),
+        panel,
+    )
     press(field)
     press(opener)
     expect(closed).toEqual([])
@@ -64,15 +69,21 @@ test('a press passes over a layer outside is off for, to close the one under it 
     const pinned = element()
     let menuClosed = false
     let pinnedClosed = false
-    const stopMenu = dismissible(() => {
-        menuClosed = true
-    })(menu)
-    const stopPinned = dismissible(
-        () => {
-            pinnedClosed = true
-        },
-        { outside: false },
-    )(pinned)
+    const stopMenu = bindPart(
+        dismissible(() => {
+            menuClosed = true
+        }),
+        menu,
+    )
+    const stopPinned = bindPart(
+        dismissible(
+            () => {
+                pinnedClosed = true
+            },
+            { outside: false },
+        ),
+        pinned,
+    )
     press(document.body)
     expect(`menu closed: ${menuClosed}`).toBe('menu closed: true')
     expect(pinnedClosed).toBe(false)
@@ -85,7 +96,10 @@ test('the press that opened the panel closes nothing — 53.13', () => {
     const closed: string[] = []
     let stop: (() => void) | undefined
     opener.addEventListener('pointerdown', () => {
-        stop = dismissible(() => closed.push('closed'))(element())
+        stop = bindPart(
+            dismissible(() => closed.push('closed')),
+            element(),
+        )
     })
     press(opener)
     expect(closed).toEqual([])
@@ -96,8 +110,14 @@ test('Escape closes the top panel alone and is prevented, and a field that took 
     const outer = element()
     const inner = element()
     const closed: string[] = []
-    const stopOuter = dismissible(() => closed.push('outer'))(outer)
-    const stopInner = dismissible(() => closed.push('inner'))(inner)
+    const stopOuter = bindPart(
+        dismissible(() => closed.push('outer')),
+        outer,
+    )
+    const stopInner = bindPart(
+        dismissible(() => closed.push('inner')),
+        inner,
+    )
     expect(escape()).toBe(true)
     expect(closed).toEqual(['inner'])
     const field = outer.appendChild(document.createElement('input'))
@@ -118,11 +138,14 @@ test('Escape closes the top panel alone and is prevented, and a field that took 
 test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15', async () => {
     const panel = element()
     const closed: string[] = []
-    const stopPanel = dismissible(() => closed.push('panel'))(panel)
+    const stopPanel = bindPart(
+        dismissible(() => closed.push('panel')),
+        panel,
+    )
     const first = panel.appendChild(document.createElement('button'))
     const second = panel.appendChild(document.createElement('button'))
-    const stopFirst = tip('First', { delay: 0 })(first)
-    const stopSecond = tip('Second', { delay: 0 })(second)
+    const stopFirst = bindPart(tip('First', { delay: 0 }), first)
+    const stopSecond = bindPart(tip('Second', { delay: 0 }), second)
     first.dispatchEvent(new MouseEvent('mouseenter'))
     await Bun.sleep(1)
     second.dispatchEvent(new MouseEvent('mouseenter'))
@@ -142,8 +165,14 @@ test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15
 // meant for the one under it.
 test('a disposer takes its panel off the stack — 53.16', () => {
     const closed: string[] = []
-    const stopUnder = dismissible(() => closed.push('under'))(element())
-    const stopGone = dismissible(() => closed.push('gone'))(element())
+    const stopUnder = bindPart(
+        dismissible(() => closed.push('under')),
+        element(),
+    )
+    const stopGone = bindPart(
+        dismissible(() => closed.push('gone')),
+        element(),
+    )
     stopGone()
     escape()
     expect(closed).toEqual(['under'])
@@ -414,7 +443,7 @@ test('a click copies, marks the element copied, and the mark wears off — 53.21
     const written = clipboardWrites()
     let email = 'ada@engines.example'
     const button = element('button')
-    const stop = copy({ value: () => email, copiedFor: 5 })(button)
+    const stop = bindPart(copy({ value: () => email, copiedFor: 5 }), button)
     email = 'grace@hopper.example'
     button.click()
     await Bun.sleep(0)
@@ -430,13 +459,16 @@ test('a click copies, marks the element copied, and the mark wears off — 53.21
 test('a record copies as one item holding each type it names — 53.57', async () => {
     const written = clipboardWrites()
     const button = element('button')
-    const stop = copy({
-        value: {
-            'text/html':
-                '<a href="mailto:grace@hopper.example">Grace Hopper</a>',
-            'text/plain': 'Grace Hopper',
-        },
-    })(button)
+    const stop = bindPart(
+        copy({
+            value: {
+                'text/html':
+                    '<a href="mailto:grace@hopper.example">Grace Hopper</a>',
+                'text/plain': 'Grace Hopper',
+            },
+        }),
+        button,
+    )
     button.click()
     await Bun.sleep(0)
     expect(written).toEqual([
@@ -458,16 +490,20 @@ test('with a selector, a click on a button inside copies from that button, and n
         '<pre><code>bun add @abide/abide</code><button data-copy>Copy</button></pre>' +
         '<pre><code>bun run dev</code><button data-copy>Copy</button></pre><p>prose</p>'
     const heard: [boolean, string][] = []
-    const stop = copy({
-        value: (clicked) =>
-            clicked.closest('pre')?.querySelector('code')?.textContent ?? '',
-        selector: '[data-copy]',
-        oncopied: (landed, clicked) =>
-            heard.push([
-                landed,
-                clicked.previousElementSibling?.textContent ?? '',
-            ]),
-    })(block)
+    const stop = bindPart(
+        copy({
+            value: (clicked) =>
+                clicked.closest('pre')?.querySelector('code')?.textContent ??
+                '',
+            selector: '[data-copy]',
+            oncopied: (landed, clicked) =>
+                heard.push([
+                    landed,
+                    clicked.previousElementSibling?.textContent ?? '',
+                ]),
+        }),
+        block,
+    )
     const [first, second] = block.querySelectorAll('button')
     second?.click()
     block.querySelector('p')?.click()
@@ -487,12 +523,15 @@ test('a page with no clipboard copies through a selected textarea, carrying ever
     const restore = noClipboard(landed)
     try {
         const button = element('button')
-        const stop = copy({
-            value: {
-                'text/html': '<strong>Grace Hopper</strong>',
-                'text/plain': 'Grace Hopper',
-            },
-        })(button)
+        const stop = bindPart(
+            copy({
+                value: {
+                    'text/html': '<strong>Grace Hopper</strong>',
+                    'text/plain': 'Grace Hopper',
+                },
+            }),
+            button,
+        )
         button.click()
         await Bun.sleep(0)
         expect(landed).toEqual([
@@ -516,14 +555,17 @@ test('a value holding no string reports not copied where there is no clipboard �
     try {
         const button = element('button')
         const heard: boolean[] = []
-        const stop = copy({
-            value: {
-                'image/png': new Blob([new Uint8Array([137, 80, 78, 71])], {
-                    type: 'image/png',
-                }),
-            },
-            oncopied: (copied) => heard.push(copied),
-        })(button)
+        const stop = bindPart(
+            copy({
+                value: {
+                    'image/png': new Blob([new Uint8Array([137, 80, 78, 71])], {
+                        type: 'image/png',
+                    }),
+                },
+                oncopied: (copied) => heard.push(copied),
+            }),
+            button,
+        )
         button.click()
         await Bun.sleep(0)
         expect({ landed, heard }).toEqual({ landed: [], heard: [false] })
@@ -540,7 +582,7 @@ test('with no value, a click copies the element clicked as its text and its mark
     const written = clipboardWrites()
     const card = element()
     card.innerHTML = '<strong>Grace Hopper</strong>, <em>engines</em>'
-    const stop = copy()(card)
+    const stop = bindPart(copy(), card)
     card.click()
     await Bun.sleep(0)
     expect(written).toEqual([

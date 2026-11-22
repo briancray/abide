@@ -11,13 +11,29 @@ import type { Disposer } from './reactive/watch.ts'
 export type PopoverOptions = PlaceOptions
 
 /**
- * The `bind:element` adaptor showing the element in the top layer, placed against `anchor` and
- * placed again as anything moves it, until it is unbound.
+ * The part showing the element it is spread on in the top layer, placed against `anchor` and placed
+ * again as anything moves it, until it is unbound. The server writes it a manual popover, so it is
+ * hidden from the first paint; a `popover` the element writes itself is its own (33.12).
  *
- * @param anchor the element it opens against
+ * @param anchor the element it opens against — not there yet on the server, where nothing opens
  * @param options the side it opens on, the edge it lines up with, and the gaps it keeps
  */
 export function popover(
+    anchor: Element | undefined,
+    options: PopoverOptions = {},
+): Record<string, unknown> {
+    return {
+        popover: 'manual',
+        'data-popover': 'host',
+        'bind:element': (element: Element) =>
+            anchor === undefined
+                ? undefined
+                : popoverOn(anchor, options)(element),
+    }
+}
+
+/** `popover`'s binding alone, for a part of the framework's own that opens an element it holds. */
+export function popoverOn(
     anchor: Element,
     options: PopoverOptions = {},
 ): (element: Element) => Disposer {

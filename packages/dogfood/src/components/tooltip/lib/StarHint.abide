@@ -7,4 +7,4 @@ const hint = tooltip.tip('Star this contact', {
 })
 </script>
 
-<button aria-label="Star" bind:element={hint}>★</button>
+<button aria-label="Star" {...hint}>★</button>

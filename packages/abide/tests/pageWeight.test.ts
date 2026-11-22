@@ -115,7 +115,7 @@ let theme = reactive('system', { store: store.cookies('theme') })
     expect(light.includes(WEB_STORE)).toBe(false)
 }, 60_000)
 
-// Names each `observe` adaptor's module reads off the platform, which survive minification: the
+// Names each `observe` part's module reads off the platform, which survive minification: the
 // border box is `size`'s alone, `isIntersecting` `visible`'s, and `rootMargin` `rect`'s.
 const SIZE_OBSERVER = 'borderBoxSize'
 const VISIBLE_OBSERVER = 'isIntersecting'
@@ -139,7 +139,7 @@ import { observe, reactive } from '@abide/abide'
 let box = reactive({ width: 0, height: 0 })
 </script>
 
-<div bind:element={observe.size(box, { box: 'border' })}>{box.width}</div>`,
+<div {...observe.size(box, { box: 'border' })}>{box.width}</div>`,
         'all/index.abide': `<script>
 import { observe, reactive } from '@abide/abide'
 
@@ -147,7 +147,7 @@ let seen = reactive(false)
 let placed = reactive<{ x: number }>()
 </script>
 
-<div bind:element={[observe.visible(seen), observe.rect(placed)]}>{seen}</div>`,
+<div {...observe.visible(seen)} {...observe.rect(placed)}>{seen}</div>`,
     })
     const out = `${app}/.abide`
     const built = await buildApp(app)

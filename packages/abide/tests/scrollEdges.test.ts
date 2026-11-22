@@ -12,6 +12,8 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 
 import { scrollEdges } from '#shared/scrollEdges.ts'
 
+import { bindPart } from './bindPart.ts'
+
 // The shared resize observer is made by the first bind (32.98), so the stand-in is installed at load.
 type Delivery = (entries: { target: Element }[]) => void
 const resize = {
@@ -108,7 +110,7 @@ function scroller(
     define('scrollWidth', () => geometry.width)
     define('clientHeight', () => 100)
     define('clientWidth', () => 100)
-    const stop = scrollEdges(element)
+    const stop = bindPart(scrollEdges(), element)
     stops.push(stop)
     return { element, geometry, stop }
 }
@@ -230,11 +232,11 @@ test('a change anywhere inside reads the element again, and its own mark does no
 test('the Disposer removes the attribute and stops observing, and a second bind throws — 32.107, 32.108', () => {
     const { element, stop } = scroller()
     runFrame()
-    expect(() => scrollEdges(element)).toThrow('RULEBOOK 32.108')
+    expect(() => bindPart(scrollEdges(), element)).toThrow('RULEBOOK 32.108')
     stop()
     expect(element.hasAttribute('data-scrollable')).toBe(false)
     expect(resize.observed.has(element)).toBe(false)
     element.dispatchEvent(new Event('scroll'))
     expect(queued).toHaveLength(0)
-    stops.push(scrollEdges(element))
+    stops.push(bindPart(scrollEdges(), element))
 })

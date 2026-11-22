@@ -2,7 +2,7 @@
 import { copy } from '@abide/abide'
 </script>
 
-<address class="cursor-pointer data-copied:opacity-60" bind:element={copy()}>
+<address class="cursor-pointer data-copied:opacity-60" {...copy()}>
     <strong>Grace Hopper</strong><br>
     <a href="mailto:grace@hopper.example">grace@hopper.example</a>
 </address>

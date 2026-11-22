@@ -30,7 +30,8 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Explain a pipeline stage on hover and on focus">
-        <p>Bind <code>tooltip.tip</code> to the element it explains. Nothing is written beside it, so it
+        <p>Spread <code>tooltip.tip</code> on the element it explains, and the text describes it from
+            the first paint. Nothing is written beside it, so it
             works in a list, a table row or a flex row alike. Give the element a
             <code>tabindex</code> where it is not focusable, or a keyboard never reaches the
             hint. The hint shows in the page's <code>Tooltips</code>.</p>

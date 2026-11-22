@@ -14,7 +14,7 @@ let opener = reactive<HTMLButtonElement | undefined>(undefined)
         before:left-(--arrow-offset) before:size-3
         before:-translate-x-1/2 before:rotate-45 before:border-t
         before:border-l before:border-rule before:bg-raised"
-        bind:element={popover(opener, { align: 'start', arrowInset: 12 })}
+        {...popover(opener, { align: 'start', arrowInset: 12 })}
     >
         Analytical Engines renewal, $42K
     </div>

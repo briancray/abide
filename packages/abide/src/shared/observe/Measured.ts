@@ -1,7 +1,7 @@
 import { isReactive } from '../reactive/isReactive.ts'
 
 /**
- * What an `observe` adaptor writes, in either of its two forms: a `Reactive` takes the measurement
+ * What an `observe` part writes, in either of its two forms: a `Reactive` takes the measurement
  * as its value, and a callback as its argument.
  *
  * THE BRAND IS READ FIRST (1.6): a `Reactive` is callable, and called it would be read rather than

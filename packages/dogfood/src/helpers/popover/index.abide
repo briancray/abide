@@ -39,7 +39,7 @@ import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
     <Section level={3} title="Open a filter panel under its button">
         <p>The panel is open for as long as it is bound, so its <code>&#123;#if&#125;</code>
             opens and closes it. It sits in the top layer, placed on the side it is given and
-            flipped where there is no room, and <code>data-side</code> says which it took. Bind
+            flipped where there is no room, and <code>data-side</code> says which it took. Spread
             <code>dismissible</code> beside it to close it on a press outside or on Escape.</p>
         <Example code={filterPanel}><FilterPanel /></Example>
     </Section>

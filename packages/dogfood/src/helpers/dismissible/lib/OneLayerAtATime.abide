@@ -7,7 +7,7 @@ const hint = tooltip.tip('Press Escape: this hint closes first', { delay: 0 })
 
 <button onclick={() => (open = true)}>Quick edit</button>
 {#if open}
-    <form bind:element={dismissible(() => (open = false))}>
-        <input value="Analytical Engines" bind:element={hint}>
+    <form {...dismissible(() => (open = false))}>
+        <input value="Analytical Engines" {...hint}>
     </form>
 {/if}

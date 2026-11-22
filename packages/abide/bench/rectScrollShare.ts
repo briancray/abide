@@ -40,7 +40,7 @@ const sink = () => { globalThis.__RECT_WRITES__ = (globalThis.__RECT_WRITES__ ??
 </script>
 
 <main>
-    {#for row of rows by row}<div class="row" bind:element={observe.rect(sink)}>{row}</div>{/for}
+    {#for row of rows by row}<div class="row" {...observe.rect(sink)}>{row}</div>{/for}
     <div class="spacer"></div>
 </main>
 

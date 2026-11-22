@@ -19,7 +19,7 @@ const copyLink = copy({
 
 <div class="row">
     <span>{DEAL}</span>
-    <button class="group" bind:element={copyLink}>
+    <button class="group" {...copyLink}>
         <span class="group-data-copied:hidden">Copy link</span>
         <span class="hidden group-data-copied:inline">Copied</span>
     </button>

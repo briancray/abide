@@ -13,4 +13,4 @@ const copyBlock = copy({
 })
 </script>
 
-<article bind:element={copyBlock}>{raw(noteHtml)}</article>
+<article {...copyBlock}>{raw(noteHtml)}</article>

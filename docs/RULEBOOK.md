@@ -2607,7 +2607,7 @@ one.
 32.82 An `observe.size` or an `observe.visible` MUST NOT write its target before the first
 observation of its element, and MUST NOT read the element's layout to write it.
 
-32.83 The `Disposer` an `observe` adaptor hands back MUST stop observing its element.
+32.83 The `Disposer` an `observe` part's element binding hands back MUST stop observing its element.
 
 32.84 `observe.rect` MUST write the element's rectangle in the viewport — `x`, `y`, `top`, `left`,
 `right`, `bottom`, `width` and `height`, as `getBoundingClientRect` reports them — as one record,
@@ -2644,8 +2644,8 @@ change of the box observes the element again.
 32.91 A `bind:size`, a `bind:visible` or a `bind:rect` on an element, or a `visibleIn` or a `sizeBox`
 attribute, MUST be a build error naming the `observe` spelling that measures it.
 
-32.92 An `observe` adaptor handed an element that another adaptor of the same kind is observing
-MUST throw.
+32.92 An `observe` part bound to an element that another part of the same kind is observing MUST
+throw.
 
 32.93 In a browser, a slot rendering a value branded by `raw` into the document the runtime loaded in
 MUST create no node but those its markup parses to, whatever was parsed before it.
@@ -2670,9 +2670,11 @@ from the `ResizeObserver` or `IntersectionObserver` the document holds then.
 
 32.99 A function, a `Reactive` or a list a `{...expr}` spread onto an element carries under
 `bind:element` MUST be handed that element as `bind:element` hands it (32.9, 32.68), bound again when
-the value carries another, and MUST NOT be written as an attribute.
+the value carries another, and MUST NOT be written as an attribute; and every `bind:element` an
+element carries, written or spread, MUST be handed the element, in source order, none replacing
+another.
 
-32.100 Where the `once` option of `observe.visible` is `true`, the adaptor MUST stop observing the
+32.100 Where the `once` option of `observe.visible` is `true`, the part MUST stop observing the
 element, and stop watching a `Reactive` its `in` holds, in the delivery that writes `true`, and
 MUST NOT write its target again.
 
@@ -2698,10 +2700,10 @@ shares, and `scrollEdges` MUST NOT observe a node inside it for resizes.
 element, every read before any attribute is written, and `scrollEdges` MUST NOT read an element
 outside such a frame.
 
-32.107 The `Disposer` `scrollEdges` hands back MUST stop observing its element and remove its
-`data-scrollable`.
+32.107 The `Disposer` `scrollEdges`'s element binding hands back MUST stop observing its element and
+remove its `data-scrollable`.
 
-32.108 `scrollEdges` handed an element it is already bound to MUST throw.
+32.108 `scrollEdges` bound to an element it is already bound to MUST throw.
 
 # 33. Props
 
@@ -5012,7 +5014,8 @@ id a parts function writes MUST be optional with one made where none is given, a
 parts; and its `key` and `label` MUST be optional where an item is a string or a number, which is then
 its own key and label.
 
-49.11 A parts function MUST hand back an element there is one of as a member naming that element, an
+49.11 A parts function MUST hand back an element there is one of as a member naming that element —
+save one whose parts are one element's alone, which MUST hand back that element's part itself — an
 item with one element as a function of the item answering that element's attributes, and an item with
 more than one element, or with data of its own, as a function of the item answering that item's parts
 and data together; what a part reads that changes MUST be a `get` accessor, and no function among the parts
@@ -5023,6 +5026,10 @@ takes a function of its own meaning — MUST take the value or a function answer
 
 49.13 A parts function MUST read each of its options where it uses it, save its `id`, a `multiple`,
 a `debounce`, a `rowHeight` and a size a measurement replaces, which it MUST read once.
+
+49.14 What `@abide/abide` does to an element an app writes MUST be handed out as a part, carrying
+under `bind:element` what needs the element in a browser (32.99), and MUST NOT be a function an
+app hands `bind:element` itself.
 
 # 50. Dialogs, toasts and popovers
 
@@ -5091,8 +5098,8 @@ start edge kept where it does not fit.
 50.22 Placing an anchored layer MUST read every box it is placed by before it writes the layer's
 place.
 
-50.23 `tooltip.tip` MUST describe the element it is bound to by its text, through that element's
-`aria-description`, and MUST restore the description it found once unbound.
+50.23 `tooltip.tip` MUST describe the element it is spread on by its text, through an
+`aria-description` among its part's attributes.
 
 50.24 `tooltip.tip` MUST open its hint once a pointer has rested on its element for `delay` milliseconds, and at once when its element takes focus that matches `:focus-visible`, and
 MUST NOT open it for focus that does not.
@@ -5181,8 +5188,8 @@ the crosshair stands, and the chart's `svg` part MUST name it in `aria-described
 50.48 The element carrying `tooltip.host`'s `hint` part, and a `chart`'s `tip`, MUST NOT be the
 target of a pointer event, so a hint open over its anchor never takes the pointer from it.
 
-50.49 `popover` MUST show the element it is bound to as a popover, a manual one where the element
-carries no `popover` attribute, for as long as it is bound, and MUST hide it once it is unbound.
+50.49 `popover` MUST show the element it is spread on as a popover, carrying `popover="manual"`
+among its part's attributes, for as long as it is bound, and MUST hide it once it is unbound.
 
 50.50 `announce` MUST make its text the one message `Announcer` holds, in place of the message before
 it, read `polite` unless its `politeness` says `assertive`.
@@ -5898,7 +5905,7 @@ bound.
 53.14 `dismissible` MUST call its callback on an Escape `keydown` not already `defaultPrevented`, and
 MUST call `preventDefault` on it, save where `escape` is `false`.
 
-53.15 Elements `dismissible` is bound to at once, the anchor of the hint `tooltip.tip` shows, and
+53.15 Elements `dismissible` is spread on at once, the anchor of the hint `tooltip.tip` shows, and
 the crosshair of a `chart`'s open `tip`, MUST stack in the order they were bound or opened: an
 Escape dismissing the top one alone, and a press dismissing each from the top that it lands outside
 until the first it lands in.

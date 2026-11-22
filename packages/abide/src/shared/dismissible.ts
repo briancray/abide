@@ -24,10 +24,24 @@ type Layer = {
 
 const layers = reactive<readonly Layer[]>([])
 
+/** What a press outside the element or an Escape does: `dismissible`'s options. */
+export type DismissibleOptions = {
+    /** Whether Escape dismisses. `true` by default. */
+    escape?: boolean
+    /** Whether a press outside the element dismisses. `true` by default. */
+    outside?: boolean
+    /**
+     * Elements a press on is not outside, besides the element itself: the button that opens it,
+     * so pressing that button again is the button's to answer. An entry still `undefined` is
+     * skipped.
+     */
+    inside?: readonly (Element | null | undefined)[]
+}
+
 /**
- * The `bind:element` adaptor calling `onDismiss` on a press outside the element or on Escape.
+ * The part calling `onDismiss` on a press outside the element it is spread on, or on Escape.
  *
- * Bound to several elements at once — a menu opened from a panel — they stack: Escape dismisses the
+ * Spread on several elements at once — a menu opened from a panel — they stack: Escape dismisses the
  * last one bound, and a press dismisses each one from the top that it lands outside, stopping at
  * the first it lands in. The press that opened the element is over by the time it is bound, so it
  * dismisses nothing.
@@ -37,28 +51,27 @@ const layers = reactive<readonly Layer[]>([])
  */
 export function dismissible(
     onDismiss: (event: PointerEvent | KeyboardEvent) => void,
-    options: {
-        /** Whether Escape dismisses. `true` by default. */
-        escape?: boolean
-        /** Whether a press outside the element dismisses. `true` by default. */
-        outside?: boolean
-        /**
-         * Elements a press on is not outside, besides the element itself: the button that opens it,
-         * so pressing that button again is the button's to answer. An entry still `undefined` is
-         * skipped.
-         */
-        inside?: readonly (Element | null | undefined)[]
-    } = {},
+    options: DismissibleOptions = {},
+): Record<string, unknown> {
+    return {
+        'data-dismissible': 'host',
+        'bind:element': dismissing(onDismiss, options),
+    }
+}
+
+/** `dismissible`'s binding alone, for a part of the framework's own that stacks an element it holds. */
+export function dismissing(
+    onDismiss: (event: PointerEvent | KeyboardEvent) => void,
+    options: DismissibleOptions = {},
 ): (element: Element) => Disposer {
-    return (element) => {
-        return stack({
+    return (element) =>
+        stack({
             element,
             dismiss: onDismiss,
             escape: options.escape ?? true,
             outside: options.outside ?? true,
             inside: options.inside ?? [],
         })
-    }
 }
 
 /** Puts `layer` on top of the stack, and hands back what takes it off. */

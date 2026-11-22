@@ -35,7 +35,7 @@ import quickEdit from './lib/QuickEdit.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Close a quick-edit panel on a press outside it or on Escape">
-        <p>Bind the panel to <code>dismissible</code>, and your callback runs on a press anywhere
+        <p>Spread <code>dismissible</code> on the panel, and your callback runs on a press anywhere
             else or on Escape. Under <code>&#123;#if&#125;</code> it listens only while the panel
             is open.</p>
         <Example code={quickEdit}><QuickEdit /></Example>
@@ -49,7 +49,7 @@ import quickEdit from './lib/QuickEdit.abide' with { type: 'text' }
 
     <Section level={3} title="Close a panel on Escape alone">
         <p>Turn the outside press off with <code>outside: false</code>, or Escape off with
-            <code>escape: false</code>. Bind it beside another adaptor as a list.</p>
+            <code>escape: false</code>. Spread it beside another part, and both bind the element.</p>
         <Example code={escapeOnly}><EscapeOnly /></Example>
     </Section>
     <Section level={3} title="Close one layer per Escape">

@@ -52,12 +52,12 @@ export {
     commandPalette,
 } from './commandPalette.ts'
 export { type Cookies, cookies } from './cookies.ts'
-// 53.21-53.23, 53.57, 53.74 — the `bind:element` adaptor copying on a click.
+// 53.21-53.23, 53.57, 53.74 — the part copying on a click.
 export { copy } from './copy.ts'
 export { csp } from './csp.ts'
 // 50.1-50.4 — a native modal as a part on a `<dialog>` of the app's own.
 export { type DialogOptions, type DialogParts, dialog } from './dialog.ts'
-// 53.12-53.16 — the `bind:element` adaptor closing a panel from outside it.
+// 53.12-53.16 — the part closing a panel from outside it.
 export { dismissible } from './dismissible.ts'
 // 53.53, 53.61-53.63 — a scrolling element kept at its bottom, and the button taking a reader back down.
 export {
@@ -65,9 +65,9 @@ export {
     type FollowBottomOptions,
     followBottom,
 } from './followBottom.ts'
-// 32.101-32.108 — the `bind:element` adaptor marking the edges a scrolling element can scroll toward.
+// 32.101-32.108 — the part marking the edges a scrolling element can scroll toward.
 export { scrollEdges } from './scrollEdges.ts'
-// 53.17-53.20 — the `bind:element` adaptor taking dropped and pasted files.
+// 53.17-53.20 — the parts taking dropped and pasted files.
 export {
     type DropzoneOptions,
     type DropzoneParts,
@@ -132,7 +132,7 @@ export {
 // modules into the static closure of the entry every page imports.
 export { media } from './media.ts'
 export { navigate } from './navigate.ts'
-// 32.79-32.92 — the measuring adaptors a `bind:element` takes.
+// 32.79-32.92 — the parts measuring the element they are spread on.
 export * as observe from './observe/index.ts'
 export { online } from './online.ts'
 export { outbox, type QueuedCall } from './outbox.ts'

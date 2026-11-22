@@ -8,7 +8,7 @@ import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
-import { popover } from './popover.ts'
+import { popoverOn } from './popover.ts'
 import { randomToken } from './randomToken.ts'
 import { busy, type Reactive, reactive, watch } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
@@ -298,7 +298,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             'data-combobox': 'popup',
             onmousedown: (event: MouseEvent) => event.preventDefault(),
             'bind:element': (element: Element) =>
-                popover(input.peek() as HTMLInputElement, {
+                popoverOn(input.peek() as HTMLInputElement, {
                     side: 'bottom',
                     align: 'start',
                     offset: 4,

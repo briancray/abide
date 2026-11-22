@@ -4,4 +4,4 @@ import { copy, props } from '@abide/abide'
 const { source } = props<{ source: string; info: string }>()
 </script>
 
-<pre><code>{source}</code> <button bind:element={copy({ value: source })}>Copy</button></pre>
+<pre><code>{source}</code> <button {...copy({ value: source })}>Copy</button></pre>

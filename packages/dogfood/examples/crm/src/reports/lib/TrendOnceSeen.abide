@@ -6,6 +6,6 @@ import PipelineTrend from './PipelineTrend.abide'
 let seen = reactive(false)
 </script>
 
-<section class="min-h-60" bind:element={observe.visible(seen, { once: true })}>
+<section class="min-h-60" {...observe.visible(seen, { once: true })}>
     {#if seen}<PipelineTrend />{/if}
 </section>

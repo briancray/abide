@@ -334,3 +334,39 @@ const parts = {
     click('#toggle')
     expect((globalThis as { __SPREAD__?: string }).__SPREAD__).toBe('cC')
 })
+
+// 32.99 — EVERY `bind:element` AN ELEMENT CARRIES IS HANDED IT, written or spread, in source order,
+// none replacing another: two parts and a ref on one element all reach it. THE REVERT: drop the
+// `bindSpreadElement` call `emitClient` makes for a spread; the log reads `w` where `wab` is due.
+test('a written bind:element and two spread ones are each handed the element, in source order — 32.99', async () => {
+    ;(globalThis as { __ORDER__?: string }).__ORDER__ = ''
+    await mountPage(`<script>
+const log = (mark: string) => (node: Element) => {
+    ;(globalThis as { __ORDER__?: string }).__ORDER__ += node.id === 'both' ? mark : '?'
+}
+const first = { 'bind:element': log('a') }
+const second = { 'bind:element': log('b') }
+</script>
+
+<div id="both" bind:element={log('w')} {...first} {...second}></div>`)
+    flushSync()
+    expect((globalThis as { __ORDER__?: string }).__ORDER__).toBe('wab')
+})
+
+// 50.23, 50.49, 49.14 — WHAT A PART NEEDS IN THE MARKUP, THE SERVER WRITES: a hint's description and
+// a popover's `popover`, there before any script runs, and an attribute the element writes itself
+// beats the part's (33.12). THE REVERT: drop `aria-description` from `tip`'s part; the markup holds
+// only `data-tooltip`.
+test('the server writes a tip part’s aria-description and a popover part’s popover, and an explicit one wins — 50.23, 50.49', async () => {
+    const { html } = await mountPage(`<script>
+import { popover, tooltip } from '@abide/abide'
+</script>
+
+<button id="tipped" {...tooltip.tip('Saves the deal')}>Save</button>
+<button id="own" aria-description="Mine" {...tooltip.tip('Saves the deal')}>Save</button>
+<div id="floating" {...popover(undefined)}>panel</div>`)
+    expect(html).toContain('aria-description="Saves the deal"')
+    expect(html).toContain('aria-description="Mine"')
+    expect(html).not.toContain('bind:element')
+    expect(html).toMatch(/id="floating"[^>]*popover="manual"/)
+})

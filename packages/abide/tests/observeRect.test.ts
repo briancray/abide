@@ -165,7 +165,7 @@ let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, rect:
 </script>
 
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
-{#for row of rows by row.id}<div class="row" bind:element={observe.rect((rect) => { (globalThis as { __RECTS__?: { log: string } }).__RECTS__!.log += 'w'; row.rect = rect })}>{row.id}</div>{/for}`
+{#for row of rows by row.id}<div class="row" {...observe.rect((rect) => { (globalThis as { __RECTS__?: { log: string } }).__RECTS__!.log += 'w'; row.rect = rect })}>{row.id}</div>{/for}`
 
 // 32.86, 32.87 — TWENTY ELEMENTS, ONE LISTENER OF EACH KIND, AND A BURST OF TEN SCROLLS IS ONE FRAME
 // OF TWENTY READS, every read before any write. THE REVERTS, each run: add the listeners per bind
@@ -228,7 +228,7 @@ const shown = reactive(() => {
 })
 </script>
 
-<div id="placed" bind:element={observe.rect(rect)}></div>
+<div id="placed" {...observe.rect(rect)}></div>
 <p id="top">{shown}</p>`)
     runFrame()
     expect(document.getElementById('top')?.textContent).toBe('10')

@@ -5,4 +5,4 @@ const { source } = props<{ source: string; info: string }>()
 </script>
 
 <pre class="row"><code>{source}</code><button type="button"
-    bind:element={copy({ value: () => source })}>Copy</button></pre>
+    {...copy({ value: () => source })}>Copy</button></pre>

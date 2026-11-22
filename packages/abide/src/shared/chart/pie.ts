@@ -113,6 +113,8 @@ export function pie(options: PieOptions): PieParts {
                     transform: `rotate(-90 ${CENTER} ${CENTER})`,
                     // 52.64 — the sweep as `style` properties, which a CSS transition eases.
                     style: `stroke-dasharray: ${share * circumference} ${circumference}; stroke-dashoffset: ${-before * circumference}`,
+                    // 50.23 — the hint describes the slice, as `tooltip.tip`'s describes its anchor.
+                    'aria-description': hint,
                     'bind:element': hinted(hint, before, before + share, hole),
                     onclick: () => pick(index),
                 },
