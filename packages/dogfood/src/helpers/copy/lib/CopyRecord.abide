@@ -1,12 +1,14 @@
 <script>
 import { copy, url } from '@abide/abide'
 
-const copyLink = copy(() => {
-    const href = `${location.origin}${url('/pipeline')}#d1`
-    return {
-        'text/html': `<a href="${href}">Analytical Engines renewal</a>`,
-        'text/plain': href,
-    }
+const copyLink = copy({
+    value: () => {
+        const href = `${location.origin}${url('/pipeline')}#d1`
+        return {
+            'text/html': `<a href="${href}">Analytical Engines renewal</a>`,
+            'text/plain': href,
+        }
+    },
 })
 </script>
 

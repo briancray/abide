@@ -6078,6 +6078,9 @@ the `host`'s centre as `behavior` names, and `reset` MUST do so for the item the
 53.73 `carousel`'s `host` MUST carry `role="region"` and `aria-roledescription="carousel"`, and its
 `item` MUST carry `role="group"`, `aria-roledescription="slide"` and its label as `aria-label`.
 
+53.74 `copy` given no `value` MUST copy the element clicked as one item holding its `textContent` as
+`text/plain` and its `innerHTML` as `text/html`.
+
 # 54. Guards, fetches and jobs
 
 ## Rungs

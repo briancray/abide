@@ -1,4 +1,4 @@
-// 53.12-53.23, 53.53, 53.57, 53.58 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
+// 53.12-53.23, 53.53, 53.57, 53.58, 53.74 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
 // element the way `bind:element` binds one: called with the node, and stopped by what it hands back.
 
 import { afterEach, expect, test } from 'bun:test'
@@ -414,7 +414,7 @@ test('a click copies, marks the element copied, and the mark wears off — 53.21
     const written = clipboardWrites()
     let email = 'ada@engines.example'
     const button = element('button')
-    const stop = copy(() => email, { copiedFor: 5 })(button)
+    const stop = copy({ value: () => email, copiedFor: 5 })(button)
     email = 'grace@hopper.example'
     button.click()
     await Bun.sleep(0)
@@ -431,8 +431,11 @@ test('a record copies as one item holding each type it names — 53.57', async (
     const written = clipboardWrites()
     const button = element('button')
     const stop = copy({
-        'text/html': '<a href="mailto:grace@hopper.example">Grace Hopper</a>',
-        'text/plain': 'Grace Hopper',
+        value: {
+            'text/html':
+                '<a href="mailto:grace@hopper.example">Grace Hopper</a>',
+            'text/plain': 'Grace Hopper',
+        },
     })(button)
     button.click()
     await Bun.sleep(0)
@@ -455,18 +458,16 @@ test('with a selector, a click on a button inside copies from that button, and n
         '<pre><code>bun add @abide/abide</code><button data-copy>Copy</button></pre>' +
         '<pre><code>bun run dev</code><button data-copy>Copy</button></pre><p>prose</p>'
     const heard: [boolean, string][] = []
-    const stop = copy(
-        (clicked) =>
+    const stop = copy({
+        value: (clicked) =>
             clicked.closest('pre')?.querySelector('code')?.textContent ?? '',
-        {
-            selector: '[data-copy]',
-            oncopied: (landed, clicked) =>
-                heard.push([
-                    landed,
-                    clicked.previousElementSibling?.textContent ?? '',
-                ]),
-        },
-    )(block)
+        selector: '[data-copy]',
+        oncopied: (landed, clicked) =>
+            heard.push([
+                landed,
+                clicked.previousElementSibling?.textContent ?? '',
+            ]),
+    })(block)
     const [first, second] = block.querySelectorAll('button')
     second?.click()
     block.querySelector('p')?.click()
@@ -487,8 +488,10 @@ test('a page with no clipboard copies through a selected textarea, carrying ever
     try {
         const button = element('button')
         const stop = copy({
-            'text/html': '<strong>Grace Hopper</strong>',
-            'text/plain': 'Grace Hopper',
+            value: {
+                'text/html': '<strong>Grace Hopper</strong>',
+                'text/plain': 'Grace Hopper',
+            },
         })(button)
         button.click()
         await Bun.sleep(0)
@@ -513,14 +516,14 @@ test('a value holding no string reports not copied where there is no clipboard �
     try {
         const button = element('button')
         const heard: boolean[] = []
-        const stop = copy(
-            {
+        const stop = copy({
+            value: {
                 'image/png': new Blob([new Uint8Array([137, 80, 78, 71])], {
                     type: 'image/png',
                 }),
             },
-            { oncopied: (copied) => heard.push(copied) },
-        )(button)
+            oncopied: (copied) => heard.push(copied),
+        })(button)
         button.click()
         await Bun.sleep(0)
         expect({ landed, heard }).toEqual({ landed: [], heard: [false] })
@@ -529,6 +532,25 @@ test('a value holding no string reports not copied where there is no clipboard �
     } finally {
         restore()
     }
+})
+
+// THE REVERT: default `value` to the element's `textContent` alone — this reports
+// `[["text/plain: Grace Hopper, engines"]]`, and the markup never reaches the clipboard.
+test('with no value, a click copies the element clicked as its text and its markup — 53.74', async () => {
+    const written = clipboardWrites()
+    const card = element()
+    card.innerHTML = '<strong>Grace Hopper</strong>, <em>engines</em>'
+    const stop = copy()(card)
+    card.click()
+    await Bun.sleep(0)
+    expect(written).toEqual([
+        [
+            'text/plain: Grace Hopper, engines',
+            'text/html: <strong>Grace Hopper</strong>, <em>engines</em>',
+        ],
+    ])
+    expect(card.hasAttribute('data-copied')).toBe(true)
+    stop()
 })
 
 // THE REVERT: drop the `following` check in `followBottom`'s observer — the reader scrolled up to 0

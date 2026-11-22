@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import CopyBlocks from './lib/CopyBlocks.abide'
 import copyBlocks from './lib/CopyBlocks.abide' with { type: 'text' }
+import CopyContact from './lib/CopyContact.abide'
+import copyContact from './lib/CopyContact.abide' with { type: 'text' }
 import CopyEmail from './lib/CopyEmail.abide'
 import copyEmail from './lib/CopyEmail.abide' with { type: 'text' }
 import CopyLink from './lib/CopyLink.abide'
@@ -16,6 +18,12 @@ import copyRecord from './lib/CopyRecord.abide' with { type: 'text' }
 <Doc
     seeAlso={['/helpers/observe', '/helpers/dismissible', '/helpers/dropzone']}
     tests={[
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('with no value, a click copies the element clicked as its text and its markup",
+            ],
+        },
         {
             path: 'packages/abide/tests/elementBehaviors.test.ts',
             from: [
@@ -46,19 +54,27 @@ import copyRecord from './lib/CopyRecord.abide' with { type: 'text' }
         },
     ]}
 >
+    <Section level={3} title="Copy a contact card, text and formatting together">
+        <p>With no <code>value</code>, a click copies the element itself: its text as
+            <code>text/plain</code> and its markup as <code>text/html</code>. A doc keeps the bold
+            name and the link, and a plain field takes the text.</p>
+        <Example code={copyContact}><CopyContact /></Example>
+    </Section>
+
     <Section level={3} title="Copy a contact's email, and show Copied once it lands">
-        <p>A click copies the text and writes <code>data-copied</code> on the button for 1500
+        <p>Hand <code>copy</code> a <code>value</code> to copy that instead. A click copies the
+            text and writes <code>data-copied</code> on the button for 1500
             milliseconds. The button swaps its word by that attribute alone.</p>
         <Example code={copyEmail}><CopyEmail /></Example>
     </Section>
 
     <Section level={3} title="Copy text that changes, read at the click">
-        <p>Hand <code>copy</code> a function, and it reads what to copy when the button is
+        <p>Make <code>value</code> a function, and it reads what to copy when the button is
             pressed. <code>copiedFor</code> sets how long the mark stays.</p>
         <Example code={copyLink}><CopyLink /></Example>
     </Section>
     <Section level={3} title="Copy a link that pastes as the deal's name">
-        <p>Hand <code>copy</code> a record of MIME type to what it holds, and every type lands in
+        <p>Make <code>value</code> a record of MIME type to what it holds, and every type lands in
             one clipboard item. Each place you paste takes the richest type it reads. A doc or a
             chat takes <code>text/html</code> and shows a link named for the deal. An address
             bar takes <code>text/plain</code>. A <code>Blob</code> copies an image the same way,

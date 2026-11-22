@@ -1063,7 +1063,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copy` | `(value: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>), options?: { copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying text, or a record of MIME type to what it holds, to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45, 53.57, 53.58 |
+| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => (element: Element) => Disposer` | The `bind:element` adaptor copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of an element, or of a button inside it. | 32.9, 53.21, 53.22, 53.23, 53.44, 53.45, 53.57, 53.58, 53.74 |
 
 # Charts
 

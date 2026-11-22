@@ -109,7 +109,7 @@ const command = () => status.peek()?.command ?? ''
     {:else if shown === 'click' || shown === 'waiting'}
         <pre data-pairing="command">{status?.command}</pre>
         <button type="button" data-pairing="copy"
-            bind:element={copy(command)}>Copy</button>
+            bind:element={copy({ value: command })}>Copy</button>
         <button type="button" data-pairing="pair" disabled={shown === 'waiting'}
             onclick={start}>
             {shown === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>

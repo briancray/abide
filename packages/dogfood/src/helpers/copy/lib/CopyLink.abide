@@ -6,6 +6,6 @@ const link = () => `${location.origin}/deals/${dealId}`
 </script>
 
 <input bind:value={dealId}>
-<button bind:element={copy(link, { copiedFor: 3000 })}>
+<button bind:element={copy({ value: link, copiedFor: 3000 })}>
     Copy link
 </button>

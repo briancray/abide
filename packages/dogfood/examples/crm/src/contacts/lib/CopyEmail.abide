@@ -6,7 +6,7 @@ const EMAIL = 'grace@hopper.example'
 
 <ul class="fields">
     <li><span>Grace Hopper</span><strong>{EMAIL}</strong>
-        <button class="group" bind:element={copy(EMAIL)}>
+        <button class="group" bind:element={copy({ value: EMAIL })}>
             <span class="group-data-copied:hidden">Copy</span>
             <span class="hidden group-data-copied:inline">Copied</span>
         </button></li>

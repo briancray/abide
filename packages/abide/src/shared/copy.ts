@@ -1,23 +1,30 @@
-// 53.21-53.23, 53.44, 53.45, 53.57, 53.58 — A CLICK THAT COPIES, and the element marked once the copy lands.
+// 53.21-53.23, 53.44, 53.45, 53.57, 53.58, 53.74 — A CLICK THAT COPIES, and the element marked once the copy lands.
 
 import type { Disposer } from './reactive/watch.ts'
 import { type Copyable, writeClipboard } from './writeClipboard.ts'
 
+/** 53.74 — the element clicked, as the text it reads and the markup it holds. */
+const contentOf = (clicked: Element): Copyable => ({
+    'text/plain': clicked.textContent ?? '',
+    'text/html': clicked.innerHTML,
+})
+
 /**
- * The `bind:element` adaptor copying to the clipboard when the element is clicked — text, or a
- * record of MIME type to what it holds (`text/html` beside `text/plain`, `image/png`) — and writing
- * `data-copied` on it for `copiedFor` milliseconds once the copy landed.
+ * The `bind:element` adaptor copying to the clipboard when the element is clicked — its own text
+ * and markup by default, or a `value`: text, or a record of MIME type to what it holds (`text/html`
+ * beside `text/plain`, `image/png`) — and writing `data-copied` on it for `copiedFor` milliseconds
+ * once the copy landed.
  *
  * 53.44 — WITH `selector`, THE ELEMENT HOLDS THE BUTTONS RATHER THAN BEING ONE: a click inside it
  * on an element matching `selector` copies, and that element is marked. One listener reaches buttons
  * written by markup no template built, which is what a `raw` block holds.
  *
- * @param value what to copy, or a function read at the click — handed the element clicked — for a value that changes
- * @param options how long `data-copied` stays, the buttons inside the element, and what hears the outcome
+ * @param options what to copy, how long `data-copied` stays, the buttons inside the element, and what hears the outcome
  */
 export function copy(
-    value: Copyable | ((clicked: Element) => Copyable),
     options: {
+        /** What to copy, or a function read at the click — handed the element clicked — for a value that changes. The element clicked's text and markup by default. */
+        value?: Copyable | ((clicked: Element) => Copyable)
         /** How long `data-copied` stays on the element after a copy, in milliseconds. 1500 by default. */
         copiedFor?: number
         /** The buttons inside the element a click copies from, in place of the element itself. */
@@ -26,7 +33,7 @@ export function copy(
         oncopied?: (copied: boolean, clicked: Element) => void
     } = {},
 ): (element: Element) => Disposer {
-    const { copiedFor = 1500, selector, oncopied } = options
+    const { value = contentOf, copiedFor = 1500, selector, oncopied } = options
     return (element) => {
         const clearing = new Map<Element, ReturnType<typeof setTimeout>>()
         let bound = true
