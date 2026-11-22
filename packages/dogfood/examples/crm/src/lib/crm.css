@@ -247,18 +247,55 @@
         width: fit-content;
     }
 
+    /* A BUTTON IS NEUTRAL UNLESS IT SUBMITS. Painting every button in the accent made a sort
+       header, a tab, a menu trigger and a form's Save the same loudest thing on the page, so
+       nothing read as the action. The accent is kept for the one control that commits — a
+       `type=submit` — and everything else is a raised key a reader presses.
+       A PRESS IS A TINT LAID OVER the fill rather than a mix of the two tokens: bun keeps only
+       the light-scheme fallback of a two-token mix (see `chat` below), and dark then hovered white. */
     button {
+        --hover-tint: color-mix(in srgb, var(--color-ink) 6%, transparent);
         font-weight: 500;
         font-size: .75rem;
-        color: var(--color-paper);
-        background: var(--color-signal);
-        border-color: transparent;
+        color: var(--color-ink);
+        background: var(--color-raised);
+        border-color: color-mix(in srgb, var(--color-ink) 14%, transparent);
+        box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 8%, transparent);
         padding-inline: 1rem;
         cursor: pointer;
+        transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease;
     }
 
     button:hover:not(:disabled) {
-        background: color-mix(in srgb, var(--color-signal) 86%, var(--color-ink));
+        border-color: color-mix(in srgb, var(--color-ink) 26%, transparent);
+        background-image: linear-gradient(var(--hover-tint), var(--hover-tint));
+    }
+
+    button:active:not(:disabled) {
+        box-shadow: none;
+        --hover-tint: color-mix(in srgb, var(--color-ink) 10%, transparent);
+    }
+
+    button[type=submit] {
+        color: var(--color-paper);
+        background: var(--color-signal);
+        border-color: transparent;
+    }
+
+    button[type=submit]:hover:not(:disabled) {
+        border-color: transparent;
+        --hover-tint: color-mix(in srgb, var(--color-ink) 14%, transparent);
+    }
+
+    /* A box is drawn by the engine at its own size: the control box above would pad it into a
+       lozenge, so it gives that back and takes the accent as its fill. */
+    input[type=checkbox],
+    input[type=radio] {
+        width: 1rem;
+        height: 1rem;
+        padding: 0;
+        margin: 0;
+        accent-color: var(--color-signal);
     }
 
     /* A CONTROL A READER MAY NOT USE HAS TO LOOK LIKE ONE. Four arms already drove `disabled`
@@ -270,37 +307,26 @@
     }
 
 
-    /* The label WRAPS its control in both arms of every example, and is set like a nav section
-       header: same size, case and tracking, because it is the same job — naming the thing under
-       it. It is a column of two, so the distance between them is the label's gap. */
+    /* The label WRAPS its control in both arms of every example. It names the field under it at
+       the chrome step rather than the micro one: at .5rem uppercase a field's name was the one
+       thing on the form a reader could not read. A column of two, so the distance between them
+       is the label's gap. */
     label {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-snug);
-        font: 500 .5rem/.5rem var(--font-mono);
-        text-transform: uppercase;
-        letter-spacing: .14em;
+        gap: var(--spacing-tight);
+        font: 500 .75rem/1rem var(--font-sans);
         color: var(--color-muted);
     }
 
-    label input,
-    label select,
-    label textarea {
-        text-transform: none;
-        letter-spacing: normal;
-    }
-
     /* A box and its own label share a line, so those two go back to being a ROW — and the
-       label goes back to being a SENTENCE. The uppercase tracking above names a field sitting
-       under it; beside a checkbox it is just shouting. */
+       label goes back to being a SENTENCE, read at the body's size beside the box it names. */
     label:has(> input[type=checkbox]),
     label:has(> input[type=radio]) {
         flex-direction: row;
         align-items: center;
         gap: var(--spacing-tight);
         font: 400 1rem/1.5rem var(--font-sans);
-        text-transform: none;
-        letter-spacing: normal;
         color: var(--color-ink);
     }
 
@@ -311,13 +337,44 @@
     }
 
     th {
-        font: 500 .5rem/.5rem var(--font-mono);
-        text-transform: uppercase;
-        letter-spacing: .11em;
+        font: 500 .75rem/1rem var(--font-sans);
         color: var(--color-muted);
         text-align: left;
         padding: 0 1rem .5rem 0;
         border-bottom: 1px solid var(--color-rule);
+    }
+
+    /* A SORT IS THE HEADER, not a button under it: the header's own type, no box, and the
+       direction drawn beside the name once the column is the sort. */
+    th button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        box-shadow: none;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-hair);
+    }
+
+    th button:hover:not(:disabled) {
+        background: none;
+        color: var(--color-ink);
+    }
+
+    th[aria-sort] {
+        color: var(--color-ink);
+    }
+
+    th[aria-sort=ascending] button::after {
+        content: '↑';
+        color: var(--color-signal);
+    }
+
+    th[aria-sort=descending] button::after {
+        content: '↓';
+        color: var(--color-signal);
     }
 
     td {
@@ -326,8 +383,163 @@
         vertical-align: top;
     }
 
+    tbody tr {
+        transition: background-color .12s ease;
+    }
+
+    tbody tr:hover {
+        background: color-mix(in srgb, var(--color-ink) 3%, transparent);
+    }
+
     tr:last-child td {
         border-bottom: 0;
+    }
+
+    /* WIDGET DEFAULTS, keyed by the ROLE a helper's parts spread rather than by a class, because a
+       headless part carries no class (RULEBOOK 49) and an example that writes none still has to
+       look like the widget it is. One attribute outranks the element rules above, and any utility
+       an example writes still wins, being a later layer. */
+
+    /* Tabs are a segmented control: one recessed track, the selected tab the raised key in it. */
+    [role=tablist] {
+        display: inline-flex;
+        flex-direction: row;
+        gap: var(--spacing-hair);
+        padding: .25rem;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+    }
+
+    [role=tab] {
+        padding: .25rem .75rem;
+        color: var(--color-muted);
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    [role=tab]:hover:not(:disabled) {
+        color: var(--color-ink);
+        background: transparent;
+        border-color: transparent;
+    }
+
+    [role=tab][aria-selected=true],
+    [role=tab][aria-selected=true]:hover:not(:disabled) {
+        color: var(--color-ink);
+        background: var(--color-raised);
+        box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 14%, transparent);
+    }
+
+    /* A menu and a listbox are one surface: a raised sheet, each item a row the pointer lights. */
+    :is([role=menu], [role=listbox]) {
+        display: flex;
+        flex-direction: column;
+        min-width: 12rem;
+        margin: 0;
+        padding: .25rem;
+        list-style: none;
+        color: var(--color-ink);
+        background: var(--color-raised);
+        border: 1px solid var(--color-rule);
+        border-radius: 8px;
+    }
+
+    [role=menu] {
+        box-shadow: 0 12px 32px -8px color-mix(in srgb, var(--color-ink) 24%, transparent),
+            0 2px 6px color-mix(in srgb, var(--color-ink) 8%, transparent);
+    }
+
+    :is([role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [role=option]) {
+        display: block;
+        width: 100%;
+        padding: .5rem .75rem;
+        font: 400 1rem/1.25rem var(--font-sans);
+        text-align: left;
+        color: var(--color-ink);
+        background: transparent;
+        border: 0;
+        border-radius: 5px;
+        box-shadow: none;
+        cursor: default;
+    }
+
+    :is([role=menuitem], [role=menuitemcheckbox], [role=menuitemradio]):hover:not(:disabled),
+    [role=option][data-active] {
+        background: color-mix(in srgb, var(--color-signal) 10%, transparent);
+    }
+
+    [role=option][aria-selected=true] {
+        font-weight: 600;
+    }
+
+    [role=option][aria-selected=true]::after,
+    [role=menuitemcheckbox][aria-checked=true]::after {
+        content: '✓';
+        float: right;
+        margin-left: var(--spacing-snug);
+        color: var(--color-signal);
+    }
+
+    /* What a search matched inside an option: lit in the accent, not the UA highlighter. An
+       inline mark in a row of text, so the row is block flow — a flex row parts the mark from
+       the rest of its word. */
+    mark {
+        color: inherit;
+        background: color-mix(in srgb, var(--color-signal) 18%, transparent);
+        border-radius: 2px;
+    }
+
+    /* A dialog floats over the page it interrupts: lifted, and the page under it dimmed. */
+    dialog {
+        color: var(--color-ink);
+        background: var(--color-raised);
+        border: 1px solid var(--color-rule);
+        border-radius: 10px;
+        padding: 1.25rem;
+        box-shadow: 0 24px 64px -16px color-mix(in srgb, var(--color-ink) 36%, transparent);
+    }
+
+    /* Preflight zeroes the margin the UA centres a modal with, which pinned it to the corner. */
+    dialog:modal {
+        margin: auto;
+    }
+
+    dialog::backdrop {
+        background: color-mix(in srgb, var(--color-ink) 28%, transparent);
+        backdrop-filter: blur(2px);
+    }
+
+    /* A carousel is a row it scrolls along, a slide a card, the centred one lit. */
+    [aria-roledescription=carousel] {
+        flex-direction: row;
+        list-style: none;
+        padding: 0;
+    }
+
+    [aria-roledescription=slide] {
+        border: 1px solid var(--color-rule);
+        border-radius: 8px;
+        background: var(--color-raised);
+    }
+
+    [aria-roledescription=slide][data-centred] {
+        border-color: var(--color-signal);
+    }
+
+    /* A drop target says what it takes before anything is dragged over it. */
+    [data-dropzone=host]:not(textarea) {
+        padding: 1.25rem;
+        border: 1px dashed color-mix(in srgb, var(--color-ink) 24%, transparent);
+        border-radius: 8px;
+        color: var(--color-muted);
+        background: var(--color-raised);
+    }
+
+    [data-dropzone=host][data-dragging] {
+        border-color: var(--color-signal);
+        background-image: linear-gradient(var(--drag-tint), var(--drag-tint));
+        --drag-tint: color-mix(in srgb, var(--color-signal) 8%, transparent);
     }
 
     blockquote {
@@ -496,7 +708,7 @@
     }
 
     & [data-combobox=listbox] {
-        @apply m-0 list-none p-0;
+        @apply m-0 list-none p-0 min-w-0 rounded-none border-0 bg-transparent;
     }
 
     & [data-combobox=option] {
@@ -533,7 +745,7 @@
     }
 
     & [data-command-palette=listbox] {
-        @apply m-0 list-none p-1;
+        @apply m-0 list-none p-1 min-w-0 rounded-none border-0 bg-transparent;
     }
 
     & [data-command-palette=option] {
@@ -595,13 +807,14 @@
         @apply cursor-default rounded-sm outline-none select-none;
     }
 
+    /* the chevron is two edges of a turned square, so it follows the token and needs no glyph */
     & [role=treeitem][aria-expanded]::before {
-        content: '▸ ';
-        @apply text-muted;
+        content: '';
+        @apply mr-2 mb-0.5 inline-block size-1.5 -rotate-45 border-r-2 border-b-2 border-muted transition-transform;
     }
 
     & [role=treeitem][aria-expanded=true]::before {
-        content: '▾ ';
+        @apply rotate-45;
     }
 
     & [role=treeitem]:focus-visible {

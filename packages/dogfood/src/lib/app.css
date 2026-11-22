@@ -242,8 +242,43 @@
         @apply rounded-b-none;
     }
 
+    /* THE FRAME IS A CANVAS, not a caption: the example's own type at the body's size and in ink,
+       over a dot grid that says "this is running" before anything in it moves.
+       IT STAYS BLOCK FLOW and spaces by SIBLING instead: as a flex row it parted every run of
+       text from the inline element inside it — `7` bold in a date set as `7 :30` — because each
+       became an item with a gap between. So a block is a gap from whatever it follows, and two
+       controls side by side are a gap apart on their line. */
     .result {
-        @apply rounded-b-lg border border-t-0 border-rule bg-paper p-5 text-chrome text-muted;
+        @apply relative rounded-b-lg border border-t-0 border-rule px-8 pt-12 pb-8 text-prose text-ink max-lg:px-5;
+        /* the dot grid's period and dot size — a pattern rather than a box, so no utility spells it */
+        background:
+            radial-gradient(circle, color-mix(in srgb, var(--color-ink) 11%, transparent) 1px, transparent 1.5px) 0 0 / 1rem 1rem,
+            var(--color-paper);
+    }
+
+    .result > * + :not(button, input, select, textarea, a, span, strong, em, b, i, code, kbd, small, img, svg, output, time, dialog, [popover]),
+    .result > :not(button, input, select, textarea, a, span, strong, em, b, i, code, kbd, small, img, svg, output, time, dialog, [popover]) + :not(dialog, [popover]) {
+        @apply mt-snug;
+    }
+
+    .result > :is(button, input, select, textarea) + :is(button, input, select, textarea) {
+        @apply ml-snug;
+    }
+
+    /* A chart's ticks and labels at the caption step, in the recessive tone, as an axis is. */
+    :where(.result) :where(svg) {
+        @apply text-chrome text-muted;
+    }
+
+    .result::before {
+        content: '';
+        @apply absolute top-5 left-4 size-2 rounded-full bg-good;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-good) 20%, transparent);
+    }
+
+    .result::after {
+        content: 'Live';
+        @apply absolute top-3 left-8 font-mono text-micro/6 font-medium tracking-caps text-muted uppercase;
     }
 
     /* THE FRAME'S DEFAULTS ARE ZERO-SPECIFICITY, so a class the example writes wins over them: each
