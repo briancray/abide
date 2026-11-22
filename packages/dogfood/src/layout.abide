@@ -76,6 +76,6 @@ onMenu(() => MENUS)
 <SiteBar />
 <DocsNav />
 <slot />
-<Tooltips class="m-0 grid w-max max-w-60 gap-0.5 rounded-md border border-rule bg-raised px-3 py-2 text-chrome text-ink shadow-sm [&_[data-part=readout]]:grid [&_[data-part=readout-x]]:text-muted" />
+<Tooltips class="m-0 w-max max-w-60 rounded-md border border-rule bg-raised px-3 py-2 text-chrome text-ink shadow-sm" />
     </body>
 </html>

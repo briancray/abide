@@ -33,6 +33,6 @@ let leads = reactive(true)
     <Line label="Target" values={TARGET} stack={false} />
 </Chart>
 <Tooltips
-    class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
-    text-chrome text-ink shadow-sm [&_[data-part=readout-x]]:text-muted"
+    class="m-0 w-max rounded-md border border-rule bg-raised px-3 py-2 text-chrome text-ink
+    shadow-sm"
  />
