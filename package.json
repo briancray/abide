@@ -38,6 +38,7 @@
         "bench:virtual": "bun packages/abide/bench/virtualShare.ts",
         "bench:selected": "bun packages/abide/bench/selectedRowShare.ts",
         "bench:inline": "bun packages/abide/bench/inlineRowShare.ts",
+        "bench:spread-part": "bun packages/abide/bench/spreadPartShare.ts",
         "bench:mux": "bun packages/abide/bench/muxShare.ts",
         "bench:first-chunk": "bun packages/abide/bench/firstChunkShare.ts",
         "prepare": "git config core.hooksPath .githooks || true",
