@@ -44,7 +44,7 @@ function walkListbox(): string[] {
     })
     const landed: string[] = []
     for (const step of WALK) {
-        press(list.keydown, keyOf(step, true))
+        press(list.onkeydown, keyOf(step, true))
         landed.push(list.active ?? '')
     }
     return landed

@@ -5034,6 +5034,9 @@ a `debounce`, a `rowHeight` and a size a measurement replaces, which it MUST rea
 under `bind:element` what needs the element in a browser (32.99), and MUST NOT be a function an
 app hands `bind:element` itself.
 
+49.15 A listener a parts function hands back or takes for an element's event MUST be named `on`
+followed by that event's name.
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with

@@ -39,8 +39,8 @@ export type Listbox<Option, Multiple extends boolean = false> = {
     activate: (key: string) => void
     /** The id the option with `key` renders with, which `aria-activedescendant` names. */
     idOf: (key: string) => string
-    /** The listener a focused element hands its `keydown` to. */
-    keydown: (event: KeyboardEvent) => void
+    /** The `keydown` listener for the focused element: the list's own, or a field that keeps focus while it walks the list. */
+    onkeydown: (event: KeyboardEvent) => void
     /** The list's part: its role. */
     readonly listbox: Record<string, unknown>
     /** The option of `key`'s part: its id, role, `aria-selected`, `data-active`, `data-selected`, the pointer resting on it activating it, and its click. */
@@ -179,7 +179,7 @@ export function listbox<Option, Multiple extends boolean = false>(
         },
         activate: (each) => chosen.set(each),
         idOf,
-        keydown,
+        onkeydown: keydown,
         listbox: {
             role: 'listbox',
             'data-listbox': 'listbox',

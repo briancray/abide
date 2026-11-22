@@ -226,7 +226,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             open.set(true)
             return
         }
-        list.keydown(event)
+        list.onkeydown(event)
     }
 
     const pickedKeys = reactive(() => {

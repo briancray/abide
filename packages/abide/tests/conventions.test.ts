@@ -424,3 +424,30 @@ test('a published package depends on no workspace: protocol at run time', async 
     }
     expect(unresolvable).toEqual([])
 })
+
+// 49.15 — A LISTENER IS NAMED `on<event>`, as the element it is spread on names it: a member named
+// for the bare event is one an app must wire by hand (`onkeydown={list.keydown}`), where `on<event>`
+// spreads and composes with the app's own (32.109). Read off REGISTRY's signatures: a member, an
+// option or a method taking an `Event`, named for an event the DOM fires. THE REVERT: name
+// `listbox`'s listener `keydown` again; `keydown` is reported.
+test('a listener the framework hands out or takes is named on<event> — 49.15', async () => {
+    const events = new Set<string>()
+    // happy-dom's `on<event>` properties are not enumerable: the chain is walked by name.
+    for (
+        let prototype: object | null = document.createElement('div');
+        prototype !== null;
+        prototype = Object.getPrototypeOf(prototype)
+    )
+        for (const key of Object.getOwnPropertyNames(prototype))
+            if (key.startsWith('on')) events.add(key.slice(2))
+    expect(events.has('keydown')).toBe(true)
+    const registry = await Bun.file(
+        new URL('../docs/REGISTRY.md', PACKAGES),
+    ).text()
+    const offenders: string[] = []
+    for (const match of registry.matchAll(
+        /\b([a-z]+)\??(?::\s*\(|\()\s*event\s*:\s*[A-Za-z]*Event\b/g,
+    ))
+        if (events.has(match[1] ?? '')) offenders.push(match[1] ?? '')
+    expect(offenders).toEqual([])
+})

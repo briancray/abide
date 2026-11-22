@@ -37,7 +37,7 @@ test('the active key stays on its option while the list changes — 51.1, 51.2, 
     const options = reactive(['a', 'b', 'c'])
     const list = listbox({ id: 'letters', options, key: (letter) => letter })
     expect(list.active).toBe('a')
-    press(list.keydown, 'End')
+    press(list.onkeydown, 'End')
     expect(list.active).toBe('c')
     options.set(['b', 'c'])
     flushSync()
@@ -57,9 +57,9 @@ test('the arrows go round the ends unless `wrap` is off — 51.4, 51.5, 51.6', (
         options: () => letters,
         key: (letter) => letter,
     })
-    press(round.keydown, 'ArrowUp')
+    press(round.onkeydown, 'ArrowUp')
     expect(round.active).toBe('c')
-    press(round.keydown, 'ArrowDown')
+    press(round.onkeydown, 'ArrowDown')
     expect(round.active).toBe('a')
     const held = listbox({
         id: 'held',
@@ -67,12 +67,12 @@ test('the arrows go round the ends unless `wrap` is off — 51.4, 51.5, 51.6', (
         key: (letter) => letter,
         wrap: false,
     })
-    press(held.keydown, 'ArrowUp')
+    press(held.onkeydown, 'ArrowUp')
     expect(held.active).toBe('a')
-    press(held.keydown, 'End')
-    press(held.keydown, 'ArrowDown')
+    press(held.onkeydown, 'End')
+    press(held.onkeydown, 'ArrowDown')
     expect(held.active).toBe('c')
-    press(held.keydown, 'Home')
+    press(held.onkeydown, 'Home')
     expect(held.active).toBe('a')
 })
 
@@ -90,18 +90,18 @@ test('Enter picks and Escape calls `onescape`, cancelling only what they act on 
             escaped += 1
         },
     })
-    expect(press(list.keydown, 'ArrowDown').defaultPrevented).toBe(true)
-    const enter = press(list.keydown, 'Enter')
-    press(list.keydown, 'Escape')
+    expect(press(list.onkeydown, 'ArrowDown').defaultPrevented).toBe(true)
+    const enter = press(list.onkeydown, 'Enter')
+    press(list.onkeydown, 'Escape')
     expect([picked, escaped, enter.defaultPrevented]).toEqual([['b'], 1, true])
     const bare = listbox({
         id: 'bare',
         options: () => ['a'],
         key: (letter) => letter,
     })
-    expect(press(bare.keydown, 'Enter').defaultPrevented).toBe(false)
-    expect(press(bare.keydown, 'Escape').defaultPrevented).toBe(false)
-    expect(press(bare.keydown, 'a').defaultPrevented).toBe(false)
+    expect(press(bare.onkeydown, 'Enter').defaultPrevented).toBe(false)
+    expect(press(bare.onkeydown, 'Escape').defaultPrevented).toBe(false)
+    expect(press(bare.onkeydown, 'a').defaultPrevented).toBe(false)
 })
 
 test('each key has its own id, and the active one’s is `activeId` — 51.10, 51.11', () => {
@@ -112,7 +112,7 @@ test('each key has its own id, and the active one’s is `activeId` — 51.10, 5
     })
     expect(list.idOf('a b')).not.toBe(list.idOf('a-b'))
     expect(list.idOf('a b')).toBe('letters-option-a%20b')
-    press(list.keydown, 'End')
+    press(list.onkeydown, 'End')
     expect(list.activeId).toBe(list.idOf('a-b'))
 })
 
@@ -179,18 +179,18 @@ test('Space toggles, Shift with an arrow extends, and `mod+a` selects all — 51
         multiple: true,
         selected,
     })
-    expect(press(list.keydown, ' ').defaultPrevented).toBe(true)
+    expect(press(list.onkeydown, ' ').defaultPrevented).toBe(true)
     expect(selected()).toEqual(['a'])
-    press(list.keydown, 'ArrowDown')
+    press(list.onkeydown, 'ArrowDown')
     expect([list.active, selected()]).toEqual(['b', ['a']])
-    press(list.keydown, 'ArrowDown', { shiftKey: true })
+    press(list.onkeydown, 'ArrowDown', { shiftKey: true })
     expect(selected()).toEqual(['a', 'b', 'c'])
-    press(list.keydown, 'End', { shiftKey: true })
+    press(list.onkeydown, 'End', { shiftKey: true })
     expect(selected()).toEqual(['a', 'b', 'c', 'd'])
-    press(list.keydown, ' ')
+    press(list.onkeydown, ' ')
     expect(selected()).toEqual(['a', 'b', 'c'])
     selected.set([])
-    expect(press(list.keydown, 'a', MOD).defaultPrevented).toBe(true)
+    expect(press(list.onkeydown, 'a', MOD).defaultPrevented).toBe(true)
     expect(selected()).toEqual(['a', 'b', 'c', 'd'])
 })
 
@@ -207,12 +207,12 @@ test('selecting one, the selection is the key last moved to, and a click picks i
     })
     expect(list.active).toBe('c')
     expect(list.listbox['aria-multiselectable']).toBe(undefined)
-    press(list.keydown, 'ArrowUp')
+    press(list.onkeydown, 'ArrowUp')
     expect(selected()).toBe('b')
     click(list.option('a'))
     expect([list.active, selected(), picked]).toEqual(['a', 'a', ['a']])
     // Space and `mod+a` are left alone: a list picking one is often a field's, where they type.
-    expect(press(list.keydown, ' ').defaultPrevented).toBe(false)
-    expect(press(list.keydown, 'a', MOD).defaultPrevented).toBe(false)
+    expect(press(list.onkeydown, ' ').defaultPrevented).toBe(false)
+    expect(press(list.onkeydown, 'a', MOD).defaultPrevented).toBe(false)
     expect(list.option('a')['data-selected']).toBe(undefined)
 })

@@ -15,7 +15,7 @@ const batch = listbox({
 })
 </script>
 
-<ul {...batch.listbox} tabindex="0" onkeydown={batch.keydown}
+<ul {...batch.listbox} tabindex="0" onkeydown={batch.onkeydown}
     aria-label="Leads to hand over" aria-activedescendant={batch.activeId}
     class="fields select-none [&_[data-active]]:bg-signal/10
         [&_[data-selected]]:font-semibold">

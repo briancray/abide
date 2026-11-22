@@ -188,7 +188,7 @@ export function commandPalette(
                     event.key === 'End'
                 )
                     return
-                list.keydown(event)
+                list.onkeydown(event)
             },
         },
         listbox: {
