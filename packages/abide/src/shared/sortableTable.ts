@@ -1,4 +1,4 @@
-// 51.45-51.60, 51.79-51.83 — A TABLE SORTED BY ITS HEADERS AND PICKED BY ITS ROWS, as parts an app
+// 51.49-51.60, 51.79-51.83 — A TABLE SORTED BY ITS HEADERS AND PICKED BY ITS ROWS, as parts an app
 // spreads onto a `<table>` of its own: each header's `aria-sort` and the press that sorts by it, the rows
 // in the order the sort names, and a native checkbox per row with a Shift-click range and a header box
 // that is mixed while some rows are picked. The app writes every cell.

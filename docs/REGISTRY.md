@@ -992,6 +992,8 @@ type Reached = { readonly [REACHED]: true }
 | `SortableTableOptions` | `<Row>{ rows: readonly Row[] \| (() => readonly Row[]); columns: readonly Column<Row>[] \| (() => readonly Column<Row>[]); key?(row: Row): string; sort?: Reactive<Sort \| undefined>; selected?: Reactive<readonly string[] \| undefined> }` | The rows and columns of a sortable table, how a row is told apart, and its sort and selection. | 51.51, 51.79, 49.10 |
 | `SortableTableParts` | `<Row>{ readonly table: Record<string, unknown>; get rows(): readonly Row[]; column(column: Column<Row>): SortableTableColumn; row(row: Row): SortableTableRow; text(row: Row, column: Column<Row>): string; readonly selectAll: { readonly select: Record<string, unknown>; readonly checkbox: Record<string, unknown> }; readonly sort: Reactive<Sort \| undefined>; readonly selected: Reactive<readonly string[] \| undefined> }` | The parts `sortableTable` hands back: the table, the rows in sorted order, a column's parts, a row's parts, a cell's text, the header's checkbox and its cell, and the sort and the selection. | 51.51, 51.53, 51.54, 51.55, 51.58, 51.59, 51.79, 51.82, 32.99, 49.4, 49.10, 49.11 |
 | `SortableTableColumn` | `{ readonly header: Record<string, unknown>; readonly sort: Record<string, unknown>; readonly cell: Record<string, unknown> }` | A column's header cell, its sort button, and its body cells. | 51.51, 51.53, 51.54, 51.55, 49.4 |
+| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean; firstDirection?: 'ascending' \| 'descending' }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.49, 51.52, 51.53, 51.58, 51.59 |
+| `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.51, 51.53, 51.54, 51.55 |
 | `SortableTableRow` | `{ readonly row: Record<string, unknown>; readonly select: Record<string, unknown>; readonly checkbox: Record<string, unknown>; readonly detail: Record<string, unknown> }` | A row's part, the cell holding its checkbox, the checkbox, and a detail row under it. | 51.79, 51.81, 49.4 |
 
 ## `listbox`
@@ -1010,13 +1012,11 @@ type Reached = { readonly [REACHED]: true }
 | `VirtualRowsOptions` | `{ count: number \| (() => number); rowHeight: number; overscan?: number \| (() => number); height?: number }` | What `virtualRows` is handed: how many rows there are, how tall each is, and the height drawn at before the scroller is measured. | 51.65, 51.67, 51.71, 49.12, 49.13 |
 | `VirtualRows` | `{ viewport: (element: Element) => Disposer; start: () => number; end: () => number; before: () => number; after: () => number; scrollTo: (index: number) => void }` | What `virtualRows` hands back: the adaptor for the scroller, the rows to render, the heights of the spacers around them, and a scroll to a row. | 51.65, 51.69, 51.70 |
 
-## `sortRows`
+## `sortBy`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `sortRows` | `<Row>(rows: readonly Row[], columns: readonly Column<Row>[], sort: Sort \| undefined) => readonly Row[]` | The rows in the order a `Sort` names. | 51.45, 51.46, 51.47, 51.48, 51.49, 51.50 |
-| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean; firstDirection?: 'ascending' \| 'descending' }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.49, 51.52, 51.53, 51.58, 51.59 |
-| `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.45, 51.53, 51.54, 51.55 |
+| `sortBy` | `<Item>(items: readonly Item[], value: (item: Item) => unknown, direction?: 'ascending' \| 'descending') => Item[]` | A new array of `items` ordered by a value of each, blanks last and text in abide's locale, so a server and the page hydrating it agree. | 51.45, 51.46, 51.47, 51.48, 51.50 |
 
 ## `hotkeys`
 

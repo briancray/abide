@@ -1,5 +1,5 @@
 <script generics="Row">
-// 49.9, 51.45-51.60, 51.79-51.83 — `sortableTable`'s default markup: a header per column with a sort
+// 49.9, 51.49-51.60, 51.79-51.83 — `sortableTable`'s default markup: a header per column with a sort
 // button, a row per row with a cell per column, a checkbox column while `selected` is given, and a
 // detail row where `Detail` is. Everything it does is the parts'; an app wanting its own cells spreads them.
 import type { Attributes } from '#shared/Attributes.ts'

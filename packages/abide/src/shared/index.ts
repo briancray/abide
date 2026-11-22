@@ -102,7 +102,7 @@ export { markdown } from './markdown/markdown.ts'
 export type { LinkTarget } from './markdown/sections.ts'
 export { type Report, ReportDraft, report } from './report.ts'
 export type { Sort } from './Sort.ts'
-export { sortRows } from './sortRows.ts'
+export { sortBy } from './sortBy.ts'
 export {
     type VirtualRows,
     type VirtualRowsOptions,

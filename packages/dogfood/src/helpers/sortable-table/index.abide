@@ -10,11 +10,7 @@ import pickRows from './lib/PickRows.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={[
-        '/components/sortable-table',
-        '/helpers/sort-rows',
-        '/helpers/format',
-    ]}
+    seeAlso={['/components/sortable-table', '/helpers/sort-by', '/helpers/format']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StaleDeals.test.ts',

@@ -618,10 +618,10 @@ const WRITTEN: readonly {
                     'Put arrow-key, Home, End, Enter and Escape handling on a list of options you render yourself.',
             },
             {
-                route: '/helpers/sort-rows',
-                title: '`sortRows`',
+                route: '/helpers/sort-by',
+                title: '`sortBy`',
                 description:
-                    'Sort table rows by a column and direction, numbers as numbers, dates by time and blanks last.',
+                    'Sort a list by a value of each item: numbers as numbers, dates by time, text in one locale on both sides, and blanks last.',
             },
             {
                 route: '/helpers/virtual-rows',

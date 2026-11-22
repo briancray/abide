@@ -1,0 +1,77 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import LargestFirst from './lib/LargestFirst.abide'
+import largestFirst from './lib/LargestFirst.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/components/sortable-table',
+        '/helpers/format',
+        '/abide-files/control-flow',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/sortBy.test.ts',
+            from: ["test('a blank value sorts last in both directions"],
+        },
+        {
+            path: 'packages/abide/tests/sortBy.test.ts',
+            from: [
+                "test('numbers sort as numbers, dates by time and text by its words",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/sortBy.test.ts',
+            from: ["test('items of equal value keep the order they came in"],
+        },
+        {
+            path: 'packages/abide/tests/sortBy.test.ts',
+            from: ["test('a sort is a new list, the one handed in left as it is"],
+        },
+    ]}
+>
+    <Section level={3} title="Show the largest deals first">
+        <p>Hand <code>sortBy</code> the list and the value each item sorts by. It answers a new
+            array, so the list you hand it keeps its order.</p>
+        <Example code={largestFirst}><LargestFirst /></Example>
+    </Section>
+
+    <Section level={3} title="Order the open deals by when each is expected to close">
+        <p>Numbers sort as numbers and dates by time. A deal with no close date sorts last in
+            either direction, and deals that close the same day keep the order they came in.</p>
+        <Code language="ts" caption="shared" code={`
+            import { sortBy } from '@abide/abide'
+
+            type Deal = { name: string; amount: number; closes?: Date }
+
+            sortBy(deals, (deal) => deal.closes)
+        `} />
+    </Section>
+
+    <Section level={3} title="Sort deal names with numbers in the order people read">
+        <p>Text sorts by its words in abide's locale, with the numerals in it read as numbers, so
+            the server and the page it hydrates agree on the order.</p>
+        <Code language="ts" caption="shared" code={`
+            import { sortBy } from '@abide/abide'
+
+            const names = [{ name: 'deal 10' }, { name: 'Deal 9' }]
+            sortBy(names, (deal) => deal.name) // Deal 9, deal 10
+        `} />
+    </Section>
+
+    <Section level={3} title="Sort stages by their place in the pipeline">
+        <p>What an item sorts by is any value you derive from it.</p>
+        <Code language="ts" caption="shared" code={`
+            import { sortBy } from '@abide/abide'
+
+            const STAGES = ['lead', 'qualified', 'proposal', 'won']
+
+            sortBy(deals, (deal) => STAGES.indexOf(deal.stage))
+        `} />
+    </Section>
+</Doc>

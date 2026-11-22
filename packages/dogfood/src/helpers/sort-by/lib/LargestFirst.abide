@@ -1,0 +1,19 @@
+<script>
+import { reactive, sortBy } from '@abide/abide'
+
+type Deal = { name: string; amount: number }
+const deals: Deal[] = [
+    { name: 'Acme renewal', amount: 42_000 },
+    { name: 'Engines upgrade', amount: 18_000 },
+    { name: 'Hopper & Co', amount: 67_000 },
+]
+
+let largestFirst = reactive(false)
+const shown = reactive(() =>
+    largestFirst ? sortBy(deals, (deal) => deal.amount, 'descending') : deals,
+)
+</script>
+
+<button onclick={() => (largestFirst = !largestFirst)}>
+    {largestFirst ? 'As entered' : 'Largest first'}</button>
+<ol>{#for deal of shown by deal.name}<li>{deal.name}</li>{/for}</ol>

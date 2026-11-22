@@ -23,7 +23,7 @@ import sortedByClose from './lib/SortedByClose.abide' with { type: 'text' }
 <Doc
     seeAlso={[
         '/helpers/sortable-table',
-        '/helpers/sort-rows',
+        '/helpers/sort-by',
         '/helpers/format',
         '/abide-files/components',
         '/abide-files/control-flow',

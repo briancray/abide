@@ -5293,24 +5293,25 @@ be labelled by that tab; a tab MUST name its panel by `aria-controls` only while
 
 51.44 `tabs` MUST write `data-selected` on the selected tab.
 
-51.45 `sortRows` MUST order `rows` by each row's value for the column `sort` names, in the direction
-`sort` names.
+51.45 `sortBy` MUST order `items` by the value `value` answers for each, ascending unless
+`direction` is `descending`.
 
-51.46 `sortRows` MUST keep rows of equal value in the order `rows` holds them, in either direction.
+51.46 `sortBy` MUST keep items of equal value in the order `items` holds them, in either direction.
 
-51.47 `sortRows` MUST put a row whose value is blank — `undefined`, `null`, `''`, `NaN` or an
-invalid `Date` — after every row whose value is not, in either direction.
+51.47 `sortBy` MUST put an item whose value is blank — `undefined`, `null`, `''`, `NaN` or an
+invalid `Date` — after every item whose value is not, in either direction.
 
-51.48 `sortRows` MUST compare two numbers, two bigints or two booleans by value, two dates by time,
+51.48 `sortBy` MUST compare two numbers, two bigints or two booleans by value, two dates by time,
 and any other pair as text in the `en-US` locale, the numerals in it compared by value.
 
-51.49 `sortRows` MUST read a row's value for a `Column` through its `value` where it has one, and as
-the row's field its `key` names otherwise.
+51.49 `sortableTable` MUST sort by a `Column`'s `value` where it has one, and by the row's field its
+`key` names otherwise.
 
-51.50 `sortRows` MUST hand back `rows` itself where `sort` is `undefined` or names no column.
+51.50 `sortBy` MUST hand back a new array, and MUST leave `items` in the order it holds them.
 
 51.51 `sortableTable`'s `rows` MUST answer, and `SortableTable` MUST render, its rows in the order
-`sortRows` hands back for its `rows`, `columns` and `sort`.
+`sortBy` hands back for the value of the column `sort` names, and in the order its `rows` hold them
+where `sort` is `undefined` or names no column.
 
 51.52 `SortableTable` MUST render each header's `label` in a button that sorts by its column, save a
 `Column` whose `sortable` is `false`.
