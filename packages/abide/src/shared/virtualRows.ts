@@ -10,6 +10,7 @@
 // first delivery the shared resize observer makes after the browser lays it out, so binding forces
 // no layout. Until then the range is the one `height` gives, which is what the server rendered.
 
+import { type Live, live } from './live.ts'
 import { resized } from './observe/resized.ts'
 import { reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
@@ -17,11 +18,11 @@ import type { Disposer } from './reactive/watch.ts'
 /** What `virtualRows` is handed: how many rows there are, and how tall each is. */
 export type VirtualRowsOptions = {
     /** How many rows the list has, read live: hand it a function reading a reactive value. */
-    count: () => number
+    count: Live<number>
     /** Every row's height in pixels. */
     rowHeight: number
     /** Rows rendered past each end of the view, so a scroll shows rows already made. Default `5`. */
-    overscan?: number
+    overscan?: Live<number>
     /** The viewport's height in pixels before it is measured, and on the server. Default `480`. */
     height?: number
 }
@@ -47,17 +48,19 @@ export type VirtualRows = {
  * with `overscan` more on each side.
  */
 export function virtualRows(options: VirtualRowsOptions): VirtualRows {
-    const { count, rowHeight } = options
-    const overscan = options.overscan ?? 5
+    // 49.13 — read where they are used, save `rowHeight` and the starting `height`, read once.
+    const { rowHeight } = options
+    const count = () => live(options.count)
+    const overscan = () => live(options.overscan) ?? 5
     let viewportHeight = options.height ?? 480
     // The first row in view, and how many rows the viewport fits: the two the range is made of.
     const first = reactive(0)
     const fits = reactive(Math.ceil(viewportHeight / rowHeight))
     // 51.66 — each end clamped into the list, so a list shorter than its view renders every row.
     const start = reactive(() =>
-        Math.min(count(), Math.max(0, first() - overscan)),
+        Math.min(count(), Math.max(0, first() - overscan())),
     )
-    const end = reactive(() => Math.min(count(), first() + fits() + overscan))
+    const end = reactive(() => Math.min(count(), first() + fits() + overscan()))
     const before = reactive(() => start() * rowHeight)
     const after = reactive(() => (count() - end()) * rowHeight)
     let scroller: Element | undefined

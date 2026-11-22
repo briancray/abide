@@ -1,5 +1,6 @@
 import { checkParts } from './checkParts.ts'
-import { itself, type KeyOption } from './itemKey.ts'
+import { type KeyOption, writtenBy } from './itemKey.ts'
+import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { reactive } from './reactive/index.ts'
 import { roving } from './roving.ts'
@@ -8,10 +9,10 @@ import { roving } from './roving.ts'
 export type ListboxOptions<Option> = {
     /** The base every option's element id is derived from; unique on the page. One is made where none is given. */
     id?: string
-    /** The options in the order they render, read live: hand it a function reading a reactive value. */
-    options: () => readonly Option[]
-    /** Whether an arrow past either end goes round to the other end. `true` unless set. */
-    wrap?: boolean
+    /** The options in the order they render; a function is read live. */
+    options: Live<readonly Option[]>
+    /** Whether an arrow past either end goes round to the other end. `true` unless set; a function is read live. */
+    wrap?: Live<boolean>
     /** Called with the active option when Enter is pressed. */
     onpick?: (option: Option) => void
     /** Called when Escape is pressed. */
@@ -44,9 +45,10 @@ export type Listbox<Option> = {
 export function listbox<Option>(
     given: ListboxOptions<Option>,
 ): Listbox<Option> {
-    const { options, wrap = true, onpick, onescape } = given
+    // 49.13 — read where they are used; the id is fixed for the life of the parts.
+    const options = () => live(given.options)
     const id = given.id ?? `listbox-${randomToken(4, 'hex')}`
-    const key = itself<Option>(given.key)
+    const key = (option: Option) => writtenBy(given.key, option)
     if (process.env.NODE_ENV !== 'production') checkParts('listbox', `${id}-`)
     // The key last moved to; what is active is this key while it is listed, and the first otherwise.
     const chosen = reactive<string | undefined>(undefined)
@@ -96,7 +98,7 @@ export function listbox<Option>(
                     if (key(list[index] as Option) === current) at = index
                 return [at, list.length]
             },
-            wrap,
+            live(given.wrap) ?? true,
         )
         if (next !== -1) {
             event.preventDefault()
@@ -106,15 +108,18 @@ export function listbox<Option>(
         switch (event.key) {
             case 'Enter': {
                 const option = activeOption()
+                const onpick = given.onpick
                 if (option === undefined || onpick === undefined) return
                 event.preventDefault()
                 onpick(option)
                 return
             }
-            case 'Escape':
+            case 'Escape': {
+                const onescape = given.onescape
                 if (onescape === undefined) return
                 event.preventDefault()
                 onescape()
+            }
         }
     }
 

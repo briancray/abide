@@ -30,10 +30,9 @@ export type DialogParts = {
 
 /** A native `<dialog>` opened and closed by `open`, as a part to spread. */
 export function dialog(options: DialogOptions = {}): DialogParts {
-    const { onclose } = options
     const open = options.open ?? reactive(false)
-    const modal = () => live(options.modal ?? true)
-    const dismissible = () => live(options.dismissible ?? true)
+    const modal = () => live(options.modal) ?? true
+    const dismissible = () => live(options.dismissible) ?? true
 
     return {
         open,
@@ -64,7 +63,7 @@ export function dialog(options: DialogOptions = {}): DialogParts {
             onclose: (event: Event) => {
                 const element = event.currentTarget as HTMLDialogElement
                 if (!element.open) open.set(false)
-                onclose?.(element.returnValue)
+                options.onclose?.(element.returnValue)
             },
             oncancel: (event: Event) => {
                 if (!dismissible()) event.preventDefault()

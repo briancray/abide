@@ -49,15 +49,11 @@ const parts = range({
     min: () => min,
     max: () => max,
     step: () => step,
-    // Accessors, so a prop that changes reaches the parts (33.5).
-    get labels() {
-        return labels
-    },
+    labels: () => labels,
+    name: () => name,
+    // An accessor, so a function prop that changes reaches the parts (49.13).
     get format() {
         return format
-    },
-    get name() {
-        return name
     },
 })
 </script>

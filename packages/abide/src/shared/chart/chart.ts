@@ -27,10 +27,12 @@ import {
 
 /** What `chart` draws and how. A value is read live where a function is given. */
 export type ChartOptions = {
+    /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
+    id?: string
     /** What the chart shows, as its accessible name: `'Won revenue by month'`. */
     label: Live<string>
     /** The series drawn, in order, the first at the back (52.24). */
-    series: () => readonly Series[]
+    series: Live<readonly Series[]>
     /** The x of each position, ascending: a time in epoch milliseconds, say. Indices by default. */
     x?: Live<readonly number[] | undefined>
     /** Writes an x for its tick and the readout: `format.date`, say. `format.number` by default. */
@@ -159,6 +161,8 @@ export type ChartReadout = {
 
 /** The parts `chart` hands back. Each list is read live; each part is spread onto an element of your own. */
 export type ChartParts = {
+    /** The base its parts' ids are derived from. */
+    readonly id: string
     /** The `<svg>`: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.70). */
     readonly svg: Record<string, unknown>
     /** The x of position `index`. */
@@ -208,7 +212,7 @@ const BAND = 0.8
 
 /** A chart over one pair of axes, as its geometry and the parts to draw it with. */
 export function chart(options: ChartOptions): ChartParts {
-    // Read as they are used, so options handed as accessors stay live (33.5).
+    // 49.13 — read where they are used.
     const xFormat = (value: number) => (options.xFormat ?? number)(value)
     const yFormat = (value: number) => (options.yFormat ?? number)(value)
     const size = reactive({
@@ -220,7 +224,7 @@ export function chart(options: ChartOptions): ChartParts {
     const measuredWidth = () => size.peek()?.width ?? 0
 
     const plot = reactive(() => {
-        const series = options.series()
+        const series = live(options.series)
         const normalize = live(options.normalize) === true
         const zero = live(options.zero) === true
         const bounds = live(options.bounds)
@@ -641,7 +645,8 @@ export function chart(options: ChartOptions): ChartParts {
         }
     }
     // Hydration runs setup again (41.6), and the chart's `aria-describedby` is bound to it.
-    const tipId = `chart-tip-${randomToken(4, 'hex')}`
+    const base = options.id ?? `chart-${randomToken(4, 'hex')}`
+    const tipId = `${base}-tip`
     const holdTip = (element: HTMLElement): Disposer =>
         watch(() => {
             const anchor = line()
@@ -677,6 +682,7 @@ export function chart(options: ChartOptions): ChartParts {
     const measure = observeSize(size)
 
     return {
+        id: base,
         svg: {
             'data-part': 'svg',
             get width() {

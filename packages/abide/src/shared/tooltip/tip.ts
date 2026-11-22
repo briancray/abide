@@ -2,6 +2,7 @@
 // the page: nothing is added beside the anchor, and one popover serves every hint on the page.
 
 import { dismissible } from '../dismissible.ts'
+import { live } from '../live.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { hints, type OpenTip, shown, type TooltipOptions } from './tips.ts'
 
@@ -20,7 +21,6 @@ export function tip(
     text: string,
     options: TooltipOptions = {},
 ): (anchor: Element) => Disposer {
-    const delay = options.delay ?? 300
     return (anchor) => {
         // 50.23 — the text describes its anchor with no element to point at.
         const description = anchor.getAttribute('aria-description')
@@ -54,7 +54,7 @@ export function tip(
         // names, a `Combobox` on those arrows and on typing — so there is no second caller to share it.
         const linger = (): void => {
             clearTimeout(timer)
-            timer = setTimeout(show, delay)
+            timer = setTimeout(show, live(options.delay) ?? 300)
         }
 
         anchor.addEventListener('mouseenter', linger)

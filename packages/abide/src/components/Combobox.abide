@@ -56,7 +56,7 @@ const {
 const box = combobox({
     id,
     options: () => options,
-    // Accessors, so a prop that changes reaches the parts (33.5); the id and debounce are fixed.
+    // Accessors, so a function prop that changes reaches the parts (49.13); the id and debounce are read once (49.13).
     get search() {
         return search
     },

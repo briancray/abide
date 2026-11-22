@@ -3,21 +3,23 @@
 // never writes (50.22), so a caller placing several reads every one before writing any, and one forced
 // layout pays for all of them.
 
+import { type Live, live } from './live.ts'
+
 /** A side of the anchor a floating element can sit on. */
 export type Side = 'top' | 'bottom' | 'left' | 'right'
 
 /** Where a floating element sits against its anchor, and how it is kept on screen. */
 export type PlaceOptions = {
-    /** The side tried first; the opposite one is taken where this one has no room and that one has more. Default `'bottom'`. */
-    side?: Side
-    /** Which edge of the anchor the floating element lines up with along that side: `'start'`, `'center'` or `'end'`. Default `'center'`. */
-    align?: 'start' | 'center' | 'end'
-    /** Pixels between the anchor and the floating element. Default `8`. */
-    offset?: number
-    /** Pixels the floating element keeps from the viewport's edges. Default `8`. */
-    margin?: number
-    /** 50.35 — pixels `arrow` keeps from each end of the floating element's facing edge, so an arrow clears its rounded corners. Default `0`. */
-    arrowInset?: number
+    /** The side tried first; the opposite one is taken where this one has no room and that one has more. Default `'bottom'`; a function is read at each placement. */
+    side?: Live<Side>
+    /** Which edge of the anchor the floating element lines up with along that side: `'start'`, `'center'` or `'end'`. Default `'center'`; a function is read at each placement. */
+    align?: Live<'start' | 'center' | 'end'>
+    /** Pixels between the anchor and the floating element. Default `8`; a function is read at each placement. */
+    offset?: Live<number>
+    /** Pixels the floating element keeps from the viewport's edges. Default `8`; a function is read at each placement. */
+    margin?: Live<number>
+    /** 50.35 — pixels `arrow` keeps from each end of the floating element's facing edge, so an arrow clears its rounded corners. Default `0`; a function is read at each placement. */
+    arrowInset?: Live<number>
 }
 
 /** Where `place` puts a floating element, in viewport pixels. */
@@ -48,14 +50,18 @@ export function place(
     floating: Element,
     options: PlaceOptions = {},
 ): Placement {
-    const { align = 'center', offset = 8, margin = 8, arrowInset = 0 } = options
+    // 49.13 — read at each placement.
+    const align = live(options.align) ?? 'center'
+    const offset = live(options.offset) ?? 8
+    const margin = live(options.margin) ?? 8
+    const arrowInset = live(options.arrowInset) ?? 0
     const at = anchor.getBoundingClientRect()
     const size = floating.getBoundingClientRect()
     const viewport = document.documentElement
     const width = viewport.clientWidth
     const height = viewport.clientHeight
 
-    let side = options.side ?? 'bottom'
+    let side = live(options.side) ?? 'bottom'
     const opposite = OPPOSITE[side]
     const needed =
         side === 'top' || side === 'bottom' ? size.height : size.width

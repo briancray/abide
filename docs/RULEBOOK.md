@@ -4984,6 +4984,12 @@ more than one element, or with data of its own, as a function of the item answer
 and data together; what a part reads that changes MUST be a `get` accessor, and no function among the parts
 MUST take an optional argument that changes what it answers, or take none to answer a value.
 
+49.12 Every option of a parts function that is a value — save a `Reactive` it binds, and one that
+takes a function of its own meaning — MUST take the value or a function answering it.
+
+49.13 A parts function MUST read each of its options where it uses it, save its `id`, a `multiple`,
+a `debounce`, a `rowHeight` and a size a measurement replaces, which it MUST read once.
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with

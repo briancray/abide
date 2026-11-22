@@ -4,7 +4,7 @@
 // tree as it stands before it hydrates.
 
 import { checkParts } from './checkParts.ts'
-import { itself, type KeyOption, type LabelOption } from './itemKey.ts'
+import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -12,6 +12,8 @@ import { roving, typeahead } from './roving.ts'
 
 /** The nodes, how each is told apart and named, and which are open and picked. */
 export type TreeOptions<Node> = {
+    /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
+    id?: string
     /** The top level's nodes, in the order they render; a function is read live. */
     roots: Live<readonly Node[]>
     /** A node's children, in order; none, or an empty list, for a leaf. */
@@ -37,6 +39,8 @@ export type TreeNode = {
 
 /** The parts `tree` hands back, each spread onto an element: `<li {...view.node(node).item}>`. */
 export type Tree<Node> = {
+    /** The base its parts' ids are derived from. */
+    readonly id: string
     /** The tree's attributes and its keyboard. */
     readonly tree: Record<string, unknown>
     /** One node's parts. */
@@ -59,10 +63,11 @@ type Placed = {
 
 /** WAI-ARIA's tree: nested nodes the keys rove and expand, as parts to spread. */
 export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
-    const { roots, children } = options
-    const key = itself<Node>(options.key)
-    const label = itself<Node>(options.label)
-    const rootsOf = () => live(roots)
+    // 49.13 — read where they are used.
+    const children = (node: Node) => options.children(node)
+    const key = (node: Node) => writtenBy(options.key, node)
+    const label = (node: Node) => writtenBy(options.label, node)
+    const rootsOf = () => live(options.roots)
     const expanded = options.expanded ?? reactive<readonly string[]>([])
     const selected = options.selected ?? reactive<string | undefined>(undefined)
     const typedTo = typeahead()
@@ -111,7 +116,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
         return shown[0]
     })
 
-    const base = `tree-${randomToken(4, 'hex')}`
+    const base = options.id ?? `tree-${randomToken(4, 'hex')}`
     const itemId = (each: string) => `${base}-${encodeURIComponent(each)}`
     if (process.env.NODE_ENV !== 'production') checkParts('tree', base)
     const focus = (each: string): void => {
@@ -239,6 +244,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
     }
 
     return {
+        id: base,
         tree: root,
         node: (node) => {
             const each = key(node)

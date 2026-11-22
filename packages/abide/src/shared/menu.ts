@@ -5,6 +5,7 @@
 
 import { anchored } from './anchored.ts'
 import { checkParts } from './checkParts.ts'
+import { type Live, live } from './live.ts'
 import type { Side } from './place.ts'
 import type { PopoverOptions } from './popover.ts'
 import { randomToken } from './randomToken.ts'
@@ -13,12 +14,14 @@ import { openingEnd, roving, typeahead } from './roving.ts'
 
 /** Where a menu opens against its trigger, placed as a `popover` is, and what hears it open and close. */
 export type MenuOptions = Omit<PopoverOptions, 'align' | 'offset'> & {
+    /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
+    id?: string
     /** Whether the menu is open: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. */
     open?: Reactive<boolean>
-    /** Which edge of the trigger the menu lines up with. Default `'start'`. */
-    align?: 'start' | 'center' | 'end'
-    /** Pixels between the trigger and the menu. Default `4`. */
-    offset?: number
+    /** Which edge of the trigger the menu lines up with. Default `'start'`; a function is read at each placement. */
+    align?: Live<'start' | 'center' | 'end'>
+    /** Pixels between the trigger and the menu. Default `4`; a function is read at each placement. */
+    offset?: Live<number>
     /** 50.37 — called each time the menu opens. */
     onopen?: () => void
     /** 50.37 — called each time the menu closes, however it closed. */
@@ -27,6 +30,8 @@ export type MenuOptions = Omit<PopoverOptions, 'align' | 'offset'> & {
 
 /** The two parts `menu` hands back, each spread onto an element: `<button {...actions.trigger}>`. */
 export type Menu = {
+    /** The base its parts' ids are derived from. */
+    readonly id: string
     /** The trigger's attributes and listeners. */
     readonly trigger: Record<string, unknown>
     /** The menu's attributes and listeners; its children carrying a menu item role are its items. */
@@ -41,19 +46,20 @@ const ITEM =
 
 /** WAI-ARIA's menu button: a trigger and the menu it opens, as two parts to spread. */
 export function menu(options: MenuOptions = {}): Menu {
-    const { side = 'bottom', onopen, onclose } = options
-    // Every placement option a `popover` takes, under a menu's own defaults (50.19-50.21).
+    // 49.13 — read where they are used: every placement option a `popover` takes, under a
+    // menu's own defaults (50.19-50.21), at each placement.
+    const side = () => live(options.side) ?? 'bottom'
     const placing = {
         ...options,
         side,
-        align: options.align ?? 'start',
-        offset: options.offset ?? 4,
+        align: () => live(options.align) ?? 'start',
+        offset: () => live(options.offset) ?? 4,
     }
     const open = options.open ?? reactive(false)
-    const placed = reactive<Side>(side)
+    const placed = reactive<Side>(side())
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the two
     // ids are rewritten together.
-    const menuId = `menu-${randomToken(4, 'hex')}`
+    const menuId = options.id ?? `menu-${randomToken(4, 'hex')}`
     const triggerId = `${menuId}-trigger`
     if (process.env.NODE_ENV !== 'production') checkParts('menu', menuId)
     const triggerOf = () => document.getElementById(triggerId)
@@ -95,13 +101,13 @@ export function menu(options: MenuOptions = {}): Menu {
             if (!open.peek()) open.set(true)
             const listed = items()
             listed[focusOnOpen === 'first' ? 0 : listed.length - 1]?.focus()
-            onopen?.()
+            options.onopen?.()
             return
         }
         stop?.()
         stop = undefined
         if (open.peek()) open.set(false)
-        onclose?.()
+        options.onclose?.()
     }
 
     // 50.37 — `open` written by the app opens and closes the popover.
@@ -186,5 +192,5 @@ export function menu(options: MenuOptions = {}): Menu {
         },
     }
 
-    return { trigger, menu: list, open }
+    return { id: menuId, trigger, menu: list, open }
 }

@@ -24,9 +24,10 @@ export type LabelOption<Item> = [Item] extends [string | number]
           label: (item: Item) => string
       }
 
-/** The function given, or the item written as itself. */
-export function itself<Item>(
+/** `item` as the function given writes it, or as itself where none is given — read each call (49.13). */
+export function writtenBy<Item>(
     given: ((item: Item) => string) | undefined,
-): (item: Item) => string {
-    return given ?? ((item) => String(item))
+    item: Item,
+): string {
+    return given === undefined ? String(item) : given(item)
 }

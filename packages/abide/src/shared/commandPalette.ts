@@ -32,11 +32,11 @@ export type CommandPaletteOptions = {
     /** Whether the palette is showing: a `Reactive` to open it from a button of the app's own. One of the palette's own by default. */
     open?: Reactive<boolean>
     /** The binding that opens and shuts it, as `hotkeys` reads one. `'mod+k'` by default. */
-    hotkey?: string
+    hotkey?: Live<string>
     /** The base the input's, the list's and each option's ids are derived from; unique on the page. */
     id?: string
     /** The palette's accessible name. `'Commands'` by default. */
-    label?: string
+    label?: Live<string>
 }
 
 /** One command's parts: its option, and the label and the key written in it. */
@@ -51,6 +51,8 @@ export type CommandParts = {
 
 /** The parts `commandPalette` hands back, each spread onto an element: `<input {...palette.input} />`. */
 export type CommandPaletteParts = {
+    /** The base its parts' ids are derived from. */
+    readonly id: string
     /** The `<dialog>`: `dialog`'s part, opened modal by `open`, and the palette's accessible name. */
     readonly dialog: Record<string, unknown>
     /** The search input: a combobox naming the active command, and its typing and keys. */
@@ -72,9 +74,8 @@ export function commandPalette(
     options: CommandPaletteOptions,
 ): CommandPaletteParts {
     const { commands, id = `palette-${randomToken(4, 'hex')}` } = options
-    // Read as they are used, so options handed as accessors stay live (33.5); the id is the
-    // ids' base, fixed for the life of the parts.
-    const label = () => options.label ?? 'Commands'
+    // 49.13 — read where they are used; the id is the ids' base, fixed for the life of the parts.
+    const label = () => live(options.label) ?? 'Commands'
     const open = options.open ?? reactive(false)
     const commandsOf = () => live(commands)
     const inputId = `${id}-input`
@@ -115,7 +116,7 @@ export function commandPalette(
     watch(() => {
         if (typeof window === 'undefined') return
         const keys = hotkeys({
-            [options.hotkey ?? 'mod+k']: {
+            [live(options.hotkey) ?? 'mod+k']: {
                 run: () => open.set(!open.peek()),
                 editable: true,
             },
@@ -135,6 +136,7 @@ export function commandPalette(
     )
 
     return {
+        id: id,
         dialog: shown,
         input: {
             id: inputId,

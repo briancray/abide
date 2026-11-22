@@ -4,7 +4,7 @@
 // that is mixed while some rows are picked. The app writes every cell.
 
 import type { Column } from './Column.ts'
-import { itself, type KeyOption } from './itemKey.ts'
+import { type KeyOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Sort } from './Sort.ts'
@@ -71,7 +71,8 @@ export type SortableTableParts<Row> = {
 export function sortableTable<Row>(
     options: SortableTableOptions<Row>,
 ): SortableTableParts<Row> {
-    const key = itself<Row>(options.key)
+    // 49.13 — read where it is used.
+    const key = (row: Row) => writtenBy(options.key, row)
     const sort = options.sort ?? reactive<Sort | undefined>(undefined)
     const selected =
         options.selected ?? reactive<readonly string[] | undefined>(undefined)

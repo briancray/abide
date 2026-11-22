@@ -318,11 +318,11 @@ test('every option an app binds is optional and handed back, and every id is mad
     )
 })
 
-// 33.5 — AN OPTION HANDED AS AN ACCESSOR STAYS LIVE: a shipped component hands its props over as
+// 33.5, 49.13 — AN OPTION HANDED AS AN ACCESSOR STAYS LIVE: a shipped component hands its props over as
 // accessors, and the parts read them as they are used, so a prop that changes after mount reaches
 // the markup. THE REVERT: destructure `labels` in `range` (or `label` in `commandPalette`, or `key` in
 // `combobox`) at setup -> the old value stays.
-test('options handed as accessors are read as they are used — 33.5', () => {
+test('options handed as accessors are read as they are used — 33.5, 49.13', () => {
     let labels: readonly [string, string] = ['Least', 'Most']
     let named = 'Commands'
     let keyOf = (item: string) => item
@@ -360,4 +360,61 @@ test('options handed as accessors are read as they are used — 33.5', () => {
     expect(before.slice(0, 2)).toEqual(['Least', 'Commands'])
     expect(after.slice(0, 2)).toEqual(['Floor', 'Actions'])
     expect(after[2]).not.toBe(before[2])
+})
+
+// 49.10 — EVERY PARTS FUNCTION THAT WRITES IDS TAKES ONE, and hands it back. THE REVERT: make `menu`'s id
+// alone and ignore the option -> 'menu' answers its own id where 'given-menu' is due.
+test('every parts function that writes ids takes the id given and hands it back — 49.10', () => {
+    const made: Record<string, { id: string }> = {
+        listbox: listbox({ id: 'given-listbox', options: ['a'] }),
+        combobox: combobox({ id: 'given-combobox', options: ['a'] }),
+        commandPalette: commandPalette({
+            id: 'given-commandPalette',
+            commands: [COMMAND],
+        }),
+        tabs: tabs({ id: 'given-tabs', keys: ['a'] }),
+        tree: tree<string>({
+            id: 'given-tree',
+            roots: ['a'],
+            children: () => undefined,
+        }),
+        range: range({ id: 'given-range', label: 'Amount' }),
+        menu: menu({ id: 'given-menu' }),
+        chart: chart({ id: 'given-chart', label: 'Won', series: [] }),
+    }
+    const wrong: string[] = []
+    for (const [name, parts] of Object.entries(made))
+        if (parts.id !== `given-${name}`) wrong.push(`${name}: ${parts.id}`)
+    expect(wrong).toEqual([])
+})
+
+// 49.12 — A VALUE OPTION TAKES THE VALUE ITSELF as well as a function answering it: a list handed as a
+// constant is listed. THE REVERT: call `options` as a function in `listbox` -> it throws on the array.
+test('a value option takes the value itself or a function answering it — 49.12', () => {
+    const constant = listbox({ options: ['a', 'b'] })
+    const answered = listbox({ options: () => ['a', 'b'] })
+    expect([constant.active, answered.active]).toEqual(['a', 'a'])
+})
+
+// 49.12 — A FUNCTION THAT ANSWERS NOTHING TAKES THE DEFAULT, as the option left out does: a component
+// hands an unset prop over as `() => prop`. THE REVERT: apply the default before the read
+// (`live(options.labels ?? DEFAULT_LABELS)`) -> the thumb's name throws on undefined.
+test('an option answering undefined takes its default, as one left out does — 49.12', () => {
+    const unset = (): undefined => undefined
+    const slider = range({
+        label: 'Amount',
+        labels: unset as never,
+        min: unset as never,
+        max: unset as never,
+    })
+    const palette = commandPalette({
+        commands: [COMMAND],
+        label: unset as never,
+    })
+    expect([
+        slider.end(0).thumb['aria-label'],
+        slider.end(0).thumb['aria-valuemin'],
+        slider.end(1).thumb['aria-valuemax'],
+        palette.listbox['aria-label'],
+    ]).toEqual(['Minimum', 0, 100, 'Commands'])
 })

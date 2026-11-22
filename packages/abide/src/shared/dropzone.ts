@@ -2,6 +2,7 @@
 // input, filtered as a file input filters, as parts an app spreads onto a host and an input of its own.
 
 import { filesOf } from './filesOf.ts'
+import { type Live, live } from './live.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 /** What `dropzone` takes, and what hears it. */
@@ -14,10 +15,10 @@ export type DropzoneOptions = {
      * by default.
      */
     accept?: string | ((data: DataTransfer | null) => File[])
-    /** Whether a paste of files into the host is taken as a drop. `false` by default. */
-    paste?: boolean
-    /** Whether more than the first accepted file is taken. `true` by default. */
-    multiple?: boolean
+    /** Whether a paste of files into the host is taken as a drop. `false` by default; a function is read live. */
+    paste?: Live<boolean>
+    /** Whether more than the first accepted file is taken. `true` by default; a function is read live. */
+    multiple?: Live<boolean>
     /** 49.10 — the files taken last, to read, clear or bind; one of the parts' own by default. */
     files?: Reactive<readonly File[]>
     /** Handed the files a drop, a paste or a pick took, where it took any. */
@@ -45,18 +46,15 @@ export type DropzoneParts = {
  * @param options which files are taken, whether a paste is a drop, and what hears the files
  */
 export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
-    const {
-        accept = '',
-        paste = false,
-        multiple = true,
-        onfiles,
-        onreject,
-    } = options
-    const select =
-        typeof accept === 'function' ? accept : acceptedBy(acceptOf(accept))
+    // 49.13 — read where they are used.
+    const multiple = () => live(options.multiple) ?? true
     const taken = (data: DataTransfer | null): File[] => {
-        const files = select(data)
-        return multiple || files.length < 2 ? files : files.slice(0, 1)
+        const accept = options.accept ?? ''
+        const files =
+            typeof accept === 'function'
+                ? accept(data)
+                : acceptedBy(acceptOf(accept))(data)
+        return multiple() || files.length < 2 ? files : files.slice(0, 1)
     }
     const files = options.files ?? reactive<readonly File[]>([])
     const turnedAway = reactive<readonly File[]>([])
@@ -76,10 +74,10 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
             else unmatched.splice(at, 1)
         }
         turnedAway.set(away)
-        if (away.length > 0) onreject?.(away, event)
+        if (away.length > 0) options.onreject?.(away, event)
         if (kept.length > 0) {
             files.set(kept)
-            onfiles?.(kept, event)
+            options.onfiles?.(kept, event)
         }
         return kept
     }
@@ -111,22 +109,28 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
         get 'data-dragging'() {
             return entered() > 0 ? '' : undefined
         },
-        'data-part': 'host',
-    }
-    if (paste)
-        host.onpaste = (event: ClipboardEvent) => {
-            // Words pasted alone paste as they always do.
+        // Words pasted alone paste as they always do, and so does everything where `paste` is off.
+        onpaste: (event: ClipboardEvent) => {
+            if (!(live(options.paste) ?? false)) return
             if (took(event.clipboardData, event).length > 0)
                 event.preventDefault()
-        }
+        },
+        'data-part': 'host',
+    }
 
     // 53.60 — a pick through the input is taken as a drop is, and the input emptied after, so the
     // same file picked again is a pick again and what shows is `files`.
     const input: Record<string, unknown> = {
         type: 'file',
-        accept:
-            typeof accept === 'string' && accept !== '' ? accept : undefined,
-        multiple,
+        get accept() {
+            const accept = options.accept
+            return typeof accept === 'string' && accept !== ''
+                ? accept
+                : undefined
+        },
+        get multiple() {
+            return multiple()
+        },
         onchange: (event: Event) => {
             const picker = event.currentTarget as HTMLInputElement
             const transfer = new DataTransfer()

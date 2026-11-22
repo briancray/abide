@@ -52,7 +52,7 @@ const CENTER = SIZE / 2
 
 /** Shares of a whole as the slices of a pie or a donut, as parts to spread. */
 export function pie(options: PieOptions): PieParts {
-    // Read as it is used, so an option handed as an accessor stays live (33.5).
+    // 49.13 — read where it is used.
     const valueFormat = (value: number) =>
         (options.valueFormat ?? number)(value)
     // A slice's hint binding, kept while its words stand, so a sweep that eases binds nothing again.

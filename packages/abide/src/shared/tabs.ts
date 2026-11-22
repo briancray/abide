@@ -11,6 +11,8 @@ import { roving } from './roving.ts'
 
 /** The tabs, and the one selected. */
 export type TabsOptions = {
+    /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
+    id?: string
     /** The tabs' keys, in the order they render; a function is read live. */
     keys: Live<readonly string[]>
     /** The selected tab's key, where the app holds it: a `Reactive` to read and set the pick. Held by the parts, and handed back as `selected`, where none is given. A key no tab has selects the first. */
@@ -27,6 +29,8 @@ export type TabParts = {
 
 /** The parts `tabs` hands back, each spread onto an element: `<button {...view.tab('notes').button}>`. */
 export type Tabs = {
+    /** The base its parts' ids are derived from. */
+    readonly id: string
     /** The tab list's attributes and its keyboard. */
     readonly list: Record<string, unknown>
     /** One tab's parts. */
@@ -51,7 +55,7 @@ export function tabs(options: TabsOptions): Tabs {
     })
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids
     // are rewritten together.
-    const base = `tabs-${randomToken(4, 'hex')}`
+    const base = options.id ?? `tabs-${randomToken(4, 'hex')}`
     const tabId = (key: string) => `${base}-tab-${encodeURIComponent(key)}`
     const panelId = (key: string) => `${base}-panel-${encodeURIComponent(key)}`
     if (process.env.NODE_ENV !== 'production') checkParts('tabs', base)
@@ -135,5 +139,5 @@ export function tabs(options: TabsOptions): Tabs {
         () => current(),
         (key: string | undefined) => picked.set(key),
     )
-    return { list, tab, panel, selected }
+    return { id: base, list, tab, panel, selected }
 }

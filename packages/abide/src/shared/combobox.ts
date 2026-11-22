@@ -4,8 +4,9 @@
 // `listbox` the input's keys move through, opened in the top layer against the input as `popover`
 // opens one. Bound to an array, it picks many: each pick adds an item or takes it out again.
 
-import type { KeyOption, LabelOption } from './itemKey.ts'
+import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { listbox } from './listbox.ts'
+import { type Live, live } from './live.ts'
 import { popover } from './popover.ts'
 import { randomToken } from './randomToken.ts'
 import { busy, type Reactive, reactive, watch } from './reactive/index.ts'
@@ -22,8 +23,8 @@ export type Picked<Item, Multiple extends boolean> = Multiple extends true
 export type ComboboxOptions<Item, Multiple extends boolean = false> = {
     /** The input's id, for a `<label for>`; the list's and each option's ids are derived from it. One is made where none is given. */
     id?: string
-    /** The items to pick from, narrowed to those whose label holds what was typed: read live. */
-    options?: () => readonly Item[]
+    /** The items to pick from, narrowed to those whose label holds what was typed; a function is read live. */
+    options?: Live<readonly Item[]>
     /** Finds the items for what was typed, in place of narrowing `options`: a handler call, or any async function. */
     search?(
         query: string,
@@ -90,12 +91,10 @@ export function combobox<Item, Multiple extends boolean = false>(
 ): ComboboxParts<Item, Multiple> {
     const { debounce } = options
     const id = options.id ?? `combobox-${randomToken(4, 'hex')}`
-    // Read as they are used, so options handed as accessors stay live (33.5). The id, the debounce
-    // and whether it picks many are fixed for the life of the parts.
-    const key = (item: Item) =>
-        options.key === undefined ? String(item) : options.key(item)
-    const label = (item: Item) =>
-        options.label === undefined ? String(item) : options.label(item)
+    // 49.13 — read where they are used; the id, the debounce and whether it picks many are
+    // fixed for the life of the parts.
+    const key = (item: Item) => writtenBy(options.key, item)
+    const label = (item: Item) => writtenBy(options.label, item)
     const many = options.multiple === true
     const value = (options.value ??
         (many
@@ -131,7 +130,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             if (search !== undefined) return search(text)
             const lowered = text.toLowerCase()
             const kept: Item[] = []
-            for (const item of options.options?.() ?? NOTHING)
+            for (const item of live(options.options) ?? NOTHING)
                 if (label(item).toLowerCase().includes(lowered)) kept.push(item)
             return kept
         },

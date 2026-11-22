@@ -53,7 +53,7 @@ export function host(options: ToastsHostOptions = {}): ToastsHost {
             'data-part': 'region',
             'aria-live': 'polite',
             get 'aria-label'() {
-                return live(options.label ?? 'Notices')
+                return live(options.label) ?? 'Notices'
             },
         },
         get notices() {

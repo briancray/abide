@@ -30,7 +30,7 @@ const {
     } & Omit<Attributes<'svg'>, 'values'>
 >()
 
-// The function props as accessors, so one that arrives or changes after mount reaches the pie (33.5).
+// The function props as accessors, so one that arrives or changes after mount reaches the pie (49.13).
 const ring = pie({
     slices: () => slices,
     label: () => label,

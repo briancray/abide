@@ -12,6 +12,8 @@ import { scrub, type ScrubPosition } from './scrub.ts'
 
 /** The range picked, and the scale it is picked on. */
 export type RangeOptions = {
+    /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
+    id?: string
     /** The low and the high end of the range picked, where the app holds them: a `Reactive` to read and set. Held by the parts, from `min` to `max`, and handed back as `value`, where none is given. */
     value?: Reactive<readonly [number, number]>
     /** What the range is of, as the group's accessible name: `'Deal amount'`. */
@@ -22,12 +24,12 @@ export type RangeOptions = {
     max?: Live<number>
     /** How far apart the values a thumb stops at are, from `min`. 1 by default. */
     step?: Live<number>
-    /** Each thumb's accessible name, low then high. `['Minimum', 'Maximum']` by default. */
-    labels?: readonly [string, string]
+    /** Each thumb's accessible name, low then high. `['Minimum', 'Maximum']` by default; a function is read live. */
+    labels?: Live<readonly [string, string]>
     /** Writes a value for the thumb's `aria-valuetext`: `format.money`, say. `format.number` by default. */
     format?: (value: number) => string
-    /** The name each end is submitted under by `input`, low then high (51.98). */
-    name?: string
+    /** The name each end is submitted under by `input`, low then high (51.98); a function is read live. */
+    name?: Live<string | undefined>
 }
 
 /** One end's parts, low (`0`) or high (`1`): its thumb, and the hidden field submitting it. */
@@ -40,6 +42,8 @@ export type RangeEnd = {
 
 /** The parts `range` hands back, each spread onto an element: `<span {...amount.end(0).thumb} />`. */
 export type RangeParts = {
+    /** The base its parts' ids are derived from. */
+    readonly id: string
     /** The group's role, name and `data-dragging`. */
     readonly root: Record<string, unknown>
     /** The track's pointer handling: a press takes the nearer thumb and drags it. */
@@ -56,12 +60,13 @@ const DEFAULT_LABELS = ['Minimum', 'Maximum'] as const
 
 /** WAI-ARIA's multi-thumb slider: a low and a high value on one track, as parts to spread. */
 export function range(options: RangeOptions): RangeParts {
-    // Read as they are used, so options handed as accessors stay live (33.5).
-    const labelOf = (which: 0 | 1) => (options.labels ?? DEFAULT_LABELS)[which]
+    // 49.13 — read where they are used.
+    const labelOf = (which: 0 | 1) =>
+        (live(options.labels) ?? DEFAULT_LABELS)[which]
     const format = (each: number) => (options.format ?? number)(each)
-    const min = () => live(options.min ?? 0)
-    const max = () => live(options.max ?? 100)
-    const step = () => live(options.step ?? 1)
+    const min = () => live(options.min) ?? 0
+    const max = () => live(options.max) ?? 100
+    const step = () => live(options.step) ?? 1
     const value =
         options.value ?? reactive<readonly [number, number]>([min(), max()])
 
@@ -121,7 +126,7 @@ export function range(options: RangeOptions): RangeParts {
 
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids are
     // rewritten together.
-    const base = `range-${randomToken(4, 'hex')}`
+    const base = options.id ?? `range-${randomToken(4, 'hex')}`
     const thumbId = (which: number) => `${base}-${which}`
     if (process.env.NODE_ENV !== 'production') checkParts('range', base)
 
@@ -170,6 +175,7 @@ export function range(options: RangeOptions): RangeParts {
     const letGo = () => dragging.set(-1)
 
     return {
+        id: base,
         value,
         root: {
             role: 'group',
@@ -232,7 +238,7 @@ export function range(options: RangeOptions): RangeParts {
                 type: 'hidden',
                 'data-part': 'input',
                 get name() {
-                    return options.name
+                    return live(options.name)
                 },
                 get value() {
                     return value()[which]

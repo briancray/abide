@@ -43,7 +43,10 @@ const {
 const table = sortableTable({
     rows: () => rows,
     columns: () => columns,
-    key,
+    // An accessor, so a function prop that changes reaches the parts (49.13).
+    get key() {
+        return key
+    },
     sort: reactiveOver(
         () => sort,
         (next) => {
