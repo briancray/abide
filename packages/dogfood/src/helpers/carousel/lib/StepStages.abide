@@ -1,0 +1,19 @@
+<script>
+import { carousel } from '@abide/abide'
+
+const STAGES = ['lead', 'qualified', 'proposal', 'won']
+const stages = carousel({ items: STAGES })
+</script>
+
+<div class="row">
+    <button {...stages.previous}>Back</button>
+    <ul {...stages.host} aria-label="Stages"
+        class="flex snap-x snap-mandatory gap-snug overflow-x-auto">
+        {#for name of STAGES by name}
+            <li {...stages.item(name)}
+                class="shrink-0 basis-3/4 snap-center p-snug">{name}</li>
+        {/for}
+    </ul>
+    <button {...stages.next}>Forward</button>
+</div>
+<button onclick={stages.reset}>Back to the start</button>

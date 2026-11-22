@@ -1016,6 +1016,14 @@ type Reached = { readonly [REACHED]: true }
 | `VirtualListSection` | `{ label: string; index: number }` | One section: its label, and the index of its first item, or `-1` where it has none. | 51.71 |
 | `VirtualListSections` | `{ readonly host: Record<string, unknown>; get all(): readonly VirtualListSection[]; get current(): string \| undefined; jump(section: VirtualListSection): Record<string, unknown> }` | The jump index: its host, every section, the one in view, and a section's jump. | 51.71, 51.102, 51.103, 49.11 |
 
+## `carousel`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centres, as parts an app spreads onto a scroller, its items and a button either side. | 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 53.71, 53.72, 53.73, 32.99, 49.4, 49.8 |
+| `CarouselOptions` | `<Item>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; label?: (item: Item) => string; selected?: Reactive<string \| undefined>; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how each is told apart and named, the key of the one the carousel rests on, and how a scroll to an item moves. | 53.64, 53.65, 53.71, 49.10, 49.12, 49.13 |
+| `Carousel` | `<Item>{ readonly id: string; readonly host: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; get centred(): string \| undefined; readonly selected: Reactive<string \| undefined>; scrollTo(key: string): void; reset(): void }` | The scroller's part, an item's part, the two buttons' parts, the key of the item centred, the key it rests on, and what scrolls to an item and back. | 53.66, 53.70, 53.71, 53.72, 49.4, 49.10, 49.11 |
+
 ## `sortBy`
 
 | Name | Signature | Meaning | Rules |

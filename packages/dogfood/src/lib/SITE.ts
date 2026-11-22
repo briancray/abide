@@ -630,6 +630,12 @@ const WRITTEN: readonly {
                     'Render only the items of a long list or grid that are in view, measured from your own markup, with a jump to each section.',
             },
             {
+                route: '/helpers/carousel',
+                title: '`carousel`',
+                description:
+                    'Swipe through records in a row that snaps to each one, resting on the one picked and saying which is centred as you scroll.',
+            },
+            {
                 route: '/helpers/hotkeys',
                 title: '`hotkeys`',
                 description:

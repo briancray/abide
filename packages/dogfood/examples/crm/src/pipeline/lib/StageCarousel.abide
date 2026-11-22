@@ -1,0 +1,29 @@
+<script>
+import { carousel, reactive } from '@abide/abide'
+
+import { STAGES } from './STAGES.ts'
+
+// The stage the deal is at: where the carousel rests.
+let stage = reactive<string | undefined>('qualified')
+const stages = carousel({ items: STAGES, selected: stage })
+</script>
+
+<div class="row">
+    <button {...stages.previous} aria-label="Previous stage">‹</button>
+    <ul {...stages.host} aria-label="Stages"
+        class="flex snap-x snap-mandatory gap-snug overflow-x-auto">
+        {#for name of STAGES by name}
+            <li {...stages.item(name)} class="shrink-0 basis-3/4 snap-center
+                rounded-md border border-rule p-snug data-centred:border-signal">
+                <button onclick={() => (stage = name)}>Move to {name}</button>
+            </li>
+        {/for}
+    </ul>
+    <button {...stages.next} aria-label="Next stage">›</button>
+</div>
+
+<ul class="fields">
+    <li><span>at</span><strong>{stage}</strong></li>
+    <li><span>centred</span><strong>{stages.centred}</strong></li>
+</ul>
+<button onclick={stages.reset}>Back to {stage}</button>

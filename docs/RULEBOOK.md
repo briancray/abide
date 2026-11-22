@@ -5932,6 +5932,38 @@ true again.
 53.63 `FollowBottom`'s `toBottom` MUST scroll the `host` to its bottom as `behavior` names, and MUST
 set `following` to true.
 
+53.64 `carousel` MUST rest on the item `selected` names, and on its first item where `selected` names
+none of them.
+
+53.65 `carousel`'s `host` MUST scroll the item the carousel rests on to its centre at once when it is
+bound, and as `behavior` names whenever the item it rests on changes after.
+
+53.66 `Carousel`'s `centred` MUST be the key of the item the carousel rests on, until a scroll of the
+`host`, `scrollTo` or `reset` sets it, and again whenever the item it rests on changes.
+
+53.67 A scroll of `carousel`'s `host` MUST set `centred` to the key of the item whose centre is nearest
+the host's centre, measured at most once a frame, save where 53.69 sets it.
+
+53.68 While a scroll `scrollTo`, `reset` or a change of the item `carousel` rests on started is on its
+way, what the `host`'s scrolling passes MUST NOT set `centred`, until it reaches that item or a
+`scrollend` arrives.
+
+53.69 Once `carousel`'s `host` has dispatched a `scrollsnapchanging` or a `scrollsnapchange`,
+`centred` MUST be set from those events alone, to the key of the item whose element is, holds or is
+held by the event's snap target.
+
+53.70 `carousel`'s `previous` and `next` MUST scroll to the item before and the item after the centred
+one as `scrollTo` does, and MUST be disabled where there is no such item.
+
+53.71 `Carousel`'s `scrollTo` MUST set `centred` to the key it is handed and scroll that key's item to
+the `host`'s centre as `behavior` names, and `reset` MUST do so for the item the carousel rests on.
+
+53.72 `carousel`'s `item` MUST carry `data-centred` while it is centred, and `data-selected` while
+`selected` names it.
+
+53.73 `carousel`'s `host` MUST carry `role="region"` and `aria-roledescription="carousel"`, and its
+`item` MUST carry `role="group"`, `aria-roledescription="slide"` and its label as `aria-label`.
+
 # 54. Guards, fetches and jobs
 
 ## Rungs

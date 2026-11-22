@@ -9,6 +9,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { POST } from '#server'
 import { addressed } from '#server/addressed.ts'
 import {
+    type Carousel,
+    carousel,
     chart,
     type ChartParts,
     combobox,
@@ -141,6 +143,7 @@ test('every part is a member, a function of its item, or an action — 49.11', (
     shaped<AnnouncerHost>()
     shaped<VirtualList<number>>()
     shaped<VirtualListSections>()
+    shaped<Carousel<string>>()
     expect(true).toBe(true)
 })
 
@@ -174,6 +177,7 @@ function elementParts(): Record<string, unknown> {
     const regions = standing(() => announce.host())
     const long = virtualList({ items: [1, 2, 3] })
     const keys = listbox({ options: ['a'] })
+    const slides = carousel({ items: ['a', 'b'] })
     const toast = {
         id: 1,
         text: 'Saved',
@@ -268,6 +272,10 @@ function elementParts(): Record<string, unknown> {
         'announce.host.polite': regions.polite,
         'announce.host.assertive': regions.assertive,
         'virtualList.host': long.host,
+        'carousel.host': slides.host,
+        'carousel.item': slides.item('a'),
+        'carousel.previous': slides.previous,
+        'carousel.next': slides.next,
         'virtualList.item': long.item({ item: 1, index: 0, key: '1' }),
         'virtualList.sections.host': long.sections.host,
         'virtualList.sections.jump': long.sections.jump({
@@ -315,6 +323,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     const keys = listbox({ options: () => ['a'] })
     const drop = dropzone()
     const follow = followBottom()
+    const slides = carousel({ items: ['a', 'b'] })
     const handed: Record<string, unknown> = {
         'tabs.selected': view.selected,
         'menu.open': opener.open,
@@ -328,6 +337,7 @@ test('every option an app binds is optional and handed back, and every id is mad
         'dialog.open': modal.open,
         'dropzone.files': drop.files,
         'followBottom.following': follow.following,
+        'carousel.selected': slides.selected,
     }
     const missing: string[] = []
     for (const [name, value] of Object.entries(handed))
@@ -413,6 +423,7 @@ test('every parts function that writes ids takes the id given and hands it back 
         range: range({ id: 'given-range', label: 'Amount' }),
         menu: menu({ id: 'given-menu' }),
         chart: chart({ id: 'given-chart', label: 'Won', series: [] }),
+        carousel: carousel({ id: 'given-carousel', items: ['a'] }),
     }
     const wrong: string[] = []
     for (const [name, parts] of Object.entries(made))
