@@ -5,10 +5,18 @@ import Section from '#src/lib/Section.abide'
 
 import CheckBeforeSending from './lib/CheckBeforeSending.abide'
 import checkBeforeSending from './lib/CheckBeforeSending.abide' with { type: 'text' }
+import MarkWhatChanged from './lib/MarkWhatChanged.abide'
+import markWhatChanged from './lib/MarkWhatChanged.abide' with { type: 'text' }
 import RefusedByTheServer from './lib/RefusedByTheServer.abide'
 import refusedByTheServer from './lib/RefusedByTheServer.abide' with { type: 'text' }
+import SavedIsTheNewStart from './lib/SavedIsTheNewStart.abide'
+import savedIsTheNewStart from './lib/SavedIsTheNewStart.abide' with { type: 'text' }
+import UndoAnEdit from './lib/UndoAnEdit.abide'
+import undoAnEdit from './lib/UndoAnEdit.abide' with { type: 'text' }
 import WaitOnTheCall from './lib/WaitOnTheCall.abide'
 import waitOnTheCall from './lib/WaitOnTheCall.abide' with { type: 'text' }
+import WhatASaveChanges from './lib/WhatASaveChanges.abide'
+import whatASaveChanges from './lib/WhatASaveChanges.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -39,6 +47,22 @@ import waitOnTheCall from './lib/WaitOnTheCall.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/deals/lib/NewDeal.test.ts',
             from: ["test('the form posts to the handler where no script runs'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/EditDeal.test.ts',
+            from: [
+                "test('an edit marks the field it changed and the deal unsaved'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/EditDeal.test.ts',
+            from: ["test('undo puts the deal back as it opened'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/EditDeal.test.ts',
+            from: [
+                "test('a save makes what was saved the deal an undo goes back to'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Check a new deal before it is sent">
@@ -60,5 +84,30 @@ import waitOnTheCall from './lib/WaitOnTheCall.abide' with { type: 'text' }
         <p><code>submit</code> is disabled while the call is in flight, and a second submit makes
             no second call.</p>
         <Example code={waitOnTheCall}><WaitOnTheCall /></Example>
+    </Section>
+
+    <Section level={3} title="Mark the fields an edit changed">
+        <p>A field's baseline is the value the page renders it with. A field typed away from it
+            carries <code>data-changed</code>, and the form reads <code>dirty</code> until every
+            field is back. A field rendered with no value and one cleared are the same.</p>
+        <Example code={markWhatChanged}><MarkWhatChanged /></Example>
+    </Section>
+
+    <Section level={3} title="Undo an edit back to the deal as it opened">
+        <p><code>reset</code> is a reset button, disabled until something differs. It works
+            with no script, since the browser's own reset restores the rendered values.</p>
+        <Example code={undoAnEdit}><UndoAnEdit /></Example>
+    </Section>
+
+    <Section level={3} title="Start again from what was saved">
+        <p>Once a save is answered, what it sent is the new baseline: the form reads clean, and
+            Undo goes back to the saved name. A refused save moves nothing.</p>
+        <Example code={savedIsTheNewStart}><SavedIsTheNewStart /></Example>
+    </Section>
+
+    <Section level={3} title="See what a save would change">
+        <p><code>changes</code> holds the args a submit would send, only those whose field
+            differs, coerced as the call would carry them.</p>
+        <Example code={whatASaveChanges}><WhatASaveChanges /></Example>
     </Section>
 </Doc>

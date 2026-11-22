@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 
 import { POST } from '#server'
 import { addressed } from '#server/addressed.ts'
-import { flushSync, form, refuse } from '#shared'
+import { flushSync, form, refuse, watch } from '#shared'
 import { ARGS_DOCUMENT } from '#shared/ARGS_DOCUMENT.ts'
 import type { StandardSchemaV1 } from '#shared/Schema.ts'
 
@@ -204,4 +204,186 @@ test("a refusal no field owns shows as the form's own message — 56.4", async (
     expect(deal.message).toBe('the books are closed')
     expect(deal.error.hidden).toBe(false)
     expect(deal.field('company').message).toBeUndefined()
+})
+
+/** A `<form>` as a page renders it over a record: each field's `value` attribute is its baseline (56.14). */
+function opened(
+    parts: ReturnType<typeof form>,
+    values: Record<string, string | undefined>,
+): HTMLFormElement {
+    document.body.innerHTML = ''
+    const element = document.createElement('form')
+    spread(element, parts.form)
+    for (const [name, value] of Object.entries(values)) {
+        const input = document.createElement('input')
+        spread(input, parts.field(name as never).input)
+        if (value !== undefined) input.setAttribute('value', value)
+        element.append(input)
+    }
+    document.body.append(element)
+    return element
+}
+
+/** Types `value` into the field named `name` as a person does: the value, then the `input` event. */
+function typed(element: HTMLFormElement, name: string, value: string): void {
+    const field = element.elements.namedItem(name) as HTMLInputElement
+    field.value = value
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    flushSync()
+}
+
+const valueOf = (element: HTMLFormElement, name: string): string =>
+    (element.elements.namedItem(name) as HTMLInputElement).value
+
+const EDITED = { company: 'Hopper & Co', amount: '4000' }
+
+// 56.14, 56.16, 56.20, 56.21 — AN EDIT AGAINST THE RECORD AS OPENED: the field typed into reads
+// changed and the form dirty, each on its part, and typing the opened value back reads clean again.
+// THE REVERT: compare `value` against `''` rather than `defaultValue` — the untouched amount reads
+// changed.
+test('a field typed into reads changed, and typed back reads clean — 56.14, 56.16, 56.20, 56.21', () => {
+    const edit = POST((args: { company: string; amount: number }) => args)
+    addressed(edit, '/deals/edit')
+    const deal = form(edit)
+    const element = opened(deal, EDITED)
+    expect(deal.dirty).toBe(false)
+    typed(element, 'company', 'Hopper and Co')
+    expect(deal.dirty).toBe(true)
+    expect(deal.form['data-dirty']).toBe('')
+    expect(deal.field('company').changed).toBe(true)
+    expect(deal.field('company').input['data-changed']).toBe('')
+    expect(deal.field('amount').changed).toBe(false)
+    expect(deal.field('amount').input['data-changed']).toBeUndefined()
+    typed(element, 'company', 'Hopper & Co')
+    expect(deal.dirty).toBe(false)
+    expect(deal.form['data-dirty']).toBeUndefined()
+})
+
+// 56.15 — A FIELD RENDERED WITH NO VALUE IS BLANK: cleared after an edit, it reads as it opened. And a
+// `<select>` marking no option opens on its first, which is its baseline. THE REVERT: compare a single
+// `<select>` option by option — the select reads changed before anyone touched it.
+test('a field opened with no value and one cleared compare equal — 56.15', () => {
+    const edit = POST((args: { company: string; stage: string }) => args)
+    addressed(edit, '/deals/blank')
+    const deal = form(edit)
+    const element = opened(deal, { company: undefined })
+    const stage = document.createElement('select')
+    stage.name = 'stage'
+    for (const name of ['lead', 'won']) {
+        const option = document.createElement('option')
+        option.textContent = name
+        stage.append(option)
+    }
+    element.append(stage)
+    typed(element, 'company', 'Hopper & Co')
+    expect(deal.field('company').changed).toBe(true)
+    typed(element, 'company', '')
+    expect(deal.field('company').changed).toBe(false)
+    expect(deal.field('stage').changed).toBe(false)
+    stage.selectedIndex = 1
+    stage.dispatchEvent(new Event('input', { bubbles: true }))
+    flushSync()
+    expect(deal.field('stage').changed).toBe(true)
+    expect(deal.dirty).toBe(true)
+})
+
+// 56.17 — WHAT CHANGED, AS A SUBMIT WOULD SEND IT: the amount typed, coerced to the number the document
+// declares, and not the company left as it opened. THE REVERT: hand back every arg — the company is
+// in it.
+test("a form's changes are the args a submit sends, narrowed to the fields that differ — 56.17", () => {
+    const edit = holding(
+        POST((args: { company: string; amount: number }) => args),
+    )
+    addressed(edit, '/deals/changes')
+    const deal = form(edit)
+    expect(deal.changes).toEqual({})
+    const element = opened(deal, EDITED)
+    typed(element, 'amount', '5200')
+    expect(deal.changes).toEqual({ amount: 5200 })
+})
+
+// 56.18, 56.22 — A RESET PUTS THE RECORD BACK: the reset button is enabled only while something
+// differs, and the `<form>`'s reset takes every field to its baseline and reads clean. THE REVERT:
+// drop `onreset` from the form's part — the form reads dirty after the reset.
+test('a reset puts every field back and reads clean — 56.18, 56.22', () => {
+    const edit = POST((args: { company: string; amount: number }) => args)
+    addressed(edit, '/deals/reset')
+    const deal = form(edit)
+    const element = opened(deal, EDITED)
+    expect(deal.reset.type).toBe('reset')
+    expect(deal.reset.disabled).toBe(true)
+    typed(element, 'company', 'Babbage Ltd')
+    expect(deal.reset.disabled).toBe(false)
+    element.reset()
+    flushSync()
+    expect(valueOf(element, 'company')).toBe('Hopper & Co')
+    expect(deal.dirty).toBe(false)
+    expect(deal.field('company').changed).toBe(false)
+    expect(deal.reset.disabled).toBe(true)
+})
+
+// 56.19 — WHAT WAS SAVED IS THE NEW BASELINE: once the call answers, the field it carried reads clean,
+// and a reset goes back to the saved company rather than the one the form opened with. An edit made
+// while the call was in flight is not what it sent, and stays changed. THE REVERT: drop the watch
+// over the call — the company reads changed after the save.
+test('a call answered moves the baseline to what it sent — 56.19', async () => {
+    let answer: () => void = () => undefined
+    const edit = POST(
+        (args: { company: string; amount: number }) =>
+            new Promise((resolve) => {
+                answer = () => resolve(args)
+            }),
+    )
+    addressed(edit, '/deals/save')
+    const deal = form(edit)
+    const element = opened(deal, EDITED)
+    typed(element, 'company', 'Babbage Ltd')
+    await submitted(element)
+    typed(element, 'amount', '5200')
+    answer()
+    await Bun.sleep(10)
+    flushSync()
+    expect(deal.field('company').changed).toBe(false)
+    expect(deal.field('amount').changed).toBe(true)
+    element.reset()
+    flushSync()
+    expect(valueOf(element, 'company')).toBe('Babbage Ltd')
+    expect(valueOf(element, 'amount')).toBe('4000')
+})
+
+// 56.19 — A REFUSED CALL SAVED NOTHING, and the edit it carried stays changed. THE REVERT: move the
+// baseline whatever the call answers — the company reads clean.
+test('a refused call leaves the baseline where it was — 56.19', async () => {
+    const edit = POST((args: { company: string }) =>
+        args.company === 'Hopper & Co'
+            ? args
+            : refuse.validation<{ company: string }>({ company: ['is taken'] }),
+    )
+    addressed(edit, '/deals/taken')
+    const deal = form(edit)
+    const element = opened(deal, { company: 'Hopper & Co' })
+    typed(element, 'company', 'Babbage Ltd')
+    await submitted(element)
+    expect(deal.field('company').message).toBe('is taken')
+    expect(deal.field('company').changed).toBe(true)
+})
+
+// 56.23 — AN EDIT WAKES ONLY THE FIELD IT MOVED: typing into the company twice wakes a reader of the
+// amount's `changed` not once. THE REVERT: hold the changed names in one `reactive` set every field
+// reads — the amount's reader wakes at each of the company's keystrokes (2 wakes, not 0).
+test("an edit of one field wakes no reader of another's changed — 56.23", () => {
+    const edit = POST((args: { company: string; amount: number }) => args)
+    addressed(edit, '/deals/wakes')
+    const deal = form(edit)
+    const element = opened(deal, EDITED)
+    let woken = -1
+    const stop = watch(() => {
+        deal.field('amount').changed
+        woken += 1
+    })
+    flushSync()
+    typed(element, 'company', 'Babbage Ltd')
+    typed(element, 'company', 'Babbage & Co')
+    stop()
+    expect(`wakes: ${woken}`).toBe('wakes: 0')
 })

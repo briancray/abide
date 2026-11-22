@@ -1,0 +1,18 @@
+<script server>
+import { POST } from '@abide/abide/server'
+
+const saveDeal = POST((deal: { name: string }) => deal)
+</script>
+
+<script>
+import { form } from '@abide/abide'
+
+const deal = form(saveDeal)
+</script>
+
+<form {...deal.form} class="row">
+    <label>
+        name <input {...deal.field('name').input} value="Engine renewal">
+    </label>
+    <button {...deal.reset}>Undo</button>
+</form>

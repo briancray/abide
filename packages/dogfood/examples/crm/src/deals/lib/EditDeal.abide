@@ -1,0 +1,20 @@
+<script>
+import { form, reactive } from '@abide/abide'
+
+import getDeal from '../getDeal.handler.ts'
+import saveDeal from '../saveDeal.handler.ts'
+
+const deal = reactive(() => getDeal({ id: 'd1' }))
+const edit = form(saveDeal)
+</script>
+
+<form {...edit.form} class="row">
+    <input type="hidden" {...edit.field('id').input} value={deal.id}>
+    <label>name <input {...edit.field('name').input} value={deal.name}></label>
+    <label>company <input {...edit.field('company').input} value={deal.company}></label>
+    <label>amount <input type="number" {...edit.field('amount').input} value={deal.amount}></label>
+    <button {...edit.reset}>Undo</button>
+    <button {...edit.submit}>Save</button>
+</form>
+
+<p class="status">{edit.dirty ? 'Unsaved changes' : 'Saved'}</p>

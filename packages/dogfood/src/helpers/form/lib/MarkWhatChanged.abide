@@ -1,0 +1,23 @@
+<script server>
+import { POST } from '@abide/abide/server'
+
+const saveDeal = POST((deal: { name: string; amount: number }) => deal)
+</script>
+
+<script>
+import { form } from '@abide/abide'
+
+const deal = form(saveDeal)
+</script>
+
+<form {...deal.form} class="row">
+    <label>name
+        <input {...deal.field('name').input} value="Engine renewal"
+            class="data-changed:text-signal">
+    </label>
+    <label>amount
+        <input type="number" {...deal.field('amount').input} value="12000"
+            class="data-changed:text-signal">
+    </label>
+    <span>{deal.dirty ? 'Unsaved changes' : 'Saved'}</span>
+</form>

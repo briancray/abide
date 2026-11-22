@@ -6235,3 +6235,30 @@ form's own `error` while the form has none.
 
 56.13 A `form`'s `message` MUST be the first of its issues no field owns, those under `''`, and a
 `field`'s `message` the first of that field's.
+
+56.14 A `form`'s baseline for a field MUST be what a reset of its `<form>` restores the field to: its
+`value` attribute, its `checked` attribute, or the option its options' `selected` attributes choose.
+
+56.15 A `form` MUST read a field rendered with no `value` attribute as having a blank baseline, and
+the field cleared as equal to it.
+
+56.16 A `form`'s `dirty` MUST be whether any field of its `<form>` differs from its baseline, and a
+`field`'s `changed` whether a field posting under its name does.
+
+56.17 A `form`'s `changes` MUST be the args 56.1 reads, holding only the members whose field differs
+from its baseline.
+
+56.18 A `form` MUST read its fields against their baseline again at each edit, and MUST read none as
+differing once its `<form>` is reset.
+
+56.19 A call a `form` makes that answers without a failure MUST move each field's baseline to what the
+field held when the call was made.
+
+56.20 The `form` part of a `form` MUST carry `data-dirty` while the form is dirty.
+
+56.21 The `input` of a `form`'s `field` MUST carry `data-changed` while its field is changed.
+
+56.22 A `form`'s `reset` MUST be a reset button, disabled while the form is not dirty.
+
+56.23 An edit of a `form` MUST NOT wake a reader of `dirty`, or of a `field`'s `changed`, whose answer
+the edit leaves.

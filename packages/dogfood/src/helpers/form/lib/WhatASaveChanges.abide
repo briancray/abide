@@ -1,0 +1,38 @@
+<script server>
+import { jsonSchema } from '@abide/abide'
+import { POST } from '@abide/abide/server'
+
+type Deal = { name: string; company: string; amount: number }
+
+const saveDeal = POST((deal: Deal) => deal, {
+    args: jsonSchema<Deal>({
+        type: 'object',
+        properties: {
+            name: { type: 'string' },
+            company: { type: 'string' },
+            amount: { type: 'number' },
+        },
+    }),
+})
+</script>
+
+<script>
+import { form } from '@abide/abide'
+
+const deal = form(saveDeal)
+</script>
+
+<form {...deal.form} class="fields stacked">
+    <label>
+        name <input {...deal.field('name').input} value="Engine renewal">
+    </label>
+    <label>
+        company
+        <input {...deal.field('company').input} value="Analytical Engines">
+    </label>
+    <label>
+        amount
+        <input type="number" {...deal.field('amount').input} value="12000">
+    </label>
+    <code>{JSON.stringify(deal.changes)}</code>
+</form>

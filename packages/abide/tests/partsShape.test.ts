@@ -263,6 +263,7 @@ function elementParts(): Record<string, unknown> {
         'form.form': deal.form,
         'form.error': deal.error,
         'form.submit': deal.submit,
+        'form.reset': deal.reset,
         'form.field.input': deal.field('name').input,
         'form.field.error': deal.field('name').error,
         'dropzone.host': drop.host,

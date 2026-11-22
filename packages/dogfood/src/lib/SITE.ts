@@ -549,7 +549,7 @@ const WRITTEN: readonly {
                 route: '/helpers/form',
                 title: '`form`',
                 description:
-                    'Check a form against the handler it submits to before calling it, and show what is wrong beside each field.',
+                    'Check a form against the handler it submits to before calling it, show what is wrong beside each field, and mark what an edit changed.',
             },
             {
                 route: '/components/combobox',

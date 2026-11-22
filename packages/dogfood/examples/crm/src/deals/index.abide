@@ -8,6 +8,7 @@ import DealDrawer from './lib/DealDrawer.abide'
 import DealNotes from './lib/DealNotes.abide'
 import DealStage from './lib/DealStage.abide'
 import DeleteDeal from './lib/DeleteDeal.abide'
+import EditDeal from './lib/EditDeal.abide'
 import ExportDeals from './lib/ExportDeals.abide'
 import NewDeal from './lib/NewDeal.abide'
 import Pipeline from './lib/Pipeline.abide'
@@ -27,6 +28,7 @@ import QuickDeal from './lib/QuickDeal.abide'
     <DealNotes />
     <DealStage />
     <NewDeal />
+    <EditDeal />
     <QuickDeal />
     <ExportDeals />
     <DealActions />
