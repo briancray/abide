@@ -10,12 +10,15 @@ export type LabelRun = {
 }
 
 const MATCH = { 'data-part': 'match' }
+// `RegExp.escape` ships in this module's client too, and Safari has it only from 18.2.
+const SPECIAL = /[.*+?^${}()|[\]\\/]/g
 
 /** What `text` is looked for by: itself whole, or each word of it where `words` is set; none where it is blank. */
 export function needlesOf(text: string, words: boolean): readonly RegExp[] {
     const needles: RegExp[] = []
     for (const word of words ? text.split(/\s+/) : [text])
-        if (word !== '') needles.push(new RegExp(RegExp.escape(word), 'iu'))
+        if (word !== '')
+            needles.push(new RegExp(word.replace(SPECIAL, '\\$&'), 'iu'))
     return needles
 }
 
