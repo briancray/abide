@@ -22,8 +22,8 @@ let picked = reactive<string | undefined>(undefined)
     onpick={(index) => (picked = STAGES[index]?.label)}
     disabled={(index) => STAGES[index]?.label === 'Verbal'}
     class="size-40 text-muted [&_[data-series='0']]:text-signal
-        [&_[data-part=slice]]:transition-[stroke-dasharray,stroke-dashoffset]
-        [&_[data-part=slice]:hover]:opacity-80"
+        [&_[data-pie=slice]]:transition-[stroke-dasharray,stroke-dashoffset]
+        [&_[data-pie=slice]:hover]:opacity-80"
  />
 {#if picked !== undefined}
     <p>Open deals at {picked}</p>

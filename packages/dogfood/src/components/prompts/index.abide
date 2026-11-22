@@ -43,7 +43,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Lay out the prompt's form and its buttons">
-        <p>Each piece inside carries a <code>data-part</code>: <code>form</code>,
+        <p>Each piece inside carries a <code>data-prompts</code>: <code>form</code>,
             <code>title</code>, <code>body</code>, <code>field</code>, <code>input</code>,
             <code>actions</code>, <code>confirm</code> and <code>cancel</code>.</p>
         <Code language="abide" caption="abide" code={`
@@ -52,8 +52,8 @@ import Section from '#src/lib/Section.abide'
             </script>
 
             <Prompts
-                class="[&_[data-part=form]]:flex [&_[data-part=form]]:flex-col
-                [&_[data-part=actions]]:flex [&_[data-part=actions]]:gap-2"
+                class="[&_[data-prompts=form]]:flex [&_[data-prompts=form]]:flex-col
+                [&_[data-prompts=actions]]:flex [&_[data-prompts=actions]]:gap-2"
             />
         `} />
     </Section>
@@ -66,7 +66,7 @@ import Section from '#src/lib/Section.abide'
             import Prompts from '@abide/abide/Prompts.abide'
             </script>
 
-            <Prompts class="data-[danger]:[&_[data-part=confirm]]:bg-bad" />
+            <Prompts class="data-[danger]:[&_[data-prompts=confirm]]:bg-bad" />
         `} />
     </Section>
 </Doc>

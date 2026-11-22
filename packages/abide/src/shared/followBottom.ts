@@ -88,14 +88,14 @@ export function followBottom(options: FollowBottomOptions = {}): FollowBottom {
     return {
         host: {
             'bind:element': bind,
-            'data-part': 'host',
+            'data-follow-bottom': 'host',
             get 'data-following'() {
                 return following() ? '' : undefined
             },
         },
         jump: {
             type: 'button',
-            'data-part': 'jump',
+            'data-follow-bottom': 'jump',
             get hidden() {
                 return following()
             },

@@ -15,7 +15,7 @@ test('a thumb dragged takes the keys after it — 51.95', async ({ page }) => {
     })
     const frame = page.locator('.result').last()
     await frame.scrollIntoViewIfNeeded()
-    const track = frame.locator('[data-part=track]')
+    const track = frame.locator('[data-range=track]')
     const box = (await track.boundingBox()) as NonNullable<
         Awaited<ReturnType<typeof track.boundingBox>>
     >

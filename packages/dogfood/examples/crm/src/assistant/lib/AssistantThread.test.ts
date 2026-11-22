@@ -25,12 +25,12 @@ test('Enter asks, and the answer streams in with its tool call', async () => {
             using _thread = await mount(AssistantThread({}))
             ask('Which company is Ada at?')
             await settled()
-            const turns = [...document.querySelectorAll('[data-part=turn]')]
+            const turns = [...document.querySelectorAll('[data-chat=turn]')]
             expect(
                 turns.map((turn) => turn.getAttribute('data-speaker')),
             ).toEqual(['you', 'assistant'])
             expect(
-                document.querySelector('[data-part=tool]')?.textContent,
+                document.querySelector('[data-chat=tool]')?.textContent,
             ).toBe('looked up searchContacts')
             expect(turns[1]?.querySelector('p')?.textContent).toBe(
                 'Ada Lovelace is at Analytical Engines.',
@@ -54,7 +54,7 @@ test('Ask again replaces the answer with a fresh one to the same question', asyn
                 ) as HTMLButtonElement
             ).click()
             await settled()
-            const turns = [...document.querySelectorAll('[data-part=turn]')]
+            const turns = [...document.querySelectorAll('[data-chat=turn]')]
             expect(
                 turns.map((turn) => turn.getAttribute('data-speaker')),
             ).toEqual(['you', 'assistant'])

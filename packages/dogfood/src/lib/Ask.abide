@@ -58,7 +58,7 @@ watch(() => {
 function show() {
     open = true
     flushSync()
-    panel?.querySelector<HTMLElement>('[data-part=input]')?.focus()
+    panel?.querySelector<HTMLElement>('[data-chat=input]')?.focus()
 }
 
 function clear() {

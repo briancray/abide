@@ -169,16 +169,16 @@ export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
                   action: handler.url(),
                   onsubmit: submitted,
                   oninput: edited,
-                  'data-part': 'form',
+                  'data-form': 'form',
               }
-            : { onsubmit: submitted, oninput: edited, 'data-part': 'form' }
+            : { onsubmit: submitted, oninput: edited, 'data-form': 'form' }
     // The element a message shows in: the whole form's under `''`, which no field posts under.
     const errorOf = (name: string): Record<string, unknown> => ({
         id: errorId(name),
         get hidden() {
             return message(name) === undefined
         },
-        'data-part': 'error',
+        'data-form': 'error',
     })
 
     return {
@@ -190,7 +190,7 @@ export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
                     return message(name) === undefined ? undefined : 'true'
                 },
                 'aria-describedby': errorId(name),
-                'data-part': 'input',
+                'data-form': 'input',
             },
             error: errorOf(name),
             get message() {
@@ -209,7 +209,7 @@ export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
             get disabled() {
                 return call.busy()
             },
-            'data-part': 'submit',
+            'data-form': 'submit',
         },
         get issues() {
             return issues() as Issues<Handler> | undefined

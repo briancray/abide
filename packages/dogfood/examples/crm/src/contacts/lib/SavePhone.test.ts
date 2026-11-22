@@ -8,10 +8,10 @@ import { atMost } from '@abide/harness/gate'
 import SavePhone from './SavePhone.abide'
 
 const notices = () =>
-    [...document.querySelectorAll('[data-part=toast]')].map((toast) => [
+    [...document.querySelectorAll('[data-toasts=toast]')].map((toast) => [
         toast.getAttribute('data-tone'),
-        toast.querySelector('[data-part=text]')?.textContent,
-        toast.querySelector('[data-part=action]')?.textContent ?? null,
+        toast.querySelector('[data-toasts=text]')?.textContent,
+        toast.querySelector('[data-toasts=action]')?.textContent ?? null,
     ])
 
 async function save(phone: string) {
@@ -29,7 +29,7 @@ test('a refused save says why and offers a report', async () => {
     // The live region a screen reader reads each notice out from.
     expect(
         document
-            .querySelector('[data-part=toast]')
+            .querySelector('[data-toasts=toast]')
             ?.parentElement?.getAttribute('role'),
     ).toBe('status')
     expect(notices()).toEqual([['success', 'Phone saved', null]])
@@ -39,7 +39,7 @@ test('a refused save says why and offers a report', async () => {
         ['error', 'A phone number needs at least seven digits.', 'Report'],
     ])
     for (const close of document.querySelectorAll<HTMLButtonElement>(
-        '[data-part=close]',
+        '[data-toasts=close]',
     ))
         close.click()
     flushSync()
@@ -50,8 +50,9 @@ test('closing one notice leaves the others where they are', async () => {
     using _phone = await mount(SavePhone({}))
     await save('555 0100')
     await save('12')
-    const [first] =
-        document.querySelectorAll<HTMLButtonElement>('[data-part=close]')
+    const [first] = document.querySelectorAll<HTMLButtonElement>(
+        '[data-toasts=close]',
+    )
     const work = measure(() => {
         first?.click()
         flushSync()
@@ -61,7 +62,7 @@ test('closing one notice leaves the others where they are', async () => {
     ])
     // The one move is the closed notice leaving.
     atMost(work, { nodesCreated: 0, elementsMoved: 1, attributesSet: 0 })
-    document.querySelector<HTMLButtonElement>('[data-part=close]')?.click()
+    document.querySelector<HTMLButtonElement>('[data-toasts=close]')?.click()
     flushSync()
 })
 
@@ -73,9 +74,11 @@ test('a notice carries its attributes, and its action tells onclose why it left'
     using _phone = await mount(SavePhone({}))
     await save('555 0100')
     expect(
-        document.querySelector('[data-part=toast]')?.getAttribute('data-track'),
+        document
+            .querySelector('[data-toasts=toast]')
+            ?.getAttribute('data-track'),
     ).toBe('phone-saved')
-    document.querySelector<HTMLButtonElement>('[data-part=close]')?.click()
+    document.querySelector<HTMLButtonElement>('[data-toasts=close]')?.click()
     flushSync()
 
     using _toasts = await mount(Toasts({}))
@@ -86,7 +89,7 @@ test('a notice carries its attributes, and its action tells onclose why it left'
         onclose: (reason) => reasons.push(reason),
     })
     flushSync()
-    document.querySelector<HTMLButtonElement>('[data-part=action]')?.click()
+    document.querySelector<HTMLButtonElement>('[data-toasts=action]')?.click()
     flushSync()
     expect(reasons).toEqual(['action'])
 })

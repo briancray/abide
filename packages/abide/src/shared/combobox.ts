@@ -237,7 +237,7 @@ export function combobox<Item, Multiple extends boolean = false>(
     return {
         id,
         root: {
-            'data-part': 'root',
+            'data-combobox': 'root',
             get 'data-open'() {
                 return open() ? '' : undefined
             },
@@ -249,7 +249,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             id,
             type: 'text',
             role: 'combobox',
-            'data-part': 'input',
+            'data-combobox': 'input',
             autocomplete: 'off',
             'aria-autocomplete': 'list',
             get 'aria-expanded'() {
@@ -291,7 +291,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         ),
         popup: {
             popover: 'manual',
-            'data-part': 'popup',
+            'data-combobox': 'popup',
             onmousedown: (event: MouseEvent) => event.preventDefault(),
             'bind:element': (element: Element) =>
                 popover(input.peek() as HTMLInputElement, {
@@ -303,7 +303,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         listbox: {
             id: `${id}-listbox`,
             role: 'listbox',
-            'data-part': 'listbox',
+            'data-combobox': 'listbox',
             get 'aria-multiselectable'() {
                 return many ? 'true' : undefined
             },
@@ -313,6 +313,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         },
         option: (item) =>
             withPart(list.option(key(item)), {
+                'data-combobox': 'option',
                 get 'data-selected'() {
                     return pickedKeys().has(key(item)) ? '' : undefined
                 },
@@ -321,17 +322,17 @@ export function combobox<Item, Multiple extends boolean = false>(
         get nothingFound() {
             return !busy(found) && (found() as readonly Item[]).length === 0
         },
-        empty: { role: 'status', 'data-part': 'empty' },
+        empty: { role: 'status', 'data-combobox': 'empty' },
         value: value as Reactive<Picked<Item, Multiple>>,
         get picks() {
             return picks()
         },
-        chips: { 'data-part': 'chips' },
+        chips: { 'data-combobox': 'chips' },
         chip: (item) => ({
-            chip: { 'data-part': 'chip' },
+            chip: { 'data-combobox': 'chip' },
             remove: {
                 type: 'button',
-                'data-part': 'remove',
+                'data-combobox': 'remove',
                 'aria-label': `Remove ${label(item)}`,
                 onclick: () => unpick(item),
             },

@@ -68,7 +68,7 @@ export function tabs(options: TabsOptions): Tabs {
 
     const list = {
         role: 'tablist',
-        'data-part': 'list',
+        'data-tabs': 'list',
         onkeydown: (event: KeyboardEvent) => {
             const listed = keysOf()
             const key =
@@ -88,7 +88,7 @@ export function tabs(options: TabsOptions): Tabs {
         button: {
             type: 'button',
             role: 'tab',
-            'data-part': 'tab',
+            'data-tabs': 'tab',
             id: tabId(key),
             // 51.42 — only the selected tab names its panel: the shared panel exists for it alone, so a
             // tab naming its own while another is selected would name nothing.
@@ -110,7 +110,7 @@ export function tabs(options: TabsOptions): Tabs {
         // 51.42 — a tab's own panel is hidden while another is selected.
         panel: {
             role: 'tabpanel',
-            'data-part': 'panel',
+            'data-tabs': 'panel',
             tabindex: '0',
             id: panelId(key),
             'aria-labelledby': tabId(key),
@@ -123,7 +123,7 @@ export function tabs(options: TabsOptions): Tabs {
     // 51.42 — the shared panel takes the selected tab's id, so that tab's `aria-controls` names it.
     const panel = {
         role: 'tabpanel',
-        'data-part': 'panel',
+        'data-tabs': 'panel',
         tabindex: '0',
         get id() {
             const shown = current()

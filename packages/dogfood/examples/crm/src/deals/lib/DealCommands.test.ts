@@ -34,9 +34,11 @@ test('the shipped CommandPalette opens on its key, lists what is typed and runs 
     input().dispatchEvent(new Event('input', { bubbles: true }))
     flushSync()
     expect(
-        [...dialog().querySelectorAll('[role=option] [data-part=label]')].map(
-            (option) => option.textContent,
-        ),
+        [
+            ...dialog().querySelectorAll(
+                '[role=option] [data-command-palette=label]',
+            ),
+        ].map((option) => option.textContent),
     ).toEqual(['Export deals'])
     press('Enter')
     expect(dialog().open).toBe(false)

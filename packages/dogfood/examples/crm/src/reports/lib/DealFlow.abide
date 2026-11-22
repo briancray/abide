@@ -30,7 +30,7 @@ let picked = reactive<number | undefined>(undefined)
     onpick={(month) => (picked = month)}
     disabled={(month) => WON[month] === null}
     class="block h-60 w-full overflow-visible text-chrome text-muted
-        [&_[data-series='0']]:text-signal [&_[data-part=bar]]:transition-transform
+        [&_[data-series='0']]:text-signal [&_[data-chart=bar]]:transition-transform
         [&_[data-disabled]]:opacity-40"
 >
     <Column label="Won" values={WON} />
@@ -41,5 +41,5 @@ let picked = reactive<number | undefined>(undefined)
 {/if}
 <Tooltips
     class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
-    text-chrome text-ink shadow-sm [&_[data-part=readout-x]]:text-muted"
+    text-chrome text-ink shadow-sm [&_[data-chart=readout-x]]:text-muted"
  />

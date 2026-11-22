@@ -39,6 +39,7 @@ export function host(): TooltipHost {
                 side: tip.options.side ?? 'top',
                 // 50.48 — a hint is never the pointer's target.
                 interactive: false,
+                box: tip.box,
             },
             (placement) => placed.set(placement.side),
         )
@@ -49,7 +50,7 @@ export function host(): TooltipHost {
         // before the page hydrates.
         hint: {
             role: 'tooltip',
-            'data-part': 'hint',
+            'data-tooltip': 'hint',
             popover: 'manual',
             get 'data-open'() {
                 return open() === undefined ? undefined : ''

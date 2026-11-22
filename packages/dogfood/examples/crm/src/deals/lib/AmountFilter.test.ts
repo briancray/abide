@@ -17,7 +17,7 @@ function press(thumb: HTMLElement, key: string) {
 }
 // Laid out 500 wide, a hundred dollars a pixel: a DOM with no layout measures every box as empty.
 function pointer(type: string, clientX: number) {
-    const track = document.querySelector('[data-part=track]') as HTMLElement
+    const track = document.querySelector('[data-range=track]') as HTMLElement
     track.getBoundingClientRect = () => new DOMRect(0, 0, 500, 20)
     track.dispatchEvent(
         new PointerEvent(type, { clientX, pointerId: 1, bubbles: true }),

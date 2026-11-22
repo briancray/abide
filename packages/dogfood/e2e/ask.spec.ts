@@ -27,10 +27,10 @@ test('the prompt’s key is the one its label names, and its panel pairs — 53.
     await expect(page.locator('.answers')).toBeVisible()
     const pairing = page.locator('.answers [data-step]')
     await expect(pairing).toHaveAttribute('data-step', 'click')
-    await expect(pairing.locator('[data-part=command]')).toContainText(
+    await expect(pairing.locator('[data-pairing=command]')).toContainText(
         'bunx @abide/bridge@',
     )
-    await expect(pairing.locator('[data-part=pair]')).toHaveText(
+    await expect(pairing.locator('[data-pairing=pair]')).toHaveText(
         'Pair with a click',
     )
     await context.close()

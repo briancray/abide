@@ -69,7 +69,7 @@ function press(init: KeyboardEventInit): KeyboardEvent {
 }
 
 const turns = () =>
-    [...document.querySelectorAll('[data-part=turn]')].map((turn) =>
+    [...document.querySelectorAll('[data-chat=turn]')].map((turn) =>
         turn.getAttribute('data-speaker'),
     )
 
@@ -135,7 +135,7 @@ test('a streamed answer reads each event once, and a chunk rewrites one text nod
     expect(written.length).toBeLessThanOrEqual(CHUNKS - 1)
     stream.end()
     await settled()
-    const answer = document.querySelectorAll('[data-part=text]')[1]
+    const answer = document.querySelectorAll('[data-chat=text]')[1]
     expect(answer?.textContent).toBe(`${'word '.repeat(CHUNKS - 1)}end.`)
 })
 
@@ -150,18 +150,18 @@ test('Stop ends the answer and keeps what arrived', async () => {
     expect(
         document.querySelector('section')?.hasAttribute('data-streaming'),
     ).toBe(true)
-    ;(document.querySelector('[data-part=stop]') as HTMLButtonElement).click()
+    ;(document.querySelector('[data-chat=stop]') as HTMLButtonElement).click()
     await settled()
     flushSync()
-    const answer = document.querySelectorAll('[data-part=turn]')[1]
+    const answer = document.querySelectorAll('[data-chat=turn]')[1]
     expect(answer?.getAttribute('data-stop')).toBe('stopped')
-    expect(answer?.querySelector('[data-part=text]')?.textContent).toBe(
+    expect(answer?.querySelector('[data-chat=text]')?.textContent).toBe(
         'Hi Grace,',
     )
     expect(
         document.querySelector('section')?.hasAttribute('data-streaming'),
     ).toBe(false)
-    expect(document.querySelector('[data-part=send]')).not.toBeNull()
+    expect(document.querySelector('[data-chat=send]')).not.toBeNull()
 })
 
 test('a permission prompt is answered through permit', async () => {
@@ -185,9 +185,9 @@ test('a permission prompt is answered through permit', async () => {
     })
     await Bun.sleep(0)
     flushSync()
-    const prompt = document.querySelector('[data-part=permission]')
+    const prompt = document.querySelector('[data-chat=permission]')
     expect(prompt?.getAttribute('data-answer')).toBe('waiting')
-    ;(prompt?.querySelector('[data-part=allow]') as HTMLButtonElement).click()
+    ;(prompt?.querySelector('[data-chat=allow]') as HTMLButtonElement).click()
     flushSync()
     expect(answers).toEqual([{ id: 'p1', allow: true }])
     expect(prompt?.getAttribute('data-answer')).toBe('allowed')
@@ -210,7 +210,7 @@ test('an image dropped on the composer goes with the next question', async () =>
     document.querySelector('form')?.dispatchEvent(drop)
     await settled()
     flushSync()
-    expect(document.querySelectorAll('[data-part=attachment]')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-chat=attachment]')).toHaveLength(1)
     type('Who is on this card?')
     press({})
     const [message] = stream.asked[0] ?? []
@@ -219,7 +219,7 @@ test('an image dropped on the composer goes with the next question', async () =>
         { type: 'image', data: 'iVBORw==', mimeType: 'image/png' },
         { type: 'text', text: 'Who is on this card?' },
     ])
-    expect(document.querySelector('[data-part=attachment]')).toBeNull()
+    expect(document.querySelector('[data-chat=attachment]')).toBeNull()
     stream.end()
     await settled()
 })
@@ -239,12 +239,12 @@ test('an answer that fails says why, and the composer sends again', async () => 
     press({})
     await settled()
     flushSync()
-    const answer = document.querySelectorAll('[data-part=turn]')[1]
+    const answer = document.querySelectorAll('[data-chat=turn]')[1]
     expect(answer?.hasAttribute('data-failed')).toBe(true)
-    expect(answer?.querySelector('[data-part=failure]')?.textContent).toBe(
+    expect(answer?.querySelector('[data-chat=failure]')?.textContent).toBe(
         'The CRM is offline.',
     )
-    expect(document.querySelector('[data-part=send]')).not.toBeNull()
+    expect(document.querySelector('[data-chat=send]')).not.toBeNull()
 })
 
 // THE REVERT: drop the `following` check in `followBottom`, and a reader scrolled up to an earlier
@@ -252,7 +252,7 @@ test('an answer that fails says why, and the composer sends again', async () => 
 test('the transcript follows its bottom until the reader scrolls up', async () => {
     const stream = fed()
     using _chat = await mount(Chat({ ask: stream.ask }))
-    const log = document.querySelector('[data-part=transcript]') as HTMLElement
+    const log = document.querySelector('[data-chat=transcript]') as HTMLElement
     expect(log.getAttribute('role')).toBe('log')
     expect(log.getAttribute('aria-live')).toBe('polite')
     // The emulator lays nothing out: the transcript is 100px tall and grows 40px a chunk.
@@ -287,7 +287,7 @@ test('a question sent while an answer streams is queued, and asked once the answ
     type('And Grace?')
     press({})
     expect(turns()).toEqual(['you', 'assistant'])
-    expect(document.querySelector('[data-part=queued]')?.textContent).toContain(
+    expect(document.querySelector('[data-chat=queued]')?.textContent).toContain(
         'And Grace?',
     )
     stream.push({ type: 'text', text: 'Analytical Engines.' })
@@ -299,7 +299,7 @@ test('a question sent while an answer streams is queued, and asked once the answ
         role: 'user',
         content: 'And Grace?',
     })
-    expect(document.querySelector('[data-part=queued]')).toBeNull()
+    expect(document.querySelector('[data-chat=queued]')).toBeNull()
     stream.end()
     await settled()
 })
@@ -311,9 +311,9 @@ test('a queued question cancelled is never asked', async () => {
     press({})
     type('And Grace?')
     press({})
-    ;(document.querySelector('[data-part=cancel]') as HTMLButtonElement).click()
+    ;(document.querySelector('[data-chat=cancel]') as HTMLButtonElement).click()
     flushSync()
-    expect(document.querySelector('[data-part=queued]')).toBeNull()
+    expect(document.querySelector('[data-chat=queued]')).toBeNull()
     stream.end()
     await settled()
     flushSync()

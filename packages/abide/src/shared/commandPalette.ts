@@ -128,6 +128,7 @@ export function commandPalette(
     // The palette's dialog is `dialog`'s parts, its accessible name written beside them.
     const shown = withPart(
         {
+            'data-command-palette': 'dialog',
             get 'aria-label'() {
                 return label()
             },
@@ -140,7 +141,7 @@ export function commandPalette(
         dialog: shown,
         input: {
             id: inputId,
-            'data-part': 'input',
+            'data-command-palette': 'input',
             type: 'text',
             role: 'combobox',
             autocomplete: 'off',
@@ -179,7 +180,7 @@ export function commandPalette(
         listbox: {
             id: listId,
             role: 'listbox',
-            'data-part': 'listbox',
+            'data-command-palette': 'listbox',
             get 'aria-label'() {
                 return label()
             },
@@ -187,12 +188,13 @@ export function commandPalette(
         },
         command: (command) => ({
             option: withPart(list.option(command.label), {
+                'data-command-palette': 'option',
                 onclick: () => run(command),
             }),
-            label: { 'data-part': 'label' },
-            key: { 'data-part': 'key' },
+            label: { 'data-command-palette': 'label' },
+            key: { 'data-command-palette': 'key' },
         }),
-        empty: { role: 'status', 'data-part': 'empty' },
+        empty: { role: 'status', 'data-command-palette': 'empty' },
         get results() {
             return found()
         },

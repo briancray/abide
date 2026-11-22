@@ -131,7 +131,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
 
     const root = {
         role: 'tree',
-        'data-part': 'tree',
+        'data-tree': 'tree',
         onkeydown: (event: KeyboardEvent) => {
             const { placed, shown, labels, open } = walked()
             // The item the key was pressed in, read off the event, so focus put there by any means counts.
@@ -187,7 +187,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
         const place = () => walked().placed.get(each)
         return {
             role: 'treeitem',
-            'data-part': 'item',
+            'data-tree': 'item',
             id: itemId(each),
             get 'aria-level'() {
                 return place()?.level
@@ -236,7 +236,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
         const each = key(node)
         return {
             role: 'group',
-            'data-part': 'group',
+            'data-tree': 'group',
             get hidden() {
                 return !walked().open.has(each)
             },

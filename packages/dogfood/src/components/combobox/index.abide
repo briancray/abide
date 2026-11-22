@@ -107,13 +107,13 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
 
     <Section level={3} title="Highlight the option the arrow keys are on">
         <p>The active option carries <code>data-active</code>, and the picked one
-            <code>data-selected</code>. The list is <code>data-part="listbox"</code>.</p>
+            <code>data-selected</code>. The list is <code>data-combobox="listbox"</code>.</p>
         <Example code={activeOption}><ActiveOption /></Example>
     </Section>
     <Section level={3} title="Open the list over a box that clips its input">
         <p>The list opens in the top layer under its input, as <code>popover</code> opens one, so
             no scroller or <code>overflow</code> cuts it off. It is
-            <code>data-part="popup"</code>, holding the list and the children, and
+            <code>data-combobox="popup"</code>, holding the list and the children, and
             <code>--anchor-width</code> is its input's width.</p>
         <Example code={listOverClip}><ListOverClip /></Example>
     </Section>

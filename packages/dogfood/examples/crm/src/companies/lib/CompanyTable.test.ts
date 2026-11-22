@@ -40,13 +40,13 @@ test("each company's contact sits in a row of its own under it, and sorts with i
     await settled()
     const pairs = () =>
         [...document.querySelectorAll('tbody tr')].map((row) =>
-            row.getAttribute('data-part') === 'detail'
+            row.getAttribute('data-sortable-table') === 'detail'
                 ? row.textContent?.trim()
                 : row.querySelector('a')?.textContent,
         )
     expect(
         document
-            .querySelector('[data-part=detail] td')
+            .querySelector('[data-sortable-table=detail] td')
             ?.getAttribute('colspan'),
     ).toBe('2')
     for (const button of document.querySelectorAll('th button'))

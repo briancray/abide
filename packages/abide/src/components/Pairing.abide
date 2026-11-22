@@ -3,7 +3,7 @@
 // and the click that pair a bridge, the install where no bridge app opened, and once paired, what the
 // caller put inside it. 53.42 — the step is the root's `data-step`.
 //
-// STYLED BY WHAT IT WRITES (49.2, 49.4): `data-step` on the root, and the `data-part`s `message`,
+// STYLED BY WHAT IT WRITES (49.2, 49.4): `data-step` on the root, and the `data-pairing` parts `message`,
 // `command`, `copy` (`data-copied`), `pair`, `retry` and `missing`.
 import type { Attributes } from '#shared/Attributes.ts'
 import { copy } from '#shared/copy.ts'
@@ -89,28 +89,28 @@ const command = () => status.peek()?.command ?? ''
 
 <section {...rest} data-step={shown}>
     {#if shown !== 'paired'}
-        <p data-part="message">{#if Message}<Message step={shown} />{:else}{WORDS[shown]}{/if}</p>
+        <p data-pairing="message">{#if Message}<Message step={shown} />{:else}{WORDS[shown]}{/if}</p>
     {/if}
     {#if shown === 'slow'}
-        <button type="button" data-part="retry" onclick={retry}>Try again</button>
+        <button type="button" data-pairing="retry" onclick={retry}>Try again</button>
     {:else if shown === 'paired'}
         {#if status?.missing.length}
-            <p data-part="missing">Claude Code here cannot use
+            <p data-pairing="missing">Claude Code here cannot use
                 {status.missing.join(', ')}.</p>
         {/if}
         <slot />
-        <button type="button" data-part="pair" onclick={start}>Reconnect</button>
+        <button type="button" data-pairing="pair" onclick={start}>Reconnect</button>
     {:else if shown === 'install'}
-        <pre data-part="command">{status?.install}</pre>
-        <button type="button" data-part="copy"
+        <pre data-pairing="command">{status?.install}</pre>
+        <button type="button" data-pairing="copy"
             data-copied={copied ? '' : undefined}
             onclick={copyInstall}>{copied ? 'Copied' : 'Copy'}</button>
-        <button type="button" data-part="pair" onclick={start}>Pair again</button>
+        <button type="button" data-pairing="pair" onclick={start}>Pair again</button>
     {:else if shown === 'click' || shown === 'waiting'}
-        <pre data-part="command">{status?.command}</pre>
-        <button type="button" data-part="copy"
+        <pre data-pairing="command">{status?.command}</pre>
+        <button type="button" data-pairing="copy"
             bind:element={copy(command)}>Copy</button>
-        <button type="button" data-part="pair" disabled={shown === 'waiting'}
+        <button type="button" data-pairing="pair" disabled={shown === 'waiting'}
             onclick={start}>
             {shown === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>
     {/if}

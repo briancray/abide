@@ -55,11 +55,11 @@ export function time(options: TimeOptions = {}): TimeParts {
     }
 
     function timeOf(at: number | undefined): Record<string, unknown> {
-        if (at === undefined) return { 'data-part': 'time' }
+        if (at === undefined) return { 'data-time': 'time' }
         const timeZone = live(options.timeZone)
         const locale = live(options.locale)
         return {
-            'data-part': 'time',
+            'data-time': 'time',
             datetime: new Date(at).toISOString(),
             title: date(at, {
                 style: 'dateTime',

@@ -19,6 +19,6 @@ let spring = reactive(true)
 <Pie
     label="Open pipeline by stage"
     slices={spring ? SPRING : SUMMER}
-    class="size-40 [&_[data-part=slice]]:transition-all
-    motion-reduce:[&_[data-part=slice]]:transition-none"
+    class="size-40 [&_[data-pie=slice]]:transition-all
+    motion-reduce:[&_[data-pie=slice]]:transition-none"
  />

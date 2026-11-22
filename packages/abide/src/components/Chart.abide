@@ -39,7 +39,7 @@ const {
         xTicks?: number
         /** About how many intervals the y gridlines divide the range into. 4 by default. */
         yTicks?: number
-        /** Whether the y range takes in zero, with a line drawn there as `data-part="zero"`. `false` by default. */
+        /** Whether the y range takes in zero, with a line drawn there as `data-chart="zero"`. `false` by default. */
         zero?: boolean
         /** Whether a child with no `stack` of its own piles into one stack with the others (52.55). `false` by default. */
         stack?: boolean

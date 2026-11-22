@@ -138,11 +138,11 @@ export function listbox<Option>(
         activate: (each) => chosen.set(each),
         idOf,
         keydown,
-        listbox: { role: 'listbox', 'data-part': 'listbox' },
+        listbox: { role: 'listbox', 'data-listbox': 'listbox' },
         option: (each) => ({
             id: idOf(each),
             role: 'option',
-            'data-part': 'option',
+            'data-listbox': 'option',
             get 'aria-selected'() {
                 return active() === each ? 'true' : 'false'
             },

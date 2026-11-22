@@ -1,5 +1,5 @@
 // 49.4, 49.10, 49.11 — EVERY PARTS FUNCTION IN ONE SHAPE, listed here so a new one is a decision rather
-// than an omission: each element's part names it as `data-part` (49.4), each option an app binds is
+// than an omission: each element's part names it under the attribute named for its function (49.4), each option an app binds is
 // optional and handed back (49.10), and the parts are a member per element there is one of and a
 // function per item, never a reader taking no argument or an optional one that changes the answer
 // (49.11).
@@ -173,6 +173,7 @@ function elementParts(): Record<string, unknown> {
     const follow = followBottom()
     const regions = standing(() => announce.host())
     const long = virtualList({ items: [1, 2, 3] })
+    const keys = listbox({ options: ['a'] })
     const toast = {
         id: 1,
         text: 'Saved',
@@ -180,6 +181,8 @@ function elementParts(): Record<string, unknown> {
         attributes: {},
     } as unknown as Parameters<ToastsHost['toast']>[0]
     return {
+        'listbox.listbox': keys.listbox,
+        'listbox.option': keys.option('a'),
         'tabs.list': view.list,
         'tabs.panel': view.panel,
         'tabs.tab.button': view.tab('a').button,
@@ -274,16 +277,19 @@ function elementParts(): Record<string, unknown> {
     }
 }
 
-// THE REVERT: drop `'data-part': 'list'` from `tabs`'s list, and `tabs.list` is named.
-test('every element part names its element as data-part — 49.4', () => {
+// THE REVERT: write `tabs`'s list's `'data-tabs'` as `'data-part'` again, and `tabs.list` is named —
+// as is a `combobox` option that carried only the `data-listbox` of the `listbox` part it is built on.
+test('every element part names its element under the attribute its function is named for — 49.4', () => {
     const unnamed: string[] = []
-    for (const [name, part] of Object.entries(elementParts()))
+    for (const [name, part] of Object.entries(elementParts())) {
+        const attribute = `data-${(name.split('.')[0] as string).replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`
+        const record = part as Record<string, unknown> | undefined
         if (
-            typeof (part as Record<string, unknown> | undefined)?.[
-                'data-part'
-            ] !== 'string'
+            typeof record?.[attribute] !== 'string' ||
+            record['data-part'] !== undefined
         )
             unnamed.push(name)
+    }
     expect(unnamed).toEqual([])
 })
 

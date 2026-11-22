@@ -24,10 +24,10 @@ test('a notice renders through Toast, and stays until its fade has finished', as
         ) as HTMLButtonElement
     ).click()
     flushSync()
-    const notice = document.querySelector('[data-part=toast]') as HTMLElement
+    const notice = document.querySelector('[data-toasts=toast]') as HTMLElement
     expect(notice.getAttribute('data-tone')).toBe('success')
     expect(notice.querySelector('strong')?.textContent).toBe('Won.')
-    expect(notice.querySelector('[data-part=text]')).toBeNull()
+    expect(notice.querySelector('[data-toasts=text]')).toBeNull()
     ;(
         [...notice.querySelectorAll('button')].find(
             (button) => button.textContent === 'Close',

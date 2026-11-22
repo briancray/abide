@@ -49,7 +49,8 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 ## Components
 
 Components abide ships, each an entry of its own an app imports as `@abide/abide/<Name>.abide`,
-with no stylesheet: a caller styles one by the `data-` attributes and the `data-part`s it writes.
+with no stylesheet: a caller styles one by the `data-` attributes it writes, its parts under one
+named for it (RULEBOOK 49.4).
 
 # `.abide` files
 

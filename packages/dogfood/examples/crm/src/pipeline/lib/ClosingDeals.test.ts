@@ -89,7 +89,9 @@ test('each row carries its stage, and a click on it picks the deal', async () =>
     using _deals = await mount(ClosingDeals({}))
     await settled()
     const rows = [...document.querySelectorAll<HTMLElement>('tbody tr')]
-    expect(rows.map((row) => row.getAttribute('data-part'))).toContain('row')
+    expect(
+        rows.map((row) => row.getAttribute('data-sortable-table')),
+    ).toContain('row')
     expect(rows.every((row) => row.hasAttribute('data-stage'))).toBe(true)
     const second = rows[1] as HTMLElement
     second.click()

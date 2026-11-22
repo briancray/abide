@@ -25,7 +25,7 @@ test('won revenue is a line broken where a month has no total', async () => {
     expect(chart().getAttribute('aria-label')).toBe(
         'Won revenue against target, June to November',
     )
-    const won = chart().querySelector("[data-part=line][data-series='0']")
+    const won = chart().querySelector("[data-chart=line][data-series='0']")
     expect(won?.getAttribute('d')?.match(/M/g)).toHaveLength(2)
     expect(texts('[data-axis=x]')).toEqual([
         'Jun 2026',
@@ -61,12 +61,12 @@ test('the crosshair reads each line at the nearest month', async () => {
         'Target: $22K',
     ])
     pointAt(2)
-    expect(texts('[data-part=readout-value]')).toEqual([
+    expect(texts('[data-chart=readout-value]')).toEqual([
         'Won: —',
         'Target: $24K',
     ])
     pointAt(5)
-    expect(texts('[data-part=readout-value]')).toEqual([
+    expect(texts('[data-chart=readout-value]')).toEqual([
         'Won: $42K',
         'Target: $30K',
     ])
@@ -90,7 +90,7 @@ test('a series of zeroes is drawn along the bottom of a chart that takes zero in
     using _chart = await mount(
         WonRevenue({ won: [0, 0, 0], target: [0, 0, 0] }),
     )
-    const won = chart().querySelector("[data-part=line][data-series='0']")
+    const won = chart().querySelector("[data-chart=line][data-series='0']")
     const heights = new Set(
         [...(won?.getAttribute('d') ?? '').matchAll(/,([\d.]+)/g)].map(
             (match) => match[1],
@@ -116,7 +116,7 @@ function press(key: string) {
 test('the arrows step the crosshair month by month, and Escape puts it away', async () => {
     using _chart = await mount(WonRevenue({}))
     const tip = () => document.querySelector('[role=tooltip]') as HTMLElement
-    const month = () => texts('[role=tooltip] [data-part=readout-x]')[0]
+    const month = () => texts('[role=tooltip] [data-chart=readout-x]')[0]
     expect(chart().getAttribute('tabindex')).toBe('0')
     press('ArrowRight')
     expect(month()).toBe('Jun 2026')
@@ -142,7 +142,7 @@ test('the arrows step the crosshair month by month, and Escape puts it away', as
 })
 
 const said = (part: 'polite' | 'assertive') =>
-    document.querySelector(`[data-part=${part}]`)?.textContent ?? ''
+    document.querySelector(`[data-announce=${part}]`)?.textContent ?? ''
 
 // 52.72 — A MOVE THE KEYS MAKE IS READ OUT, and a pointer's is not: the keyboard's reader has no
 // readout in front of them, and a pointer sweeping the plot would read every month it crossed.
@@ -167,7 +167,9 @@ test("a move the keys make is read out, and a pointer's is not", async () => {
 // reader to read.
 test('the same words said twice land twice, each replacing the last', async () => {
     using _chart = await mount(WonRevenue({}))
-    const region = document.querySelector('[data-part=polite]') as HTMLElement
+    const region = document.querySelector(
+        '[data-announce=polite]',
+    ) as HTMLElement
     expect(region.getAttribute('aria-live')).toBe('polite')
     announce('Saved')
     flushSync()
@@ -188,14 +190,16 @@ test('the same words said twice land twice, each replacing the last', async () =
 test('every month won is marked by a dot of its own, on the line', async () => {
     using _chart = await mount(WonRevenue({}))
     const dots = [
-        ...chart().querySelectorAll("circle[data-part=point][data-series='0']"),
+        ...chart().querySelectorAll(
+            "circle[data-chart=point][data-series='0']",
+        ),
     ]
     expect(dots).toHaveLength(5)
     // The path's corners, which it writes to two places.
     const corners = [
         ...(
             chart()
-                .querySelector("[data-part=line][data-series='0']")
+                .querySelector("[data-chart=line][data-series='0']")
                 ?.getAttribute('d') ?? ''
         ).matchAll(/(-?[\d.]+),(-?[\d.]+)/g),
     ].map((match) => [Number(match[1]), Number(match[2])])

@@ -27,7 +27,7 @@ test('typing narrows the contacts, ignoring case', async () => {
     expect(names()).toHaveLength(3)
     type('zz')
     expect(
-        document.querySelector('[data-part=empty]')?.textContent?.trim(),
+        document.querySelector('[data-combobox=empty]')?.textContent?.trim(),
     ).toBe('No contact matches')
 })
 

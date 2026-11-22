@@ -20,13 +20,13 @@ const {
         values: readonly (number | null | undefined)[]
         /** What the trend shows, as the image's accessible name: `'Won revenue, last 6 months'`. */
         label: string
-        /** Whether to fill under the line, as `data-part="area"`. `false` by default. */
+        /** Whether to fill under the line, as `data-sparkline="area"`. `false` by default. */
         area?: boolean
-        /** Whether to mark the last value, as `data-part="dot"`. `false` by default. */
+        /** Whether to mark the last value, as `data-sparkline="dot"`. `false` by default. */
         dot?: boolean
         /** Whether the range takes in zero, so a run of zeroes lies along the bottom. `false` by default. */
         zero?: boolean
-        /** 52.33 — `'bar'` draws each value as a bar up from zero, as `data-part="bar"`, in place of the line: a count. `'line'` by default. */
+        /** 52.33 — `'bar'` draws each value as a bar up from zero, as `data-sparkline="bar"`, in place of the line: a count. `'line'` by default. */
         kind?: 'line' | 'bar'
     } & Omit<Attributes<'svg'>, 'values'>
 >()

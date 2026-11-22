@@ -44,17 +44,17 @@ test('a docs tool reads as being read, then as read, and the words after it rend
     }
     using _chat = await mount(ScriptedAnswer({ ask }))
     const input = document.querySelector(
-        '[data-part=input]',
+        '[data-chat=input]',
     ) as HTMLTextAreaElement
     input.value = 'How do I watch a value?'
     input.dispatchEvent(new Event('input'))
     flushSync()
     document
-        .querySelector('[data-part=composer]')
+        .querySelector('[data-chat=composer]')
         ?.dispatchEvent(new Event('submit', { cancelable: true }))
     await settled()
     const line = () =>
-        document.querySelector('[data-part=tool] .status')?.textContent
+        document.querySelector('[data-chat=tool] .status')?.textContent
     expect(line()).toBe('Reading the docs: page…')
     steps.shift()?.()
     await settled()
@@ -83,13 +83,13 @@ test('an answer leaves out what it is still writing until the turn ends — 52.5
     }
     using _chat = await mount(ScriptedAnswer({ ask }))
     const input = document.querySelector(
-        '[data-part=input]',
+        '[data-chat=input]',
     ) as HTMLTextAreaElement
     input.value = 'How?'
     input.dispatchEvent(new Event('input'))
     flushSync()
     document
-        .querySelector('[data-part=composer]')
+        .querySelector('[data-chat=composer]')
         ?.dispatchEvent(new Event('submit', { cancelable: true }))
     await settled()
     const answer = () =>

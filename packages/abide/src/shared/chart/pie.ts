@@ -7,7 +7,7 @@ import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
 import { reactive } from '../reactive/index.ts'
 import type { Disposer } from '../reactive/watch.ts'
-import { tip } from '../tooltip/tip.ts'
+import { tipAgainst } from '../tooltip/tip.ts'
 
 /** What `pie` draws and how. A value is read live where a function is given. */
 export type PieOptions = {
@@ -55,14 +55,25 @@ export function pie(options: PieOptions): PieParts {
     // 49.13 — read where it is used.
     const valueFormat = (value: number) =>
         (options.valueFormat ?? number)(value)
-    // A slice's hint binding, kept while its words stand, so a sweep that eases binds nothing again.
-    // Each drawing keeps only the words it drew, so values that move do not pile bindings up.
-    let hints = new Map<string, (element: Element) => Disposer>()
-    let drawing = new Map<string, (element: Element) => Disposer>()
-    const hinted = (text: string) => {
-        const bind = hints.get(text) ?? tip(text)
-        drawing.set(text, bind)
-        return bind
+    // 52.81 — a slice's hint binding, kept while its words stand, so a sweep that eases binds nothing
+    // again; its arc is what the latest drawing wrote, read as the hint is placed (52.68). Each drawing
+    // keeps only the words it drew, so values that move do not pile bindings up.
+    let hints = new Map<string, Hinted>()
+    let drawing = new Map<string, Hinted>()
+    const hinted = (text: string, from: number, to: number, hole: number) => {
+        let kept = hints.get(text)
+        if (kept === undefined) {
+            const arc = new Hinted(from, to, hole)
+            arc.bind = tipAgainst(text, {}, (element) =>
+                arcBox(element, arc.from, arc.to, arc.hole),
+            )
+            kept = arc
+        }
+        kept.from = from
+        kept.to = to
+        kept.hole = hole
+        drawing.set(text, kept)
+        return kept.bind
     }
 
     const ring = reactive(() => {
@@ -89,7 +100,7 @@ export function pie(options: PieOptions): PieParts {
                 share,
                 hint,
                 circle: {
-                    'data-part': 'slice',
+                    'data-pie': 'slice',
                     'data-series': index,
                     'data-disabled':
                         options.disabled?.(index) === true ? '' : undefined,
@@ -102,7 +113,7 @@ export function pie(options: PieOptions): PieParts {
                     transform: `rotate(-90 ${CENTER} ${CENTER})`,
                     // 52.64 — the sweep as `style` properties, which a CSS transition eases.
                     style: `stroke-dasharray: ${share * circumference} ${circumference}; stroke-dashoffset: ${-before * circumference}`,
-                    'bind:element': hinted(hint),
+                    'bind:element': hinted(hint, before, before + share, hole),
                     onclick: () => pick(index),
                 },
             })
@@ -121,7 +132,7 @@ export function pie(options: PieOptions): PieParts {
 
     return {
         svg: {
-            'data-part': 'svg',
+            'data-pie': 'svg',
             viewBox: `0 0 ${SIZE} ${SIZE}`,
             role: 'img',
             get 'aria-label'() {
@@ -132,6 +143,62 @@ export function pie(options: PieOptions): PieParts {
             return ring()
         },
     }
+}
+
+// A slice's hint binding and the arc it opens against, as the latest drawing left it.
+class Hinted {
+    bind: (element: Element) => Disposer = () => () => {}
+    from: number
+    to: number
+    hole: number
+    constructor(from: number, to: number, hole: number) {
+        this.from = from
+        this.to = to
+        this.hole = hole
+    }
+}
+
+// 52.68 — WHERE A SLICE'S HINT OPENS: the box of its own arc, on screen. Its element is a circle as
+// wide as the ring whatever its sweep, so against the element every slice's hint opens in one place.
+// `from` and `to` are fractions of a turn clockwise from the top; the arc spans the ring between `hole`
+// and the outer edge, and its box is its four corners and every axis it crosses on the outer edge.
+function arcBox(
+    slice: Element,
+    from: number,
+    to: number,
+    hole: number,
+): DOMRect {
+    const svg = (slice as SVGElement).ownerSVGElement ?? slice
+    const frame = svg.getBoundingClientRect()
+    // The viewBox's square, centered in the element as `xMidYMid meet` draws it.
+    const scale = Math.min(frame.width, frame.height) / SIZE
+    const left = frame.left + (frame.width - SIZE * scale) / 2
+    const top = frame.top + (frame.height - SIZE * scale) / 2
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    const reach = (turn: number, radius: number) => {
+        const angle = turn * 2 * Math.PI
+        const x = CENTER + radius * Math.sin(angle)
+        const y = CENTER - radius * Math.cos(angle)
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+    }
+    reach(from, hole)
+    reach(to, hole)
+    reach(from, CENTER)
+    reach(to, CENTER)
+    for (let quarter = Math.ceil(from * 4); quarter < to * 4; quarter += 1)
+        reach(quarter / 4, CENTER)
+    return DOMRect.fromRect({
+        x: left + minX * scale,
+        y: top + minY * scale,
+        width: (maxX - minX) * scale,
+        height: (maxY - minY) * scale,
+    })
 }
 
 // 52.66 — a value missing, zero or below it is no slice.

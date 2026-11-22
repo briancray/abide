@@ -118,6 +118,7 @@ export function host(): PromptsHost {
     const shown = withPart(
         {
             role: 'alertdialog',
+            'data-prompts': 'dialog',
             get 'aria-label'() {
                 return current()?.title ?? current()?.body
             },
@@ -138,7 +139,7 @@ export function host(): PromptsHost {
 
     return {
         dialog: shown,
-        form: { method: 'dialog', 'data-part': 'form', onsubmit: submitted },
+        form: { method: 'dialog', 'data-prompts': 'form', onsubmit: submitted },
         get current() {
             return current()
         },
@@ -149,11 +150,11 @@ export function host(): PromptsHost {
                 (asked.mustType !== undefined || asked.kind === 'prompt')
             )
         },
-        title: { 'data-part': 'title' },
-        body: { 'data-part': 'body' },
-        field: { 'data-part': 'field' },
+        title: { 'data-prompts': 'title' },
+        body: { 'data-prompts': 'body' },
+        field: { 'data-prompts': 'field' },
         input: {
-            'data-part': 'input',
+            'data-prompts': 'input',
             autocomplete: 'off',
             autofocus: true,
             get 'aria-label'() {
@@ -177,10 +178,10 @@ export function host(): PromptsHost {
         get failed() {
             return failure()
         },
-        error: { role: 'alert', 'data-part': 'error' },
+        error: { role: 'alert', 'data-prompts': 'error' },
         confirm: {
             type: 'submit',
-            'data-part': 'confirm',
+            'data-prompts': 'confirm',
             value: 'confirm',
             get disabled() {
                 return !typedRight() || busy()
@@ -191,13 +192,13 @@ export function host(): PromptsHost {
         },
         cancel: {
             type: 'submit',
-            'data-part': 'cancel',
+            'data-prompts': 'cancel',
             value: 'cancel',
             get autofocus() {
                 const asked = current()
                 return asked?.kind === 'confirm' && asked.mustType === undefined
             },
         },
-        actions: { 'data-part': 'actions' },
+        actions: { 'data-prompts': 'actions' },
     }
 }

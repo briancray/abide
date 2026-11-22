@@ -114,7 +114,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
 
     return {
         svg: {
-            'data-part': 'svg',
+            'data-sparkline': 'svg',
             viewBox: `0 0 ${SIZE} ${SIZE}`,
             preserveAspectRatio: 'none',
             overflow: 'visible',
@@ -127,7 +127,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             },
         },
         line: {
-            'data-part': 'line',
+            'data-sparkline': 'line',
             get d() {
                 return drawing().line
             },
@@ -138,7 +138,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             'vector-effect': 'non-scaling-stroke',
         },
         area: {
-            'data-part': 'area',
+            'data-sparkline': 'area',
             get d() {
                 return drawing().area
             },
@@ -147,7 +147,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             stroke: 'none',
         },
         bars: {
-            'data-part': 'bar',
+            'data-sparkline': 'bar',
             get d() {
                 return drawing().bars
             },
@@ -155,7 +155,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             stroke: 'none',
         },
         dot: {
-            'data-part': 'dot',
+            'data-sparkline': 'dot',
             get d() {
                 return drawing().end
             },

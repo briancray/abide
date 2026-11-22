@@ -6,7 +6,7 @@ import { mount } from '@abide/harness/abide'
 import PipelineMix from './PipelineMix.abide'
 
 const slices = () => [
-    ...document.querySelectorAll<SVGCircleElement>('[data-part=slice]'),
+    ...document.querySelectorAll<SVGCircleElement>('[data-pie=slice]'),
 ]
 // A slice's length along the ring and where it starts, both as shares of the ring (52.64).
 function sweep(slice: SVGCircleElement) {

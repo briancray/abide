@@ -123,7 +123,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Send a follow-up while an answer streams">
         <p>A question sent while an answer streams waits in the composer's
-            <code>data-part="queued"</code>, with a <code>cancel</code> button, and is asked as
+            <code>data-chat="queued"</code>, with a <code>cancel</code> button, and is asked as
             soon as the answer ends.</p>
     </Section>
 
@@ -152,7 +152,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Tell the rep's turns from the assistant's">
-        <p>Each turn is <code>data-part="turn"</code> with <code>data-speaker</code>,
+        <p>Each turn is <code>data-chat="turn"</code> with <code>data-speaker</code>,
             <code>you</code> or <code>assistant</code>. The root carries
             <code>data-streaming</code> while an answer arrives.</p>
         <Code language="abide" caption="abide" code={`

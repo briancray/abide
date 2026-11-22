@@ -146,14 +146,14 @@ export function sortableTable<Row>(
     }
 
     return {
-        table: { 'data-part': 'table' },
+        table: { 'data-sortable-table': 'table' },
         get rows() {
             return sorted()
         },
         column: (column) => ({
             header: {
                 scope: 'col',
-                'data-part': 'header',
+                'data-sortable-table': 'header',
                 get 'aria-sort'() {
                     return directionOf(column)
                 },
@@ -164,22 +164,22 @@ export function sortableTable<Row>(
             },
             sort: {
                 type: 'button',
-                'data-part': 'sort',
+                'data-sortable-table': 'sort',
                 onclick: () => sortBy(column),
             },
-            cell: { 'data-part': 'cell', 'data-align': column.align },
+            cell: { 'data-sortable-table': 'cell', 'data-align': column.align },
         }),
         row: (row) => ({
             row: {
-                'data-part': 'row',
+                'data-sortable-table': 'row',
                 get 'data-selected'() {
                     return picked().has(key(row)) ? '' : undefined
                 },
             },
-            select: { 'data-part': 'select' },
+            select: { 'data-sortable-table': 'select' },
             checkbox: {
                 type: 'checkbox',
-                'data-part': 'checkbox',
+                'data-sortable-table': 'checkbox',
                 get 'aria-label'() {
                     const first = columns()[0]
                     return `Select ${first === undefined ? key(row) : cellText(row, first)}`
@@ -189,14 +189,14 @@ export function sortableTable<Row>(
                 },
                 onclick: (event: MouseEvent) => toggle(row, event),
             },
-            detail: { 'data-part': 'detail' },
+            detail: { 'data-sortable-table': 'detail' },
         }),
         text: cellText,
         selectAll: {
-            select: { scope: 'col', 'data-part': 'select' },
+            select: { scope: 'col', 'data-sortable-table': 'select' },
             checkbox: {
                 type: 'checkbox',
-                'data-part': 'checkbox',
+                'data-sortable-table': 'checkbox',
                 'aria-label': 'Select every row',
                 get checked() {
                     return every()

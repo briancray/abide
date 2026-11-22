@@ -24,7 +24,7 @@ test('a combobox in a box that clips it opens its list past the box — 51.64', 
     await expect(option).toBeVisible()
     const box = page.locator('#clipped-name').locator('xpath=ancestor::div[2]')
     const clip = (await box.boundingBox()) as { y: number; height: number }
-    // The list is placed again in the frame after its options grow it (50.26): read it once it has.
+    // The list is placed again before the frame its options grow it in is painted (50.26): read it once it has.
     await expect
         .poll(() =>
             option.evaluate((element) => {

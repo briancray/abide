@@ -29,9 +29,9 @@ test('a key opens the palette, Enter runs a command, Escape shuts it, and focus 
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('combobox')).toBeFocused()
     await page.keyboard.type('new')
-    await expect(dialog.locator('[role=option] [data-part=label]')).toHaveText([
-        'Add a deal',
-    ])
+    await expect(
+        dialog.locator('[role=option] [data-command-palette=label]'),
+    ).toHaveText(['Add a deal'])
     await page.keyboard.press('Enter')
     await expect(dialog).toBeHidden()
     await expect(

@@ -54,9 +54,9 @@ test('a shipped component writes a style only from a computed value — 49.6', a
 
 // 49.9 — A COMPONENT OVER PARTS renders its widget through the parts function an app can spread
 // itself, exported beside it, and its own markup does nothing for the widget: no handler, no role and
-// no `aria-` attribute and no `data-part` of its own, every one of them the parts' (49.4).
-// THE REVERT: write Range's thumbs' `onkeydown` in `Range.abide` again, or `data-part="thumb"` beside
-// their spread, and it is named.
+// no `aria-` attribute and no attribute named for the parts function of its own, every one of them the
+// parts' (49.4). THE REVERT: write Range's thumbs' `onkeydown` in `Range.abide` again, or
+// `data-range="thumb"` beside their spread, and it is named.
 const OVER_PARTS: Record<string, { module: string; name: string }> = {
     'Range.abide': { module: 'range.ts', name: 'range' },
     'CommandPalette.abide': {
@@ -143,8 +143,15 @@ test('a component over a parts function renders through it, and does nothing of 
             ).test(exporting)
         )
             wrong.push(`${name} is not exported`)
+        // 49.4 — a `host`'s attribute is its namespace's: `data-toasts` for `toasts.host`.
+        const named = (
+            name === 'host' ? (module.split('/')[0] as string) : name
+        ).replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
         for (const [attribute] of template(text).matchAll(
-            /\s(?:on[a-z]+|role|aria-[a-z]+|data-part)=/g,
+            new RegExp(
+                `\\s(?:on[a-z]+|role|aria-[a-z]+|data-${named}|data-part)=`,
+                'g',
+            ),
         ))
             wrong.push(`${component} writes${attribute} of its own`)
     }

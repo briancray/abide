@@ -265,11 +265,11 @@
         color: var(--color-heading);
     }
 
-    :where(.result) :where([data-part=line][data-series]) {
+    :where(.result) :where([data-chart=line][data-series]) {
         stroke-width: 2;
     }
 
-    :where(.result) :where([data-part=area][data-series]) {
+    :where(.result) :where([data-chart=area][data-series]) {
         fill-opacity: 0.55;
     }
 
@@ -399,7 +399,7 @@ html:has(> body > .site)::view-transition-new(root) {
     }
 
     /* `Pairing` (`@abide/abide/Pairing.abide`) styled by what it writes: its step on the root and
-       a `data-part` on each piece. Until paired, the command and its buttons sit as one row under
+       a `data-pairing` on each piece. Until paired, the command and its buttons sit as one row under
        the message; paired, it is the conversation, with Reconnect as quiet as the header's buttons. */
     .pairing {
         @apply flex flex-wrap items-center gap-snug;
@@ -413,7 +413,7 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply flex-col flex-nowrap items-stretch gap-section;
     }
 
-    .pairing[data-step="paired"] > [data-part="pair"] {
+    .pairing[data-step="paired"] > [data-pairing="pair"] {
         @apply self-end border-0 bg-transparent px-2 py-1 text-chrome text-muted shadow-none hover:text-ink;
     }
 
@@ -424,53 +424,53 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply flex flex-col gap-section;
     }
 
-    .conversation [data-part="transcript"] {
+    .conversation [data-chat="transcript"] {
         @apply m-0 flex list-none flex-col gap-section p-0;
     }
 
-    .conversation [data-part="turn"] {
+    .conversation [data-chat="turn"] {
         @apply flex flex-col gap-flow;
     }
 
     /* Shown only once the reader has scrolled the transcript up (53.62). */
-    .conversation [data-part="jump"] {
+    .conversation [data-follow-bottom="jump"] {
         @apply self-center rounded-full border border-rule bg-raised px-3 py-1 text-chrome text-muted hover:text-ink;
     }
 
-    .conversation [data-part="speaker"] {
+    .conversation [data-chat="speaker"] {
         @apply sr-only;
     }
 
-    .conversation [data-speaker="you"] [data-part="text"] {
+    .conversation [data-speaker="you"] [data-chat="text"] {
         @apply self-end rounded-lg bg-signal/10 px-3 py-2 font-medium;
     }
 
-    .conversation [data-part="turn"][data-streaming]::after {
+    .conversation [data-chat="turn"][data-streaming]::after {
         @apply animate-board-pulse text-chrome text-muted;
         content: "Thinking…";
     }
 
-    .conversation [data-part="permission"] {
+    .conversation [data-chat="permission"] {
         @apply flex flex-wrap items-center gap-snug rounded-lg border border-signal bg-signal/8 p-4;
     }
 
-    .conversation [data-part="permission-name"] {
+    .conversation [data-chat="permission-name"] {
         @apply basis-full font-mono;
     }
 
-    .conversation [data-part="permission-input"] {
+    .conversation [data-chat="permission-input"] {
         @apply basis-full;
     }
 
-    .conversation [data-part="failure"] {
+    .conversation [data-chat="failure"] {
         @apply text-chrome text-muted;
     }
 
-    .conversation [data-part="composer"] {
+    .conversation [data-chat="composer"] {
         @apply flex items-end gap-snug;
     }
 
-    .conversation [data-part="input"] {
+    .conversation [data-chat="input"] {
         @apply min-h-10 min-w-0 flex-1 resize-y rounded-lg border border-rule bg-raised px-3 py-2 text-prose;
     }
 

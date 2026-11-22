@@ -5,6 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { flushSync } from '#shared'
+import { pie } from '#shared/chart/pie.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { host } from '#shared/tooltip/host.ts'
 import { tip } from '#shared/tooltip/tip.ts'
@@ -86,6 +87,53 @@ test('a hint keeps the margin it is given from the viewport — 50.21', async ()
     await Bun.sleep(1)
     flushSync()
     expect(popover.style.inset.split(' ').at(-1)).toBe('30px')
+    unbind()
+    release()
+    shown.leave()
+})
+
+// 52.68 — A SLICE'S HINT OPENS AGAINST ITS OWN ARC, its element being a circle as wide as the ring
+// whatever it sweeps. The last quarter of a ring 100 across at (0, 100) spans x 0-50, so a hint 20
+// wide centers at 25. THE REVERT: bind the slice with `tip(text)`, as `pie` once did, and the hint
+// centers on the whole ring — `40px`, where `15px` is due.
+test("a pie slice's hint opens against its own arc, not the ring — 52.68", async () => {
+    for (const [name, value] of [
+        ['clientWidth', 400],
+        ['clientHeight', 300],
+    ] as const)
+        Object.defineProperty(document.documentElement, name, {
+            configurable: true,
+            get: () => value,
+        })
+    const shown = standing()
+    const popover = document.body.appendChild(document.createElement('span'))
+    popover.setAttribute('popover', 'manual')
+    popover.getBoundingClientRect = () =>
+        DOMRect.fromRect({ x: 0, y: 0, width: 20, height: 10 })
+    const release = (
+        shown.parts.hint['bind:element'] as (element: HTMLElement) => () => void
+    )(popover)
+    const ring = pie({
+        slices: [
+            { label: 'Won', value: 3 },
+            { label: 'Lost', value: 1 },
+        ],
+        label: 'Outcomes',
+    })
+    const SVG = 'http://www.w3.org/2000/svg'
+    const svg = document.body.appendChild(document.createElementNS(SVG, 'svg'))
+    svg.getBoundingClientRect = () =>
+        DOMRect.fromRect({ x: 0, y: 100, width: 100, height: 100 })
+    const circle = svg.appendChild(document.createElementNS(SVG, 'circle'))
+    circle.getBoundingClientRect = svg.getBoundingClientRect
+    const lost = ring.slices[1]?.circle as {
+        'bind:element': (element: Element) => () => void
+    }
+    const unbind = lost['bind:element'](circle)
+    circle.dispatchEvent(new MouseEvent('mouseenter'))
+    await Bun.sleep(350)
+    flushSync()
+    expect(popover.style.inset).toBe('82px auto auto 15px')
     unbind()
     release()
     shown.leave()

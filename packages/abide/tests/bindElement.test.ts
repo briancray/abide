@@ -314,7 +314,7 @@ import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 const parts = {
-    'data-part': 'box',
+    'data-box': 'box',
     'bind:element': (node: Element) => {
         ;(globalThis as { __SPREAD__?: string }).__SPREAD__ += node.isConnected ? 'c' : 'x'
         return () => { (globalThis as { __SPREAD__?: string }).__SPREAD__ += 'C' }
@@ -327,7 +327,7 @@ const parts = {
 
     expect(html).not.toContain('bind:element')
     flushSync()
-    expect(document.querySelector('#widget')?.getAttribute('data-part')).toBe(
+    expect(document.querySelector('#widget')?.getAttribute('data-box')).toBe(
         'box',
     )
     expect((globalThis as { __SPREAD__?: string }).__SPREAD__).toBe('c')

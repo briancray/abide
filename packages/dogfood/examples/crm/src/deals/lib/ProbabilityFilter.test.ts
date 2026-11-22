@@ -16,8 +16,8 @@ test('the shipped Range is a group holding the track, the span and two thumbs th
     const group = document.querySelector('[role=group]') as HTMLElement
     expect(group.getAttribute('aria-label')).toBe('Win probability')
     expect(
-        [...group.querySelectorAll('[data-part]')].map((part) =>
-            part.getAttribute('data-part'),
+        [...group.querySelectorAll('[data-range]')].map((part) =>
+            part.getAttribute('data-range'),
         ),
     ).toEqual(['track', 'fill', 'thumb', 'thumb'])
     expect(listed()).toEqual(['Turing seats', 'Hopper renewal'])

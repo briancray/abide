@@ -8,7 +8,7 @@ import RepTrends from './RepTrends.abide'
 
 const lines = () =>
     [...document.querySelectorAll('svg')].filter(
-        (svg) => svg.querySelector('[data-part=line]') !== null,
+        (svg) => svg.querySelector('[data-sparkline=line]') !== null,
     )
 const trends = () => lines().map((line) => line.getAttribute('data-trend'))
 
@@ -21,9 +21,9 @@ test("a rep's sparkline carries its trend, and redraws in place", async () => {
         "Grace Hopper's won revenue, 6 months",
     )
     // August is missing, so Grace's line is two runs.
-    const line = grace?.querySelector('[data-part=line]')
+    const line = grace?.querySelector('[data-sparkline=line]')
     expect(line?.getAttribute('d')?.match(/M/g)).toHaveLength(2)
-    expect(grace?.querySelector('[data-part=dot]')).not.toBeNull()
+    expect(grace?.querySelector('[data-sparkline=dot]')).not.toBeNull()
     const work = measure(() => {
         ;(document.querySelectorAll('.tabs button')[1] as HTMLElement).click()
         flushSync()
@@ -37,7 +37,7 @@ test("a rep's sparkline carries its trend, and redraws in place", async () => {
 test('a rep who has closed nothing lies along the bottom, not across the middle', async () => {
     using _trends = await mount(RepTrends({}))
     const joan = lines()[3]
-    expect(joan?.querySelector('[data-part=dot]')?.getAttribute('d')).toBe(
+    expect(joan?.querySelector('[data-sparkline=dot]')?.getAttribute('d')).toBe(
         'M100,100Z',
     )
 })
@@ -46,7 +46,7 @@ test('a rep who has closed nothing lies along the bottom, not across the middle'
 // draw as nothing, and Ada's two as no bar at all.
 test("a rep's deals closed draw as bars up from zero, as long as the count", async () => {
     using _trends = await mount(RepTrends({}))
-    const bars = [...document.querySelectorAll('[data-part=bar]')]
+    const bars = [...document.querySelectorAll('[data-sparkline=bar]')]
     expect(bars).toHaveLength(4)
     // Each bar is `M left,zero H right V top H left Z`: its height is zero less its top.
     const heights = (bar: Element | undefined) =>

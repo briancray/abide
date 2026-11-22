@@ -3,12 +3,14 @@
 // on Enter. 53.32 — every event is folded into the answering turn once, through `patch`, so a chunk
 // rewrites the part it lands in and nothing before it.
 //
-// STYLED BY WHAT IT WRITES (49.2, 49.4): the root carries `data-streaming`; its `data-part`s are
-// `transcript` (`data-following`), `jump` (`hidden` while following, `data-unseen`), `turn` (`data-speaker`, `data-streaming`, `data-stop`, `data-failed`), `speaker`,
-// `text`, `image`, `tool` (`data-status`) holding `tool-name`, `tool-input` and `tool-result`,
-// `permission` (`data-answer`) holding `permission-name`, `permission-input`, `allow` and `deny`,
-// `failure`, `actions`, and `composer` (`data-dragging`) holding `attachments`, `attachment`,
-// `remove`, `queued` holding `cancel`, `input`, `send` and `stop`.
+// STYLED BY WHAT IT WRITES (49.2, 49.4): the root carries `data-streaming`; its `data-chat` parts are
+// `transcript` (`data-following`), `turn` (`data-speaker`, `data-streaming`, `data-stop`,
+// `data-failed`), `speaker`, `text`, `image`, `tool` (`data-status`) holding `tool-name`, `tool-input`
+// and `tool-result`, `permission` (`data-answer`) holding `permission-name`, `permission-input`,
+// `allow` and `deny`, `failure`, `actions`, and `composer` (`data-dragging`) holding `attachments`,
+// `attachment`, `remove`, `queued` holding `cancel`, `input`, `send` and `stop`. The transcript is
+// also `followBottom`'s `data-follow-bottom="host"`, and its jump button `data-follow-bottom="jump"`
+// (`hidden` while following, `data-unseen`); the composer is also `dropzone`'s host.
 import type {
     AssistantEvent,
     AssistantMessage,
@@ -213,67 +215,67 @@ const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
 </script>
 
 <section {...rest} data-streaming={streaming ? '' : undefined}>
-    <ol data-part="transcript" role="log" aria-live="polite"
+    <ol data-chat="transcript" role="log" aria-live="polite"
         {...follow.host}>
         {#for turn, index of turns by turn}
-            <li data-part="turn"
+            <li data-chat="turn"
                 data-speaker={turn.role === 'user' ? 'you' : 'assistant'}
                 data-streaming={streaming && index === turns.length - 1 ? '' : undefined}
                 data-stop={turn.stop}
                 data-failed={turn.failed === undefined ? undefined : ''}>
-                <span data-part="speaker">{turn.role === 'user' ? 'you' : 'assistant'}</span>
+                <span data-chat="speaker">{turn.role === 'user' ? 'you' : 'assistant'}</span>
                 {#for part of turn.parts by part}
                     {#if part.type === 'text'}
                         {#if Text && turn.role === 'assistant'}
-                            <div data-part="text"><Text text={part.text} part={part} turn={turn} /></div>
+                            <div data-chat="text"><Text text={part.text} part={part} turn={turn} /></div>
                         {:else}
-                            <p data-part="text">{part.text}</p>
+                            <p data-chat="text">{part.text}</p>
                         {/if}
                     {:else if part.type === 'image'}
-                        <img data-part="image" src={sourceOf(part)} alt="an image you sent">
+                        <img data-chat="image" src={sourceOf(part)} alt="an image you sent">
                     {:else if part.type === 'tool' && Tool}
-                        <div data-part="tool" data-status={statusOf(part)}><Tool part={part} turn={turn} /></div>
+                        <div data-chat="tool" data-status={statusOf(part)}><Tool part={part} turn={turn} /></div>
                     {:else if part.type === 'tool'}
-                        <details data-part="tool" data-status={statusOf(part)}>
-                            <summary data-part="tool-name">{part.name}</summary>
-                            <pre data-part="tool-input">{JSON.stringify(part.input) ?? ''}</pre>
+                        <details data-chat="tool" data-status={statusOf(part)}>
+                            <summary data-chat="tool-name">{part.name}</summary>
+                            <pre data-chat="tool-input">{JSON.stringify(part.input) ?? ''}</pre>
                             {#if part.result !== undefined}
-                                <pre data-part="tool-result">{part.result}</pre>
+                                <pre data-chat="tool-result">{part.result}</pre>
                             {/if}
                         </details>
                     {:else if part.type === 'permission'}
-                        <div data-part="permission" data-answer={answerOf(part)}>
-                            <span data-part="permission-name">{part.name}</span>
-                            <pre data-part="permission-input">{JSON.stringify(part.input, null, 2) ?? ''}</pre>
-                            <button type="button" data-part="allow"
+                        <div data-chat="permission" data-answer={answerOf(part)}>
+                            <span data-chat="permission-name">{part.name}</span>
+                            <pre data-chat="permission-input">{JSON.stringify(part.input, null, 2) ?? ''}</pre>
+                            <button type="button" data-chat="allow"
                                 disabled={!permit || part.allowed !== undefined}
                                 onclick={() => answer(part.id, true)}>Allow</button>
-                            <button type="button" data-part="deny"
+                            <button type="button" data-chat="deny"
                                 disabled={!permit || part.allowed !== undefined}
                                 onclick={() => answer(part.id, false)}>Deny</button>
                         </div>
                     {/if}
                 {/for}
                 {#if turn.failed !== undefined}
-                    <p data-part="failure" role="alert">{turn.failed}</p>
+                    <p data-chat="failure" role="alert">{turn.failed}</p>
                 {/if}
                 {#if Actions &&
                     turn.role === 'assistant' &&
                     !(streaming && index === turns.length - 1)}
-                    <div data-part="actions"><Actions turn={turn} index={index} retry={() => retry(index)} /></div>
+                    <div data-chat="actions"><Actions turn={turn} index={index} retry={() => retry(index)} /></div>
                 {/if}
             </li>
         {/for}
     </ol>
     <button {...follow.jump}>↓ Latest</button>
 
-    <form {...drop.host} data-part="composer" onsubmit={submit}>
+    <form {...drop.host} data-chat="composer" onsubmit={submit}>
         {#if attached.length > 0}
-            <div data-part="attachments">
+            <div data-chat="attachments">
                 {#for image, at of attached}
-                    <span data-part="attachment">
+                    <span data-chat="attachment">
                         <img src={sourceOf(image)} alt="an image to send">
-                        <button type="button" data-part="remove"
+                        <button type="button" data-chat="remove"
                             aria-label="Remove this image"
                             onclick={() => attached.splice(at, 1)}>×</button>
                     </span>
@@ -281,20 +283,20 @@ const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
             </div>
         {/if}
         {#if queued}
-            <div data-part="queued">
+            <div data-chat="queued">
                 <span>{queued
                     .map((part) => (part.type === 'text' ? part.text : 'an image'))
                     .join(' ')}</span>
-                <button type="button" data-part="cancel" onclick={() => (queued = undefined)}>Cancel</button>
+                <button type="button" data-chat="cancel" onclick={() => (queued = undefined)}>Cancel</button>
             </div>
         {/if}
-        <textarea data-part="input" aria-label={label}
+        <textarea data-chat="input" aria-label={label}
             placeholder={placeholder} disabled={disabled} bind:value={draft}
             onkeydown={keys}></textarea>
         {#if streaming}
-            <button type="button" data-part="stop" onclick={stop}>Stop</button>
+            <button type="button" data-chat="stop" onclick={stop}>Stop</button>
         {/if}
-        <button type="submit" data-part="send"
+        <button type="submit" data-chat="send"
             disabled={disabled || (draft.trim() === '' && attached.length === 0)}>
             {streaming ? 'Queue' : 'Send'}</button>
     </form>

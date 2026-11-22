@@ -103,7 +103,7 @@ test('an option’s part carries its id and whether it is active, and a pointer 
     const list = listbox({ id: 'letters', options: () => ['a', 'b'] })
     const a = list.option('a')
     const b = list.option('b')
-    expect([a.id, a.role, a['data-part'], list.listbox.role]).toEqual([
+    expect([a.id, a.role, a['data-listbox'], list.listbox.role]).toEqual([
         'letters-option-a',
         'option',
         'option',

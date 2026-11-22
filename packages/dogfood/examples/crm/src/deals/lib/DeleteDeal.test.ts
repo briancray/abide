@@ -17,7 +17,7 @@ async function answer(part: 'confirm' | 'cancel') {
     await settled()
     flushSync()
     expect(dialog().open).toBe(true)
-    dialog().querySelector<HTMLButtonElement>(`[data-part=${part}]`)?.click()
+    dialog().querySelector<HTMLButtonElement>(`[data-prompts=${part}]`)?.click()
     await settled()
     flushSync()
 }
@@ -38,10 +38,10 @@ test('the question names the deal and is marked danger', async () => {
     flushSync()
     expect(dialog().getAttribute('role')).toBe('alertdialog')
     expect(dialog().hasAttribute('data-danger')).toBe(true)
-    expect(dialog().querySelector('[data-part=title]')?.textContent).toBe(
+    expect(dialog().querySelector('[data-prompts=title]')?.textContent).toBe(
         'Delete Engine renewal?',
     )
-    dialog().querySelector<HTMLButtonElement>('[data-part=cancel]')?.click()
+    dialog().querySelector<HTMLButtonElement>('[data-prompts=cancel]')?.click()
     await settled()
 })
 
@@ -51,9 +51,9 @@ test('Delete waits for the word to be typed', async () => {
     const asked = prompts.confirm({ body: 'Delete Acme?', mustType: 'acme' })
     flushSync()
     const confirm = () =>
-        dialog().querySelector('[data-part=confirm]') as HTMLButtonElement
+        dialog().querySelector('[data-prompts=confirm]') as HTMLButtonElement
     const input = dialog().querySelector(
-        '[data-part=input]',
+        '[data-prompts=input]',
     ) as HTMLInputElement
     expect(confirm().disabled).toBe(true)
     input.value = ' ACME '
@@ -89,7 +89,7 @@ test('a withdrawn prompt is declined, and the next shows in its place', async ()
         })
     const next = prompts.confirm('Archive Compiler pilot?')
     flushSync()
-    expect(dialog().querySelector('[data-part=body]')?.textContent).toBe(
+    expect(dialog().querySelector('[data-prompts=body]')?.textContent).toBe(
         'Keep editing?',
     )
     leaving.abort()
@@ -97,10 +97,10 @@ test('a withdrawn prompt is declined, and the next shows in its place', async ()
     flushSync()
     expect(`withdrawn: ${withdrawn}`).toBe('withdrawn: false')
     expect(dialog().open).toBe(true)
-    expect(dialog().querySelector('[data-part=body]')?.textContent).toBe(
+    expect(dialog().querySelector('[data-prompts=body]')?.textContent).toBe(
         'Archive Compiler pilot?',
     )
-    dialog().querySelector<HTMLButtonElement>('[data-part=confirm]')?.click()
+    dialog().querySelector<HTMLButtonElement>('[data-prompts=confirm]')?.click()
     expect(await next).toBe(true)
     expect(
         await prompts.confirm({ body: 'Gone?', signal: AbortSignal.abort() }),
@@ -127,12 +127,12 @@ test('a confirm that is a call stays up, busy, until it lands, and shows why it 
     })
     flushSync()
     const confirm = () =>
-        dialog().querySelector<HTMLButtonElement>('[data-part=confirm]')
+        dialog().querySelector<HTMLButtonElement>('[data-prompts=confirm]')
     confirm()?.click()
     await settled()
     flushSync()
     expect(`open: ${dialog().open}`).toBe('open: true')
-    expect(dialog().querySelector('[data-part=error]')?.textContent).toBe(
+    expect(dialog().querySelector('[data-prompts=error]')?.textContent).toBe(
         'The deal is locked.',
     )
     confirm()?.click()
@@ -169,7 +169,7 @@ test('a prompt that is not modal opens beside the page', async () => {
         flushSync()
         expect(opened).toEqual(['show'])
         dialog()
-            .querySelector<HTMLButtonElement>('[data-part=confirm]')
+            .querySelector<HTMLButtonElement>('[data-prompts=confirm]')
             ?.click()
         await answered
     } finally {
@@ -190,6 +190,6 @@ test('a question shows in one dialog where two Prompts stand', async () => {
         (each) => each.open,
     )
     expect(open).toHaveLength(1)
-    open[0]?.querySelector<HTMLButtonElement>('[data-part=cancel]')?.click()
+    open[0]?.querySelector<HTMLButtonElement>('[data-prompts=cancel]')?.click()
     expect(await asked).toBe(false)
 })

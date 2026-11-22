@@ -97,7 +97,7 @@ test('a search in flight keeps the last companies listed', async () => {
     await settled()
     expect(options()).toEqual([])
     expect(
-        document.querySelector('[data-part=empty]')?.textContent?.trim(),
+        document.querySelector('[data-combobox=empty]')?.textContent?.trim(),
     ).toBe('No company matches')
     await type('lang')
     ;(document.querySelector('[role=option]') as HTMLElement).click()

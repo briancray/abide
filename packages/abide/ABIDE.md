@@ -238,8 +238,8 @@ table.
 
 A shipped component brings no stylesheet and writes no class. Pass `class` and any attribute and it
 lands on the root; style its states by the `data-` attributes it writes (`data-open`,
-`data-active`, `data-sort="ascending"`) and its inner pieces by `data-part` — in Tailwind,
-`data-[open]:…` and `[&_[data-part=option]]:…` (RULEBOOK 49.1, 49.2, 49.4).
+`data-active`, `data-sort="ascending"`) and its inner pieces by the attribute named for its parts function (`data-combobox="option"`) — in
+Tailwind, `data-[open]:…` and `[&_[data-combobox=option]]:…` (RULEBOOK 49.1, 49.2, 49.4).
 
 ## The app's own notes
 

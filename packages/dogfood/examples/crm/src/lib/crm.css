@@ -491,19 +491,19 @@
 @utility picker {
     @apply flex flex-col gap-hair;
 
-    & [data-part=popup] {
+    & [data-combobox=popup] {
         @apply m-0 w-(--anchor-width) rounded-md border border-rule bg-raised p-0 text-ink shadow-sm;
     }
 
-    & [data-part=listbox] {
+    & [data-combobox=listbox] {
         @apply m-0 list-none p-0;
     }
 
-    & [data-part=option] {
+    & [data-combobox=option] {
         @apply px-3 py-1;
     }
 
-    & [data-part=empty] {
+    & [data-combobox=empty] {
         @apply px-3 py-1 text-muted;
     }
 
@@ -524,15 +524,15 @@
         @apply bg-ink/20;
     }
 
-    & [data-part=input] {
+    & [data-command-palette=input] {
         @apply w-full rounded-none border-0 border-b border-rule p-3;
     }
 
-    & [data-part=listbox] {
+    & [data-command-palette=listbox] {
         @apply m-0 list-none p-1;
     }
 
-    & [data-part=option] {
+    & [data-command-palette=option] {
         @apply flex justify-between gap-4 rounded-md px-3 py-2;
     }
 
@@ -540,11 +540,11 @@
         @apply bg-signal/10;
     }
 
-    & [data-part=key] {
+    & [data-command-palette=key] {
         @apply text-chrome text-muted;
     }
 
-    & [data-part=empty] {
+    & [data-command-palette=empty] {
         @apply p-3 text-muted;
     }
 }
@@ -609,23 +609,23 @@
 @utility range {
     @apply py-3;
 
-    & [data-part=track] {
+    & [data-range=track] {
         @apply relative h-1.5 touch-none rounded-full bg-rule;
     }
 
-    & [data-part=fill] {
+    & [data-range=fill] {
         @apply absolute inset-y-0 rounded-full bg-signal;
     }
 
-    & [data-part=thumb] {
+    & [data-range=thumb] {
         @apply absolute top-1/2 size-4 -translate-1/2 cursor-grab rounded-full border-2 border-signal bg-raised;
     }
 
-    & [data-part=thumb]:focus-visible {
+    & [data-range=thumb]:focus-visible {
         @apply outline-2 outline-offset-2 outline-signal outline-solid;
     }
 
-    &[data-dragging] [data-part=thumb] {
+    &[data-dragging] [data-range=thumb] {
         @apply cursor-grabbing;
     }
 }

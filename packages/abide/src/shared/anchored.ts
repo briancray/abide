@@ -9,6 +9,8 @@ import { place, type Placement, type PlaceOptions } from './place.ts'
 export type AnchoredOptions = PlaceOptions & {
     /** 50.48 — `false` for a layer the pointer passes through, as a hint is. Default `true`. */
     interactive?: boolean
+    /** 52.68 — the box the layer is placed against, where it is not the anchor's own: a pie slice's arc, whose element is the whole ring. Read at each placement. */
+    box?: ((anchor: Element) => DOMRect) | undefined
 }
 
 /**
@@ -23,11 +25,16 @@ export function anchored(
     placed: (placement: Placement) => void,
 ): () => void {
     let frame = 0
+    const box = options.box
+    const boxed =
+        box === undefined
+            ? anchor
+            : { getBoundingClientRect: () => box(anchor) }
     const update = (): void => {
         frame = 0
-        const placement = place(anchor, floating, options)
+        const placement = place(boxed, floating, options)
         // Read with `place`'s reads, before any write, so it forces no layout of its own.
-        const width = anchor.getBoundingClientRect().width
+        const width = boxed.getBoundingClientRect().width
         // The values `place` computed (49.6): `inset` sets the top-left corner and frees the
         // popover's UA `inset: 0`, `--arrow-offset` is where an arrow the caller draws points from,
         // and `--anchor-width` is what a list sized to its input reads (50.27).
@@ -51,8 +58,16 @@ export function anchored(
     addEventListener('resize', scheduled, { passive: true })
     // 50.26 — a hint whose text lands after it opens, or an anchor that reflows, moves nothing a
     // scroll or a resize would report: both are watched by the observer every resize shares (32.81).
-    const unresizeAnchor = resized(anchor, scheduled)
-    const unresizeFloating = resized(floating, scheduled)
+    // PLACED IN THE DELIVERY, not a frame later: a `ResizeObserver` reports after layout and before
+    // paint, so the layout is already clean to read, and the first frame shows the popover where it
+    // belongs. Scheduled instead, a hint whose text an effect wrote after it opened painted one frame
+    // sized to its padding, then jumped.
+    const resizedNow = (): void => {
+        cancelAnimationFrame(frame)
+        update()
+    }
+    const unresizeAnchor = resized(anchor, resizedNow)
+    const unresizeFloating = resized(floating, resizedNow)
     return () => {
         unresizeAnchor()
         unresizeFloating()

@@ -50,7 +50,7 @@ export function host(options: ToastsHostOptions = {}): ToastsHost {
     return {
         region: {
             role: 'status',
-            'data-part': 'region',
+            'data-toasts': 'region',
             'aria-live': 'polite',
             get 'aria-label'() {
                 return live(options.label) ?? 'Notices'
@@ -62,18 +62,18 @@ export function host(options: ToastsHostOptions = {}): ToastsHost {
         toast: (toast) => ({
             toast: {
                 ...toast.attributes,
-                'data-part': 'toast',
+                'data-toasts': 'toast',
                 'data-tone': toast.tone,
             },
-            text: { 'data-part': 'text' },
+            text: { 'data-toasts': 'text' },
             action: {
                 type: 'button',
-                'data-part': 'action',
+                'data-toasts': 'action',
                 onclick: () => act(toast),
             },
             close: {
                 type: 'button',
-                'data-part': 'close',
+                'data-toasts': 'close',
                 'aria-label': 'Dismiss',
                 onclick: () => dismiss(toast.id),
             },

@@ -23,6 +23,6 @@ async function rename() {
 <Prompts
     class="m-auto w-96 max-w-[calc(100%-2rem)] rounded-xl border border-rule
     bg-raised p-5 text-ink backdrop:bg-paper/70
-    [&_[data-part=form]]:flex [&_[data-part=form]]:flex-col
-    [&_[data-part=form]]:gap-snug [&_[data-part=actions]]:row"
+    [&_[data-prompts=form]]:flex [&_[data-prompts=form]]:flex-col
+    [&_[data-prompts=form]]:gap-snug [&_[data-prompts=actions]]:row"
  />

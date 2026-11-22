@@ -7,7 +7,7 @@ import TeamPicker from './TeamPicker.abide'
 
 const input = () => document.querySelector('input') as HTMLInputElement
 const chips = () =>
-    [...document.querySelectorAll('[data-part=chip]')].map(
+    [...document.querySelectorAll('[data-combobox=chip]')].map(
         (chip) => chip.firstChild?.textContent,
     )
 const status = () => document.querySelector('.status')?.textContent

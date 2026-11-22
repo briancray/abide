@@ -12,7 +12,9 @@ const texts = (selector: string) =>
 // A column's place and size, read off the transform that draws its unit rect (52.64).
 function bars(series: number) {
     return [
-        ...chart().querySelectorAll(`[data-part=bar][data-series='${series}']`),
+        ...chart().querySelectorAll(
+            `[data-chart=bar][data-series='${series}']`,
+        ),
     ].map((bar) => {
         const [x = 0, y = 0, width = 0, height = 0] = (
             (bar as SVGElement).style.transform.match(/-?[\d.]+/g) ?? []
@@ -39,7 +41,7 @@ function pointAt(clientX: number) {
 test('no column is drawn over a y label', async () => {
     using _flow = await mount(DealFlow({}))
     const start = Number(
-        chart().querySelector('[data-part=grid]')?.getAttribute('x1'),
+        chart().querySelector('[data-chart=grid]')?.getAttribute('x1'),
     )
     expect(start).toBeGreaterThan(0)
     for (const bar of [...bars(0), ...bars(1)])
@@ -92,7 +94,7 @@ test('as shares, every month fills the column and reads its share', async () => 
     ])
     for (const top of bars(1)) expect(top.y).toBeCloseTo(16)
     pointAt(0)
-    expect(texts('[data-part=readout-value]')).toEqual([
+    expect(texts('[data-chart=readout-value]')).toEqual([
         'Won: 4 (57.1%)',
         'Lost: 3 (42.9%)',
     ])
@@ -104,10 +106,10 @@ test('as shares, every month fills the column and reads its share', async () => 
 // is the element it was.
 test('stacking moves the columns rather than redrawing them', async () => {
     using _flow = await mount(DealFlow({}))
-    const before = [...chart().querySelectorAll('[data-part=bar]')]
+    const before = [...chart().querySelectorAll('[data-chart=bar]')]
     const work = measure(() => check('Stack'))
     atMost(work, { nodesCreated: 12 })
-    const after = [...chart().querySelectorAll('[data-part=bar]')]
+    const after = [...chart().querySelectorAll('[data-chart=bar]')]
     expect(after.every((bar, at) => bar === before[at])).toBe(true)
     expect(bars(1)[0]?.y).not.toBe(141)
 })
@@ -132,7 +134,7 @@ test('a click opens its month, and November takes no pick', async () => {
     pointAt(590)
     expect(
         document
-            .querySelector('[data-part=readout]')
+            .querySelector('[data-chart=readout]')
             ?.hasAttribute('data-disabled'),
     ).toBe(true)
 })

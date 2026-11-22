@@ -21,6 +21,19 @@ export function tip(
     text: string,
     options: TooltipOptions = {},
 ): (anchor: Element) => Disposer {
+    return tipAgainst(text, options, undefined)
+}
+
+/**
+ * `tip`, opening against `box` rather than the element's own box where one is given: what `pie` binds
+ * a slice's hint with, its element being the whole ring (52.68). Not `tip`'s own option, so it is no
+ * name an app writes.
+ */
+export function tipAgainst(
+    text: string,
+    options: TooltipOptions,
+    box: ((anchor: Element) => DOMRect) | undefined,
+): (anchor: Element) => Disposer {
     return (anchor) => {
         // 50.23 — the text describes its anchor with no element to point at.
         const description = anchor.getAttribute('aria-description')
@@ -33,7 +46,7 @@ export function tip(
             if (open !== undefined && shown.peek() === open) return
             hints.asked()
             unstack?.()
-            open = { anchor, text, options }
+            open = { anchor, text, options, box }
             shown.set(open)
             unstack = dismissible(hide, { outside: false })(anchor)
         }

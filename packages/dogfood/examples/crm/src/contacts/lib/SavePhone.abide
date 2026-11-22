@@ -33,5 +33,5 @@ async function save() {
     *:flex *:items-center *:gap-snug *:rounded-lg *:border *:border-rule
     *:bg-raised *:px-4 *:py-2 *:shadow-sm
     *:data-[tone=error]:border-bad *:data-[tone=success]:border-good
-    [&_[data-part=close]]:bg-transparent [&_[data-part=close]]:text-muted"
+    [&_[data-toasts=close]]:bg-transparent [&_[data-toasts=close]]:text-muted"
  />

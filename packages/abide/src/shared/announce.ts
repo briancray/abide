@@ -64,12 +64,12 @@ function host(): AnnouncerHost {
         polite: {
             role: 'status',
             'aria-live': 'polite',
-            'data-part': 'polite',
+            'data-announce': 'polite',
         },
         assertive: {
             role: 'alert',
             'aria-live': 'assertive',
-            'data-part': 'assertive',
+            'data-announce': 'assertive',
         },
         said(politeness) {
             const message = said()

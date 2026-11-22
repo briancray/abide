@@ -384,7 +384,7 @@ export function chart(options: ChartOptions): ChartParts {
                 path:
                     kind === 'line'
                         ? {
-                              'data-part': 'line',
+                              'data-chart': 'line',
                               'data-series': at,
                               d: drawn,
                               fill: 'none',
@@ -393,13 +393,13 @@ export function chart(options: ChartOptions): ChartParts {
                               'stroke-linecap': 'round',
                           }
                         : {
-                              'data-part': 'area',
+                              'data-chart': 'area',
                               'data-series': at,
                               d: drawn,
                               fill: 'currentColor',
                               stroke: 'none',
                           },
-                columns: { 'data-part': 'columns', 'data-series': at },
+                columns: { 'data-chart': 'columns', 'data-series': at },
                 bars,
             })
         }
@@ -412,7 +412,7 @@ export function chart(options: ChartOptions): ChartParts {
                 y,
                 label: gridLabels[index] as string,
                 grid: {
-                    'data-part': 'grid',
+                    'data-chart': 'grid',
                     x1: left,
                     x2: width,
                     y1: y,
@@ -421,7 +421,7 @@ export function chart(options: ChartOptions): ChartParts {
                     'stroke-opacity': '0.2',
                 },
                 text: {
-                    'data-part': 'tick',
+                    'data-chart': 'tick',
                     'data-axis': 'y',
                     x: 0,
                     y,
@@ -443,7 +443,7 @@ export function chart(options: ChartOptions): ChartParts {
                 x,
                 label: xFormat(positions[index] ?? index),
                 text: {
-                    'data-part': 'tick',
+                    'data-chart': 'tick',
                     'data-axis': 'x',
                     x,
                     y: bottom + 6,
@@ -478,7 +478,7 @@ export function chart(options: ChartOptions): ChartParts {
                 ? {
                       y: zeroY,
                       line: {
-                          'data-part': 'zero',
+                          'data-chart': 'zero',
                           x1: left,
                           x2: width,
                           y1: zeroY,
@@ -505,7 +505,7 @@ export function chart(options: ChartOptions): ChartParts {
             x,
             y,
             circle: {
-                'data-part': 'point',
+                'data-chart': 'point',
                 'data-series': series,
                 cx: x,
                 cy: y,
@@ -533,7 +533,7 @@ export function chart(options: ChartOptions): ChartParts {
             width,
             height,
             rect: {
-                'data-part': 'bar',
+                'data-chart': 'bar',
                 'data-series': series,
                 'data-disabled':
                     options.disabled?.(index) === true ? '' : undefined,
@@ -572,14 +572,14 @@ export function chart(options: ChartOptions): ChartParts {
                     y === undefined
                         ? undefined
                         : {
-                              'data-part': 'point',
+                              'data-chart': 'point',
                               'data-series': line,
                               cx: at,
                               cy: y,
                               r: '3',
                               fill: 'currentColor',
                           },
-                text: { 'data-part': 'readout-value', 'data-series': line },
+                text: { 'data-chart': 'readout-value', 'data-series': line },
             })
         }
         return {
@@ -587,7 +587,7 @@ export function chart(options: ChartOptions): ChartParts {
             x: at,
             label: xFormat(drawn.positions[index] ?? index),
             disabled: options.disabled?.(index) === true,
-            heading: { 'data-part': 'readout-x' },
+            heading: { 'data-chart': 'readout-x' },
             values,
         }
     })
@@ -684,7 +684,7 @@ export function chart(options: ChartOptions): ChartParts {
     return {
         id: base,
         svg: {
-            'data-part': 'svg',
+            'data-chart': 'svg',
             get width() {
                 return size().width
             },
@@ -749,7 +749,7 @@ export function chart(options: ChartOptions): ChartParts {
             id: tipId,
             role: 'tooltip',
             popover: 'manual',
-            'data-part': 'readout',
+            'data-chart': 'readout',
             get 'data-disabled'() {
                 return readout()?.disabled === true ? '' : undefined
             },
@@ -763,7 +763,7 @@ export function chart(options: ChartOptions): ChartParts {
                 index: read.index,
                 x: read.x,
                 line: {
-                    'data-part': 'crosshair',
+                    'data-chart': 'crosshair',
                     x1: read.x,
                     x2: read.x,
                     y1: frame.top,

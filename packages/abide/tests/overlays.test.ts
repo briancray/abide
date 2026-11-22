@@ -99,8 +99,11 @@ test('the arrow keeps arrowInset from the corners, and an edge too short for bot
     ).toBe(10)
 })
 
-// THE REVERT: drop the observer, and a hint whose text grew after it opened stays where it opened.
-test('a floating element that changes size is placed again — 50.26', async () => {
+// PLACED IN THE DELIVERY, which a browser makes after layout and before paint, so the frame that
+// lays the new size out paints it placed. THE REVERT: drop the observer, and a hint whose text grew
+// after it opened stays where it opened — `[62]`; hand the delivery `scheduled`, and the placement
+// waits a frame, painting one sized to the old text — `[62]` here too, read before that frame.
+test('a floating element that changes size is placed again before paint — 50.26', () => {
     const heard: ResizeObserverCallback[] = []
     const Observer = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {
@@ -127,9 +130,8 @@ test('a floating element that changes size is placed again — 50.26', async () 
         // A browser hands over an entry per element whose size changed: here, the floating one.
         const entry = { target: floating } as unknown as ResizeObserverEntry
         for (const callback of heard) callback([entry], {} as ResizeObserver)
-        await Bun.sleep(50)
-        stop()
         expect(tops).toEqual([62, 42])
+        stop()
     } finally {
         globalThis.ResizeObserver = Observer
     }

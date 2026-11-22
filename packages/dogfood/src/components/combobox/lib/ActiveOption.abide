@@ -5,7 +5,7 @@ const STAGES = ['lead', 'qualified', 'proposal', 'won']
 </script>
 
 <Combobox
-    class="[&_[data-part=listbox]]:list-none [&_[data-active]]:bg-signal/10"
+    class="[&_[data-combobox=listbox]]:list-none [&_[data-active]]:bg-signal/10"
     id="stage"
     options={STAGES}
     key={(stage: string) => stage}

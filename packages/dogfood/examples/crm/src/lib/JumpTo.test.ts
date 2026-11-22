@@ -8,9 +8,11 @@ import JumpTo from './JumpTo.abide'
 const dialog = () => document.querySelector('dialog') as HTMLDialogElement
 const input = () => dialog().querySelector('input') as HTMLInputElement
 const options = () =>
-    [...dialog().querySelectorAll('[role=option] [data-part=label]')].map(
-        (option) => option.textContent,
-    )
+    [
+        ...dialog().querySelectorAll(
+            '[role=option] [data-command-palette=label]',
+        ),
+    ].map((option) => option.textContent)
 
 function press(key: string, init: KeyboardEventInit = {}) {
     ;(document.activeElement ?? document.body).dispatchEvent(

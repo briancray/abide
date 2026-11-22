@@ -71,8 +71,8 @@ not a clause
 * `packages/abide/src/components` holds the SHIPPED components — headless `.abide` files an app imports
 one at a time as `@abide/abide/<Name>.abide`, each an `exports` entry of its own because the app's
 compile follows `.abide` specifiers and no `.ts` barrel can re-export one. RULEBOOK 49 is their
-contract: no stylesheet, no `class`, state as `data-` attributes, inner pieces as `data-part`. they
-import by seam like the rest of the framework, and are mounted and tested in the CRM, since abide's
+contract: no stylesheet, no `class`, state as `data-` attributes, inner pieces under a `data-`
+attribute named for the parts function (`data-sortable-table="row"`). they import by seam like the rest of the framework, and are mounted and tested in the CRM, since abide's
 own test preload compiles no `.abide`. when the docs app hand-rolls what one of them does, it uses
 the component instead
 * import across the seams with the `#server` / `#ui` / `#shared`

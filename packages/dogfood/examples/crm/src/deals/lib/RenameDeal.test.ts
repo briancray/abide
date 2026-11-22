@@ -7,7 +7,7 @@ import RenameDeal from './RenameDeal.abide'
 
 const dialog = () => document.querySelector('dialog') as HTMLDialogElement
 const input = () =>
-    dialog().querySelector('[data-part=input]') as HTMLInputElement
+    dialog().querySelector('[data-prompts=input]') as HTMLInputElement
 const deal = () => document.querySelector('strong')?.textContent
 
 async function ask() {
@@ -17,7 +17,7 @@ async function ask() {
 }
 
 async function press(part: 'confirm' | 'cancel') {
-    dialog().querySelector<HTMLButtonElement>(`[data-part=${part}]`)?.click()
+    dialog().querySelector<HTMLButtonElement>(`[data-prompts=${part}]`)?.click()
     await settled()
     flushSync()
 }

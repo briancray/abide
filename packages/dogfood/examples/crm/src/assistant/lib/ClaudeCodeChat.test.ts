@@ -32,10 +32,10 @@ test('unpaired: the command and the click, and no chat yet', async () => {
     using _chat = await mount(ClaudeCodeChat({}))
     await settled()
     expect(step()).toBe('click')
-    expect(document.querySelector('[data-part=command]')?.textContent).toMatch(
-        /^bunx @abide\/bridge@\S+ http:\/\/crm.invalid \S+$/,
-    )
-    expect(document.querySelector('[data-part=pair]')?.textContent).toBe(
+    expect(
+        document.querySelector('[data-pairing=command]')?.textContent,
+    ).toMatch(/^bunx @abide\/bridge@\S+ http:\/\/crm.invalid \S+$/)
+    expect(document.querySelector('[data-pairing=pair]')?.textContent).toBe(
         'Pair with a click',
     )
     expect(document.querySelector('textarea')).toBeNull()
@@ -54,7 +54,7 @@ test('paired: the chat, and the tools it cannot use', async () => {
     await settled()
     expect(step()).toBe('paired')
     expect(
-        document.querySelector('[data-part=missing]')?.textContent,
+        document.querySelector('[data-pairing=missing]')?.textContent,
     ).toContain('WebSearch')
     expect(document.querySelector('textarea')?.placeholder).toBe(
         'Which company is Grace at?',

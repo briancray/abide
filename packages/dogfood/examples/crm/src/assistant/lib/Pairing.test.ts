@@ -39,7 +39,9 @@ test('a connection that takes too long offers to try again, and trying again ask
     flushSync()
     expect(step()).toBe('slow')
     const before = asked
-    ;(document.querySelector('[data-part=retry]') as HTMLButtonElement).click()
+    ;(
+        document.querySelector('[data-pairing=retry]') as HTMLButtonElement
+    ).click()
     flushSync()
     expect(asked).toBeGreaterThan(before)
     answer(Response.json(UNPAIRED))
@@ -57,7 +59,7 @@ test('a visitor offline is told so, and the step returns once they are back', as
     window.dispatchEvent(new Event('offline'))
     flushSync()
     expect(step()).toBe('offline')
-    expect(document.querySelector('[data-part=message]')?.textContent).toBe(
+    expect(document.querySelector('[data-pairing=message]')?.textContent).toBe(
         'You are offline. Pairing resumes once you are back.',
     )
     window.dispatchEvent(new Event('online'))

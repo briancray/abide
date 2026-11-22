@@ -46,7 +46,7 @@ const OPPOSITE: Record<Side, Side> = {
  * layer a popover or a modal dialog opens in. It reads layout and writes nothing.
  */
 export function place(
-    anchor: Element,
+    anchor: Pick<Element, 'getBoundingClientRect'>,
     floating: Element,
     options: PlaceOptions = {},
 ): Placement {

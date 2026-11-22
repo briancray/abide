@@ -64,7 +64,7 @@ export type VirtualListSections = {
 export type VirtualList<Item> = {
     /** The element the items sit in: what measures them, and carries the rows left out as its padding. */
     readonly host: Record<string, unknown>
-    /** An entry's part: `data-part="item"`, its index, and what measures it. */
+    /** An entry's part: `data-virtual-list="item"`, its index, and what measures it. */
     item(entry: VirtualListEntry<Item>): Record<string, unknown>
     /** The items to render: the rows in view and `overscan` rows past each end. */
     get shown(): readonly VirtualListEntry<Item>[]
@@ -322,9 +322,9 @@ export function virtualList<Item>(
     })
 
     return {
-        host: { 'bind:element': bindHost, 'data-part': 'host' },
+        host: { 'bind:element': bindHost, 'data-virtual-list': 'host' },
         item: (entry) => ({
-            'data-part': 'item',
+            'data-virtual-list': 'item',
             'data-index': entry.index,
             'bind:element': (element: Element): Disposer => {
                 const stop = resized(
@@ -353,7 +353,7 @@ export function virtualList<Item>(
             return shown()
         },
         sections: {
-            host: { 'data-part': 'sections' },
+            host: { 'data-virtual-list': 'sections' },
             get all() {
                 return sectionList()
             },
@@ -363,7 +363,7 @@ export function virtualList<Item>(
             // 51.102, 51.103
             jump: (section) => ({
                 type: 'button',
-                'data-part': 'jump',
+                'data-virtual-list': 'jump',
                 get 'aria-current'() {
                     return current() === section.label ? 'true' : undefined
                 },

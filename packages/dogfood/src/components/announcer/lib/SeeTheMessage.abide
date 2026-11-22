@@ -7,6 +7,6 @@ import Announcer, { announce } from '@abide/abide/Announcer.abide'
     onclick={() => announce('Connection lost', { politeness: 'assertive' })}
 >Drop the connection</button>
 <Announcer
-    class="mt-3 [&_[data-part=polite]]:text-signal
-    [&_[data-part=assertive]]:text-bad"
+    class="mt-3 [&_[data-announce=polite]]:text-signal
+    [&_[data-announce=assertive]]:text-bad"
  />

@@ -29,8 +29,8 @@ function pointAt(clientX: number) {
 // Qualified's floor is 216 throughout where Proposals' top is due.
 test('each stage stacks on the one before it, through a month it has no value', async () => {
     using _trend = await mount(PipelineTrend({}))
-    const proposals = points("[data-part=area][data-series='0']")
-    const qualified = points("[data-part=area][data-series='1']")
+    const proposals = points("[data-chart=area][data-series='0']")
+    const qualified = points("[data-chart=area][data-series='1']")
     const proposalsTop = proposals.slice(0, 6)
     const qualifiedFloor = qualified.slice(6).reverse()
     expect(qualifiedFloor).toEqual(proposalsTop)
@@ -46,7 +46,7 @@ test('the target is drawn at its own values, on an axis fixed at $150K', async (
     expect(texts('[data-axis=y]')).toEqual(['$0', '$50K', '$100K', '$150K'])
     // $90K of $150K, up from the floor at 216 to the top at 16, right of the five characters of
     // `$150K` at 7 apiece and the 8 between them and the plot (52.69).
-    expect(points('[data-part=line]')[0]).toEqual([43, 96])
+    expect(points('[data-chart=line]')[0]).toEqual([43, 96])
 })
 
 // 52.24, 52.53 — A STAGE UNCHECKED IS NO LONGER DRAWN, and checked again it joins in the order it was
@@ -54,16 +54,16 @@ test('the target is drawn at its own values, on an axis fixed at $150K', async (
 // unchecking leaves three areas.
 test('leads leave the chart when unchecked, and come back last', async () => {
     using _trend = await mount(PipelineTrend({}))
-    expect(chart().querySelectorAll('[data-part=area]')).toHaveLength(3)
+    expect(chart().querySelectorAll('[data-chart=area]')).toHaveLength(3)
     const leads = document.querySelector('input') as HTMLInputElement
     leads.click()
     flushSync()
-    expect(chart().querySelectorAll('[data-part=area]')).toHaveLength(2)
+    expect(chart().querySelectorAll('[data-chart=area]')).toHaveLength(2)
     leads.click()
     flushSync()
-    expect(chart().querySelectorAll('[data-part=area]')).toHaveLength(3)
+    expect(chart().querySelectorAll('[data-chart=area]')).toHaveLength(3)
     pointAt(0)
-    expect(texts('[data-part=readout-value]')).toEqual([
+    expect(texts('[data-chart=readout-value]')).toEqual([
         'Proposals: $12K',
         'Qualified: $22K',
         'Target: $90K',

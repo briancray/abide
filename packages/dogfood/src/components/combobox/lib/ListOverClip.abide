@@ -14,8 +14,8 @@ let name = reactive<string | undefined>(undefined)
         label={(each: string) => each}
         bind:value={name}
         placeholder="Type a name"
-        class="[&_[data-part=popup]]:m-0
-        [&_[data-part=popup]]:w-(--anchor-width)"
+        class="[&_[data-combobox=popup]]:m-0
+        [&_[data-combobox=popup]]:w-(--anchor-width)"
     >
         No one matches
     </Combobox>

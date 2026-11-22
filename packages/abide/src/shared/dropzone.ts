@@ -115,7 +115,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
             if (took(event.clipboardData, event).length > 0)
                 event.preventDefault()
         },
-        'data-part': 'host',
+        'data-dropzone': 'host',
     }
 
     // 53.60 — a pick through the input is taken as a drop is, and the input emptied after, so the
@@ -138,7 +138,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
             took(transfer, event)
             picker.value = ''
         },
-        'data-part': 'input',
+        'data-dropzone': 'input',
     }
 
     return {

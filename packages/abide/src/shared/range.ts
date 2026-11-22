@@ -179,7 +179,7 @@ export function range(options: RangeOptions): RangeParts {
         value,
         root: {
             role: 'group',
-            'data-part': 'root',
+            'data-range': 'root',
             get 'aria-label'() {
                 return live(options.label)
             },
@@ -188,7 +188,7 @@ export function range(options: RangeOptions): RangeParts {
             },
         },
         track: {
-            'data-part': 'track',
+            'data-range': 'track',
             onpointerdown: press,
             onpointermove: (event: PointerEvent) => {
                 const held = dragging.peek()
@@ -198,7 +198,7 @@ export function range(options: RangeOptions): RangeParts {
             onlostpointercapture: letGo,
         },
         fill: {
-            'data-part': 'fill',
+            'data-range': 'fill',
             // 51.97 — the span between the thumbs, as the computed `left` and `right` placing it.
             get style() {
                 const [low, high] = value()
@@ -209,7 +209,7 @@ export function range(options: RangeOptions): RangeParts {
             thumb: {
                 id: thumbId(which),
                 role: 'slider',
-                'data-part': 'thumb',
+                'data-range': 'thumb',
                 tabindex: '0',
                 'data-thumb': which === 0 ? 'low' : 'high',
                 get 'aria-label'() {
@@ -236,7 +236,7 @@ export function range(options: RangeOptions): RangeParts {
             },
             input: {
                 type: 'hidden',
-                'data-part': 'input',
+                'data-range': 'input',
                 get name() {
                     return live(options.name)
                 },

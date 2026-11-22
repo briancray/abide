@@ -6,9 +6,9 @@ import askAssistant from '../askAssistant.handler.ts'
 </script>
 
 <Chat ask={askAssistant} placeholder="Which company is Ada at?"
-    class="chat [&_[data-part=transcript]]:flex
-        [&_[data-part=transcript]]:flex-col [&_[data-part=transcript]]:gap-snug
-        [&_[data-part=transcript]]:p-0 [&_[data-part=composer]]:row">
+    class="chat [&_[data-chat=transcript]]:flex
+        [&_[data-chat=transcript]]:flex-col [&_[data-chat=transcript]]:gap-snug
+        [&_[data-chat=transcript]]:p-0 [&_[data-chat=composer]]:row">
     {#component Text({ text }: { text: string })}
         <Markdown source={text} />
     {/component}

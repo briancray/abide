@@ -4951,9 +4951,12 @@ while it holds where it has two.
 
 49.3 A shipped component MUST NOT write a `class`.
 
-49.4 Every part a parts function hands back for an element MUST carry a `data-part` attribute naming
-the element, and an element of a shipped component other than its root that a caller can style MUST
-carry the `data-part` the part spread on it writes.
+49.4 Every part a parts function hands back for an element MUST carry, naming the element, a `data-`
+attribute named for the parts function — its name in kebab case, `data-sortable-table` for
+`sortableTable`, and its namespace's for a `host`, `data-toasts` for `toasts.host`. An element of a
+shipped component other than its root that a caller can style MUST carry the attribute the part
+spread on it writes, or, where no part is spread on it, one named for the component the same way,
+`data-chat` for `Chat`.
 
 49.5 `@abide/abide` MUST NOT ship a stylesheet for a shipped component.
 
@@ -4968,8 +4971,8 @@ parts that names by id an element the document does not hold, and for each of it
 stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry the check.
 
 49.9 A shipped component for a widget a parts function also ships MUST render the widget through that
-parts function, and MUST NOT write a handler, a `role`, an `aria-` attribute or a `data-part` of its
-own for it.
+parts function, and MUST NOT write a handler, a `role`, an `aria-` attribute, or the attribute 49.4
+names for its parts, of its own for it.
 
 49.10 Every option of a parts function an app binds — a `Reactive` the parts read and write — MUST be
 optional, and the parts MUST hand back what they read and write as a `Reactive` member under the
@@ -5121,7 +5124,7 @@ its `menu` open.
 the keys typed within 500 milliseconds of each other.
 
 50.41 `Toasts` MUST write each attribute a notice's `attributes` names onto that notice's element,
-under its `data-part` and `data-tone`.
+under its `data-toasts` and `data-tone`.
 
 50.42 A notice's `onclose` MUST be called once, as the notice leaves `toasts.list`, with `timeout`
 where its timeout took it, `action` where its action did, and `dismissed` otherwise.
@@ -5139,7 +5142,7 @@ in its `error` part once it rejects.
 
 50.46 `Toasts` MUST render a notice's content through `Toast` where it is given, handed the notice,
 what dismisses it and what runs its action, inside the element carrying the notice's attributes,
-`data-part="toast"` and `data-tone`, and as its text, action and close button otherwise.
+`data-toasts="toast"` and `data-tone`, and as its text, action and close button otherwise.
 
 50.47 The element carrying a `chart`'s `tip` MUST open against the chart's crosshair for as long as
 the crosshair stands, and the chart's `svg` part MUST name it in `aria-describedby` while it does.
@@ -5349,11 +5352,11 @@ is given, handed the item and what takes it out, and as its `label` beside `comb
 part otherwise, and Backspace in `combobox`'s empty input MUST take out the last item it holds.
 
 51.63 `SortableTable` given `Detail` MUST render, after each row, a row of its own whose
-`data-part` is `detail` and whose one cell spans every column and holds `Detail` handed that row.
+`data-sortable-table` is `detail` and whose one cell spans every column and holds `Detail` handed that row.
 
 51.64 `combobox`'s `popup` part MUST open the element it is spread on against its input as `popover`
 opens one, and a press inside it MUST NOT take focus from its input, and `Combobox` MUST hold its open
-list, and the children 51.31 renders, in one `data-part="popup"` element carrying it.
+list, and the children 51.31 renders, in one `data-combobox="popup"` element carrying it.
 
 51.65 `virtualList`'s `shown` MUST be its `items` from `overscan` rows before the first row its
 scroller shows to `overscan` rows past the last, each with the item, its index and its key.
@@ -5553,7 +5556,7 @@ near, and `-1` where there are no positions.
 order they were mounted with the first at the back, each mark carrying its series' index in that
 order as `data-series`.
 
-52.25 `Chart` MUST draw a `data-part="zero"` line at zero inside its plot, where `zero` is set.
+52.25 `Chart` MUST draw a `data-chart="zero"` line at zero inside its plot, where `zero` is set.
 
 52.26 `Chart` MUST draw a crosshair at the x position nearest the pointer while a pointer is over it,
 and MUST open a readout of every series' value wherever its crosshair stands (50.47).
@@ -5585,7 +5588,7 @@ MUST draw a series whose every present value is zero along the bottom of that ra
 52.36 `format.dateParts` MUST answer the pieces whose values joined in order are what `format.date`
 writes for the same value and options.
 
-52.37 `Chart` MUST draw a `Column` as a `data-part="bar"` rect per present value, take zero into its
+52.37 `Chart` MUST draw a `Column` as a `data-chart="bar"` rect per present value, take zero into its
 range where it draws one, and stand the columns of an x side by side in its slot, one band per stack
 of columns and one per column in none.
 
@@ -5637,9 +5640,9 @@ fence half written, a last line that is a block's marker alone, a table's rows u
 under its head is whole and its last row until the line ends, and the end of the last line from an
 opening of code, emphasis, a link or a tag nothing closes yet.
 
-52.51 `Chart` MUST draw a `Line` as a `data-part="line"` path through its present values.
+52.51 `Chart` MUST draw a `Line` as a `data-chart="line"` path through its present values.
 
-52.52 `Chart` MUST draw an `Area` as a `data-part="area"` path closed onto the top of what is stacked
+52.52 `Chart` MUST draw an `Area` as a `data-chart="area"` path closed onto the top of what is stacked
 under it, through a value it is missing, and, where it is in no stack, down to zero or the edge of the
 plot nearer zero.
 
@@ -5675,7 +5678,7 @@ of its values.
 
 52.64 `Chart` MUST write a column's place and size, and `Pie` a slice's sweep, as `style` properties.
 
-52.65 `Pie` MUST draw each slice as a `data-part="slice"` arc sweeping its value's share of the sum of
+52.65 `Pie` MUST draw each slice as a `data-pie="slice"` arc sweeping its value's share of the sum of
 the slices' values, clockwise from the top in the order given, its index as `data-series`.
 
 52.66 `Pie` MUST draw no slice for a value that is missing, zero or negative.
@@ -5683,9 +5686,9 @@ the slices' values, clockwise from the top in the order given, its index as `dat
 52.67 `Pie` MUST leave a hole at its center `inner` of its radius across.
 
 52.68 `Pie` MUST open a hint for a slice as `tooltip` does, reading its label, its value and its
-share.
+share, placed against the box of that slice's own arc rather than the whole ring's.
 
-52.69 `Chart` MUST draw its y ticks as `data-part="tick"` labels left of its plot, and no mark over
+52.69 `Chart` MUST draw its y ticks as `data-chart="tick"` labels left of its plot, and no mark over
 one.
 
 52.70 `Chart` MUST take focus, and while it has it, ArrowRight and ArrowLeft MUST move its crosshair
