@@ -605,6 +605,48 @@
     }
 }
 
+/* A calendar: the month between its paging buttons, a week a row of seven, today ringed, the days of
+   other months dimmed and the day picked lit. */
+@utility calendar {
+    @apply grid gap-1;
+
+    & [data-part=bar] {
+        @apply flex items-center justify-between;
+    }
+
+    & [role=row] {
+        @apply grid grid-cols-7 gap-1;
+    }
+
+    & [role=columnheader] {
+        @apply text-center text-chrome text-muted;
+    }
+
+    & [role=gridcell] {
+        @apply grid min-h-12 cursor-default content-start gap-0.5 rounded-sm bg-raised p-1 text-chrome outline-none;
+    }
+
+    & [role=gridcell]:focus-visible {
+        @apply outline-2 outline-offset-2 outline-signal outline-solid;
+    }
+
+    & [data-outside] {
+        @apply text-muted;
+    }
+
+    & [data-today] {
+        @apply border border-signal;
+    }
+
+    & [data-selected] {
+        @apply bg-signal text-paper;
+    }
+
+    & [data-part=deal] {
+        @apply truncate font-medium;
+    }
+}
+
 /* A range: a thin track, the span picked lit along it, and a round thumb at each end of the span. */
 @utility range {
     @apply py-3;

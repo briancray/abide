@@ -1,0 +1,51 @@
+<script>
+import { calendar, reactive } from '@abide/abide'
+
+import listClosing from '../listClosing.handler.ts'
+
+const deals = reactive(() => listClosing())
+// The deals closing on each day, by the day.
+const closing = reactive(() => {
+    const byDay = new Map<string, { id: string; name: string }[]>()
+    for (const deal of deals)
+        if (deal.closes !== undefined)
+            byDay.set(deal.closes, [...(byDay.get(deal.closes) ?? []), deal])
+    return byDay
+})
+let month = reactive<string | undefined>('2026-12')
+let selected = reactive<string | undefined>(undefined)
+const view = calendar({ month, selected })
+</script>
+
+<p class="status">
+    {selected === undefined
+        ? 'Pick a day.'
+        : (closing.get(selected) ?? []).map((deal) => deal.name).join(', ') ||
+              `Nothing closes on ${selected}.`}
+</p>
+<div class="calendar">
+    <div data-part="bar">
+        <button {...view.previous}>‹</button>
+        <h3 {...view.heading}>{view.label}</h3>
+        <button {...view.next}>›</button>
+    </div>
+    <div {...view.grid}>
+        <div {...view.header}>
+            {#for weekday of view.weekdays by weekday.day}
+                <div {...weekday.header}>{weekday.short}</div>
+            {/for}
+        </div>
+        {#for week of view.weeks by week[0]?.date}
+            <div {...view.week}>
+                {#for day of week by day.date}
+                    <div {...day.cell}>
+                        {day.day}
+                        {#for deal of closing.get(day.date) ?? [] by deal.id}
+                            <span data-part="deal">{deal.name}</span>
+                        {/for}
+                    </div>
+                {/for}
+            </div>
+        {/for}
+    </div>
+</div>

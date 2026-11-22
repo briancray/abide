@@ -7,8 +7,11 @@
 // answered before `locate` runs, so a list that is a live search is not read for a keystroke that
 // leaves it alone.
 
-// Which way `key` steps along a list of that orientation: forward, back, or neither.
-function stepOf(key: string, orientation: 'vertical' | 'horizontal'): number {
+/** Which way `key` steps along a list of that orientation: `1` forward, `-1` back, `0` neither. */
+export function stepOf(
+    key: string,
+    orientation: 'vertical' | 'horizontal',
+): number {
     const vertical = orientation === 'vertical'
     if (key === (vertical ? 'ArrowDown' : 'ArrowRight')) return 1
     if (key === (vertical ? 'ArrowUp' : 'ArrowLeft')) return -1

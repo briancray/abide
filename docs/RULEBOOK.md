@@ -5738,6 +5738,49 @@ changes.
 parts function hands back where an app spreads it, save 52.24 and 52.53, which hold of `Chart`'s
 children: `chart` draws the series its `series` answers, in that order.
 
+52.83 `calendar`'s `weeks` MUST be the whole weeks the month shown falls in, each seven consecutive
+days from the week's first day, and a day of another month among them MUST carry `data-outside`.
+
+52.84 `calendar` MUST count its days the same in every zone the code runs in, dropping and repeating
+none where a daylight-saving change falls in the month.
+
+52.85 `calendar`'s today MUST be the day it is in the zone its `timeZone` names, and where it names
+none in the zone `format.date` writes in (52.3), and today's cell MUST carry `data-today` and an
+`aria-current` of `date`.
+
+52.86 The month `calendar` shows MUST be the `month` written where it is one, else the selected
+day's, else today's.
+
+52.87 Exactly one of `calendar`'s day cells MUST be in the page's tab order: the active day's, being
+the day focused last, else the selected day, else today, whichever is first in the month shown, and
+the month's first day where none is; focus put on a day's cell by any means MUST make that day the
+active one.
+
+52.88 `calendar`'s `weekdays` MUST be the seven days in the order a week runs, named in its `locale`,
+and a week MUST start on the `firstDay` given, else on the day `Intl.Locale` gives for the locale,
+else on Sunday.
+
+52.89 On `calendar`'s grid, ArrowRight and ArrowLeft MUST move focus a day on and back, ArrowDown and
+ArrowUp a week on and back, and Home and End to the first and last day of the active day's week.
+
+52.90 On `calendar`'s grid, PageDown and PageUp MUST move focus a month on and back, and a year with
+Shift, to the same day of the month where that month has it and its last day where it does not.
+
+52.91 A key moving `calendar`'s active day out of the month shown MUST show the month it moved into.
+
+52.92 Enter and Space on `calendar`'s grid MUST select the active day.
+
+52.93 A click on one of `calendar`'s day cells MUST select its day and make it the active one.
+
+52.94 `calendar`'s `previous` and `next` MUST show the month before and after the one shown, and MUST
+NOT move focus.
+
+52.95 `calendar`'s `label` MUST be the month shown and its year in its `locale`, and its grid MUST
+be labelled by its `heading`.
+
+52.96 The selected day's cell MUST carry `data-selected` and an `aria-selected` of `true`, and every
+other day's cell an `aria-selected` of `false`.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

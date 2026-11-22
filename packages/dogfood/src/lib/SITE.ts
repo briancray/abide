@@ -771,6 +771,12 @@ const WRITTEN: readonly {
                     'Spread a time kept current onto a `<time>` of your own, one per row of a list.',
             },
             {
+                route: '/helpers/calendar',
+                title: '`calendar`',
+                description:
+                    'Spread a month of days onto a grid of your own, picked by click or by the arrow keys and paged a month at a time.',
+            },
+            {
                 route: '/helpers/follow-bottom',
                 title: '`followBottom`',
                 description:

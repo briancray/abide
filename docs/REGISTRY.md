@@ -1189,6 +1189,16 @@ type Reached = { readonly [REACHED]: true }
 | `TimeParts` | `{ at(value: unknown): TimeAt }` | A value's parts. | 32.11, 32.99, 52.73, 52.74, 49.11 |
 | `TimeAt` | `{ readonly time: Record<string, unknown>; get text(): string }` | A value's `<time>` attributes and its label. | 32.99, 52.73, 52.74, 49.4 |
 
+## `calendar`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `calendar` | `(options?: CalendarOptions) => Calendar` | WAI-ARIA's date grid as parts an app spreads onto elements of its own: a month of whole weeks, a header cell per weekday, a cell per day, the month's heading and the buttons paging it. | 52.83, 52.84, 52.85, 52.86, 52.87, 52.88, 52.89, 52.90, 52.91, 52.92, 52.93, 52.94, 52.95, 52.96, 49.8 |
+| `CalendarOptions` | `{ id?: string; month?: Reactive<string \| undefined>; selected?: Reactive<string \| undefined>; firstDay?: number \| undefined \| (() => number \| undefined); locale?: string \| undefined \| (() => string \| undefined); timeZone?: string \| undefined \| (() => string \| undefined) }` | The month shown as `YYYY-MM`, the day picked as `YYYY-MM-DD`, and the week's first day, locale and zone, each read live where a function is given. | 52.85, 52.86, 52.88, 49.10, 49.12, 49.13 |
+| `Calendar` | `{ readonly id: string; readonly grid: Record<string, unknown>; readonly heading: Record<string, unknown>; get label(): string; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly header: Record<string, unknown>; readonly week: Record<string, unknown>; get weekdays(): readonly CalendarWeekday[]; get weeks(): readonly (readonly CalendarDay[])[]; readonly month: Reactive<string \| undefined>; readonly selected: Reactive<string \| undefined> }` | The grid's part, the heading's and its text, the paging buttons, the rows', the weekdays and the weeks as data with a part to spread, and the month shown and the day picked. | 32.11, 52.83, 52.86, 52.88, 52.94, 52.95, 49.4, 49.10, 49.11 |
+| `CalendarWeekday` | `{ readonly day: number; readonly name: string; readonly short: string; readonly header: Record<string, unknown> }` | A weekday's number from Monday's `1`, its name in full and shortened, and its header cell. | 52.88, 49.4 |
+| `CalendarDay` | `{ readonly date: string; readonly day: number; readonly cell: Record<string, unknown> }` | A day of the grid as `YYYY-MM-DD`, its number in its month, and its cell. | 52.83, 52.85, 52.87, 52.96, 49.4 |
+
 ## `followBottom`
 
 | Name | Signature | Meaning | Rules |

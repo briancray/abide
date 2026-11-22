@@ -191,6 +191,14 @@ export { type TabParts, type Tabs, type TabsOptions, tabs } from './tabs.ts'
 export { type Tree, type TreeNode, type TreeOptions, tree } from './tree.ts'
 // 52.73-52.78 — a time that stays current, as parts on a `<time>` of the app's own.
 export { type TimeAt, type TimeOptions, type TimeParts, time } from './time.ts'
+// 52.83-52.96 — a month of days the keys move through and pick, as parts on a grid of the app's own.
+export {
+    type Calendar,
+    type CalendarDay,
+    type CalendarOptions,
+    type CalendarWeekday,
+    calendar,
+} from './calendar.ts'
 export * as transcript from './transcript/index.ts'
 export * as tooltip from './tooltip/index.ts'
 export { type TooltipOptions } from './tooltip/tips.ts'
