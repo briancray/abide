@@ -1,0 +1,37 @@
+<script>
+import { sortBy, virtualList } from '@abide/abide'
+
+const COMPANIES = ['Acme', 'Bolt', 'Cedar', 'Delta', 'Ember', 'Fable']
+const DEALS = sortBy(
+    Array.from({ length: 3000 }, (_, id) => ({
+        id,
+        name: `${COMPANIES[id % 6]} deal ${id + 1}`,
+    })),
+    (deal) => deal.name,
+)
+
+const deals = virtualList({
+    items: DEALS,
+    key: (deal) => String(deal.id),
+    section: (deal) => deal.name[0] ?? '',
+    labels: [...'ABCDEFG'],
+})
+</script>
+
+<div class="flex gap-4">
+    <div class="h-80 grow overflow-auto">
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-2"
+            {...deals.host}>
+            {#for entry of deals.shown by entry.key}
+                <div class="h-12 rounded border border-rule p-2"
+                    {...deals.item(entry)}>{entry.item.name}</div>
+            {/for}
+        </div>
+    </div>
+    <nav class="flex flex-col" {...deals.sections.host}>
+        {#for section of deals.sections.all by section.label}
+            <button class="aria-[current]:font-bold disabled:opacity-40"
+                {...deals.sections.jump(section)}>{section.label}</button>
+        {/for}
+    </nav>
+</div>

@@ -1004,13 +1004,16 @@ type Reached = { readonly [REACHED]: true }
 | `ListboxOptions` | `ListboxOptions<Option> = { id?: string; options: readonly Option[] \| (() => readonly Option[]); key?: (option: Option) => string; wrap?: boolean \| (() => boolean); onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10, 49.10, 49.12, 49.13 |
 | `Listbox` | `Listbox<Option> = { readonly id: string; readonly active: string \| undefined; readonly activeOption: Option \| undefined; readonly activeId: string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; keydown: (event: KeyboardEvent) => void; readonly listbox: Record<string, unknown>; option(key: string): Record<string, unknown> }` | What `listbox` hands back: its id, the active key and option, the ids and the listener the markup takes, and the list's part and an option's. | 51.1, 51.2, 51.3, 51.10, 51.11, 51.101, 49.4, 49.10, 49.11 |
 
-## `virtualRows`
+## `virtualList`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `virtualRows` | `(options: VirtualRowsOptions) => VirtualRows` | The range of a long list's rows its scroller shows, for a keyed `{#for}` over just those rows. | 51.65, 51.66, 51.67, 51.68, 51.69, 51.70, 51.71 |
-| `VirtualRowsOptions` | `{ count: number \| (() => number); rowHeight: number; overscan?: number \| (() => number); height?: number }` | What `virtualRows` is handed: how many rows there are, how tall each is, and the height drawn at before the scroller is measured. | 51.65, 51.67, 51.71, 49.12, 49.13 |
-| `VirtualRows` | `{ viewport: (element: Element) => Disposer; start: () => number; end: () => number; before: () => number; after: () => number; scrollTo: (index: number) => void }` | What `virtualRows` hands back: the adaptor for the scroller, the rows to render, the heights of the spacers around them, and a scroll to a row. | 51.65, 51.69, 51.70 |
+| `virtualList` | `<Item>(options: VirtualListOptions<Item>) => VirtualList<Item>` | A long list's items that are in view, measured from the app's own markup — a list or a CSS grid — as parts to spread, for a keyed `{#for}` over just those items. | 51.65, 51.66, 51.67, 51.68, 51.69, 51.70, 51.104, 32.99, 49.4 |
+| `VirtualListOptions` | `<Item>{ items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; section?: (item: Item) => string; labels?: readonly string[] \| (() => readonly string[]); overscan?: number \| (() => number); initial?: number; estimate?: number; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how one is told apart and grouped, the rows past each end, what renders before a measurement, and how a jump scrolls. | 51.65, 51.67, 51.71, 49.12, 49.13 |
+| `VirtualList` | `<Item>{ readonly host: Record<string, unknown>; item(entry: VirtualListEntry<Item>): Record<string, unknown>; get shown(): readonly VirtualListEntry<Item>[]; readonly sections: VirtualListSections; scrollTo(index: number): void }` | The host's part, an item's part, the items to render, the sections and their jumps, and what scrolls to an item. | 51.65, 51.69, 51.70, 49.11 |
+| `VirtualListEntry` | `<Item>{ item: Item; index: number; key: string }` | One item `shown` renders: the item, where it stands in `items`, and its key. | 51.65 |
+| `VirtualListSection` | `{ label: string; index: number }` | One section: its label, and the index of its first item, or `-1` where it has none. | 51.71 |
+| `VirtualListSections` | `{ readonly host: Record<string, unknown>; get all(): readonly VirtualListSection[]; get current(): string \| undefined; jump(section: VirtualListSection): Record<string, unknown> }` | The jump index: its host, every section, the one in view, and a section's jump. | 51.71, 51.102, 51.103, 49.11 |
 
 ## `sortBy`
 

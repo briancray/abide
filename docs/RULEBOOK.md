@@ -5070,7 +5070,8 @@ when its element loses focus.
 50.26 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
 the menu of a `menu`, an element `popover` is bound to and a `Combobox`'s open list MUST open in the
 top layer as a popover placed against their anchor as 50.19-50.21 state, and MUST be placed again while
-open whenever anything scrolls, the window resizes, or the anchor or the popover changes size.
+open whenever anything scrolls, the window resizes, or the anchor or the popover changes size — and
+for a change of size, before the frame that lays that size out is painted.
 
 50.27 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
 the menu of a `menu`, an element `popover` is bound to and a `Combobox`'s open list MUST write the
@@ -5354,26 +5355,29 @@ part otherwise, and Backspace in `combobox`'s empty input MUST take out the last
 opens one, and a press inside it MUST NOT take focus from its input, and `Combobox` MUST hold its open
 list, and the children 51.31 renders, in one `data-part="popup"` element carrying it.
 
-51.65 `virtualRows` MUST answer as `start` and `end` the rows of its list from `overscan` rows before
-the first row its viewport shows to `overscan` rows past the last, and as `before` and `after` the
-heights of the rows before `start` and from `end` on.
+51.65 `virtualList`'s `shown` MUST be its `items` from `overscan` rows before the first row its
+scroller shows to `overscan` rows past the last, each with the item, its index and its key.
 
-51.66 `virtualRows` MUST hold `start` and `end` inside the list, so a list its viewport holds whole
-is answered whole.
+51.66 `virtualList` MUST take a row to hold as many items as fit across its `host` at the width of an
+item measured, the host's column gap counted, and to be as tall as the items measured are on average,
+the host's row gap counted.
 
-51.67 `virtualRows` MUST read its viewport's height and scroll position at the first resize delivery
-after it is bound and at each scroll, MUST read neither as it is bound, and MUST answer the range
-`height` fits until then, on a server as in a browser.
+51.67 `virtualList` MUST read nothing as its `host` is bound, and MUST answer its first `initial`
+items as `shown` until its first measurement, on a server as in a browser.
 
-51.68 `virtualRows` MUST move its range by whole rows, only when a scroll or a resize brings another
-row into view.
+51.68 `virtualList` MUST follow the nearest ancestor of its `host` whose overflow scrolls, or the
+window where none does.
 
-51.69 `virtualRows` MUST stop following a viewport once it is unbound.
+51.69 `virtualList`'s `host` MUST carry, as its block padding, the height of the rows before `shown`
+and of the rows after it.
 
-51.70 `virtualRows`'s `scrollTo` MUST scroll its viewport only as far as shows the whole row at
-`index`, and MUST answer a range holding that row before the scroll lands.
+51.70 `virtualList`'s `scrollTo` MUST scroll the row holding `index` to the top of its scroller, past
+the scroller's scroll padding, and `shown` MUST hold that item before the scroll lands.
 
-51.71 `virtualRows` MUST take every row to be `rowHeight` pixels tall.
+51.71 `virtualList`'s `sections` MUST answer each label `section` writes, in the order its first item
+stands, with that item's index — or, where `labels` is given, each of `labels` in order, with `-1` for
+one no item stands in — and MUST answer as `current` the label of the section the first item its
+scroller shows stands in.
 
 51.72 `commandPalette` MUST turn `open` on and off on `hotkey`, wherever focus is, its own input
 included; its `dialog` part MUST be `dialog`'s, opened modal by `open`, so `CommandPalette` opens as a
@@ -5473,6 +5477,14 @@ shut it where it is open, and each MUST leave its active item where it stands.
 51.101 `Listbox`'s `option` MUST answer the option of a key with the id `idOf` derives for it,
 `aria-selected` and `data-active` saying whether that key is the active one, and a pointer moving
 over it making that key active.
+
+51.102 A jump `virtualList`'s `sections` hand back MUST scroll to its section's first item, and MUST
+carry `aria-current` while its section is `current`.
+
+51.103 A jump `virtualList`'s `sections` hand back for a section no item stands in MUST be
+disabled.
+
+51.104 `virtualList` MUST stop following its scroller once its `host` is unbound.
 
 # 52. Formatting, markdown and charts
 

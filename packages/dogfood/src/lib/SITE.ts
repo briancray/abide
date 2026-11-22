@@ -624,10 +624,10 @@ const WRITTEN: readonly {
                     'Sort a list by a value of each item: numbers as numbers, dates by time, text in one locale on both sides, and blanks last.',
             },
             {
-                route: '/helpers/virtual-rows',
-                title: '`virtualRows`',
+                route: '/helpers/virtual-list',
+                title: '`virtualList`',
                 description:
-                    'Render only the rows of a long list that are in view, so ten thousand rows mount as fast as twenty.',
+                    'Render only the items of a long list or grid that are in view, measured from your own markup, with a jump to each section.',
             },
             {
                 route: '/helpers/hotkeys',

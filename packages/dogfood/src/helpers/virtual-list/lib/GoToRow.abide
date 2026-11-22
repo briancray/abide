@@ -1,0 +1,24 @@
+<script>
+import { reactive, virtualList } from '@abide/abide'
+
+const DEALS = Array.from({ length: 10_000 }, (_, id) => ({
+    id,
+    name: `Deal ${id + 1}`,
+}))
+const deals = virtualList({ items: DEALS, key: (deal) => String(deal.id) })
+let wanted = reactive<number | undefined>(5000)
+</script>
+
+<label>
+    Deal <input type="number" min="1" max="10000" bind:value={wanted} />
+</label>
+<button onclick={() => deals.scrollTo((wanted ?? 1) - 1)}>Show it</button>
+<div class="h-60 overflow-auto">
+    <div {...deals.host}>
+        {#for entry of deals.shown by entry.key}
+            <div class="h-7 data-[wanted]:font-semibold"
+                data-wanted={entry.index === (wanted ?? 1) - 1 ? '' : undefined}
+                {...deals.item(entry)}>{entry.item.name}</div>
+        {/for}
+    </div>
+</div>

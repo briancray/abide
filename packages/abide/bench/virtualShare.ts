@@ -1,4 +1,4 @@
-// THE SHARE A LONG LIST COSTS, and what windowing buys back — measured before `virtualRows` existed,
+// THE SHARE A LONG LIST COSTS, and what windowing buys back — measured before `virtualList` existed,
 // and kept as its bench: where a keyed `{#for}` over N rows crosses a frame when it mounts, and the
 // windowed arms, abide's and a hand-written one, priced on the same two ops.
 //
@@ -119,22 +119,22 @@ function mount() {
 <button id="open" onclick={mount}>Open</button>
 ${STYLE}`
 
-// The rows in view, through \`virtualRows\`.
+// The rows in view, through \`virtualList\`, measured from the rows' own CSS.
 const virtualArm = (count: number): string => `<script>
-import { reactive, virtualRows } from '@abide/abide'
+import { reactive, virtualList } from '@abide/abide'
 ${rowsOf(count)}
 let open = reactive(false)
-const view = virtualRows({ count: () => rows.length, rowHeight: ${ROW} })
+const view = virtualList({ items: rows, key: (row) => String(row.id) })
 </script>
 
 <button id="open" onclick={() => (open = true)}>Open</button>
 {#if open}
-    <div class="viewport" id="viewport" bind:element={view.viewport}>
-        <div style:height="{view.before()}px"></div>
-        {#for row of rows.slice(view.start(), view.end()) by row.id}
-            <div class="row"><span>{row.name}</span><span>{row.amount}</span></div>
-        {/for}
-        <div style:height="{view.after()}px"></div>
+    <div class="viewport" id="viewport">
+        <div {...view.host}>
+            {#for entry of view.shown by entry.key}
+                <div class="row" {...view.item(entry)}><span>{entry.item.name}</span><span>{entry.item.amount}</span></div>
+            {/for}
+        </div>
     </div>
 {/if}
 ${STYLE}`

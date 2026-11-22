@@ -1,0 +1,31 @@
+<script>
+import { virtualList } from '@abide/abide'
+
+import { AUDIT_TRAIL } from './AUDIT_TRAIL.ts'
+
+// Only the changes in view are made: all 5,000 would cost several
+// frames to mount. Each row is measured as it renders, so how tall one
+// is comes from its CSS, not from here.
+const trail = virtualList({
+    items: AUDIT_TRAIL,
+    key: (entry) => String(entry.id),
+    initial: 20,
+})
+</script>
+
+<div class="h-80 overflow-auto">
+    <div role="list" aria-label="Audit trail" {...trail.host}>
+        {#for entry of trail.shown by entry.key}
+            <div
+                role="listitem"
+                aria-setsize={AUDIT_TRAIL.length}
+                aria-posinset={entry.index + 1}
+                class="flex h-7 items-center gap-4"
+                {...trail.item(entry)}
+            >
+                <span class="text-muted">{entry.item.at}</span>
+                <span>{entry.item.change}</span>
+            </div>
+        {/for}
+    </div>
+</div>

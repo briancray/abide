@@ -228,7 +228,7 @@ table.
   spread on markup of your own; `CommandPalette`, `Range`, `SortableTable`, `Combobox`, `Time`,
   `Dialog`, `Chart`, `Pie` and `Sparkline` are default markup over the last nine, and `chart` carries
   the arithmetic under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and
-  `chart.nearest`), `sortBy`, `virtualRows`, `hotkeys` and `keyLabel`, and
+  `chart.nearest`), `sortBy`, `virtualList`, `hotkeys` and `keyLabel`, and
   the `bind:element` adaptors `dismissible`, `copy`, `popover` (an app's own panel in
   the top layer, against its anchor) and `tooltip.tip` (shown by the root layout's `Tooltips`, or by
   `tooltip.host` on markup of the app's own) beside `observe`.

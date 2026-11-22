@@ -50,6 +50,9 @@ import {
     type Tree,
     tree,
     type TreeNode,
+    type VirtualList,
+    virtualList,
+    type VirtualListSections,
 } from '#shared'
 import { announce, type AnnouncerHost } from '#shared/announce.ts'
 import { host as promptsHost } from '#shared/prompts/host.ts'
@@ -136,6 +139,8 @@ test('every part is a member, a function of its item, or an action — 49.11', (
     shaped<DropzoneParts>()
     shaped<FollowBottom>()
     shaped<AnnouncerHost>()
+    shaped<VirtualList<number>>()
+    shaped<VirtualListSections>()
     expect(true).toBe(true)
 })
 
@@ -167,6 +172,7 @@ function elementParts(): Record<string, unknown> {
     const drop = dropzone()
     const follow = followBottom()
     const regions = standing(() => announce.host())
+    const long = virtualList({ items: [1, 2, 3] })
     const toast = {
         id: 1,
         text: 'Saved',
@@ -258,6 +264,13 @@ function elementParts(): Record<string, unknown> {
         'followBottom.jump': follow.jump,
         'announce.host.polite': regions.polite,
         'announce.host.assertive': regions.assertive,
+        'virtualList.host': long.host,
+        'virtualList.item': long.item({ item: 1, index: 0, key: '1' }),
+        'virtualList.sections.host': long.sections.host,
+        'virtualList.sections.jump': long.sections.jump({
+            label: 'a',
+            index: 0,
+        }),
     }
 }
 
