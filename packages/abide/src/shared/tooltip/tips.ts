@@ -2,10 +2,10 @@
 // in a browser — by `tooltip.tip`'s element binding, which a server never runs.
 
 import type { Live } from '../live.ts'
-import { outlet } from '../outlet.ts'
 import type { Side } from '../place.ts'
 import type { PopoverOptions } from '../popover.ts'
 import { reactive } from '../reactive/index.ts'
+import { standing } from '../standing.ts'
 
 /**
  * Where a hint opens against its anchor — `popover`'s placement, every option of it, so the two cannot
@@ -30,4 +30,4 @@ export type OpenTip = {
 export const shown = reactive<OpenTip | undefined>(undefined)
 
 // 50.36 — the hosts standing: the last shows the hint.
-export const hints = outlet('<Tooltips />', 'abide:tooltip')
+export const hints = standing('<Tooltips />', 'abide:tooltip')

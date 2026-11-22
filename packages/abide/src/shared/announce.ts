@@ -7,8 +7,8 @@
 // button inside it. Said here as well, its words would be read twice.
 
 import { isServer } from './isServer.ts'
-import { outlet } from './outlet.ts'
 import { reactive } from './reactive/index.ts'
+import { standing } from './standing.ts'
 
 /** How urgently a message interrupts what a screen reader is reading. */
 export type AnnounceOptions = {
@@ -29,7 +29,7 @@ export type Announcement = {
 export const said = reactive<Announcement | undefined>(undefined)
 
 // 50.36 — the `Announcer` standing: the last holds the message.
-export const announcers = outlet('<Announcer />', 'abide:announce')
+export const announcers = standing('<Announcer />', 'abide:announce')
 
 let count = 0
 

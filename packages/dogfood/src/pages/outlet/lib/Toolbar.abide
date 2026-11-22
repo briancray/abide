@@ -1,13 +1,10 @@
 <script>
-import Outlet, { fill } from '@abide/abide/Outlet.abide'
-
-import Action from './Action.abide'
-
-fill('toolbar', Action, { label: 'Export' })
-fill('toolbar', Action, { label: 'Share' })
+import { outlet } from '@abide/abide'
 </script>
 
-<header class="row">
+<header class="row" {...outlet.host('toolbar')}>
     <strong>Deals</strong>
-    <Outlet name="toolbar" />
 </header>
+
+<button {...outlet.into('toolbar')}>Export</button>
+<button {...outlet.into('toolbar')}>Share</button>

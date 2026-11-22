@@ -203,6 +203,7 @@ export {
     calendar,
 } from './calendar.ts'
 export * as transcript from './transcript/index.ts'
+export * as outlet from './outlet.ts'
 export * as tooltip from './tooltip/index.ts'
 export { type TooltipOptions } from './tooltip/tips.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'

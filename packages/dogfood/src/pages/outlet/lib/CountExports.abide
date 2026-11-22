@@ -1,0 +1,12 @@
+<script>
+import { outlet, reactive } from '@abide/abide'
+
+let exported = reactive(0)
+</script>
+
+<header class="row" {...outlet.host('actions')}></header>
+
+<button {...outlet.into('actions')} onclick={() => (exported += 1)}>
+    Export
+</button>
+<p>Exported {exported} times.</p>

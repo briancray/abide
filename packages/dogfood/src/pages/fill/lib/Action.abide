@@ -1,7 +1,0 @@
-<script>
-import { props } from '@abide/abide'
-
-const { label, onclick } = props<{ label: string; onclick?: () => void }>()
-</script>
-
-<button onclick={onclick}>{label}</button>

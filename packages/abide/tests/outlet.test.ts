@@ -1,81 +1,108 @@
-// 50.36 — AN OUTLET SHOWS IN ONE HOST, the last of those standing, and a request no host stands to show
-// warns once rather than being lost without a word. `Tooltips`, `Toasts` and `Prompts` each stand
-// through one.
+// 35.20-35.24 — A PLACE A LAYOUT OWNS, FILLED FROM BELOW IT: `outlet.into`'s element is written where
+// the page wrote it, hidden, and moved into the `outlet.host` of its name once the browser has it.
+// The CRM's tests hold the same through a layout and a page, served and navigated.
 
-import { expect, test } from 'bun:test'
+import { afterAll, expect, test } from 'bun:test'
 
-import { outlet } from '#shared/outlet.ts'
-import { collectWatches } from '#shared/reactive/watch.ts'
+import { flushSync } from '#shared'
 
-// A host standing as a component's setup stands it: its watches collected, and stopped as it leaves.
-function standing(through: ReturnType<typeof outlet>) {
-    const stops: (() => void)[] = []
-    const previous = collectWatches(stops)
-    const shows = through.stand()
-    collectWatches(previous)
-    return {
-        shows,
-        leave: () => {
-            for (const stop of stops) stop()
-        },
-    }
+import { click } from './click.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, mountPage } from './typed.ts'
+
+afterAll(closeTyped)
+afterAll(removeTemporaryModules)
+
+const texts = (selector: string): string[] => {
+    const found: string[] = []
+    for (const node of document.querySelectorAll(selector))
+        found.push(node.textContent ?? '')
+    return found
 }
 
-// THE REVERT: have `stand` answer whether ANY host stands, and the first shows beside the second — two
-// copies of every notice, and a second modal over the first.
-test('the last host standing shows, and the one before it once the last is removed', () => {
-    const notices = outlet('<Toasts />', 'abide:toasts')
-    const first = standing(notices)
-    expect(first.shows()).toBe(true)
-    const second = standing(notices)
-    expect([first.shows(), second.shows()]).toEqual([false, true])
-    second.leave()
-    expect(first.shows()).toBe(true)
-    first.leave()
-    expect(first.shows()).toBe(false)
+// THE REVERT: drop the `element.remove()` in `outlet.into`'s `Disposer`; the host still holds
+// `Share` once its `{#if}` has closed — `Export,Print,Share` where `Export,Print` is due.
+test('what is filled into a name stands in its host in the order it was bound, and leaves when unbound — 35.20, 35.23', async () => {
+    await mountPage(`<script>
+import { outlet, reactive } from '@abide/abide'
+
+let sharing = reactive(true)
+</script>
+
+<header id="bar" {...outlet.host('toolbar')}><strong>Deals</strong></header>
+<button id="toggle" onclick={() => { sharing = !sharing }}>toggle</button>
+<button {...outlet.into('toolbar')}>Export</button>
+<button {...outlet.into('toolbar')}>Print</button>
+{#if sharing}<button {...outlet.into('toolbar')}>Share</button>{/if}`)
+    flushSync()
+    expect(texts('#bar > *').slice(0, 1)).toEqual(['Deals'])
+    expect(texts('#bar button').filter((text) => text !== 'Share')).toEqual([
+        'Export',
+        'Print',
+    ])
+    expect(texts('#bar button')).toContain('Share')
+    expect(document.querySelector('#bar button')?.hasAttribute('hidden')).toBe(
+        false,
+    )
+    click('#toggle')
+    flushSync()
+    expect(texts('#bar button')).toEqual(['Export', 'Print'])
+    expect(texts('button').filter((text) => text === 'Share')).toEqual([])
 })
 
-async function warnings(body: () => void): Promise<string[]> {
+// THE REVERT: have `showing` answer the first host standing rather than the last; `Share` lands in
+// `#above` and `#below` is the one marked empty.
+test('of two hosts under one name the last holds what is filled, and the other is marked empty — 35.22', async () => {
+    await mountPage(`<script>
+import { outlet } from '@abide/abide'
+</script>
+
+<span id="above" {...outlet.host('side')}></span>
+<span id="below" {...outlet.host('side')}></span>
+<button {...outlet.into('side')}>Share</button>`)
+    flushSync()
+    expect(texts('#below button')).toEqual(['Share'])
+    expect(texts('#above button')).toEqual([])
+    expect(document.querySelector('#above')?.hasAttribute('data-empty')).toBe(
+        true,
+    )
+    expect(document.querySelector('#below')?.hasAttribute('data-empty')).toBe(
+        false,
+    )
+})
+
+// THE REVERT: drop `hidden` from `outlet.into`'s part; the server writes the button bare.
+test('the server writes what is filled where the page wrote it, hidden — 35.21', async () => {
+    const { html } = await mountPage(`<script>
+import { outlet } from '@abide/abide'
+</script>
+
+<header {...outlet.host('served')}></header>
+<button {...outlet.into('served')}>Export</button>`)
+    expect(html).toMatch(/<header[^>]*data-empty[^>]*><\/header>/)
+    expect(html).toMatch(/<button[^>]*\bhidden\b[^>]*>Export<\/button>/)
+})
+
+// THE REVERT: drop the `setTimeout` `outlet.into`'s binding schedules; nothing warns.
+test('a name no host stands under warns once — 35.24', async () => {
     const warned: string[] = []
     const warn = console.warn
     console.warn = (...args: unknown[]): void => {
         const line = args.join(' ')
-        if (line.includes('abide:prompts')) warned.push(line)
+        if (line.includes('abide:outlet')) warned.push(line)
     }
     try {
-        body()
-        await Promise.resolve()
+        await mountPage(`<script>
+import { outlet } from '@abide/abide'
+</script>
+
+<button {...outlet.into('nowhere')}>Lost</button>
+<button {...outlet.into('nowhere')}>Lost too</button>`)
+        flushSync()
+        await new Promise((settled) => setTimeout(settled, 5))
     } finally {
         console.warn = warn
     }
-    return warned
-}
-
-// THE REVERT: drop the warning from `asked`, and a `confirm` with no `Prompts` waits forever unsaid.
-test('a request with no host standing warns once, and one with a host standing does not', async () => {
-    const asking = outlet('<Prompts />', 'abide:prompts')
-    const host = standing(asking)
-    expect(await warnings(() => asking.asked())).toEqual([])
-    host.leave()
-    const first = await warnings(() => {
-        asking.asked()
-        asking.asked()
-    })
-    expect(first).toHaveLength(1)
-    expect(first[0]).toContain('<Prompts />')
-    expect(await warnings(() => asking.asked())).toEqual([])
-})
-
-// A host that stands later in the same mount than the request — a root layout's, after the page's
-// `<slot />` — is standing by the time the request is looked at.
-test('a host standing later in the same turn as the request is in time', async () => {
-    const asking = outlet('<Prompts />', 'abide:prompts')
-    let host: ReturnType<typeof standing> | undefined
-    expect(
-        await warnings(() => {
-            asking.asked()
-            host = standing(asking)
-        }),
-    ).toEqual([])
-    host?.leave()
+    expect(warned).toHaveLength(1)
+    expect(warned[0]).toContain("outlet.host('nowhere')")
 })

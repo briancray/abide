@@ -7,18 +7,16 @@ onError((error) => tracker.capture(error))
 </script>
 
 <script>
-import { reactive, url } from '@abide/abide'
-import Outlet from '@abide/abide/Outlet.abide'
+import { outlet, reactive, url } from '@abide/abide'
 
 let note = reactive('')
 </script>
 
 <head><title>Companies — CRM</title></head>
 
-<header class="row">
+<header class="row" {...outlet.host('actions')}>
     <a href={url('/companies')}>All companies</a>
     <input bind:value={note} placeholder="Note for the call">
-    <Outlet name="actions" />
 </header>
 
 <slot />

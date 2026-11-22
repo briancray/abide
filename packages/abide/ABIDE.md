@@ -217,8 +217,7 @@ table.
   `import Prompts, { prompts } from '@abide/abide/Prompts.abide'`, and `prompts.host` for a dialog of
   your own markup), `Toasts` (and `toasts.notify` beside it, and `toasts.host` for notices of your own
   markup), `Tooltips`, `Announcer` (and `announce` beside it, a message read to a screen reader
-  with nothing shown), `Outlet` (and `fill` beside it: a page's component rendered in a place its
-  layout leaves, painted there by the server), `Combobox`, `CommandPalette`, `Range`, `SortableTable`, `Markdown`, `Time`, `Chart` (with `Line`,
+  with nothing shown), `Combobox`, `CommandPalette`, `Range`, `SortableTable`, `Markdown`, `Time`, `Chart` (with `Line`,
   `Column` and `Area` children), `Pie`, `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `form` (a `<form>` over a handler, checked against its args before the call),
@@ -229,7 +228,8 @@ table.
   `Dialog`, `Chart`, `Pie` and `Sparkline` are default markup over the last nine, and `chart` carries
   the arithmetic under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and
   `chart.nearest`), `sortBy`, `virtualList`, `hotkeys` and `keyLabel`, and
-  the one-element parts `dismissible`, `copy`, `popover` (an app's own panel in the top layer,
+  the one-element parts `outlet.host` and `outlet.into` (a place a layout leaves, filled by the page's
+  own markup from below), `dismissible`, `copy`, `popover` (an app's own panel in the top layer,
   against its anchor), `scrollEdges` and `tooltip.tip` (shown by the root layout's `Tooltips`, or by
   `tooltip.host` on markup of the app's own) beside `observe` — every behavior on an element is a
   part, spread as `{...copy()}`, and several spread on one element each bind it.

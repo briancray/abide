@@ -2940,20 +2940,20 @@ navigation from it MUST load the document it asks for.
 35.19 A page route MUST answer a request whose `sec-fetch-dest` names neither a destination fetch
 calls a navigation request's nor `empty` with a bodiless 404, and MUST NOT set up its page.
 
-35.20 `fill` MUST render its component with its props in the `Outlet` whose `name` is its `into`,
-for as long as the setup that called it stands, and the fills of one name MUST render in the order
-they were made.
+35.20 `outlet.into` MUST move the element it is spread on into the element `outlet.host` of its name
+is spread on, for as long as it is bound, and the elements of one name MUST stand in that host in
+the order they were bound, after what the host's own markup holds.
 
-35.21 A `fill` made in the setup of a page or a layout MUST be written by the server inside the
-`Outlet` it fills, and hydration MUST adopt it there.
+35.21 An element `outlet.into` is spread on MUST be written by the server where it is written,
+`hidden`, and hydration MUST adopt it there; it MUST stay `hidden` until a host of its name stands.
 
-35.22 Of the `Outlet`s standing under one name, the last MUST render that name's fills and the
-others MUST render none.
+35.22 Of the elements `outlet.host` is spread on under one name, the last standing MUST hold that
+name's elements, and each MUST carry `data-empty` while it holds none.
 
-35.23 A `fill` made once the `Outlet` it fills has been built MUST render there in a browser once it
-is made, and MUST NOT be written by the server.
+35.23 An element `outlet.into` moved MUST be removed from the document once it is unbound.
 
-35.24 A `fill` whose `into` no `Outlet` has stood under MUST warn once, on `abide:fill`.
+35.24 An `outlet.into` whose name no `outlet.host` stands under a task after it is bound MUST warn
+once, on `abide:outlet`.
 
 # 36. Environment and files
 

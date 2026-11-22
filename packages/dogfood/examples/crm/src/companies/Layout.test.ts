@@ -10,17 +10,18 @@ test('the list and a company render inside one layout', async () => {
     }
 })
 
-// 35.20, 35.21 — A PAGE FILLS ITS LAYOUT'S TOOLBAR, AND THE SERVER PAINTS IT THERE: the company page's
-// `fill` is made in its setup, which runs before the layout's `Outlet` is built, so the button is in
-// the header the server writes — and the list, which fills nothing, has none.
-// THE REVERT: have the `Outlet` render nothing on the server, and the company's header has no button.
-test("a company's page fills the layout's toolbar, painted by the server", async () => {
+// 35.21 — THE SERVER WRITES A COMPANY'S TOOLBAR ACTION WHERE THE PAGE WROTE IT, HIDDEN: the move into
+// the layout's header is the browser's, so the header the server writes holds no button, and the
+// button it does write shows nothing before then. THE REVERT: drop `hidden` from `outlet.into`'s
+// part; the button is written bare, under the company's heading.
+test("the server writes a company's toolbar action hidden where the page wrote it", async () => {
     await using app = await createApp()
-    const header = async (path: string) => {
-        const answer = await app.fetch(new Request(`http://crm.invalid${path}`))
-        const html = await answer.text()
-        return html.slice(html.indexOf('<header'), html.indexOf('</header>'))
-    }
-    expect(await header('/companies/hopper-and-co')).toContain('Print sheet')
-    expect(await header('/companies')).not.toContain('Print sheet')
+    const answer = await app.fetch(
+        new Request('http://crm.invalid/companies/hopper-and-co'),
+    )
+    const html = await answer.text()
+    expect(
+        html.slice(html.indexOf('<header'), html.indexOf('</header>')),
+    ).not.toContain('Print sheet')
+    expect(html).toMatch(/<button[^>]*\bhidden\b[^>]*>Print sheet<\/button>/)
 })

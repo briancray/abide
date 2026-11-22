@@ -85,7 +85,6 @@ const OVER_PARTS: Record<string, { module: string; name: string }> = {
 const WITHOUT_PARTS: Record<string, string> = {
     'Announcer.abide':
         'two live regions whose shape is how a screen reader hears them, with nothing for an app to lay out',
-    'Outlet.abide': 'a place, not a widget: what it renders is the fill',
     'Markdown.abide':
         'its markup is the document it renders, and `markdown` is the function under it',
     'Chat.abide':

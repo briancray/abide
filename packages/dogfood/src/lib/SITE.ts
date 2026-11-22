@@ -115,15 +115,9 @@ const WRITTEN: readonly {
             },
             {
                 route: '/pages/outlet',
-                title: '`Outlet`',
+                title: '`outlet`',
                 description:
-                    'Leave a named place in a layout, a toolbar or a side panel, for the page under it to fill.',
-            },
-            {
-                route: '/pages/fill',
-                title: '`fill`',
-                description:
-                    "Put a component in a layout's named place from the page under it, painted there by the server.",
+                    "Leave a named place in a layout, a toolbar or a side panel, and fill it with the page's own markup from below.",
             },
             {
                 route: '/app/create-app',

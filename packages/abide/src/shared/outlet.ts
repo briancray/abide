@@ -1,49 +1,119 @@
-// 50.36 — AN OUTLET: requests made anywhere, shown by the ONE component of a kind standing in the
-// page — the last bound of those standing, so a second `Toasts` or `Prompts` a nested layout renders
-// shows nothing rather than a second copy of every notice or a second modal over the first. What is
-// asked for, and in what order it shows, is the caller's: one hint, a list of notices, a queue of
-// prompts. A request no component stands to show is lost without a word, so the first warns.
+// 35.20-35.24 — A PLACE A LAYOUT OWNS, FILLED FROM BELOW IT: a page's toolbar actions, a section's
+// side panel. `outlet.host` is spread on the element that holds them, and `outlet.into` on each
+// element a page writes for it, inline, closing over the page's own state — and the element is moved
+// into the host once the browser has it.
+//
+// THE SERVER WRITES AN `into` WHERE THE PAGE WROTE IT, `hidden`, and hydration adopts it there as it
+// adopts anything else: no node is where the hydrating walk does not expect it, so nothing mismatches.
+// The move is its element binding's (32.99), which a server never runs — so what is filled shows once
+// the page is hydrated, and is never shown in the wrong place before then (35.21).
+//
+// THE HOST PLACES, NOT THE `into`. Each host's watch appends what is filled into its name in the
+// order it was filled: appending a child it holds moves it to the end, so a pass in that order IS the
+// order (35.20), however the hosts standing change. An `into` moved out of its own region is outside
+// the markers that region removes between, so its own binding's `Disposer` takes it out.
 
 import { namedLogger } from './log.ts'
 import { reactive } from './reactive/index.ts'
-import { join } from './register.ts'
+import { type Disposer, watch } from './reactive/watch.ts'
+import { register } from './register.ts'
+
+/** An element standing under a name: a host, or an element filled into one. */
+type Standing = { name: string; element: Element }
+
+// One per request on a server, as every `reactive` without `global` is (11.32) — and only a browser
+// ever registers, since only a browser runs an element binding.
+const hosts = reactive<readonly Standing[]>([])
+const filled = reactive<readonly Standing[]>([])
+
+const OUTLET_LOG = namedLogger('abide:outlet')
+let warned = false
+
+/** 35.22 — the host that shows a name's elements: the last standing under it. */
+function showing(name: string): Standing | undefined {
+    let last: Standing | undefined
+    for (const host of hosts()) if (host.name === name) last = host
+    return last
+}
+
+// BOTH PARTS ARE FIXED RECORDS, their state written by their bindings: a getter reading the hosts
+// would rerun the spread, and a spread written `{...outlet.host('x')}` makes its part again on each
+// run — a fresh binding, and the host it registered standing beside the one it replaced. So the
+// server writes each part's state as it stands before any binding runs, `data-empty` and `hidden`,
+// and the browser keeps it from there.
 
 /**
- * The hosts standing for one kind of component, and the warning it gives once where a request finds
- * none.
+ * The part for the element that holds what `outlet.into` fills under `name`: `data-empty` while it
+ * holds none. Of several standing under one name, the last holds them (35.22).
  *
- * @param component the component that shows the requests, as an app renders it: `'<Toasts />'`
- * @param logger the logger the warning is written on: `'abide:toasts'`
+ * @param name the name `outlet.into` fills
  */
-export function outlet(component: string, logger: string) {
-    // One per request on a server, as every `reactive` without `global` is (11.32).
-    const hosts = reactive<readonly object[]>([])
-    const log = namedLogger(logger)
-    let warned = false
+export function host(name: string): Record<string, unknown> {
     return {
-        /**
-         * Stands the calling component as a host until it is removed, handing back whether it is the
-         * one that shows. Called from the component's own `<script>`.
-         */
-        stand(): () => boolean {
-            const host = {}
-            join(hosts, host)
-            return () => hosts().at(-1) === host
-        },
-        /**
-         * Warns once where a request is made with no host standing to show it — looked at a microtask
-         * on, since a root layout renders its host after the `<slot />` whose page may ask while it
-         * mounts, and the host stands in that same mount.
-         */
-        asked(): void {
-            if (warned) return
-            queueMicrotask(() => {
-                if (warned || (hosts.peek()?.length ?? 0) > 0) return
-                warned = true
-                log.warning(
-                    `a request was made with no ${component} rendered to show it — render one in the root layout. RULEBOOK 50.36.`,
-                )
+        'data-outlet': 'host',
+        'data-empty': '',
+        'bind:element': (element: Element): Disposer => {
+            const standing: Standing = { name, element }
+            const unregister = register(hosts, standing)
+            const stop = watch(() => {
+                const holds = showing(name) === standing
+                // A DOM move costs more than the compare deciding it: nothing moves while the order
+                // holds, and from the first element out of place every one after it is appended.
+                let moving = false
+                let previous: Element | undefined
+                for (const each of filled()) {
+                    if (each.name !== name || !holds) continue
+                    if (
+                        !moving &&
+                        (each.element.parentNode !== element ||
+                            (previous !== undefined &&
+                                previous.nextSibling !== each.element))
+                    )
+                        moving = true
+                    if (moving) element.append(each.element)
+                    previous = each.element
+                }
+                element.toggleAttribute('data-empty', previous === undefined)
             })
+            return () => {
+                stop()
+                unregister()
+            }
         },
     }
+}
+
+/**
+ * The part moving the element it is spread on into the `outlet.host` standing under `name`, for as
+ * long as it is bound: `hidden` until a host holds it, the server's markup included.
+ *
+ * @param name the name of the host it is moved into
+ */
+export function into(name: string): Record<string, unknown> {
+    return {
+        'data-outlet': 'into',
+        hidden: true,
+        'bind:element': (element: Element): Disposer => {
+            const unregister = register(filled, { name, element })
+            const stop = watch(() => {
+                element.toggleAttribute('hidden', showing(name) === undefined)
+            })
+            // 35.24 — looked at a task on, once the layout around the page has bound its hosts.
+            setTimeout(() => unhosted(name), 0)
+            return () => {
+                stop()
+                unregister()
+                element.remove()
+            }
+        },
+    }
+}
+
+function unhosted(name: string): void {
+    if (warned) return
+    for (const host of hosts.peek() ?? []) if (host.name === name) return
+    warned = true
+    OUTLET_LOG.warning(
+        `outlet.into('${name}') has no outlet.host('${name}') standing to hold it. RULEBOOK 35.24.`,
+    )
 }

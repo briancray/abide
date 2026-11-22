@@ -170,17 +170,12 @@ named for it (RULEBOOK 49.4).
 | `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
 | `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
 
-## `Outlet`
+## `outlet`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Outlet` | `{ name: string }` | A place a layout owns, rendering every component `fill` hands to its name where it stands, imported from `@abide/abide/Outlet.abide`. | 35.20, 35.21, 35.22, 35.23 |
-
-## `fill`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `fill` | `<Props>(into: string, Component: (props: Props) => unknown, props?: Props) => void` | A component handed to the `Outlet` named `into`, rendered there with `props` for as long as the setup that called it stands. | 35.20, 35.21, 35.23, 35.24 |
+| `outlet.host` | `(name: string) => Record<string, unknown>` | The part for an element a layout owns, holding what `outlet.into` fills under its name. | 35.20, 35.22, 49.4, 49.14 |
+| `outlet.into` | `(name: string) => Record<string, unknown>` | The part moving the element it is spread on into the `outlet.host` of its name. | 35.20, 35.21, 35.23, 35.24, 32.99, 49.4, 49.14 |
 
 ## `createApp`
 

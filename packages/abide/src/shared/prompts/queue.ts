@@ -5,8 +5,8 @@
 // there: `queued` throws first (50.11). One visitor's prompt cannot reach another's page by either.
 
 import { isServer } from '../isServer.ts'
-import { outlet } from '../outlet.ts'
 import { reactive } from '../reactive/index.ts'
+import { standing } from '../standing.ts'
 
 /** What a `prompts.confirm`, `prompts.alert` or `prompts.prompt` shows, and what its buttons say. */
 export type PromptOptions = {
@@ -58,7 +58,7 @@ export type Prompt = {
 export const queue = reactive<Prompt[]>([])
 
 // 50.36 — the `Prompts` standing: the last shows the queue.
-export const asking = outlet('<Prompts />', 'abide:prompts')
+export const asking = standing('<Prompts />', 'abide:prompts')
 
 /** Queues a prompt for `Prompts` to show, settling with the text typed once it is confirmed and `undefined` once it is closed any other way. */
 export function queued(

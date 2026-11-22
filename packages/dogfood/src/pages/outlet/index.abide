@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import CountExports from './lib/CountExports.abide'
+import countExports from './lib/CountExports.abide' with { type: 'text' }
 import Toolbar from './lib/Toolbar.abide'
 import toolbar from './lib/Toolbar.abide' with { type: 'text' }
 import TwoPlaces from './lib/TwoPlaces.abide'
@@ -10,32 +12,44 @@ import twoPlaces from './lib/TwoPlaces.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/pages/fill', '/pages/pages', '/components/tooltips']}
+    seeAlso={['/pages/pages', '/components/tooltips']}
     tests={[
+        {
+            path: 'packages/abide/tests/outlet.test.ts',
+            from: [
+                "test('what is filled into a name stands in its host in the order it was bound, and leaves when unbound — 35.20, 35.23'",
+            ],
+        },
         {
             path: 'packages/dogfood/examples/crm/src/companies/Layout.test.ts',
             from: [
-                'test("a company\'s page fills the layout\'s toolbar, painted by the server"',
+                'test("the server writes a company\'s toolbar action hidden where the page wrote it"',
             ],
         },
         {
             path: 'packages/dogfood/examples/crm/e2e/Layout.test.ts',
             from: [
-                'test("a company\'s toolbar action hydrates in place and leaves with the company"',
+                'test("a company\'s toolbar action moves into the header and leaves with the company"',
             ],
         },
     ]}
 >
     <Section level={3} title="Leave a toolbar for the page to fill">
-        <p>An <code>Outlet</code> renders what <code>fill</code> hands its name, in the order it
-            was handed, where the outlet stands. Write one in a layout, and every page under it
-            can put its own actions in the layout's header.</p>
+        <p>Spread <code>outlet.host</code> on the element a layout leaves, and
+            <code>outlet.into</code> on each element a page writes for it. The browser moves them
+            in, in the order they were written, after what the host already holds.</p>
         <Example code={toolbar}><Toolbar /></Example>
     </Section>
 
-    <Section level={3} title="Render a place once where two layouts leave the same name">
-        <p>Of the outlets standing under one name, the last renders its fills and the others
-            render nothing, so a nested layout can take over a place its parent leaves.</p>
+    <Section level={3} title="Act on the page's own state from the toolbar">
+        <p>What fills the place is the page's own markup, so it reads and writes what the page
+            holds. It leaves with the page.</p>
+        <Example code={countExports}><CountExports /></Example>
+    </Section>
+
+    <Section level={3} title="Hold a place once where two layouts leave the same name">
+        <p>Of the hosts standing under one name, the last holds what is filled, so a nested
+            layout can take over a place its parent leaves.</p>
         <Example code={twoPlaces}><TwoPlaces /></Example>
     </Section>
 </Doc>
