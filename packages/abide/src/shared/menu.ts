@@ -14,7 +14,10 @@ import { join } from './register.ts'
 import { openingEnd, roving, typeahead } from './roving.ts'
 
 /** Where a menu opens against its trigger, placed as a `popover` is, and what hears it open and close. */
-export type MenuOptions = Omit<PopoverOptions, 'align' | 'offset'> & {
+export type MenuOptions = Omit<
+    PopoverOptions,
+    'align' | 'offset' | 'escape' | 'outside'
+> & {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string
     /** Whether the menu is open: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. */

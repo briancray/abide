@@ -3,11 +3,12 @@ import { dismissible, reactive } from '@abide/abide'
 
 let open = reactive(false)
 let company = reactive('Analytical Engines')
+const edit = dismissible(() => (open = false))
 </script>
 
 <button onclick={() => (open = true)}>Quick edit</button>
 {#if open}
-    <form {...dismissible(() => (open = false))}>
+    <form {...edit.host}>
         <input bind:value={company}>
     </form>
 {/if}

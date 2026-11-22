@@ -41,23 +41,23 @@ function escape(target: Element = document.body): boolean {
     return event.defaultPrevented
 }
 
-test('a press outside closes, a press inside or on what `inside` holds does not — 53.12', () => {
+test('a press outside closes, a press inside or on an element `inside` is spread on does not — 53.12', () => {
     const panel = element()
     const field = panel.appendChild(document.createElement('input'))
     const opener = element('button')
     const elsewhere = element('p')
     const closed: string[] = []
-    const stop = bindPart(
-        dismissible((event) => closed.push(event.type), {
-            inside: [opener, undefined],
-        }),
-        panel,
-    )
+    const parts = dismissible((event) => closed.push(event.type))
+    const stop = bindPart(parts.host, panel)
+    const unbindOpener = bindPart(parts.inside, opener)
     press(field)
     press(opener)
     expect(closed).toEqual([])
     press(elsewhere)
     expect(closed).toEqual(['pointerdown'])
+    unbindOpener()
+    press(opener)
+    expect(closed).toEqual(['pointerdown', 'pointerdown'])
     stop()
 })
 
@@ -72,7 +72,7 @@ test('a press passes over a layer outside is off for, to close the one under it 
     const stopMenu = bindPart(
         dismissible(() => {
             menuClosed = true
-        }),
+        }).host,
         menu,
     )
     const stopPinned = bindPart(
@@ -81,7 +81,7 @@ test('a press passes over a layer outside is off for, to close the one under it 
                 pinnedClosed = true
             },
             { outside: false },
-        ),
+        ).host,
         pinned,
     )
     press(document.body)
@@ -97,7 +97,7 @@ test('the press that opened the panel closes nothing — 53.13', () => {
     let stop: (() => void) | undefined
     opener.addEventListener('pointerdown', () => {
         stop = bindPart(
-            dismissible(() => closed.push('closed')),
+            dismissible(() => closed.push('closed')).host,
             element(),
         )
     })
@@ -111,11 +111,11 @@ test('Escape closes the top panel alone and is prevented, and a field that took 
     const inner = element()
     const closed: string[] = []
     const stopOuter = bindPart(
-        dismissible(() => closed.push('outer')),
+        dismissible(() => closed.push('outer')).host,
         outer,
     )
     const stopInner = bindPart(
-        dismissible(() => closed.push('inner')),
+        dismissible(() => closed.push('inner')).host,
         inner,
     )
     expect(escape()).toBe(true)
@@ -139,7 +139,7 @@ test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15
     const panel = element()
     const closed: string[] = []
     const stopPanel = bindPart(
-        dismissible(() => closed.push('panel')),
+        dismissible(() => closed.push('panel')).host,
         panel,
     )
     const first = panel.appendChild(document.createElement('button'))
@@ -166,11 +166,11 @@ test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15
 test('a disposer takes its panel off the stack — 53.16', () => {
     const closed: string[] = []
     const stopUnder = bindPart(
-        dismissible(() => closed.push('under')),
+        dismissible(() => closed.push('under')).host,
         element(),
     )
     const stopGone = bindPart(
-        dismissible(() => closed.push('gone')),
+        dismissible(() => closed.push('gone')).host,
         element(),
     )
     stopGone()

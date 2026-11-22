@@ -1,19 +1,24 @@
 <script>
-import { popover, reactive } from '@abide/abide'
+import { popover, reactive, watch } from '@abide/abide'
 
-let field = reactive<HTMLInputElement | undefined>(undefined)
 let typed = reactive('')
+const suggest = popover({ align: 'start', offset: 4 })
+
+watch(() => suggest.open.set(typed !== ''))
 </script>
 
-<input bind:element={field} bind:value={typed} placeholder="Type to suggest" />
+<input
+    type="text"
+    bind:value={typed}
+    placeholder="Type to suggest"
+    {...suggest.anchor}
+ />
 
-{#if typed !== '' && field}
-    <ul
-        class="m-0 w-(--anchor-width) list-none rounded-md border border-rule
-        bg-raised p-2"
-        {...popover(field, { align: 'start', offset: 4 })}
-    >
-        <li>{typed} Ltd</li>
-        <li>{typed} & Co</li>
-    </ul>
-{/if}
+<ul
+    class="m-0 w-(--anchor-width) list-none rounded-md border border-rule
+    bg-raised p-2"
+    {...suggest.popover}
+>
+    <li>{typed} Ltd</li>
+    <li>{typed} & Co</li>
+</ul>

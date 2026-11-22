@@ -6,31 +6,41 @@ import { mount } from '@abide/harness/abide'
 import StageFilter from './StageFilter.abide'
 
 const opener = () => document.querySelector('button') as HTMLButtonElement
-const panel = () => document.querySelector('[popover]') as HTMLElement | null
+const panel = () => document.querySelector('[popover]') as HTMLElement
+const shown = () => panel().matches(':popover-open')
 
-// 50.49, 50.27 — THE PANEL OPENS IN THE TOP LAYER FOR AS LONG AS IT IS BOUND, under the button and
-// as the side it took says. THE REVERT: drop `popover` from the panel's binding — it renders in
-// the page's flow with no `popover` and no `data-side`.
-test('the stage panel opens as a popover under its button, and shuts with its {#if}', async () => {
+const press = (target: Element) =>
+    target.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true }),
+    )
+
+// 50.49, 50.27, 50.61 — THE TRIGGER OPENS THE PANEL IN THE TOP LAYER, under the button and as the
+// side it took says, and a pick that writes `open` back shuts it. THE REVERT: drop `anchored` from
+// the popover part's binding — `open` turns true and the panel never shows.
+test('the stage button opens its panel as a popover under it, and a pick shuts it', async () => {
     using _filter = await mount(StageFilter({}))
-    expect(panel()).toBeNull()
+    expect(panel().getAttribute('popover')).toBe('manual')
+    expect(shown()).toBe(false)
     opener().click()
     flushSync()
-    expect(panel()?.getAttribute('popover')).toBe('manual')
-    expect(panel()?.matches(':popover-open')).toBe(true)
-    expect(panel()?.getAttribute('data-side')).toBe('bottom')
-    expect(panel()?.style.getPropertyValue('--anchor-width')).toMatch(/px$/)
-    const lead = [...document.querySelectorAll('[popover] button')].find(
+    expect(shown()).toBe(true)
+    expect(opener().getAttribute('aria-expanded')).toBe('true')
+    expect(panel().getAttribute('data-side')).toBe('bottom')
+    expect(panel().style.getPropertyValue('--anchor-width')).toMatch(/px$/)
+    const lead = [...panel().querySelectorAll('button')].find(
         (each) => each.textContent === 'Lead',
     ) as HTMLButtonElement
     lead.click()
     flushSync()
-    expect(panel()).toBeNull()
+    expect(shown()).toBe(false)
     expect(opener().textContent).toBe('Stage: Lead')
 })
 
-// 53.15 — Escape is the panel's, as a layer `dismissible` stacks, and the next one the page's.
-test('Escape shuts the stage panel', async () => {
+// 50.62, 53.15 — Escape and a press outside are the panel's, as a layer `dismissible` stacks, and a
+// press on its own button is the button's: it shuts the panel once, not shuts and reopens it.
+// THE REVERT: drop `inside: [at]` from the popover's dismissal — the press on the button shuts the
+// panel and the click opens it again.
+test('Escape, a press outside and a second press on the button each shut the stage panel', async () => {
     using _filter = await mount(StageFilter({}))
     opener().click()
     flushSync()
@@ -42,5 +52,18 @@ test('Escape shuts the stage panel', async () => {
     document.body.dispatchEvent(escape)
     flushSync()
     expect(escape.defaultPrevented).toBe(true)
-    expect(panel()).toBeNull()
+    expect(shown()).toBe(false)
+
+    opener().click()
+    flushSync()
+    press(document.body)
+    flushSync()
+    expect(shown()).toBe(false)
+
+    opener().click()
+    flushSync()
+    press(opener())
+    opener().click()
+    flushSync()
+    expect(shown()).toBe(false)
 })

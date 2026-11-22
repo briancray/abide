@@ -12,7 +12,7 @@ const drop = dropzone({
 </script>
 
 {#if open}
-    <aside {...drop.host} {...panel}>
+    <aside {...drop.host} {...panel.host}>
         Drop files: {files.join(', ') || 'none'}
     </aside>
 {:else}

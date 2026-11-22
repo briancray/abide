@@ -364,7 +364,7 @@ import { popover, tooltip } from '@abide/abide'
 
 <button id="tipped" {...tooltip.tip('Saves the deal')}>Save</button>
 <button id="own" aria-description="Mine" {...tooltip.tip('Saves the deal')}>Save</button>
-<div id="floating" {...popover(undefined)}>panel</div>`)
+<div id="floating" {...popover().popover}>panel</div>`)
     expect(html).toContain('aria-description="Saves the deal"')
     expect(html).toContain('aria-description="Mine"')
     expect(html).not.toContain('bind:element')

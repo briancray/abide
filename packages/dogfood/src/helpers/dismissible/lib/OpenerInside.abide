@@ -2,14 +2,13 @@
 import { dismissible, reactive } from '@abide/abide'
 
 let open = reactive(false)
-let opener = reactive<HTMLButtonElement | undefined>(undefined)
-const close = () => (open = false)
+const edit = dismissible(() => (open = false))
 </script>
 
-<button bind:element={opener} onclick={() => (open = !open)}>
+<button {...edit.inside} onclick={() => (open = !open)}>
     {open ? 'Done' : 'Quick edit'}</button>
 {#if open}
-    <form {...dismissible(close, { inside: [opener] })}>
+    <form {...edit.host}>
         <input value="Analytical Engines">
     </form>
 {/if}

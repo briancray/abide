@@ -58,7 +58,11 @@ export { csp } from './csp.ts'
 // 50.1-50.4 — a native modal as a part on a `<dialog>` of the app's own.
 export { type DialogOptions, type DialogParts, dialog } from './dialog.ts'
 // 53.12-53.16 — the part closing a panel from outside it.
-export { dismissible } from './dismissible.ts'
+export {
+    type DismissibleOptions,
+    type DismissibleParts,
+    dismissible,
+} from './dismissible.ts'
 // 53.53, 53.61-53.63 — a scrolling element kept at its bottom, and the button taking a reader back down.
 export {
     type FollowBottom,
@@ -145,7 +149,7 @@ export { pairing } from './pairing.ts'
 export { onRefusal } from './onRefusal.ts'
 // 50.19 — where a floating element sits beside its anchor.
 export type { Side } from './place.ts'
-export { type PopoverOptions, popover } from './popover.ts'
+export { type PopoverOptions, type PopoverParts, popover } from './popover.ts'
 export { type Principal, principal } from './principal.ts'
 export { props } from './props.ts'
 export { Raw, raw } from './Raw.ts'

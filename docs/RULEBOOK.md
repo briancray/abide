@@ -5188,8 +5188,9 @@ the crosshair stands, and the chart's `svg` part MUST name it in `aria-described
 50.48 The element carrying `tooltip.host`'s `hint` part, and a `chart`'s `tip`, MUST NOT be the
 target of a pointer event, so a hint open over its anchor never takes the pointer from it.
 
-50.49 `popover` MUST show the element it is spread on as a popover, carrying `popover="manual"`
-among its part's attributes, for as long as it is bound, and MUST hide it once it is unbound.
+50.49 `popover`'s `popover` part MUST carry `popover="manual"` among its attributes, and MUST show
+its element against the element its `trigger` or its `anchor` is spread on while `open` holds, and
+hide it once `open` does not or it is unbound.
 
 50.50 `announce` MUST make its text the one message `Announcer` holds, in place of the message before
 it, read `polite` unless its `politeness` says `assertive`.
@@ -5225,6 +5226,13 @@ one before or after it in the document order of their triggers, going round.
 50.60 A `menu` a `group` switches to MUST carry `data-from` naming the side the one it switched from
 stands on, `start` or `end`, until it closes, and the one it switched from MUST carry `data-to` naming
 the side of the one it switched to, until it opens again.
+
+50.61 `popover`'s `trigger` MUST open the popover on a click while it is shut, and shut it on a click
+while it is open, or while it was open as the press began; its `anchor` MUST NOT open it.
+
+50.62 An open `popover` MUST be a layer `dismissible` stacks, writing `false` to `open` on an Escape
+and on a press outside it and outside its `trigger` or `anchor`, save where its `escape` or its
+`outside` is `false`.
 
 # 51. Lists and tables
 
@@ -5896,8 +5904,8 @@ method is composing.
 53.11 `keyLabel` MUST write `mod` as ⌘ where 53.3 matches it as ⌘, and as Ctrl where 53.3 matches it
 as Ctrl.
 
-53.12 `dismissible` MUST call its callback on a `pointerdown` landing outside its element and outside
-every element `inside` holds, save where `outside` is `false`.
+53.12 `dismissible` MUST call its callback on a `pointerdown` landing outside the element its `host`
+is spread on and outside every element its `inside` is spread on, save where `outside` is `false`.
 
 53.13 `dismissible` MUST NOT call its callback for a `pointerdown` dispatched when its element was
 bound.

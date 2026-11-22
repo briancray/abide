@@ -1,32 +1,28 @@
 <script>
-import { dismissible, popover, reactive } from '@abide/abide'
+import { popover, reactive } from '@abide/abide'
 
 const STAGES = ['Any stage', 'Lead', 'Qualified', 'Proposal']
 
-let open = reactive(false)
 let stage = reactive('Any stage')
-let opener = reactive<HTMLButtonElement | undefined>(undefined)
+const filter = popover({ align: 'start', offset: 4 })
 
 function choose(chosen: string) {
     stage = chosen
-    open = false
+    filter.open.set(false)
 }
 </script>
 
-<button bind:element={opener} onclick={() => (open = !open)}>Stage: {stage}</button>
+<button {...filter.trigger}>Stage: {stage}</button>
 
-{#if open && opener}
-    <div
-        class="m-0 flex flex-col rounded-md border border-rule bg-raised p-1 shadow-sm"
-        {...popover(opener, { align: 'start', offset: 4 })}
-        {...dismissible(() => (open = false), { inside: [opener] })}
-    >
-        {#for each of STAGES}
-            <button
-                class="border-0 bg-transparent text-left"
-                aria-pressed={each === stage ? 'true' : 'false'}
-                onclick={() => choose(each)}
-            >{each}</button>
-        {/for}
-    </div>
-{/if}
+<div
+    class="m-0 flex flex-col rounded-md border border-rule bg-raised p-1 shadow-sm"
+    {...filter.popover}
+>
+    {#for each of STAGES}
+        <button
+            class="border-0 bg-transparent text-left"
+            aria-pressed={each === stage ? 'true' : 'false'}
+            onclick={() => choose(each)}
+        >{each}</button>
+    {/for}
+</div>

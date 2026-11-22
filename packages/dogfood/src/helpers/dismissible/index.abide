@@ -25,7 +25,7 @@ import quickEdit from './lib/QuickEdit.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/elementBehaviors.test.ts',
             from: [
-                "test('a press outside closes, a press inside or on what `inside` holds does not",
+                "test('a press outside closes, a press inside or on an element `inside` is spread on does not",
             ],
         },
         {
@@ -35,7 +35,7 @@ import quickEdit from './lib/QuickEdit.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Close a quick-edit panel on a press outside it or on Escape">
-        <p>Spread <code>dismissible</code> on the panel, and your callback runs on a press anywhere
+        <p>Spread <code>host</code> on the panel, and your callback runs on a press anywhere
             else or on Escape. Under <code>&#123;#if&#125;</code> it listens only while the panel
             is open.</p>
         <Example code={quickEdit}><QuickEdit /></Example>
@@ -43,13 +43,14 @@ import quickEdit from './lib/QuickEdit.abide' with { type: 'text' }
 
     <Section level={3} title="Count the opening button as part of the panel">
         <p>A press on the button that toggles the panel lands outside it, closes it, and the click
-            opens it again. List the button in <code>inside</code>.</p>
+            opens it again. Spread <code>inside</code> on the button.</p>
         <Example code={openerInside}><OpenerInside /></Example>
     </Section>
 
     <Section level={3} title="Close a panel on Escape alone">
         <p>Turn the outside press off with <code>outside: false</code>, or Escape off with
-            <code>escape: false</code>. Spread it beside another part, and both bind the element.</p>
+            <code>escape: false</code>. Spread <code>host</code> beside another part, and both bind the
+            element.</p>
         <Example code={escapeOnly}><EscapeOnly /></Example>
     </Section>
     <Section level={3} title="Close one layer per Escape">

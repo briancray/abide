@@ -2,8 +2,7 @@
 // in a browser — by `tooltip.tip`'s element binding, which a server never runs.
 
 import type { Live } from '../live.ts'
-import type { Side } from '../place.ts'
-import type { PopoverOptions } from '../popover.ts'
+import type { PlaceOptions, Side } from '../place.ts'
 import { reactive } from '../reactive/index.ts'
 import { standing } from '../standing.ts'
 
@@ -11,7 +10,7 @@ import { standing } from '../standing.ts'
  * Where a hint opens against its anchor — `popover`'s placement, every option of it, so the two cannot
  * drift — and how long a pointer rests first. Only the side's default is a hint's own.
  */
-export type TooltipOptions = Omit<PopoverOptions, 'side'> & {
+export type TooltipOptions = Omit<PlaceOptions, 'side'> & {
     /** The side of the anchor the hint opens on, flipped to the opposite one where it has no room. Default `'top'`; a function is read at each placement. */
     side?: Live<Side>
     /** Milliseconds a pointer rests on the anchor before the hint opens. Default `300`; a function is read as the pointer rests. */

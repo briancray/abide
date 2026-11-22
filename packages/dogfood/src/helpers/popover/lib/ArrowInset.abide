@@ -1,21 +1,18 @@
 <script>
-import { popover, reactive } from '@abide/abide'
+import { popover } from '@abide/abide'
 
-let open = reactive(false)
-let opener = reactive<HTMLButtonElement | undefined>(undefined)
+const quickView = popover({ align: 'start', arrowInset: 12 })
 </script>
 
-<button bind:element={opener} onclick={() => (open = !open)}>Quick view</button>
+<button {...quickView.trigger}>Quick view</button>
 
-{#if open && opener}
-    <div
-        class="m-0 overflow-visible rounded-lg border border-rule bg-raised
-        p-3 before:absolute before:-top-1.5
-        before:left-(--arrow-offset) before:size-3
-        before:-translate-x-1/2 before:rotate-45 before:border-t
-        before:border-l before:border-rule before:bg-raised"
-        {...popover(opener, { align: 'start', arrowInset: 12 })}
-    >
-        Analytical Engines renewal, $42K
-    </div>
-{/if}
+<div
+    class="m-0 overflow-visible rounded-lg border border-rule bg-raised
+    p-3 before:absolute before:-top-1.5
+    before:left-(--arrow-offset) before:size-3
+    before:-translate-x-1/2 before:rotate-45 before:border-t
+    before:border-l before:border-rule before:bg-raised"
+    {...quickView.popover}
+>
+    Analytical Engines renewal, $42K
+</div>

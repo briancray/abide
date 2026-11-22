@@ -874,28 +874,31 @@ type Reached = { readonly [REACHED]: true }
 | `tooltip.tip` | `(text: string, options?: TooltipOptions) => Record<string, unknown>` | The part opening a text hint for the element it is spread on, shown by the page's `tooltip.host`. | 32.99, 50.23, 50.24, 50.25, 50.36, 53.15, 49.4, 49.14 |
 | `tooltip.host` | `() => TooltipHost` | The popover every hint shows in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.36, 50.48, 50.54, 49.9 |
 | `TooltipHost` | `{ readonly hint: Record<string, unknown>; get text(): string \| undefined }` | The popover's part, and the text of the hint showing in it. | 32.11, 50.54, 50.55, 49.4, 49.11 |
-| `TooltipOptions` | `Omit<PopoverOptions, 'side'> & { side?: Side \| (() => Side); delay?: number \| (() => number) }` | Where a hint opens against its anchor, placed as a `popover` is, and how long a pointer rests first. | 50.19, 50.20, 50.21, 50.24, 50.26, 50.35, 49.12, 49.13 |
+| `TooltipOptions` | `{ align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); side?: Side \| (() => Side); delay?: number \| (() => number) }` | Where a hint opens against its anchor, placed as a `popover` is, and how long a pointer rests first. | 50.19, 50.20, 50.21, 50.24, 50.26, 50.35, 49.12, 49.13 |
 
 ## `menu`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.35, 50.37, 50.38, 50.39, 50.40, 49.8, 50.57, 50.58, 50.59, 50.60 |
-| `MenuOptions` | `Omit<PopoverOptions, 'align' \| 'offset'> & { id?: string; open?: Reactive<boolean>; align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); openOnHover?: number \| false \| (() => number \| false); closeOnLeave?: number \| false \| (() => number \| false); group?: string \| (() => string \| undefined); onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, placed as a `popover` is, whether a resting pointer opens it and a leaving one closes it, the group it switches within, and what hears it open and close. | 50.19, 50.20, 50.21, 50.35, 50.37, 49.10, 49.12, 49.13, 50.57, 50.58, 50.59 |
+| `MenuOptions` | `Omit<PopoverOptions, 'align' \| 'offset' \| 'escape' \| 'outside'> & { id?: string; open?: Reactive<boolean>; align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); openOnHover?: number \| false \| (() => number \| false); closeOnLeave?: number \| false \| (() => number \| false); group?: string \| (() => string \| undefined); onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, placed as a `popover` is, whether a resting pointer opens it and a leaving one closes it, the group it switches within, and what hears it open and close. | 50.19, 50.20, 50.21, 50.35, 50.37, 49.10, 49.12, 49.13, 50.57, 50.58, 50.59 |
 | `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38, 49.4, 49.10, 49.11 |
 
 ## `dismissible`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: { escape?: boolean; outside?: boolean; inside?: readonly (Element \| null \| undefined)[] }) => Record<string, unknown>` | The part closing the element it is spread on, on a press outside it or on Escape. | 32.99, 53.12, 53.13, 53.14, 53.15, 53.16, 49.4, 49.14 |
+| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: DismissibleOptions) => DismissibleParts` | A panel closed on a press outside it or on Escape, as parts an app spreads onto the panel and onto what counts as inside it. | 53.12, 53.13, 53.14, 53.15, 53.16, 32.99, 49.14 |
+| `DismissibleOptions` | `{ escape?: boolean; outside?: boolean }` | Whether Escape dismisses, and whether a press outside does. | 53.12, 53.14 |
+| `DismissibleParts` | `{ readonly host: Record<string, unknown>; readonly inside: Record<string, unknown> }` | The panel's part, and the part for an element a press on is not outside. | 53.12, 49.4, 49.11 |
 
 ## `popover`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `popover` | `(anchor: Element \| undefined, options?: PopoverOptions) => Record<string, unknown>` | The part showing the element it is spread on in the top layer against an anchor for as long as it is bound. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.49, 32.99, 49.4, 49.14 |
-| `PopoverOptions` | `{ side?: Side \| (() => Side); align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number) }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners. | 50.19, 50.20, 50.21, 50.35, 49.12, 49.13 |
+| `popover` | `(options?: PopoverOptions) => PopoverParts` | An app's own overlay as parts it spreads onto a trigger or an anchor and a popover of its own, shown in the top layer against the one while `open` holds. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.49, 50.61, 50.62, 32.99, 49.8, 49.14 |
+| `PopoverOptions` | `{ side?: Side \| (() => Side); align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); id?: string; open?: Reactive<boolean>; escape?: boolean; outside?: boolean }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners, the base of its ids, whether it is open, and whether Escape and a press outside close it. | 50.19, 50.20, 50.21, 50.35, 50.62, 49.10, 49.12, 49.13 |
+| `PopoverParts` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly popover: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the popover's, and whether it is open. | 50.49, 50.61, 32.11, 49.4, 49.10, 49.11 |
 | `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
 # Input and lists

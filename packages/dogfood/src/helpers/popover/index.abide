@@ -17,12 +17,14 @@ import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageFilter.test.ts',
             from: [
-                "test('the stage panel opens as a popover under its button, and shuts with its {#if}'",
+                "test('the stage button opens its panel as a popover under it, and a pick shuts it'",
             ],
         },
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageFilter.test.ts',
-            from: ["test('Escape shuts the stage panel'"],
+            from: [
+                "test('Escape, a press outside and a second press on the button each shut the stage panel'",
+            ],
         },
         {
             path: 'packages/abide/tests/overlays.test.ts',
@@ -37,15 +39,17 @@ import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Open a filter panel under its button">
-        <p>The panel is open for as long as it is bound, so its <code>&#123;#if&#125;</code>
-            opens and closes it. It sits in the top layer, placed on the side it is given and
-            flipped where there is no room, and <code>data-side</code> says which it took. Spread
-            <code>dismissible</code> beside it to close it on a press outside or on Escape.</p>
+        <p>Spread <code>trigger</code> on the button and <code>popover</code> on the panel. The
+            button opens and closes it, and a press outside or Escape closes it. It sits in the
+            top layer, placed on the side it is given and flipped where there is no room, and
+            <code>data-side</code> says which it took.</p>
         <Example code={filterPanel}><FilterPanel /></Example>
     </Section>
 
     <Section level={3} title="Make a list as wide as the field it suggests for">
-        <p><code>--anchor-width</code> is the anchor's width, kept current as it resizes.</p>
+        <p>Spread <code>anchor</code> on a field that opens the popover some other way, here
+            by typing, and write <code>open</code> from what opens it. <code>--anchor-width</code> is the
+            anchor's width, kept current as it resizes.</p>
         <Example code={anchorWidth}><AnchorWidth /></Example>
     </Section>
     <Section level={3} title="Point an arrow at the button, clear of the rounded corners">

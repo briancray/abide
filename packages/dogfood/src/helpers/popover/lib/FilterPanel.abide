@@ -1,18 +1,14 @@
 <script>
-import { dismissible, popover, reactive } from '@abide/abide'
+import { popover } from '@abide/abide'
 
-let open = reactive(false)
-let opener = reactive<HTMLButtonElement | undefined>(undefined)
+const filters = popover({ align: 'start' })
 </script>
 
-<button bind:element={opener} onclick={() => (open = !open)}>Filters</button>
+<button {...filters.trigger}>Filters</button>
 
-{#if open && opener}
-    <div
-        class="m-0 rounded-md border border-rule bg-raised p-3 shadow-sm"
-        {...popover(opener, { align: 'start' })}
-        {...dismissible(() => (open = false), { inside: [opener] })}
-    >
-        <label><input type="checkbox" /> Only my deals</label>
-    </div>
-{/if}
+<div
+    class="m-0 rounded-md border border-rule bg-raised p-3 shadow-sm"
+    {...filters.popover}
+>
+    <label><input type="checkbox" /> Only my deals</label>
+</div>

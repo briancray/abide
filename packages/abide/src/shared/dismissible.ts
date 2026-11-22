@@ -19,50 +19,71 @@ type Layer = {
     dismiss: (event: PointerEvent | KeyboardEvent) => void
     escape: boolean
     outside: boolean
-    inside: readonly (Element | null | undefined)[]
+    inside: Iterable<Element | null | undefined>
 }
 
 const layers = reactive<readonly Layer[]>([])
 
-/** What a press outside the element or an Escape does: `dismissible`'s options. */
+/** Which of a press outside and an Escape dismiss: `dismissible`'s options. */
 export type DismissibleOptions = {
     /** Whether Escape dismisses. `true` by default. */
     escape?: boolean
     /** Whether a press outside the element dismisses. `true` by default. */
     outside?: boolean
+}
+
+/** The two parts `dismissible` hands back: `<form {...edit.host}>`, `<button {...edit.inside}>`. */
+export type DismissibleParts = {
+    /** The element a press outside or an Escape closes. */
+    readonly host: Record<string, unknown>
     /**
-     * Elements a press on is not outside, besides the element itself: the button that opens it,
-     * so pressing that button again is the button's to answer. An entry still `undefined` is
-     * skipped.
+     * An element a press on is not outside, spread on as many as there are: the button that opens
+     * the host, so pressing it again is the button's to answer.
      */
-    inside?: readonly (Element | null | undefined)[]
+    readonly inside: Record<string, unknown>
 }
 
 /**
- * The part calling `onDismiss` on a press outside the element it is spread on, or on Escape.
+ * The parts calling `onDismiss` on a press outside the host, or on Escape.
  *
- * Spread on several elements at once — a menu opened from a panel — they stack: Escape dismisses the
- * last one bound, and a press dismisses each one from the top that it lands outside, stopping at
- * the first it lands in. The press that opened the element is over by the time it is bound, so it
- * dismisses nothing.
+ * Several hosts standing at once — a menu opened from a panel — stack: Escape dismisses the last one
+ * bound, and a press dismisses each one from the top that it lands outside, stopping at the first it
+ * lands in. The press that opened the host is over by the time it is bound, so it dismisses nothing.
  *
- * @param onDismiss what closes the element, handed the `pointerdown` or `keydown` that asked
- * @param options which of the two dismiss, and what else a press counts as inside
+ * @param onDismiss what closes the host, handed the `pointerdown` or `keydown` that asked
+ * @param options which of the two dismiss
  */
 export function dismissible(
     onDismiss: (event: PointerEvent | KeyboardEvent) => void,
     options: DismissibleOptions = {},
-): Record<string, unknown> {
+): DismissibleParts {
+    const inside = new Set<Element>()
     return {
-        'data-dismissible': 'host',
-        'bind:element': dismissing(onDismiss, options),
+        host: {
+            'data-dismissible': 'host',
+            'bind:element': dismissing(onDismiss, { ...options, inside }),
+        },
+        inside: {
+            'data-dismissible': 'inside',
+            'bind:element': (element: Element): Disposer => {
+                inside.add(element)
+                return () => {
+                    inside.delete(element)
+                }
+            },
+        },
     }
 }
 
-/** `dismissible`'s binding alone, for a part of the framework's own that stacks an element it holds. */
+/**
+ * `dismissible`'s binding alone, for a part of the framework's own that stacks an element it holds,
+ * with what else a press counts as inside — read at each press, so a set filled later counts.
+ */
 export function dismissing(
     onDismiss: (event: PointerEvent | KeyboardEvent) => void,
-    options: DismissibleOptions = {},
+    options: DismissibleOptions & {
+        inside?: Iterable<Element | null | undefined>
+    } = {},
 ): (element: Element) => Disposer {
     return (element) =>
         stack({
