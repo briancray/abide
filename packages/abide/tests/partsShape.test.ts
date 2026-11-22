@@ -51,6 +51,7 @@ import {
     tree,
     type TreeNode,
 } from '#shared'
+import { announce, type AnnouncerHost } from '#shared/announce.ts'
 import { host as promptsHost } from '#shared/prompts/host.ts'
 import type { PromptsHost } from '#shared/prompts/host.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
@@ -134,6 +135,7 @@ test('every part is a member, a function of its item, or an action — 49.11', (
     shaped<FormField>()
     shaped<DropzoneParts>()
     shaped<FollowBottom>()
+    shaped<AnnouncerHost>()
     expect(true).toBe(true)
 })
 
@@ -164,6 +166,7 @@ function elementParts(): Record<string, unknown> {
     const deal = form(ADD)
     const drop = dropzone()
     const follow = followBottom()
+    const regions = standing(() => announce.host())
     const toast = {
         id: 1,
         text: 'Saved',
@@ -253,6 +256,8 @@ function elementParts(): Record<string, unknown> {
         'dropzone.input': drop.input,
         'followBottom.host': follow.host,
         'followBottom.jump': follow.jump,
+        'announce.host.polite': regions.polite,
+        'announce.host.assertive': regions.assertive,
     }
 }
 

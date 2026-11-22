@@ -1,33 +1,37 @@
 <script module>
 // 50.50, 34.33 — THE CALL THAT GIVES THIS COMPONENT ITS MESSAGE, imported beside it from its own entry.
-import { announce, type AnnounceOptions } from '#shared/announce.ts'
+import {
+    announce,
+    type Announcement,
+    type AnnounceOptions,
+    type AnnouncerHost,
+} from '#shared/announce.ts'
 
 export { announce }
-export type { AnnounceOptions }
+export type { Announcement, AnnounceOptions, AnnouncerHost }
 </script>
 
 <script>
-import { announcers, said } from '#shared/announce.ts'
-// 50.52, 50.53 — WHERE `announce` IS READ OUT: rendered once, in the root layout, as a polite and an
-// assertive live region, both standing empty from the first paint — a region added together with its
-// words is not read. Nothing it holds is meant to be seen: hide it with the app's own class.
+// 49.9, 50.52, 50.53 — `announce.host`'s default markup: the polite and the assertive live region,
+// rendered once in the root layout, both standing empty from the first paint — a region added
+// together with its words is not read. Nothing it holds is meant to be seen: hide it with the app's
+// own class. An app wanting other markup spreads the parts itself.
 import type { Attributes } from '#shared/Attributes.ts'
 import { props } from '#shared/props.ts'
 
 const { ...rest } = props<Attributes<'div'>>()
 
-// 50.36 — this host, among the ones standing; the last holds the message.
-const shows = announcers.stand()
+const regions = announce.host()
 </script>
 
 <div {...rest}>
-    <div role="status" aria-live="polite" data-part="polite">
-        {#for message of shows() && said?.politeness === 'polite' ? [said] : [] by message.count}
+    <div {...regions.polite}>
+        {#for message of regions.said('polite') by message.count}
             <span>{message.text}</span>
         {/for}
     </div>
-    <div role="alert" aria-live="assertive" data-part="assertive">
-        {#for message of shows() && said?.politeness === 'assertive' ? [said] : [] by message.count}
+    <div {...regions.assertive}>
+        {#for message of regions.said('assertive') by message.count}
             <span>{message.text}</span>
         {/for}
     </div>

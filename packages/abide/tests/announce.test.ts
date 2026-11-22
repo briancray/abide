@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test'
 import { installServer } from '#server/installServer.ts'
 import { inScope } from '#server/requestScope.ts'
 import { announce, said } from '#shared/announce.ts'
+import { collectWatches } from '#shared/reactive/watch.ts'
 
 installServer()
 
@@ -49,4 +50,27 @@ test('announce throws inside a request — 50.51', async () => {
     await inScope(new Request('http://app/'), async () => {
         expect(() => announce('Saved')).toThrow('RULEBOOK 50.51')
     })
+})
+
+// 50.52 — THE REGIONS AS PARTS: each a live region of its politeness, and the message in the region its
+// politeness names alone. THE REVERT: answer the message from `said` whatever its politeness -> the
+// assertive region holds the polite message too.
+test('announce.host hands back both live regions, and the message in its own region alone — 50.52', () => {
+    // Stood as a component's setup stands it, and stopped after, so no host outlives the test.
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const regions = announce.host()
+    collectWatches(previous)
+    announce('Saved')
+    expect([
+        regions.polite.role,
+        regions.polite['aria-live'],
+        regions.assertive.role,
+        regions.assertive['aria-live'],
+    ]).toEqual(['status', 'polite', 'alert', 'assertive'])
+    expect(regions.said('polite').map((message) => message.text)).toEqual([
+        'Saved',
+    ])
+    expect(regions.said('assertive')).toEqual([])
+    for (const stop of stops) stop()
 })

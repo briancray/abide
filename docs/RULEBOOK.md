@@ -5154,12 +5154,12 @@ it, read `polite` unless its `politeness` says `assertive`.
 
 50.51 `announce` MUST throw where `isServer` is true.
 
-50.52 `Announcer` MUST render a polite and an assertive live region, both standing and empty as it
-first renders, and MUST hold its message in the region its politeness names and nothing in the
-other.
+50.52 `announce.host`'s `polite` and `assertive` parts MUST each be a live region of that politeness,
+and its `said` MUST answer the message for the region its politeness names and nothing for the
+other; `Announcer` MUST render both regions, standing and empty as it first renders.
 
-50.53 `Announcer` MUST render each message as an element of its own, a message saying the words of
-the one before it among them.
+50.53 `Announcer` MUST render each message `said` answers as an element of its own, a message
+saying the words of the one before it among them.
 
 50.54 `tooltip.host`'s `hint` part MUST carry every attribute its element needs as the server writes
 it: `role="tooltip"` and `popover="manual"`, with `data-open` present while a hint shows there.

@@ -43,3 +43,41 @@ export function announce(text: string, options: AnnounceOptions = {}): void {
     count += 1
     said.set({ text, politeness: options.politeness ?? 'polite', count })
 }
+
+/** The parts `announce.host` hands back: `<div {...regions.polite}>`, and the message each region holds. */
+export type AnnouncerHost = {
+    /** The polite live region: `role="status"`, `aria-live="polite"`. */
+    readonly polite: Record<string, unknown>
+    /** The assertive live region: `role="alert"`, `aria-live="assertive"`. */
+    readonly assertive: Record<string, unknown>
+    /** What the region of `politeness` holds: the message, keyed by its `count`, or none — none where another host shows it. */
+    said(politeness: 'polite' | 'assertive'): readonly Announcement[]
+}
+
+/**
+ * The two live regions `announce` is read out from, as parts to spread, called from the script of the
+ * one component that renders them — of several standing, the last holds the message (50.36).
+ */
+function host(): AnnouncerHost {
+    const shows = announcers.stand()
+    return {
+        polite: {
+            role: 'status',
+            'aria-live': 'polite',
+            'data-part': 'polite',
+        },
+        assertive: {
+            role: 'alert',
+            'aria-live': 'assertive',
+            'data-part': 'assertive',
+        },
+        said(politeness) {
+            const message = said()
+            return shows() && message?.politeness === politeness
+                ? [message]
+                : []
+        },
+    }
+}
+
+announce.host = host

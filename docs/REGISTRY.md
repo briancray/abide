@@ -1127,13 +1127,16 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Announcer` | `Attributes<'div'>` | The polite and the assertive live region `announce` is read out from, rendered once and imported from `@abide/abide/Announcer.abide`. | 50.36, 50.52, 50.53, 49.1, 49.2, 49.3, 49.4, 49.5 |
+| `Announcer` | `Attributes<'div'>` | `announce.host`'s default markup: the polite and the assertive live region `announce` is read out from, rendered once and imported from `@abide/abide/Announcer.abide`. | 50.36, 50.52, 50.53, 49.1, 49.2, 49.3, 49.4, 49.5 |
 
 ## `announce`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `announce` | `(text: string, options?: AnnounceOptions) => void` | A message a screen reader reads out from the app's `Announcer`, with nothing shown. | 50.36, 50.50, 50.51 |
+| `announce.host` | `() => AnnouncerHost` | The polite and the assertive live region `announce` is read out from, as parts an app spreads onto markup of its own, from the script of the one component that renders them. | 50.36, 50.52, 49.4, 49.9, 49.11 |
+| `AnnouncerHost` | `{ readonly polite: Record<string, unknown>; readonly assertive: Record<string, unknown>; said(politeness: 'polite' \| 'assertive'): readonly Announcement[] }` | The two regions' parts, and the message each holds. | 50.52, 50.53, 49.11 |
+| `Announcement` | `{ text: string; politeness: 'polite' \| 'assertive'; count: number }` | One message `announce` gave: its words, how urgently they are read, and which message it is. | 50.50, 50.53 |
 | `AnnounceOptions` | `{ politeness?: 'polite' \| 'assertive' }` | How urgently a message interrupts what a screen reader is reading. | 50.50 |
 
 ## `Chat`
