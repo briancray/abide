@@ -1,0 +1,34 @@
+<script>
+import { commandPalette, reactive } from '@abide/abide'
+
+let open = reactive(false)
+const palette = commandPalette({
+    id: 'marked-palette',
+    commands: [
+        { label: 'Add a deal', run: () => {} },
+        { label: 'Open the pipeline', run: () => {} },
+    ],
+    open,
+    hotkey: 'mod+shift+u',
+})
+</script>
+
+<button onclick={() => (open = true)}>Open the palette</button>
+<dialog {...palette.dialog} class="palette">
+    <input {...palette.input} placeholder="Type “deal ad”">
+    <ul {...palette.listbox}>
+        {#for command of palette.results by command.label}
+            <li {...palette.command(command).option}>
+                <span {...palette.command(command).label}>
+                    {#for run of palette.command(command).runs}
+                        {#if run.match}
+                            <mark {...run.match}>{run.text}</mark>
+                        {:else}
+                            {run.text}
+                        {/if}
+                    {/for}
+                </span>
+            </li>
+        {/for}
+    </ul>
+</dialog>

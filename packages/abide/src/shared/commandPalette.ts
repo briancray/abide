@@ -1,4 +1,4 @@
-// 51.72-51.78 — A MODAL SEARCH OVER WHAT AN APP CAN DO: WAI-ARIA's combobox inside a modal dialog, as
+// 51.72-51.78, 51.114 — A MODAL SEARCH OVER WHAT AN APP CAN DO: WAI-ARIA's combobox inside a modal dialog, as
 // parts an app spreads onto elements of its own. The dialog is `dialog`'s parts on the app's own
 // `<dialog>`, opened modal by the `open` handed here, so the page behind it is inert, Escape cancels it
 // and closing it hands focus back to what had it; the keys over the list are `listbox`'s, and the key that opens it is a `hotkeys` binding
@@ -7,6 +7,7 @@
 import { checkParts } from './checkParts.ts'
 import { dialog } from './dialog.ts'
 import { hotkeys } from './hotkeys.ts'
+import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
@@ -39,12 +40,14 @@ export type CommandPaletteOptions = {
     label?: Live<string>
 }
 
-/** One command's parts: its option, and the label and the key written in it. */
+/** One command's parts: its option, the label and the key written in it, and the label's runs. */
 export type CommandParts = {
     /** The option: its id, whether it is active, and its click. */
     readonly option: Record<string, unknown>
     /** The element holding the command's label. */
     readonly label: Record<string, unknown>
+    /** The command's label in runs, each run of it a word typed is found in carrying the `match` part (51.114). */
+    readonly runs: readonly LabelRun[]
     /** The element showing the command's key. */
     readonly key: Record<string, unknown>
 }
@@ -85,16 +88,24 @@ export function commandPalette(
 
     const query = reactive('')
 
+    // 51.73, 51.114 — what the commands are narrowed by and their labels marked with.
+    const needles = reactive(() => needlesOf(query(), true))
+
     // 51.73 — a command is listed while every word typed is in its label or one of its keywords.
     const found = reactive(() => {
-        const words = query().toLowerCase().split(/\s+/)
+        const words = needles()
         const kept: Command[] = []
-        for (const command of commandsOf()) {
-            let text = command.label.toLowerCase()
-            for (const keyword of command.keywords ?? [])
-                text += ` ${keyword.toLowerCase()}`
-            if (words.every((word) => text.includes(word))) kept.push(command)
-        }
+        for (const command of commandsOf())
+            if (
+                words.every(
+                    (word) =>
+                        word.test(command.label) ||
+                        (command.keywords ?? []).some((each) =>
+                            word.test(each),
+                        ),
+                )
+            )
+                kept.push(command)
         return kept
     })
 
@@ -192,6 +203,9 @@ export function commandPalette(
             }),
             label: { 'data-command-palette': 'label' },
             key: { 'data-command-palette': 'key' },
+            get runs() {
+                return labelRuns(command.label, needles())
+            },
         }),
         empty: { role: 'status', 'data-command-palette': 'empty' },
         get results() {

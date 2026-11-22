@@ -31,6 +31,20 @@ test('typing narrows the contacts, ignoring case', async () => {
     ).toBe('No contact matches')
 })
 
+// 51.113, 51.115 — WHAT WAS TYPED IS MARKED in each contact listed, where the narrowing found it.
+// THE REVERT: render the label whole in `Combobox` — no contact carries a mark.
+test('what was typed is marked in each contact it lists', async () => {
+    using _picker = await mount(ContactPicker({}))
+    await settled()
+    type('ER')
+    expect(names()).toEqual(['Grace Hopper', 'Katherine Johnson'])
+    expect(
+        [
+            ...document.querySelectorAll('[role=option] mark[data-part=match]'),
+        ].map((mark) => mark.textContent),
+    ).toEqual(['er', 'er'])
+})
+
 test('narrowing keeps the rows still listed, and builds none', async () => {
     using _picker = await mount(ContactPicker({}))
     await settled()

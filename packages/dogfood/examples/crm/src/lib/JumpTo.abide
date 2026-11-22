@@ -47,7 +47,15 @@ const palette = commandPalette({
     <ul {...palette.listbox}>
         {#for command of palette.results by command.label}
             <li {...palette.command(command).option}>
-                <span {...palette.command(command).label}>{command.label}</span>
+                <span {...palette.command(command).label}>
+                    {#for run of palette.command(command).runs}
+                        {#if run.match}
+                            <mark {...run.match}>{run.text}</mark>
+                        {:else}
+                            {run.text}
+                        {/if}
+                    {/for}
+                </span>
                 {#if command.key}
                     <kbd {...palette.command(command).key}>{keyLabel(command.key)}</kbd>
                 {/if}

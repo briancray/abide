@@ -5513,6 +5513,14 @@ shut it where it is open, and each MUST leave its active item where it stands.
 `data-active` saying whether that key is the active one, `aria-selected` saying the same where
 `multiple` is not `true`, and a pointer moving over it making that key active.
 
+51.102 A jump `virtualList`'s `sections` hand back MUST scroll to its section's first item, and MUST
+carry `aria-current` while its section is `current`.
+
+51.103 A jump `virtualList`'s `sections` hand back for a section no item stands in MUST be
+disabled.
+
+51.104 `virtualList` MUST stop following its scroller once its `host` is unbound.
+
 51.105 A `listbox` or a `tree` given `multiple` `true` MUST hold every key selected as `selected`,
 write `aria-multiselectable="true"` on its `listbox` or `tree` part, and write on each option or item
 `aria-selected` saying whether its key is in `selected`, and `data-selected` while it is.
@@ -5541,13 +5549,16 @@ moved to, and MUST take a key written to `selected` as that key.
 51.112 A click on an option of a `listbox` not given `multiple` `true` MUST make its key active and
 call `onpick` with its option.
 
-51.102 A jump `virtualList`'s `sections` hand back MUST scroll to its section's first item, and MUST
-carry `aria-current` while its section is `current`.
+51.113 `combobox`'s `runs` MUST answer an item's `label` cut into runs in order, the first stretch of
+it holding the input's text as 51.16 finds it carrying the `match` part, whether or not `search` is
+given.
 
-51.103 A jump `virtualList`'s `sections` hand back for a section no item stands in MUST be
-disabled.
+51.114 `CommandParts`'s `runs` MUST answer the command's `label` cut into runs in order, the first
+stretch of it each word typed is found in as 51.73 finds it carrying the `match` part, stretches that
+overlap or touch carrying it as one run.
 
-51.104 `virtualList` MUST stop following its scroller once its `host` is unbound.
+51.115 `Combobox`, rendering an option as its `label`, and `CommandPalette`, rendering a command's
+label, MUST render each run carrying the `match` part as a `<mark>` it is spread on.
 
 # 52. Formatting, markdown and charts
 

@@ -1,10 +1,11 @@
-// 51.13-51.29, 51.61, 51.62, 51.64 — A FIELD THAT LISTS WHAT MATCHES AS IT IS TYPED IN, as parts an app
+// 51.13-51.29, 51.61, 51.62, 51.64, 51.113 — A FIELD THAT LISTS WHAT MATCHES AS IT IS TYPED IN, as parts an app
 // spreads onto an input, a popup and options of its own: WAI-ARIA's combobox with a list popup. Focus
 // stays in the input, which names the active option as its `aria-activedescendant`; the list is a
 // `listbox` the input's keys move through, opened in the top layer against the input as `popover`
 // opens one. Bound to an array, it picks many: each pick adds an item or takes it out again.
 
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
+import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { popover } from './popover.ts'
@@ -63,6 +64,8 @@ export type ComboboxParts<Item, Multiple extends boolean = false> = {
     get items(): readonly Item[]
     /** An item's option: its role, id, `aria-selected`, `data-active`, `data-selected`, and the press that picks it. */
     option(item: Item): Record<string, unknown>
+    /** An item's `label` in runs, each run of it the input's text is found in carrying the `match` part (51.113). */
+    runs(item: Item): readonly LabelRun[]
     /** Whether nothing is listed with no search in flight: where `empty` is rendered. */
     get nothingFound(): boolean
     /** The element saying nothing matched: a status. */
@@ -113,6 +116,8 @@ export function combobox<Item, Multiple extends boolean = false>(
             ? ''
             : label(one as Item)
     })
+    // 51.16, 51.113 — what the labels are narrowed by and marked with.
+    const needles = reactive(() => needlesOf(query(), false))
     const open = reactive(false)
     // 51.64 — what the open list is placed against.
     const input = reactive<HTMLInputElement | undefined>(undefined)
@@ -124,10 +129,11 @@ export function combobox<Item, Multiple extends boolean = false>(
             const text = query()
             const search = options.search
             if (search !== undefined) return search(text)
-            const lowered = text.toLowerCase()
+            const needle = needles()[0]
             const kept: Item[] = []
             for (const item of live(options.options) ?? NOTHING)
-                if (label(item).toLowerCase().includes(lowered)) kept.push(item)
+                if (needle === undefined || needle.test(label(item)))
+                    kept.push(item)
             return kept
         },
         debounce === undefined ? {} : { debounce },
@@ -314,6 +320,7 @@ export function combobox<Item, Multiple extends boolean = false>(
                     return pickedKeys().has(key(item)) ? '' : undefined
                 },
             }),
+        runs: (item) => labelRuns(label(item), needles()),
         get nothingFound() {
             return !busy(found) && (found() as readonly Item[]).length === 0
         },

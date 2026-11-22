@@ -103,3 +103,21 @@ test('Escape is left to the dialog', async () => {
     input().dispatchEvent(escape)
     expect(escape.defaultPrevented).toBe(false)
 })
+
+// 51.114 — THE WORDS TYPED ARE MARKED where the label holds them, and a word found in a keyword alone
+// marks nothing. THE REVERT: mark the query whole rather than each word apart from the filter's words — "deal ad" is in no label as
+// one run, and nothing is marked.
+test('each word typed is marked in the labels it is in', async () => {
+    using _jump = await mount(JumpTo({}))
+    press('k', { ctrlKey: true })
+    type('deal ad')
+    expect(options()).toEqual(['Add a deal'])
+    expect(
+        [...dialog().querySelectorAll('mark[data-part=match]')].map(
+            (mark) => mark.textContent,
+        ),
+    ).toEqual(['Ad', 'deal'])
+    type('new')
+    expect(options()).toEqual(['Add a deal'])
+    expect(dialog().querySelectorAll('[data-part=match]')).toHaveLength(0)
+})

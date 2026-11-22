@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import MarkTyped from './lib/MarkTyped.abide'
+import markTyped from './lib/MarkTyped.abide' with { type: 'text' }
 import OwnChips from './lib/OwnChips.abide'
 import ownChips from './lib/OwnChips.abide' with { type: 'text' }
 import OwnOptions from './lib/OwnOptions.abide'
@@ -43,6 +45,10 @@ import ownOptions from './lib/OwnOptions.abide' with { type: 'text' }
             ],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
+            from: ["test('what was typed is marked in each contact it lists'"],
+        },
+        {
             path: 'packages/dogfood/e2e/combobox.spec.ts',
             from: [
                 "test('a press on the field opens its list once, and a second press shuts it — 51.99'",
@@ -64,5 +70,13 @@ import ownOptions from './lib/OwnOptions.abide' with { type: 'text' }
             <code>picks</code> is what is picked, and <code>chip(item)</code> is a chip and the
             button taking it out, as Backspace in the empty field takes the last.</p>
         <Example code={ownChips}><OwnChips /></Example>
+    </Section>
+
+    <Section level={3} title="Mark what was typed in each company">
+        <p><code>runs(item)</code> cuts an item's label where the list found what was typed, so
+            the mark and the narrowing never disagree. Write a matched run in a
+            <code>&lt;mark&gt;</code> carrying its <code>match</code> part, and the rest as
+            text.</p>
+        <Example code={markTyped}><MarkTyped /></Example>
     </Section>
 </Doc>

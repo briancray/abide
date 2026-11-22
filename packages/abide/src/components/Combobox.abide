@@ -1,5 +1,5 @@
 <script generics="Item">
-// 49.9, 51.13-51.29, 51.61-51.64 — `combobox`'s default markup: the chips picked where `value` is an
+// 49.9, 51.13-51.29, 51.61-51.64, 51.115 — `combobox`'s default markup: the chips picked where `value` is an
 // array, the input, and the popup holding the list and the children shown where nothing matches.
 // Everything it does is the parts'; an app wanting its own option or chip markup spreads them itself.
 import type { Attributes } from '#shared/Attributes.ts'
@@ -37,7 +37,7 @@ const {
         debounce?: number
         /** What tells one item from another; unique among the items. */
         key(item: Item): string
-        /** An item's text: what an option shows by default, and what the input holds once it is picked. */
+        /** An item's text: what an option shows by default, what was typed marked in it, and what the input holds once it is picked. */
         label(item: Item): string
         /**
          * The item picked; bind it to read and set the pick. 51.61 — bound to an array, every item
@@ -99,7 +99,7 @@ const box = combobox({
                         {#if Option}
                             <Option item={item} />
                         {:else}
-                            {label(item)}
+                            {#for run of box.runs(item)}{#if run.match}<mark {...run.match}>{run.text}</mark>{:else}{run.text}{/if}{/for}
                         {/if}
                     </li>
                 {/for}

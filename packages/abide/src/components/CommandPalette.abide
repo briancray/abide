@@ -1,5 +1,5 @@
 <script>
-// 49.9, 51.72-51.78 — `commandPalette`'s default markup: a `<dialog>` holding the search input, the list
+// 49.9, 51.72-51.78, 51.115 — `commandPalette`'s default markup: a `<dialog>` holding the search input, the list
 // of commands, each with its key shown beside it, and the component's children where nothing matches.
 // Everything it does is the parts'; an app wanting other markup spreads them itself.
 import type { Attributes } from '#shared/Attributes.ts'
@@ -52,7 +52,7 @@ const palette = commandPalette({
     <ul {...palette.listbox}>
         {#for command of palette.results by command.label}
             <li {...palette.command(command).option}>
-                <span {...palette.command(command).label}>{command.label}</span>
+                <span {...palette.command(command).label}>{#for run of palette.command(command).runs}{#if run.match}<mark {...run.match}>{run.text}</mark>{:else}{run.text}{/if}{/for}</span>
                 {#if command.key}
                     <kbd {...palette.command(command).key}>{keyLabel(command.key)}</kbd>
                 {/if}

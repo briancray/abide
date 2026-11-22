@@ -97,6 +97,7 @@ export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 // 51.1-51.8 — the keyboard over a list of keyed options, the one `Combobox.abide` runs on.
 export { type Listbox, type ListboxOptions, listbox } from './listbox.ts'
+export type { LabelRun } from './labelRuns.ts'
 export type { Picked } from './Selection.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'

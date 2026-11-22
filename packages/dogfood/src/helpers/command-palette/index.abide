@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import MarkWords from './lib/MarkWords.abide'
+import markWords from './lib/MarkWords.abide' with { type: 'text' }
 import ShowKeywords from './lib/ShowKeywords.abide'
 import showKeywords from './lib/ShowKeywords.abide' with { type: 'text' }
 </script>
@@ -36,6 +38,10 @@ import showKeywords from './lib/ShowKeywords.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
             from: ["test('Escape is left to the dialog'"],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
+            from: ["test('each word typed is marked in the labels it is in'"],
+        },
     ]}
 >
     <Section level={3} title="Show each command beside the keywords typing matches">
@@ -44,5 +50,13 @@ import showKeywords from './lib/ShowKeywords.abide' with { type: 'text' }
             <code>command(command).option</code> in <code>results</code>, which can hold anything. The parts carry the combobox, the keys,
             the filtering and the hotkey, here ⌘J.</p>
         <Example code={showKeywords}><ShowKeywords /></Example>
+    </Section>
+
+    <Section level={3} title="Mark the words typed in each command">
+        <p><code>command(command).runs</code> cuts a command's label where each word typed was
+            found, by the same match that listed it. Write a matched run in a
+            <code>&lt;mark&gt;</code> carrying its <code>match</code> part, and the rest as
+            text.</p>
+        <Example code={markWords}><MarkWords /></Example>
     </Section>
 </Doc>

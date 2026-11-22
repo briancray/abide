@@ -514,6 +514,10 @@
     & [data-selected] {
         @apply font-semibold;
     }
+
+    & [data-part=match] {
+        @apply rounded-xs bg-signal/15 text-inherit;
+    }
 }
 
 /* A command palette: the dialog centred, its input across the top, a command and its key a row. */
@@ -542,6 +546,10 @@
 
     & [data-command-palette=key] {
         @apply text-chrome text-muted;
+    }
+
+    & [data-part=match] {
+        @apply rounded-xs bg-signal/15 text-inherit;
     }
 
     & [data-command-palette=empty] {

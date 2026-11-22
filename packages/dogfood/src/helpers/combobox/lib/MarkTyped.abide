@@ -1,0 +1,30 @@
+<script>
+import { combobox } from '@abide/abide'
+
+const box = combobox({
+    id: 'marked-company',
+    options: ['Analytical Co', 'Hopper & Co', 'Orbit Labs'],
+})
+</script>
+
+<div class="picker">
+    <label for={box.id}>Company</label>
+    <input {...box.input} placeholder="Type “co”">
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for company of box.items by company}
+                    <li {...box.option(company)}>
+                        {#for run of box.runs(company)}
+                            {#if run.match}
+                                <mark {...run.match}>{run.text}</mark>
+                            {:else}
+                                {run.text}
+                            {/if}
+                        {/for}
+                    </li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>

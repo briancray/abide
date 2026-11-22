@@ -178,6 +178,11 @@ function elementParts(): Record<string, unknown> {
     const long = virtualList({ items: [1, 2, 3] })
     const keys = listbox({ options: ['a'] })
     const slides = carousel({ items: ['a', 'b'] })
+    // Typed into, so each has a run of its label marked.
+    for (const input of [palette.input, box.input])
+        (input.oninput as (event: Event) => void)({
+            currentTarget: { value: 'O' },
+        } as unknown as Event)
     const toast = {
         id: 1,
         text: 'Saved',
@@ -208,6 +213,9 @@ function elementParts(): Record<string, unknown> {
         'commandPalette.command.option': palette.command(COMMAND).option,
         'commandPalette.command.label': palette.command(COMMAND).label,
         'commandPalette.command.key': palette.command(COMMAND).key,
+        'commandPalette.command.runs.match': palette
+            .command(COMMAND)
+            .runs.find((run) => run.match !== undefined)?.match,
         'combobox.root': box.root,
         'combobox.input': box.input,
         'combobox.popup': box.popup,
@@ -215,6 +223,9 @@ function elementParts(): Record<string, unknown> {
         'combobox.empty': box.empty,
         'combobox.chips': box.chips,
         'combobox.option': box.option('a'),
+        'combobox.runs.match': box
+            .runs('o')
+            .find((run) => run.match !== undefined)?.match,
         'combobox.chip.chip': box.chip('a').chip,
         'combobox.chip.remove': box.chip('a').remove,
         'sortableTable.table': table.table,
