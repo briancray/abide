@@ -304,6 +304,16 @@
         stroke-width: 2;
     }
 
+    /* A sparkline is one series in a cell, so it takes the first series color and the same line:
+       in the axis tone at a hairline it was not there to see. */
+    :where(.result) :where([data-sparkline=svg]) {
+        color: var(--color-signal);
+    }
+
+    :where(.result) :where([data-sparkline=line]) {
+        stroke-width: 2;
+    }
+
     :where(.result) :where([data-chart=area][data-series]) {
         fill-opacity: 0.55;
     }
