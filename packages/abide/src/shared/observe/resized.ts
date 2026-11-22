@@ -1,6 +1,5 @@
 // 32.81 — ONE `ResizeObserver` FOR EVERY ELEMENT WATCHED FOR A RESIZE IN THE DOCUMENT: each
-// `observe.size`, each `observe.rect`, each element `scrollEdges` marks and its element children
-// (32.104), and the anchor and the popover `anchored` keeps placed. Made by the
+// `observe.size`, each `observe.rect`, each element `scrollEdges` marks (32.104), and the anchor and the popover `anchored` keeps placed. Made by the
 // first and dropped with the last, so the next is made by whatever `ResizeObserver` stands then — a
 // test's fake among them. An observer per caller is a callback per caller per frame a layout moves,
 // where one hands every resize of the frame over in a single batch.

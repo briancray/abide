@@ -182,26 +182,47 @@ test('a burst of scrolls on two elements is one frame, every read before any wri
     expect(counts.log).toBe('rr')
 })
 
-// 32.103, 32.104 — CONTENT GROWING INSIDE A CHILD IS A RESIZE OF THE CHILD, which the element's own
-// box never shows: each element child is watched by the shared resize observer, a child added is
-// watched, and one removed is let go. THE REVERT: drop the `observeChild` call from
-// `childrenChanged`; the row appended is never watched, so its growing owes no read.
-test('a child that grows, arrives or leaves reads the element again — 32.103, 32.104', async () => {
+// 32.103, 32.104 — CONTENT CHANGING DEEP INSIDE IS A READ, which the element's own box never shows:
+// a node added, text changed, an attribute written two levels down and an image loading each owe
+// one frame, and none of the nodes inside is observed for resizes. The element's own
+// `data-scrollable` written owes nothing, so a frame that writes it is not followed by another.
+// THE REVERT: drop the `data-scrollable` test from `contentChanged`; every frame that writes the
+// attribute asks for one more, 1 frame where 0 are owed.
+test('a change anywhere inside reads the element again, and its own mark does not — 32.103, 32.104', async () => {
     const { element, geometry } = scroller()
     const row = element.appendChild(document.createElement('p'))
+    const label = row.appendChild(document.createElement('span'))
+    const image = row.appendChild(document.createElement('img'))
+    runFrame()
     await Bun.sleep(0)
-    expect(resize.observed.has(element)).toBe(true)
-    expect(resize.observed.has(row)).toBe(true)
     runFrame()
     expect(element.getAttribute('data-scrollable')).toBe('bottom')
-    geometry.height = 100
-    resize.deliver?.([{ target: row }])
-    expect(counts.frames).toBeGreaterThan(0)
-    runFrame()
-    expect(element.getAttribute('data-scrollable')).toBeNull()
-    row.remove()
+    expect(
+        [...resize.observed].filter((node) => element.contains(node)),
+    ).toEqual([element])
+    // The frame that wrote `bottom` has settled: nothing is owed.
     await Bun.sleep(0)
-    expect(resize.observed.has(row)).toBe(false)
+    expect(queued).toHaveLength(0)
+    const owes = async (change: () => void): Promise<number> => {
+        counts.frames = 0
+        change()
+        await Bun.sleep(0)
+        const asked = counts.frames
+        runFrame()
+        return asked
+    }
+    expect(await owes(() => label.setAttribute('class', 'tall'))).toBe(1)
+    expect(await owes(() => (label.textContent = 'Deal 1'))).toBe(1)
+    expect(await owes(() => row.append(document.createElement('p')))).toBe(1)
+    expect(await owes(() => image.dispatchEvent(new Event('load')))).toBe(1)
+    geometry.height = 100
+    expect(await owes(() => label.setAttribute('class', ''))).toBe(1)
+    // That frame removed the mark, and the removal owes no frame after it.
+    expect(element.getAttribute('data-scrollable')).toBeNull()
+    await Bun.sleep(0)
+    expect(`frames owed after the mark: ${queued.length}`).toBe(
+        'frames owed after the mark: 0',
+    )
 })
 
 // 32.107, 32.108 — STOPPING LEAVES NOTHING BEHIND, and a second bind of one element throws.

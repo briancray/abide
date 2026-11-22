@@ -13,23 +13,32 @@ class Edged {
     // What `data-scrollable` holds, so an unchanged reading writes nothing.
     tokens = ''
     unresize: Disposer
-    // Each element child, and what stops the shared resize observer telling its resizes.
-    children = new Map<Element, Disposer>()
     mutations: MutationObserver
 
     constructor(element: Element) {
         this.element = element
         this.unresize = resized(element, ownResized)
-        this.mutations = new MutationObserver(childrenChanged)
+        this.mutations = new MutationObserver(contentChanged)
+        observedBy.set(this.mutations, this)
     }
 }
 
 const bound = new WeakMap<Element, Edged>()
+// A record names the node that changed, deep in the subtree, so the observer is what finds the
+// element it belongs to.
+const observedBy = new WeakMap<MutationObserver, Edged>()
 // 32.106 — the elements the next frame reads, and the frame.
 const owed = new Set<Edged>()
 let frame = 0
 const SCROLLING: AddEventListenerOptions = { passive: true }
-const CHILDREN: MutationObserverInit = { childList: true }
+// 32.103 — `load` does not bubble, so an image or a frame loading inside is heard in capture.
+const LOADING: AddEventListenerOptions = { capture: true, passive: true }
+const CONTENT: MutationObserverInit = {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+}
 // The frame's readings, kept between frames so a frame allocates no array.
 const read: Edged[] = []
 const readings: string[] = []
@@ -41,6 +50,11 @@ const readings: string[] = []
  *
  * 32.106 — NOTHING IS READ HERE: binding owes the element a read in the next frame, where every
  * owed element is read before any is written.
+ *
+ * 32.103 — CONTENT IS WATCHED FOR CHANGE, NOT FOR SIZE. A resize observation per child also saw a
+ * row grow under a stylesheet's transition, and was dropped for its price: `bench:edges` measured it
+ * at 3.2x the hand-written arm's main thread per idle frame on a 1000-row list — paid every frame
+ * whether or not anything changed, where a mutation costs only when one happens.
  */
 export function scrollEdges(element: Element): Disposer {
     if (bound.has(element))
@@ -49,19 +63,18 @@ export function scrollEdges(element: Element): Disposer {
         )
     const edged = new Edged(element)
     bound.set(element, edged)
-    for (const child of element.children) observeChild(edged, child)
-    edged.mutations.observe(element, CHILDREN)
-    element.addEventListener('scroll', scrolled, SCROLLING)
+    edged.mutations.observe(element, CONTENT)
+    element.addEventListener('scroll', listened, SCROLLING)
+    element.addEventListener('load', listened, LOADING)
     owe(edged)
     return () => {
         if (bound.get(element) !== edged) return
         bound.delete(element)
         owed.delete(edged)
-        element.removeEventListener('scroll', scrolled, SCROLLING)
+        element.removeEventListener('scroll', listened, SCROLLING)
+        element.removeEventListener('load', listened, LOADING)
         edged.mutations.disconnect()
         edged.unresize()
-        for (const stop of edged.children.values()) stop()
-        edged.children.clear()
         element.removeAttribute('data-scrollable')
     }
 }
@@ -71,15 +84,7 @@ function owe(edged: Edged): void {
     if (frame === 0) frame = requestAnimationFrame(measure)
 }
 
-// 32.104 — a child resizing is content growing or shrinking where the element's own box may not move,
-// and is delivered too when a closed `<details>` around the element opens over content that changed
-// while it was closed.
-function observeChild(edged: Edged, child: Element): void {
-    if (!edged.children.has(child))
-        edged.children.set(child, resized(child, childResized))
-}
-
-function scrolled(event: Event): void {
+function listened(event: Event): void {
     const edged = bound.get(event.currentTarget as Element)
     if (edged !== undefined) owe(edged)
 }
@@ -89,28 +94,21 @@ function ownResized(entry: ResizeObserverEntry): void {
     if (edged !== undefined) owe(edged)
 }
 
-function childResized(entry: ResizeObserverEntry): void {
-    const parent = entry.target.parentElement
-    const edged = parent === null ? undefined : bound.get(parent)
-    if (edged !== undefined) owe(edged)
-}
-
-// Records name the element observed, since its children alone are, so no ancestor walk finds it.
-function childrenChanged(records: MutationRecord[]): void {
-    for (const record of records) {
-        const edged = bound.get(record.target as Element)
-        if (edged === undefined) continue
-        for (const node of record.removedNodes) {
-            const stop = edged.children.get(node as Element)
-            if (stop === undefined) continue
-            stop()
-            edged.children.delete(node as Element)
+// The element's own `data-scrollable` written is the one change that owes no read.
+function contentChanged(
+    records: MutationRecord[],
+    observer: MutationObserver,
+): void {
+    const edged = observedBy.get(observer)
+    if (edged === undefined) return
+    for (const record of records)
+        if (
+            record.target !== edged.element ||
+            record.attributeName !== 'data-scrollable'
+        ) {
+            owe(edged)
+            return
         }
-        for (const node of record.addedNodes)
-            if (node.nodeType === 1 && node.parentNode === edged.element)
-                observeChild(edged, node as Element)
-        owe(edged)
-    }
 }
 
 // 32.106 — EVERY READ BEFORE ANY WRITE: a write invalidates style, and a read after one would force

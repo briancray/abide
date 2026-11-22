@@ -1,0 +1,11 @@
+<script>
+import { observe, reactive } from '@abide/abide'
+
+import PipelineTrend from './PipelineTrend.abide'
+
+let seen = reactive(false)
+</script>
+
+<section class="min-h-60" bind:element={observe.visible(seen, { once: true })}>
+    {#if seen}<PipelineTrend />{/if}
+</section>

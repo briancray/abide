@@ -2686,10 +2686,11 @@ measured from — its left in a left-to-right element and its right in a right-t
 `end` the edge opposite.
 
 32.103 `scrollEdges` MUST read its element again after a scroll of the element, a resize of the
-element or of any element child of it, and an element child added or removed.
+element, a `load` event at a node inside it, and a node added to or removed from its subtree, text in
+it changed or an attribute in it written, save its own `data-scrollable`.
 
-32.104 The element `scrollEdges` is bound to, and each element child of it, MUST be observed for
-resizes by the observer 32.81 shares.
+32.104 The element `scrollEdges` is bound to MUST be observed for resizes by the observer 32.81
+shares, and `scrollEdges` MUST NOT observe a node inside it for resizes.
 
 32.105 `scrollEdges` MUST listen for its element's scrolls passively.
 

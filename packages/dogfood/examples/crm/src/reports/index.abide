@@ -7,6 +7,7 @@ import Forecast from './lib/Forecast.abide'
 import PipelineSummary from './lib/PipelineSummary.abide'
 import StageTiles from './lib/StageTiles.abide'
 import TopDeals from './lib/TopDeals.abide'
+import TrendOnceSeen from './lib/TrendOnceSeen.abide'
 import UpdateNotice from './lib/UpdateNotice.abide'
 import WonDeals from './lib/WonDeals.abide'
 
@@ -45,6 +46,8 @@ printReport.on(() => print())
     <WonDeals />
     <h2>Top deals</h2>
     <TopDeals />
+    <h2>Trend</h2>
+    <TrendOnceSeen />
     <h2>Export</h2>
     <DealsExport />
 </main>

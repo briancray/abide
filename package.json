@@ -34,6 +34,7 @@
         "clauses:uncited": "bun packages/dogfood/scripts/uncitedClauses.ts",
         "bench:reorder": "bun packages/abide/bench/reorderShare.ts",
         "bench:rect": "bun packages/abide/bench/rectScrollShare.ts",
+        "bench:edges": "bun packages/abide/bench/scrollEdgesShare.ts",
         "bench:virtual": "bun packages/abide/bench/virtualShare.ts",
         "bench:selected": "bun packages/abide/bench/selectedRowShare.ts",
         "bench:inline": "bun packages/abide/bench/inlineRowShare.ts",

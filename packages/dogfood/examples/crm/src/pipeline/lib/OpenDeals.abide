@@ -1,0 +1,14 @@
+<script>
+import { reactive, scrollEdges } from '@abide/abide'
+
+import listDeals from '../listDeals.handler.ts'
+
+const deals = reactive(() => listDeals())
+</script>
+
+<ol
+    class="h-24 overflow-y-auto data-[scrollable~=top]:mask-t-from-70%
+        data-[scrollable~=bottom]:mask-b-from-70%"
+    bind:element={scrollEdges}>
+    {#for deal of deals by deal.id}<li>{deal.name}</li>{/for}
+</ol>

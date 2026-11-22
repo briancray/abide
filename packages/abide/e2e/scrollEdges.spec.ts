@@ -88,10 +88,10 @@ test("rows added past a list's height mark it, and scrolling moves the mark — 
     await expect(list).toHaveAttribute('data-scrollable', 'top')
 })
 
-// 32.103, 32.104 — CONTENT GROWING INSIDE A CHILD IS SEEN THOUGH THE SCROLLER KEEPS ITS SIZE.
-// THE REVERT: drop the `observeChild` loop from `scrollEdges`; the paragraph growing to 300px
-// resizes nothing observed, and the scroller stays unmarked.
-test('a child growing inside a scroller of fixed size marks it — 32.103, 32.104', async ({
+// 32.103 — CONTENT GROWING INSIDE IS SEEN THOUGH THE SCROLLER KEEPS ITS SIZE: the class that grows the
+// paragraph is an attribute written inside. THE REVERT: drop `attributes` from `CONTENT`; the
+// paragraph grows to 300px with no read, and the scroller stays unmarked.
+test('a child growing inside a scroller of fixed size marks it — 32.103', async ({
     page,
 }) => {
     await page.goto(`${base}/`)
@@ -127,29 +127,18 @@ test('start and end follow the direction a scroller runs in — 32.102', async (
     await expect(rtl).toHaveAttribute('data-scrollable', 'start')
 })
 
-// 32.103, 32.104 — CONTENT THAT GREW INSIDE A CLOSED `<details>` IS READ WHEN IT OPENS: the closed
-// content's boxes are skipped, so its resize is delivered only once the `<details>` opens — to the
-// child's observation, the scroller's own box never moving. THE REVERT: drop the `observeChild`
-// loop from `scrollEdges`; the scroller stays unmarked after the open.
-test('a scroller whose content grew inside a closed details is marked when it opens — 32.103, 32.104', async ({
+// 32.103 — CONTENT THAT GROWS INSIDE A CLOSED `<details>` IS READ AT THE CHANGE: the read forces the
+// closed content's layout, so the scroller is marked before the `<details>` opens and stays marked
+// after. THE REVERT: drop `attributes` from `CONTENT`; the scroller is unmarked, open or closed.
+test('a scroller whose content grew inside a closed details is marked, and stays marked open — 32.103', async ({
     page,
 }) => {
     await page.goto(`${base}/`)
     const inside = page.locator('#inside')
     await expect(page.locator('#ltr')).toHaveAttribute('data-scrollable', 'end')
+    await expect(inside).not.toHaveAttribute('data-scrollable')
     await page.click('#grow')
-    await expect(page.locator('#grown')).toHaveAttribute(
-        'data-scrollable',
-        'bottom',
-    )
-    await page.evaluate(
-        () =>
-            new Promise((done) =>
-                requestAnimationFrame(() => requestAnimationFrame(done)),
-            ),
-    )
-    const whileClosed = await inside.getAttribute('data-scrollable')
+    await expect(inside).toHaveAttribute('data-scrollable', 'bottom')
     await page.click('#folded summary')
     await expect(inside).toHaveAttribute('data-scrollable', 'bottom')
-    expect(whileClosed).toBeNull()
 })
