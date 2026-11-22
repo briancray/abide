@@ -2705,6 +2705,9 @@ remove its `data-scrollable`.
 
 32.108 `scrollEdges` bound to an element it is already bound to MUST throw.
 
+32.109 Every `on<event>` listener an element carries, written or spread, MUST be added to it, none
+replacing another of its event: the written ones first, then each spread's in source order.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

@@ -370,3 +370,23 @@ import { popover, tooltip } from '@abide/abide'
     expect(html).not.toContain('bind:element')
     expect(html).toMatch(/id="floating"[^>]*popover="manual"/)
 })
+
+// 32.109 — A LISTENER IS ADDED BESIDE ANOTHER OF ITS EVENT, NEVER INSTEAD OF IT: a written one and
+// two spreads' all run on one click — the written one first, then the spreads' in source order — so a
+// part's `onclick` survives an app's own. THE REVERT: count an `on<event>` among the names
+// `explicitNames` hands a spread; the button runs `w` alone where `wab` is due.
+test('a written listener and two spread ones of one event each run, the written one first — 32.109', async () => {
+    ;(globalThis as { __CLICKS__?: string }).__CLICKS__ = ''
+    await mountPage(`<script>
+const log = (mark: string) => () => {
+    ;(globalThis as { __CLICKS__?: string }).__CLICKS__ += mark
+}
+const first = { onclick: log('a') }
+const second = { onclick: log('b') }
+</script>
+
+<button id="mixed" {...first} onclick={log('w')} {...second}>mixed</button>`)
+    flushSync()
+    click('#mixed')
+    expect((globalThis as { __CLICKS__?: string }).__CLICKS__).toBe('wab')
+})

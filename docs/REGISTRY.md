@@ -80,7 +80,7 @@ named for it (RULEBOOK 49.4).
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
 | `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31, 32.70 |
 | `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37, 32.70, 32.71 |
-| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75, 32.95 |
+| `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75, 32.95, 32.109 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3, 32.71 |
 | `bind:value` | Two-way bind on an element. | 5.16, 32.5, 32.58, 32.59, 32.60, 32.61, 32.62, 32.72, 32.74, 32.75, 32.76, 32.78 |
 | `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18, 32.76 |
@@ -92,7 +92,7 @@ named for it (RULEBOOK 49.4).
 | `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer) \| ((element: Element) => void \| Disposer)[]}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
 | `class:name={cond}` | Toggles a class. | 32.10, 32.71 |
 | `style:prop={value}` | Sets one style property. | 32.10, 32.19, 32.71, 32.94 |
-| `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13, 32.99 |
+| `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13, 32.99, 32.109 |
 | static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.27, 32.28 |
 
 ## `raw`

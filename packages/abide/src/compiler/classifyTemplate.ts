@@ -594,13 +594,15 @@ export function propKeyOf(attribute: Attribute): string | undefined {
  * The attribute names an element writes for itself, which a spread on it does not override.
  *
  * 32.11 — each attribute as the tag carries it, `class:` and `style:` folded into the one attribute
- * they merge into and a bind into the property's own name.
+ * they merge into and a bind into the property's own name. 32.109 — save an `on<event>`: a listener
+ * is added beside a spread's of its name, never instead of it.
  */
 function explicitNames(node: ElementNode): string[] {
     const names: string[] = []
     for (const attribute of node.attributes) {
         if (attribute.name === '...') continue
         const lower = attribute.lowerName
+        if (isEventName(lower)) continue
         const name = lower.startsWith('class:')
             ? 'class'
             : lower.startsWith('style:')
