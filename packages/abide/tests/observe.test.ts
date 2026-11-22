@@ -361,3 +361,53 @@ test('a second observe.size on one element throws — 32.92', async () => {
     stop()
     observe.size(() => {})(element)()
 })
+
+// 32.100 — `once` RENDERS WHAT IT GATES THE FIRST TIME THE ELEMENT IS SEEN AND KEEPS IT: the first
+// `true` is written and the element unobserved in the same delivery, so a later `false` has nothing
+// to arrive through. A `Reactive` `in` stops being watched with it. THE REVERT: drop
+// `seen.stop?.()` from `deliverIntersections`; both elements stay observed, and the stale `false`
+// empties the slot.
+test('once: the first sighting is kept, and the element unobserved — 32.100', async () => {
+    await mountPage(`<script>
+import { observe, reactive } from '@abide/abide'
+
+let seen = reactive(false)
+let scroller = reactive<HTMLElement>()
+let inside = reactive(false)
+</script>
+
+<div id="scroller" bind:element={scroller}>
+    <section id="lazy" bind:element={observe.visible(seen, { once: true })}>{#if seen}<p id="chart">chart</p>{/if}</section>
+    <section id="lazy-in" bind:element={observe.visible(inside, { in: scroller, once: true })}>{inside}</section>
+</div>`)
+    flushSync()
+    const lazy = document.getElementById('lazy') as Element
+    const lazyIn = document.getElementById('lazy-in') as Element
+    const scroller = document.getElementById('scroller') as Element
+    const rootedObserved = () =>
+        (intersect.counts.rooted.get(scroller) ?? []).some((made) =>
+            made.observed.has(lazyIn),
+        )
+    intersect.counts.deliver?.([{ target: lazy, isIntersecting: false }])
+    flushSync()
+    expect(document.getElementById('chart')).toBeNull()
+    expect(intersect.counts.observed.has(lazy)).toBe(true)
+    expect(rootedObserved()).toBe(true)
+    intersect.counts.deliver?.([
+        { target: lazy, isIntersecting: true },
+        { target: lazyIn, isIntersecting: true },
+    ])
+    flushSync()
+    expect(document.getElementById('chart')?.textContent).toBe('chart')
+    expect({
+        viewport: intersect.counts.observed.has(lazy),
+        rooted: rootedObserved(),
+    }).toEqual({ viewport: false, rooted: false })
+    intersect.counts.deliver?.([
+        { target: lazy, isIntersecting: false },
+        { target: lazyIn, isIntersecting: false },
+    ])
+    flushSync()
+    expect(document.getElementById('chart')?.textContent).toBe('chart')
+    expect(lazyIn.textContent).toBe('true')
+})

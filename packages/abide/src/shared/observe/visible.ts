@@ -6,13 +6,27 @@ import { observedTwice } from './observedTwice.ts'
 
 type Root = Element | Document
 
-const measuredBy = new WeakMap<Element, Measured>()
+const measuredBy = new WeakMap<Element, Seen>()
 // 32.81, 32.89, 32.98 — AN OBSERVER'S ROOT IS FIXED AT CONSTRUCTION, so each root — the viewport
 // (`null`) among them — is one observer shared by every element observed against it, made by the
 // first and disconnected with the last, so the next is made by whatever `IntersectionObserver` stands
 // then. Keyed by the element, so a delivery finds what to write.
 let viewport: Rooted | undefined
 const rooted = new WeakMap<Root, Rooted>()
+
+/**
+ * One `observe.visible`: what it writes, and — under 32.100's `once` — how its element stops being
+ * observed after the first `true`.
+ */
+class Seen extends Measured {
+    stop: Disposer | undefined = undefined
+    once: boolean
+
+    constructor(target: unknown, once: boolean) {
+        super(target)
+        this.once = once
+    }
+}
 
 class Rooted {
     observer: IntersectionObserver
@@ -30,7 +44,7 @@ class Rooted {
  * The `bind:element` callback writing whether an element intersects the viewport into `target`.
  *
  * 32.80 — against the viewport, or 32.89 the root `in` holds; 32.83 — the `Disposer` it hands back
- * stops observing.
+ * stops observing, and 32.100 `once` stops it after the first `true`.
  *
  * 32.82 — nothing is read at bind time (`size`'s reason): the observer's first delivery says where
  * the element stands, and the target holds what the author gave it until then.
@@ -41,43 +55,49 @@ export function visible(
     target: Reactive<unknown, boolean, unknown, unknown>,
     options?: {
         in?: Reactive<Root | null | undefined, never, unknown, unknown>
+        once?: boolean
     },
 ): (element: Element) => Disposer
 export function visible(
     target: Reactive<unknown, boolean, unknown, unknown>,
-    options?: { in?: Root },
+    options?: { in?: Root; once?: boolean },
 ): (element: Element) => Disposer
 export function visible(
     target: (visible: boolean) => void,
     options?: {
         in?: Reactive<Root | null | undefined, never, unknown, unknown>
+        once?: boolean
     },
 ): (element: Element) => Disposer
 export function visible(
     target: (visible: boolean) => void,
-    options?: { in?: Root },
+    options?: { in?: Root; once?: boolean },
 ): (element: Element) => Disposer
 export function visible(
     target: unknown,
-    options?: { in?: unknown },
+    options?: { in?: unknown; once?: boolean },
 ): (element: Element) => Disposer {
     const root = options?.in
+    const once = options?.once === true
     return (element) => {
         if (measuredBy.has(element)) observedTwice('visible', element)
-        measuredBy.set(element, new Measured(target))
+        const seen = new Seen(target, once)
+        measuredBy.set(element, seen)
         if (!isReactive(root)) {
             const fixed = (root ?? null) as Root | null
             observeIn(fixed, element)
-            return () => {
+            seen.stop = () => {
+                if (measuredBy.get(element) !== seen) return
                 measuredBy.delete(element)
                 release(fixed, element)
             }
+            return seen.stop
         }
         // 32.89 — no root yet is nothing observed: a `bind:element` sets its value after the binds
         // of the element's children, so a root read as the viewport would deliver an answer to the
         // wrong question first.
         let current: Root | undefined
-        const stop = watchTracked(() => {
+        const unwatch = watchTracked(() => {
             const next = ((root as () => Root | null | undefined)() ??
                 undefined) as Root | undefined
             if (next === current) return
@@ -85,12 +105,14 @@ export function visible(
             current = next
             if (next !== undefined) observeIn(next, element)
         })
-        return () => {
-            stop()
+        seen.stop = () => {
+            unwatch()
+            if (measuredBy.get(element) !== seen) return
             measuredBy.delete(element)
             if (current !== undefined) release(current, element)
             current = undefined
         }
+        return seen.stop
     }
 }
 
@@ -116,8 +138,12 @@ function release(root: Root | null, element: Element): void {
 }
 
 // The same boolean written twice to a `Reactive` is collapsed by its own identity gate.
+// 32.100 — a `once` element is released after its first `true` is written, within the delivery.
 function deliverIntersections(entries: IntersectionObserverEntry[]): void {
     for (const entry of entries) {
-        measuredBy.get(entry.target)?.write(entry.isIntersecting)
+        const seen = measuredBy.get(entry.target)
+        if (seen === undefined) continue
+        seen.write(entry.isIntersecting)
+        if (seen.once && entry.isIntersecting) seen.stop?.()
     }
 }

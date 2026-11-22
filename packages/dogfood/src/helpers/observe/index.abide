@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import CardRect from './lib/CardRect.abide'
 import cardRect from './lib/CardRect.abide' with { type: 'text' }
+import ChartOnceSeen from './lib/ChartOnceSeen.abide'
+import chartOnceSeen from './lib/ChartOnceSeen.abide' with { type: 'text' }
 import LoadMore from './lib/LoadMore.abide'
 import loadMore from './lib/LoadMore.abide' with { type: 'text' }
 import SizeToPanel from './lib/SizeToPanel.abide'
@@ -27,6 +29,10 @@ import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
             path: 'packages/abide/tests/observe.test.ts',
             from: ["test('fifty observed elements share one observer of each kind"],
         },
+        {
+            path: 'packages/abide/tests/observe.test.ts',
+            from: ["test('once: the first sighting is kept"],
+        },
     ]}
 >
     <Section level={3} title="Size a chart to its panel">
@@ -41,6 +47,13 @@ import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
             the element <code>in</code> names. A function in place of the value is called with
             each reading.</p>
         <Example code={loadMore}><LoadMore /></Example>
+    </Section>
+
+    <Section level={3} title="Draw the pipeline chart the first time it scrolls into view">
+        <p>Pass <code>once: true</code> and the first <code>true</code> is the last thing
+            written. The element stops being observed, so what the value gates mounts once and
+            stays mounted when it scrolls away again.</p>
+        <Example code={chartOnceSeen}><ChartOnceSeen /></Example>
     </Section>
 
     <Section level={3} title="Measure the size and the position of one card">

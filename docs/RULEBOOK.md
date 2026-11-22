@@ -2672,6 +2672,10 @@ from the `ResizeObserver` or `IntersectionObserver` the document holds then.
 `bind:element` MUST be handed that element as `bind:element` hands it (32.9, 32.68), bound again when
 the value carries another, and MUST NOT be written as an attribute.
 
+32.100 Where the `once` option of `observe.visible` is `true`, the adaptor MUST stop observing the
+element, and stop watching a `Reactive` its `in` holds, in the delivery that writes `true`, and
+MUST NOT write its target again.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
