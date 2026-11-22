@@ -5170,6 +5170,20 @@ does.
 50.56 `Tooltips` MUST render one element carrying `tooltip.host`'s `hint` part whose content is its
 `text`.
 
+50.57 A `menu` given `openOnHover` MUST open once a mouse or a pen has rested on its trigger that many
+milliseconds, focusing nothing in its menu, and MUST NOT open from a touch's resting.
+
+50.58 A `menu` a pointer opened, given `closeOnLeave`, MUST close once the pointer has been off its
+trigger and its menu that many milliseconds, and a `menu` a key opened MUST NOT close for a leave.
+
+50.59 While a `menu` of a `group` is open, a pointer entering the trigger of another `menu` of that
+`group`, or ArrowLeft or ArrowRight in its menu, MUST close it and open the other — for the keys, the
+one before or after it in the document order of their triggers, going round.
+
+50.60 A `menu` a `group` switches to MUST carry `data-from` naming the side the one it switched from
+stands on, `start` or `end`, until it closes, and the one it switched from MUST carry `data-to` naming
+the side of the one it switched to, until it opens again.
+
 # 51. Lists and tables
 
 51.1 `listbox` MUST keep active the option whose key it last moved to, for as long as the options

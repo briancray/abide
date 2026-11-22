@@ -884,8 +884,8 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.35, 50.37, 50.38, 50.39, 50.40, 49.8 |
-| `MenuOptions` | `Omit<PopoverOptions, 'align' \| 'offset'> & { id?: string; open?: Reactive<boolean>; align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, placed as a `popover` is, and what hears it open and close. | 50.19, 50.20, 50.21, 50.35, 50.37, 49.10, 49.12, 49.13 |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.35, 50.37, 50.38, 50.39, 50.40, 49.8, 50.57, 50.58, 50.59, 50.60 |
+| `MenuOptions` | `Omit<PopoverOptions, 'align' \| 'offset'> & { id?: string; open?: Reactive<boolean>; align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); openOnHover?: number \| false \| (() => number \| false); closeOnLeave?: number \| false \| (() => number \| false); group?: string \| (() => string \| undefined); onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, placed as a `popover` is, whether a resting pointer opens it and a leaving one closes it, the group it switches within, and what hears it open and close. | 50.19, 50.20, 50.21, 50.35, 50.37, 49.10, 49.12, 49.13, 50.57, 50.58, 50.59 |
 | `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38, 49.4, 49.10, 49.11 |
 
 ## `dismissible`

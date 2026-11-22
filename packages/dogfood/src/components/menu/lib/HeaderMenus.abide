@@ -1,0 +1,27 @@
+<script>
+import { menu } from '@abide/abide'
+
+// One group: while one is open, the other's trigger switches to it.
+const HOVER = { group: 'crm', openOnHover: 150, closeOnLeave: 300 }
+const deals = menu(HOVER)
+const people = menu(HOVER)
+</script>
+
+<nav class="row">
+    <button type="button" {...deals.trigger}>Deals</button>
+    <button type="button" {...people.trigger}>People</button>
+</nav>
+<div {...deals.menu}
+    class="transition-transform transition-discrete duration-150
+        data-[from=start]:starting:open:-translate-x-4
+        data-[from=end]:starting:open:translate-x-4">
+    <button role="menuitem">New deal</button>
+    <button role="menuitem">Pipeline</button>
+</div>
+<div {...people.menu}
+    class="transition-transform transition-discrete duration-150
+        data-[from=start]:starting:open:-translate-x-4
+        data-[from=end]:starting:open:translate-x-4">
+    <button role="menuitem">New contact</button>
+    <button role="menuitem">Companies</button>
+</div>
