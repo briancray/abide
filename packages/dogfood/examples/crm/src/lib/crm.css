@@ -584,7 +584,7 @@
     }
 
     & [role=treeitem] {
-        @apply cursor-default rounded-sm outline-none;
+        @apply cursor-default rounded-sm outline-none select-none;
     }
 
     & [role=treeitem][aria-expanded]::before {

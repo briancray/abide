@@ -12,12 +12,8 @@ import { randomToken } from './randomToken.ts'
 import { busy, type Reactive, reactive, watch } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { openingEnd } from './roving.ts'
+import type { Picked } from './Selection.ts'
 import { withPart } from './withPart.ts'
-
-/** What a combobox holds: every item picked where it picks many, else the one picked or none. */
-export type Picked<Item, Multiple extends boolean> = Multiple extends true
-    ? readonly Item[]
-    : Item | undefined
 
 /** What a combobox lists, how an item is told apart and written, and the pick it holds. */
 export type ComboboxOptions<Item, Multiple extends boolean = false> = {
@@ -317,7 +313,6 @@ export function combobox<Item, Multiple extends boolean = false>(
                 get 'data-selected'() {
                     return pickedKeys().has(key(item)) ? '' : undefined
                 },
-                onclick: () => pick(item),
             }),
         get nothingFound() {
             return !busy(found) && (found() as readonly Item[]).length === 0

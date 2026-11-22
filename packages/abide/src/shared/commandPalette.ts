@@ -189,7 +189,6 @@ export function commandPalette(
         command: (command) => ({
             option: withPart(list.option(command.label), {
                 'data-command-palette': 'option',
-                onclick: () => run(command),
             }),
             label: { 'data-command-palette': 'label' },
             key: { 'data-command-palette': 'key' },

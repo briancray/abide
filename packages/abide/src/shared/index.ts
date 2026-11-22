@@ -43,7 +43,6 @@ export {
     type ComboboxOptions,
     type ComboboxParts,
     combobox,
-    type Picked,
 } from './combobox.ts'
 export {
     type Command,
@@ -98,6 +97,7 @@ export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 // 51.1-51.8 — the keyboard over a list of keyed options, the one `Combobox.abide` runs on.
 export { type Listbox, type ListboxOptions, listbox } from './listbox.ts'
+export type { Picked } from './Selection.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log, type Span } from './log.ts'

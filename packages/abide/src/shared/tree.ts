@@ -1,17 +1,19 @@
-// 51.84-51.91 — WAI-ARIA's tree, as parts an app spreads onto elements of its own: the tree, an item per
+// 51.84-51.91, 51.105-51.110 — WAI-ARIA's tree, as parts an app spreads onto elements of its own: the tree, an item per
 // node, and the group holding a node's children. The keys rove the items that show — a collapsed
 // node's children are not among them — and the server writes every attribute, so the page is the
 // tree as it stands before it hydrates.
 
 import { checkParts } from './checkParts.ts'
+import { hotkeys } from './hotkeys.ts'
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { roving, typeahead } from './roving.ts'
+import { type Picked, Selection } from './Selection.ts'
 
 /** The nodes, how each is told apart and named, and which are open and picked. */
-export type TreeOptions<Node> = {
+export type TreeOptions<Node, Multiple extends boolean = false> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string
     /** The top level's nodes, in the order they render; a function is read live. */
@@ -20,8 +22,10 @@ export type TreeOptions<Node> = {
     children(node: Node): readonly Node[] | undefined
     /** The keys of the nodes expanded, where the app holds them: a `Reactive` to read and set. Held by the parts, none expanded, and handed back as `expanded`, where none is given. */
     expanded?: Reactive<readonly string[]>
-    /** The key of the node picked, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<string | undefined>
+    /** 51.105 — whether it selects many, each press changing the selection rather than replacing it. `false` by default. */
+    multiple?: Multiple
+    /** The key of the node picked, or every key picked where it selects many, where the app holds them: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
+    selected?: Reactive<Picked<string, Multiple>>
 } & KeyOption<Node> &
     LabelOption<Node>
 
@@ -38,7 +42,7 @@ export type TreeNode = {
 }
 
 /** The parts `tree` hands back, each spread onto an element: `<li {...view.node(node).item}>`. */
-export type Tree<Node> = {
+export type Tree<Node, Multiple extends boolean = false> = {
     /** The base its parts' ids are derived from. */
     readonly id: string
     /** The tree's attributes and its keyboard. */
@@ -47,8 +51,8 @@ export type Tree<Node> = {
     node(node: Node): TreeNode
     /** The keys of the nodes expanded, read and set. */
     readonly expanded: Reactive<readonly string[]>
-    /** The key of the node picked, read and set. */
-    readonly selected: Reactive<string | undefined>
+    /** The key of the node picked, or every key picked where it selects many, read and set. */
+    readonly selected: Reactive<Picked<string, Multiple>>
 }
 
 // Where a node stands: its depth from 1, how many siblings it has counting itself, its place among
@@ -62,14 +66,20 @@ type Placed = {
 }
 
 /** WAI-ARIA's tree: nested nodes the keys rove and expand, as parts to spread. */
-export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
-    // 49.13 — read where they are used.
+export function tree<Node, Multiple extends boolean = false>(
+    options: TreeOptions<Node, Multiple>,
+): Tree<Node, Multiple> {
+    // 49.13 — read where they are used; whether it selects many is fixed for the life of the parts.
     const children = (node: Node) => options.children(node)
     const key = (node: Node) => writtenBy(options.key, node)
     const label = (node: Node) => writtenBy(options.label, node)
     const rootsOf = () => live(options.roots)
     const expanded = options.expanded ?? reactive<readonly string[]>([])
-    const selected = options.selected ?? reactive<string | undefined>(undefined)
+    const many = options.multiple === true
+    const selection = new Selection(
+        options.selected as Reactive<Picked<string, boolean>> | undefined,
+        many,
+    )
     const typedTo = typeahead()
 
     // EVERY NODE PLACED, and the ones that show in order: one walk, again only when the nodes or what
@@ -107,14 +117,24 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
         return { placed, shown, labels, open }
     })
 
-    // 51.86 — the item in the page's tab order: the one focused last, else the one picked, else the first.
+    // 51.86 — the item in the page's tab order: the one focused last, else the first one picked, else
+    // the first.
     const focused = reactive<string | undefined>(undefined)
     const current = reactive((): string | undefined => {
         const { shown } = walked()
-        for (const wanted of [focused(), selected()])
-            if (wanted !== undefined && shown.includes(wanted)) return wanted
+        const wanted = focused()
+        if (wanted !== undefined && shown.includes(wanted)) return wanted
+        for (const each of selection.list())
+            if (shown.includes(each)) return each
         return shown[0]
     })
+    const shownKeys = () => walked().shown
+    // 51.108 — every node, where it selects many.
+    const selectAll = many
+        ? hotkeys({
+              'mod+a': () => selection.all(() => [...walked().placed.keys()]),
+          })
+        : undefined
 
     const base = options.id ?? `tree-${randomToken(4, 'hex')}`
     const itemId = (each: string) => `${base}-${encodeURIComponent(each)}`
@@ -132,7 +152,9 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
     const root = {
         role: 'tree',
         'data-tree': 'tree',
+        'aria-multiselectable': many ? 'true' : undefined,
         onkeydown: (event: KeyboardEvent) => {
+            selectAll?.(event)
             const { placed, shown, labels, open } = walked()
             // The item the key was pressed in, read off the event, so focus put there by any means counts.
             const within = (event.target as Element | null)?.closest?.(
@@ -151,6 +173,8 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
                 () => [at, shown.length],
                 false,
             )
+            // 51.110 — Shift carries the selection along with a move of Up, Down, Home or End.
+            const extending = many && event.shiftKey && to !== -1
             if (to === -1 && each !== undefined && place !== undefined) {
                 // 51.88 — Right opens a closed branch, then enters it; Left closes an open one, then
                 // climbs to its parent.
@@ -161,8 +185,14 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
                     if (place.branch && open.has(each)) setOpen(each, false)
                     else if (place.parent !== undefined)
                         to = shown.indexOf(place.parent)
-                } else if (event.key === 'Enter' || event.key === ' ')
-                    selected.set(each)
+                } else if (event.key === 'Enter') selection.pick(each)
+                // 51.109 — Space toggles where it selects many, and Shift+Space selects the run to it.
+                else if (event.key === ' ') {
+                    if (!many) selection.pick(each)
+                    else if (event.shiftKey)
+                        selection.extend(each, each, shownKeys)
+                    else selection.toggle(each)
+                }
                 // 51.89 — a printable key moves to the next item whose label starts with what was typed.
                 else
                     to = typedTo(event, at, shown.length, (index) =>
@@ -178,7 +208,9 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
             }
             event.preventDefault()
             const next = shown[to]
-            if (next !== undefined) focus(next)
+            if (next === undefined) return
+            if (extending) selection.extend(each, next, shownKeys)
+            focus(next)
         },
     }
 
@@ -204,17 +236,17 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
                 return walked().open.has(each) ? 'true' : 'false'
             },
             get 'aria-selected'() {
-                return selected() === each ? 'true' : 'false'
+                return selection.has(each) ? 'true' : 'false'
             },
             get tabindex() {
                 return current() === each ? '0' : '-1'
             },
             get 'data-selected'() {
-                return selected() === each ? '' : undefined
+                return selection.has(each) ? '' : undefined
             },
             // 51.86 — focus put on an item by any means makes it the one in the tab order.
             onfocus: () => focused.set(each),
-            // 51.90 — a click picks the item it lands in, and not the branches holding it.
+            // 51.90, 51.106 — a click picks the item it lands in, and not the branches holding it.
             onclick: (event: MouseEvent) => {
                 const hit = (event.target as Element | null)?.closest?.(
                     '[role=treeitem]',
@@ -225,7 +257,7 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
                     hit.id !== itemId(each)
                 )
                     return
-                selected.set(each)
+                selection.press(each, event, current.peek(), shownKeys)
                 focus(each)
             },
         }
@@ -259,6 +291,6 @@ export function tree<Node>(options: TreeOptions<Node>): Tree<Node> {
             }
         },
         expanded,
-        selected,
+        selected: selection.selected as Reactive<Picked<string, Multiple>>,
     }
 }

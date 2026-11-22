@@ -6,6 +6,8 @@ import Section from '#src/lib/Section.abide'
 
 import CallQueue from './lib/CallQueue.abide'
 import callQueue from './lib/CallQueue.abide' with { type: 'text' }
+import LeadBatch from './lib/LeadBatch.abide'
+import leadBatch from './lib/LeadBatch.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -29,6 +31,24 @@ import callQueue from './lib/CallQueue.abide' with { type: 'text' }
             path: 'packages/abide/tests/listbox.test.ts',
             from: ["test('Enter picks and Escape calls `onescape`"],
         },
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: [
+                "test('a click selects one, `mod` toggles, and Shift selects the run from the anchor",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: [
+                "test('Space toggles, Shift with an arrow extends, and `mod+a` selects all",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: [
+                "test('selecting one, the selection is the key last moved to, and a click picks it",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Walk a call queue of leads with the arrow keys">
@@ -38,17 +58,25 @@ import callQueue from './lib/CallQueue.abide' with { type: 'text' }
         <Example code={callQueue}><CallQueue /></Example>
     </Section>
 
-    <Section level={3} title="Mark the active lead, and activate one on a click">
+    <Section level={3} title="Mark the active lead, and call one on a click">
         <p>Spread <code>listbox</code> on the list and <code>option(key)</code> on each option:
             the option carries its id, its role, <code>aria-selected</code> and
-            <code>data-active</code>, and a pointer resting on it makes it active.
-            <code>idOf(key)</code> and <code>active</code> stay for markup of your own.</p>
+            <code>data-active</code>, a pointer resting on it makes it active, and a click calls
+            <code>onpick</code> with it. <code>idOf(key)</code> and <code>active</code> stay for
+            markup of your own.</p>
         <Code language="abide" caption="abide" code={`
             {#for deal of leads by deal.id}
-                <li {...queue.option(deal.id)}
-                    onclick={() => queue.activate(deal.id)}>{deal.name}</li>
+                <li {...queue.option(deal.id)}>{deal.name}</li>
             {/for}
         `} />
+    </Section>
+
+    <Section level={3} title="Hand several leads over at once">
+        <p><code>multiple</code> selects many, and <code>selected</code> holds their keys. A click
+            selects one lead, ⌘ or Ctrl with it adds or takes one out, and Shift takes the run from
+            the last one picked. Space, Shift with an arrow and ⌘A or Ctrl+A do the same from the
+            keys.</p>
+        <Example code={leadBatch}><LeadBatch /></Example>
     </Section>
 
     <Section level={3} title="Keep the place in a list that keeps changing">

@@ -1,15 +1,34 @@
-// `listbox`, the keyboard over a list of keyed options (RULEBOOK 51.1-51.12, 51.101). What `Combobox`
-// renders over it is the CRM's tests', which mount it.
+// `listbox`, the keyboard over a list of keyed options (RULEBOOK 51.1-51.12, 51.101, 51.105-51.112).
+// What `Combobox` renders over it is the CRM's tests', which mount it.
 
 import { expect, test } from 'bun:test'
 
 import { flushSync, listbox, reactive } from '#shared'
+import { isApplePlatform } from '#shared/isApplePlatform.ts'
 
-function press(handler: (event: KeyboardEvent) => void, key: string) {
-    const event = new KeyboardEvent('keydown', { key, cancelable: true })
+function press(
+    handler: (event: KeyboardEvent) => void,
+    key: string,
+    held: KeyboardEventInit = {},
+) {
+    const event = new KeyboardEvent('keydown', {
+        key,
+        cancelable: true,
+        ...held,
+    })
     handler(event)
     flushSync()
     return event
+}
+
+// The platform's `mod`, as `hotkeys` reads it: ⌘ on an Apple platform, Ctrl on any other.
+const MOD = isApplePlatform() ? { metaKey: true } : { ctrlKey: true }
+
+function click(part: Record<string, unknown>, held: MouseEventInit = {}) {
+    ;(part.onclick as (event: MouseEvent) => void)(
+        new MouseEvent('click', held),
+    )
+    flushSync()
 }
 
 // THE REVERT: answer the first key from `active` whatever was moved to, and the narrowed list
@@ -122,4 +141,78 @@ test('an option’s part carries its id and whether it is active, and a pointer 
         'true',
         '',
     ])
+})
+
+// THE REVERT: extend from the active option rather than the anchor, and Shift on `a` after Shift on `d`
+// selects `a`..`d` rather than the run from `c`, the option last toggled.
+test('a click selects one, `mod` toggles, and Shift selects the run from the anchor — 51.105, 51.106, 51.107', () => {
+    const list = listbox({
+        id: 'stages',
+        options: () => ['a', 'b', 'c', 'd'],
+        multiple: true,
+    })
+    expect(list.listbox['aria-multiselectable']).toBe('true')
+    click(list.option('b'))
+    expect(list.selected()).toEqual(['b'])
+    click(list.option('c'), MOD)
+    expect(list.selected()).toEqual(['b', 'c'])
+    click(list.option('d'), { shiftKey: true })
+    expect(list.selected()).toEqual(['c', 'd'])
+    click(list.option('a'), { shiftKey: true })
+    expect(list.selected()).toEqual(['a', 'b', 'c'])
+    click(list.option('c'), MOD)
+    expect(list.selected()).toEqual(['a', 'b'])
+    const [a, d] = [list.option('a'), list.option('d')]
+    expect([a['aria-selected'], a['data-selected']]).toEqual(['true', ''])
+    expect([d['aria-selected'], d['data-selected']]).toEqual([
+        'false',
+        undefined,
+    ])
+})
+
+// THE REVERT: extend on every arrow rather than on a shifted one, and a bare ArrowDown selects `c`.
+test('Space toggles, Shift with an arrow extends, and `mod+a` selects all — 51.108, 51.109, 51.110', () => {
+    const selected = reactive<readonly string[]>([])
+    const list = listbox({
+        id: 'stages',
+        options: () => ['a', 'b', 'c', 'd'],
+        multiple: true,
+        selected,
+    })
+    expect(press(list.keydown, ' ').defaultPrevented).toBe(true)
+    expect(selected()).toEqual(['a'])
+    press(list.keydown, 'ArrowDown')
+    expect([list.active, selected()]).toEqual(['b', ['a']])
+    press(list.keydown, 'ArrowDown', { shiftKey: true })
+    expect(selected()).toEqual(['a', 'b', 'c'])
+    press(list.keydown, 'End', { shiftKey: true })
+    expect(selected()).toEqual(['a', 'b', 'c', 'd'])
+    press(list.keydown, ' ')
+    expect(selected()).toEqual(['a', 'b', 'c'])
+    selected.set([])
+    expect(press(list.keydown, 'a', MOD).defaultPrevented).toBe(true)
+    expect(selected()).toEqual(['a', 'b', 'c', 'd'])
+})
+
+// THE REVERT: hold the key moved to apart from `selected`, and the key written there makes nothing
+// active.
+test('selecting one, the selection is the key last moved to, and a click picks it — 51.111, 51.112', () => {
+    const picked: string[] = []
+    const selected = reactive<string | undefined>('c')
+    const list = listbox({
+        id: 'stages',
+        options: () => ['a', 'b', 'c'],
+        selected,
+        onpick: (stage) => picked.push(stage),
+    })
+    expect(list.active).toBe('c')
+    expect(list.listbox['aria-multiselectable']).toBe(undefined)
+    press(list.keydown, 'ArrowUp')
+    expect(selected()).toBe('b')
+    click(list.option('a'))
+    expect([list.active, selected(), picked]).toEqual(['a', 'a', ['a']])
+    // Space and `mod+a` are left alone: a list picking one is often a field's, where they type.
+    expect(press(list.keydown, ' ').defaultPrevented).toBe(false)
+    expect(press(list.keydown, 'a', MOD).defaultPrevented).toBe(false)
+    expect(list.option('a')['data-selected']).toBe(undefined)
 })

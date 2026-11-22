@@ -2,6 +2,7 @@
 import { reactive, url } from '@abide/abide'
 
 import AccountTree from './lib/AccountTree.abide'
+import CampaignAccounts from './lib/CampaignAccounts.abide'
 import listCompanies from './listCompanies.handler.ts'
 
 const companies = reactive(() => listCompanies())
@@ -17,6 +18,8 @@ const companies = reactive(() => listCompanies())
 </ul>
 <h2>By region</h2>
 <AccountTree />
+<h2>In the campaign</h2>
+<CampaignAccounts />
 
 <style>
 ::view-transition-group(*) {

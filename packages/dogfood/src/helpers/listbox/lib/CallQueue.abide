@@ -20,8 +20,7 @@ const queue = listbox({
     class="[&_[data-active]]:bg-signal/10"
     aria-activedescendant={queue.activeId}>
     {#for deal of leads by deal.id}
-        <li {...queue.option(deal.id)}
-            onclick={() => queue.activate(deal.id)}>{deal.name}</li>
+        <li {...queue.option(deal.id)}>{deal.name}</li>
     {/for}
 </ul>
 <p>Calling: {calling || 'nobody yet'}</p>

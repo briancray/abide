@@ -5461,7 +5461,7 @@ the element holding a node's children `role="group"`.
 expanded, and on no other item.
 
 51.86 `tree` MUST put exactly one item in the page's tab order: the one last focused while it shows,
-else the one selected, else the first.
+else the first one selected that shows, else the first.
 
 51.87 `tree` MUST move focus on ArrowDown and ArrowUp to the next and the previous item that shows,
 stopping at the ends, and on Home and End to the first and the last.
@@ -5472,9 +5472,10 @@ child, and, on ArrowLeft, collapse an expanded node and move focus to the parent
 51.89 `tree` MUST move focus on a printable key to an item that shows whose `label` starts with what
 was typed, as `menu` moves among its items (50.40).
 
-51.90 A click on an item of a `tree`, and Enter or Space on the one focused, MUST set `selected` to that
-item's node's key, a click picking only the item it lands in; `tree` MUST write `aria-selected` on each
-item and `data-selected` on the one selected.
+51.90 A click on an item of a `tree` not given `multiple` `true`, and Enter or Space on the one focused,
+MUST set `selected` to that item's node's key, and Enter on the focused item of one given `multiple`
+`true` MUST set `selected` to that key alone; a click MUST pick only the item it lands in, and `tree`
+MUST write `aria-selected` on each item and `data-selected` on each one selected.
 
 51.91 `tree` MUST hide the element holding a node's children while the node is collapsed.
 
@@ -5509,8 +5510,36 @@ it.
 shut it where it is open, and each MUST leave its active item where it stands.
 
 51.101 `Listbox`'s `option` MUST answer the option of a key with the id `idOf` derives for it,
-`aria-selected` and `data-active` saying whether that key is the active one, and a pointer moving
-over it making that key active.
+`data-active` saying whether that key is the active one, `aria-selected` saying the same where
+`multiple` is not `true`, and a pointer moving over it making that key active.
+
+51.105 A `listbox` or a `tree` given `multiple` `true` MUST hold every key selected as `selected`,
+write `aria-multiselectable="true"` on its `listbox` or `tree` part, and write on each option or item
+`aria-selected` saying whether its key is in `selected`, and `data-selected` while it is.
+
+51.106 A click on an option of a `listbox`, or on an item of a `tree`, given `multiple` `true` MUST set
+`selected` to its key alone, MUST instead add its key to `selected` or take it out where the key 53.3
+matches `mod` by is held, and MUST instead select the run 51.107 names to it where Shift is held.
+
+51.107 A run of a `listbox` or a `tree` MUST be every key from the anchor to the key it reaches, in the order the options or the
+items that show are listed, the anchor being the key the last pick or toggle of 51.106 or 51.109 landed
+on, or the active option's or the focused item's key where that key is not listed.
+
+51.108 `mod+a`, as `hotkeys` matches it, in a `listbox` given `multiple` `true` MUST set `selected` to
+every option's key, and in a `tree` given `multiple` `true` to every node's key.
+
+51.109 Space in a `listbox` or a `tree` given `multiple` `true` MUST add the active option's or the
+focused item's key to `selected` or take it out, and Shift+Space MUST select the run 51.107 names to
+it.
+
+51.110 ArrowDown, ArrowUp, Home or End with Shift held, in a `listbox` or a `tree` given `multiple`
+`true`, MUST select the run 51.107 names to the option or the item it moves to.
+
+51.111 A `listbox` not given `multiple` `true` MUST hold as `selected` the key 51.1 names as last
+moved to, and MUST take a key written to `selected` as that key.
+
+51.112 A click on an option of a `listbox` not given `multiple` `true` MUST make its key active and
+call `onpick` with its option.
 
 51.102 A jump `virtualList`'s `sections` hand back MUST scroll to its section's first item, and MUST
 carry `aria-current` while its section is `current`.

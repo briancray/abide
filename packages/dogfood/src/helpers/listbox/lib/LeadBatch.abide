@@ -1,0 +1,26 @@
+<script>
+import { listbox } from '@abide/abide'
+
+type Deal = { id: string; name: string }
+const leads: Deal[] = [
+    { id: 'a', name: 'Acme renewal' },
+    { id: 'b', name: 'Engines upgrade' },
+    { id: 'c', name: 'Hopper & Co' },
+]
+const batch = listbox({
+    id: 'batch',
+    options: () => leads,
+    key: (deal: Deal) => deal.id,
+    multiple: true,
+})
+</script>
+
+<ul {...batch.listbox} tabindex="0" onkeydown={batch.keydown}
+    aria-label="Leads to hand over" aria-activedescendant={batch.activeId}
+    class="fields select-none [&_[data-active]]:bg-signal/10
+        [&_[data-selected]]:font-semibold">
+    {#for deal of leads by deal.id}
+        <li {...batch.option(deal.id)}>{deal.name}</li>
+    {/for}
+</ul>
+<p>Handing over: {batch.selected().length} of {leads.length}</p>

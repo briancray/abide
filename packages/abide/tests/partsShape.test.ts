@@ -333,6 +333,7 @@ test('every option an app binds is optional and handed back, and every id is mad
         'range.value': slider.value,
         'commandPalette.open': palette.open,
         'combobox.value': box.value,
+        'listbox.selected': keys.selected,
         'sortableTable.sort': table.sort,
         'sortableTable.selected': table.selected,
         'dialog.open': modal.open,

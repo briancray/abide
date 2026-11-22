@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import AccountsByRegion from './lib/AccountsByRegion.abide'
 import accountsByRegion from './lib/AccountsByRegion.abide' with { type: 'text' }
+import CampaignAccounts from './lib/CampaignAccounts.abide'
+import campaignAccounts from './lib/CampaignAccounts.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -40,6 +42,18 @@ import accountsByRegion from './lib/AccountsByRegion.abide' with { type: 'text' 
                 "test('a click picks the item it lands in, and Enter picks the one focused'",
             ],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/CampaignAccounts.test.ts',
+            from: [
+                "test('a click picks one account, mod adds another, and Shift takes the run between'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/CampaignAccounts.test.ts',
+            from: [
+                "test('Space picks the account focused, Shift with an arrow extends, and mod+a takes all'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Browse accounts by region">
@@ -48,5 +62,13 @@ import accountsByRegion from './lib/AccountsByRegion.abide' with { type: 'text' 
             through what shows; Right opens a region, Left closes it, and a letter jumps to the next
             name it starts.</p>
         <Example code={accountsByRegion}><AccountsByRegion /></Example>
+    </Section>
+
+    <Section level={3} title="Put several accounts in a campaign">
+        <p><code>multiple</code> selects many, and <code>selected</code> holds their keys. A click
+            picks one account, ⌘ or Ctrl with it adds or takes one out, and Shift takes the run from
+            the last one picked; Space, Shift with an arrow and ⌘A or Ctrl+A do the same from the
+            keys.</p>
+        <Example code={campaignAccounts}><CampaignAccounts /></Example>
     </Section>
 </Doc>

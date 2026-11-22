@@ -1,0 +1,44 @@
+<script>
+import { tree } from '@abide/abide'
+
+type Account = { id: string; name: string; under?: Account[] }
+
+const REGIONS: Account[] = [
+    {
+        id: 'europe',
+        name: 'Europe',
+        under: [
+            { id: 'hopper', name: 'Hopper & Co' },
+            { id: 'babbage', name: 'Babbage & Co' },
+        ],
+    },
+    {
+        id: 'americas',
+        name: 'Americas',
+        under: [{ id: 'turing', name: 'Turing Labs' }],
+    },
+]
+
+const accounts = tree({
+    id: 'campaign',
+    roots: REGIONS,
+    children: (account: Account) => account.under,
+    key: (account: Account) => account.id,
+    label: (account: Account) => account.name,
+    multiple: true,
+})
+</script>
+
+<p>{accounts.selected().join(', ') || 'No account in the campaign.'}</p>
+<ul {...accounts.tree} aria-label="Campaign accounts" class="tree">
+    {#for region of REGIONS by region.id}
+        <li {...accounts.node(region).item}>
+            {region.name}
+            <ul {...accounts.node(region).group}>
+                {#for company of region.under by company.id}
+                    <li {...accounts.node(company).item}>{company.name}</li>
+                {/for}
+            </ul>
+        </li>
+    {/for}
+</ul>
