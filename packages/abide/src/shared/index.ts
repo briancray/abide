@@ -66,6 +66,8 @@ export {
     type FollowBottomOptions,
     followBottom,
 } from './followBottom.ts'
+// 32.101-32.108 — the `bind:element` adaptor marking the edges a scrolling element can scroll toward.
+export { scrollEdges } from './scrollEdges.ts'
 // 53.17-53.20 — the `bind:element` adaptor taking dropped and pasted files.
 export {
     type DropzoneOptions,

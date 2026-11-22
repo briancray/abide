@@ -2676,6 +2676,32 @@ the value carries another, and MUST NOT be written as an attribute.
 element, and stop watching a `Reactive` its `in` holds, in the delivery that writes `true`, and
 MUST NOT write its target again.
 
+32.101 `scrollEdges` MUST write on the element it is bound to a `data-scrollable` attribute holding,
+space-separated in the order `top`, `bottom`, `start`, `end`, each edge of the element that a pixel
+or more of the content it scrolls lies beyond, MUST remove the attribute where no edge does, and
+MUST NOT write the attribute where it already holds what a read finds.
+
+32.102 The `start` of `scrollEdges` MUST be the edge the element's horizontal scroll position is
+measured from — its left in a left-to-right element and its right in a right-to-left one — and its
+`end` the edge opposite.
+
+32.103 `scrollEdges` MUST read its element again after a scroll of the element, a resize of the
+element or of any element child of it, and an element child added or removed.
+
+32.104 The element `scrollEdges` is bound to, and each element child of it, MUST be observed for
+resizes by the observer 32.81 shares.
+
+32.105 `scrollEdges` MUST listen for its element's scrolls passively.
+
+32.106 The reads 32.103 owes before the next animation frame MUST be made in that frame, one per
+element, every read before any attribute is written, and `scrollEdges` MUST NOT read an element
+outside such a frame.
+
+32.107 The `Disposer` `scrollEdges` hands back MUST stop observing its element and remove its
+`data-scrollable`.
+
+32.108 `scrollEdges` handed an element it is already bound to MUST throw.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

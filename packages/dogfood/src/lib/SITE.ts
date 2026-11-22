@@ -783,6 +783,12 @@ const WRITTEN: readonly {
                     'Keep a scrolling log or transcript at its newest line as lines arrive, until the reader scrolls up to an earlier one.',
             },
             {
+                route: '/helpers/scroll-edges',
+                title: '`scrollEdges`',
+                description:
+                    'Fade or shadow the edges of a scrolling list from CSS while there is more to scroll to, in either direction.',
+            },
+            {
                 route: '/helpers/observe',
                 title: '`observe`',
                 description:

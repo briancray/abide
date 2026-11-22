@@ -1,0 +1,33 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import FadedDeals from './lib/FadedDeals.abide'
+import fadedDeals from './lib/FadedDeals.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/helpers/observe', '/helpers/follow-bottom']}
+    tests={[
+        {
+            path: 'packages/abide/tests/scrollEdges.test.ts',
+            from: [
+                "test('the edges content lies beyond are written as data-scrollable",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/scrollEdges.test.ts',
+            from: ["test('a child that grows, arrives or leaves"],
+        },
+    ]}
+>
+    <Section level={3} title="Fade a list's edges while there is more to scroll to">
+        <p>Bind the scrolling element to <code>scrollEdges</code>, and its
+            <code>data-scrollable</code> lists the edges with content beyond them:
+            <code>top</code>, <code>bottom</code>, <code>start</code> and <code>end</code>.
+            Style each one from your stylesheet. A row added, a row that grows and a
+            <code>&lt;details&gt;</code> opening around the list all mark it again.</p>
+        <Example code={fadedDeals}><FadedDeals /></Example>
+    </Section>
+</Doc>

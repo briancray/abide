@@ -1,0 +1,14 @@
+<script>
+import { reactive, scrollEdges } from '@abide/abide'
+
+let deals = reactive(
+    Array.from({ length: 12 }, (_, id) => ({ id, name: `Deal ${id + 1}` })),
+)
+</script>
+
+<ol
+    class="h-32 overflow-y-auto data-[scrollable~=bottom]:mask-b-from-70%
+        data-[scrollable~=top]:mask-t-from-70%"
+    bind:element={scrollEdges}>
+    {#for deal of deals by deal.id}<li>{deal.name}</li>{/for}
+</ol>

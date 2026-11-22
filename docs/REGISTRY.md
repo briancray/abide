@@ -1207,6 +1207,12 @@ type Reached = { readonly [REACHED]: true }
 | `FollowBottomOptions` | `{ following?: Reactive<boolean>; threshold?: number \| (() => number); behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. | 53.61, 53.63, 49.10, 49.12, 49.13 |
 | `FollowBottom` | `{ readonly host: Record<string, unknown>; readonly jump: Record<string, unknown>; readonly following: Reactive<boolean>; toBottom(): void }` | The scroller's part, the jump button's part, whether it is following, and what takes it back down. | 53.53, 53.62, 53.63, 49.11 |
 
+## `scrollEdges`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `scrollEdges` | `(element: Element) => Disposer` | The `bind:element` adaptor marking a scrolling element with the edges it can still scroll toward. | 32.9, 32.101, 32.102, 32.103, 32.104, 32.105, 32.106, 32.107, 32.108 |
+
 ## `observe`
 
 | Name | Signature | Meaning | Rules |
