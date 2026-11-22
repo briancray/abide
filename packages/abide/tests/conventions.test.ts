@@ -451,3 +451,25 @@ test('a listener the framework hands out or takes is named on<event> — 49.15',
         if (events.has(match[1] ?? '')) offenders.push(match[1] ?? '')
     expect(offenders).toEqual([])
 })
+
+// 49.15 — AN `on` NAME AN ELEMENT OR A COMPONENT TAKES IS LOWERCASE, as `onclick` is: a key in a
+// REGISTRY signature's record — an option, a part's member — and a prop a `.abide` file declares.
+// A function an app calls by name (`onError`) and a positional parameter (`onSettled`) are neither,
+// and keep their case. THE REVERT: name `listbox`'s `onpick` option `onPick`; `onPick` is reported.
+test('an on name an element or a component takes is lowercase — 49.15', async () => {
+    const offenders: string[] = []
+    const registry = await Bun.file(
+        new URL('../docs/REGISTRY.md', PACKAGES),
+    ).text()
+    for (const match of registry.matchAll(
+        /[{;]\s*(?:readonly\s+)?(on[A-Z][A-Za-z]*)\??:/g,
+    ))
+        offenders.push(`REGISTRY.md: ${match[1]}`)
+    for (const { path, text } of await sources(PACKAGES, '**/*.abide'))
+        for (const match of text.matchAll(
+            /props<[\s\S]*?>\(\)|\{#component [A-Z]\w*\([^)]*\)\}/g,
+        ))
+            for (const key of match[0].matchAll(/\b(on[A-Z][A-Za-z]*)\??:/g))
+                offenders.push(`${path}: ${key[1]}`)
+    expect(offenders).toEqual([])
+})

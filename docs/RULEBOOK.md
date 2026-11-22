@@ -5035,7 +5035,8 @@ under `bind:element` what needs the element in a browser (32.99), and MUST NOT b
 app hands `bind:element` itself.
 
 49.15 A listener a parts function hands back or takes for an element's event MUST be named `on`
-followed by that event's name.
+followed by that event's name, and every option, part key or component prop `@abide/abide` names
+beginning `on` MUST be lowercase.
 
 # 50. Dialogs, toasts and popovers
 
