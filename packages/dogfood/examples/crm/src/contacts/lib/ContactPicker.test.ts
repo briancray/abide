@@ -40,7 +40,9 @@ test('what was typed is marked in each contact it lists', async () => {
     expect(names()).toEqual(['Grace Hopper', 'Katherine Johnson'])
     expect(
         [
-            ...document.querySelectorAll('[role=option] mark[data-part=match]'),
+            ...document.querySelectorAll(
+                '[role=option] mark[data-combobox=match]',
+            ),
         ].map((mark) => mark.textContent),
     ).toEqual(['er', 'er'])
 })

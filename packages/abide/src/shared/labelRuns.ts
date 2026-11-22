@@ -9,7 +9,6 @@ export type LabelRun = {
     readonly match: Record<string, unknown> | undefined
 }
 
-const MATCH = { 'data-part': 'match' }
 // `RegExp.escape` ships in this module's client too, and Safari has it only from 18.2.
 const SPECIAL = /[.*+?^${}()|[\]\\/]/g
 
@@ -22,10 +21,11 @@ export function needlesOf(text: string, words: boolean): readonly RegExp[] {
     return needles
 }
 
-/** `label` cut into runs, the first place each needle is in it marked, runs that overlap or touch marked as one. */
+/** `label` cut into runs, the first place each needle is in it marked with `match`, runs that overlap or touch marked as one. */
 export function labelRuns(
     label: string,
     needles: readonly RegExp[],
+    match: Record<string, unknown>,
 ): readonly LabelRun[] {
     // Each found place as a start and an end, kept in order of start as they are found.
     const spans: number[] = []
@@ -52,7 +52,7 @@ export function labelRuns(
         if (end <= start) continue
         if (start > from)
             runs.push({ text: label.slice(from, start), match: undefined })
-        runs.push({ text: label.slice(start, end), match: MATCH })
+        runs.push({ text: label.slice(start, end), match })
         from = end
     }
     if (from < label.length || runs.length === 0)

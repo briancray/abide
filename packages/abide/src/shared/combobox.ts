@@ -83,6 +83,8 @@ export type ComboboxParts<Item, Multiple extends boolean = false> = {
 }
 
 const NOTHING: readonly never[] = []
+// 49.4 — the part a matched run of a label spreads.
+const MATCH = { 'data-combobox': 'match' }
 
 /** WAI-ARIA's combobox with a list popup, as parts to spread onto markup of one's own. */
 export function combobox<Item, Multiple extends boolean = false>(
@@ -320,7 +322,7 @@ export function combobox<Item, Multiple extends boolean = false>(
                     return pickedKeys().has(key(item)) ? '' : undefined
                 },
             }),
-        runs: (item) => labelRuns(label(item), needles()),
+        runs: (item) => labelRuns(label(item), needles(), MATCH),
         get nothingFound() {
             return !busy(found) && (found() as readonly Item[]).length === 0
         },

@@ -24,7 +24,7 @@ const view = calendar({ month, selected })
               `Nothing closes on ${selected}.`}
 </p>
 <div class="calendar">
-    <div data-part="bar">
+    <div data-bar>
         <button {...view.previous}>‹</button>
         <h3 {...view.heading}>{view.label}</h3>
         <button {...view.next}>›</button>
@@ -41,7 +41,7 @@ const view = calendar({ month, selected })
                     <div {...day.cell}>
                         {day.day}
                         {#for deal of closing.get(day.date) ?? [] by deal.id}
-                            <span data-part="deal">{deal.name}</span>
+                            <span data-deal>{deal.name}</span>
                         {/for}
                     </div>
                 {/for}

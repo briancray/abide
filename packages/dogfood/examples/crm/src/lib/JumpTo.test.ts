@@ -113,11 +113,13 @@ test('each word typed is marked in the labels it is in', async () => {
     type('deal ad')
     expect(options()).toEqual(['Add a deal'])
     expect(
-        [...dialog().querySelectorAll('mark[data-part=match]')].map(
+        [...dialog().querySelectorAll('mark[data-command-palette=match]')].map(
             (mark) => mark.textContent,
         ),
     ).toEqual(['Ad', 'deal'])
     type('new')
     expect(options()).toEqual(['Add a deal'])
-    expect(dialog().querySelectorAll('[data-part=match]')).toHaveLength(0)
+    expect(
+        dialog().querySelectorAll('[data-command-palette=match]'),
+    ).toHaveLength(0)
 })

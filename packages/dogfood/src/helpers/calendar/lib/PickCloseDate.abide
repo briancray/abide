@@ -7,7 +7,7 @@ const dates = calendar({ selected: closes })
 
 <p>Closes {closes ?? 'on no day yet'}</p>
 <div class="calendar">
-    <div data-part="bar">
+    <div data-bar>
         <button {...dates.previous}>‹</button>
         <h3 {...dates.heading}>{dates.label}</h3>
         <button {...dates.next}>›</button>

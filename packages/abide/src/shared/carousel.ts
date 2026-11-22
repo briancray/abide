@@ -226,7 +226,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     }
     const stepper = (part: string, step: number) => ({
         type: 'button',
-        'data-part': part,
+        'data-carousel': part,
         'aria-controls': base,
         get disabled() {
             return beside(step) === undefined
@@ -243,7 +243,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             id: base,
             role: 'region',
             'aria-roledescription': 'carousel',
-            'data-part': 'host',
+            'data-carousel': 'host',
             'bind:element': bindHost,
         },
         item: (item: Item) => {
@@ -252,7 +252,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
                 role: 'group',
                 'aria-roledescription': 'slide',
                 'aria-label': labelOf(item),
-                'data-part': 'item',
+                'data-carousel': 'item',
                 get 'data-centred'() {
                     return centred() === key ? '' : undefined
                 },

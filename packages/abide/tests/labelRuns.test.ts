@@ -31,7 +31,9 @@ test('an option’s label marks where the typed text is, as the list is narrowed
         'Hopper & [Co]',
         'İzmir [Co]',
     ])
-    expect(box.runs('Hopper & Co')[1]?.match).toEqual({ 'data-part': 'match' })
+    expect(box.runs('Hopper & Co')[1]?.match).toEqual({
+        'data-combobox': 'match',
+    })
     type(box.input, '')
     expect(written(box.runs('Babbage Ltd'))).toBe('Babbage Ltd')
 })

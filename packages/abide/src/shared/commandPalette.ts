@@ -72,6 +72,9 @@ export type CommandPaletteParts = {
     readonly open: Reactive<boolean>
 }
 
+// 49.4 — the part a matched run of a label spreads.
+const MATCH = { 'data-command-palette': 'match' }
+
 /** WAI-ARIA's combobox in a modal dialog, over the commands an app can run, as parts to spread. */
 export function commandPalette(
     options: CommandPaletteOptions,
@@ -204,7 +207,7 @@ export function commandPalette(
             label: { 'data-command-palette': 'label' },
             key: { 'data-command-palette': 'key' },
             get runs() {
-                return labelRuns(command.label, needles())
+                return labelRuns(command.label, needles(), MATCH)
             },
         }),
         empty: { role: 'status', 'data-command-palette': 'empty' },

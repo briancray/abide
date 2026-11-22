@@ -155,7 +155,7 @@ function dayOf(
         day: Number(date.slice(8, 10)),
         cell: {
             role: 'gridcell',
-            'data-part': 'day',
+            'data-calendar': 'day',
             id,
             // 52.87 — only the active day is in the page's tab order.
             get tabindex() {
@@ -272,7 +272,7 @@ export function calendar(options: CalendarOptions = {}): Calendar {
                 short: short.format(time),
                 header: {
                     role: 'columnheader',
-                    'data-part': 'weekday',
+                    'data-calendar': 'weekday',
                     abbr: name,
                 },
             })
@@ -300,7 +300,7 @@ export function calendar(options: CalendarOptions = {}): Calendar {
 
     const grid = {
         role: 'grid',
-        'data-part': 'grid',
+        'data-calendar': 'grid',
         id: gridId,
         'aria-labelledby': headingId,
         onkeydown: (event: KeyboardEvent) => {
@@ -369,7 +369,7 @@ export function calendar(options: CalendarOptions = {}): Calendar {
         grid,
         heading: {
             id: headingId,
-            'data-part': 'heading',
+            'data-calendar': 'heading',
             'aria-live': 'polite',
         },
         // 52.95 — the month in words, in the locale.
@@ -387,20 +387,20 @@ export function calendar(options: CalendarOptions = {}): Calendar {
         },
         previous: {
             type: 'button',
-            'data-part': 'previous',
+            'data-calendar': 'previous',
             'aria-label': 'Previous month',
             'aria-controls': gridId,
             onclick: page(-1),
         },
         next: {
             type: 'button',
-            'data-part': 'next',
+            'data-calendar': 'next',
             'aria-label': 'Next month',
             'aria-controls': gridId,
             onclick: page(1),
         },
-        header: { role: 'row', 'data-part': 'header' },
-        week: { role: 'row', 'data-part': 'week' },
+        header: { role: 'row', 'data-calendar': 'header' },
+        week: { role: 'row', 'data-calendar': 'week' },
         get weekdays() {
             return weekdays()
         },

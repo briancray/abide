@@ -515,7 +515,7 @@
         @apply font-semibold;
     }
 
-    & [data-part=match] {
+    & [data-combobox=match] {
         @apply rounded-xs bg-signal/15 text-inherit;
     }
 }
@@ -548,7 +548,7 @@
         @apply text-chrome text-muted;
     }
 
-    & [data-part=match] {
+    & [data-command-palette=match] {
         @apply rounded-xs bg-signal/15 text-inherit;
     }
 
@@ -618,7 +618,7 @@
 @utility calendar {
     @apply grid gap-1;
 
-    & [data-part=bar] {
+    & [data-bar] {
         @apply flex items-center justify-between;
     }
 
@@ -650,7 +650,7 @@
         @apply bg-signal text-paper;
     }
 
-    & [data-part=deal] {
+    & [data-deal] {
         @apply truncate font-medium;
     }
 }

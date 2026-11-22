@@ -21,7 +21,7 @@ function press(key: string) {
 test('the month is whole weeks, each deal on the day it closes', async () => {
     using _calendar = await mount(CloseCalendar({}))
     await settled()
-    expect(document.querySelector('[data-part=heading]')?.textContent).toBe(
+    expect(document.querySelector('[data-calendar=heading]')?.textContent).toBe(
         'December 2026',
     )
     const headers = [...document.querySelectorAll('[role=columnheader]')]
@@ -34,7 +34,7 @@ test('the month is whole weeks, each deal on the day it closes', async () => {
         'Fri',
         'Sat',
     ])
-    const rows = document.querySelectorAll('[data-part=week]')
+    const rows = document.querySelectorAll('[data-calendar=week]')
     expect(rows).toHaveLength(5)
     expect(rows[0]?.querySelector('[role=gridcell]')?.id).toEndWith(
         '2026-11-29',
@@ -64,7 +64,7 @@ test('the arrows move the day focused into the next month, and Enter picks it', 
     press('ArrowDown')
     press('ArrowDown')
     expect(focused()).toBe('2027-01-05')
-    expect(document.querySelector('[data-part=heading]')?.textContent).toBe(
+    expect(document.querySelector('[data-calendar=heading]')?.textContent).toBe(
         'January 2027',
     )
     press('ArrowDown')
@@ -83,9 +83,9 @@ test('a click picks a day, and the buttons page the month', async () => {
     expect(status()).toBe('Hopper & Co expansion')
     expect(cell('2026-12-02').getAttribute('aria-selected')).toBe('true')
     expect(cell('2026-12-02').hasAttribute('data-selected')).toBe(true)
-    ;(document.querySelector('[data-part=next]') as HTMLElement).click()
+    ;(document.querySelector('[data-calendar=next]') as HTMLElement).click()
     flushSync()
-    expect(document.querySelector('[data-part=heading]')?.textContent).toBe(
+    expect(document.querySelector('[data-calendar=heading]')?.textContent).toBe(
         'January 2027',
     )
     expect(cell('2027-01-20').textContent).toContain('Langley Research seats')
