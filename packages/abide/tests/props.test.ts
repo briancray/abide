@@ -1050,6 +1050,7 @@ import { isReactive, props, type Reactive } from '@abide/abide'
 
 const { n } = props<{ n: number }>()
 function hold(options: { n: Reactive<number> }) {
+    // Untyped, so 31.15 does not read the member: \`options.n\` is typed a \`Reactive\`.
     return isReactive(Object.values(options as Record<string, unknown>)[0]) ? 'held' : 'value'
 }
 const short = hold({ n })
