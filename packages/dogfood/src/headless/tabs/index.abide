@@ -1,0 +1,64 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import DealTabs from './lib/DealTabs.abide'
+import dealTabs from './lib/DealTabs.abide' with { type: 'text' }
+import KeepDraft from './lib/KeepDraft.abide'
+import keepDraft from './lib/KeepDraft.abide' with { type: 'text' }
+import TabCount from './lib/TabCount.abide'
+import tabCount from './lib/TabCount.abide' with { type: 'text' }
+import UnderlineSelected from './lib/UnderlineSelected.abide'
+import underlineSelected from './lib/UnderlineSelected.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/abide-files/control-flow',
+        '/abide-files/components',
+        '/headless/combobox',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealTabs.test.ts',
+            from: [
+                "test('the arrow keys move between tabs, and the panel follows'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealTabs.test.ts',
+            from: [
+                "test('switching tabs rebuilds the panel, and none of the tabs'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/tabs.test.ts',
+            from: [
+                "test('a panel per tab is hidden while another is selected, and kept",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Switch a deal between its details and its stage">
+        <p>Spread <code>list</code> on the row, <code>tab(key).button</code> on each tab, and
+            <code>panel</code> on the one panel, and branch on the selected key in it.</p>
+        <Example code={dealTabs}><DealTabs /></Example>
+    </Section>
+
+    <Section level={3} title="Keep a draft in a tab while another shows">
+        <p>Spread <code>tab(key).panel</code> on a panel per tab. A panel is hidden while another
+            tab is selected, and keeps what it holds.</p>
+        <Example code={keepDraft}><KeepDraft /></Example>
+    </Section>
+
+    <Section level={3} title="Put a count beside each tab's name">
+        <p>A tab is your own element, so it holds anything.</p>
+        <Example code={tabCount}><TabCount /></Example>
+    </Section>
+
+    <Section level={3} title="Underline the selected tab">
+        <p>The selected tab carries <code>data-selected</code>.</p>
+        <Example code={underlineSelected}><UnderlineSelected /></Example>
+    </Section>
+</Doc>

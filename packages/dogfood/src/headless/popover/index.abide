@@ -1,0 +1,61 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import AnchorWidth from './lib/AnchorWidth.abide'
+import anchorWidth from './lib/AnchorWidth.abide' with { type: 'text' }
+import ArrowInset from './lib/ArrowInset.abide'
+import arrowInset from './lib/ArrowInset.abide' with { type: 'text' }
+import FilterPanel from './lib/FilterPanel.abide'
+import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/behaviors/dismissible', '/headless/menu', '/headless/combobox']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageFilter.test.ts',
+            from: [
+                "test('the stage button opens its panel as a popover under it, and a pick shuts it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageFilter.test.ts',
+            from: [
+                "test('Escape, a press outside and a second press on the button each shut the stage panel'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: ["test('a side with no room flips to the opposite one"],
+        },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: [
+                "test('the arrow keeps arrowInset from the corners, and an edge too short for both centers it",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Open a filter panel under its button">
+        <p>Spread <code>trigger</code> on the button and <code>popover</code> on the panel. The
+            button opens and closes it, and a press outside or Escape closes it. It sits in the
+            top layer, placed on the side it is given and flipped where there is no room, and
+            <code>data-side</code> says which it took.</p>
+        <Example code={filterPanel}><FilterPanel /></Example>
+    </Section>
+
+    <Section level={3} title="Make a list as wide as the field it suggests for">
+        <p>Spread <code>anchor</code> on a field that opens the popover some other way, here
+            by typing, and write <code>open</code> from what opens it. <code>--anchor-width</code> is the
+            anchor's width, kept current as it resizes.</p>
+        <Example code={anchorWidth}><AnchorWidth /></Example>
+    </Section>
+    <Section level={3} title="Point an arrow at the button, clear of the rounded corners">
+        <p>The popover writes <code>--arrow-offset</code>: how far along its facing edge the
+            button's middle falls, kept <code>arrowInset</code> pixels from each end so an arrow
+            drawn there clears the corners.</p>
+        <Example code={arrowInset}><ArrowInset /></Example>
+    </Section>
+</Doc>

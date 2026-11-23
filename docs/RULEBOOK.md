@@ -4037,6 +4037,14 @@ side its code runs on.
 40.35 An example's relative import MUST name a file of the example app, and a name that file
 exports.
 
+40.36 Every page MUST say, in its header, where the name it documents is written and on which side
+it runs, and a page whose name runs on one side only MUST carry a mark naming that side beside its
+nav label. A page documenting a name `@abide/abide/server` exports and `@abide/abide` does not MUST
+say it runs on the server, and a page documenting a name `@abide/abide` exports MUST NOT.
+
+40.37 A group MAY list its pages in runs, each under the label its pages' `SITE` entries name as
+their `subgroup`, and the pages of one run MUST be adjacent in the group.
+
 # 41. Rendering and hydration
 
 41.1 `render` MUST send nothing until the page and every layout around it are set up and built, and a

@@ -34,7 +34,7 @@ test('every example fence is captioned with the side its code runs on', async ()
 // parameter, a method's shorthand, `{#component Name(…)}` — so the check reads tokens and never parses, and a name only
 // ever called is the candidate. A global is whatever this process has on `globalThis`, which the
 // DOM preload makes a browser's and `bun test` makes its own. THE REVERT: write
-// `onclose: (reason) => track('archive-notice', { reason })` in `/components/toasts-api` and
+// `onclose: (reason) => track('archive-notice', { reason })` in `/headless/toasts` and
 // `track` is named.
 const NOT_A_CALL = new Set([
     'if',
@@ -121,7 +121,7 @@ test('every example calls only names its fence imports or declares, or a global'
 // path is matched by its FILE NAME against every file of the app, and the name it imports against
 // what one of them exports — a `.abide` exports its component as its default. A name the CRM does not
 // have is declared in the fence, where the reader sees it is the example's own. THE REVERT: import
-// `track` from `'../lib/analytics.ts'` in `/components/toasts-api` and it is named.
+// `track` from `'../lib/analytics.ts'` in `/headless/toasts` and it is named.
 const CRM = new URL('../examples/crm/', import.meta.url).pathname
 
 /** Every file of the example app, by file name. */

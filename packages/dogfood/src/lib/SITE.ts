@@ -1,8 +1,40 @@
 // THE SITE: one page per REGISTRY `##` section — one export an app imports, or one construct it
-// writes (40.2, 40.3) — grouped as REGISTRY groups them: its route, its words, and the section it
-// documents (40.4). One home for what a page is CALLED and what it COVERS, so the nav, the home page's
-// index, the page's own header and the coverage gates read one list. What a page SAYS is its
-// `index.abide`: its examples, its See also and its Tests.
+// writes (40.2, 40.3) — grouped as REGISTRY groups them: its route, its words, the section it
+// documents (40.4) and where a reader reaches for it (40.36). One home for what a page is CALLED and
+// what it COVERS, so the nav, the home page's index, the page's own header and the coverage gates
+// read one list. What a page SAYS is its `index.abide`: its examples, its See also and its Tests.
+
+/** Where a page's name is written and where it runs (40.36). */
+export type Where =
+    'component' | 'browser' | 'server' | 'anywhere' | 'test' | 'terminal'
+
+/** What a page's header says of where it is reached for, and the nav's mark for it. */
+export const WHERE: Readonly<
+    Record<Where, { runs: string; written: string; mark: string | undefined }>
+> = {
+    component: {
+        runs: 'in the browser and on the server',
+        written: 'a `.abide` file',
+        mark: undefined,
+    },
+    browser: {
+        runs: 'in the browser',
+        written: 'a `.abide` file',
+        mark: 'browser',
+    },
+    server: {
+        runs: 'on the server',
+        written: 'a `<script server>` block, a handler or a `.server.ts` file',
+        mark: 'server',
+    },
+    anywhere: {
+        runs: 'in the browser and on the server',
+        written: 'any module',
+        mark: undefined,
+    },
+    test: { runs: 'under `bun test`', written: 'a test file', mark: undefined },
+    terminal: { runs: 'in a terminal', written: 'a shell', mark: undefined },
+}
 
 export type SitePage = {
     route: string
@@ -14,6 +46,9 @@ export type SitePage = {
     description: string
     /** The REGISTRY `##` heading whose rows this page carries. */
     registry: string
+    where: Where
+    /** The run of pages in its group it is listed under in the nav, where the group has runs. */
+    subgroup: string | undefined
 }
 
 export type SiteGroup = {
@@ -24,9 +59,10 @@ export type SiteGroup = {
 }
 
 // A page as written: `nav` and `registry` are its `title` unless it says otherwise.
-type WrittenPage = Omit<SitePage, 'nav' | 'registry'> & {
+type WrittenPage = Omit<SitePage, 'nav' | 'registry' | 'subgroup'> & {
     nav?: string
     registry?: string
+    subgroup?: string
 }
 
 const WRITTEN: readonly {
@@ -45,6 +81,7 @@ const WRITTEN: readonly {
                 nav: 'Values by name',
                 description:
                     'Read a reactive value by naming it and write it by assigning, with the explicit calls still compiling.',
+                where: 'component',
             },
             {
                 route: '/abide-files/expressions',
@@ -53,12 +90,14 @@ const WRITTEN: readonly {
                 description:
                     'Put live values into text, attributes, listeners, classes and styles, and bind form fields both ways.',
                 registry: 'Expressions',
+                where: 'component',
             },
             {
                 route: '/abide-files/raw',
                 title: '`raw`',
                 description:
                     'Render a string you trust as markup rather than escaped text, such as the HTML `markdown` hands back.',
+                where: 'component',
             },
             {
                 route: '/abide-files/control-flow',
@@ -67,18 +106,21 @@ const WRITTEN: readonly {
                 description:
                     'Show markup on a condition, repeat it over a keyed list, and hold a placeholder or fallback while a region loads or fails.',
                 registry: 'Control flow',
+                where: 'component',
             },
             {
                 route: '/abide-files/components',
                 title: 'Components and slots',
                 description:
                     'Use a component as a tag, pass markup into its slot, and declare small components inline in a file.',
+                where: 'component',
             },
             {
                 route: '/abide-files/props',
                 title: '`props`',
                 description:
                     'Take typed, live props from the markup using a component, with defaults, bound writes and element attributes passed through.',
+                where: 'component',
             },
             {
                 route: '/abide-files/blocks',
@@ -87,58 +129,72 @@ const WRITTEN: readonly {
                 description:
                     'Split a component into per-instance setup, module scope, server-only code and scoped styles.',
                 registry: 'Script and style blocks',
+                where: 'component',
             },
         ],
     },
     {
-        group: 'Pages and the app',
+        group: 'Pages and routing',
         description:
-            'A file under `src` is a page at the address its path spells, inside the layouts above it, in an app that reads its environment and its files.',
+            'A file under `src` is a page at the address its path spells, inside the layouts above it, and a page reads where it is and goes elsewhere.',
         pages: [
             {
                 route: '/pages/pages',
                 title: 'Pages',
                 description:
                     'Route pages by file path and dynamic segments, add to the document head, listen on the window, and animate between pages.',
+                where: 'component',
+            },
+            {
+                route: '/pages/files',
+                title: 'Files abide reads',
+                nav: 'Files',
+                description:
+                    "Lay out the app so each file's path decides its address, its side and its role, and configure the build in `bunfig.toml`.",
+                registry: 'Files',
+                where: 'component',
             },
             {
                 route: '/pages/render',
                 title: '`render`',
                 description:
                     "Render a component bound to its props into a document's bytes on the server, for a handler, an email or a file.",
+                where: 'server',
             },
             {
                 route: '/pages/sinks',
                 title: 'Sinks',
                 description:
                     'Send a page before its data lands, leaving holes in text, attributes, titles and textareas that fill as each value arrives.',
+                where: 'component',
             },
             {
                 route: '/pages/outlet',
                 title: '`outlet`',
                 description:
                     "Leave a named place in a layout, a toolbar or a side panel, and fill it with the page's own markup from below.",
+                where: 'component',
             },
             {
-                route: '/app/create-app',
-                title: '`createApp`',
+                route: '/pages/route',
+                title: '`route`',
                 description:
-                    'Start the app in-process with no port, and drive it through `fetch` and `run` from a test or a host.',
+                    "Read the page's address, its params and its query as reactive values, and keep page state in the address.",
+                where: 'anywhere',
             },
             {
-                route: '/configuration/environment',
-                title: 'Environment variables',
-                nav: 'Environment',
+                route: '/pages/url',
+                title: '`url`',
                 description:
-                    'Set the port, public URL, secrets, logging, offline mode and telemetry export with environment variables.',
+                    'Build a typed address from the route a page is filed under, with its query, right under any mount path.',
+                where: 'anywhere',
             },
             {
-                route: '/configuration/files',
-                title: 'Files abide reads',
-                nav: 'Files',
+                route: '/pages/navigate',
+                title: '`navigate`',
                 description:
-                    "Lay out the app so each file's path decides its address, its side and its role, and configure the build in `bunfig.toml`.",
-                registry: 'Files',
+                    'Go to another page from script without reloading, or step back and forward through the history.',
+                where: 'browser',
             },
         ],
     },
@@ -152,642 +208,746 @@ const WRITTEN: readonly {
                 title: '`reactive`',
                 description:
                     'Hold a value, derive one from others, or load or stream one from a handler, with reads, writes, probes and triggers on one type.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/watch',
                 title: '`watch`',
                 description:
                     'Run a side effect each time the values it reads change, and stop it with the disposer it returns.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/store',
                 title: '`store`',
                 description:
                     'Keep a reactive value somewhere that outlives the process: Web Storage, a cookie, IndexedDB, SQLite, Redis, or your own.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/refuse',
                 title: '`refuse`',
                 description:
                     'Declare a named refusal with typed data, return it from a handler, and match it by name where the call is made.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/is-failed',
                 title: '`isFailed`',
                 description:
                     'Tell a refusal from any other value or thrown error, including one read back from JSON.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/busy',
                 title: '`busy`',
                 description:
                     'Ask whether any value, keyed entry, handler call or tagged value in a selection has work in flight.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/ready',
                 title: '`ready`',
                 description:
                     'Ask whether every entry in a selection has a value to serve, to show a view only once it is whole.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/synced',
                 title: '`synced`',
                 description:
                     'Ask whether every entry in a selection still holds what its producer made, rather than a write made here.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/refresh',
                 title: '`refresh`',
                 description:
                     'Reload a value, a keyed entry, a handler or everything carrying a tag, keeping what is held on screen meanwhile.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/invalidate',
                 title: '`invalidate`',
                 description:
                     'Mark a selection stale so its next read loads again, without starting a load now.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/flush-sync',
                 title: '`flushSync`',
                 description:
                     'Run every effect a write woke right now, so a test or a layout read sees the updated page.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/stop-signal',
                 title: '`stopSignal`',
                 description:
                     "Read the signal a stopping app aborts, so a long job's run or its fetch ends early.",
+                where: 'anywhere',
             },
             {
                 route: '/reactive/structural',
                 title: '`structural`',
                 description:
                     'Compare values by contents rather than reference, so an equal reload or write wakes nobody.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/is-reactive',
                 title: '`isReactive`',
                 description:
                     'Check whether a value is a `Reactive`, ahead of any thenable check, since a `Reactive` is thenable.',
+                where: 'anywhere',
             },
             {
                 route: '/reactive/tracking',
                 title: 'Tracking',
                 description:
                     'Which reads subscribe, which do not, and how to read a value without following it.',
+                where: 'anywhere',
             },
         ],
     },
     {
-        group: 'Ambient values',
+        group: 'Headless components',
         description:
-            'What is true where the code runs — the request, the route, the network, the person — read without passing it in.',
+            'Dialogs, pickers, tables and charts as parts a component spreads onto markup of its own, with the keyboard, the ARIA and the state handled and the look left to the app.',
         pages: [
             {
-                route: '/ambient/request',
-                title: '`request`',
-                description:
-                    "Read the request being answered, its headers, signal and caller's address, from anywhere in the code answering it.",
-            },
-            {
-                route: '/ambient/response',
-                title: '`response`',
-                description:
-                    'Set the status and headers of the answer, or fix it as a page, JSON, a redirect, or a stream.',
-            },
-            {
-                route: '/ambient/cookies',
-                title: '`cookies`',
-                description:
-                    'Read and write cookies by name on both sides, so the server paints what the browser chose.',
-            },
-            {
-                route: '/ambient/route',
-                title: '`route`',
-                description:
-                    "Read the page's address, its params and its query as reactive values, and keep page state in the address.",
-            },
-            {
-                route: '/ambient/online',
-                title: '`online`',
-                description:
-                    'Tell the reader the browser has lost its network, and catch up when it returns.',
-            },
-            {
-                route: '/ambient/media',
-                title: '`media`',
-                description:
-                    'Follow a CSS media query, such as a width or reduced motion, from script as a value a page reads.',
-            },
-            {
-                route: '/ambient/outbox',
-                title: '`outbox`',
-                description:
-                    'Queue writes made offline, send them in order once the server answers, and retry or drop the refused ones.',
-            },
-            {
-                route: '/ambient/reachable',
-                title: '`reachable`',
-                description:
-                    'Ask whether another host answers, so a handler can refuse at once while it is down.',
-            },
-            {
-                route: '/ambient/server',
-                title: '`server`',
-                description:
-                    'Reach the listening Bun server for what abide does not carry, such as requests in flight.',
-            },
-            {
-                route: '/ambient/is-server',
-                title: '`isServer`',
-                description:
-                    "Tell whether code is running in a server's request or render or in the browser, to guard browser-only APIs.",
-            },
-            {
-                route: '/ambient/principal',
-                title: '`principal`',
-                description:
-                    'Sign a caller in and out, read who they are, and decide in a handler what they see.',
-            },
-            {
-                route: '/ambient/config',
-                title: '`config`',
-                description:
-                    'Read typed settings, defaulted by `onConfig` and overridden by the environment, validated once at start.',
-            },
-        ],
-    },
-    {
-        group: 'Transports',
-        description:
-            'A handler file is a server function a page calls by name, with its type the same on both sides.',
-        pages: [
-            {
-                route: '/transports/get',
-                title: '`GET`',
-                description:
-                    'Declare a read in a handler file and call it from a page as a reactive value, a stream or a link.',
-            },
-            {
-                route: '/transports/post',
-                title: '`POST`, `PUT`, `PATCH` and `DELETE`',
-                nav: '`POST` and friends',
-                description:
-                    'Declare a write with `POST`, `PUT`, `PATCH` or `DELETE`, and refresh what it changed once it answers.',
-            },
-            {
-                route: '/transports/mount-paths',
-                title: 'Mount paths',
-                description:
-                    "Find the address a handler answers at from its file's path, its `[param]` segments and its `<script server>`.",
-            },
-            {
-                route: '/transports/validate-json',
-                title: '`validateJson`',
-                description:
-                    'Check a value against a JSON Schema document, and read what was wrong keyed by the path to it.',
-            },
-            {
-                route: '/transports/json-schema',
-                title: '`jsonSchema`',
-                description:
-                    "Turn a JSON Schema document into a `Schema` that gates a handler's args and is published as written.",
-            },
-            {
-                route: '/transports/headers',
-                title: 'Headers abide generates',
-                nav: 'Headers',
-                description:
-                    'See the headers every answer carries without you writing them, and replace a default from a handler.',
-            },
-        ],
-    },
-    {
-        group: 'Generated surfaces',
-        description:
-            'The handler a page calls is also an OpenAPI operation, an MCP tool and a CLI command.',
-        pages: [
-            {
-                route: '/surfaces/clients',
-                title: '`clients`',
-                description:
-                    'Choose which surfaces a handler is on: the page, OpenAPI, MCP and the command line.',
-            },
-            {
-                route: '/surfaces/openapi',
-                title: 'OpenAPI',
-                description:
-                    'Read the OpenAPI 3.1 document abide writes from your handlers, served or printed beside the code.',
-            },
-            {
-                route: '/surfaces/mcp',
-                title: 'MCP',
-                description:
-                    'Offer your handlers as the tools of an MCP server a model calls as the person asking.',
-            },
-        ],
-    },
-    {
-        group: 'Lifecycle hooks',
-        description:
-            'Functions an app registers to run around its boot, its requests, its errors and its people.',
-        pages: [
-            {
-                route: '/hooks/middleware',
-                title: '`middleware`',
-                description:
-                    'Run code around every request under a route, to guard a section, gate pages or answer before routing.',
-            },
-            {
-                route: '/hooks/on-start',
-                title: '`onStart`',
-                description:
-                    "Run work around the app's boot, such as connecting a pool or migrating, before the first request is answered.",
-            },
-            {
-                route: '/hooks/on-stop',
-                title: '`onStop`',
-                description:
-                    'Close what the app opened once in-flight requests drain, on a signal, a quit or `App.stop`.',
-            },
-            {
-                route: '/hooks/on-error',
-                title: '`onError`',
-                description:
-                    'Send an unexpected error to a tracker, on the server under a route or in the browser under a component.',
-            },
-            {
-                route: '/hooks/on-refusal',
-                title: '`onRefusal`',
-                description:
-                    "Hear every refusal a browser call gets while a component stands, with the call's method, URL and trace.",
-            },
-            {
-                route: '/hooks/on-config',
-                title: '`onConfig`',
-                description:
-                    'Give config settings defaults a deployment overrides, and check the whole document with a schema before the app starts.',
-            },
-            {
-                route: '/hooks/on-health',
-                title: '`onHealth`',
-                description:
-                    "Add the app's own fields, such as a database's state, to the health check at `/__abide/health`.",
-            },
-            {
-                route: '/hooks/on-principal',
-                title: '`onPrincipal`',
-                description:
-                    'Turn the claims in a signed-in cookie into the member a page and a handler read.',
-            },
-            {
-                route: '/hooks/on-pairing',
-                title: '`onPairing`',
-                description:
-                    "Set, per person, the Claude Code arguments a pairing's command and install carry after `--`.",
-            },
-            {
-                route: '/hooks/on-report',
-                title: '`onReport`',
-                description:
-                    'Send each problem report a person files to your tracker, refusing the send when the tracker fails.',
-            },
-            {
-                route: '/hooks/on-launcher',
-                title: '`onLauncher`',
-                description:
-                    "Set the native app's window, launcher forms, menu bar extra and update feed.",
-            },
-        ],
-    },
-    {
-        group: 'Overlays',
-        description:
-            'Dialogs, prompts, toasts, tooltips and menus, and the placing and dismissing under them.',
-        pages: [
-            {
-                route: '/helpers/dialog',
+                route: '/headless/dialog',
                 title: '`dialog`',
                 description:
                     'Spread a native modal onto a `<dialog>` of your own, opened and closed by a value you hold.',
+                where: 'component',
+                subgroup: 'Overlays',
             },
             {
-                route: '/components/prompts-api',
+                route: '/headless/prompts',
                 title: '`prompts`',
                 description:
                     'Ask a yes-or-no question, show a message or ask for a line of text, and await the answer.',
+                where: 'component',
+                subgroup: 'Overlays',
             },
             {
-                route: '/components/toasts-api',
+                route: '/headless/toasts',
                 title: '`toasts`',
                 description:
                     'Show a notice that takes itself down, offer one action on it, or dismiss it by its id.',
+                where: 'component',
+                subgroup: 'Overlays',
             },
             {
-                route: '/components/tooltip',
+                route: '/headless/tooltip',
                 title: '`tooltip`',
                 description:
                     'Show a text hint for the element it is bound to, on hover and on focus, placed where it fits.',
+                where: 'component',
+                subgroup: 'Overlays',
             },
             {
-                route: '/components/menu',
+                route: '/headless/menu',
                 title: '`menu`',
                 description:
                     'Open a list of actions from a button of your own, walked by the arrow keys and closed by a pick.',
+                where: 'component',
+                subgroup: 'Overlays',
             },
             {
-                route: '/helpers/dismissible',
-                title: '`dismissible`',
-                description:
-                    'Close a panel or popover when someone presses outside it or hits Escape.',
-            },
-            {
-                route: '/helpers/popover',
+                route: '/headless/popover',
                 title: '`popover`',
                 description:
                     'Open a panel of your own in the top layer against the button or field it belongs to, and keep it there as the page moves.',
+                where: 'component',
+                subgroup: 'Overlays',
+            },
+            {
+                route: '/headless/command-palette',
+                title: '`commandPalette`',
+                description:
+                    'Spread a search over commands onto a dialog and a list of your own, opened on one key.',
+                where: 'component',
+                subgroup: 'Overlays',
+            },
+            {
+                route: '/headless/form',
+                title: '`form`',
+                description:
+                    'Check a form against the handler it submits to before calling it, show what is wrong beside each field, and mark what an edit changed.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/combobox',
+                title: '`combobox`',
+                description:
+                    'Spread a field that lists what matches onto markup of your own, each option and chip written by you.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/tabs',
+                title: '`tabs`',
+                description:
+                    'Switch between views from a row of tabs of your own that the arrow keys move along.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/tree',
+                title: '`tree`',
+                description:
+                    'Show nested records as a tree of your own that the arrow keys open, close and move through.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/range',
+                title: '`range`',
+                description:
+                    'Spread a two-thumb range onto markup of your own: the group, the track, the span and each thumb.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/listbox',
+                title: '`listbox`',
+                description:
+                    'Put arrow-key, Home, End, Enter and Escape handling on a list of options you render yourself.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/calendar',
+                title: '`calendar`',
+                description:
+                    'Spread months of days onto grids of your own, a day or a range picked by click or by the arrow keys.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/carousel',
+                title: '`carousel`',
+                description:
+                    'Swipe through records in a row that snaps to each one, resting on the one picked and saying which is centered as you scroll.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/sortable-table',
+                title: '`sortableTable`',
+                description:
+                    'Spread a sortable table onto markup of your own, writing every cell, with rows picked by checkbox.',
+                where: 'component',
+                subgroup: 'Data',
+            },
+            {
+                route: '/headless/virtual-list',
+                title: '`virtualList`',
+                description:
+                    'Render only the items of a long list or grid that are in view, measured from your own markup, with a jump to each section.',
+                where: 'component',
+                subgroup: 'Data',
+            },
+            {
+                route: '/headless/time',
+                title: '`time`',
+                description:
+                    'Spread a time kept current onto a `<time>` of your own, one per row of a list.',
+                where: 'component',
+                subgroup: 'Data',
+            },
+            {
+                route: '/headless/chat',
+                title: '`chat`',
+                description:
+                    'Spread a streaming conversation with your assistant handler onto markup of your own: turns, a composer, Stop and tool permissions.',
+                where: 'component',
+                subgroup: 'Data',
+            },
+            {
+                route: '/headless/chart',
+                title: '`chart`',
+                description:
+                    'Draw a chart in markup of your own from the geometry and parts it hands back, or compute its ticks, scales and paths yourself.',
+                where: 'component',
+                subgroup: 'Charts',
+            },
+            {
+                route: '/headless/pie',
+                title: '`pie`',
+                description:
+                    'Draw shares of a whole in markup of your own from the slices and parts it hands back.',
+                where: 'component',
+                subgroup: 'Charts',
+            },
+            {
+                route: '/headless/sparkline',
+                title: '`sparkline`',
+                description:
+                    'Draw a trend with no axes in markup of your own from the parts it hands back.',
+                where: 'component',
+                subgroup: 'Charts',
             },
         ],
     },
     {
-        group: 'Input and lists',
+        group: 'Element behaviors',
         description:
-            'Forms, pickers, tabs and sortable tables, and the keys, drops and copies a page takes.',
+            'One behavior added to an element the app already has: dismissing, dropping, copying, keys, scrolling, resizing and announcing.',
         pages: [
             {
-                route: '/helpers/form',
-                title: '`form`',
+                route: '/behaviors/dismissible',
+                title: '`dismissible`',
                 description:
-                    'Check a form against the handler it submits to before calling it, show what is wrong beside each field, and mark what an edit changed.',
+                    'Close a panel or popover when someone presses outside it or hits Escape.',
+                where: 'component',
             },
             {
-                route: '/helpers/combobox',
-                title: '`combobox`',
+                route: '/behaviors/dropzone',
+                title: '`dropzone`',
                 description:
-                    'Spread a field that lists what matches onto markup of your own, each option and chip written by you.',
+                    'Take the files dropped on an element, or pasted into it, filtered by type, and highlight the target while files hover.',
+                where: 'component',
             },
             {
-                route: '/helpers/command-palette',
-                title: '`commandPalette`',
+                route: '/behaviors/copy',
+                title: '`copy`',
                 description:
-                    'Spread a search over commands onto a dialog and a list of your own, opened on one key.',
+                    'Copy text, rich text or an image to the clipboard when an element is clicked, and mark the element while the copy shows.',
+                where: 'component',
             },
             {
-                route: '/components/tabs',
-                title: '`tabs`',
+                route: '/behaviors/hotkeys',
+                title: '`hotkeys`',
                 description:
-                    'Switch between views from a row of tabs of your own that the arrow keys move along.',
+                    'Map key presses to commands with one `keydown` listener that stands aside while the visitor types.',
+                where: 'browser',
             },
             {
-                route: '/helpers/range',
-                title: '`range`',
+                route: '/behaviors/is-editable-target',
+                title: '`isEditableTarget`',
                 description:
-                    'Spread a two-thumb range onto markup of your own: the group, the track, the span and each thumb.',
+                    'Check whether a key event landed in a field the visitor types into, before a listener of your own acts on it.',
+                where: 'browser',
             },
             {
-                route: '/helpers/tree',
-                title: '`tree`',
+                route: '/behaviors/follow-bottom',
+                title: '`followBottom`',
                 description:
-                    'Show nested records as a tree of your own that the arrow keys open, close and move through.',
+                    'Keep a scrolling log or transcript at its newest line as lines arrive, until the reader scrolls up to an earlier one.',
+                where: 'component',
             },
             {
-                route: '/helpers/sortable-table',
-                title: '`sortableTable`',
+                route: '/behaviors/scroll-edges',
+                title: '`scrollEdges`',
                 description:
-                    'Spread a sortable table onto markup of your own, writing every cell, with rows picked by checkbox.',
+                    'Fade or shadow the edges of a scrolling list from CSS while there is more to scroll to, in either direction.',
+                where: 'component',
             },
             {
-                route: '/helpers/listbox',
-                title: '`listbox`',
+                route: '/behaviors/observe',
+                title: '`observe`',
                 description:
-                    'Put arrow-key, Home, End, Enter and Escape handling on a list of options you render yourself.',
+                    "Bind an element's size, visibility or position to reactive values a template reads.",
+                where: 'component',
+            },
+            {
+                route: '/behaviors/announce',
+                title: '`announce`',
+                description:
+                    'Tell a screen reader what changed where nothing on screen says it, politely or interrupting.',
+                where: 'component',
+            },
+        ],
+    },
+    {
+        group: 'Helpers',
+        description:
+            'Plain functions over data: formatting, sorting, markdown, wall-clock times and key labels.',
+        pages: [
+            {
+                route: '/helpers/format',
+                title: '`format`',
+                description:
+                    'Write money, percents, counts, lists, dates and durations the same on server and browser, with a dash for missing values.',
+                where: 'anywhere',
             },
             {
                 route: '/helpers/sort-by',
                 title: '`sortBy`',
                 description:
                     'Sort a list by a value of each item: numbers as numbers, dates by time, text in one locale on both sides, and blanks last.',
+                where: 'anywhere',
             },
-            {
-                route: '/helpers/virtual-list',
-                title: '`virtualList`',
-                description:
-                    'Render only the items of a long list or grid that are in view, measured from your own markup, with a jump to each section.',
-            },
-            {
-                route: '/helpers/carousel',
-                title: '`carousel`',
-                description:
-                    'Swipe through records in a row that snaps to each one, resting on the one picked and saying which is centered as you scroll.',
-            },
-            {
-                route: '/helpers/hotkeys',
-                title: '`hotkeys`',
-                description:
-                    'Map key presses to commands with one `keydown` listener that stands aside while the visitor types.',
-            },
-            {
-                route: '/helpers/key-label',
-                title: '`keyLabel`',
-                description:
-                    "Write a shortcut binding as the visitor's platform shows it, ⌘ on a Mac and Ctrl elsewhere.",
-            },
-            {
-                route: '/helpers/is-editable-target',
-                title: '`isEditableTarget`',
-                description:
-                    'Check whether a key event landed in a field the visitor types into, before a listener of your own acts on it.',
-            },
-            {
-                route: '/helpers/dropzone',
-                title: '`dropzone`',
-                description:
-                    'Take the files dropped on an element, or pasted into it, filtered by type, and highlight the target while files hover.',
-            },
-            {
-                route: '/helpers/copy',
-                title: '`copy`',
-                description:
-                    'Copy text, rich text or an image to the clipboard when an element is clicked, and mark the element while the copy shows.',
-            },
-        ],
-    },
-    {
-        group: 'Charts',
-        description:
-            'Lines, columns, areas, pies and sparklines drawn in SVG, and the scales and paths under them.',
-        pages: [
-            {
-                route: '/helpers/chart',
-                title: '`chart`',
-                description:
-                    'Draw a chart in markup of your own from the geometry and parts it hands back, or compute its ticks, scales and paths yourself.',
-            },
-            {
-                route: '/helpers/pie',
-                title: '`pie`',
-                description:
-                    'Draw shares of a whole in markup of your own from the slices and parts it hands back.',
-            },
-            {
-                route: '/helpers/sparkline',
-                title: '`sparkline`',
-                description:
-                    'Draw a trend with no axes in markup of your own from the parts it hands back.',
-            },
-        ],
-    },
-    {
-        group: 'Content',
-        description:
-            'Markdown, a chat transcript, formatted values and messages read to a screen reader, and elements that follow what they hold or how big they are.',
-        pages: [
             {
                 route: '/helpers/markdown',
                 title: '`markdown`',
                 description:
                     'Turn markdown into HTML safe to hand `raw`, with its HTML escaped and unsafe links reduced to text.',
-            },
-            {
-                route: '/helpers/chat',
-                title: '`chat`',
-                description:
-                    'Spread a streaming conversation with your assistant handler onto markup of your own: turns, a composer, Stop and tool permissions.',
-            },
-            {
-                route: '/components/announce',
-                title: '`announce`',
-                description:
-                    'Tell a screen reader what changed where nothing on screen says it, politely or interrupting.',
-            },
-            {
-                route: '/helpers/format',
-                title: '`format`',
-                description:
-                    'Write money, percents, counts, lists, dates and durations the same on server and browser, with a dash for missing values.',
-            },
-            {
-                route: '/helpers/time',
-                title: '`time`',
-                description:
-                    'Spread a time kept current onto a `<time>` of your own, one per row of a list.',
-            },
-            {
-                route: '/helpers/calendar',
-                title: '`calendar`',
-                description:
-                    'Spread months of days onto grids of your own, a day or a range picked by click or by the arrow keys.',
+                where: 'anywhere',
             },
             {
                 route: '/helpers/instant-at',
                 title: '`instantAt`',
                 description:
                     'Turn a day and a time picked into the moment they name in a zone, the one to keep.',
+                where: 'anywhere',
             },
             {
-                route: '/helpers/follow-bottom',
-                title: '`followBottom`',
+                route: '/helpers/key-label',
+                title: '`keyLabel`',
                 description:
-                    'Keep a scrolling log or transcript at its newest line as lines arrive, until the reader scrolls up to an earlier one.',
+                    "Write a shortcut binding as the visitor's platform shows it, ⌘ on a Mac and Ctrl elsewhere.",
+                where: 'anywhere',
+            },
+        ],
+    },
+    {
+        group: 'Handlers',
+        description:
+            'A handler file is a server function a page calls by name, with its type the same on both sides, and the same handler is an OpenAPI operation, an MCP tool and a CLI command.',
+        pages: [
+            {
+                route: '/handlers/get',
+                title: '`GET`',
+                description:
+                    'Declare a read in a handler file and call it from a page as a reactive value, a stream or a link.',
+                where: 'server',
             },
             {
-                route: '/helpers/scroll-edges',
-                title: '`scrollEdges`',
+                route: '/handlers/post',
+                title: '`POST`, `PUT`, `PATCH` and `DELETE`',
+                nav: '`POST` and friends',
                 description:
-                    'Fade or shadow the edges of a scrolling list from CSS while there is more to scroll to, in either direction.',
+                    'Declare a write with `POST`, `PUT`, `PATCH` or `DELETE`, and refresh what it changed once it answers.',
+                where: 'server',
             },
             {
-                route: '/helpers/observe',
-                title: '`observe`',
+                route: '/handlers/mount-paths',
+                title: 'Mount paths',
                 description:
-                    "Bind an element's size, visibility or position to reactive values a template reads.",
+                    "Find the address a handler answers at from its file's path, its `[param]` segments and its `<script server>`.",
+                where: 'server',
+            },
+            {
+                route: '/handlers/validate-json',
+                title: '`validateJson`',
+                description:
+                    'Check a value against a JSON Schema document, and read what was wrong keyed by the path to it.',
+                where: 'anywhere',
+            },
+            {
+                route: '/handlers/json-schema',
+                title: '`jsonSchema`',
+                description:
+                    "Turn a JSON Schema document into a `Schema` that gates a handler's args and is published as written.",
+                where: 'anywhere',
+            },
+            {
+                route: '/handlers/headers',
+                title: 'Headers abide generates',
+                nav: 'Headers',
+                description:
+                    'See the headers every answer carries without you writing them, and replace a default from a handler.',
+                where: 'server',
+            },
+            {
+                route: '/handlers/clients',
+                title: '`clients`',
+                description:
+                    'Choose which surfaces a handler is on: the page, OpenAPI, MCP and the command line.',
+                where: 'server',
+            },
+            {
+                route: '/handlers/openapi',
+                title: 'OpenAPI',
+                description:
+                    'Read the OpenAPI 3.1 document abide writes from your handlers, served or printed beside the code.',
+                where: 'server',
+            },
+            {
+                route: '/handlers/mcp',
+                title: 'MCP',
+                description:
+                    'Offer your handlers as the tools of an MCP server a model calls as the person asking.',
+                where: 'server',
+            },
+        ],
+    },
+    {
+        group: 'Middleware and guards',
+        description:
+            'Rungs run around the requests a route answers: who is signed in, the role they hold, the identities a server trusts, and what a page may write and load.',
+        pages: [
+            {
+                route: '/middleware/middleware',
+                title: '`middleware`',
+                description:
+                    'Run code around every request under a route, to guard a section, gate pages or answer before routing.',
+                where: 'server',
+            },
+            {
+                route: '/middleware/signed-in',
+                title: '`signedIn`',
+                description:
+                    'Refuse a handler to anyone not signed in, answering `SignedOut` at 401 before the body runs.',
+                where: 'server',
+            },
+            {
+                route: '/middleware/require-role',
+                title: '`requireRole`',
+                description:
+                    'Admit only signed-in callers with a role, or ones a test of the principal passes, refusing the rest `Forbidden` at 403.',
+                where: 'server',
+            },
+            {
+                route: '/middleware/trusted-identity',
+                title: '`trustedIdentity`',
+                description:
+                    'Sign in the caller a single sign-on proxy in front of the app names in a header, believed from that proxy alone.',
+                where: 'server',
+            },
+            {
+                route: '/middleware/read-only',
+                title: '`readOnly`',
+                description:
+                    'Refuse every write below a route or to a handler, keeping open the handlers you allow.',
+                where: 'server',
+            },
+            {
+                route: '/middleware/csp',
+                title: '`csp`',
+                description:
+                    "Admit only the app's own scripts and styles with a content security policy, and read the nonce for an inline script.",
+                where: 'anywhere',
+            },
+        ],
+    },
+    {
+        group: 'Request context',
+        description:
+            'What is true of the request being answered — the request, the response, the cookies, the person — read without passing it in.',
+        pages: [
+            {
+                route: '/request/request',
+                title: '`request`',
+                description:
+                    "Read the request being answered, its headers, signal and caller's address, from anywhere in the code answering it.",
+                where: 'server',
+            },
+            {
+                route: '/request/response',
+                title: '`response`',
+                description:
+                    'Set the status and headers of the answer, or fix it as a page, JSON, a redirect, or a stream.',
+                where: 'server',
+            },
+            {
+                route: '/request/cookies',
+                title: '`cookies`',
+                description:
+                    'Read and write cookies by name on both sides, so the server paints what the browser chose.',
+                where: 'anywhere',
+            },
+            {
+                route: '/request/principal',
+                title: '`principal`',
+                description:
+                    'Sign a caller in and out, read who they are, and decide in a handler what they see.',
+                where: 'anywhere',
+            },
+            {
+                route: '/request/config',
+                title: '`config`',
+                description:
+                    'Read typed settings, defaulted by `onConfig` and overridden by the environment, validated once at start.',
+                where: 'server',
+            },
+            {
+                route: '/request/server',
+                title: '`server`',
+                description:
+                    'Reach the listening Bun server for what abide does not carry, such as requests in flight.',
+                where: 'server',
+            },
+            {
+                route: '/request/reachable',
+                title: '`reachable`',
+                description:
+                    'Ask whether another host answers, so a handler can refuse at once while it is down.',
+                where: 'server',
+            },
+            {
+                route: '/request/is-server',
+                title: '`isServer`',
+                description:
+                    "Tell whether code is running in a server's request or render or in the browser, to guard browser-only APIs.",
+                where: 'anywhere',
+            },
+        ],
+    },
+    {
+        group: 'Browser context',
+        description:
+            'What is true of the browser a page stands in: whether it is online, what the screen matches, and the calls it has not delivered yet.',
+        pages: [
+            {
+                route: '/browser/online',
+                title: '`online`',
+                description:
+                    'Tell the reader the browser has lost its network, and catch up when it returns.',
+                where: 'browser',
+            },
+            {
+                route: '/browser/media',
+                title: '`media`',
+                description:
+                    'Follow a CSS media query, such as a width or reduced motion, from script as a value a page reads.',
+                where: 'browser',
+            },
+            {
+                route: '/browser/outbox',
+                title: '`outbox`',
+                description:
+                    'Queue writes made offline, send them in order once the server answers, and retry or drop the refused ones.',
+                where: 'browser',
+            },
+        ],
+    },
+    {
+        group: 'App and lifecycle',
+        description:
+            'The app object, its environment, and the functions it registers to run around its boot, its errors, its config and its people.',
+        pages: [
+            {
+                route: '/app/create-app',
+                title: '`createApp`',
+                description:
+                    'Start the app in-process with no port, and drive it through `fetch` and `run` from a test or a host.',
+                where: 'server',
+            },
+            {
+                route: '/app/environment',
+                title: 'Environment variables',
+                nav: 'Environment',
+                description:
+                    'Set the port, public URL, secrets, logging, offline mode and telemetry export with environment variables.',
+                where: 'server',
+            },
+            {
+                route: '/app/on-start',
+                title: '`onStart`',
+                description:
+                    "Run work around the app's boot, such as connecting a pool or migrating, before the first request is answered.",
+                where: 'server',
+            },
+            {
+                route: '/app/on-stop',
+                title: '`onStop`',
+                description:
+                    'Close what the app opened once in-flight requests drain, on a signal, a quit or `App.stop`.',
+                where: 'server',
+            },
+            {
+                route: '/app/on-error',
+                title: '`onError`',
+                description:
+                    'Send an unexpected error to a tracker, on the server under a route or in the browser under a component.',
+                where: 'anywhere',
+            },
+            {
+                route: '/app/on-refusal',
+                title: '`onRefusal`',
+                description:
+                    "Hear every refusal a browser call gets while a component stands, with the call's method, URL and trace.",
+                where: 'browser',
+            },
+            {
+                route: '/app/on-config',
+                title: '`onConfig`',
+                description:
+                    'Give config settings defaults a deployment overrides, and check the whole document with a schema before the app starts.',
+                where: 'server',
+            },
+            {
+                route: '/app/on-health',
+                title: '`onHealth`',
+                description:
+                    "Add the app's own fields, such as a database's state, to the health check at `/__abide/health`.",
+                where: 'server',
+            },
+            {
+                route: '/app/on-principal',
+                title: '`onPrincipal`',
+                description:
+                    'Turn the claims in a signed-in cookie into the member a page and a handler read.',
+                where: 'server',
+            },
+            {
+                route: '/app/on-pairing',
+                title: '`onPairing`',
+                description:
+                    "Set, per person, the Claude Code arguments a pairing's command and install carry after `--`.",
+                where: 'server',
+            },
+            {
+                route: '/app/on-report',
+                title: '`onReport`',
+                description:
+                    'Send each problem report a person files to your tracker, refusing the send when the tracker fails.',
+                where: 'server',
+            },
+            {
+                route: '/app/on-launcher',
+                title: '`onLauncher`',
+                description:
+                    "Set the native app's window, launcher forms, menu bar extra and update feed.",
+                where: 'server',
             },
         ],
     },
     {
         group: 'Data and I/O',
         description:
-            'The database, fetches and handled calls, background jobs, and the addresses a page builds and goes to.',
+            'The database, background jobs, and fetches of other services read as their content type says.',
         pages: [
             {
-                route: '/helpers/database',
+                route: '/data/database',
                 title: '`database`',
                 description:
                     "Open the app's SQLite file where the deployment keeps its data, and run each migration once, in order.",
+                where: 'server',
             },
             {
-                route: '/helpers/fetch-json',
-                title: '`fetchJson`',
-                description:
-                    'Ask another service for JSON with a deadline, retries and an optional cache, and get a refusal rather than a throw when it gives up.',
-            },
-            {
-                route: '/helpers/fetch-text',
-                title: '`fetchText`',
-                description:
-                    'Ask another service for a text answer with a deadline, retries and an optional cache, and get a refusal when it gives up.',
-            },
-            {
-                route: '/helpers/handle',
-                title: '`handle`',
-                description:
-                    'Read a response you fetched yourself as its type says: JSON, a stream of chunks, text or bytes.',
-            },
-            {
-                route: '/helpers/job',
+                route: '/data/job',
                 title: '`job`',
                 description:
                     'Run work on the server on a schedule, one run at a time, with a status every page can read.',
+                where: 'server',
             },
             {
-                route: '/helpers/url',
-                title: '`url`',
+                route: '/data/fetch-json',
+                title: '`fetchJson`',
                 description:
-                    'Build a typed address from the route a page is filed under, with its query, right under any mount path.',
+                    'Ask another service for JSON with a deadline, retries and an optional cache, and get a refusal rather than a throw when it gives up.',
+                where: 'server',
             },
             {
-                route: '/helpers/navigate',
-                title: '`navigate`',
+                route: '/data/fetch-text',
+                title: '`fetchText`',
                 description:
-                    'Go to another page from script without reloading, or step back and forward through the history.',
-            },
-        ],
-    },
-    {
-        group: 'Identity and access',
-        description:
-            'Who is signed in, the role they hold, the identities a server trusts, and what a page may write and load.',
-        pages: [
-            {
-                route: '/helpers/signed-in',
-                title: '`signedIn`',
-                description:
-                    'Refuse a handler to anyone not signed in, answering `SignedOut` at 401 before the body runs.',
+                    'Ask another service for a text answer with a deadline, retries and an optional cache, and get a refusal when it gives up.',
+                where: 'server',
             },
             {
-                route: '/helpers/require-role',
-                title: '`requireRole`',
+                route: '/data/handle',
+                title: '`handle`',
                 description:
-                    'Admit only signed-in callers with a role, or ones a test of the principal passes, refusing the rest `Forbidden` at 403.',
-            },
-            {
-                route: '/helpers/trusted-identity',
-                title: '`trustedIdentity`',
-                description:
-                    'Sign in the caller a single sign-on proxy in front of the app names in a header, believed from that proxy alone.',
-            },
-            {
-                route: '/helpers/read-only',
-                title: '`readOnly`',
-                description:
-                    'Refuse every write below a route or to a handler, keeping open the handlers you allow.',
-            },
-            {
-                route: '/helpers/csp',
-                title: '`csp`',
-                description:
-                    "Admit only the app's own scripts and styles with a content security policy, and read the nonce for an inline script.",
+                    'Read a response you fetched yourself as its type says: JSON, a stream of chunks, text or bytes.',
+                where: 'anywhere',
             },
         ],
     },
@@ -801,42 +961,49 @@ const WRITTEN: readonly {
                 title: '`assistant`',
                 description:
                     'Stream a conversation with a model whose tools are your handlers, from a handler you write.',
+                where: 'server',
             },
             {
                 route: '/ai/results-of',
                 title: '`resultsOf`',
                 description:
                     "Read what a conversation's calls to one handler answered, typed as that handler's value.",
+                where: 'anywhere',
             },
             {
                 route: '/ai/image-piece',
                 title: '`imagePiece`',
                 description:
                     'Turn an image into a piece of a turn, drawn down to what a model looks at.',
+                where: 'anywhere',
             },
             {
                 route: '/ai/image-files',
                 title: '`imageFiles`',
                 description:
                     'Take the images a model is shown from a paste or a drop.',
+                where: 'browser',
             },
             {
                 route: '/ai/provider',
                 title: '`provider`',
                 description:
                     "Run the conversation on the Claude API, or on the visitor's own Claude Code through the bridge.",
+                where: 'server',
             },
             {
                 route: '/ai/pairing',
                 title: '`pairing`',
                 description:
                     "Pair this browser with the visitor's Claude Code with a click, and follow the pairing's status.",
+                where: 'browser',
             },
             {
                 route: '/ai/transcript',
                 title: '`transcript`',
                 description:
                     'Fold a streamed answer into the turns a chat shows, and send them back as messages.',
+                where: 'component',
             },
         ],
     },
@@ -850,24 +1017,28 @@ const WRITTEN: readonly {
                 title: '`native`',
                 description:
                     "Tell the native app's window from a browser, and drag the window by a header drawn under its controls.",
+                where: 'anywhere',
             },
             {
                 route: '/native-app/pending-update',
                 title: '`pendingUpdate`',
                 description:
                     'Show the update the native window has staged, and restart into it.',
+                where: 'browser',
             },
             {
                 route: '/native-app/on-menu',
                 title: '`onMenu`',
                 description:
                     "Add menus to the native app's menu bar while a layout or page stands, following the values they read.",
+                where: 'component',
             },
             {
                 route: '/native-app/menu-item',
                 title: '`menuItem`',
                 description:
                     'Make a menu bar entry that runs your function when picked, or one the platform performs by role.',
+                where: 'component',
             },
         ],
     },
@@ -877,28 +1048,32 @@ const WRITTEN: readonly {
             'Logs, problem reports, traces and health checks for an app that is running.',
         pages: [
             {
-                route: '/helpers/log',
+                route: '/operating/log',
                 title: '`log`',
                 description:
                     'Write leveled lines under a named namespace, turned on with `DEBUG` on the server and in the browser.',
+                where: 'anywhere',
             },
             {
-                route: '/helpers/report',
+                route: '/operating/report',
                 title: '`report`',
                 description:
                     "Start a problem report from a failed call's trace, let the person read every word, and send it to `onReport`.",
+                where: 'anywhere',
             },
             {
-                route: '/ambient/trace',
+                route: '/operating/trace',
                 title: '`trace`',
                 description:
                     'Follow one request through every handler, log line and outbound call with one trace id, and time its spans.',
+                where: 'server',
             },
             {
-                route: '/ambient/health',
+                route: '/operating/health',
                 title: '`health`',
                 description:
                     "Read the app's health report, the same one a load balancer polls, with your own fields beside the baseline.",
+                where: 'anywhere',
             },
         ],
     },
@@ -912,12 +1087,14 @@ const WRITTEN: readonly {
                 title: '`mount`',
                 description:
                     'Render and hydrate a component in `bun test`, then click it and read what it rendered.',
+                where: 'test',
             },
             {
                 route: '/testing/settled',
                 title: '`settled`',
                 description:
                     'Wait in a test until every load and effect a click started has finished, instead of sleeping.',
+                where: 'test',
             },
             {
                 route: '/harness/measure/measure',
@@ -925,6 +1102,7 @@ const WRITTEN: readonly {
                 description:
                     'Count what an op did to the DOM, rows moved, nodes created, text and class writes, and what your own code published while it ran.',
                 registry: '`measure` — `@abide/harness/measure`',
+                where: 'test',
             },
             {
                 route: '/harness/measure/published-by',
@@ -932,6 +1110,7 @@ const WRITTEN: readonly {
                 description:
                     "Read one source's published counters off a `Work`, or `null` when nothing was published.",
                 registry: '`publishedBy` — `@abide/harness/measure`',
+                where: 'test',
             },
             {
                 route: '/harness/measure/published-work-key',
@@ -939,6 +1118,7 @@ const WRITTEN: readonly {
                 description:
                     'Publish your own counters under this global so `measure` zeroes them per case and copies them into its result.',
                 registry: '`PUBLISHED_WORK_KEY` — `@abide/harness/measure`',
+                where: 'test',
             },
             {
                 route: '/harness/measure/time',
@@ -946,6 +1126,7 @@ const WRITTEN: readonly {
                 description:
                     'Time several arms of an op in one interleaved batch, refused while counting and on an emulated DOM.',
                 registry: '`time` — `@abide/harness/measure`',
+                where: 'test',
             },
             {
                 route: '/harness/measure/patch-set',
@@ -953,6 +1134,7 @@ const WRITTEN: readonly {
                 description:
                     'List every DOM member the measure lane patches, by `Interface.member`, so you know what a count covers.',
                 registry: '`patchSet` — `@abide/harness/measure`',
+                where: 'test',
             },
             {
                 route: '/harness/preload',
@@ -960,6 +1142,7 @@ const WRITTEN: readonly {
                 nav: '`preload`',
                 description:
                     "Give every `bun test` process a DOM with the measure lane's counters installed, while `fetch` and the wire stay bun's own.",
+                where: 'test',
             },
             {
                 route: '/harness/engine/trace-op',
@@ -967,6 +1150,7 @@ const WRITTEN: readonly {
                 description:
                     'Trace one op in a Chromium page from Playwright, and read its style, layout, paint and forced-layout counts and its user timing.',
                 registry: '`traceOp` — `@abide/harness/engine`',
+                where: 'test',
             },
             {
                 route: '/harness/engine/shares',
@@ -974,6 +1158,7 @@ const WRITTEN: readonly {
                 description:
                     'Find what fraction of a whole op one measured layer took, and whether a person would see the saving.',
                 registry: '`shares` — `@abide/harness/engine`',
+                where: 'test',
             },
             {
                 route: '/harness/engine/measures-named',
@@ -981,6 +1166,7 @@ const WRITTEN: readonly {
                 description:
                     'List every user-timing measure in a trace with one name, in trace order.',
                 registry: '`measuresNamed` — `@abide/harness/engine`',
+                where: 'test',
             },
             {
                 route: '/harness/engine/duration-of',
@@ -988,6 +1174,7 @@ const WRITTEN: readonly {
                 description:
                     'Sum the nanoseconds of every measure with one name in a trace.',
                 registry: '`durationOf` — `@abide/harness/engine`',
+                where: 'test',
             },
             {
                 route: '/harness/server/bytes',
@@ -995,6 +1182,7 @@ const WRITTEN: readonly {
                 description:
                     "Measure what a response, string or buffer sends, or estimate an object's memory, to compare a render across sizes.",
                 registry: '`bytes` — `@abide/harness/server`',
+                where: 'test',
             },
             {
                 route: '/harness/server/ticks',
@@ -1002,6 +1190,7 @@ const WRITTEN: readonly {
                 description:
                     "Count the microtask turns a call's result takes to settle.",
                 registry: '`ticks` — `@abide/harness/server`',
+                where: 'test',
             },
             {
                 route: '/harness/server/retained',
@@ -1009,6 +1198,7 @@ const WRITTEN: readonly {
                 description:
                     'Diff the live objects a call leaves behind, by engine type, in a process with no DOM.',
                 registry: '`retained` — `@abide/harness/server`',
+                where: 'test',
             },
             {
                 route: '/harness/server/retained-per-run',
@@ -1016,6 +1206,7 @@ const WRITTEN: readonly {
                 description:
                     'Find what each run of a call keeps reachable, as a batch mean, and whether that grows across the batch.',
                 registry: '`retainedPerRun` — `@abide/harness/server`',
+                where: 'test',
             },
             {
                 route: '/harness/server/closures',
@@ -1023,6 +1214,7 @@ const WRITTEN: readonly {
                 description:
                     'Count the functions and scopes a call leaves behind, as the pair the engine reports a closure as.',
                 registry: '`closures` — `@abide/harness/server`',
+                where: 'test',
             },
             {
                 route: '/harness/report/batch',
@@ -1030,6 +1222,7 @@ const WRITTEN: readonly {
                 description:
                     'Time each arm of an op in interleaved batches sized to the clock, with an A/A floor that says how much difference is noise.',
                 registry: '`batch` — `@abide/harness/report`',
+                where: 'test',
             },
             {
                 route: '/harness/report/ratio',
@@ -1037,6 +1230,7 @@ const WRITTEN: readonly {
                 description:
                     "Divide one arm's time by another's, getting a number only when the difference clears the floor and a frame.",
                 registry: '`ratio` — `@abide/harness/report`',
+                where: 'test',
             },
             {
                 route: '/harness/report/claim-of',
@@ -1044,6 +1238,7 @@ const WRITTEN: readonly {
                 description:
                     'Print a `ratio` verdict as the one line a bench report shows: a ratio, or why there is none.',
                 registry: '`claimOf` — `@abide/harness/report`',
+                where: 'test',
             },
             {
                 route: '/harness/report/emulated-dom',
@@ -1051,6 +1246,7 @@ const WRITTEN: readonly {
                 description:
                     'Tell `batch` whether a timed op touched an emulated DOM, so a happy-dom duration is refused rather than quoted.',
                 registry: '`emulatedDom` — `@abide/harness/report`',
+                where: 'test',
             },
             {
                 route: '/harness/report/thresholds',
@@ -1058,6 +1254,7 @@ const WRITTEN: readonly {
                 description:
                     'Judge a cost against one frame and the interaction budget, the two lines where a wait becomes visible.',
                 registry: '`THRESHOLDS` — `@abide/harness/report`',
+                where: 'test',
             },
             {
                 route: '/harness/gate/gate',
@@ -1065,6 +1262,7 @@ const WRITTEN: readonly {
                 description:
                     'Write a test that carries its own revert, and prove it fails reporting the number the old version did.',
                 registry: '`gate` — `@abide/harness/gate`',
+                where: 'test',
             },
             {
                 route: '/harness/gate/spawned',
@@ -1072,6 +1270,7 @@ const WRITTEN: readonly {
                 description:
                     'Run a child process from a test, awaited, killed at a deadline that fails the test naming the command.',
                 registry: '`spawned` — `@abide/harness/gate`',
+                where: 'test',
             },
             {
                 route: '/harness/gate/at-most',
@@ -1079,6 +1278,7 @@ const WRITTEN: readonly {
                 description:
                     'Hold a measured op to a ceiling per counter, failing from your line with every field that went over.',
                 registry: '`atMost` — `@abide/harness/gate`',
+                where: 'test',
             },
             {
                 route: '/harness/gate/in-a-fresh-process',
@@ -1086,6 +1286,7 @@ const WRITTEN: readonly {
                 description:
                     'Run source in a child bun with no DOM preloaded and no worker mark, for a check the test process would skew.',
                 registry: '`inAFreshProcess` — `@abide/harness/gate`',
+                where: 'test',
             },
             {
                 route: '/harness/rows/in-scope',
@@ -1093,6 +1294,7 @@ const WRITTEN: readonly {
                 description:
                     'Select runner rows by `--scope`: all of them, one section, or one item.',
                 registry: '`inScope` — `@abide/harness/rows`',
+                where: 'test',
             },
             {
                 route: '/harness/rows/matches-filter',
@@ -1100,6 +1302,7 @@ const WRITTEN: readonly {
                 description:
                     'Filter rows by typed text, matched case-insensitively against section and name, the same way the runner selects.',
                 registry: '`matchesFilter` — `@abide/harness/rows`',
+                where: 'test',
             },
             {
                 route: '/harness/runner/rows-command',
@@ -1107,6 +1310,7 @@ const WRITTEN: readonly {
                 description:
                     'Turn a list of items into a runner command that lists its catalog or streams one JSON row per result.',
                 registry: '`rowsCommand` — `@abide/harness/runner`',
+                where: 'test',
             },
             {
                 route: '/harness/runner/test-rows',
@@ -1114,6 +1318,7 @@ const WRITTEN: readonly {
                 description:
                     "Run an app's test files one process each, printing a `TestRow` per file as it finishes.",
                 registry: '`testRows` — `@abide/harness/runner`',
+                where: 'test',
             },
             {
                 route: '/harness/runner/run-benches',
@@ -1121,6 +1326,7 @@ const WRITTEN: readonly {
                 description:
                     "Run every `*.bench.ts` under an app's `src`, with each arm's time per operation and every ceiling it broke.",
                 registry: '`runBenches` — `@abide/harness/runner`',
+                where: 'test',
             },
             {
                 route: '/harness/abide/measure',
@@ -1129,6 +1335,7 @@ const WRITTEN: readonly {
                 description:
                     "Count the DOM work an op did in a test, with abide's wakes, binding runs and descents beside it.",
                 registry: '`measure` — `@abide/harness/abide`',
+                where: 'test',
             },
             {
                 route: '/harness/abide/preload',
@@ -1136,6 +1343,7 @@ const WRITTEN: readonly {
                 nav: '`abide/preload`',
                 description:
                     'Add one `bunfig.toml` line so tests can import `.abide` files, mount them and measure their work.',
+                where: 'test',
             },
         ],
     },
@@ -1151,23 +1359,26 @@ const WRITTEN: readonly {
                 description:
                     'Scaffold, develop, check, build, serve, call, watch, compile and upgrade an abide app from the terminal.',
                 registry: 'Commands',
+                where: 'terminal',
             },
             {
                 route: '/cli/bridge',
                 title: '`abide-bridge`',
                 description:
                     "Pair your own Claude Code with an abide site's assistant, register its pairing links, and make allowed sites ask again.",
+                where: 'terminal',
             },
         ],
     },
 ]
 
-/** Every group of the site, each page's `nav` and `registry` filled in. */
+/** Every group of the site, each page's `nav`, `registry` and `subgroup` filled in. */
 export const SITE: readonly SiteGroup[] = WRITTEN.map((written) => ({
     ...written,
     pages: written.pages.map((page) => ({
         ...page,
         nav: page.nav ?? page.title,
         registry: page.registry ?? page.title,
+        subgroup: page.subgroup,
     })),
 }))

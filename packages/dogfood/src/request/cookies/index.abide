@@ -1,0 +1,67 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/request/request',
+        '/request/response',
+        '/request/principal',
+        '/reactive/store',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/account/lib/Density.test.ts',
+            from: ["test('the server paints the density the cookie holds'"],
+        },
+        {
+            path: 'packages/abide/tests/cookies.test.ts',
+            from: ["test('a write wakes the readers of that name alone"],
+        },
+    ]}
+>
+    <Section level={3} title="Keep a list density the server paints on reload">
+        <p>Read and write one cookie from the component. The server render reads the same cookie
+            off the request, so a reload paints compact with no flash of the default.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { cookies, reactive } from '@abide/abide'
+
+            const density = reactive(
+                () => cookies().get('density') ?? 'comfortable',
+            )
+            </script>
+
+            <button onclick={() => cookies().set('density', 'compact')}>
+                Compact
+            </button>
+            <ul class={density}>…</ul>
+        `} />
+    </Section>
+
+    <Section level={3} title="Set a cookie from a handler">
+        <p>On the server a write is collected onto the answer as a <code>set-cookie</code>.
+            <code>secure</code> follows <code>NODE_ENV</code> unless you pass it.</p>
+        <Code language="ts" caption="server" code={`
+            import { cookies, POST } from '@abide/abide/server'
+
+            export default POST(({ pipeline }: { pipeline: string }) => {
+                cookies().set('pipeline', pipeline, {
+                    maxAge: 60 * 60 * 24 * 365,
+                    httpOnly: true,
+                })
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Forget a cookie">
+        <p>Delete by name. A reader of that name wakes; readers of other cookies do not.</p>
+        <Code language="ts" caption="shared" code={`
+            import { cookies } from '@abide/abide'
+
+            cookies().delete('pipeline')
+        `} />
+    </Section>
+</Doc>

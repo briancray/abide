@@ -171,11 +171,13 @@ test('every code caption names a syntax or a file', async () => {
 })
 
 // 40.31 — AN EXAMPLE THAT RUNS IS MOUNTED UNDER ITS FENCE, and its twin is the fence alone: the chart
-// the first example of `/helpers/chart` draws is in the page, and none of its tick labels is in
+// the first example of `/headless/chart` draws is in the page, and none of its tick labels is in
 // the twin. THE REVERT: drop the `data-result` skip from `markdownOf`, and `$40K` is in the twin.
 test("an example's file is mounted under its fence, and only the fence is in the twin", async () => {
-    const page = (await renderedHtml()).get('/helpers/chart') ?? ''
-    const twin = written((await renderedMarkdown()).get('/helpers/chart') ?? '')
+    const page = (await renderedHtml()).get('/headless/chart') ?? ''
+    const twin = written(
+        (await renderedMarkdown()).get('/headless/chart') ?? '',
+    )
     expect(page).toMatch(
         /data-result[^>]*>(?:<!--[^>]*-->)*<svg[^>]*aria-label="Won revenue against target"/,
     )

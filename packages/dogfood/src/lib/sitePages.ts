@@ -8,6 +8,8 @@ const HOME: SitePage = {
     description:
         'Type-safe reactive async interfaces for humans and machines. One type, both sides, no API layer.',
     registry: '',
+    where: 'anywhere',
+    subgroup: undefined,
 }
 
 // THE SITE MAP READ BY ROUTE, walked once: every page in reading order, and the group each is in.
@@ -57,6 +59,20 @@ export function neighborsOf(route: string): {
     const at = INDEX_OF.get(route)
     if (at === undefined) throw new Error(`docs: ${route} is not in SITE`)
     return { previous: ORDER[at - 1], next: ORDER[at + 1] }
+}
+
+/** A group's pages in their runs, each under its label, or one run with none where it has no runs (40.37). */
+export function runsOf(
+    group: SiteGroup,
+): { label: string | undefined; pages: SitePage[] }[] {
+    const runs: { label: string | undefined; pages: SitePage[] }[] = []
+    for (const page of group.pages) {
+        const last = runs.at(-1)
+        if (last !== undefined && last.label === page.subgroup)
+            last.pages.push(page)
+        else runs.push({ label: page.subgroup, pages: [page] })
+    }
+    return runs
 }
 
 /** The page's markdown twin: the same words at the same place, with `.md` on the end. */

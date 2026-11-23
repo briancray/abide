@@ -15,7 +15,7 @@ import streamSummary from './lib/StreamSummary.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/abide-files/raw', '/helpers/chat', '/helpers/url']}
+    seeAlso={['/abide-files/raw', '/headless/chat', '/pages/url']}
     tests={[
         {
             path: 'packages/abide/tests/markdown.test.ts',

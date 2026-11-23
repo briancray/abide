@@ -1,0 +1,163 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import SavePhone from './lib/SavePhone.abide'
+import savePhone from './lib/SavePhone.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/prompts', '/operating/report', '/app/on-refusal']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/SavePhone.test.ts',
+            from: ["test('a refused save says why and offers a report'"],
+        },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: [
+                "test('a notice lands at the end of the list and leaves it at its timeout",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: ["test(\"an error's notice outlasts every other tone's"],
+        },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: ["test('a notice tells its onclose once, why it left"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageNotices.test.ts',
+            from: [
+                "test('a notice lands as an item of the list, in a status region'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/SavePhone.test.ts',
+            from: ["test('closing one notice leaves the others where they are'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/SavePhone.test.ts',
+            from: ["test('a notice shows once where two Toasts stand'"],
+        },
+        {
+            path: 'packages/abide/tests/overlays.test.ts',
+            from: ["test('the notices and the prompts are one list per request"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/WonNotice.test.ts',
+            from: [
+                "test('a notice renders in markup the app writes, and stays until its fade has finished'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageNotices.test.ts',
+            from: [
+                "test('Undo puts the stage back and takes the notice down, and Close only takes it down'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Say whether a save landed">
+        <p>A notice takes itself down after three seconds, and an error's after ten, long enough
+            to reach its action.</p>
+        <Example code={savePhone}><SavePhone /></Example>
+    </Section>
+
+    <Section level={3} title="Keep a notice up until the digest is sent">
+        <p>A <code>timeout</code> of <code>Infinity</code> keeps the notice until its close button
+            is pressed or you pass its id to <code>toasts.dismiss</code>.</p>
+        <Code language="ts" caption="browser" code={`
+            import { toasts } from '@abide/abide'
+            import sendDigest from '../sendDigest.handler.ts'
+
+            const id = toasts.notify('Sending the digest…', { timeout: Infinity })
+            await sendDigest()
+            toasts.dismiss(id)
+        `} />
+    </Section>
+
+    <Section level={3} title="Count the undos people take">
+        <p><code>attributes</code> are written onto the notice, for a tag that reads them.
+            <code>onclose</code> is told whether the timeout (<code>'timeout'</code>), a dismissal
+            (<code>'dismissed'</code>) or the action (<code>'action'</code>) took the notice
+            down.</p>
+        <Code language="ts" caption="browser" code={`
+            import { reactive, toasts } from '@abide/abide'
+            import reopenDeal from '../archive/reopenDeal.handler.ts'
+
+            const undos = reactive(0)
+
+            toasts.notify('Analytical Engines pilot archived', {
+                attributes: { 'data-track': 'deal-archived' },
+                action: { label: 'Undo', run: () => reopenDeal() },
+                onclose: (reason) => {
+                    if (reason === 'action') undos.set(undos() + 1)
+                },
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Show every notice of the app in one corner">
+        <p>Call <code>toasts.host</code> from your root layout's script and spread its parts: the
+            live region, and for each of <code>notices</code> its <code>toast(toast)</code> parts:
+            the notice, its text, its action and its close button. Every
+            <code>toasts.notify</code> on every page lands there, read out by screen readers as it
+            arrives. The parts carry the role, the tone and the closing; the markup is yours, and
+            <code>data-tone</code> on each notice is there for its colors.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { toasts } from '@abide/abide'
+
+            const shown = toasts.host({ label: 'Stage changes' })
+            </script>
+
+            <ol {...shown.region} class="fixed right-5 bottom-5 flex flex-col gap-2">
+                {#for toast of shown.notices by toast.id}
+                    <li
+                        {...shown.toast(toast).toast}
+                        class="rounded-lg border px-4 data-[tone=error]:border-bad"
+                    >
+                        <span {...shown.toast(toast).text}>{toast.text}</span>
+                        {#if toast.action}
+                            <button {...shown.toast(toast).action}>
+                                {toast.action.label}
+                            </button>
+                        {/if}
+                        <button {...shown.toast(toast).close}>Close</button>
+                    </li>
+                {/for}
+            </ol>
+        `} />
+    </Section>
+
+    <Section level={3} title="Fade a notice out as it leaves">
+        <p>An element in the notice whose <code>bind:element</code> hands back
+            <code>element.animate(…).finished</code> keeps the notice in the page until the
+            animation ends. <code>dismiss</code> closes it from markup that calls it rather than
+            spreading <code>close</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { toasts } from '@abide/abide'
+
+            const shown = toasts.host()
+            const fadeOut = (element: Element) => () =>
+                element.animate([{ opacity: 1 }, { opacity: 0 }], 200).finished
+            </script>
+
+            <div {...shown.region}>
+                {#for toast of shown.notices by toast.id}
+                    <div {...shown.toast(toast).toast}>
+                        <p bind:element={fadeOut}>
+                            <strong>Won.</strong> {toast.text}
+                            <button onclick={shown.toast(toast).dismiss}>Close</button>
+                        </p>
+                    </div>
+                {/for}
+            </div>
+        `} />
+    </Section>
+</Doc>

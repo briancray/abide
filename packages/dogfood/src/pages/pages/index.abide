@@ -5,12 +5,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={[
-        '/ambient/route',
-        '/helpers/url',
-        '/configuration/files',
-        '/pages/render',
-    ]}
+    seeAlso={['/pages/route', '/pages/url', '/pages/files', '/pages/render']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/companies/CompanyPage.test.ts',

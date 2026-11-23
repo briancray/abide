@@ -14,7 +14,7 @@ function underMount(address: string): string {
 test("a pointer moving under a chart's readout keeps it open — 50.47", async ({
     page,
 }) => {
-    await page.goto(underMount('helpers/chart'), {
+    await page.goto(underMount('headless/chart'), {
         waitUntil: 'networkidle',
     })
     const chart = page

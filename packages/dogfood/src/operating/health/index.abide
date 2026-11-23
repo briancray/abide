@@ -1,0 +1,61 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/app/on-health', '/middleware/middleware', '/request/server']}
+    tests={[
+        {
+            path: 'packages/abide/tests/app.test.ts',
+            from: [
+                "test('/__abide/health answers the account, the app winning collisions",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/Health.test.ts',
+            from: [
+                "test('the health check carries the database beside the baseline'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Point a load balancer at the health check">
+        <p>Every app answers <code>GET /__abide/health</code> with no handler written. A change in
+            <code>startedAt</code> between two scrapes is a restart. The endpoint passes through the
+            app's middleware, so a rung that refuses anonymous callers has to let it through.</p>
+        <Code code={`
+            $ curl localhost:3000/__abide/health
+            {"version":"1.4.0","abide":"0.9.2","startedAt":"2026-11-19T08:00:00.000Z"}
+        `} />
+    </Section>
+
+    <Section level={3} title="Report the database beside the baseline">
+        <p>Return the field from <code>onHealth</code> in the root layout. Your fields win a
+            collision with the baseline's, and <code>onHealth</code>'s page shows how to type
+            them.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { onHealth } from '@abide/abide/server'
+            import { pool } from './lib/pool.server.ts'
+
+            onHealth(() => ({ database: pool.connected ? 'connected' : 'closed' }))
+            </script>
+        `} />
+    </Section>
+
+    <Section level={3} title="Show the account on an operations page">
+        <p><code>health</code> is a handler that takes no arguments, called the same way on both
+            sides.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { health } from '@abide/abide'
+
+            const account = health()
+            </script>
+
+            <p>Up since {account.startedAt}, database {account.database}</p>
+        `} />
+    </Section>
+</Doc>

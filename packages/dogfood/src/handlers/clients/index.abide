@@ -1,0 +1,61 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/handlers/openapi',
+        '/handlers/mcp',
+        '/cli/commands',
+        '/middleware/middleware',
+        '/handlers/get',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/WithheldExport.test.ts',
+            from: ["test('off the tool list, and still answering on its address'"],
+        },
+        {
+            path: 'packages/abide/tests/surfaceOf.test.ts',
+            from: [
+                "test('the shell lists and completes no handler whose clients.cli is false — 20.3, 38.62'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Keep the contacts export off a model's tool list">
+        <p>Set a surface to <code>false</code> in <code>clients</code>. The export is no MCP tool,
+            and its address still answers the page's button.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET } from '@abide/abide/server'
+            import { CONTACTS } from './lib/CONTACTS.server.ts'
+
+            export default GET(() => CONTACTS, {
+                description: 'Every contact, for the export button.',
+                clients: { mcp: false },
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a partner webhook out of every page">
+        <p>With <code>ui: false</code> no page can import the handler: the import fails the
+            build, naming it. OpenAPI, MCP and the command line still list it.</p>
+        <Code language="ts" caption="server" code={`
+            import { POST } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export default POST(
+                ({ id }: { id: string }) => {
+                    const deal = DEALS.find((each) => each.id === id)
+                    if (deal) deal.stage = 'won'
+                },
+                {
+                    description: 'Wins a deal, from the e-signature service.',
+                    clients: { ui: false },
+                },
+            )
+        `} />
+    </Section>
+</Doc>

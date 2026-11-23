@@ -1,0 +1,113 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/pages/pages',
+        '/handlers/get',
+        '/abide-files/blocks',
+        '/cli/commands',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/appAddresses.test.ts',
+            from: [
+                "test('a handler file answers at its path, and a private handler below",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/appAddresses.test.ts',
+            from: ["test('a layout wraps the pages below its route"],
+        },
+        {
+            path: 'packages/abide/tests/appAddresses.test.ts',
+            from: [
+                "test('a page importing a server file under a nested lib fails the build",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Lay out the CRM so each file's path is its address">
+        <p>A page or a handler file answers at its path below <code>src</code>. Code that is no
+            address goes under a <code>lib</code> directory, and anything else beside the pages
+            fails the build.</p>
+        <Code code={`
+            src/
+              layout.abide                 wraps every page
+              index.abide                  /
+              contacts/
+                index.abide                /contacts
+                listContacts.handler.ts    GET /contacts/listContacts
+                lib/ContactList.abide      no address
+                lib/ContactList.test.ts    run by bun test
+              companies/
+                [id=SLUG].abide            /companies/hopper-and-co
+                SLUG.param.ts              what an id matches
+                error.abide                a refusal below /companies
+              public/icon.png              /icon.png
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep the database out of every browser bundle">
+        <p>A <code>&lt;name&gt;.server.ts</code> under <code>lib</code> runs on the server alone.
+            A page that imports it fails the build.</p>
+        <Code language="ts" caption="server" code={`
+            import { Database } from 'bun:sqlite'
+
+            export const db = new Database('crm.sqlite')
+        `} />
+    </Section>
+
+    <Section level={3} title="Share a header across the companies pages">
+        <p>A <code>layout.abide</code> wraps every page at its directory and below, and the page
+            renders at its <code>&lt;slot/&gt;</code>. Moving between those pages keeps the
+            layout.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive, url } from '@abide/abide'
+            let note = reactive('')
+            </script>
+
+            <header>
+                <a href={url('/companies')}>All companies</a>
+                <input bind:value={note} placeholder="Note for the call">
+            </header>
+
+            <slot />
+        `} />
+    </Section>
+
+    <Section level={3} title="Paint a 404 for a company that was merged away">
+        <p>The nearest <code>error.abide</code> above a failing page renders the refusal it is
+            handed as <code>failure</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { type Failed, props, refuse } from '@abide/abide'
+            const { failure } = props<{ failure: Failed<string, unknown> }>()
+            </script>
+
+            {#if refuse.notFound.is(failure)}
+                <h2>No such company</h2>
+            {:else}
+                <p>{failure.message}</p>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Build Tailwind with the client and import pages in tests">
+        <p><code>bunfig.toml</code> names the plugins the client is built with, and the test
+            preload that lets a test import a <code>.abide</code>. A new app preloads the
+            harness's, which is a DOM to mount in and then <code>@abide/abide/test</code>. Preload
+            <code>@abide/abide/test</code> alone where your tests bring their own DOM.</p>
+        <Code code={`
+            [serve.static]
+            plugins = ["bun-plugin-tailwind"]
+
+            [test]
+            preload = ["@abide/harness/abide/preload"]
+        `} />
+    </Section>
+</Doc>

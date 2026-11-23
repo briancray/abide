@@ -1,0 +1,95 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CallQueue from './lib/CallQueue.abide'
+import callQueue from './lib/CallQueue.abide' with { type: 'text' }
+import LeadBatch from './lib/LeadBatch.abide'
+import leadBatch from './lib/LeadBatch.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/headless/combobox',
+        '/behaviors/hotkeys',
+        '/abide-files/control-flow',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: [
+                "test('the active key stays on its option while the list changes",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: ["test('the arrows go round the ends unless `wrap` is off"],
+        },
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: ["test('Enter picks and Escape calls `onescape`"],
+        },
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: [
+                "test('a click selects one, `mod` toggles, and Shift selects the run from the anchor",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: [
+                "test('Space toggles, Shift with an arrow extends, and `mod+a` selects all",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/listbox.test.ts',
+            from: [
+                "test('selecting one, the selection is the key last moved to, and a click picks it",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Walk a call queue of leads with the arrow keys">
+        <p>Hand <code>listbox</code> the options — a list, or a function reading one live — and the key each is told apart by,
+            and give the focused element its <code>onkeydown</code>. The arrows step, Home and End
+            jump, and Enter calls <code>onpick</code>.</p>
+        <Example code={callQueue}><CallQueue /></Example>
+    </Section>
+
+    <Section level={3} title="Mark the active lead, and call one on a click">
+        <p>Spread <code>listbox</code> on the list and <code>option(key)</code> on each option:
+            the option carries its id, its role, <code>aria-selected</code> and
+            <code>data-active</code>, a pointer resting on it makes it active, and a click calls
+            <code>onpick</code> with it. <code>idOf(key)</code> and <code>active</code> stay for
+            markup of your own.</p>
+        <Code language="abide" caption="abide" code={`
+            {#for deal of leads by deal.id}
+                <li {...queue.option(deal.id)}>{deal.name}</li>
+            {/for}
+        `} />
+    </Section>
+
+    <Section level={3} title="Hand several leads over at once">
+        <p><code>multiple</code> selects many, and <code>selected</code> holds their keys. A click
+            selects one lead, ⌘ or Ctrl with it adds or takes one out, and Shift takes the run from
+            the last one picked. Space, Shift with an arrow and ⌘A or Ctrl+A do the same from the
+            keys.</p>
+        <Example code={leadBatch}><LeadBatch /></Example>
+    </Section>
+
+    <Section level={3} title="Keep the place in a list that keeps changing">
+        <p>The active option is a key, so it stays on its lead while the list changes around it. Once
+            the list no longer holds it, the first option is active.</p>
+        <Code language="ts" caption="shared" code={`
+            import { listbox, reactive } from '@abide/abide'
+
+            const leads = reactive([ada, grace, linus])
+            const queue = listbox({ id: 'leads', options: leads, key: (lead) => lead.id })
+            queue.activate('grace')
+            leads.set([ada, grace]) // grace stays active
+            leads.set([ada]) // ada, the first, is active
+        `} />
+    </Section>
+</Doc>

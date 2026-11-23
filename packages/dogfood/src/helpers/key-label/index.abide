@@ -12,9 +12,9 @@ import saveLabel from './lib/SaveLabel.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
-        '/helpers/hotkeys',
-        '/helpers/is-editable-target',
-        '/components/tooltip',
+        '/behaviors/hotkeys',
+        '/behaviors/is-editable-target',
+        '/headless/tooltip',
     ]}
     tests={[
         {

@@ -1,0 +1,99 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import DropContract from './lib/DropContract.abide'
+import dropContract from './lib/DropContract.abide' with { type: 'text' }
+import LightUp from './lib/LightUp.abide'
+import lightUp from './lib/LightUp.abide' with { type: 'text' }
+import PasteScreenshot from './lib/PasteScreenshot.abide'
+import pasteScreenshot from './lib/PasteScreenshot.abide' with { type: 'text' }
+import PickOrDrop from './lib/PickOrDrop.abide'
+import pickOrDrop from './lib/PickOrDrop.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/behaviors/observe',
+        '/ai/image-files',
+        '/ai/image-piece',
+        '/behaviors/dismissible',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a drop takes what accept takes, by type, extension or function",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: ["test('data-dragging stays while a drag crosses into a child"],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a paste of files is a drop, and words pasted alone paste",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('the files a drop carries and does not take are handed to onreject",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a pick through the input lands in files, filtered as a drop is",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a drop replaces the files, keeps one under multiple false",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Attach a signed contract dropped on a deal">
+        <p>Spread <code>host</code> on the drop target. <code>accept</code> reads as an
+            <code>&lt;input type="file"&gt;</code>'s does, and <code>files</code> holds what the
+            last drop took.</p>
+        <Example code={dropContract}><DropContract /></Example>
+    </Section>
+
+    <Section level={3} title="Light up the drop target while files hover">
+        <p>The host carries <code>data-dragging</code> while files are dragged over it, its
+            children included. Style that attribute.</p>
+        <Example code={lightUp}><LightUp /></Example>
+    </Section>
+
+    <Section level={3} title="Take a screenshot pasted into a note">
+        <p>With <code>paste: true</code> a paste of files is a drop, and words pasted alone paste
+            as usual. <code>multiple: false</code> takes the first file alone.</p>
+        <Example code={pasteScreenshot}><PasteScreenshot /></Example>
+    </Section>
+    <Section level={3} title="Let a keyboard choose the file a pointer would drop">
+        <p>Spread <code>input</code> on a file input inside the host: a file chosen through it
+            is taken as a drop is, filtered by the same <code>accept</code>, and
+            <code>rejected</code> holds what was turned away.</p>
+        <Example code={pickOrDrop}><PickOrDrop /></Example>
+    </Section>
+
+    <Section level={3} title="Say which dropped files a deal turned away">
+        <p><code>onreject</code> is handed the files a drop, a paste or a pick carried that
+            <code>accept</code> or <code>multiple</code> did not take.</p>
+        <Code language="ts" caption="browser" code={`
+            import { dropzone, toasts } from '@abide/abide'
+
+            const drop = dropzone({
+                accept: '.pdf',
+                onreject: (files) =>
+                    toasts.notify(\`\${files.length} not a PDF\`, { tone: 'error' }),
+            })
+        `} />
+    </Section>
+</Doc>

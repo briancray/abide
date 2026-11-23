@@ -80,7 +80,7 @@ test('a link to another page navigates without reloading — 30.7', async ({
         ).__KEPT__ = 'yes'
     })
 
-    await page.click(`nav a[href="${underMount('/transports/get')}"]`)
+    await page.click(`nav a[href="${underMount('/handlers/get')}"]`)
 
     await expect(page.locator('main h1')).toHaveText('GET')
     // 39.6 — the incoming page's head replaced the outgoing page's, by key.
@@ -88,7 +88,7 @@ test('a link to another page navigates without reloading — 30.7', async ({
     expect(
         await page.evaluate(() => (window as { __KEPT__?: string }).__KEPT__),
     ).toBe('yes')
-    expect(new URL(page.url()).pathname).toBe(underMount('/transports/get'))
+    expect(new URL(page.url()).pathname).toBe(underMount('/handlers/get'))
     // THE NAV IS THE ONE THING SHARED BETWEEN TWO PAGES, and the mark on it is the only part
     // that differs — so a navigation that rebuilt the nav from the wrong page's slug shows
     // here and nowhere else.

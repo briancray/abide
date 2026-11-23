@@ -13,7 +13,7 @@ function underMount(address: string): string {
 test('a combobox in a box that clips it opens its list past the box — 51.57', async ({
     page,
 }) => {
-    await page.goto(underMount('helpers/combobox'), {
+    await page.goto(underMount('headless/combobox'), {
         waitUntil: 'networkidle',
     })
     const input = page.locator('#clipped-name')
@@ -52,7 +52,7 @@ test('a combobox in a box that clips it opens its list past the box — 51.57', 
 test('a press on the field opens its list once, and a second press shuts it — 51.92', async ({
     page,
 }) => {
-    await page.goto(underMount('helpers/combobox'), {
+    await page.goto(underMount('headless/combobox'), {
         waitUntil: 'networkidle',
     })
     const input = page.locator('#deal-owner')

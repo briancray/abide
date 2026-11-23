@@ -1,0 +1,107 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import HeaderMenus from './lib/HeaderMenus.abide'
+import headerMenus from './lib/HeaderMenus.abide' with { type: 'text' }
+import IconMenu from './lib/IconMenu.abide'
+import iconMenu from './lib/IconMenu.abide' with { type: 'text' }
+import MoveStage from './lib/MoveStage.abide'
+import moveStage from './lib/MoveStage.abide' with { type: 'text' }
+import OpenElsewhere from './lib/OpenElsewhere.abide'
+import openElsewhere from './lib/OpenElsewhere.abide' with { type: 'text' }
+import OpenLayout from './lib/OpenLayout.abide'
+import openLayout from './lib/OpenLayout.abide' with { type: 'text' }
+import PinDeal from './lib/PinDeal.abide'
+import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/tooltip', '/headless/popover', '/behaviors/hotkeys']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
+            from: ["test('the arrow keys skip the stage the deal is in'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
+            from: ["test('a pick moves the deal and hands focus back'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
+            from: [
+                "test('a checkbox item changes its state and leaves the menu open'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
+            from: [
+                "test('typing moves focus to the item whose text starts with it'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/menu.test.ts',
+            from: ["test('open written by the app opens and closes the menu"],
+        },
+        {
+            path: 'packages/abide/tests/menu.test.ts',
+            from: [
+                "test('a mouse resting on the trigger opens the menu after openOnHover",
+                "test('a menu a pointer opened closes once the pointer has left",
+                "test('a group switches to the menu whose trigger the pointer enters",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Move a deal to another stage from a menu">
+        <p>Spread <code>trigger</code> on a button and <code>menu</code> on the element holding
+            the items. Each child carrying <code>role="menuitem"</code> is an item. A disabled
+            one is passed over by the arrow keys, and a pick runs its own
+            <code>onclick</code>.</p>
+        <Example code={moveStage}><MoveStage /></Example>
+    </Section>
+
+    <Section level={3} title="Open a menu from an icon">
+        <p>The trigger is your own element, so it holds anything, and its
+            <code>aria-label</code> names the menu.</p>
+        <Example code={iconMenu}><IconMenu /></Example>
+    </Section>
+
+    <Section level={3} title="Pin a deal from a menu that stays open">
+        <p>An item carrying <code>role="menuitemcheckbox"</code> or
+            <code>role="menuitemradio"</code> leaves the menu open. Write its
+            <code>aria-checked</code> from your own state.</p>
+        <Example code={pinDeal}><PinDeal /></Example>
+    </Section>
+
+    <Section level={3} title="Open a menu from somewhere else">
+        <p>Hand <code>menu</code> a <code>Reactive</code> as <code>open</code>. Writing it opens
+            and closes the menu, and every way the menu closes writes it back.
+            <code>onopen</code> and <code>onclose</code> hear each.</p>
+        <Example code={openElsewhere}><OpenElsewhere /></Example>
+    </Section>
+
+    <Section level={3} title="Lay out an open menu while a closed menu stays hidden">
+        <p>The menu is a popover. A <code>display</code> class beats the browser's hiding of a
+            closed popover, so set it behind <code>open:</code>.</p>
+        <Example code={openLayout}><OpenLayout /></Example>
+    </Section>
+
+    <Section level={3} title="Switch between a header's menus on hover">
+        <p>Give menus one <code>group</code>. Once one is open, the pointer on another's trigger
+            opens it at once, and ArrowLeft and ArrowRight step between them.
+            <code>openOnHover</code> opens one when a mouse rests on its trigger, and
+            <code>closeOnLeave</code> closes a menu a pointer opened once the pointer has left it.
+            A menu a key opened stays open. The menu switched to carries <code>data-from</code>,
+            the side the last one stood on, so it can slide in from there.</p>
+        <p>For a site's navigation links, a disclosure — a <code>popover</code> opened by a
+            button — reads better to a screen reader than a menu, which announces commands.</p>
+        <Example code={headerMenus}><HeaderMenus /></Example>
+    </Section>
+
+    <Section level={3} title="Jump to an item by typing">
+        <p>A letter typed in an open menu moves focus to the next item starting with it, and
+            letters typed together find the first item starting with the word.</p>
+    </Section>
+</Doc>

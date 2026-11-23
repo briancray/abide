@@ -350,6 +350,63 @@ test('every registry section is carried by exactly one page', async () => {
     expect(wrong).toEqual([])
 })
 
+// 40.2 — A PAGE IS LISTED UNDER ITS SECTION'S GROUP: the nav and REGISTRY file a name in one place,
+// so a reader who found it in one finds it in the other. THE REVERT: move `/headless/dialog` into
+// `Element behaviors` in `SITE`, and it is listed under a group its section is not in.
+test("every page is listed under its section's REGISTRY group", () => {
+    const groupOfSection = new Map<string, string>()
+    for (const row of registryRows(registry))
+        groupOfSection.set(row.section, row.group)
+    const misfiled: string[] = []
+    for (const group of SITE)
+        for (const page of group.pages) {
+            const filed = groupOfSection.get(page.registry)
+            if (filed !== group.group)
+                misfiled.push(`${page.route}: ${group.group}, not ${filed}`)
+        }
+    expect(misfiled).toEqual([])
+})
+
+// 40.36 — WHAT A PAGE SAYS OF ITS SIDE IS WHAT THE BARRELS EXPORT, read off them rather than off the
+// page: a name only `@abide/abide/server` exports cannot be imported in the browser, and one
+// `@abide/abide` exports can. THE REVERT: mark `/middleware/signed-in` as `anywhere`, and it is a
+// server-only name said to run on both sides.
+test('a page says it runs on the server exactly where its name is server-only', async () => {
+    const entryOf = new Map<string, string>()
+    for (const { entry, scope, name } of await declaredExports())
+        if (scope === 'abide') entryOf.set(name, entry)
+    const wrong: string[] = []
+    for (const group of SITE)
+        for (const page of group.pages) {
+            if (/@abide\/harness/.test(page.registry)) continue
+            const name = /^`([\w$]+)`/.exec(page.registry)?.[1]
+            const entry = name === undefined ? undefined : entryOf.get(name)
+            if (entry === undefined) continue
+            const serverOnly = entry === '@abide/abide/server'
+            if (serverOnly !== (page.where === 'server'))
+                wrong.push(`${page.route}: ${page.where}, exported by ${entry}`)
+        }
+    expect(wrong).toEqual([])
+})
+
+// 40.37 — A RUN IS ADJACENT: a label the nav prints once heads every page filed under it, so a run
+// split by another is two headings of one name. THE REVERT: file `/headless/carousel` under `Overlays`.
+test('the pages of one run are adjacent in their group', () => {
+    const split: string[] = []
+    for (const group of SITE) {
+        const closed = new Set<string>()
+        let open: string | undefined
+        for (const page of group.pages) {
+            if (page.subgroup === open) continue
+            if (open !== undefined) closed.add(open)
+            if (page.subgroup !== undefined && closed.has(page.subgroup))
+                split.push(`${group.group}: ${page.subgroup} at ${page.route}`)
+            open = page.subgroup
+        }
+    }
+    expect(split).toEqual([])
+})
+
 // docs/BRAND.md, Documentation structure: "A label stands alone." A nav label is read with no
 // sentence around it, so a preposition and a single word waits for a noun the reader does not have.
 const BARE_PREPOSITIONAL =
@@ -642,7 +699,7 @@ test('a signature is short above the examples and whole in Types', async () => {
 // form by parameter names alone reads the same for every one of them — `GET`'s nine all read
 // `(handler, options?) => Rpc<…>`. So the parameter whose type tells them apart keeps it. Read off
 // each page's tables above its Examples, as a reader sees them. THE REVERT: pass no `typed` to
-// `shortSignature` in `Registry.abide`'s `cellsShown`, and `/transports/get` is named.
+// `shortSignature` in `Registry.abide`'s `cellsShown`, and `/handlers/get` is named.
 test('no two overloads of a name read the same in a short form', async () => {
     const same: string[] = []
     for (const [route, body] of await renderedMarkdown()) {
@@ -698,14 +755,14 @@ test('the syntax shows what is called, a type being in Types alone', async () =>
 test("an object a page's call takes is spelled out beneath its syntax", async () => {
     const expected: [string, string, string[]][] = [
         [
-            '/helpers/dialog',
+            '/headless/dialog',
             '`options?: DialogOptions`',
             ['`open?`', '`modal?`', '`dismissible?`', '`onclose?`'],
         ],
-        ['/helpers/tree', '`options: TreeOptions`', ['`children`', '`key?`']],
+        ['/headless/tree', '`options: TreeOptions`', ['`children`', '`key?`']],
         // An intersection: `Omit<PopoverOptions, 'side'> & { side?; delay? }`, a row of another section.
         [
-            '/components/tooltip',
+            '/headless/tooltip',
             '`options?: TooltipOptions`',
             ['`margin?`', '`side?`', '`delay?`'],
         ],

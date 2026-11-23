@@ -13,7 +13,7 @@ function underMount(address: string): string {
 test('a key opens the palette, Enter runs a command, Escape shuts it, and focus comes back — 51.65, 51.68, 51.69', async ({
     page,
 }) => {
-    await page.goto(underMount('helpers/command-palette'), {
+    await page.goto(underMount('headless/command-palette'), {
         waitUntil: 'networkidle',
     })
     // `mod` as the page reads it (53.3): the project's device names its own platform.

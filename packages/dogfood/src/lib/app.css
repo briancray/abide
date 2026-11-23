@@ -203,6 +203,11 @@
         @apply font-medium;
     }
 
+    /* Where a page's name is written and on which side it runs (40.36). */
+    .where {
+        @apply mt-snug text-chrome text-muted;
+    }
+
     .eyebrow {
         @apply font-mono text-micro/2 font-medium tracking-caps text-muted uppercase;
     }

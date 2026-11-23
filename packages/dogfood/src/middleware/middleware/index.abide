@@ -1,0 +1,69 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/middleware/require-role',
+        '/middleware/read-only',
+        '/app/on-error',
+        '/request/principal',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/account/lib/AdminSection.test.ts',
+            from: [
+                "test('a page is refused as a page, a handler as Problem Details'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/app.test.ts',
+            from: ["test('middleware wraps every lane, first registered outermost"],
+        },
+    ]}
+>
+    <Section level={3} title="Guard a whole admin section with one rung">
+        <p>Call <code>middleware</code> in a layout's <code>&lt;script server&gt;</code> and the
+            rung runs over every page and handler under its route. The refusal is answered in each
+            lane: the section's <code>error.abide</code> paints a page, and a handler answers
+            Problem Details.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { principal, refuse } from '@abide/abide'
+            import { middleware } from '@abide/abide/server'
+
+            // Over every page and handler under src/account/admin.
+            middleware(async (next) => {
+                const { role } = await principal.resolved
+                return role === 'admin' ? next() : refuse(403, 'Admins only.')
+            })
+            </script>
+
+            <slot />
+        `} />
+    </Section>
+
+    <Section level={3} title="Send signed-out visitors to the sign-in page, and no one else">
+        <p>A rung in the root <code>src/layout.abide</code> runs before routing, over every
+            request, abide's own addresses included. Test <code>lane</code> to gate pages alone.
+            The request's path is read below the mount, and <code>url</code> puts the mount back
+            on the redirect.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { principal, url } from '@abide/abide'
+            import { middleware } from '@abide/abide/server'
+
+            middleware(async (next, { request, lane }) => {
+                if (lane !== 'page') return next()
+                if ((await principal.resolved).authenticated) return next()
+                if (new URL(request.url).pathname === '/account') return next()
+                return Response.redirect(url('/account'))
+            })
+            </script>
+
+            <slot />
+        `} />
+    </Section>
+</Doc>

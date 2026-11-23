@@ -21,7 +21,7 @@ function underMount(address: string): string {
 test('a listbox selecting many takes a click, mod, Shift, Space and mod+a — 51.99-51.103', async ({
     page,
 }) => {
-    await page.goto(underMount('helpers/listbox'), {
+    await page.goto(underMount('headless/listbox'), {
         waitUntil: 'networkidle',
     })
     const mod = await modOf(page)
@@ -57,7 +57,7 @@ test('a listbox selecting many takes a click, mod, Shift, Space and mod+a — 51
 test('a tree selecting many keeps focus with the keys as Shift carries the run — 51.98, 51.103', async ({
     page,
 }) => {
-    await page.goto(underMount('helpers/tree'), { waitUntil: 'networkidle' })
+    await page.goto(underMount('headless/tree'), { waitUntil: 'networkidle' })
     const mod = await modOf(page)
     const tree = page.locator('[aria-label="Campaign accounts"]')
     await expect(tree).toHaveAttribute('aria-multiselectable', 'true')

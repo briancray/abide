@@ -1,0 +1,65 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import RestOnStage from './lib/RestOnStage.abide'
+import restOnStage from './lib/RestOnStage.abide' with { type: 'text' }
+import StepStages from './lib/StepStages.abide'
+import stepStages from './lib/StepStages.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/tabs', '/headless/virtual-list', '/behaviors/observe']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageCarousel.test.ts',
+            from: [
+                'test("the stages rest on the deal\'s own, each a slide named for its stage"',
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageCarousel.test.ts',
+            from: [
+                'test("next and previous step through the stages, and reset comes back to the deal\'s"',
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageCarousel.test.ts',
+            from: ["test('moving the deal to a stage rests the carousel on it'"],
+        },
+        {
+            path: 'packages/abide/tests/carousel.test.ts',
+            from: [
+                "test('what a scroll to an item passes on the way is not centered",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/carousel.test.ts',
+            from: [
+                "test('once the scroller reports a snap, the snap target alone sets centered",
+            ],
+        },
+        {
+            path: 'packages/abide/e2e/carousel.spec.ts',
+            from: ["test('a scroll moves centered to the item it snaps to"],
+        },
+    ]}
+>
+    <Section level={3} title="Rest a row of stages on the deal's own">
+        <p>Spread <code>host</code> on the scroller and <code>item</code> on each stage. The
+            page arrives scrolled to the stage <code>selected</code> names, and
+            <code>centered</code> follows the stage a swipe lands on. The snapping is your CSS:
+            give the scroller <code>snap-x</code> and each item <code>snap-center</code>, and pad
+            the scroller by half of what an item leaves (<code>px-[12.5%]</code> beside
+            <code>basis-3/4</code>) so the first and last stages can reach the center too.</p>
+        <Example code={restOnStage}><RestOnStage /></Example>
+    </Section>
+
+    <Section level={3} title="Step through stages with buttons, and go back to where it rests">
+        <p>Spread <code>previous</code> and <code>next</code> on two buttons: each steps from
+            the centered stage and is disabled at its end. <code>reset</code> scrolls back to
+            the stage the carousel rests on, the first where nothing is selected.</p>
+        <Example code={stepStages}><StepStages /></Example>
+    </Section>
+</Doc>

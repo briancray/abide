@@ -1,0 +1,45 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/middleware/signed-in',
+        '/middleware/require-role',
+        '/request/request',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/trustedIdentity.test.ts',
+            from: [
+                "test('a header from a trusted proxy signs the caller in, and from anyone else is ignored",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/trustedIdentity.test.ts',
+            from: [
+                "test('a caller a proxy names is signed in for the request alone, with no cookie sealed",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Sign in the rep the company's gateway names">
+        <p>File <code>trustedIdentity</code> ahead of the rungs that check a caller. The header is
+            believed only on a request whose peer is one of <code>proxies</code>, an address or a
+            subnet, so a caller who writes it themselves is no one. The caller is signed in for
+            that request alone, and no cookie is sealed.</p>
+        <Code language="ts" caption="server" code={`
+            import { middleware, trustedIdentity } from '@abide/abide/server'
+
+            middleware(
+                trustedIdentity({
+                    header: 'x-forwarded-user',
+                    proxies: ['10.0.0.0/8'],
+                    claims: (email) => ({ email }),
+                }),
+            )
+        `} />
+    </Section>
+</Doc>

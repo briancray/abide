@@ -1,0 +1,83 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/handlers/get',
+        '/handlers/post',
+        '/abide-files/blocks',
+        '/pages/pages',
+        '/pages/url',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/appAddresses.test.ts',
+            from: [
+                "test('a handler file answers at its path, and a private handler below /__abide/handlers — 16.2, 16.70, 23.3, 23.14'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/appAddresses.test.ts',
+            from: [
+                "test('a route parameter reaches the handler, typed, whatever the method — 16.65'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealNotes.test.ts',
+            from: ["test('the private handler answers below /__abide/handlers'"],
+        },
+    ]}
+>
+    <Section level={3} title="Find a handler's address from its file">
+        <p>Name a file <code>&lt;name&gt;.handler.ts</code> anywhere under <code>src</code>. Its
+            path, less the suffix, is the address it answers at.</p>
+        <Code code={`
+            src/
+              health.handler.ts          GET  /health
+              deals/
+                getDeal.handler.ts       GET  /deals/getDeal
+                createDeal.handler.ts    POST /deals/createDeal
+        `} />
+    </Section>
+
+    <Section level={3} title="Take a deal's id from the path">
+        <p>Put a <code>[param]</code> directory in the path and declare the parameter in the
+            handler's <code>Args</code>. A call with <code>&#123; id: 'd2' &#125;</code> goes to
+            <code>/deals/d2/close</code>.</p>
+        <Code language="ts" caption="server" code={`
+            // src/deals/[id]/close.handler.ts
+            import { POST } from '@abide/abide/server'
+            import { DEALS } from '../../lib/DEALS.server.ts'
+
+            export default POST(({ id }: { id: string }) => {
+                const deal = DEALS.find((each) => each.id === id)
+                if (deal) deal.stage = 'won'
+                return deal ?? null
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep the notes handler inside the one card showing notes">
+        <p>Declare the handler as a <code>const</code> in the component's <code>&lt;script server&gt;</code>.
+            It answers under <code>/__abide/handlers</code> at the file's path and its name, and
+            no surface lists it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { GET } from '@abide/abide/server'
+
+            const NOTES: Record<string, string[]> = { d1: ['Wants a 3-year term.'] }
+            const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
+            </script>
+
+            <script>
+            import { reactive } from '@abide/abide'
+            const notes = reactive(() => getNotes({ id: 'd1' }))
+            </script>
+
+            {#for note of notes}<p>{note}</p>{/for}
+        `} />
+    </Section>
+</Doc>

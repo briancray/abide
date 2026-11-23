@@ -1,0 +1,101 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import LondonWeeks from './lib/LondonWeeks.abide'
+import londonWeeks from './lib/LondonWeeks.abide' with { type: 'text' }
+import OpenOnTheDay from './lib/OpenOnTheDay.abide'
+import openOnTheDay from './lib/OpenOnTheDay.abide' with { type: 'text' }
+import PickCloseDate from './lib/PickCloseDate.abide'
+import pickCloseDate from './lib/PickCloseDate.abide' with { type: 'text' }
+import PickRange from './lib/PickRange.abide'
+import pickRange from './lib/PickRange.abide' with { type: 'text' }
+import TwoMonths from './lib/TwoMonths.abide'
+import twoMonths from './lib/TwoMonths.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/helpers/format', '/headless/tree', '/headless/time']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/CloseCalendar.test.ts',
+            from: [
+                "test('the month is whole weeks, each deal on the day it closes'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/CloseCalendar.test.ts',
+            from: [
+                "test('the arrows move the day focused into the next month, and Enter picks it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/CloseCalendar.test.ts',
+            from: ["test('a click picks a day, and the buttons page the month'"],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: [
+                "test('a daylight-saving change drops and repeats no day, in every zone'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: [
+                "test('two months share one tab stop, and the arrows cross between their grids'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: [
+                "test('a range picks a start, then an end, swapped where it falls before the start'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: [
+                "test('while a range has no end, the days up to the one focused are previewed'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: ["test('active is the day in the tab order, and idOf its cell'"],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: [
+                'test("a week starts on the locale\'s first day, or on the one given"',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Pick a deal's close date from a month of days">
+        <p>Hand <code>calendar</code> the date you hold as <code>selected</code>, and spread its
+            parts on markup of your own: a grid per month, a row per week, a cell per day. A click or Enter
+            picks a day; the arrows, Page Up and Page Down move through the days and the months.</p>
+        <Example code={pickCloseDate}><PickCloseDate /></Example>
+    </Section>
+    <Section level={3} title="Show two months side by side">
+        <p>Name how many <code>months</code> to show and spread each one's grid. They are one
+            calendar: one day in the tab order, and the arrows walk from one month into the
+            next.</p>
+        <Example code={twoMonths}><TwoMonths /></Example>
+    </Section>
+    <Section level={3} title="Pick a range of days">
+        <p>Set <code>range</code> and the first pick is the start, the next the end, whichever
+            order they come in. Until the end is picked, the days up to the one pointed at or
+            focused carry <code>data-preview</code>.</p>
+        <Example code={pickRange}><PickRange /></Example>
+    </Section>
+    <Section level={3} title="Open it from a button, on the day the keys move from">
+        <p>Spread <code>popover</code>'s parts around the grid, and focus the cell
+            <code>idOf</code> names for <code>active</code> as it opens.</p>
+        <Example code={openOnTheDay}><OpenOnTheDay /></Example>
+    </Section>
+    <Section level={3} title="Start each week on the first day of your team's locale">
+        <p>Name the <code>locale</code> and the week starts where that locale starts it, Monday in
+            London.</p>
+        <Example code={londonWeeks}><LondonWeeks /></Example>
+    </Section>
+</Doc>

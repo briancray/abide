@@ -15,7 +15,7 @@ test('a logged call reads now, and a minute on reads 1 minute ago — 52.73', as
     page,
 }) => {
     await page.clock.install()
-    await page.goto(underMount('helpers/time'), {
+    await page.goto(underMount('headless/time'), {
         waitUntil: 'networkidle',
     })
     await page.getByRole('button', { name: 'Log a call' }).click()
@@ -34,12 +34,12 @@ test('a page whose clock is a year on from the server writes its own label, with
             warnings.push(message.text())
     })
     const served = await (
-        await page.request.get(underMount('helpers/time'))
+        await page.request.get(underMount('headless/time'))
     ).text()
     const serverLabel = /Last touched <time[^>]*>([^<]*)</.exec(served)?.[1]
     // A year on always turns the label: a year more is a unit or a count more.
     await page.clock.install({ time: Date.now() + 365 * 86_400_000 })
-    await page.goto(underMount('helpers/time'), {
+    await page.goto(underMount('headless/time'), {
         waitUntil: 'networkidle',
     })
     const label = page.locator('p', { hasText: 'Last touched' }).locator('time')

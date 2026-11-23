@@ -14,7 +14,7 @@ function underMount(address: string): string {
 test('a grid of three thousand deals makes only the rows in view, and jumps by letter — 51.58, 51.59, 51.64, 51.95, 51.96', async ({
     page,
 }) => {
-    await page.goto(underMount('helpers/virtual-list'), {
+    await page.goto(underMount('headless/virtual-list'), {
         waitUntil: 'networkidle',
     })
     const frame = page.locator('.result').nth(1)

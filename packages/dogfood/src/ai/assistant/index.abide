@@ -9,8 +9,8 @@ import Section from '#src/lib/Section.abide'
         '/ai/provider',
         '/ai/results-of',
         '/ai/transcript',
-        '/helpers/chat',
-        '/surfaces/mcp',
+        '/headless/chat',
+        '/handlers/mcp',
     ]}
     tests={[
         {

@@ -1,0 +1,61 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/request/reachable',
+        '/browser/outbox',
+        '/browser/media',
+        '/reactive/refresh',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/OfflineBanner.test.ts',
+            from: [
+                "test('the banner shows while the browser is offline, and goes'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/isServer.test.ts',
+            from: [
+                "test('a request answered beside a DOM is a server, and an effect throw does not fail it",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Tell the rep the browser is offline">
+        <p>Read <code>online</code> by name. There is no listener to add or remove. On the server
+            it is <code>true</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { online } from '@abide/abide'
+            </script>
+
+            {#if !online}
+                <p>You are offline. Calls you log are sent once you are back.</p>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Catch up when the connection returns">
+        <p><code>false</code> is certain and <code>true</code> is a guess: a dead server reads as
+            online. Refresh on the way back rather than gating a load on it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { online, refresh, watch } from '@abide/abide'
+
+            let wentOffline = false
+            watch(() => {
+                if (!online) wentOffline = true
+                else if (wentOffline) {
+                    wentOffline = false
+                    refresh()
+                }
+            })
+            </script>
+        `} />
+    </Section>
+</Doc>

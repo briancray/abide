@@ -5,6 +5,7 @@ import Doc from '#src/lib/Doc.abide'
 import type { Heading } from '#src/lib/Heading.ts'
 import { inline, slugify } from '#src/lib/inline.ts'
 import { SITE } from '#src/lib/SITE.ts'
+import { runsOf } from '#src/lib/sitePages.ts'
 
 // THE RAIL'S HEADINGS, filed here rather than by a `<Section>` per group: the groups are a loop, and
 // a heading filed from inside one lands after `<Doc>` has decided whether there is a rail.
@@ -28,11 +29,16 @@ headings = filed
         <section><div class="flow">
                 <h2 id={slugify(group.group)}>{raw(inline(group.group))}</h2>
                 <p>{raw(inline(group.description))}</p>
-                <ul class="index">
-                    {#for page of group.pages}
-                        <li><a href={url(page.route as RouteLiteral)}>{raw(inline(page.title))}</a> — {raw(inline(page.description))}</li>
-                    {/for}
-                </ul>
+                {#for run of runsOf(group)}
+                    {#if run.label}
+                        <h3>{run.label}</h3>
+                    {/if}
+                    <ul class="index">
+                        {#for page of run.pages}
+                            <li><a href={url(page.route as RouteLiteral)}>{raw(inline(page.title))}</a> — {raw(inline(page.description))}</li>
+                        {/for}
+                    </ul>
+                {/for}
             </div></section>
     {/for}
 </Doc>

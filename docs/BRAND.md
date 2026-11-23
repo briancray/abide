@@ -171,8 +171,8 @@ it writes, grouped as REGISTRY groups them, and a prompt above every page that a
 
 | | |
 | --- | --- |
-| A page | the name, what you use it for, then its Syntax, its examples, its Types, its See also, its Tests and its Rules, always in that order (40.9, 40.32) |
-| A group | the pages that answer one kind of problem, listed on the home page with each page's description |
+| A page | the name, what you use it for, where it is written and the side it runs on (40.36), then its Syntax, its examples, its Types, its See also, its Tests and its Rules, always in that order (40.9, 40.32) |
+| A group | the pages of one KIND of name — a headless component, an element behavior, a helper, a middleware rung — listed on the home page with each page's description, in labeled runs where the group is long (40.37) |
 | The prompt | the visitor's own Claude Code, answering from the pages, rendering the files, rows and clauses it names in the answer |
 
 The home page lists every group and every page's description from `SITE`; the constraint on a

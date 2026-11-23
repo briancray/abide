@@ -10,7 +10,7 @@ import scheduleCall from './lib/ScheduleCall.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/helpers/calendar', '/helpers/format', '/helpers/time']}
+    seeAlso={['/headless/calendar', '/helpers/format', '/headless/time']}
     tests={[
         {
             path: 'packages/abide/tests/instantAt.test.ts',

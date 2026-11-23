@@ -10,7 +10,7 @@ function underMount(address: string): string {
 }
 
 test('a thumb dragged takes the keys after it — 51.88', async ({ page }) => {
-    await page.goto(underMount('helpers/range'), {
+    await page.goto(underMount('headless/range'), {
         waitUntil: 'networkidle',
     })
     const frame = page.locator('.result').first()

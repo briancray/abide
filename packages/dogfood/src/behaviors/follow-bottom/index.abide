@@ -1,0 +1,28 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ActivityLog from './lib/ActivityLog.abide'
+import activityLog from './lib/ActivityLog.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/behaviors/observe', '/headless/chat']}
+    tests={[
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a scroller follows its bottom until the reader scrolls up",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Keep a deal's activity log at its newest entry">
+        <p>Spread <code>host</code> on the scrolling element, and each entry added scrolls it
+            down. Scroll up to read an earlier entry and it stays put: <code>jump</code> shows,
+            marked <code>data-unseen</code> once an entry lands while you read, and takes you back
+            down. Scrolling back to the bottom yourself follows again too.</p>
+        <Example code={activityLog}><ActivityLog /></Example>
+    </Section>
+</Doc>

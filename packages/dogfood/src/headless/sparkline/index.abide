@@ -1,0 +1,66 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CountBars from './lib/CountBars.abide'
+import countBars from './lib/CountBars.abide' with { type: 'text' }
+import FilledTrend from './lib/FilledTrend.abide'
+import filledTrend from './lib/FilledTrend.abide' with { type: 'text' }
+import LastValue from './lib/LastValue.abide'
+import lastValue from './lib/LastValue.abide' with { type: 'text' }
+import RepTrendCells from './lib/RepTrendCells.abide'
+import repTrendCells from './lib/RepTrendCells.abide' with { type: 'text' }
+import TrendColors from './lib/TrendColors.abide'
+import trendColors from './lib/TrendColors.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/chart', '/helpers/format']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/RepTrends.test.ts',
+            from: [
+                'test("a rep\'s sparkline carries its trend, and redraws in place"',
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/RepTrends.test.ts',
+            from: [
+                'test("a rep\'s deals closed draw as bars up from zero, as long as the count"',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Show each rep's trend in a table cell">
+        <p>The drawing stretches to the box your class gives the <code>svg</code>.
+            <code>dot</code> marks the last value where <code>ended</code> says there is one, and a
+            <code>null</code> leaves a gap in the <code>line</code>.</p>
+        <Example code={repTrendCells}><RepTrendCells /></Example>
+    </Section>
+
+    <Section level={3} title="Write the last value beside a trend">
+        <p><code>sparkline</code> hands back the line as a part and the trend as a word, so the
+            markup around the drawing is yours.</p>
+        <Example code={lastValue}><LastValue /></Example>
+    </Section>
+
+    <Section level={3} title="Color a trend green going up and red going down">
+        <p>The <code>svg</code> carries <code>data-trend</code>: <code>up</code>,
+            <code>down</code> or <code>flat</code>, the last value against the first. The line
+            draws in <code>currentColor</code>.</p>
+        <Example code={trendColors}><TrendColors /></Example>
+    </Section>
+
+    <Section level={3} title="Show a count as bars up from zero">
+        <p><code>kind: 'bar'</code> scales the values from zero and draws each as a bar in
+            <code>bars</code>, so a rep closing one deal a month reads as a steady row rather than
+            a swing.</p>
+        <Example code={countBars}><CountBars /></Example>
+    </Section>
+
+    <Section level={3} title="Fill the area under a trend">
+        <p><code>area</code> is the shape under the line, as <code>data-sparkline="area"</code>.</p>
+        <Example code={filledTrend}><FilledTrend /></Example>
+    </Section>
+</Doc>

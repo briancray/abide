@@ -12,8 +12,8 @@
 import { raw, route, type RouteLiteral, url } from '@abide/abide'
 
 import { inline } from './inline.ts'
-import { SITE } from './SITE.ts'
-import { isFramed } from './sitePages.ts'
+import { SITE, WHERE } from './SITE.ts'
+import { isFramed, runsOf } from './sitePages.ts'
 
 // `-ml-2` IS NOT SPACING: it pulls the link's own padding back off the rail so the TEXT lines up
 // with the group name above it, hover surface and all. `sidebar` carries no rule — it is what
@@ -24,6 +24,13 @@ const LINK =
 // The link you are on is marked and carries `aria-current`; every other is absent of it (32.37).
 const linkClass = (active: boolean): string =>
     `${LINK} ${active ? 'bg-signal/12 font-semibold text-signal' : 'text-ink opacity-75 hover:bg-signal/10 hover:opacity-100'}`
+
+// A name that runs on one side only is marked with that side, in the color its signature's spine
+// carries (40.36); one that runs on both, the default, carries no mark.
+const MARK_CLASS: Readonly<Record<string, string>> = {
+    server: 'text-warm',
+    browser: 'text-cool',
+}
 </script>
 
 {#if !isFramed(route.name())}
@@ -31,11 +38,16 @@ const linkClass = (active: boolean): string =>
         {#for group of SITE}
             <section class="flex flex-col gap-snug">
                 <h2 class="font-mono text-micro/2 font-medium tracking-caps text-muted uppercase">{raw(inline(group.group))}</h2>
-                <ul class="flex list-none flex-col gap-hair p-0">
-                    {#for item of group.pages}
-                        <li class="flex items-baseline gap-tight"><a class={linkClass(item.route === route.name())} href={url(item.route as RouteLiteral)} aria-current={item.route === route.name() ? 'page' : undefined}>{raw(inline(item.nav))}</a></li>
-                    {/for}
-                </ul>
+                {#for run of runsOf(group)}
+                    {#if run.label}
+                        <h3 class="mt-tight text-chrome font-medium text-muted">{run.label}</h3>
+                    {/if}
+                    <ul class="flex list-none flex-col gap-hair p-0">
+                        {#for item of run.pages}
+                            <li class="flex items-baseline gap-tight"><a class={linkClass(item.route === route.name())} href={url(item.route as RouteLiteral)} aria-current={item.route === route.name() ? 'page' : undefined}>{raw(inline(item.nav))}</a>{#if WHERE[item.where].mark}<span class="font-mono text-micro/2 {MARK_CLASS[WHERE[item.where].mark ?? '']}">{WHERE[item.where].mark}</span>{/if}</li>
+                        {/for}
+                    </ul>
+                {/for}
             </section>
         {/for}
         <section class="flex flex-col gap-snug">

@@ -27,7 +27,7 @@ import Registry, { clausesOf, hasTypes } from './Registry.abide'
 import Rules from './Rules.abide'
 import Section from './Section.abide'
 import SeeAlso from './SeeAlso.abide'
-import type { SitePage } from './SITE.ts'
+import { type SitePage, WHERE } from './SITE.ts'
 import { groupOf, markdownAddressOf, neighborsOf, pageAt } from './sitePages.ts'
 import Tests from './Tests.abide'
 
@@ -36,13 +36,18 @@ const {
     seeAlso = [],
     tests = [],
 } = props<{
-    documentPage?: SitePage
+    documentPage?: Omit<SitePage, 'where' | 'subgroup'>
     /** The routes of the pages a reader of this one goes to next (40.19). */
     seeAlso?: readonly string[]
     /** The test cases that exercise what the page documents, each a file and its anchors (40.15). */
     tests?: readonly { path: string; from: readonly string[] }[]
 }>()
 const page = documentPage ?? pageAt(route.name())
+// Where the name is reached for (40.36): a page of a group says it, the home page and a document do not.
+const where =
+    documentPage === undefined && groupOf(page.route) !== undefined
+        ? WHERE[pageAt(page.route).where]
+        : undefined
 const documents = documentPage === undefined && page.registry !== ''
 const { previous, next } =
     documentPage === undefined
@@ -86,6 +91,9 @@ if (rules.length > 0) trailing.push({ id: 'rules', title: 'Rules', level: 2 })
         <h1>{raw(inline(page.title))}</h1>
         {#if page.description}
             <p class="intent">{raw(inline(page.description))}</p>
+        {/if}
+        {#if where}
+            <p class="where">Runs {raw(inline(where.runs))}, written in {raw(inline(where.written))}.</p>
         {/if}
     </header>
     {#if documents}

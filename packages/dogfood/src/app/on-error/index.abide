@@ -1,0 +1,60 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/app/on-refusal', '/app/on-report', '/operating/log']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/ExportButton.test.ts',
+            from: [
+                "test('the caller gets a bare 500, and onError gets the reason'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/onError.test.ts',
+            from: [
+                "test('a throw nothing caught reaches every onError standing, nearest first",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Send a server error to a tracker, not to the caller">
+        <p>Called in the companies layout's <code>&lt;script server&gt;</code>, the hook hears
+            every unexpected error a request under <code>/companies</code> throws. The caller
+            gets a bare 500 with nothing about the cause.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { onError } from '@abide/abide/server'
+            import { tracker } from './lib/tracker.server.ts'
+
+            onError((error) => tracker.capture(error))
+            </script>
+
+            <slot />
+        `} />
+    </Section>
+
+    <Section level={3} title="Show a notice when the page throws in the browser">
+        <p>Imported from <code>@abide/abide</code> and called in a component's
+            <code>&lt;script&gt;</code>, the hook hears what throws in the browser while the
+            component stands.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { onError, reactive } from '@abide/abide'
+
+            let broken = reactive(false)
+            onError(() => {
+                broken = true
+            })
+            </script>
+
+            {#if broken}
+                <p class="status">Something broke. Reload to carry on.</p>
+            {/if}
+            <slot />
+        `} />
+    </Section>
+</Doc>

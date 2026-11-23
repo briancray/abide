@@ -1,0 +1,63 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/pages/url',
+        '/pages/route',
+        '/pages/pages',
+        '/middleware/middleware',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/routing.test.ts',
+            from: ["test('a click on a routed link navigates and does not reload"],
+        },
+        {
+            path: 'packages/abide/tests/routing.test.ts',
+            from: ["test('navigate by a number settles once the step has arrived"],
+        },
+    ]}
+>
+    <Section level={3} title="Open the page of the company a search found">
+        <p><code>navigate</code> mounts the page the address matches without reloading the
+            document. A plain click on a routed link does the same with no code.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { navigate, url } from '@abide/abide'
+            import searchCompanies from './searchCompanies.handler.ts'
+
+            async function open(q: string) {
+                const [company] = await searchCompanies({ q })
+                await navigate(url('/companies/[id=SLUG]', { id: company.id }))
+            }
+            </script>
+        `} />
+    </Section>
+
+    <Section level={3} title="Change the address without a new history entry">
+        <p><code>replace</code> rewrites the current entry, and <code>keepScroll</code> leaves
+            the page where the reader scrolled it.</p>
+        <Code language="ts" caption="browser" code={`
+            import { navigate, url } from '@abide/abide'
+
+            await navigate(url('/companies', {}, { city: 'London' }), {
+                replace: true,
+                keepScroll: true,
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Step back through the history">
+        <p>Given a number, <code>navigate</code> steps that many entries and settles once the
+            page it arrives at is mounted.</p>
+        <Code language="ts" caption="browser" code={`
+            import { navigate } from '@abide/abide'
+
+            await navigate(-1)
+        `} />
+    </Section>
+</Doc>

@@ -1,0 +1,68 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/handlers/clients',
+        '/handlers/mcp',
+        '/handlers/json-schema',
+        '/cli/commands',
+    ]}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/OpenApiOperation.test.ts',
+            from: [
+                "test('the handler is an operation, with its sentence and type'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/generated.test.ts',
+            from: [
+                "test('the OpenAPI document publishes what each handler answers — 19.21, 19.22, 19.23, 20.15'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Hand a partner the contact search as an operation">
+        <p>Write the handler. Its argument type is the operation's parameters and its
+            <code>description</code> is the operation's, with no spec to keep in step.</p>
+        <Code language="ts" caption="server" code={`
+            // src/assistant/searchContacts.handler.ts
+            import { GET } from '@abide/abide/server'
+            import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
+
+            export default GET(
+                ({ name }: { name: string }) =>
+                    CONTACTS.filter((contact) => contact.name.includes(name)),
+                { description: 'The contacts whose name contains \`name\`.' },
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Read the operation the handler became">
+        <p>Fetch <code>/__abide/openapi.json</code> from the running app. The operation's id is
+            its method and its route.</p>
+        <Code code={`
+            $ curl -s localhost:3000/__abide/openapi.json \\
+                | jq '.paths["/assistant/searchContacts"].get'
+            {
+              "operationId": "get_assistant_searchContacts",
+              "description": "The contacts whose name contains \`name\`.",
+              "parameters": [
+                { "name": "name", "in": "query", "required": true,
+                  "schema": { "type": "string" } }
+              ],
+              ...
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Commit the spec beside the code">
+        <p>Print the document from the source, with no server running. Pass
+            <code>--url</code> to ask a deployment instead.</p>
+        <Code code={`abide openapi > openapi.json`} />
+    </Section>
+</Doc>

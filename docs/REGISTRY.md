@@ -133,7 +133,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `import './app.css'` | A stylesheet the component depends on. | 34.6 |
 | `:global(…)` | The per-selector escape from scoping. | 34.5 |
 
-# Pages and the app
+# Pages and routing
 
 ## Pages
 
@@ -147,78 +147,6 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `[...name]` | A rest segment, terminal. | 23.5, 30.5, 30.34, 30.36 |
 | `[name=NAME]` · `[[name=NAME]]` · `[...name=NAME]` | A dynamic segment a param file's matcher decides. | 19.1, 23.26, 23.27, 30.19, 30.35, 30.36, 30.37 |
 | `/__abide/**` | Every endpoint abide controls. | 20.8, 37.19 |
-
-## `render`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4, 38.208 |
-| `render` | `(component: Component) => Promise<Uint8Array>` | Renders a component bound to its props into a document, as its bytes. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31, 41.34, 41.35 |
-
-## Sinks
-
-| Spelling | Sink | Filled | Rules |
-| --- | --- | --- | --- |
-| `href={x}`, any attribute | the element | the attribute or property | 35.7, 35.8 |
-| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.7 |
-| `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
-| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
-
-## `outlet`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `outlet.host` | `(name: string) => Record<string, unknown>` | The part for an element a layout owns, holding what `outlet.into` fills under its name. | 35.20, 35.22, 49.3, 49.12 |
-| `outlet.into` | `(name: string) => Record<string, unknown>` | The part moving the element it is spread on into the `outlet.host` of its name. | 35.20, 35.21, 35.23, 35.24, 32.99, 49.3, 49.12 |
-
-## `createApp`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 42.16, 42.22, 37.4, 37.6, 38.100 |
-| `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
-| `App.fetch` | `(request: Request, options?: { principal?: Record<string, unknown>; caller?: string }) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6, 42.20, 42.21 |
-| `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request; principal?: Record<string, unknown>; caller?: string }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 42.19, 42.21, 11.38 |
-| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 7.30 |
-| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.26, 7.27, 7.31, 7.37, 7.38, 7.40, 7.41, 7.42 |
-| `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
-
-## Environment variables
-
-| Name | Type | Meaning | Rules |
-| --- | --- | --- | --- |
-| `PORT` | `number` | The listen port. | 36.1, 38.63, 38.64 |
-| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.17 |
-| `NODE_ENV` | `string` | The environment name, verbatim. | 36.3, 36.16 |
-| `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4, 38.87 |
-| `APP_VERSION` | `string` | The version beside that name. | 27.3 |
-| `APP_DATA_DIR` | `string` | The platform's per-user data directory. | 27.3, 36.4 |
-| `ABIDE_UPDATE_KEY` | `string \| null` | The key `abide native` signs the native app's updates with. | 38.147 |
-| `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.11, 36.5, 38.120, 38.175 |
-| `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.15, 26.16 |
-| `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
-| `ABIDE_APP_URL` | `string \| null` | Names an app somewhere else, for the remote CLI. | 36.6 |
-| `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.22, 16.58 |
-| `ABIDE_BRIDGE_TOOLS` | `string` | The tools of the visitor's machine `/__abide/pairing` asks a bridge for, separated by commas. | 44.67 |
-| `ABIDE_BRIDGE_FULL` | `boolean` | Whether `/__abide/pairing` asks a bridge for full access. | 44.67 |
-| `ABIDE_BRIDGE_NOTE` | `string` | The app's note on why it asks, shown in the question a pairing link asks. | 44.67, 44.91 |
-| `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
-| `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
-| `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
-| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23, 45.24, 45.25, 45.26, 45.27, 45.28, 45.29 |
-| `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
-| `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
-| `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |
-| `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. | 36.8 |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `string \| null` | Where the app's lines and spans are sent as OTLP. | 36.19, 36.20, 36.21, 36.23 |
-| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `string \| null` | Where the app's lines are sent, in place of the endpoint's. | 36.19, 36.20 |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `string \| null` | Where the app's spans are sent, in place of the endpoint's. | 36.19, 36.20 |
-| `OTEL_EXPORTER_OTLP_HEADERS` | `string \| null` | The headers every export carries, as `name=value` pairs separated by commas. | 36.20 |
-| `OTEL_SERVICE_NAME` | `string \| null` | The service every export is sent under. | 36.22 |
-| `OTEL_SDK_DISABLED` | `'true' \| null` | Turns every export off. | 36.19 |
-| `DEBUG` | `string \| null` | Log-namespace gating. | 28.6, 28.9, 28.10, 28.11 |
-| `NO_COLOR` | `string \| null` | Refuses ansi anywhere. | 36.9 |
-| `FORCE_COLOR` | `string \| null` | Asks for the readable form off a pipe. | 36.9 |
 
 ## Files
 
@@ -251,6 +179,69 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `import '…' with { type: 'routes' }` | A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handler files answering below it. | 23.19, 23.20 |
 | `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.43 |
 | `preload = ["@abide/abide/test"]` | The `[test]` preload a test imports the app's `.abide` files through. | 38.109 |
+
+## `render`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4, 38.208 |
+| `render` | `(component: Component) => Promise<Uint8Array>` | Renders a component bound to its props into a document, as its bytes. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31, 41.34, 41.35 |
+
+## Sinks
+
+| Spelling | Sink | Filled | Rules |
+| --- | --- | --- | --- |
+| `href={x}`, any attribute | the element | the attribute or property | 35.7, 35.8 |
+| `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.7 |
+| `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
+| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
+
+## `outlet`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `outlet.host` | `(name: string) => Record<string, unknown>` | The part for an element a layout owns, holding what `outlet.into` fills under its name. | 35.20, 35.22, 49.3, 49.12 |
+| `outlet.into` | `(name: string) => Record<string, unknown>` | The part moving the element it is spread on into the `outlet.host` of its name. | 35.20, 35.21, 35.23, 35.24, 32.99, 49.3, 49.12 |
+
+## `route`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `route.url` | `Reactive<URL>` | Where we are, fragment included. | 23.1, 23.2, 23.3, 23.4, 30.20, 30.21, 30.23, 30.33, 19.16, 31.15 |
+| `route.params` | `Reactive<Params>` | The matched route's segments — typed by its own route in a page or a layout, and `Params` in any other file. | 23.1, 23.5, 23.9, 30.23, 31.15 |
+| `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. | 23.5 |
+| `route.name` | `Reactive<string>` | The resolution path, the same under any mount path. | 23.1, 23.6, 23.14, 31.15 |
+| `route.index` | `Reactive<number>` | The place of the entry the address bar stands at in the history this app's router wrote. | 23.1, 23.28, 23.29, 31.15 |
+| `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1, 31.15 |
+| `route.query` | `<Defaults extends Record<string, string \| number \| boolean \| readonly string[]>>(defaults: Defaults) => Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>` | The address's query as one value of its defaults' shape. | 30.41, 30.42, 30.43, 30.44, 30.45, 30.46, 30.47, 30.48, 31.8 |
+
+The alias `route.query` widens its defaults through is declared rather than listed, not being a
+name an app writes:
+```ts
+type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends string ? string : Defaults[Name] extends number ? number : Defaults[Name] extends boolean ? boolean : string[] }
+```
+
+## `url`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>] : [params?: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>]) => string` | Builds an address from a route literal or a public file's address. | 30.1, 30.2, 30.6, 30.8, 30.19, 30.26, 30.40 |
+| `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
+| `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
+| `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
+| `OptionalNames<P>` | `string` | The optional segment names. | 30.4 |
+| `RestNames<P>` | `string` | The rest segment names. | 30.5 |
+| `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6, 30.28, 30.40 |
+| `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept, narrowed where `abide check` declares a matcher's literals. | 30.3, 30.4, 30.5 |
+| `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as, narrowed where `abide check` declares a matcher's literals. | 23.9 |
+| `Routes` | `interface Routes {}` | The app's route literals and public file addresses, which `abide check` declares. | 30.26 |
+| `RouteLiteral` | `[keyof Routes] extends [never] ? string : Extract<keyof Routes, string>` | What `url` takes. | 30.26 |
+
+## `navigate`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `navigate` | `{ (by: number): Promise<void>; (url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }): Promise<void> }` | Navigates to an address, or steps through the history. | 30.7, 30.38, 30.39, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31, 30.32, 45.12, 45.24 |
 
 # Reactive primitives
 
@@ -474,130 +465,341 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | event handler | Not the flow. | 14.9 |
 | `Transformer`, `Disposer`, middleware, lifecycle hooks | Not the flow. | 14.10 |
 
-# Ambient values
+# Headless components
 
-## `request`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `request` | `() => Request` | The request being served. | 18.16, 18.17, 18.18, 22.1 |
-| `request.ip` | `() => ReceivedFrom \| 'in-process'` | Where the request being served came from. | 22.1, 22.12, 22.13 |
-| `ReceivedFrom` | `{ address: string; family: 'IPv4' \| 'IPv6'; port: number } \| null` | The peer a listener received a request from. | 22.12 |
-
-## `response`
+## `dialog`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
-| `response.page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 16.75, 17.2 |
-| `response.json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. | 17.7, 17.9, 17.10 |
-| `response.redirect` | `(to: string \| URL, status?: RedirectStatus) => undefined` | A navigation. | 16.52, 17.3 |
-| `response.jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.44, 16.75, 17.6, 17.7 |
-| `response.sse` | `<T>(values: Values<T>) => Values<T>` | A stream of values framed as server-sent events, fixed. | 16.45, 16.57, 16.75, 17.6, 17.7 |
-| `response.bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.34, 16.75, 17.6, 17.7 |
-| `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `response.redirect` may carry. | 17.3 |
-| `response` | `() => { status: number; headers: Headers }` | The response being built for the request being served. | 16.13, 16.52, 21.10, 22.1, 22.9, 22.10 |
+| `dialog` | `(options?: DialogOptions) => DialogParts` | A native modal as a part an app spreads onto a `<dialog>` of its own, opened and closed by `open`. | 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
+| `DialogOptions` | `{ open?: Reactive<boolean>; modal?: boolean \| (() => boolean); dismissible?: boolean \| (() => boolean); onclose?: (returnValue: string) => void }` | Whether the dialog shows, and how it opens and closes. | 50.1, 50.2, 50.3 |
+| `DialogParts` | `{ readonly dialog: Record<string, unknown>; readonly open: Reactive<boolean> }` | The `<dialog>`'s part, and whether it is showing. | 32.11, 32.99, 49.3, 49.8, 49.9 |
 
-## `cookies`
+## `prompts`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `cookies` | `() => Cookies` | The cookies of the request being served, live and mutable. | 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.10 |
-| `Cookies` | `class Cookies implements Iterable<[string, string]> { get(name: string): string \| null; has(name: string): boolean; set(name: string, value: string, options?: CookieInit): void; set(options: CookieInit): void; delete(name: string, options?: Omit<CookieStoreDeleteOptions, 'name'>): void; delete(options: CookieStoreDeleteOptions): void; size: number; toJSON(): Record<string, string>; toSetCookieHeaders(): string[] }` | A cookie jar shaped like Bun's `CookieMap`. | 22.4, 22.5, 22.6 |
+| `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question shown where the app spreads `prompts.host`. | 50.5, 50.7, 50.8, 50.11, 50.36, 11.32 |
+| `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown where the app spreads `prompts.host` until it is closed. | 50.5, 50.7, 50.9, 50.11, 50.36, 11.32 |
+| `prompts.prompt` | `(asked: string \| PromptOptions) => Promise<string \| undefined>` | A line of text asked for where the app spreads `prompts.host`. | 50.5, 50.7, 50.11, 50.33, 50.36, 11.32 |
+| `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string; value?: string; placeholder?: string; signal?: AbortSignal; modal?: boolean; run?: (answer: string) => unknown }` | What a prompt shows, what its buttons say, what withdraws it, whether it is modal, and the call confirming makes. | 50.7, 50.10, 50.34, 50.43, 50.44, 50.45 |
+| `prompts.host` | `() => PromptsHost` | The `<dialog>` the queued prompts show in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.6, 50.8, 50.9, 50.10, 50.34, 50.36, 50.45, 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
+| `PromptsHost` | `{ readonly dialog: Record<string, unknown>; readonly form: Record<string, unknown>; get current(): ShownPrompt \| undefined; get typing(): boolean; readonly title: Record<string, unknown>; readonly body: Record<string, unknown>; readonly field: Record<string, unknown>; readonly input: Record<string, unknown>; get failed(): string \| undefined; readonly error: Record<string, unknown>; readonly confirm: Record<string, unknown>; readonly cancel: Record<string, unknown>; readonly actions: Record<string, unknown> }` | The dialog's, the form's, the title's, the body's, the field's, the input's, the error's, the two buttons' and their holder's parts, the prompt showing, whether it asks for text, and what its `run` failed with. | 32.11, 32.99, 50.6, 50.10, 50.34, 50.45, 49.3, 49.9 |
+| `ShownPrompt` | `Readonly<{ title: string \| undefined; body: string; confirm: string; cancel: string; danger: boolean; mustType: string \| undefined; value: string; placeholder: string \| undefined; modal: boolean; kind: 'confirm' \| 'alert' \| 'prompt' }>` | The prompt showing, as markup reads it. | 50.6 |
 
-## `route`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `route.url` | `Reactive<URL>` | Where we are, fragment included. | 23.1, 23.2, 23.3, 23.4, 30.20, 30.21, 30.23, 30.33, 19.16, 31.15 |
-| `route.params` | `Reactive<Params>` | The matched route's segments — typed by its own route in a page or a layout, and `Params` in any other file. | 23.1, 23.5, 23.9, 30.23, 31.15 |
-| `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. | 23.5 |
-| `route.name` | `Reactive<string>` | The resolution path, the same under any mount path. | 23.1, 23.6, 23.14, 31.15 |
-| `route.index` | `Reactive<number>` | The place of the entry the address bar stands at in the history this app's router wrote. | 23.1, 23.28, 23.29, 31.15 |
-| `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1, 31.15 |
-| `route.query` | `<Defaults extends Record<string, string \| number \| boolean \| readonly string[]>>(defaults: Defaults) => Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>` | The address's query as one value of its defaults' shape. | 30.41, 30.42, 30.43, 30.44, 30.45, 30.46, 30.47, 30.48, 31.8 |
-
-The alias `route.query` widens its defaults through is declared rather than listed, not being a
-name an app writes:
-```ts
-type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends string ? string : Defaults[Name] extends number ? number : Defaults[Name] extends boolean ? boolean : string[] }
-```
-
-## `online`
+## `toasts`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8, 18.33, 18.34, 41.32 |
+| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16, 50.36 |
+| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.41, 50.42 |
+| `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
+| `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
+| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.41 |
+| `toasts.host` | `(options?: ToastsHostOptions) => ToastsHost` | The live region the notices show in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.17, 50.18, 50.36, 49.2, 49.4, 49.5, 49.6 |
+| `ToastsHostOptions` | `{ label?: string \| (() => string) }` | The region's accessible name. | 50.17 |
+| `ToastsHost` | `{ readonly region: Record<string, unknown>; get notices(): readonly Toast[]; toast(toast: Toast): ToastParts }` | The region's part, the notices to render, and a notice's parts. | 32.11, 50.17, 50.18, 50.41, 49.3, 49.9 |
+| `ToastParts` | `{ readonly toast: Record<string, unknown>; readonly text: Record<string, unknown>; readonly action: Record<string, unknown>; readonly close: Record<string, unknown>; act(): void; dismiss(): void }` | A notice's, its text's, its action's and its close button's parts, and what runs its action or closes it. | 50.15, 50.17, 50.18, 50.41, 49.3, 49.9 |
 
-## `media`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `media` | `(query: string) => Reactive<boolean>` | Whether the document matches a media query. | 23.30, 23.31, 23.32, 41.32 |
-
-## `outbox`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `outbox` | `<Chosen extends Selection>(selection?: Chosen, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 46.20, 46.21, 18.35 |
-| `rpc.outbox` | `(pattern?: Partial<Args>) => QueuedCall[]` | `outbox` narrowed to the handler's calls. | 46.1, 13.12 |
-| `QueuedCall` | `{ id: string; method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string; args: Record<string, JsonValue> \| undefined; queuedAt: number; attempts: number; value: Reactive<Value, Value, Failed<string, unknown>>; retry: () => void; discard: () => void }` | One call `outbox` holds. | 46.1, 46.10 |
-| `call.value` | `Reactive<Value, Value, Failed<string, unknown>>` | The value a queued call settled. | 46.5, 46.7, 46.18, 46.19 |
-| `call.retry` | `() => void` | Sends a queued call again. | 46.6, 46.12 |
-| `call.discard` | `() => void` | Drops a queued call. | 46.13 |
-
-## `reachable`
+## `tooltip`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `reachable` | `(host: string) => Promise<boolean>` | Whether a host answers at all. | 23.10, 23.11, 23.12, 23.13 |
+| `tooltip.tip` | `(text: string, options?: TooltipOptions) => Record<string, unknown>` | The part opening a text hint for the element it is spread on, shown by the page's `tooltip.host`. | 32.99, 50.23, 50.24, 50.25, 50.36, 53.15, 49.3, 49.12 |
+| `tooltip.host` | `() => TooltipHost` | The popover every hint shows in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.36, 50.47, 50.53, 49.14, 49.2, 49.4, 49.5, 49.6 |
+| `TooltipHost` | `{ readonly hint: Record<string, unknown>; get text(): string \| undefined }` | The popover's part, and the text of the hint showing in it. | 32.11, 50.53, 50.54, 49.3, 49.9 |
+| `TooltipOptions` | `{ align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); side?: Side \| (() => Side); delay?: number \| (() => number) }` | Where a hint opens against its anchor, placed as a `popover` is, and how long a pointer rests first. | 50.19, 50.20, 50.21, 50.24, 50.26, 50.35, 49.10, 49.11 |
 
-## `server`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `server` | `<WebSocketData>() => Server<WebSocketData>` | The listening server. | 22.1, 42.9 |
-
-## `isServer`
+## `menu`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `isServer` | `() => boolean` | Whether the work running is a server's. | 22.11, 12.7, 23.7, 23.8 |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.35, 50.37, 50.38, 50.39, 50.40, 49.7, 50.55, 50.56, 50.57, 50.58, 49.14, 49.2, 49.4, 49.5, 49.6 |
+| `MenuOptions` | `Omit<PopoverOptions, 'align' \| 'offset' \| 'escape' \| 'outside'> & { id?: string; open?: Reactive<boolean>; align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); openOnHover?: number \| false \| (() => number \| false); closeOnLeave?: number \| false \| (() => number \| false); group?: string \| (() => string \| undefined); onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, placed as a `popover` is, whether a resting pointer opens it and a leaving one closes it, the group it switches within, and what hears it open and close. | 50.19, 50.20, 50.21, 50.35, 50.37, 49.8, 49.10, 49.11, 50.55, 50.56, 50.57 |
+| `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38, 49.3, 49.8, 49.9 |
 
-## `principal`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `principal.authenticated` | `Reactive<boolean>` | Whether this caller presented something the server accepted. | 26.1, 26.2 |
-| `principal.expiresAt` | `Reactive<string \| undefined>` | When the seal lapses. | 26.1, 26.2 |
-| `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver, or a browser's load of the document, having failed. | 26.1, 26.3, 26.23 |
-| `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4, 26.25, 26.26 |
-| `principal.caller` | `Reactive<string>` | Which browser, as against who they are. | 22.10, 26.5, 26.6, 26.7, 26.19, 26.22 |
-| `principal.set` | `(claims: Record<string, unknown>) => Promise<void>` | Authenticates this caller. | 18.25, 26.8, 26.12, 26.16, 26.17, 26.18, 26.20, 26.21, 26.24 |
-| `principal.clear` | `() => void` | Signs this caller out. | 18.25, 26.7, 26.9, 26.24 |
-| `Principal` | `interface Principal { [claim: string]: unknown; authenticated: boolean; expiresAt?: string; error?: Failed<string, unknown> }` | The wire document. | 26.4, 26.10, 26.13, 26.14, 26.15, 26.25 |
-| `authenticated` | `boolean` | Whether this caller presented a seal the server accepted. | 26.10 |
-| `expiresAt` | `string \| undefined` | When the seal lapses. | 26.11 |
-| `error` | `Failed<string, unknown> \| undefined` | The app's resolver having failed. | 26.3 |
-
-## `config`
+## `popover`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `config` | `Reactive<Config>` | The resolved configuration document. | 27.1, 27.9 |
-| `Config` | `interface Config { [field: string]: unknown; APP_NAME: string; APP_VERSION: string; APP_DATA_DIR: string }` | The resolved document, widened by what each `onConfig`'s defaults return, and by declaration merging. | 27.12, 27.13 |
-| `Env` | `Record<string, string \| undefined>` | The process environment as read, before coercion. | 27.2, 27.8 |
-| `config.invalidate` | `() => void` | The trigger over the resolved configuration. | 7.2, 27.5 |
-| `ConfigDefaults` | `(env: Env) => unknown` | The defaults function, synchronous by contract. | 27.4, 27.11 |
-| `ConfigField` | `{ name: string; label: string; description: string \| undefined; input: 'text' \| 'number' \| 'checkbox' \| 'password' \| 'url' \| 'select'; options: string[] \| undefined; required: boolean; value: string }` | One input the start form asks for. | 38.72 |
+| `popover` | `(options?: PopoverOptions) => PopoverParts` | An app's own overlay as parts it spreads onto a trigger or an anchor and a popover of its own, shown in the top layer against the one while `open` holds. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.48, 50.59, 50.60, 32.99, 49.7, 49.12, 49.14, 49.2, 49.4, 49.5, 49.6 |
+| `PopoverOptions` | `{ side?: Side \| (() => Side); align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); id?: string; open?: Reactive<boolean>; escape?: boolean; outside?: boolean }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners, the base of its ids, whether it is open, and whether Escape and a press outside close it. | 50.19, 50.20, 50.21, 50.35, 50.60, 49.8, 49.10, 49.11 |
+| `PopoverParts` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly popover: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the popover's, and whether it is open. | 50.48, 50.59, 32.11, 49.3, 49.8, 49.9 |
+| `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
-### `ConfigOptions`
+## `commandPalette`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `schema` | `Schema<Config>` | The gate over the whole configuration document. | 27.7 |
+| `commandPalette` | `(options: CommandPaletteOptions) => CommandPaletteParts` | WAI-ARIA's combobox in a modal dialog over the commands an app can run, as parts an app spreads onto elements of its own. | 51.65, 51.66, 51.67, 51.68, 51.69, 51.70, 51.71, 51.107, 49.7, 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
+| `CommandPaletteOptions` | `{ commands: readonly Command[] \| (() => readonly Command[]); open?: Reactive<boolean>; hotkey?: string \| (() => string); id?: string; label?: string \| (() => string) }` | What the palette lists, what opens it, and what it is called. | 51.65, 51.66, 49.10, 49.11 |
+| `CommandPaletteParts` | `{ readonly id: string; readonly dialog: Record<string, unknown>; readonly input: Record<string, unknown>; readonly listbox: Record<string, unknown>; command(command: Command): CommandParts; readonly empty: Record<string, unknown>; get results(): readonly Command[]; readonly open: Reactive<boolean> }` | The dialog's part, the input's, the list's, a command's parts, the empty status, the commands listed and whether it shows. | 32.11, 51.66, 51.67, 49.3, 49.8, 49.9 |
+| `CommandParts` | `{ readonly option: Record<string, unknown>; readonly label: Record<string, unknown>; readonly key: Record<string, unknown>; readonly runs: readonly LabelRun[] }` | A command's option, the label and the key written in it, and the label in runs. | 51.67, 51.107, 49.3 |
+| `Command` | `{ label: string; keywords?: readonly string[]; key?: string; run: () => void }` | One thing the palette can do: what it is called, the further words typing matches, the key shown beside it and what choosing it does. | 51.66, 51.68, 51.70 |
 
-# Transports
+## `form`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `form` | `<Handler extends Rpc<any, any, any, any>>(handler: Handler) => Form<Handler>` | A form over a handler as parts an app spreads onto a `<form>` and fields of its own, checked against the handler's args document before the call is made. | 56.1, 56.2, 56.3, 56.4, 56.5, 56.6, 56.7, 56.8, 56.12, 56.14, 56.15, 56.18, 56.19, 56.23, 19.13, 49.3, 49.7, 49.9 |
+| `FieldName` | `Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? keyof NonNullable<Args> & string : string` | The names a form's fields post under: the members of its handler's args. | 56.1 |
+| `Form` | `{ readonly form: Record<string, unknown>; field(name: FieldName<Handler>): FormField; readonly error: Record<string, unknown>; get message(): string \| undefined; readonly submit: Record<string, unknown>; readonly reset: Record<string, unknown>; get dirty(): boolean; get changes(): Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? Partial<NonNullable<Args>> : Record<string, unknown>; get issues(): Issues<Handler> \| undefined; readonly call: ReturnType<Handler> }` | The form's part, a field's parts by name, the form's own message and its element, a submit button's and a reset button's parts, whether a field differs from its baseline and the args holding those that do, what is wrong with the form, and the last call it made. | 32.11, 56.4, 56.10, 56.11, 56.13, 56.16, 56.17, 56.20, 56.22, 49.9 |
+| `FormField` | `{ readonly input: Record<string, unknown>; readonly error: Record<string, unknown>; get message(): string \| undefined; get invalid(): boolean; get changed(): boolean }` | One field's parts — the field's and its message element's — with its first message, whether it has one, and whether it differs from its baseline. | 56.9, 56.10, 56.13, 56.16, 56.21, 49.9 |
+
+## `combobox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `combobox` | `<Item>(options: ComboboxOptions<Item>) => ComboboxParts<Item>` | WAI-ARIA's combobox with a list popup as parts an app spreads onto an input, a popup and options of its own. | 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.55, 51.56, 51.57, 51.92, 51.93, 51.106, 49.7, 49.14, 49.2, 49.4, 49.5, 49.6 |
+| `ComboboxOptions` | `<Item, Multiple extends boolean = false>{ id?: string; options?: readonly Item[] \| (() => readonly Item[]); search?(query: string): readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key?(item: Item): string; label?(item: Item): string; multiple?: Multiple; value?: Reactive<Picked<Item, Multiple>> }` | What a combobox lists, how an item is told apart and written, and the pick it holds. | 51.15, 51.16, 51.18, 51.24, 51.55, 49.8, 49.10, 49.11 |
+| `ComboboxParts` | `<Item, Multiple extends boolean = false>{ readonly id: string; readonly root: Record<string, unknown>; readonly input: Record<string, unknown>; readonly open: Reactive<boolean>; readonly popup: Record<string, unknown>; readonly listbox: Record<string, unknown>; get items(): readonly Item[]; option(item: Item): Record<string, unknown>; runs(item: Item): readonly LabelRun[]; get nothingFound(): boolean; readonly empty: Record<string, unknown>; readonly value: Reactive<Picked<Item, Multiple>>; get picks(): readonly Item[] \| undefined; readonly chips: Record<string, unknown>; chip(item: Item): ComboboxChip; unpick(item: Item): void }` | The parts `combobox` hands back: its id, the field's wrapper, the input, whether it is open, the popup, the list, an option, an item's label in runs, the empty status, the pick, the items picked, their chips and what takes one out. | 51.26, 51.30, 51.31, 51.56, 51.57, 51.106, 32.99, 49.3, 49.8, 49.9 |
+| `ComboboxChip` | `{ readonly chip: Record<string, unknown>; readonly remove: Record<string, unknown> }` | A picked item's chip, and the button taking it out. | 51.56, 49.3 |
+| `Picked` | `Picked<Item, Multiple extends boolean> = Multiple extends true ? readonly Item[] : Item \| undefined` | What a pick holds: every one picked where it picks many, else the one picked or none. | 51.55, 51.98 |
+| `LabelRun` | `{ readonly text: string; readonly match: Record<string, unknown> \| undefined }` | A stretch of a label, and the `match` part of the element marking it where it is what was typed. | 51.106, 51.107, 49.3 |
+
+## `tabs`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `tabs` | `(options: TabsOptions) => Tabs` | WAI-ARIA's tabs as parts an app spreads onto elements of its own: a tab list, a tab per key, and a panel. | 51.34, 51.35, 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 49.7, 49.2, 49.4, 49.5, 49.6 |
+| `TabsOptions` | `{ id?: string; keys: readonly string[] \| (() => readonly string[]); selected?: Reactive<string \| undefined> }` | The tabs' keys in order, and the key of the one selected. | 51.34, 51.35, 49.8 |
+| `TabParts` | `{ readonly button: Record<string, unknown>; readonly panel: Record<string, unknown> }` | One tab's button, and the panel kept for it alone. | 51.40, 49.3 |
+| `Tabs` | `{ readonly id: string; readonly list: Record<string, unknown>; tab(key: string): TabParts; readonly panel: Record<string, unknown>; readonly selected: Reactive<string \| undefined> }` | The list's part, a tab's parts, the one panel every tab shows in, and the key of the tab selected. | 32.11, 51.34, 51.40, 51.41, 49.3, 49.8, 49.9 |
+
+## `tree`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `tree` | `<Node, Multiple extends boolean = false>(options: TreeOptions<Node, Multiple>) => Tree<Node, Multiple>` | WAI-ARIA's tree as parts an app spreads onto elements of its own: the tree, an item per node, and the group holding a node's children. | 51.77, 51.78, 51.79, 51.80, 51.81, 51.82, 51.83, 51.84, 51.98, 51.99, 51.100, 51.101, 51.102, 51.103, 49.7, 49.2, 49.4, 49.5, 49.6 |
+| `TreeOptions` | `<Node, Multiple extends boolean = false>{ id?: string; roots: readonly Node[] \| (() => readonly Node[]); children(node: Node): readonly Node[] \| undefined; key?(node: Node): string; label?(node: Node): string; expanded?: Reactive<readonly string[]>; multiple?: Multiple; selected?: Reactive<Picked<string, Multiple>> }` | The nodes, how each is told apart and named, which are expanded, and whether one or many are selected and which. | 51.77, 51.79, 51.82, 51.83, 51.98, 49.8, 49.11 |
+| `Tree` | `<Node, Multiple extends boolean = false>{ readonly id: string; readonly tree: Record<string, unknown>; node(node: Node): TreeNode; readonly expanded: Reactive<readonly string[]>; readonly selected: Reactive<Picked<string, Multiple>> }` | The tree's part, a node's parts, and which nodes are expanded and which are selected. | 51.77, 51.78, 51.84, 51.98, 49.3, 49.8, 49.9 |
+| `TreeNode` | `{ readonly item: Record<string, unknown>; readonly group: Record<string, unknown>; get expanded(): boolean; toggle(): void }` | A node's item and group, whether it is expanded, and what expands or collapses it. | 51.77, 51.78, 51.84, 49.3 |
+
+## `range`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `range` | `(options: RangeOptions) => RangeParts` | WAI-ARIA's multi-thumb slider as parts an app spreads onto elements of its own: a group, a track, the span between the thumbs, two thumbs and a field for each. | 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91, 49.7, 49.2, 49.4, 49.5, 49.6 |
+| `RangeOptions` | `{ id?: string; value?: Reactive<readonly [number, number]>; label: string \| (() => string); min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); labels?: readonly [string, string] \| (() => readonly [string, string]); format?: (value: number) => string; name?: string \| (() => string \| undefined) }` | The range picked, and the scale it is picked on. | 51.85, 51.86, 51.91, 49.8, 49.10, 49.11 |
+| `RangeParts` | `{ readonly id: string; readonly root: Record<string, unknown>; readonly track: Record<string, unknown>; readonly fill: Record<string, unknown>; end(which: 0 \| 1): RangeEnd; readonly value: Reactive<readonly [number, number]> }` | The group's part, the track's, the span's, an end's parts, and the range picked. | 32.11, 51.90, 49.3, 49.8, 49.9 |
+| `RangeEnd` | `{ readonly thumb: Record<string, unknown>; readonly input: Record<string, unknown> }` | An end's thumb, and the hidden field submitting it. | 51.90, 51.91, 49.3 |
+
+## `listbox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `listbox` | `<Option, Multiple extends boolean = false>(options: ListboxOptions<Option, Multiple>) => Listbox<Option, Multiple>` | A keyboard controller over a list of keyed options, for markup the app writes itself. | 51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7, 51.8, 51.9, 51.10, 51.11, 51.12, 51.98, 51.99, 51.100, 51.101, 51.102, 51.103, 51.104, 51.105, 49.7, 49.2, 49.4, 49.5, 49.6 |
+| `ListboxOptions` | `ListboxOptions<Option, Multiple extends boolean = false> = { id?: string; options: readonly Option[] \| (() => readonly Option[]); key?: (option: Option) => string; wrap?: boolean \| (() => boolean); multiple?: Multiple; selected?: Reactive<Picked<string, Multiple>>; onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, whether one or many are selected and which, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10, 51.98, 51.104, 51.105, 49.8, 49.10, 49.11 |
+| `Listbox` | `Listbox<Option, Multiple extends boolean = false> = { readonly id: string; readonly active: string \| undefined; readonly activeOption: Option \| undefined; readonly activeId: string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; onkeydown: (event: KeyboardEvent) => void; readonly listbox: Record<string, unknown>; option(key: string): Record<string, unknown>; readonly selected: Reactive<Picked<string, Multiple>> }` | What `listbox` hands back: its id, the active key and option, the ids and the listener the markup takes, the list's part and an option's, and the keys selected. | 51.1, 51.2, 51.3, 51.10, 51.11, 51.94, 51.98, 51.104, 49.3, 49.8, 49.9, 49.13 |
+
+## `calendar`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `calendar` | `<Range extends boolean = false>(options?: CalendarOptions<Range>) => Calendar<Range>` | WAI-ARIA's date grid as parts an app spreads onto elements of its own, picking a day or a range: a grid of whole weeks per month shown, a header cell per weekday, a cell per day, each month's heading and the buttons paging them. | 52.82, 52.83, 52.84, 52.85, 52.86, 52.87, 52.88, 52.89, 52.90, 52.91, 52.92, 52.93, 52.94, 52.95, 52.96, 52.97, 52.98, 52.99, 49.7, 49.2, 49.4, 49.5, 49.6 |
+| `CalendarOptions` | `CalendarOptions<Range extends boolean = false> = { id?: string; month?: Reactive<string \| undefined>; range?: Range; selected?: Reactive<CalendarPick<Range>>; months?: number \| undefined \| (() => number \| undefined); firstDay?: number \| undefined \| (() => number \| undefined); locale?: string \| undefined \| (() => string \| undefined); timeZone?: string \| undefined \| (() => string \| undefined) }` | The first month shown as `YYYY-MM`, whether it picks a range, the day or the range picked, how many months are shown, and the week's first day, locale and zone, each read live where a function is given. | 52.84, 52.85, 52.87, 52.96, 52.97, 49.8, 49.10, 49.11 |
+| `Calendar` | `Calendar<Range extends boolean = false> = { readonly id: string; get active(): string; idOf(date: string): string; get months(): readonly CalendarMonth[]; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly header: Record<string, unknown>; readonly week: Record<string, unknown>; get weekdays(): readonly CalendarWeekday[]; readonly month: Reactive<string \| undefined>; readonly selected: Reactive<CalendarPick<Range>> }` | The day in the tab order and a day's cell id, the months shown, the paging buttons, the rows' parts, the weekdays as data with a part to spread, and the first month shown and the day or range picked. | 32.11, 52.85, 52.87, 52.93, 52.96, 52.100, 49.3, 49.8, 49.9 |
+| `CalendarPick` | `CalendarPick<Range extends boolean> = Range extends true ? readonly [start: string, end: string \| undefined] \| undefined : string \| undefined` | What a calendar picks: a range's start and end where it picks a range, else a day or none. | 52.97 |
+| `CalendarMonth` | `{ readonly month: string; readonly label: string; readonly heading: Record<string, unknown>; readonly grid: Record<string, unknown>; readonly weeks: readonly (readonly CalendarDay[])[] }` | A month shown as `YYYY-MM`, its name in words, its heading's part, its grid's, and its weeks. | 52.82, 52.94, 52.96, 49.3 |
+| `CalendarWeekday` | `{ readonly day: number; readonly name: string; readonly short: string; readonly header: Record<string, unknown> }` | A weekday's number from Monday's `1`, its name in full and shortened, and its header cell. | 52.87, 49.3 |
+| `CalendarDay` | `{ readonly date: string; readonly day: number; readonly cell: Record<string, unknown> }` | A day of a grid as `YYYY-MM-DD`, its number in its month, and its cell. | 52.82, 52.84, 52.86, 52.95, 52.96, 52.98, 52.99, 49.3 |
+
+## `carousel`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centers, as parts an app spreads onto a scroller, its items and a button either side. | 53.61, 53.62, 53.63, 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 32.99, 49.3, 49.7, 49.2, 49.4, 49.5, 49.6 |
+| `CarouselOptions` | `<Item>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; label?: (item: Item) => string; selected?: Reactive<string \| undefined>; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how each is told apart and named, the key of the one the carousel rests on, and how a scroll to an item moves. | 53.61, 53.62, 53.68, 49.8, 49.10, 49.11 |
+| `Carousel` | `<Item>{ readonly id: string; readonly host: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; get centered(): string \| undefined; readonly selected: Reactive<string \| undefined>; scrollTo(key: string): void; reset(): void }` | The scroller's part, an item's part, the two buttons' parts, the key of the item centered, the key it rests on, and what scrolls to an item and back. | 53.63, 53.67, 53.68, 53.69, 49.3, 49.8, 49.9 |
+
+## `sortableTable`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `sortableTable` | `<Row>(options: SortableTableOptions<Row>) => SortableTableParts<Row>` | A table sorted by its headers and picked by its rows, as parts an app spreads onto a `<table>` of its own. | 51.49, 51.50, 51.51, 51.52, 51.53, 51.54, 51.72, 51.73, 51.74, 51.75, 51.76, 49.2, 49.4, 49.5, 49.6 |
+| `SortableTableOptions` | `<Row>{ rows: readonly Row[] \| (() => readonly Row[]); columns: readonly Column<Row>[] \| (() => readonly Column<Row>[]); key?(row: Row): string; sort?: Reactive<Sort \| undefined>; selected?: Reactive<readonly string[] \| undefined> }` | The rows and columns of a sortable table, how a row is told apart, and its sort and selection. | 51.49, 51.72, 49.8 |
+| `SortableTableParts` | `<Row>{ readonly table: Record<string, unknown>; get rows(): readonly Row[]; column(column: Column<Row>): SortableTableColumn; row(row: Row): SortableTableRow; text(row: Row, column: Column<Row>): string; readonly selectAll: { readonly select: Record<string, unknown>; readonly checkbox: Record<string, unknown> }; readonly sort: Reactive<Sort \| undefined>; readonly selected: Reactive<readonly string[] \| undefined> }` | The parts `sortableTable` hands back: the table, the rows in sorted order, a column's parts, a row's parts, a cell's text, the header's checkbox and its cell, and the sort and the selection. | 51.49, 51.50, 51.51, 51.52, 51.53, 51.54, 51.72, 51.75, 32.99, 49.3, 49.8, 49.9 |
+| `SortableTableColumn` | `{ readonly header: Record<string, unknown>; readonly sort: Record<string, unknown>; readonly cell: Record<string, unknown> }` | A column's header cell, its sort button, and its body cells. | 51.49, 51.50, 51.51, 51.52, 49.3 |
+| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean; firstDirection?: 'ascending' \| 'descending' }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.47, 51.50, 51.53, 51.54 |
+| `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.49, 51.50, 51.51, 51.52 |
+| `SortableTableRow` | `{ readonly row: Record<string, unknown>; readonly select: Record<string, unknown>; readonly checkbox: Record<string, unknown>; readonly detail: Record<string, unknown> }` | A row's part, the cell holding its checkbox, the checkbox, and a detail row under it. | 51.72, 51.74, 49.3 |
+
+## `virtualList`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `virtualList` | `<Item>(options: VirtualListOptions<Item>) => VirtualList<Item>` | A long list's items that are in view, measured from the app's own markup — a list or a CSS grid — as parts to spread, for a keyed `{#for}` over just those items. | 51.58, 51.59, 51.60, 51.61, 51.62, 51.63, 51.97, 32.99, 49.3 |
+| `VirtualListOptions` | `<Item>{ items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; section?: (item: Item) => string; labels?: readonly string[] \| (() => readonly string[]); overscan?: number \| (() => number); initial?: number; estimate?: number; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how one is told apart and grouped, the rows past each end, what renders before a measurement, and how a jump scrolls. | 51.58, 51.60, 51.64, 49.10, 49.11 |
+| `VirtualList` | `<Item>{ readonly host: Record<string, unknown>; item(entry: VirtualListEntry<Item>): Record<string, unknown>; get shown(): readonly VirtualListEntry<Item>[]; readonly sections: VirtualListSections; scrollTo(index: number): void }` | The host's part, an item's part, the items to render, the sections and their jumps, and what scrolls to an item. | 51.58, 51.62, 51.63, 49.9 |
+| `VirtualListEntry` | `<Item>{ item: Item; index: number; key: string }` | One item `shown` renders: the item, where it stands in `items`, and its key. | 51.58 |
+| `VirtualListSection` | `{ label: string; index: number }` | One section: its label, and the index of its first item, or `-1` where it has none. | 51.64 |
+| `VirtualListSections` | `{ readonly host: Record<string, unknown>; get all(): readonly VirtualListSection[]; get current(): string \| undefined; jump(section: VirtualListSection): Record<string, unknown> }` | The jump index: its host, every section, the one in view, and a section's jump. | 51.64, 51.95, 51.96, 49.9 |
+
+## `time`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `time` | `(options?: TimeOptions) => TimeParts` | Times kept current as parts an app spreads onto a `<time>` of its own, one per value: its `datetime` and `title`, and its label. | 52.1, 52.2, 52.3, 52.5, 52.72, 52.73, 52.74, 52.75, 52.76, 52.77, 49.2, 49.4, 49.5, 49.6 |
+| `TimeOptions` | `{ style?: 'long' \| 'short' \| 'narrow' \| (() => 'long' \| 'short' \| 'narrow'); locale?: string \| undefined \| (() => string \| undefined); timeZone?: string \| undefined \| (() => string \| undefined) }` | How a time is written, each read live where a function is given. | 52.72 |
+| `TimeParts` | `{ at(value: unknown): TimeAt }` | A value's parts. | 32.11, 32.99, 52.72, 52.73, 49.9 |
+| `TimeAt` | `{ readonly time: Record<string, unknown>; get text(): string }` | A value's `<time>` attributes and its label. | 32.99, 52.72, 52.73, 49.3 |
+
+## `chat`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `chat` | `(options: ChatOptions) => ChatParts` | A conversation over an assistant handler as parts an app spreads onto markup of its own: the transcript and the composer. | 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.46, 53.47, 49.3, 49.2, 49.4, 49.5, 49.6 |
+| `ChatOptions` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; turns?: Reactive<AssistantTurn[]>; label?: string \| (() => string \| undefined); disabled?: boolean \| (() => boolean \| undefined) }` | The handler a conversation asks, what answers a permission prompt, the turns it holds, and its input's name and whether it sends. | 53.31, 53.34, 53.38, 53.47, 49.8, 49.10 |
+| `ChatParts` | `{ readonly turns: Reactive<AssistantTurn[]>; get streaming(): boolean; readonly root: Record<string, unknown>; readonly transcript: Record<string, unknown>; readonly jump: Record<string, unknown>; turn(turn: AssistantTurn, index: number): ChatTurnParts; readonly text: Record<string, unknown>; image(image: AssistantTurnPart): Record<string, unknown>; tool(part: AssistantTurnPart): { readonly tool: Record<string, unknown>; readonly name: Record<string, unknown>; readonly input: Record<string, unknown>; readonly result: Record<string, unknown>; readonly status: 'running' \| 'done' \| 'failed' }; permission(part: AssistantTurnPart): { readonly permission: Record<string, unknown>; readonly name: Record<string, unknown>; readonly input: Record<string, unknown>; readonly allow: Record<string, unknown>; readonly deny: Record<string, unknown>; readonly answer: 'waiting' \| 'allowed' \| 'denied' }; readonly composer: Record<string, unknown>; readonly input: Record<string, unknown>; readonly draft: Reactive<string>; get attached(): readonly AssistantTurnPart[]; readonly attachments: Record<string, unknown>; attachment(image: AssistantTurnPart): { readonly attachment: Record<string, unknown>; readonly image: Record<string, unknown>; readonly remove: Record<string, unknown> }; get pending(): readonly AssistantTurnPart[] \| undefined; readonly queued: Record<string, unknown>; readonly cancel: Record<string, unknown>; readonly stop: Record<string, unknown>; readonly send: Record<string, unknown> }` | The conversation and whether it streams, and the parts of the transcript, each turn and piece, and the composer. | 53.32, 53.33, 53.34, 53.35, 53.37, 53.39, 53.40, 49.1, 49.3, 49.9 |
+| `ChatTurnParts` | `{ readonly turn: Record<string, unknown>; readonly speaker: Record<string, unknown>; readonly role: 'you' \| 'assistant'; get streaming(): boolean; readonly failure: Record<string, unknown>; readonly actions: Record<string, unknown>; retry(): void }` | A turn's parts, who spoke, whether it streams, and what asks its question again. | 53.36, 53.46, 49.1, 49.3 |
+
+## `chart`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `chart` | `(options: ChartOptions) => ChartParts` | A chart over one pair of axes as its geometry and parts an app spreads onto SVG elements of its own, with the arithmetic under it as its members. | 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 50.46, 52.51, 52.52, 52.58, 52.59, 52.60, 52.61, 52.62, 52.63, 52.68, 52.69, 52.70, 52.71, 52.78, 52.79, 52.81, 52.19, 52.20, 52.21, 52.22, 52.23, 52.53, 49.14, 49.2, 49.4, 49.5, 49.6 |
+| `ChartOptions` | `{ id?: string; label: string \| (() => string); series: readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false; curve?: boolean }[] \| (() => readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false; curve?: boolean }[]; x?: readonly number[] \| (() => readonly number[] \| undefined); xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number \| (() => number); yTicks?: number \| (() => number); zero?: boolean \| (() => boolean); stack?: boolean \| (() => boolean); normalize?: boolean \| (() => boolean); bounds?: { x?: readonly [number, number]; y?: readonly [number, number] } \| (() => { x?: readonly [number, number]; y?: readonly [number, number] } \| undefined); width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean }` | What `chart` draws and how, each value read live where a function is given. | 52.24, 52.61, 49.8, 49.10, 49.11 |
+| `ChartParts` | `{ readonly id: string; readonly svg: Record<string, unknown>; x(index: number): number; y(value: number): number; get frame(): { left: number; top: number; right: number; bottom: number }; get yTicks(): { value: number; y: number; label: string; grid: Record<string, unknown>; text: Record<string, unknown> }[]; get xTicks(): { index: number; x: number; label: string; text: Record<string, unknown> }[]; get zero(): { y: number; line: Record<string, unknown> } \| undefined; get marks(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; columns: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; get lines(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; columns: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; get areas(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; columns: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; get bars(): { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[]; get points(): { key: string; series: number; index: number; value: number; x: number; y: number; circle: Record<string, unknown> }[]; get readout(): { index: number; x: number; label: string; disabled: boolean; heading: Record<string, unknown>; values: { series: number; label: string; value: string; y: number \| undefined; circle: Record<string, unknown> \| undefined; text: Record<string, unknown> }[] } \| undefined; get crosshair(): { index: number; x: number; line: Record<string, unknown> } \| undefined; readonly tip: Record<string, unknown> }` | The `<svg>`'s part, the plot's scales and edges, and every tick, mark, point and the crosshair as data with a part to spread. | 50.46, 52.78, 52.79, 52.81, 49.3, 49.9 |
+| `chart.ticks` | `(min: number, max: number, count?: number) => number[]` | Round values for an axis from `min` to `max`, about `count` intervals apart. | 52.19 |
+| `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
+| `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], options?: { baseline?: number \| readonly number[]; curve?: boolean }) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`, straight from point to point or curved through them. | 52.21, 52.22, 52.104 |
+| `chart.stack` | `<Each extends { values: readonly (number \| null \| undefined)[]; stack?: string \| false }>(series: readonly Each[], options?: { stack?: boolean; normalize?: boolean }) => { low: (number \| undefined)[]; high: (number \| undefined)[]; stack: string \| undefined }[]` | Where each series stands at each x once its stack is piled, and the stack it joined. | 52.53, 52.54, 52.55, 52.56, 52.57 |
+| `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
+| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false; curve?: boolean }` | One series of a chart: what it is called, its values in x order, how it is drawn, and the stack it piles into. | 52.21, 52.24, 52.54 |
+
+## `pie`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `pie` | `(options: PieOptions) => PieParts` | Shares of a whole as the slices of a pie or a donut, as parts an app spreads onto SVG elements of its own. | 52.29, 52.30, 52.38, 52.39, 52.62, 52.63, 52.64, 52.65, 52.66, 52.67, 52.80, 52.81, 49.2, 49.4, 49.5, 49.6 |
+| `PieOptions` | `{ slices: readonly { label: string; value: number \| null \| undefined }[] \| (() => readonly { label: string; value: number \| null \| undefined }[]); label: string \| (() => string); inner?: number \| (() => number); valueFormat?: (value: number) => string; onpick?: (index: number) => void; disabled?: (index: number) => boolean }` | What `pie` draws, each value read live where a function is given. | 52.66 |
+| `PieParts` | `{ readonly svg: Record<string, unknown>; get slices(): { index: number; label: string; value: number; share: number; hint: string; circle: Record<string, unknown> }[] }` | The `<svg>`'s part and every slice drawn as data with its circle's part. | 52.64, 52.80, 49.3, 49.9 |
+
+## `sparkline`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `sparkline` | `(options: SparklineOptions) => SparklineParts` | A trend with no axes, stretched to its box, as parts an app spreads onto SVG elements of its own. | 52.29, 52.30, 52.31, 52.33, 52.34, 52.81, 49.2, 49.4, 49.5, 49.6 |
+| `SparklineOptions` | `{ values: readonly (number \| null \| undefined)[] \| (() => readonly (number \| null \| undefined)[]); label: string \| (() => string); zero?: boolean \| (() => boolean); kind?: 'line' \| 'bar' \| (() => 'line' \| 'bar'); curve?: boolean \| (() => boolean) }` | What `sparkline` draws, each value read live where a function is given. | 52.33, 52.34, 52.105 |
+| `SparklineParts` | `{ readonly svg: Record<string, unknown>; readonly line: Record<string, unknown>; readonly area: Record<string, unknown>; readonly bars: Record<string, unknown>; readonly dot: Record<string, unknown>; get trend(): 'up' \| 'down' \| 'flat'; get ended(): boolean }` | The `<svg>`'s part, the line, the area, the bars and the end dot as parts, and the trend. | 52.31, 49.3, 49.9 |
+
+# Element behaviors
+
+## `dismissible`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: DismissibleOptions) => DismissibleParts` | A panel closed on a press outside it or on Escape, as parts an app spreads onto the panel and onto what counts as inside it. | 53.12, 53.13, 53.14, 53.15, 53.16, 32.99, 49.12 |
+| `DismissibleOptions` | `{ escape?: boolean; outside?: boolean }` | Whether Escape dismisses, and whether a press outside does. | 53.12, 53.14 |
+| `DismissibleParts` | `{ readonly host: Record<string, unknown>; readonly inside: Record<string, unknown> }` | The panel's part, and the part for an element a press on is not outside. | 53.12, 49.3, 49.9 |
+
+## `dropzone`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `dropzone` | `(options?: DropzoneOptions) => DropzoneParts` | Files dropped on an element, pasted into it, or picked through a file input, as parts an app spreads onto a host and an input of its own. | 53.17, 53.18, 53.19, 53.20, 53.45, 53.56, 53.57, 49.3, 49.8, 49.9 |
+| `DropzoneOptions` | `{ accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean \| (() => boolean); multiple?: boolean \| (() => boolean); files?: Reactive<readonly File[]>; onfiles?: (files: File[], event: Event) => void; onreject?: (files: File[], event: Event) => void }` | Which files a drop, a paste or a pick takes, the files it binds, and what hears them. | 53.19, 53.20, 53.45, 53.56, 49.8, 49.10, 49.11 |
+| `DropzoneParts` | `{ readonly host: Record<string, unknown>; readonly input: Record<string, unknown>; readonly files: Reactive<readonly File[]>; readonly rejected: readonly File[] }` | The drop target's part, a file input's part, the files taken last, and the files turned away last. | 53.17, 53.18, 53.45, 53.56, 53.57, 49.3, 49.9 |
+
+## `copy`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.22, 53.23, 53.43, 53.44, 53.54, 53.55, 53.71, 49.3, 49.12 |
+
+## `hotkeys`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `hotkeys` | `(bindings: Record<string, Hotkey>) => (event: KeyboardEvent) => void` | A `keydown` listener running the binding a key press matches, each binding written as its modifiers and its key joined by `+`. | 53.1, 53.2, 53.3, 53.4, 53.5, 53.6, 53.7, 53.8, 53.9 |
+| `Hotkey` | `((event: KeyboardEvent) => void) \| { run: (event: KeyboardEvent) => void; editable?: boolean; prevent?: boolean }` | What a binding runs, alone or with whether it also runs while the visitor types and whether it takes the key's default. | 53.2, 53.7 |
+
+## `isEditableTarget`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `isEditableTarget` | `(target: EventTarget \| null) => boolean` | Whether a key event's target is somewhere the visitor types. | 53.10 |
+
+## `followBottom`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `followBottom` | `(options?: FollowBottomOptions) => FollowBottom` | A scrolling element kept at its bottom as what it holds grows, until the reader scrolls up, and a button taking them back down, as parts to spread. | 32.99, 53.50, 53.58, 53.59, 53.60, 49.3, 49.8 |
+| `FollowBottomOptions` | `{ following?: Reactive<boolean>; threshold?: number \| (() => number); behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. | 53.58, 53.60, 49.8, 49.10, 49.11 |
+| `FollowBottom` | `{ readonly host: Record<string, unknown>; readonly jump: Record<string, unknown>; readonly following: Reactive<boolean>; toBottom(): void }` | The scroller's part, the jump button's part, whether it is following, and what takes it back down. | 53.50, 53.59, 53.60, 49.9 |
+
+## `scrollEdges`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `scrollEdges` | `() => Record<string, unknown>` | The part marking the scrolling element it is spread on with the edges it can still scroll toward. | 32.99, 32.101, 32.102, 32.103, 32.104, 32.105, 32.106, 32.107, 32.108, 49.3, 49.12 |
+
+## `observe`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `observe.size` | `{ (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): Record<string, unknown>; (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: 'content' \| 'border' }): Record<string, unknown>; (target: ((size: { width: number; height: number }) => void), options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): Record<string, unknown>; (target: ((size: { width: number; height: number }) => void), options?: { box?: 'content' \| 'border' }): Record<string, unknown>; (options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): { readonly host: Record<string, unknown>; readonly width: number \| undefined; readonly height: number \| undefined }; (options?: { box?: 'content' \| 'border' }): { readonly host: Record<string, unknown>; readonly width: number \| undefined; readonly height: number \| undefined } }` | The part writing the size of the element it is spread on into a target, or, given none, that part as `host` beside the width and the height read by name. | 32.79, 32.81, 32.82, 32.83, 32.90, 32.91, 32.92, 32.98, 32.99, 49.3, 49.12, 32.110 |
+| `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): Record<string, unknown>; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document; once?: boolean }): Record<string, unknown>; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): Record<string, unknown>; (target: ((visible: boolean) => void), options?: { in?: Element \| Document; once?: boolean }): Record<string, unknown>; (options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): { readonly host: Record<string, unknown>; readonly visible: boolean \| undefined }; (options?: { in?: Element \| Document; once?: boolean }): { readonly host: Record<string, unknown>; readonly visible: boolean \| undefined } }` | The part writing whether the element it is spread on is in view into a target, or, given none, that part as `host` beside `visible` read by name. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92, 32.98, 32.100, 32.99, 49.3, 49.12, 32.110 |
+| `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): Record<string, unknown>; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): Record<string, unknown>; (): { readonly host: Record<string, unknown>; readonly x: number \| undefined; readonly y: number \| undefined; readonly top: number \| undefined; readonly left: number \| undefined; readonly right: number \| undefined; readonly bottom: number \| undefined; readonly width: number \| undefined; readonly height: number \| undefined } }` | The part writing the rectangle, in the viewport, of the element it is spread on into a target, or, given none, that part as `host` beside each of the eight read by name. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92, 32.98, 32.99, 49.3, 49.12, 32.110 |
+
+## `announce`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `announce` | `(text: string, options?: AnnounceOptions) => void` | A message a screen reader reads out from the regions the app spreads `announce.host` on, with nothing shown. | 50.36, 50.49, 50.50 |
+| `announce.host` | `() => AnnouncerHost` | The polite and the assertive live region `announce` is read out from, as parts an app spreads onto markup of its own, from the script of the one component that renders them. | 50.36, 50.51, 49.3, 49.9, 49.2, 49.4, 49.5, 49.6 |
+| `AnnouncerHost` | `{ readonly polite: Record<string, unknown>; readonly assertive: Record<string, unknown>; said(politeness: 'polite' \| 'assertive'): readonly Announcement[] }` | The two regions' parts, and the message each holds. | 50.51, 50.52, 49.9 |
+| `Announcement` | `{ text: string; politeness: 'polite' \| 'assertive'; count: number }` | One message `announce` gave: its words, how urgently they are read, and which message it is. | 50.49, 50.52 |
+| `AnnounceOptions` | `{ politeness?: 'polite' \| 'assertive' }` | How urgently a message interrupts what a screen reader is reading. | 50.49 |
+
+# Helpers
+
+## `format`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `format` | `{ money; percent; number; plural; list; date; duration; relative; bytes }` | The formatters abide ships, as one namespace. | 52.1, 52.2, 52.6 |
+| `format.money` | `(value: unknown, options?: { currency?: string; compact?: boolean; signed?: boolean; digits?: number; locale?: string }) => string` | An amount of money as it is written. | 52.1, 52.2, 52.6, 52.35 |
+| `format.percent` | `(value: unknown, options?: { digits?: number; signed?: boolean; locale?: string }) => string` | A fraction written as a percent. | 52.1, 52.2, 52.6, 52.35 |
+| `format.number` | `(value: unknown, options?: { compact?: boolean; digits?: number; locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6 |
+| `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
+| `format.list` | `(value: unknown, options?: { conjunction?: 'and' \| 'or'; locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6 |
+| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101 |
+| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101 |
+| `format.timeZone` | `Reactive<string \| undefined>` | The zone the app pins every date to where its caller names none, or `undefined` for the visitor's own. | 52.3, 52.44, 52.45 |
+| `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
+| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
+| `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
+
+## `sortBy`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `sortBy` | `<Item>(items: readonly Item[], value: (item: Item) => unknown, direction?: 'ascending' \| 'descending') => Item[]` | A new array of `items` ordered by a value of each, blanks last and text in abide's locale, so a server and the page hydrating it agree. | 51.43, 51.44, 51.45, 51.46, 51.48 |
+
+## `markdown`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `markdown` | `(text: string, options?: { schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (source: string, info: string) => string>>; inline?: boolean; streaming?: boolean }) => string` | Markdown as HTML safe to hand `raw`. | 52.8, 52.9, 52.10, 52.11, 52.12, 52.13, 52.14, 52.15, 52.16, 52.40, 52.41, 52.42, 52.46, 52.47, 52.48, 52.49, 52.50 |
+| `markdown.incremental` | `(options: { source: string \| (() => string); schemes?: readonly string[] \| (() => readonly string[] \| undefined); headingLevel?: number \| (() => number \| undefined); href?: (address: string) => string \| LinkTarget \| undefined; blocks?: readonly string[] \| (() => readonly string[] \| undefined); streaming?: boolean \| (() => boolean \| undefined) }) => { readonly sections: readonly MarkdownSection[] }` | Markdown as sections an app renders itself, each kept while text only grows past it. | 52.17, 52.18, 52.40, 52.41, 52.43, 52.50, 49.10, 49.11 |
+| `MarkdownSection` | `{ readonly html: string; readonly block: { name: string; source: string; info: string } \| undefined }` | One section of a document: its markup, or the fenced block an app renders in its place. | 52.17, 52.43 |
+| `LinkTarget` | `{ href: string; target?: string; rel?: string }` | Where a link `markdown` writes goes: its address, and the `target` and `rel` it opens with. | 52.40 |
+
+## `instantAt`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `instantAt` | `(wallClock: string, options?: { timeZone?: string }) => number \| undefined` | The epoch milliseconds at which a zone's clocks read a day and a time. | 52.102, 52.103 |
+
+## `keyLabel`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `keyLabel` | `(binding: string, options?: { apple?: boolean }) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.9, 53.11, 53.51, 53.53 |
+| `keyLabel.parts` | `(binding: string, options?: { apple?: boolean }) => string[]` | Each key `keyLabel` writes for a binding, apart, for one key cap apiece. | 53.52, 53.53 |
+
+# Handlers
 
 ## `GET`
 
@@ -708,8 +910,6 @@ type Reached = { readonly [REACHED]: true }
 | `server-timing` | an rpc answer; `Middleware` and a `timing` span on any answer | The handler's duration, named `Direct`, `Seeded` from the render's run, `Cached` from a held `global` production, or `Started` to a stream's first chunk; the rungs' time; and each `timing` span. | 21.15, 21.20, 21.21, 24.6 |
 | `etag` | a `GET` answered from a `global` value | The version of the production answered. | 18.5, 18.6, 18.7, 18.9, 18.19, 18.20, 18.22, 18.23, 16.57 |
 
-# Generated surfaces
-
 ## `clients`
 
 | Name | Signature | Meaning | Rules |
@@ -730,7 +930,7 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 19.21, 19.22, 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 20.14, 20.16, 20.17, 20.19, 20.20, 20.21, 20.22, 20.23, 36.7, 16.78 |
 
-# Lifecycle hooks
+# Middleware and guards
 
 ## `middleware`
 
@@ -738,6 +938,195 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `middleware` | `(...rungs: ((next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request; lane: Lane }) => Response \| Failed<string, unknown> \| Promise<Response \| Failed<string, unknown>>)[]) => () => void` | The per-request lane at the calling file's route. | 18.26, 37.2, 37.3, 37.13, 37.14, 37.15, 37.19, 37.20 |
 | `Lane` | `'page' \| 'handler' \| 'file' \| 'openapi' \| 'mcp' \| 'bridge' \| 'socket' \| 'abide'` | What answers a request a `middleware` rung is handed. | 37.19 |
+
+## `signedIn`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `signedIn` | `Middleware<never, object, Failed<'SignedOut', undefined>>` | A rung admitting a caller the server authenticated, from `@abide/abide/server`. | 15.9, 54.1 |
+
+## `requireRole`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.7, 15.9, 54.2, 54.3, 54.4, 54.28 |
+
+## `trustedIdentity`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `trustedIdentity` | `(options: { header: string; proxies: readonly string[]; claims: (value: string) => Record<string, unknown> }) => Middleware` | A rung signing in the caller a trusted proxy names in a header, from `@abide/abide/server`. | 54.35, 54.36, 54.37 |
+
+## `readOnly`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `readOnly` | `(options?: { allow?: readonly { address: string \| undefined }[]; message?: string }) => Middleware<never, object, Failed<'ReadOnly', undefined>>` | A rung refusing every write but one to a handler it allows, from `@abide/abide/server`. | 15.9, 54.5, 54.6 |
+
+## `csp`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `csp` | `(sources?: Record<string, string[]>) => (next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Response \| Promise<Response>` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5, 29.6, 29.7, 29.8 |
+| `csp.nonce` | `() => string` | This response's nonce, for the app's own inline script. | 29.3, 29.4, 29.9, 29.11 |
+
+# Request context
+
+## `request`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `request` | `() => Request` | The request being served. | 18.16, 18.17, 18.18, 22.1 |
+| `request.ip` | `() => ReceivedFrom \| 'in-process'` | Where the request being served came from. | 22.1, 22.12, 22.13 |
+| `ReceivedFrom` | `{ address: string; family: 'IPv4' \| 'IPv6'; port: number } \| null` | The peer a listener received a request from. | 22.12 |
+
+## `response`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
+| `response.page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 16.75, 17.2 |
+| `response.json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. | 17.7, 17.9, 17.10 |
+| `response.redirect` | `(to: string \| URL, status?: RedirectStatus) => undefined` | A navigation. | 16.52, 17.3 |
+| `response.jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.44, 16.75, 17.6, 17.7 |
+| `response.sse` | `<T>(values: Values<T>) => Values<T>` | A stream of values framed as server-sent events, fixed. | 16.45, 16.57, 16.75, 17.6, 17.7 |
+| `response.bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.34, 16.75, 17.6, 17.7 |
+| `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `response.redirect` may carry. | 17.3 |
+| `response` | `() => { status: number; headers: Headers }` | The response being built for the request being served. | 16.13, 16.52, 21.10, 22.1, 22.9, 22.10 |
+
+## `cookies`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `cookies` | `() => Cookies` | The cookies of the request being served, live and mutable. | 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.10 |
+| `Cookies` | `class Cookies implements Iterable<[string, string]> { get(name: string): string \| null; has(name: string): boolean; set(name: string, value: string, options?: CookieInit): void; set(options: CookieInit): void; delete(name: string, options?: Omit<CookieStoreDeleteOptions, 'name'>): void; delete(options: CookieStoreDeleteOptions): void; size: number; toJSON(): Record<string, string>; toSetCookieHeaders(): string[] }` | A cookie jar shaped like Bun's `CookieMap`. | 22.4, 22.5, 22.6 |
+
+## `principal`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `principal.authenticated` | `Reactive<boolean>` | Whether this caller presented something the server accepted. | 26.1, 26.2 |
+| `principal.expiresAt` | `Reactive<string \| undefined>` | When the seal lapses. | 26.1, 26.2 |
+| `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver, or a browser's load of the document, having failed. | 26.1, 26.3, 26.23 |
+| `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4, 26.25, 26.26 |
+| `principal.caller` | `Reactive<string>` | Which browser, as against who they are. | 22.10, 26.5, 26.6, 26.7, 26.19, 26.22 |
+| `principal.set` | `(claims: Record<string, unknown>) => Promise<void>` | Authenticates this caller. | 18.25, 26.8, 26.12, 26.16, 26.17, 26.18, 26.20, 26.21, 26.24 |
+| `principal.clear` | `() => void` | Signs this caller out. | 18.25, 26.7, 26.9, 26.24 |
+| `Principal` | `interface Principal { [claim: string]: unknown; authenticated: boolean; expiresAt?: string; error?: Failed<string, unknown> }` | The wire document. | 26.4, 26.10, 26.13, 26.14, 26.15, 26.25 |
+| `authenticated` | `boolean` | Whether this caller presented a seal the server accepted. | 26.10 |
+| `expiresAt` | `string \| undefined` | When the seal lapses. | 26.11 |
+| `error` | `Failed<string, unknown> \| undefined` | The app's resolver having failed. | 26.3 |
+
+## `config`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `config` | `Reactive<Config>` | The resolved configuration document. | 27.1, 27.9 |
+| `Config` | `interface Config { [field: string]: unknown; APP_NAME: string; APP_VERSION: string; APP_DATA_DIR: string }` | The resolved document, widened by what each `onConfig`'s defaults return, and by declaration merging. | 27.12, 27.13 |
+| `Env` | `Record<string, string \| undefined>` | The process environment as read, before coercion. | 27.2, 27.8 |
+| `config.invalidate` | `() => void` | The trigger over the resolved configuration. | 7.2, 27.5 |
+| `ConfigDefaults` | `(env: Env) => unknown` | The defaults function, synchronous by contract. | 27.4, 27.11 |
+| `ConfigField` | `{ name: string; label: string; description: string \| undefined; input: 'text' \| 'number' \| 'checkbox' \| 'password' \| 'url' \| 'select'; options: string[] \| undefined; required: boolean; value: string }` | One input the start form asks for. | 38.72 |
+
+### `ConfigOptions`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `schema` | `Schema<Config>` | The gate over the whole configuration document. | 27.7 |
+
+## `server`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `server` | `<WebSocketData>() => Server<WebSocketData>` | The listening server. | 22.1, 42.9 |
+
+## `reachable`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `reachable` | `(host: string) => Promise<boolean>` | Whether a host answers at all. | 23.10, 23.11, 23.12, 23.13 |
+
+## `isServer`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `isServer` | `() => boolean` | Whether the work running is a server's. | 22.11, 12.7, 23.7, 23.8 |
+
+# Browser context
+
+## `online`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8, 18.33, 18.34, 41.32 |
+
+## `media`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `media` | `(query: string) => Reactive<boolean>` | Whether the document matches a media query. | 23.30, 23.31, 23.32, 41.32 |
+
+## `outbox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `outbox` | `<Chosen extends Selection>(selection?: Chosen, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 46.20, 46.21, 18.35 |
+| `rpc.outbox` | `(pattern?: Partial<Args>) => QueuedCall[]` | `outbox` narrowed to the handler's calls. | 46.1, 13.12 |
+| `QueuedCall` | `{ id: string; method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string; args: Record<string, JsonValue> \| undefined; queuedAt: number; attempts: number; value: Reactive<Value, Value, Failed<string, unknown>>; retry: () => void; discard: () => void }` | One call `outbox` holds. | 46.1, 46.10 |
+| `call.value` | `Reactive<Value, Value, Failed<string, unknown>>` | The value a queued call settled. | 46.5, 46.7, 46.18, 46.19 |
+| `call.retry` | `() => void` | Sends a queued call again. | 46.6, 46.12 |
+| `call.discard` | `() => void` | Drops a queued call. | 46.13 |
+
+# App and lifecycle
+
+## `createApp`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 42.16, 42.22, 37.4, 37.6, 38.100 |
+| `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
+| `App.fetch` | `(request: Request, options?: { principal?: Record<string, unknown>; caller?: string }) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6, 42.20, 42.21 |
+| `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request; principal?: Record<string, unknown>; caller?: string }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 42.19, 42.21, 11.38 |
+| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 7.30 |
+| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.26, 7.27, 7.31, 7.37, 7.38, 7.40, 7.41, 7.42 |
+| `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
+
+## Environment variables
+
+| Name | Type | Meaning | Rules |
+| --- | --- | --- | --- |
+| `PORT` | `number` | The listen port. | 36.1, 38.63, 38.64 |
+| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.17 |
+| `NODE_ENV` | `string` | The environment name, verbatim. | 36.3, 36.16 |
+| `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4, 38.87 |
+| `APP_VERSION` | `string` | The version beside that name. | 27.3 |
+| `APP_DATA_DIR` | `string` | The platform's per-user data directory. | 27.3, 36.4 |
+| `ABIDE_UPDATE_KEY` | `string \| null` | The key `abide native` signs the native app's updates with. | 38.147 |
+| `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.11, 36.5, 38.120, 38.175 |
+| `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.15, 26.16 |
+| `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
+| `ABIDE_APP_URL` | `string \| null` | Names an app somewhere else, for the remote CLI. | 36.6 |
+| `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.22, 16.58 |
+| `ABIDE_BRIDGE_TOOLS` | `string` | The tools of the visitor's machine `/__abide/pairing` asks a bridge for, separated by commas. | 44.67 |
+| `ABIDE_BRIDGE_FULL` | `boolean` | Whether `/__abide/pairing` asks a bridge for full access. | 44.67 |
+| `ABIDE_BRIDGE_NOTE` | `string` | The app's note on why it asks, shown in the question a pairing link asks. | 44.67, 44.91 |
+| `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
+| `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
+| `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
+| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23, 45.24, 45.25, 45.26, 45.27, 45.28, 45.29 |
+| `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
+| `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
+| `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |
+| `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. | 36.8 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `string \| null` | Where the app's lines and spans are sent as OTLP. | 36.19, 36.20, 36.21, 36.23 |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `string \| null` | Where the app's lines are sent, in place of the endpoint's. | 36.19, 36.20 |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `string \| null` | Where the app's spans are sent, in place of the endpoint's. | 36.19, 36.20 |
+| `OTEL_EXPORTER_OTLP_HEADERS` | `string \| null` | The headers every export carries, as `name=value` pairs separated by commas. | 36.20 |
+| `OTEL_SERVICE_NAME` | `string \| null` | The service every export is sent under. | 36.22 |
+| `OTEL_SDK_DISABLED` | `'true' \| null` | Turns every export off. | 36.19 |
+| `DEBUG` | `string \| null` | Log-namespace gating. | 28.6, 28.9, 28.10, 28.11 |
+| `NO_COLOR` | `string \| null` | Refuses ansi anywhere. | 36.9 |
+| `FORCE_COLOR` | `string \| null` | Asks for the readable form off a pipe. | 36.9 |
 
 ## `onStart`
 
@@ -801,342 +1190,6 @@ type Reached = { readonly [REACHED]: true }
 | `LauncherOptions` | `{ width?: number; height?: number; minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number; titlebar?: 'standard' \| 'hidden' \| 'inset'; vibrancy?: 'titlebar' \| 'selection' \| 'menu' \| 'popover' \| 'sidebar' \| 'headerView' \| 'sheet' \| 'windowBackground' \| 'hudWindow' \| 'fullScreenUI' \| 'toolTip' \| 'contentBackground' \| 'underWindowBackground' \| 'underPageBackground'; appearance?: 'system' \| 'light' \| 'dark'; resizable?: boolean; fullScreen?: boolean; alwaysOnTop?: boolean; shadow?: boolean; rememberFrame?: boolean; inspector?: boolean; panelWidth?: number; panelHeight?: number; update?: string } & ({ start?: true \| 'immediately'; connect?: boolean } \| { start: false; connect?: true }) & ({ dock?: boolean; menuBarExtra?: boolean } \| { dock: 'window'; menuBarExtra: true })` | What an `onLauncher` may answer. | 38.80, 38.81, 38.142, 38.143, 38.144, 38.150, 38.151, 38.152, 38.154, 38.157, 38.158, 38.159, 38.160, 38.161, 38.162, 38.163, 38.165, 38.166, 38.168, 38.172, 38.173, 38.182, 38.183, 38.184, 38.185, 38.187 |
 | `Launch` | `{ name: string; start: string \| undefined; connect: string \| undefined; fields: ConfigField[]; url: string; failure: { form: 'start' \| 'connect'; message: string; issues: Record<string, string[]> } \| undefined; focus: 'start' \| 'connect' \| undefined; icon: string \| undefined; accent: string \| undefined }` | The props a launch page is rendered with. | 38.82, 38.83, 38.87, 38.101 |
 
-# Overlays
-
-## `dialog`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `dialog` | `(options?: DialogOptions) => DialogParts` | A native modal as a part an app spreads onto a `<dialog>` of its own, opened and closed by `open`. | 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
-| `DialogOptions` | `{ open?: Reactive<boolean>; modal?: boolean \| (() => boolean); dismissible?: boolean \| (() => boolean); onclose?: (returnValue: string) => void }` | Whether the dialog shows, and how it opens and closes. | 50.1, 50.2, 50.3 |
-| `DialogParts` | `{ readonly dialog: Record<string, unknown>; readonly open: Reactive<boolean> }` | The `<dialog>`'s part, and whether it is showing. | 32.11, 32.99, 49.3, 49.8, 49.9 |
-
-## `prompts`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `prompts.confirm` | `(asked: string \| PromptOptions) => Promise<boolean>` | A yes-or-no question shown where the app spreads `prompts.host`. | 50.5, 50.7, 50.8, 50.11, 50.36, 11.32 |
-| `prompts.alert` | `(told: string \| PromptOptions) => Promise<void>` | A message shown where the app spreads `prompts.host` until it is closed. | 50.5, 50.7, 50.9, 50.11, 50.36, 11.32 |
-| `prompts.prompt` | `(asked: string \| PromptOptions) => Promise<string \| undefined>` | A line of text asked for where the app spreads `prompts.host`. | 50.5, 50.7, 50.11, 50.33, 50.36, 11.32 |
-| `PromptOptions` | `{ title?: string; body?: string; confirm?: string; cancel?: string; danger?: boolean; mustType?: string; value?: string; placeholder?: string; signal?: AbortSignal; modal?: boolean; run?: (answer: string) => unknown }` | What a prompt shows, what its buttons say, what withdraws it, whether it is modal, and the call confirming makes. | 50.7, 50.10, 50.34, 50.43, 50.44, 50.45 |
-| `prompts.host` | `() => PromptsHost` | The `<dialog>` the queued prompts show in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.6, 50.8, 50.9, 50.10, 50.34, 50.36, 50.45, 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
-| `PromptsHost` | `{ readonly dialog: Record<string, unknown>; readonly form: Record<string, unknown>; get current(): ShownPrompt \| undefined; get typing(): boolean; readonly title: Record<string, unknown>; readonly body: Record<string, unknown>; readonly field: Record<string, unknown>; readonly input: Record<string, unknown>; get failed(): string \| undefined; readonly error: Record<string, unknown>; readonly confirm: Record<string, unknown>; readonly cancel: Record<string, unknown>; readonly actions: Record<string, unknown> }` | The dialog's, the form's, the title's, the body's, the field's, the input's, the error's, the two buttons' and their holder's parts, the prompt showing, whether it asks for text, and what its `run` failed with. | 32.11, 32.99, 50.6, 50.10, 50.34, 50.45, 49.3, 49.9 |
-| `ShownPrompt` | `Readonly<{ title: string \| undefined; body: string; confirm: string; cancel: string; danger: boolean; mustType: string \| undefined; value: string; placeholder: string \| undefined; modal: boolean; kind: 'confirm' \| 'alert' \| 'prompt' }>` | The prompt showing, as markup reads it. | 50.6 |
-
-## `toasts`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16, 50.36 |
-| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.41, 50.42 |
-| `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
-| `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
-| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.41 |
-| `toasts.host` | `(options?: ToastsHostOptions) => ToastsHost` | The live region the notices show in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.17, 50.18, 50.36, 49.2, 49.4, 49.5, 49.6 |
-| `ToastsHostOptions` | `{ label?: string \| (() => string) }` | The region's accessible name. | 50.17 |
-| `ToastsHost` | `{ readonly region: Record<string, unknown>; get notices(): readonly Toast[]; toast(toast: Toast): ToastParts }` | The region's part, the notices to render, and a notice's parts. | 32.11, 50.17, 50.18, 50.41, 49.3, 49.9 |
-| `ToastParts` | `{ readonly toast: Record<string, unknown>; readonly text: Record<string, unknown>; readonly action: Record<string, unknown>; readonly close: Record<string, unknown>; act(): void; dismiss(): void }` | A notice's, its text's, its action's and its close button's parts, and what runs its action or closes it. | 50.15, 50.17, 50.18, 50.41, 49.3, 49.9 |
-
-## `tooltip`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `tooltip.tip` | `(text: string, options?: TooltipOptions) => Record<string, unknown>` | The part opening a text hint for the element it is spread on, shown by the page's `tooltip.host`. | 32.99, 50.23, 50.24, 50.25, 50.36, 53.15, 49.3, 49.12 |
-| `tooltip.host` | `() => TooltipHost` | The popover every hint shows in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.36, 50.47, 50.53, 49.14, 49.2, 49.4, 49.5, 49.6 |
-| `TooltipHost` | `{ readonly hint: Record<string, unknown>; get text(): string \| undefined }` | The popover's part, and the text of the hint showing in it. | 32.11, 50.53, 50.54, 49.3, 49.9 |
-| `TooltipOptions` | `{ align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); side?: Side \| (() => Side); delay?: number \| (() => number) }` | Where a hint opens against its anchor, placed as a `popover` is, and how long a pointer rests first. | 50.19, 50.20, 50.21, 50.24, 50.26, 50.35, 49.10, 49.11 |
-
-## `menu`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as two parts an app spreads onto elements of its own: a trigger and the menu it opens. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.28, 50.29, 50.30, 50.31, 50.32, 50.35, 50.37, 50.38, 50.39, 50.40, 49.7, 50.55, 50.56, 50.57, 50.58, 49.14, 49.2, 49.4, 49.5, 49.6 |
-| `MenuOptions` | `Omit<PopoverOptions, 'align' \| 'offset' \| 'escape' \| 'outside'> & { id?: string; open?: Reactive<boolean>; align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); openOnHover?: number \| false \| (() => number \| false); closeOnLeave?: number \| false \| (() => number \| false); group?: string \| (() => string \| undefined); onopen?: () => void; onclose?: () => void }` | Whether the menu is open, where it opens against its trigger, placed as a `popover` is, whether a resting pointer opens it and a leaving one closes it, the group it switches within, and what hears it open and close. | 50.19, 50.20, 50.21, 50.35, 50.37, 49.8, 49.10, 49.11, 50.55, 50.56, 50.57 |
-| `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The trigger's part and the menu's, each spread onto an element, and whether the menu is open. | 32.11, 50.38, 49.3, 49.8, 49.9 |
-
-## `dismissible`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: DismissibleOptions) => DismissibleParts` | A panel closed on a press outside it or on Escape, as parts an app spreads onto the panel and onto what counts as inside it. | 53.12, 53.13, 53.14, 53.15, 53.16, 32.99, 49.12 |
-| `DismissibleOptions` | `{ escape?: boolean; outside?: boolean }` | Whether Escape dismisses, and whether a press outside does. | 53.12, 53.14 |
-| `DismissibleParts` | `{ readonly host: Record<string, unknown>; readonly inside: Record<string, unknown> }` | The panel's part, and the part for an element a press on is not outside. | 53.12, 49.3, 49.9 |
-
-## `popover`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `popover` | `(options?: PopoverOptions) => PopoverParts` | An app's own overlay as parts it spreads onto a trigger or an anchor and a popover of its own, shown in the top layer against the one while `open` holds. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.48, 50.59, 50.60, 32.99, 49.7, 49.12, 49.14, 49.2, 49.4, 49.5, 49.6 |
-| `PopoverOptions` | `{ side?: Side \| (() => Side); align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); id?: string; open?: Reactive<boolean>; escape?: boolean; outside?: boolean }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners, the base of its ids, whether it is open, and whether Escape and a press outside close it. | 50.19, 50.20, 50.21, 50.35, 50.60, 49.8, 49.10, 49.11 |
-| `PopoverParts` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly popover: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the popover's, and whether it is open. | 50.48, 50.59, 32.11, 49.3, 49.8, 49.9 |
-| `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
-
-# Input and lists
-
-## `form`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `form` | `<Handler extends Rpc<any, any, any, any>>(handler: Handler) => Form<Handler>` | A form over a handler as parts an app spreads onto a `<form>` and fields of its own, checked against the handler's args document before the call is made. | 56.1, 56.2, 56.3, 56.4, 56.5, 56.6, 56.7, 56.8, 56.12, 56.14, 56.15, 56.18, 56.19, 56.23, 19.13, 49.3, 49.7, 49.9 |
-| `FieldName` | `Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? keyof NonNullable<Args> & string : string` | The names a form's fields post under: the members of its handler's args. | 56.1 |
-| `Form` | `{ readonly form: Record<string, unknown>; field(name: FieldName<Handler>): FormField; readonly error: Record<string, unknown>; get message(): string \| undefined; readonly submit: Record<string, unknown>; readonly reset: Record<string, unknown>; get dirty(): boolean; get changes(): Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? Partial<NonNullable<Args>> : Record<string, unknown>; get issues(): Issues<Handler> \| undefined; readonly call: ReturnType<Handler> }` | The form's part, a field's parts by name, the form's own message and its element, a submit button's and a reset button's parts, whether a field differs from its baseline and the args holding those that do, what is wrong with the form, and the last call it made. | 32.11, 56.4, 56.10, 56.11, 56.13, 56.16, 56.17, 56.20, 56.22, 49.9 |
-| `FormField` | `{ readonly input: Record<string, unknown>; readonly error: Record<string, unknown>; get message(): string \| undefined; get invalid(): boolean; get changed(): boolean }` | One field's parts — the field's and its message element's — with its first message, whether it has one, and whether it differs from its baseline. | 56.9, 56.10, 56.13, 56.16, 56.21, 49.9 |
-
-## `combobox`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `combobox` | `<Item>(options: ComboboxOptions<Item>) => ComboboxParts<Item>` | WAI-ARIA's combobox with a list popup as parts an app spreads onto an input, a popup and options of its own. | 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.55, 51.56, 51.57, 51.92, 51.93, 51.106, 49.7, 49.14, 49.2, 49.4, 49.5, 49.6 |
-| `ComboboxOptions` | `<Item, Multiple extends boolean = false>{ id?: string; options?: readonly Item[] \| (() => readonly Item[]); search?(query: string): readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key?(item: Item): string; label?(item: Item): string; multiple?: Multiple; value?: Reactive<Picked<Item, Multiple>> }` | What a combobox lists, how an item is told apart and written, and the pick it holds. | 51.15, 51.16, 51.18, 51.24, 51.55, 49.8, 49.10, 49.11 |
-| `ComboboxParts` | `<Item, Multiple extends boolean = false>{ readonly id: string; readonly root: Record<string, unknown>; readonly input: Record<string, unknown>; readonly open: Reactive<boolean>; readonly popup: Record<string, unknown>; readonly listbox: Record<string, unknown>; get items(): readonly Item[]; option(item: Item): Record<string, unknown>; runs(item: Item): readonly LabelRun[]; get nothingFound(): boolean; readonly empty: Record<string, unknown>; readonly value: Reactive<Picked<Item, Multiple>>; get picks(): readonly Item[] \| undefined; readonly chips: Record<string, unknown>; chip(item: Item): ComboboxChip; unpick(item: Item): void }` | The parts `combobox` hands back: its id, the field's wrapper, the input, whether it is open, the popup, the list, an option, an item's label in runs, the empty status, the pick, the items picked, their chips and what takes one out. | 51.26, 51.30, 51.31, 51.56, 51.57, 51.106, 32.99, 49.3, 49.8, 49.9 |
-| `ComboboxChip` | `{ readonly chip: Record<string, unknown>; readonly remove: Record<string, unknown> }` | A picked item's chip, and the button taking it out. | 51.56, 49.3 |
-| `Picked` | `Picked<Item, Multiple extends boolean> = Multiple extends true ? readonly Item[] : Item \| undefined` | What a pick holds: every one picked where it picks many, else the one picked or none. | 51.55, 51.98 |
-| `LabelRun` | `{ readonly text: string; readonly match: Record<string, unknown> \| undefined }` | A stretch of a label, and the `match` part of the element marking it where it is what was typed. | 51.106, 51.107, 49.3 |
-
-## `commandPalette`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `commandPalette` | `(options: CommandPaletteOptions) => CommandPaletteParts` | WAI-ARIA's combobox in a modal dialog over the commands an app can run, as parts an app spreads onto elements of its own. | 51.65, 51.66, 51.67, 51.68, 51.69, 51.70, 51.71, 51.107, 49.7, 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
-| `CommandPaletteOptions` | `{ commands: readonly Command[] \| (() => readonly Command[]); open?: Reactive<boolean>; hotkey?: string \| (() => string); id?: string; label?: string \| (() => string) }` | What the palette lists, what opens it, and what it is called. | 51.65, 51.66, 49.10, 49.11 |
-| `CommandPaletteParts` | `{ readonly id: string; readonly dialog: Record<string, unknown>; readonly input: Record<string, unknown>; readonly listbox: Record<string, unknown>; command(command: Command): CommandParts; readonly empty: Record<string, unknown>; get results(): readonly Command[]; readonly open: Reactive<boolean> }` | The dialog's part, the input's, the list's, a command's parts, the empty status, the commands listed and whether it shows. | 32.11, 51.66, 51.67, 49.3, 49.8, 49.9 |
-| `CommandParts` | `{ readonly option: Record<string, unknown>; readonly label: Record<string, unknown>; readonly key: Record<string, unknown>; readonly runs: readonly LabelRun[] }` | A command's option, the label and the key written in it, and the label in runs. | 51.67, 51.107, 49.3 |
-| `Command` | `{ label: string; keywords?: readonly string[]; key?: string; run: () => void }` | One thing the palette can do: what it is called, the further words typing matches, the key shown beside it and what choosing it does. | 51.66, 51.68, 51.70 |
-
-## `tabs`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `tabs` | `(options: TabsOptions) => Tabs` | WAI-ARIA's tabs as parts an app spreads onto elements of its own: a tab list, a tab per key, and a panel. | 51.34, 51.35, 51.36, 51.37, 51.38, 51.39, 51.40, 51.41, 51.42, 49.7, 49.2, 49.4, 49.5, 49.6 |
-| `TabsOptions` | `{ id?: string; keys: readonly string[] \| (() => readonly string[]); selected?: Reactive<string \| undefined> }` | The tabs' keys in order, and the key of the one selected. | 51.34, 51.35, 49.8 |
-| `TabParts` | `{ readonly button: Record<string, unknown>; readonly panel: Record<string, unknown> }` | One tab's button, and the panel kept for it alone. | 51.40, 49.3 |
-| `Tabs` | `{ readonly id: string; readonly list: Record<string, unknown>; tab(key: string): TabParts; readonly panel: Record<string, unknown>; readonly selected: Reactive<string \| undefined> }` | The list's part, a tab's parts, the one panel every tab shows in, and the key of the tab selected. | 32.11, 51.34, 51.40, 51.41, 49.3, 49.8, 49.9 |
-
-## `tree`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `tree` | `<Node, Multiple extends boolean = false>(options: TreeOptions<Node, Multiple>) => Tree<Node, Multiple>` | WAI-ARIA's tree as parts an app spreads onto elements of its own: the tree, an item per node, and the group holding a node's children. | 51.77, 51.78, 51.79, 51.80, 51.81, 51.82, 51.83, 51.84, 51.98, 51.99, 51.100, 51.101, 51.102, 51.103, 49.7, 49.2, 49.4, 49.5, 49.6 |
-| `TreeOptions` | `<Node, Multiple extends boolean = false>{ id?: string; roots: readonly Node[] \| (() => readonly Node[]); children(node: Node): readonly Node[] \| undefined; key?(node: Node): string; label?(node: Node): string; expanded?: Reactive<readonly string[]>; multiple?: Multiple; selected?: Reactive<Picked<string, Multiple>> }` | The nodes, how each is told apart and named, which are expanded, and whether one or many are selected and which. | 51.77, 51.79, 51.82, 51.83, 51.98, 49.8, 49.11 |
-| `Tree` | `<Node, Multiple extends boolean = false>{ readonly id: string; readonly tree: Record<string, unknown>; node(node: Node): TreeNode; readonly expanded: Reactive<readonly string[]>; readonly selected: Reactive<Picked<string, Multiple>> }` | The tree's part, a node's parts, and which nodes are expanded and which are selected. | 51.77, 51.78, 51.84, 51.98, 49.3, 49.8, 49.9 |
-| `TreeNode` | `{ readonly item: Record<string, unknown>; readonly group: Record<string, unknown>; get expanded(): boolean; toggle(): void }` | A node's item and group, whether it is expanded, and what expands or collapses it. | 51.77, 51.78, 51.84, 49.3 |
-
-## `range`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `range` | `(options: RangeOptions) => RangeParts` | WAI-ARIA's multi-thumb slider as parts an app spreads onto elements of its own: a group, a track, the span between the thumbs, two thumbs and a field for each. | 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91, 49.7, 49.2, 49.4, 49.5, 49.6 |
-| `RangeOptions` | `{ id?: string; value?: Reactive<readonly [number, number]>; label: string \| (() => string); min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); labels?: readonly [string, string] \| (() => readonly [string, string]); format?: (value: number) => string; name?: string \| (() => string \| undefined) }` | The range picked, and the scale it is picked on. | 51.85, 51.86, 51.91, 49.8, 49.10, 49.11 |
-| `RangeParts` | `{ readonly id: string; readonly root: Record<string, unknown>; readonly track: Record<string, unknown>; readonly fill: Record<string, unknown>; end(which: 0 \| 1): RangeEnd; readonly value: Reactive<readonly [number, number]> }` | The group's part, the track's, the span's, an end's parts, and the range picked. | 32.11, 51.90, 49.3, 49.8, 49.9 |
-| `RangeEnd` | `{ readonly thumb: Record<string, unknown>; readonly input: Record<string, unknown> }` | An end's thumb, and the hidden field submitting it. | 51.90, 51.91, 49.3 |
-
-## `sortableTable`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `sortableTable` | `<Row>(options: SortableTableOptions<Row>) => SortableTableParts<Row>` | A table sorted by its headers and picked by its rows, as parts an app spreads onto a `<table>` of its own. | 51.49, 51.50, 51.51, 51.52, 51.53, 51.54, 51.72, 51.73, 51.74, 51.75, 51.76, 49.2, 49.4, 49.5, 49.6 |
-| `SortableTableOptions` | `<Row>{ rows: readonly Row[] \| (() => readonly Row[]); columns: readonly Column<Row>[] \| (() => readonly Column<Row>[]); key?(row: Row): string; sort?: Reactive<Sort \| undefined>; selected?: Reactive<readonly string[] \| undefined> }` | The rows and columns of a sortable table, how a row is told apart, and its sort and selection. | 51.49, 51.72, 49.8 |
-| `SortableTableParts` | `<Row>{ readonly table: Record<string, unknown>; get rows(): readonly Row[]; column(column: Column<Row>): SortableTableColumn; row(row: Row): SortableTableRow; text(row: Row, column: Column<Row>): string; readonly selectAll: { readonly select: Record<string, unknown>; readonly checkbox: Record<string, unknown> }; readonly sort: Reactive<Sort \| undefined>; readonly selected: Reactive<readonly string[] \| undefined> }` | The parts `sortableTable` hands back: the table, the rows in sorted order, a column's parts, a row's parts, a cell's text, the header's checkbox and its cell, and the sort and the selection. | 51.49, 51.50, 51.51, 51.52, 51.53, 51.54, 51.72, 51.75, 32.99, 49.3, 49.8, 49.9 |
-| `SortableTableColumn` | `{ readonly header: Record<string, unknown>; readonly sort: Record<string, unknown>; readonly cell: Record<string, unknown> }` | A column's header cell, its sort button, and its body cells. | 51.49, 51.50, 51.51, 51.52, 49.3 |
-| `Column` | `Column<Row> = { key: string; label: string; align?: 'start' \| 'end'; value?: (row: Row) => unknown; format?: (value: unknown, row: Row) => string; sortable?: boolean; firstDirection?: 'ascending' \| 'descending' }` | One column of a sortable table: its header, what it sorts by and what its cells show. | 51.47, 51.50, 51.53, 51.54 |
-| `Sort` | `{ key: string; direction: 'ascending' \| 'descending' }` | The column a table is sorted by, and its direction. | 51.49, 51.50, 51.51, 51.52 |
-| `SortableTableRow` | `{ readonly row: Record<string, unknown>; readonly select: Record<string, unknown>; readonly checkbox: Record<string, unknown>; readonly detail: Record<string, unknown> }` | A row's part, the cell holding its checkbox, the checkbox, and a detail row under it. | 51.72, 51.74, 49.3 |
-
-## `listbox`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `listbox` | `<Option, Multiple extends boolean = false>(options: ListboxOptions<Option, Multiple>) => Listbox<Option, Multiple>` | A keyboard controller over a list of keyed options, for markup the app writes itself. | 51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7, 51.8, 51.9, 51.10, 51.11, 51.12, 51.98, 51.99, 51.100, 51.101, 51.102, 51.103, 51.104, 51.105, 49.7, 49.2, 49.4, 49.5, 49.6 |
-| `ListboxOptions` | `ListboxOptions<Option, Multiple extends boolean = false> = { id?: string; options: readonly Option[] \| (() => readonly Option[]); key?: (option: Option) => string; wrap?: boolean \| (() => boolean); multiple?: Multiple; selected?: Reactive<Picked<string, Multiple>>; onpick?: (option: Option) => void; onescape?: () => void }` | What `listbox` is handed: the options, what tells them apart, whether one or many are selected and which, and what Enter and Escape call. | 51.1, 51.6, 51.8, 51.9, 51.10, 51.98, 51.104, 51.105, 49.8, 49.10, 49.11 |
-| `Listbox` | `Listbox<Option, Multiple extends boolean = false> = { readonly id: string; readonly active: string \| undefined; readonly activeOption: Option \| undefined; readonly activeId: string \| undefined; activate: (key: string) => void; idOf: (key: string) => string; onkeydown: (event: KeyboardEvent) => void; readonly listbox: Record<string, unknown>; option(key: string): Record<string, unknown>; readonly selected: Reactive<Picked<string, Multiple>> }` | What `listbox` hands back: its id, the active key and option, the ids and the listener the markup takes, the list's part and an option's, and the keys selected. | 51.1, 51.2, 51.3, 51.10, 51.11, 51.94, 51.98, 51.104, 49.3, 49.8, 49.9, 49.13 |
-
-## `virtualList`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `virtualList` | `<Item>(options: VirtualListOptions<Item>) => VirtualList<Item>` | A long list's items that are in view, measured from the app's own markup — a list or a CSS grid — as parts to spread, for a keyed `{#for}` over just those items. | 51.58, 51.59, 51.60, 51.61, 51.62, 51.63, 51.97, 32.99, 49.3 |
-| `VirtualListOptions` | `<Item>{ items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; section?: (item: Item) => string; labels?: readonly string[] \| (() => readonly string[]); overscan?: number \| (() => number); initial?: number; estimate?: number; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how one is told apart and grouped, the rows past each end, what renders before a measurement, and how a jump scrolls. | 51.58, 51.60, 51.64, 49.10, 49.11 |
-| `VirtualList` | `<Item>{ readonly host: Record<string, unknown>; item(entry: VirtualListEntry<Item>): Record<string, unknown>; get shown(): readonly VirtualListEntry<Item>[]; readonly sections: VirtualListSections; scrollTo(index: number): void }` | The host's part, an item's part, the items to render, the sections and their jumps, and what scrolls to an item. | 51.58, 51.62, 51.63, 49.9 |
-| `VirtualListEntry` | `<Item>{ item: Item; index: number; key: string }` | One item `shown` renders: the item, where it stands in `items`, and its key. | 51.58 |
-| `VirtualListSection` | `{ label: string; index: number }` | One section: its label, and the index of its first item, or `-1` where it has none. | 51.64 |
-| `VirtualListSections` | `{ readonly host: Record<string, unknown>; get all(): readonly VirtualListSection[]; get current(): string \| undefined; jump(section: VirtualListSection): Record<string, unknown> }` | The jump index: its host, every section, the one in view, and a section's jump. | 51.64, 51.95, 51.96, 49.9 |
-
-## `carousel`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centers, as parts an app spreads onto a scroller, its items and a button either side. | 53.61, 53.62, 53.63, 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 32.99, 49.3, 49.7, 49.2, 49.4, 49.5, 49.6 |
-| `CarouselOptions` | `<Item>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; label?: (item: Item) => string; selected?: Reactive<string \| undefined>; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how each is told apart and named, the key of the one the carousel rests on, and how a scroll to an item moves. | 53.61, 53.62, 53.68, 49.8, 49.10, 49.11 |
-| `Carousel` | `<Item>{ readonly id: string; readonly host: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; get centered(): string \| undefined; readonly selected: Reactive<string \| undefined>; scrollTo(key: string): void; reset(): void }` | The scroller's part, an item's part, the two buttons' parts, the key of the item centered, the key it rests on, and what scrolls to an item and back. | 53.63, 53.67, 53.68, 53.69, 49.3, 49.8, 49.9 |
-
-## `sortBy`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `sortBy` | `<Item>(items: readonly Item[], value: (item: Item) => unknown, direction?: 'ascending' \| 'descending') => Item[]` | A new array of `items` ordered by a value of each, blanks last and text in abide's locale, so a server and the page hydrating it agree. | 51.43, 51.44, 51.45, 51.46, 51.48 |
-
-## `hotkeys`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `hotkeys` | `(bindings: Record<string, Hotkey>) => (event: KeyboardEvent) => void` | A `keydown` listener running the binding a key press matches, each binding written as its modifiers and its key joined by `+`. | 53.1, 53.2, 53.3, 53.4, 53.5, 53.6, 53.7, 53.8, 53.9 |
-| `Hotkey` | `((event: KeyboardEvent) => void) \| { run: (event: KeyboardEvent) => void; editable?: boolean; prevent?: boolean }` | What a binding runs, alone or with whether it also runs while the visitor types and whether it takes the key's default. | 53.2, 53.7 |
-
-## `keyLabel`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `keyLabel` | `(binding: string, options?: { apple?: boolean }) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.9, 53.11, 53.51, 53.53 |
-| `keyLabel.parts` | `(binding: string, options?: { apple?: boolean }) => string[]` | Each key `keyLabel` writes for a binding, apart, for one key cap apiece. | 53.52, 53.53 |
-
-## `isEditableTarget`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `isEditableTarget` | `(target: EventTarget \| null) => boolean` | Whether a key event's target is somewhere the visitor types. | 53.10 |
-
-## `dropzone`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `dropzone` | `(options?: DropzoneOptions) => DropzoneParts` | Files dropped on an element, pasted into it, or picked through a file input, as parts an app spreads onto a host and an input of its own. | 53.17, 53.18, 53.19, 53.20, 53.45, 53.56, 53.57, 49.3, 49.8, 49.9 |
-| `DropzoneOptions` | `{ accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean \| (() => boolean); multiple?: boolean \| (() => boolean); files?: Reactive<readonly File[]>; onfiles?: (files: File[], event: Event) => void; onreject?: (files: File[], event: Event) => void }` | Which files a drop, a paste or a pick takes, the files it binds, and what hears them. | 53.19, 53.20, 53.45, 53.56, 49.8, 49.10, 49.11 |
-| `DropzoneParts` | `{ readonly host: Record<string, unknown>; readonly input: Record<string, unknown>; readonly files: Reactive<readonly File[]>; readonly rejected: readonly File[] }` | The drop target's part, a file input's part, the files taken last, and the files turned away last. | 53.17, 53.18, 53.45, 53.56, 53.57, 49.3, 49.9 |
-
-## `copy`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.22, 53.23, 53.43, 53.44, 53.54, 53.55, 53.71, 49.3, 49.12 |
-
-# Charts
-
-## `chart`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `chart` | `(options: ChartOptions) => ChartParts` | A chart over one pair of axes as its geometry and parts an app spreads onto SVG elements of its own, with the arithmetic under it as its members. | 52.24, 52.25, 52.26, 52.27, 52.28, 52.29, 52.30, 52.34, 52.37, 52.38, 52.39, 50.46, 52.51, 52.52, 52.58, 52.59, 52.60, 52.61, 52.62, 52.63, 52.68, 52.69, 52.70, 52.71, 52.78, 52.79, 52.81, 52.19, 52.20, 52.21, 52.22, 52.23, 52.53, 49.14, 49.2, 49.4, 49.5, 49.6 |
-| `ChartOptions` | `{ id?: string; label: string \| (() => string); series: readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false; curve?: boolean }[] \| (() => readonly { label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false; curve?: boolean }[]; x?: readonly number[] \| (() => readonly number[] \| undefined); xFormat?: (x: number) => string; yFormat?: (y: number) => string; xTicks?: number \| (() => number); yTicks?: number \| (() => number); zero?: boolean \| (() => boolean); stack?: boolean \| (() => boolean); normalize?: boolean \| (() => boolean); bounds?: { x?: readonly [number, number]; y?: readonly [number, number] } \| (() => { x?: readonly [number, number]; y?: readonly [number, number] } \| undefined); width?: number; height?: number; onpick?: (index: number) => void; disabled?: (index: number) => boolean }` | What `chart` draws and how, each value read live where a function is given. | 52.24, 52.61, 49.8, 49.10, 49.11 |
-| `ChartParts` | `{ readonly id: string; readonly svg: Record<string, unknown>; x(index: number): number; y(value: number): number; get frame(): { left: number; top: number; right: number; bottom: number }; get yTicks(): { value: number; y: number; label: string; grid: Record<string, unknown>; text: Record<string, unknown> }[]; get xTicks(): { index: number; x: number; label: string; text: Record<string, unknown> }[]; get zero(): { y: number; line: Record<string, unknown> } \| undefined; get marks(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; columns: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; get lines(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; columns: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; get areas(): { series: number; label: string; kind: 'line' \| 'column' \| 'area'; d: string; path: Record<string, unknown>; columns: Record<string, unknown>; bars: { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[] }[]; get bars(): { key: string; series: number; index: number; value: number; x: number; y: number; width: number; height: number; rect: Record<string, unknown> }[]; get points(): { key: string; series: number; index: number; value: number; x: number; y: number; circle: Record<string, unknown> }[]; get readout(): { index: number; x: number; label: string; disabled: boolean; heading: Record<string, unknown>; values: { series: number; label: string; value: string; y: number \| undefined; circle: Record<string, unknown> \| undefined; text: Record<string, unknown> }[] } \| undefined; get crosshair(): { index: number; x: number; line: Record<string, unknown> } \| undefined; readonly tip: Record<string, unknown> }` | The `<svg>`'s part, the plot's scales and edges, and every tick, mark, point and the crosshair as data with a part to spread. | 50.46, 52.78, 52.79, 52.81, 49.3, 49.9 |
-| `chart.ticks` | `(min: number, max: number, count?: number) => number[]` | Round values for an axis from `min` to `max`, about `count` intervals apart. | 52.19 |
-| `chart.scale` | `(domain: readonly [number, number], range: readonly [number, number]) => (value: number) => number` | The linear map from `domain` onto `range`. | 52.20 |
-| `chart.path` | `(xs: readonly number[], ys: readonly (number \| null \| undefined)[], options?: { baseline?: number \| readonly number[]; curve?: boolean }) => string` | An SVG path through the points `xs[i]`, `ys[i]`, or the area under them down to `baseline`, straight from point to point or curved through them. | 52.21, 52.22, 52.104 |
-| `chart.stack` | `<Each extends { values: readonly (number \| null \| undefined)[]; stack?: string \| false }>(series: readonly Each[], options?: { stack?: boolean; normalize?: boolean }) => { low: (number \| undefined)[]; high: (number \| undefined)[]; stack: string \| undefined }[]` | Where each series stands at each x once its stack is piled, and the stack it joined. | 52.53, 52.54, 52.55, 52.56, 52.57 |
-| `chart.nearest` | `(positions: readonly number[], x: number) => number` | The index of the position nearest `x` in positions sorted ascending. | 52.23 |
-| `chart.Series` | `{ label: string; values: readonly (number \| null \| undefined)[]; kind?: 'line' \| 'column' \| 'area'; stack?: string \| false; curve?: boolean }` | One series of a chart: what it is called, its values in x order, how it is drawn, and the stack it piles into. | 52.21, 52.24, 52.54 |
-
-## `pie`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `pie` | `(options: PieOptions) => PieParts` | Shares of a whole as the slices of a pie or a donut, as parts an app spreads onto SVG elements of its own. | 52.29, 52.30, 52.38, 52.39, 52.62, 52.63, 52.64, 52.65, 52.66, 52.67, 52.80, 52.81, 49.2, 49.4, 49.5, 49.6 |
-| `PieOptions` | `{ slices: readonly { label: string; value: number \| null \| undefined }[] \| (() => readonly { label: string; value: number \| null \| undefined }[]); label: string \| (() => string); inner?: number \| (() => number); valueFormat?: (value: number) => string; onpick?: (index: number) => void; disabled?: (index: number) => boolean }` | What `pie` draws, each value read live where a function is given. | 52.66 |
-| `PieParts` | `{ readonly svg: Record<string, unknown>; get slices(): { index: number; label: string; value: number; share: number; hint: string; circle: Record<string, unknown> }[] }` | The `<svg>`'s part and every slice drawn as data with its circle's part. | 52.64, 52.80, 49.3, 49.9 |
-
-## `sparkline`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `sparkline` | `(options: SparklineOptions) => SparklineParts` | A trend with no axes, stretched to its box, as parts an app spreads onto SVG elements of its own. | 52.29, 52.30, 52.31, 52.33, 52.34, 52.81, 49.2, 49.4, 49.5, 49.6 |
-| `SparklineOptions` | `{ values: readonly (number \| null \| undefined)[] \| (() => readonly (number \| null \| undefined)[]); label: string \| (() => string); zero?: boolean \| (() => boolean); kind?: 'line' \| 'bar' \| (() => 'line' \| 'bar'); curve?: boolean \| (() => boolean) }` | What `sparkline` draws, each value read live where a function is given. | 52.33, 52.34, 52.105 |
-| `SparklineParts` | `{ readonly svg: Record<string, unknown>; readonly line: Record<string, unknown>; readonly area: Record<string, unknown>; readonly bars: Record<string, unknown>; readonly dot: Record<string, unknown>; get trend(): 'up' \| 'down' \| 'flat'; get ended(): boolean }` | The `<svg>`'s part, the line, the area, the bars and the end dot as parts, and the trend. | 52.31, 49.3, 49.9 |
-
-# Content
-
-## `markdown`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `markdown` | `(text: string, options?: { schemes?: readonly string[]; headingLevel?: number; href?: (address: string) => string \| LinkTarget \| undefined; blocks?: Readonly<Record<string, (source: string, info: string) => string>>; inline?: boolean; streaming?: boolean }) => string` | Markdown as HTML safe to hand `raw`. | 52.8, 52.9, 52.10, 52.11, 52.12, 52.13, 52.14, 52.15, 52.16, 52.40, 52.41, 52.42, 52.46, 52.47, 52.48, 52.49, 52.50 |
-| `markdown.incremental` | `(options: { source: string \| (() => string); schemes?: readonly string[] \| (() => readonly string[] \| undefined); headingLevel?: number \| (() => number \| undefined); href?: (address: string) => string \| LinkTarget \| undefined; blocks?: readonly string[] \| (() => readonly string[] \| undefined); streaming?: boolean \| (() => boolean \| undefined) }) => { readonly sections: readonly MarkdownSection[] }` | Markdown as sections an app renders itself, each kept while text only grows past it. | 52.17, 52.18, 52.40, 52.41, 52.43, 52.50, 49.10, 49.11 |
-| `MarkdownSection` | `{ readonly html: string; readonly block: { name: string; source: string; info: string } \| undefined }` | One section of a document: its markup, or the fenced block an app renders in its place. | 52.17, 52.43 |
-| `LinkTarget` | `{ href: string; target?: string; rel?: string }` | Where a link `markdown` writes goes: its address, and the `target` and `rel` it opens with. | 52.40 |
-
-## `announce`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `announce` | `(text: string, options?: AnnounceOptions) => void` | A message a screen reader reads out from the regions the app spreads `announce.host` on, with nothing shown. | 50.36, 50.49, 50.50 |
-| `announce.host` | `() => AnnouncerHost` | The polite and the assertive live region `announce` is read out from, as parts an app spreads onto markup of its own, from the script of the one component that renders them. | 50.36, 50.51, 49.3, 49.9, 49.2, 49.4, 49.5, 49.6 |
-| `AnnouncerHost` | `{ readonly polite: Record<string, unknown>; readonly assertive: Record<string, unknown>; said(politeness: 'polite' \| 'assertive'): readonly Announcement[] }` | The two regions' parts, and the message each holds. | 50.51, 50.52, 49.9 |
-| `Announcement` | `{ text: string; politeness: 'polite' \| 'assertive'; count: number }` | One message `announce` gave: its words, how urgently they are read, and which message it is. | 50.49, 50.52 |
-| `AnnounceOptions` | `{ politeness?: 'polite' \| 'assertive' }` | How urgently a message interrupts what a screen reader is reading. | 50.49 |
-
-## `chat`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `chat` | `(options: ChatOptions) => ChatParts` | A conversation over an assistant handler as parts an app spreads onto markup of its own: the transcript and the composer. | 53.31, 53.32, 53.33, 53.34, 53.35, 53.36, 53.37, 53.38, 53.39, 53.40, 53.46, 53.47, 49.3, 49.2, 49.4, 49.5, 49.6 |
-| `ChatOptions` | `{ ask: (args: { messages: AssistantMessage[] }, options: { signal: AbortSignal }) => AsyncIterable<AssistantEvent>; permit?: (answer: { id: string; allow: boolean }) => unknown; turns?: Reactive<AssistantTurn[]>; label?: string \| (() => string \| undefined); disabled?: boolean \| (() => boolean \| undefined) }` | The handler a conversation asks, what answers a permission prompt, the turns it holds, and its input's name and whether it sends. | 53.31, 53.34, 53.38, 53.47, 49.8, 49.10 |
-| `ChatParts` | `{ readonly turns: Reactive<AssistantTurn[]>; get streaming(): boolean; readonly root: Record<string, unknown>; readonly transcript: Record<string, unknown>; readonly jump: Record<string, unknown>; turn(turn: AssistantTurn, index: number): ChatTurnParts; readonly text: Record<string, unknown>; image(image: AssistantTurnPart): Record<string, unknown>; tool(part: AssistantTurnPart): { readonly tool: Record<string, unknown>; readonly name: Record<string, unknown>; readonly input: Record<string, unknown>; readonly result: Record<string, unknown>; readonly status: 'running' \| 'done' \| 'failed' }; permission(part: AssistantTurnPart): { readonly permission: Record<string, unknown>; readonly name: Record<string, unknown>; readonly input: Record<string, unknown>; readonly allow: Record<string, unknown>; readonly deny: Record<string, unknown>; readonly answer: 'waiting' \| 'allowed' \| 'denied' }; readonly composer: Record<string, unknown>; readonly input: Record<string, unknown>; readonly draft: Reactive<string>; get attached(): readonly AssistantTurnPart[]; readonly attachments: Record<string, unknown>; attachment(image: AssistantTurnPart): { readonly attachment: Record<string, unknown>; readonly image: Record<string, unknown>; readonly remove: Record<string, unknown> }; get pending(): readonly AssistantTurnPart[] \| undefined; readonly queued: Record<string, unknown>; readonly cancel: Record<string, unknown>; readonly stop: Record<string, unknown>; readonly send: Record<string, unknown> }` | The conversation and whether it streams, and the parts of the transcript, each turn and piece, and the composer. | 53.32, 53.33, 53.34, 53.35, 53.37, 53.39, 53.40, 49.1, 49.3, 49.9 |
-| `ChatTurnParts` | `{ readonly turn: Record<string, unknown>; readonly speaker: Record<string, unknown>; readonly role: 'you' \| 'assistant'; get streaming(): boolean; readonly failure: Record<string, unknown>; readonly actions: Record<string, unknown>; retry(): void }` | A turn's parts, who spoke, whether it streams, and what asks its question again. | 53.36, 53.46, 49.1, 49.3 |
-
-## `format`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `format` | `{ money; percent; number; plural; list; date; duration; relative; bytes }` | The formatters abide ships, as one namespace. | 52.1, 52.2, 52.6 |
-| `format.money` | `(value: unknown, options?: { currency?: string; compact?: boolean; signed?: boolean; digits?: number; locale?: string }) => string` | An amount of money as it is written. | 52.1, 52.2, 52.6, 52.35 |
-| `format.percent` | `(value: unknown, options?: { digits?: number; signed?: boolean; locale?: string }) => string` | A fraction written as a percent. | 52.1, 52.2, 52.6, 52.35 |
-| `format.number` | `(value: unknown, options?: { compact?: boolean; digits?: number; locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6 |
-| `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
-| `format.list` | `(value: unknown, options?: { conjunction?: 'and' \| 'or'; locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6 |
-| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101 |
-| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101 |
-| `format.timeZone` | `Reactive<string \| undefined>` | The zone the app pins every date to where its caller names none, or `undefined` for the visitor's own. | 52.3, 52.44, 52.45 |
-| `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
-| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
-| `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
-
-## `time`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `time` | `(options?: TimeOptions) => TimeParts` | Times kept current as parts an app spreads onto a `<time>` of its own, one per value: its `datetime` and `title`, and its label. | 52.1, 52.2, 52.3, 52.5, 52.72, 52.73, 52.74, 52.75, 52.76, 52.77, 49.2, 49.4, 49.5, 49.6 |
-| `TimeOptions` | `{ style?: 'long' \| 'short' \| 'narrow' \| (() => 'long' \| 'short' \| 'narrow'); locale?: string \| undefined \| (() => string \| undefined); timeZone?: string \| undefined \| (() => string \| undefined) }` | How a time is written, each read live where a function is given. | 52.72 |
-| `TimeParts` | `{ at(value: unknown): TimeAt }` | A value's parts. | 32.11, 32.99, 52.72, 52.73, 49.9 |
-| `TimeAt` | `{ readonly time: Record<string, unknown>; get text(): string }` | A value's `<time>` attributes and its label. | 32.99, 52.72, 52.73, 49.3 |
-
-## `calendar`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `calendar` | `<Range extends boolean = false>(options?: CalendarOptions<Range>) => Calendar<Range>` | WAI-ARIA's date grid as parts an app spreads onto elements of its own, picking a day or a range: a grid of whole weeks per month shown, a header cell per weekday, a cell per day, each month's heading and the buttons paging them. | 52.82, 52.83, 52.84, 52.85, 52.86, 52.87, 52.88, 52.89, 52.90, 52.91, 52.92, 52.93, 52.94, 52.95, 52.96, 52.97, 52.98, 52.99, 49.7, 49.2, 49.4, 49.5, 49.6 |
-| `CalendarOptions` | `CalendarOptions<Range extends boolean = false> = { id?: string; month?: Reactive<string \| undefined>; range?: Range; selected?: Reactive<CalendarPick<Range>>; months?: number \| undefined \| (() => number \| undefined); firstDay?: number \| undefined \| (() => number \| undefined); locale?: string \| undefined \| (() => string \| undefined); timeZone?: string \| undefined \| (() => string \| undefined) }` | The first month shown as `YYYY-MM`, whether it picks a range, the day or the range picked, how many months are shown, and the week's first day, locale and zone, each read live where a function is given. | 52.84, 52.85, 52.87, 52.96, 52.97, 49.8, 49.10, 49.11 |
-| `Calendar` | `Calendar<Range extends boolean = false> = { readonly id: string; get active(): string; idOf(date: string): string; get months(): readonly CalendarMonth[]; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly header: Record<string, unknown>; readonly week: Record<string, unknown>; get weekdays(): readonly CalendarWeekday[]; readonly month: Reactive<string \| undefined>; readonly selected: Reactive<CalendarPick<Range>> }` | The day in the tab order and a day's cell id, the months shown, the paging buttons, the rows' parts, the weekdays as data with a part to spread, and the first month shown and the day or range picked. | 32.11, 52.85, 52.87, 52.93, 52.96, 52.100, 49.3, 49.8, 49.9 |
-| `CalendarPick` | `CalendarPick<Range extends boolean> = Range extends true ? readonly [start: string, end: string \| undefined] \| undefined : string \| undefined` | What a calendar picks: a range's start and end where it picks a range, else a day or none. | 52.97 |
-| `CalendarMonth` | `{ readonly month: string; readonly label: string; readonly heading: Record<string, unknown>; readonly grid: Record<string, unknown>; readonly weeks: readonly (readonly CalendarDay[])[] }` | A month shown as `YYYY-MM`, its name in words, its heading's part, its grid's, and its weeks. | 52.82, 52.94, 52.96, 49.3 |
-| `CalendarWeekday` | `{ readonly day: number; readonly name: string; readonly short: string; readonly header: Record<string, unknown> }` | A weekday's number from Monday's `1`, its name in full and shortened, and its header cell. | 52.87, 49.3 |
-| `CalendarDay` | `{ readonly date: string; readonly day: number; readonly cell: Record<string, unknown> }` | A day of a grid as `YYYY-MM-DD`, its number in its month, and its cell. | 52.82, 52.84, 52.86, 52.95, 52.96, 52.98, 52.99, 49.3 |
-
-## `instantAt`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `instantAt` | `(wallClock: string, options?: { timeZone?: string }) => number \| undefined` | The epoch milliseconds at which a zone's clocks read a day and a time. | 52.102, 52.103 |
-
-## `followBottom`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `followBottom` | `(options?: FollowBottomOptions) => FollowBottom` | A scrolling element kept at its bottom as what it holds grows, until the reader scrolls up, and a button taking them back down, as parts to spread. | 32.99, 53.50, 53.58, 53.59, 53.60, 49.3, 49.8 |
-| `FollowBottomOptions` | `{ following?: Reactive<boolean>; threshold?: number \| (() => number); behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. | 53.58, 53.60, 49.8, 49.10, 49.11 |
-| `FollowBottom` | `{ readonly host: Record<string, unknown>; readonly jump: Record<string, unknown>; readonly following: Reactive<boolean>; toBottom(): void }` | The scroller's part, the jump button's part, whether it is following, and what takes it back down. | 53.50, 53.59, 53.60, 49.9 |
-
-## `scrollEdges`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `scrollEdges` | `() => Record<string, unknown>` | The part marking the scrolling element it is spread on with the edges it can still scroll toward. | 32.99, 32.101, 32.102, 32.103, 32.104, 32.105, 32.106, 32.107, 32.108, 49.3, 49.12 |
-
-## `observe`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `observe.size` | `{ (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): Record<string, unknown>; (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: 'content' \| 'border' }): Record<string, unknown>; (target: ((size: { width: number; height: number }) => void), options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): Record<string, unknown>; (target: ((size: { width: number; height: number }) => void), options?: { box?: 'content' \| 'border' }): Record<string, unknown>; (options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): { readonly host: Record<string, unknown>; readonly width: number \| undefined; readonly height: number \| undefined }; (options?: { box?: 'content' \| 'border' }): { readonly host: Record<string, unknown>; readonly width: number \| undefined; readonly height: number \| undefined } }` | The part writing the size of the element it is spread on into a target, or, given none, that part as `host` beside the width and the height read by name. | 32.79, 32.81, 32.82, 32.83, 32.90, 32.91, 32.92, 32.98, 32.99, 49.3, 49.12, 32.110 |
-| `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): Record<string, unknown>; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document; once?: boolean }): Record<string, unknown>; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): Record<string, unknown>; (target: ((visible: boolean) => void), options?: { in?: Element \| Document; once?: boolean }): Record<string, unknown>; (options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): { readonly host: Record<string, unknown>; readonly visible: boolean \| undefined }; (options?: { in?: Element \| Document; once?: boolean }): { readonly host: Record<string, unknown>; readonly visible: boolean \| undefined } }` | The part writing whether the element it is spread on is in view into a target, or, given none, that part as `host` beside `visible` read by name. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92, 32.98, 32.100, 32.99, 49.3, 49.12, 32.110 |
-| `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): Record<string, unknown>; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): Record<string, unknown>; (): { readonly host: Record<string, unknown>; readonly x: number \| undefined; readonly y: number \| undefined; readonly top: number \| undefined; readonly left: number \| undefined; readonly right: number \| undefined; readonly bottom: number \| undefined; readonly width: number \| undefined; readonly height: number \| undefined } }` | The part writing the rectangle, in the viewport, of the element it is spread on into a target, or, given none, that part as `host` beside each of the eight read by name. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92, 32.98, 32.99, 49.3, 49.12, 32.110 |
-
 # Data and I/O
 
 ## `database`
@@ -1146,6 +1199,17 @@ type Reached = { readonly [REACHED]: true }
 | `database` | `(file: string \| (() => string), options?: { migrations?: (string \| ((database: Database) => void))[]; openNewer?: boolean; open?: (database: Database) => void; strict?: boolean; readonly?: boolean; safeIntegers?: boolean }) => (() => Database) & { close: (options?: { remove?: boolean }) => void; changed: Reactive<number> }` | The opener of the app's `bun:sqlite` database `file`, from `@abide/abide/server`. | 36.4, 47.1, 47.2, 47.3, 47.4, 47.5, 47.6, 47.7, 47.8, 47.9, 47.10, 47.11, 47.12, 47.13, 47.14, 47.15, 47.16, 47.18, 47.19, 47.20, 47.21 |
 | `opener.close` | `(options?: { remove?: boolean }) => void` | Closes the `Database` an opener holds, and with `remove` deletes the file it last opened. | 47.11, 47.16, 47.17 |
 | `opener.changed` | `Reactive<number>` | How many times the opener has found another connection's commits to its file. | 47.22, 47.23, 47.24 |
+
+## `job`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29 |
+| `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
+| `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
+| `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
+| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
+| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
 
 ## `fetchJson`
 
@@ -1166,72 +1230,6 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `handle` | `(response: Response) => Promise<unknown \| FetchFailed>` | A `Response` the app fetched itself, read as its `content-type` says: `fetch(url).then(handle)`. | 54.30, 54.31, 54.32, 54.33 |
-
-## `job`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29 |
-| `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
-| `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
-| `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
-| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
-| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
-
-## `url`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>] : [params?: ParamsOf<P>, queryParams?: Query, defaults?: Record<string, unknown>]) => string` | Builds an address from a route literal or a public file's address. | 30.1, 30.2, 30.6, 30.8, 30.19, 30.26, 30.40 |
-| `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
-| `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
-| `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
-| `OptionalNames<P>` | `string` | The optional segment names. | 30.4 |
-| `RestNames<P>` | `string` | The rest segment names. | 30.5 |
-| `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6, 30.28, 30.40 |
-| `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept, narrowed where `abide check` declares a matcher's literals. | 30.3, 30.4, 30.5 |
-| `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as, narrowed where `abide check` declares a matcher's literals. | 23.9 |
-| `Routes` | `interface Routes {}` | The app's route literals and public file addresses, which `abide check` declares. | 30.26 |
-| `RouteLiteral` | `[keyof Routes] extends [never] ? string : Extract<keyof Routes, string>` | What `url` takes. | 30.26 |
-
-## `navigate`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `navigate` | `{ (by: number): Promise<void>; (url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }): Promise<void> }` | Navigates to an address, or steps through the history. | 30.7, 30.38, 30.39, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31, 30.32, 45.12, 45.24 |
-
-# Identity and access
-
-## `signedIn`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `signedIn` | `Middleware<never, object, Failed<'SignedOut', undefined>>` | A rung admitting a caller the server authenticated, from `@abide/abide/server`. | 15.9, 54.1 |
-
-## `requireRole`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.7, 15.9, 54.2, 54.3, 54.4, 54.28 |
-
-## `trustedIdentity`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `trustedIdentity` | `(options: { header: string; proxies: readonly string[]; claims: (value: string) => Record<string, unknown> }) => Middleware` | A rung signing in the caller a trusted proxy names in a header, from `@abide/abide/server`. | 54.35, 54.36, 54.37 |
-
-## `readOnly`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `readOnly` | `(options?: { allow?: readonly { address: string \| undefined }[]; message?: string }) => Middleware<never, object, Failed<'ReadOnly', undefined>>` | A rung refusing every write but one to a handler it allows, from `@abide/abide/server`. | 15.9, 54.5, 54.6 |
-
-## `csp`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `csp` | `(sources?: Record<string, string[]>) => (next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Response \| Promise<Response>` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5, 29.6, 29.7, 29.8 |
-| `csp.nonce` | `() => string` | This response's nonce, for the app's own inline script. | 29.3, 29.4, 29.9, 29.11 |
 
 # Assistant
 

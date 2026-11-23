@@ -10,7 +10,7 @@ import largestFirst from './lib/LargestFirst.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
-        '/helpers/sortable-table',
+        '/headless/sortable-table',
         '/helpers/format',
         '/abide-files/control-flow',
     ]}

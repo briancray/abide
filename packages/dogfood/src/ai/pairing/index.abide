@@ -5,7 +5,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/helpers/chat', '/ai/provider', '/hooks/on-pairing', '/cli/bridge']}
+    seeAlso={['/headless/chat', '/ai/provider', '/app/on-pairing', '/cli/bridge']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/assistant/lib/ClaudeCodeChat.test.ts',

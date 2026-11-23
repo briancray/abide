@@ -7,9 +7,9 @@ import Section from '#src/lib/Section.abide'
 <Doc
     seeAlso={[
         '/testing/mount',
-        '/hooks/on-start',
-        '/hooks/on-stop',
-        '/hooks/on-principal',
+        '/app/on-start',
+        '/app/on-stop',
+        '/app/on-principal',
     ]}
     tests={[
         {

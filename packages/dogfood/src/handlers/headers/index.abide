@@ -1,0 +1,72 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/request/response',
+        '/middleware/csp',
+        '/handlers/get',
+        '/operating/trace',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/app.test.ts',
+            from: [
+                "test('every answer carries nosniff and traceresponse; a page its referrer policy — 21.1, 21.2, 21.6'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/transport.test.ts',
+            from: [
+                "test('a GET over a global value answers a max-age its ttl derives — 21.8, 21.9, 21.11'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="See the headers a handler's answer carries">
+        <p>Ask for any handler's address. None of these headers is written in the app.</p>
+        <Code code={`
+            $ curl -sI 'localhost:3000/deals/getDeal?id=d1'
+            HTTP/1.1 200 OK
+            Content-Type: application/json
+            Cache-Control: private, no-store
+            Vary: origin, accept-encoding
+            X-Content-Type-Options: nosniff
+            Server-Timing: Direct;dur=0.4, Middleware;dur=0.1
+            traceresponse: 00-24db850a2e3606d1bee904ad5dc6d1bb-ad05a794ac117c21-00
+        `} />
+    </Section>
+
+    <Section level={3} title="Let a browser keep the month's closed totals for a minute">
+        <p>Declare the read over a <code>global</code> value with a <code>ttl</code>. Its answer
+            says how long the production has left, in place of <code>no-store</code>.</p>
+        <Code language="ts" caption="server" code={`
+            import { reactive } from '@abide/abide'
+            import { GET } from '@abide/abide/server'
+            import { closedTotals } from './lib/closedTotals.ts'
+
+            const totals = reactive(() => closedTotals(30), {
+                global: true,
+                ttl: 60_000,
+            })
+            export default GET(totals) // cache-control: private, max-age=60
+        `} />
+    </Section>
+
+    <Section level={3} title="Replace a default header from a handler">
+        <p>Write the header through <code>response()</code>. What the handler writes wins over
+            the default.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, response } from '@abide/abide/server'
+            import { COMPANIES } from './lib/COMPANIES.server.ts'
+
+            export default GET(() => {
+                response().headers.set('cache-control', 'public, max-age=300')
+                return COMPANIES
+            })
+        `} />
+    </Section>
+</Doc>
