@@ -5257,6 +5257,15 @@ and growing it as the handle moves away from the edge `side` names.
 viewport's height, nearest the height the drag would rest at carried on by its speed for 150
 milliseconds, and MUST write `false` to `open` where no stop is nearer that height than none.
 
+50.65 `lightbox`'s parts MUST be a `carousel`'s, given every option the lightbox was, beside a
+`dialog`'s `dialog` part opened and closed by `open`.
+
+50.66 ArrowLeft and ArrowRight in `lightbox`'s `dialog` MUST do what a click on its carousel's
+`previous` and `next` does, and nothing where that button is disabled.
+
+50.67 `lightbox`'s `show` MUST set its carousel's `selected` to the key it is handed and write `true`
+to `open`.
+
 # 51. Lists and tables
 
 51.1 `listbox` MUST keep active the option whose key it last moved to, for as long as the options

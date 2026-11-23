@@ -1,0 +1,27 @@
+<script>
+import { lightbox } from '@abide/abide'
+
+const PAGES = ['Terms', 'Pricing', 'Signatures']
+const viewer = lightbox({ items: PAGES })
+</script>
+
+<div class="row">
+    {#for page of PAGES by page}
+        <button onclick={() => viewer.show(page)}>{page}</button>
+    {/for}
+</div>
+<dialog aria-label="Contract" {...viewer.dialog}>
+    <ul
+        class="flex w-80 snap-x snap-mandatory overflow-x-auto"
+        {...viewer.host}
+    >
+        {#for page of PAGES by page}
+            <li
+                class="shrink-0 basis-full snap-center p-8"
+                {...viewer.item(page)}
+            >{page}</li>
+        {/for}
+    </ul>
+    <button {...viewer.previous}>‹</button>
+    <button {...viewer.next}>›</button>
+</dialog>

@@ -380,6 +380,14 @@ const WRITTEN: readonly {
                 subgroup: 'Overlays',
             },
             {
+                route: '/headless/lightbox',
+                title: '`lightbox`',
+                description:
+                    'Open a set of pictures of your own full-screen, resting on the one picked, stepped with the arrow keys.',
+                where: 'component',
+                subgroup: 'Overlays',
+            },
+            {
                 route: '/headless/command-palette',
                 title: '`commandPalette`',
                 description:

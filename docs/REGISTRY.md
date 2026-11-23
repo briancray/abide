@@ -542,6 +542,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `sheet` | `(options?: SheetOptions) => Drawer` | A `drawer` on the bottom edge whose handle, let go, settles it at the nearest of its stops. | 50.63, 50.64, 49.2, 49.4, 49.5, 49.6 |
 | `SheetOptions` | `Omit<DrawerOptions, 'side'> & { stops?: readonly number[] \| (() => readonly number[]) }` | How it opens, its size and the bounds of it, and the heights it settles at as shares of the viewport's. | 50.63, 50.64, 49.10, 49.11 |
 
+## `lightbox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `lightbox` | `<Item>(options: LightboxOptions<Item>) => Lightbox<Item>` | A `carousel` in a `dialog`, its arrow keys bound with `hotkeys` to the carousel's own buttons, as parts an app spreads onto a `<dialog>` and the carousel's markup of its own. | 50.65, 50.66, 50.67, 49.2, 49.4, 49.5, 49.6 |
+| `LightboxOptions` | `<Item>CarouselOptions<Item> & { open?: Reactive<boolean> }` | The carousel's options, and whether it is showing. | 50.65, 49.8 |
+| `Lightbox` | `<Item>Carousel<Item> & { readonly dialog: Record<string, unknown>; readonly open: Reactive<boolean>; show(key: string): void }` | The carousel's parts, the dialog's, whether it is showing, and what opens it on an item. | 32.11, 50.65, 50.67, 49.3, 49.8, 49.9 |
+
 ## `commandPalette`
 
 | Name | Signature | Meaning | Rules |

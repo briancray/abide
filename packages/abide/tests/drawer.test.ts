@@ -66,7 +66,7 @@ test('a drawer opens as its dialog does, stands on its side, and its handle size
 })
 
 // THE REVERT: drop `settle` from the handle's `pointerup`, and a sheet let go stays where it was dropped.
-test('a sheet let go settles at the nearest stop, a flick carries it on, and below every stop it closes — 50.63, 50.64', async () => {
+test('a sheet let go settles at the nearest stop, a flick carries it on, and below every stop it closes — 50.63, 50.64', () => {
     Object.defineProperty(globalThis, 'innerHeight', {
         configurable: true,
         value: 800,
@@ -76,30 +76,45 @@ test('a sheet let go settles at the nearest stop, a flick carries it on, and bel
     peek.open.set(true)
     flushSync()
     panel.getBoundingClientRect = () => ({ width: 400, height: 200 }) as DOMRect
-    const drag = async (fromY: number, toY: number, wait = 0) => {
+    // Each event stamped with the time a browser would give it, the move `took` milliseconds after
+    // the press, so a drag's speed is the test's and not the machine's.
+    let clock = 0
+    const at = <Event extends PointerEvent>(
+        event: Event,
+        time: number,
+    ): Event => Object.defineProperty(event, 'timeStamp', { value: time })
+    const drag = (fromY: number, toY: number, took = 1000) => {
+        clock += 10_000
         send(
-            new PointerEvent('pointerdown', {
-                clientY: fromY,
-                button: 0,
-                buttons: 1,
-            }),
+            at(
+                new PointerEvent('pointerdown', {
+                    clientY: fromY,
+                    button: 0,
+                    buttons: 1,
+                }),
+                clock,
+            ),
         )
-        if (wait > 0) await Bun.sleep(wait)
-        send(new PointerEvent('pointermove', { clientY: toY, buttons: 1 }))
-        send(new PointerEvent('pointerup', { clientY: toY }))
+        send(
+            at(
+                new PointerEvent('pointermove', { clientY: toY, buttons: 1 }),
+                clock + took,
+            ),
+        )
+        send(at(new PointerEvent('pointerup', { clientY: toY }), clock + took))
     }
     expect(panel.getAttribute('data-side')).toBe('bottom')
-    // Dragged up 150px from 200 and let go: 350, nearest 400 (half the viewport).
-    await drag(600, 450)
+    // Dragged up 150px over a second from 200: carried 22px on, 372, nearest 400 (half the viewport).
+    drag(600, 450)
     expect(peek.size()).toBe(400)
-    // Dragged down to 300: nearest 200 (a quarter).
-    await drag(450, 550)
+    // Dragged down 100px over a second: 300, carried to 285, nearest 200 (a quarter).
+    drag(450, 550)
     expect(peek.size()).toBe(200)
-    // Flicked up 60px in 20ms: carried on to the full height.
-    await drag(550, 490, 20)
+    // Flicked up 60px in 20ms: carried 450px on, to the full height.
+    drag(550, 490, 20)
     expect(peek.size()).toBe(800)
     // Dragged down to 60: nearer none than a quarter, so it closes.
     peek.size.set(200)
-    await drag(550, 690)
+    drag(550, 690)
     expect(peek.open()).toBe(false)
 })

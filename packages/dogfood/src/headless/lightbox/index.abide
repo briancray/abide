@@ -1,0 +1,33 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ContractPages from './lib/ContractPages.abide'
+import contractPages from './lib/ContractPages.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/carousel', '/headless/dialog', '/behaviors/hotkeys']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/ContractViewer.test.ts',
+            from: [
+                "test('a page picked opens the viewer on it, and the arrows step it'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/lightbox.test.ts',
+            from: ["test('the arrow keys step it as its carousel buttons do"],
+        },
+    ]}
+>
+    <Section level={3} title="Open a contract's pages on the one picked">
+        <p>A lightbox is a <code>carousel</code> inside a <code>dialog</code>, its arrow keys
+            bound with <code>hotkeys</code> to the carousel's own <code>previous</code> and
+            <code>next</code>. Spread <code>dialog</code> on a <code>&lt;dialog&gt;</code> and
+            the carousel's parts inside it, and call <code>show(key)</code> to open it resting on
+            that item. Escape and the backdrop close it, as they do any dialog.</p>
+        <Example code={contractPages}><ContractPages /></Example>
+    </Section>
+</Doc>
