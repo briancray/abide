@@ -5689,19 +5689,26 @@ disabled on the first.
 51.145 `sortableList`'s `sorted` MUST be `items` in the order `order` names their keys, any item
 `order` does not name following, in the order given.
 
-51.146 A pointer pressed on an item's `handle` and moved MUST place the item's key in `order` after
+51.146 A pointer pressed on an item's `handle` and moved MUST place the items 51.147 names after
 every other item whose middle, as it stood when the pointer was pressed, is above the pointer, and
-the item's `item` part MUST carry `data-grabbed` until the pointer is let go.
+each of them MUST carry `data-grabbed` on its `item` part until the pointer is let go.
 
-51.147 Space or Enter on an item's `handle` MUST grab the item, and again drop it; while it is
-grabbed, ArrowUp and ArrowDown MUST move it one place, and Escape MUST put `order` back as it was
-when it was grabbed and drop it.
+51.147 The items `sortableList` moves MUST be every key of `selected`, in the order put, where it is
+`multiple` and the item pressed or active is selected, and that item alone otherwise, placed
+together.
 
-51.148 `sortableList` grabbing, moving, dropping and putting back an item MUST `announce` the item's
-`label`, what was done, and its place among the items.
+51.148 Alt with ArrowUp or ArrowDown on `sortableList`'s `list` MUST move the items 51.147 names one
+place before or after the others, kept to the list's ends, and every other key MUST be the
+`listbox`'s.
 
-51.149 An item's `handle` part MUST carry `aria-pressed` naming whether the item is grabbed, and
-`aria-label` naming the item's `label`.
+51.149 `sortableList` moving items MUST `announce`, for one item, its `label` and its place among the
+items, and for several, how many and the places they span.
+
+51.150 `sortableList`'s `list` part MUST be a `listbox`'s `listbox` part over `sorted`, given `multiple`
+and `selected`, in the tab order and naming the active option as its `aria-activedescendant`, and each
+item's `item` part MUST be that listbox's `option` part.
+
+51.151 An item's `handle` part MUST carry `aria-hidden="true"` and MUST NOT stand in the tab order.
 
 # 52. Formatting, markdown and charts
 

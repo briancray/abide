@@ -681,10 +681,10 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `sortableList` | `<Item>(options: SortableListOptions<Item>) => SortableList<Item>` | A list put in order by hand, as parts an app spreads onto a list, its items and their handles: a handle dragged, or grabbed and moved with the keys, each step read out through `announce`. | 51.145, 51.146, 51.147, 51.148, 51.149, 32.99, 49.2, 49.4, 49.5, 49.6 |
-| `SortableListOptions` | `<Item>{ items: readonly Item[] \| (() => readonly Item[]); order?: Reactive<readonly string[]>; key?(item: Item): string; label?(item: Item): string }` | The items, the order of their keys, and how each is told apart and read out. | 51.145, 51.148, 49.8, 49.10 |
-| `SortableItem` | `{ readonly item: Record<string, unknown>; readonly handle: Record<string, unknown> }` | An item's part, and its handle's. | 51.146, 51.149, 49.3 |
-| `SortableList` | `<Item>{ readonly list: Record<string, unknown>; item(item: Item): SortableItem; get sorted(): readonly Item[]; readonly order: Reactive<readonly string[]> }` | The list's part, an item's parts, the items in the order put, and the order of their keys. | 32.11, 51.145, 49.3, 49.8, 49.9 |
+| `sortableList` | `<Item, Multiple extends boolean = false>(options: SortableListOptions<Item, Multiple>) => SortableList<Item, Multiple>` | A `listbox` put in order by hand, as parts an app spreads onto a list, its items and a grip on each: Alt with the arrows moves the items, a grip drags them, the selection moving as one, each move read out through `announce`. | 51.145, 51.146, 51.147, 51.148, 51.149, 51.150, 51.151, 32.99, 49.2, 49.4, 49.5, 49.6 |
+| `SortableListOptions` | `<Item, Multiple extends boolean = false>{ items: readonly Item[] \| (() => readonly Item[]); order?: Reactive<readonly string[]>; multiple?: Multiple; selected?: Reactive<Picked<string, Multiple>>; key?(item: Item): string; label?(item: Item): string }` | The items, the order of their keys, whether many may be selected and which are, and how each is told apart and read out. | 51.145, 51.147, 51.149, 51.150, 49.8, 49.10 |
+| `SortableItem` | `{ readonly item: Record<string, unknown>; readonly handle: Record<string, unknown> }` | An item's part, a `listbox` option, and its grip's. | 51.146, 51.150, 51.151, 49.3 |
+| `SortableList` | `<Item, Multiple extends boolean = false>{ readonly list: Record<string, unknown>; item(item: Item): SortableItem; get sorted(): readonly Item[]; readonly order: Reactive<readonly string[]>; readonly selected: Reactive<Picked<string, Multiple>> }` | The list's part, an item's parts, the items in the order put, the order of their keys, and the keys selected. | 32.11, 51.145, 51.150, 49.3, 49.8, 49.9 |
 
 ## `tree`
 

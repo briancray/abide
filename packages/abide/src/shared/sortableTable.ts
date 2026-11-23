@@ -7,6 +7,7 @@ import type { Column } from './Column.ts'
 import { type KeyOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
+import { runOf } from './Selection.ts'
 import type { Sort } from './Sort.ts'
 import { cellText, sortRows } from './sortRows.ts'
 
@@ -120,17 +121,10 @@ export function sortableTable<Row>(
         const order = sorted.peek() as readonly Row[]
         const holding = picked.peek() as Set<string>
         const checked = !holding.has(key(row))
-        const at = order.findIndex((each) => key(each) === key(row))
-        const from =
-            event.shiftKey && anchor !== undefined
-                ? order.findIndex((each) => key(each) === anchor)
-                : -1
-        const keys =
-            from === -1
-                ? [key(row)]
-                : order
-                      .slice(Math.min(from, at), Math.max(from, at) + 1)
-                      .map(key)
+        // 51.74 — Shift runs from the last row clicked, the run checked or cleared with this one.
+        const keys = (event.shiftKey && anchor !== undefined
+            ? runOf(order.map(key), anchor, key(row))
+            : undefined) ?? [key(row)]
         anchor = key(row)
         const next = new Set(holding)
         for (const each of keys) {

@@ -1,33 +1,41 @@
-// 51.145-51.149 — A LIST PUT IN ORDER BY HAND: an item's handle dragged to a new place, or grabbed with
-// Space and moved with the arrow keys, each step read out through `announce`, as parts an app spreads
-// onto a list, its items and their handles. A drag measures every item's middle once, as it begins, and
-// places the item among them by the pointer, so moving reads no layout.
+// 51.145-51.151 — A LIST PUT IN ORDER BY HAND: a `listbox` over the items in the order put, its keys and
+// its selection the listbox's own, with Alt and the arrows moving the items and a grip on each to drag
+// them, each move read out through `announce`. The items moved are the selection where the item taken
+// is in it, so several move as one. A drag measures every other item's middle once, as it begins, and
+// is heard on the window, so moving reads no layout and a reorder moving the grip loses nothing.
 
 import { announce } from './announce.ts'
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
+import { type Listbox, listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
+import type { Picked } from './Selection.ts'
+import { withPart } from './withPart.ts'
 
-/** The items, how each is told apart and read out, and the order they are put in. */
-export type SortableListOptions<Item> = {
+/** The items, how each is told apart and read out, their order, and what is selected. */
+export type SortableListOptions<Item, Multiple extends boolean = false> = {
     /** The items; a function is read live. */
     items: Live<readonly Item[]>
     /** The keys of the items in the order put: a `Reactive` to read and set. Held by the parts, and handed back as `order`, where none is given. */
     order?: Reactive<readonly string[]>
+    /** Whether many may be selected, to move as one. `false` by default. */
+    multiple?: Multiple
+    /** The keys selected, as a `listbox`'s are. Held by the parts, and handed back as `selected`, where none is given. */
+    selected?: Reactive<Picked<string, Multiple>>
 } & KeyOption<Item> &
     LabelOption<Item>
 
-/** One item's parts: the item, and the handle that moves it. */
+/** One item's parts: the item, a `listbox` option, and the grip that drags it. */
 export type SortableItem = {
-    /** The item's attributes: `data-grabbed` while it is moved. */
+    /** The item's attributes: a `listbox` option, `data-grabbed` while it is dragged. */
     readonly item: Record<string, unknown>
-    /** The handle's attributes, its drag and its keys. */
+    /** The grip's attributes: its drag, outside the tab order, since the list holds the keys. */
     readonly handle: Record<string, unknown>
 }
 
 /** The parts `sortableList` hands back: `<ol {...ranks.list}>`, `<li {...ranks.item(book).item}>`. */
-export type SortableList<Item> = {
-    /** The list's attributes. */
+export type SortableList<Item, Multiple extends boolean = false> = {
+    /** The list's attributes: a `listbox`, in the tab order, its keys and Alt with the arrows. */
     readonly list: Record<string, unknown>
     /** An item's parts. */
     item(item: Item): SortableItem
@@ -35,21 +43,23 @@ export type SortableList<Item> = {
     get sorted(): readonly Item[]
     /** The keys of the items in the order put; written, it puts them in that order. */
     readonly order: Reactive<readonly string[]>
+    /** The keys selected, as the `listbox` holds them. */
+    readonly selected: Reactive<Picked<string, Multiple>>
 }
 
-/** A list reordered by dragging a handle or by the keys, as parts to spread. */
-export function sortableList<Item>(
-    options: SortableListOptions<Item>,
-): SortableList<Item> {
+/** A listbox reordered by Alt and the arrows or by dragging a grip, the selection moving as one. */
+export function sortableList<Item, Multiple extends boolean = false>(
+    options: SortableListOptions<Item, Multiple>,
+): SortableList<Item, Multiple> {
     const order = options.order ?? reactive<readonly string[]>([])
     const keyOf = (item: Item) => writtenBy(options.key, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
-    const grabbed = reactive<string | undefined>(undefined)
+    const many = options.multiple === true
+    const grabbed = reactive<ReadonlySet<string>>(new Set())
     // 51.145 — the order put, then any item it does not name, in the order given.
     const sorted = reactive((): Item[] => {
-        const items = live(options.items)
         const byKey = new Map<string, Item>()
-        for (const item of items) byKey.set(keyOf(item), item)
+        for (const item of live(options.items)) byKey.set(keyOf(item), item)
         const placed: Item[] = []
         for (const key of order() ?? []) {
             const item = byKey.get(key)
@@ -60,32 +70,68 @@ export function sortableList<Item>(
         for (const item of byKey.values()) placed.push(item)
         return placed
     })
+    // 51.150 — the listbox over the items as put.
+    const choices: Listbox<Item, Multiple> = listbox({
+        ...options,
+        options: () => sorted(),
+    })
     const keys = (): string[] => (sorted.peek() ?? []).map(keyOf)
-    const say = (item: Item, what: string): void => {
-        const at = keys().indexOf(keyOf(item)) + 1
-        announce(`${labelOf(item)} ${what}, ${at} of ${keys().length}.`)
+
+    // 51.147 — the selection where the item taken is in it, else that item alone, in the order put.
+    const moving = (taken: string): string[] => {
+        if (!many) return [taken]
+        const picked = new Set(
+            (choices.selected.peek() as readonly string[] | undefined) ?? [],
+        )
+        return picked.has(taken)
+            ? keys().filter((key) => picked.has(key))
+            : [taken]
     }
-    const place = (key: string, to: number): void => {
-        const rest = keys().filter((each) => each !== key)
-        rest.splice(Math.max(0, Math.min(rest.length, to)), 0, key)
+    // The items placed together, `before` of the others ahead of them.
+    const place = (block: readonly string[], before: number): void => {
+        const held = new Set(block)
+        const rest = keys().filter((key) => !held.has(key))
+        rest.splice(Math.max(0, Math.min(rest.length, before)), 0, ...block)
         order.set(rest)
     }
+    // How many of the others stand ahead of `key` as the list is now.
+    const ahead = (key: string, block: readonly string[]): number => {
+        const held = new Set(block)
+        let count = 0
+        for (const each of keys()) {
+            if (each === key) return count
+            if (!held.has(each)) count += 1
+        }
+        return count
+    }
+    // 51.149
+    const say = (block: readonly string[], what: string): void => {
+        const listed = keys()
+        const first = listed.indexOf(block[0] as string) + 1
+        if (block.length === 1) {
+            const item = sorted.peek()?.find((each) => keyOf(each) === block[0])
+            if (item !== undefined)
+                announce(
+                    `${labelOf(item)} ${what}, ${first} of ${listed.length}.`,
+                )
+            return
+        }
+        announce(
+            `${block.length} items ${what}, ${first} to ${first + block.length - 1} of ${listed.length}.`,
+        )
+    }
 
-    // A drag's start: the keys as they stood, and each other item's middle along the list.
-    let middles: { key: string; middle: number }[] = []
-    let before: string[] = []
     const elements = new Map<string, Element>()
-
     const parts = new Map<string, SortableItem>()
     const item = (entry: Item): SortableItem => {
         const key = keyOf(entry)
         let made = parts.get(key)
         if (made !== undefined) return made
         made = {
-            item: {
+            item: withPart(withPart({}, choices.option(key)), {
                 'data-sortable-list': 'item',
                 get 'data-grabbed'() {
-                    return grabbed() === key ? '' : undefined
+                    return grabbed().has(key) ? '' : undefined
                 },
                 'bind:element': (element: Element) => {
                     elements.set(key, element)
@@ -93,91 +139,42 @@ export function sortableList<Item>(
                         if (elements.get(key) === element) elements.delete(key)
                     }
                 },
-            },
+            }),
+            // 51.151
             handle: {
-                type: 'button',
                 'data-sortable-list': 'handle',
-                'aria-label': `Move ${labelOf(entry)}`,
-                // 51.149
-                get 'aria-pressed'() {
-                    return grabbed() === key ? 'true' : 'false'
-                },
-                // 51.146 — every middle read before anything moves. The moves are heard on the window,
-                // not captured by the handle: the list reordering moves the handle's element, and a
-                // browser lets go of a capture whose element leaves the document.
+                'aria-hidden': 'true',
+                // 51.146 — every other middle read before anything moves; the moves heard on the window.
                 onpointerdown: (event: PointerEvent) => {
                     if (event.button !== 0) return
                     event.preventDefault()
-                    before = keys()
-                    middles = []
-                    for (const each of before) {
-                        if (each === key) continue
+                    choices.activate(key)
+                    const block = moving(key)
+                    const held = new Set(block)
+                    const middles: number[] = []
+                    for (const each of keys()) {
+                        if (held.has(each)) continue
                         const box = elements.get(each)?.getBoundingClientRect()
                         if (box !== undefined)
-                            middles.push({
-                                key: each,
-                                middle: box.top + box.height / 2,
-                            })
+                            middles.push(box.top + box.height / 2)
                     }
-                    grabbed.set(key)
-                    say(entry, 'grabbed')
+                    grabbed.set(held)
                     const moved = (move: PointerEvent): void => {
-                        let to = 0
-                        for (const { middle } of middles)
-                            if (middle < move.clientY) to += 1
-                        if (keys().indexOf(key) !== to) place(key, to)
+                        let before = 0
+                        for (const middle of middles)
+                            if (middle < move.clientY) before += 1
+                        if (ahead(key, block) !== before) place(block, before)
                     }
                     const dropped = (): void => {
                         removeEventListener('pointermove', moved)
                         removeEventListener('pointerup', dropped)
                         removeEventListener('pointercancel', dropped)
-                        grabbed.set(undefined)
-                        middles = []
-                        say(entry, 'dropped')
+                        grabbed.set(new Set())
+                        say(block, 'moved')
                     }
                     addEventListener('pointermove', moved)
                     addEventListener('pointerup', dropped)
                     addEventListener('pointercancel', dropped)
-                },
-                // 51.147
-                onkeydown: (event: KeyboardEvent) => {
-                    const holding = grabbed.peek() === key
-                    if (event.key === ' ' || event.key === 'Enter') {
-                        event.preventDefault()
-                        if (holding) {
-                            grabbed.set(undefined)
-                            say(entry, 'dropped')
-                        } else {
-                            before = keys()
-                            grabbed.set(key)
-                            say(entry, 'grabbed')
-                        }
-                        return
-                    }
-                    if (!holding) return
-                    // The handle keeps focus as its item moves: a moved element loses it.
-                    const handle = event.currentTarget as HTMLElement
-                    const refocus = (): void =>
-                        queueMicrotask(() => handle.focus())
-                    if (event.key === 'Escape') {
-                        event.preventDefault()
-                        order.set(before)
-                        grabbed.set(undefined)
-                        say(entry, 'put back')
-                        refocus()
-                        return
-                    }
-                    const step =
-                        event.key === 'ArrowUp'
-                            ? -1
-                            : event.key === 'ArrowDown'
-                              ? 1
-                              : 0
-                    if (step === 0) return
-                    event.preventDefault()
-                    place(key, keys().indexOf(key) + step)
-                    say(entry, 'moved')
-                    refocus()
                 },
             },
         }
@@ -186,11 +183,40 @@ export function sortableList<Item>(
     }
 
     return {
-        list: { 'data-sortable-list': 'list' },
+        // 51.150
+        list: withPart(withPart({}, choices.listbox), {
+            'data-sortable-list': 'list',
+            tabindex: '0',
+            get 'aria-activedescendant'() {
+                return choices.activeId
+            },
+            // 51.148 — Alt with an arrow moves the items; every other key is the listbox's.
+            onkeydown: (event: KeyboardEvent) => {
+                const step =
+                    event.altKey && event.key === 'ArrowUp'
+                        ? -1
+                        : event.altKey && event.key === 'ArrowDown'
+                          ? 1
+                          : 0
+                if (step === 0) return choices.onkeydown(event)
+                const taken = choices.active
+                if (taken === undefined) return
+                event.preventDefault()
+                const block = moving(taken)
+                const others = keys().length - block.length
+                const before = Math.max(
+                    0,
+                    Math.min(others, ahead(block[0] as string, block) + step),
+                )
+                place(block, before)
+                say(block, 'moved')
+            },
+        }),
         item,
         get sorted() {
             return sorted()
         },
         order,
+        selected: choices.selected,
     }
 }

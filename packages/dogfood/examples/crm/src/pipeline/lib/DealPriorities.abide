@@ -5,20 +5,22 @@ const DEALS = [
     { id: 'd1', name: 'Engine renewal' },
     { id: 'd2', name: 'Babbage pilot' },
     { id: 'd3', name: 'Hopper expansion' },
+    { id: 'd4', name: 'Lovelace audit' },
 ]
 let order = reactive<readonly string[]>([])
 const ranks = sortableList({
     items: DEALS,
     order,
+    multiple: true,
     key: (deal) => deal.id,
     label: (deal) => deal.name,
 })
 </script>
 
-<ol class="flex flex-col gap-hair" {...ranks.list}>
+<ol class="flex flex-col gap-hair" aria-label="Priorities" {...ranks.list}>
     {#for deal of ranks.sorted by deal.id}
-        <li class="row" {...ranks.item(deal).item}>
-            <button {...ranks.item(deal).handle}>⠿</button>
+        <li class="row data-selected:bg-raised" {...ranks.item(deal).item}>
+            <span class="cursor-grab" {...ranks.item(deal).handle}>⠿</span>
             <span>{deal.name}</span>
         </li>
     {/for}

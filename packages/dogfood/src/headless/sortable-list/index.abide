@@ -13,24 +13,26 @@ import rankDeals from './lib/RankDeals.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/DealPriorities.test.ts',
             from: [
-                "test('the priorities move with the keys, and Escape puts them back'",
+                "test('the deals selected move together with Alt and the arrows'",
             ],
         },
         {
             path: 'packages/abide/tests/sortableList.test.ts',
             from: [
-                "test('a handle dragged places its item among the others by the pointer",
+                "test('a grip dragged places its item among the others by the pointer",
             ],
         },
     ]}
 >
     <Section level={3} title="Rank deals by dragging or with the keys">
-        <p>Walk <code>sorted</code>, and spread <code>item(entry).item</code> on each item and
-            <code>.handle</code> on a button in it. A handle dragged places its item among the
-            others by the pointer. Space grabs it, the arrow keys move it, Space drops it and
-            Escape puts every item back, each step read out through <code>announce</code>, so
-            stand an <code>announce.host</code> on the page. <code>order</code> holds the keys
-            in the order put.</p>
+        <p>A sortable list is a <code>listbox</code>. Spread <code>list</code> on the list and
+            <code>item(entry).item</code> on each item. It is one stop in the tab order: the
+            arrows, Home and End move what is active, and a click, a ⌘ or Ctrl click and a Shift
+            click select as in any listbox. Alt with ArrowUp or ArrowDown moves the item a place,
+            or the whole selection where the item is in it. Spread <code>.handle</code> on a grip
+            to drag them; it is for the pointer alone, hidden from the keyboard. Each move is
+            read out through <code>announce</code>, so stand an <code>announce.host</code> on
+            the page.</p>
         <Example code={rankDeals}><RankDeals /></Example>
     </Section>
 </Doc>

@@ -5,55 +5,41 @@ import { mount } from '@abide/harness/abide'
 
 import DealPriorities from './DealPriorities.abide'
 
+const list = () => document.querySelector('[role=listbox]') as HTMLElement
 const names = () =>
-    [...document.querySelectorAll('li span')].map((name) => name.textContent)
-const key = (name: string) => {
-    document.activeElement?.dispatchEvent(
-        new KeyboardEvent('keydown', {
-            key: name,
-            bubbles: true,
-            cancelable: true,
-        }),
+    [...document.querySelectorAll('[role=option] span:last-child')].map(
+        (name) => name.textContent,
+    )
+const key = (name: string, held: KeyboardEventInit = {}) => {
+    list().dispatchEvent(
+        new KeyboardEvent('keydown', { key: name, cancelable: true, ...held }),
     )
     flushSync()
 }
 
-test('the priorities move with the keys, and Escape puts them back', async () => {
+test('the deals selected move together with Alt and the arrows', async () => {
     using _ranks = await mount(DealPriorities({}))
-    ;(
-        document.querySelector(
-            '[aria-label="Move Engine renewal"]',
-        ) as HTMLElement
-    ).focus()
-    key(' ')
-    key('ArrowDown')
-    key('ArrowDown')
-    expect(names()).toEqual([
-        'Babbage pilot',
-        'Hopper expansion',
-        'Engine renewal',
-    ])
-    await Bun.sleep(0)
-    expect(document.activeElement?.getAttribute('aria-label')).toBe(
-        'Move Engine renewal',
+    list().focus()
+    // Shift with the arrows selects a run, as in any listbox.
+    key('ArrowDown', { shiftKey: true })
+    expect([...document.querySelectorAll('[aria-selected=true]')].length).toBe(
+        2,
     )
-    key('Escape')
+    key('ArrowDown', { altKey: true })
+    key('ArrowDown', { altKey: true })
     expect(names()).toEqual([
+        'Hopper expansion',
+        'Lovelace audit',
         'Engine renewal',
         'Babbage pilot',
-        'Hopper expansion',
     ])
-    // Focus comes back to the handle once its item has moved back.
-    await Bun.sleep(0)
-    expect(document.activeElement?.getAttribute('aria-label')).toBe(
-        'Move Engine renewal',
-    )
-    key('Enter')
-    key('ArrowDown')
-    key('Enter')
+    // A deal outside the selection moves alone.
+    key('Home')
+    key('ArrowDown', { altKey: true })
     expect(names()).toEqual([
-        'Babbage pilot',
-        'Engine renewal',
+        'Lovelace audit',
         'Hopper expansion',
+        'Engine renewal',
+        'Babbage pilot',
     ])
 })

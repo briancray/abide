@@ -13,6 +13,18 @@ export type Picked<Item, Multiple extends boolean> = Multiple extends true
 
 const NONE: ReadonlySet<string> = new Set()
 
+/** 51.74, 51.100 — every key of `order` from `from` to `to`, either way round, or `undefined` where either is not listed. */
+export function runOf(
+    order: readonly string[],
+    from: string,
+    to: string,
+): string[] | undefined {
+    const start = order.indexOf(from)
+    const end = order.indexOf(to)
+    if (start === -1 || end === -1) return undefined
+    return order.slice(Math.min(start, end), Math.max(start, end) + 1)
+}
+
 /** The keys a `listbox` or a `tree` holds selected, and the gestures that change them. */
 export class Selection {
     readonly selected: Reactive<Picked<string, boolean>>
@@ -76,16 +88,11 @@ export class Selection {
     ): void {
         if (!this.many) return this.pick(to)
         const list = order()
-        const end = list.indexOf(to)
-        let start = this.anchor === undefined ? -1 : list.indexOf(this.anchor)
-        if (start === -1) {
+        if (this.anchor === undefined || !list.includes(this.anchor))
             this.anchor = from ?? to
-            start = list.indexOf(this.anchor)
-        }
-        if (start === -1 || end === -1) return this.pick(to)
-        this.selected.set(
-            list.slice(Math.min(start, end), Math.max(start, end) + 1),
-        )
+        const run = runOf(list, this.anchor, to)
+        if (run === undefined) return this.pick(to)
+        this.selected.set(run)
     }
 
     /** 51.101 — selects every key of `order`, where it picks many. */
