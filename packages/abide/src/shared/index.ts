@@ -220,6 +220,11 @@ export {
     type BreadcrumbsOptions,
     breadcrumbs,
 } from './breadcrumbs.ts'
+export {
+    type InlineEdit,
+    type InlineEditOptions,
+    inlineEdit,
+} from './inlineEdit.ts'
 export { type Meter, type MeterOptions, meter } from './meter.ts'
 export { type Pages, type PagesOptions, pages } from './pages.ts'
 export { type Playback, type PlaybackOptions, playback } from './playback.ts'

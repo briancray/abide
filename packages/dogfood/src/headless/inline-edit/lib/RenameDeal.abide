@@ -1,0 +1,15 @@
+<script>
+import { inlineEdit, reactive } from '@abide/abide'
+
+let name = reactive('Engine renewal')
+const rename = inlineEdit({
+    value: name,
+    save: async (text) => {
+        if (text.trim() === '') throw new Error('A deal needs a name')
+    },
+})
+</script>
+
+<button {...rename.view}>{name}</button>
+<input aria-label="Deal name" {...rename.input} />
+{#if rename.error}<p class="status">{rename.error}</p>{/if}

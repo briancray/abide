@@ -404,6 +404,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/inline-edit',
+                title: '`inlineEdit`',
+                description:
+                    'Edit a value where it stands: text of your own that a press turns into a field, saved on Enter and undone by Escape.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/combobox',
                 title: '`combobox`',
                 description:

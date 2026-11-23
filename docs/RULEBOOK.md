@@ -6482,3 +6482,18 @@ field held when the call was made.
 
 56.23 An edit of a `form` MUST NOT wake a reader of `dirty`, or of a `field`'s `changed`, whose answer
 the edit leaves.
+
+56.24 A click on `inlineEdit`'s `view` MUST start an edit: `editing` holding, the `view` hidden and the
+`input` shown, holding `value`, focused and its text selected.
+
+56.25 Enter in `inlineEdit`'s `input`, and the input losing focus, MUST end the edit by calling `save`
+with its text, waiting on a promise it answers, and only then writing the text to `value`; a text
+that is `value` already MUST end it without calling `save`.
+
+56.26 A `save` that rejects MUST leave `inlineEdit` editing and `value` as it was, with `error` naming
+the rejection's message; while a `save` is in flight, `busy` MUST hold and the `input` MUST be
+disabled.
+
+56.27 Escape in `inlineEdit`'s `input` MUST end the edit without calling `save` or writing `value`.
+
+56.28 An edit of `inlineEdit` ending MUST move focus to its `view`.

@@ -1,0 +1,33 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import RenameDeal from './lib/RenameDeal.abide'
+import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/form', '/headless/prompts']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactTitle.test.ts',
+            from: [
+                "test('a title is renamed where it stands, and a refused one stays open'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/inlineEdit.test.ts',
+            from: ["test('Escape puts the value back and hands focus to the text"],
+        },
+    ]}
+>
+    <Section level={3} title="Rename a deal where its name stands">
+        <p>Spread <code>view</code> on a button showing the value and <code>input</code> on a
+            field. A press opens the field holding the value, selected. Enter, or leaving the
+            field, calls <code>save</code> and waits on it before <code>value</code> changes;
+            Escape puts it back. A save that throws keeps the field open, its message in
+            <code>error</code>, and focus goes back to the button when an edit ends.</p>
+        <Example code={renameDeal}><RenameDeal /></Example>
+    </Section>
+</Doc>

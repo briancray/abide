@@ -569,6 +569,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `Form` | `{ readonly form: Record<string, unknown>; field(name: FieldName<Handler>): FormField; readonly error: Record<string, unknown>; get message(): string \| undefined; readonly submit: Record<string, unknown>; readonly reset: Record<string, unknown>; get dirty(): boolean; get changes(): Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? Partial<NonNullable<Args>> : Record<string, unknown>; get issues(): Issues<Handler> \| undefined; readonly call: ReturnType<Handler> }` | The form's part, a field's parts by name, the form's own message and its element, a submit button's and a reset button's parts, whether a field differs from its baseline and the args holding those that do, what is wrong with the form, and the last call it made. | 32.11, 56.4, 56.10, 56.11, 56.13, 56.16, 56.17, 56.20, 56.22, 49.9 |
 | `FormField` | `{ readonly input: Record<string, unknown>; readonly error: Record<string, unknown>; get message(): string \| undefined; get invalid(): boolean; get changed(): boolean }` | One field's parts — the field's and its message element's — with its first message, whether it has one, and whether it differs from its baseline. | 56.9, 56.10, 56.13, 56.16, 56.21, 49.9 |
 
+## `inlineEdit`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `inlineEdit` | `(options?: InlineEditOptions) => InlineEdit` | A value edited where it stands, as parts an app spreads onto a button showing it and an input editing it. | 56.24, 56.25, 56.26, 56.27, 56.28, 32.99, 49.2, 49.4, 49.5, 49.6 |
+| `InlineEditOptions` | `{ value?: Reactive<string>; save?: (text: string) => unknown }` | The value, and what saves an edit of it. | 56.25, 56.26, 49.8 |
+| `InlineEdit` | `{ readonly view: Record<string, unknown>; readonly input: Record<string, unknown>; readonly editing: Reactive<boolean>; readonly value: Reactive<string>; get busy(): boolean; get error(): string \| undefined }` | The button's part, the input's, whether it is being edited, the value, whether a save is in flight, and why the last one failed. | 32.11, 56.24, 56.26, 49.3, 49.8, 49.9 |
+
 ## `combobox`
 
 | Name | Signature | Meaning | Rules |
