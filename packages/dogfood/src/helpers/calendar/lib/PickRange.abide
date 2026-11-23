@@ -1,0 +1,37 @@
+<script>
+import { calendar, reactive } from '@abide/abide'
+
+let trial = reactive<readonly [string, string | undefined] | undefined>(
+    undefined,
+)
+const dates = calendar({ range: true, selected: trial })
+</script>
+
+<p>Trial from {trial?.[0] ?? '…'} to {trial?.[1] ?? '…'}</p>
+<div class="calendar">
+    <div data-bar>
+        <button {...dates.previous}>‹</button>
+        <button {...dates.next}>›</button>
+    </div>
+    <div data-months>
+        {#for shown of dates.months by shown.month}
+            <section>
+                <h3 {...shown.heading}>{shown.label}</h3>
+                <div {...shown.grid}>
+                    <div {...dates.header}>
+                        {#for weekday of dates.weekdays by weekday.day}
+                            <div {...weekday.header}>{weekday.short}</div>
+                        {/for}
+                    </div>
+                    {#for week of shown.weeks by week[0]?.date}
+                        <div {...dates.week}>
+                            {#for day of week by day.date}
+                                <div {...day.cell}>{day.day}</div>
+                            {/for}
+                        </div>
+                    {/for}
+                </div>
+            </section>
+        {/for}
+    </div>
+</div>

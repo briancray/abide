@@ -871,6 +871,10 @@
         @apply bg-signal text-paper;
     }
 
+    & [data-preview]:not([data-selected]) {
+        @apply bg-rule;
+    }
+
     & [data-deal] {
         @apply truncate font-medium;
     }

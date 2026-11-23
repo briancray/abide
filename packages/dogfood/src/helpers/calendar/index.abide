@@ -5,8 +5,12 @@ import Section from '#src/lib/Section.abide'
 
 import LondonWeeks from './lib/LondonWeeks.abide'
 import londonWeeks from './lib/LondonWeeks.abide' with { type: 'text' }
+import OpenOnTheDay from './lib/OpenOnTheDay.abide'
+import openOnTheDay from './lib/OpenOnTheDay.abide' with { type: 'text' }
 import PickCloseDate from './lib/PickCloseDate.abide'
 import pickCloseDate from './lib/PickCloseDate.abide' with { type: 'text' }
+import PickRange from './lib/PickRange.abide'
+import pickRange from './lib/PickRange.abide' with { type: 'text' }
 import TwoMonths from './lib/TwoMonths.abide'
 import twoMonths from './lib/TwoMonths.abide' with { type: 'text' }
 </script>
@@ -45,6 +49,22 @@ import twoMonths from './lib/TwoMonths.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/calendar.test.ts',
             from: [
+                "test('a range picks a start, then an end, swapped where it falls before the start'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: [
+                "test('while a range has no end, the days up to the one focused are previewed'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: ["test('active is the day in the tab order, and idOf its cell'"],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: [
                 'test("a week starts on the locale\'s first day, or on the one given"',
             ],
         },
@@ -61,6 +81,17 @@ import twoMonths from './lib/TwoMonths.abide' with { type: 'text' }
             calendar: one day in the tab order, and the arrows walk from one month into the
             next.</p>
         <Example code={twoMonths}><TwoMonths /></Example>
+    </Section>
+    <Section level={3} title="Pick a range of days">
+        <p>Set <code>range</code> and the first pick is the start, the next the end, whichever
+            order they come in. Until the end is picked, the days up to the one pointed at or
+            focused carry <code>data-preview</code>.</p>
+        <Example code={pickRange}><PickRange /></Example>
+    </Section>
+    <Section level={3} title="Open it from a button, on the day the keys move from">
+        <p>Spread <code>popover</code>'s parts around the grid, and focus the cell
+            <code>idOf</code> names for <code>active</code> as it opens.</p>
+        <Example code={openOnTheDay}><OpenOnTheDay /></Example>
     </Section>
     <Section level={3} title="Start each week on the first day of your team's locale">
         <p>Name the <code>locale</code> and the week starts where that locale starts it, Monday in

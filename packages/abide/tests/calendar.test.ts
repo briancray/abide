@@ -1,4 +1,4 @@
-// 52.83-52.97 — `calendar`'s parts, spread by hand as 32.11 spreads them: an attribute per string read
+// 52.83-52.101 — `calendar`'s parts, spread by hand as 32.11 spreads them: an attribute per string read
 // at the spread, a listener per `on<event>`, and the weeks rendered again as they change. What a
 // template does with them is the CRM's tests'.
 
@@ -275,4 +275,91 @@ test('two months share one tab stop, and the arrows cross between their grids', 
     expect(view.next['aria-controls']).toBe(
         `${view.months[0]?.grid.id} ${view.months[1]?.grid.id}`,
     )
+})
+
+// 52.98, 52.99 — A RANGE: the first pick a start, the next its end, swapped where it falls before
+// the start, and a pick after that a start again. THE REVERT: drop the swap, and the end lands before
+// the start with no day between them picked.
+test('a range picks a start, then an end, swapped where it falls before the start', () => {
+    const selected = reactive<
+        readonly [string, string | undefined] | undefined
+    >(undefined)
+    const view = calendar({
+        range: true,
+        selected,
+        month: reactive<string | undefined>('2026-11'),
+    })
+    const root = render(view)
+    const click = (date: string) => {
+        ;(document.getElementById(view.idOf(date)) as HTMLElement).click()
+        flushSync()
+    }
+    expect(
+        root.querySelector('[role=grid]')?.getAttribute('aria-multiselectable'),
+    ).toBe('true')
+    click('2026-11-20')
+    expect(selected.peek()).toEqual(['2026-11-20', undefined])
+    expect(root.querySelectorAll('[aria-selected=true]')).toHaveLength(1)
+    click('2026-11-17')
+    expect(selected.peek()).toEqual(['2026-11-17', '2026-11-20'])
+    const picked = [...root.querySelectorAll('[data-selected]')].map((cell) =>
+        cell.id.slice(-10),
+    )
+    expect(picked).toEqual([
+        '2026-11-17',
+        '2026-11-18',
+        '2026-11-19',
+        '2026-11-20',
+    ])
+    expect(root.querySelectorAll('[aria-selected=true]')).toHaveLength(4)
+    expect(
+        document
+            .getElementById(view.idOf('2026-11-17'))
+            ?.hasAttribute('data-range-start'),
+    ).toBe(true)
+    expect(
+        document
+            .getElementById(view.idOf('2026-11-20'))
+            ?.hasAttribute('data-range-end'),
+    ).toBe(true)
+    click('2026-11-25')
+    expect(selected.peek()).toEqual(['2026-11-25', undefined])
+})
+
+// 52.100 — THE PREVIEW follows the keys while a range has a start and no end, and is gone once it
+// has one. THE REVERT: read the preview from the day picked rather than the day focused, and it
+// never leaves the start.
+test('while a range has no end, the days up to the one focused are previewed', () => {
+    const selected = reactive<
+        readonly [string, string | undefined] | undefined
+    >(['2026-11-10', undefined])
+    const view = calendar({ range: true, selected })
+    const root = render(view)
+    ;(document.getElementById(view.idOf(view.active)) as HTMLElement).focus()
+    press('ArrowRight')
+    press('ArrowRight')
+    const previewed = () =>
+        [...root.querySelectorAll('[data-preview]')].map((cell) =>
+            cell.id.slice(-10),
+        )
+    expect(previewed()).toEqual(['2026-11-10', '2026-11-11', '2026-11-12'])
+    press('Enter')
+    expect(selected.peek()).toEqual(['2026-11-10', '2026-11-12'])
+    expect(previewed()).toEqual([])
+})
+
+// 52.101 — ACTIVE AND IDOF put focus on the day the keys move from, from outside the grid: what a
+// popover opening on the calendar does.
+test('active is the day in the tab order, and idOf its cell', () => {
+    const view = calendar({
+        selected: reactive<string | undefined>('2026-11-11'),
+    })
+    const root = render(view)
+    expect(view.active).toBe('2026-11-11')
+    const cell = document.getElementById(view.idOf(view.active))
+    expect(cell).toBe(root.querySelector('[tabindex="0"]'))
+    cell?.focus()
+    press('ArrowDown')
+    expect(view.active).toBe('2026-11-18')
+    expect(document.activeElement?.id).toBe(view.idOf('2026-11-18'))
 })
