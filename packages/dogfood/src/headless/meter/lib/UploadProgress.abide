@@ -1,0 +1,15 @@
+<script>
+import { meter, reactive } from '@abide/abide'
+
+let sent = reactive<number | undefined>(undefined)
+const upload = meter({
+    value: () => sent,
+    role: 'progressbar',
+    label: 'Upload',
+})
+</script>
+
+<div class="h-2 rounded-full bg-rule" {...upload.meter}>
+    <div class="h-full rounded-full bg-signal" {...upload.fill}></div>
+</div>
+<button onclick={() => (sent = (sent ?? 0) + 0.25)}>Send a chunk</button>

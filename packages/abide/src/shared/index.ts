@@ -215,6 +215,8 @@ export {
     accordion,
 } from './accordion.ts'
 export { type Clamp, type ClampOptions, clamp } from './clamp.ts'
+export { type Meter, type MeterOptions, meter } from './meter.ts'
+export { type Pages, type PagesOptions, pages } from './pages.ts'
 export {
     type ToggleGroup,
     type ToggleGroupOptions,

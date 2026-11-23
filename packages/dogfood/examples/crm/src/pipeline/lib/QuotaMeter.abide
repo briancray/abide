@@ -1,0 +1,20 @@
+<script>
+import { format, meter, reactive } from '@abide/abide'
+
+const TARGET = 500_000
+let won = reactive(410_000)
+const quota = meter({
+    value: () => won,
+    max: TARGET,
+    low: TARGET / 2,
+    label: 'Quota won',
+})
+</script>
+
+<div class="h-2 rounded-full bg-rule" {...quota.meter}>
+    <div class="h-full rounded-full bg-signal" {...quota.fill}></div>
+</div>
+<p class="status">
+    {format.money(won, { digits: 0 })} of {format.money(TARGET, { digits: 0 })}
+</p>
+<button onclick={() => (won = 200_000)}>Lose the Hopper deal</button>

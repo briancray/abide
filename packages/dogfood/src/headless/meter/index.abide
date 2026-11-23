@@ -1,0 +1,41 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import TeamQuota from './lib/TeamQuota.abide'
+import teamQuota from './lib/TeamQuota.abide' with { type: 'text' }
+import UploadProgress from './lib/UploadProgress.abide'
+import uploadProgress from './lib/UploadProgress.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/range', '/headless/sparkline']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/QuotaMeter.test.ts',
+            from: ["test('the quota fills as far as the deals won reach'"],
+        },
+        {
+            path: 'packages/abide/tests/meter.test.ts',
+            from: [
+                "test('a progress bar with no value is indeterminate",
+                "test('a meter says whether its value is low, high or between",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Show how much of the quota is won">
+        <p>Spread <code>meter</code> on a track and <code>fill</code> on the bar inside it. The
+            fill is as wide as the value is far along its range, and the track carries
+            <code>data-level</code> where you give <code>low</code> or <code>high</code>.</p>
+        <Example code={teamQuota}><TeamQuota /></Example>
+    </Section>
+
+    <Section level={3} title="Show an upload's progress, unknown until it starts">
+        <p>Give <code>role: 'progressbar'</code> for progress toward an end. While
+            <code>value</code> is <code>undefined</code> it is indeterminate: no fill, and
+            <code>data-indeterminate</code> on the track.</p>
+        <Example code={uploadProgress}><UploadProgress /></Example>
+    </Section>
+</Doc>

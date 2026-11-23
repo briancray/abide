@@ -436,6 +436,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/pages',
+                title: '`pages`',
+                description:
+                    'Page through a long list with numbered links or buttons of your own, the far pages folded into gaps.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/tree',
                 title: '`tree`',
                 description:
@@ -528,6 +536,14 @@ const WRITTEN: readonly {
                 title: '`sparkline`',
                 description:
                     'Draw a trend with no axes in markup of your own from the parts it hands back.',
+                where: 'component',
+                subgroup: 'Charts',
+            },
+            {
+                route: '/headless/meter',
+                title: '`meter`',
+                description:
+                    'Show a value within its range, or progress toward an end, as a track and a fill of your own.',
                 where: 'component',
                 subgroup: 'Charts',
             },

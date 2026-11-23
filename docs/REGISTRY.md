@@ -606,6 +606,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `ClampOptions` | `{ lines?: number \| (() => number); open?: Reactive<boolean>; id?: string }` | The lines shown while it is shut, whether all of it shows, and the base of its ids. | 51.122, 49.8, 49.10, 49.11 |
 | `Clamp` | `{ readonly text: Record<string, unknown>; readonly button: Record<string, unknown>; readonly open: Reactive<boolean>; get overflowing(): boolean }` | The text's part, the button's, whether all of it shows, and whether there is more than the lines show. | 32.11, 51.122, 51.123, 49.3, 49.8, 49.9 |
 
+## `pages`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `pages` | `(options: PagesOptions) => Pages` | Pagination as parts an app spreads onto a nav and links or buttons of its own: a link per page listed, and one to the page before and after. | 51.125, 51.126, 51.127, 51.128, 51.129, 49.2, 49.4, 49.5, 49.6 |
+| `PagesOptions` | `{ count: number \| (() => number); page?: Reactive<number>; around?: number \| (() => number); href?: (page: number) => string; label?: string \| (() => string) }` | How many pages there are, the one on, how many around it are listed, each page's address, and the nav's accessible name. | 51.125, 51.126, 51.129, 49.8, 49.10, 49.11 |
+| `Pages` | `{ readonly nav: Record<string, unknown>; get items(): readonly (number \| 'gap')[]; link(page: number): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly page: Reactive<number> }` | The nav's part, the pages listed, a page's link, the links before and after, and the page on. | 32.11, 51.125, 51.127, 51.128, 49.3, 49.8, 49.9 |
+
 ## `tree`
 
 | Name | Signature | Meaning | Rules |
@@ -722,6 +730,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `sparkline` | `(options: SparklineOptions) => SparklineParts` | A trend with no axes, stretched to its box, as parts an app spreads onto SVG elements of its own. | 52.29, 52.30, 52.31, 52.33, 52.34, 52.81, 49.2, 49.4, 49.5, 49.6 |
 | `SparklineOptions` | `{ values: readonly (number \| null \| undefined)[] \| (() => readonly (number \| null \| undefined)[]); label: string \| (() => string); zero?: boolean \| (() => boolean); kind?: 'line' \| 'bar' \| (() => 'line' \| 'bar'); curve?: boolean \| (() => boolean) }` | What `sparkline` draws, each value read live where a function is given. | 52.33, 52.34, 52.105 |
 | `SparklineParts` | `{ readonly svg: Record<string, unknown>; readonly line: Record<string, unknown>; readonly area: Record<string, unknown>; readonly bars: Record<string, unknown>; readonly dot: Record<string, unknown>; get trend(): 'up' \| 'down' \| 'flat'; get ended(): boolean }` | The `<svg>`'s part, the line, the area, the bars and the end dot as parts, and the trend. | 52.31, 49.3, 49.9 |
+
+## `meter`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `meter` | `(options: MeterOptions) => Meter` | WAI-ARIA's meter, or its progress bar, as parts an app spreads onto a track and a fill of its own. | 52.106, 52.107, 52.108, 52.109, 49.2, 49.4, 49.5, 49.6 |
+| `MeterOptions` | `{ value: number \| undefined \| (() => number \| undefined); min?: number \| (() => number); max?: number \| (() => number); low?: number \| (() => number); high?: number \| (() => number); role?: 'meter' \| 'progressbar' \| (() => 'meter' \| 'progressbar'); label?: string \| (() => string) }` | The value, the range it falls in, the bands marking it low or high, whether it is progress, and its accessible name. | 52.106, 52.107, 52.109, 49.10, 49.11 |
+| `Meter` | `{ readonly meter: Record<string, unknown>; readonly fill: Record<string, unknown>; get fraction(): number \| undefined }` | The track's part, the fill's, and how far along the range the value is. | 32.11, 52.106, 52.108, 49.3, 49.9 |
 
 # Element behaviors
 

@@ -5605,6 +5605,20 @@ show, measured as the text resizes while `open` does not hold.
 
 51.124 `clamp`'s `button` part MUST be a `disclosure`'s `button` over its `text`, flipping `open`.
 
+51.125 `pages`' `items` MUST be the first page, the last, and every page within `around` of `page`,
+in order, with a `gap` where the pages between two of them are left out, save a gap that would stand
+for one page, which MUST be that page.
+
+51.126 A click on `pages`' `link` of a page MUST write that page to `page`, and where `href` is given
+the link MUST carry `href` naming that page's address.
+
+51.127 `pages`' `link` of the page `page` names MUST carry `aria-current="page"`.
+
+51.128 A click on `pages`' `previous` or `next` MUST write the page before or after to `page`, and
+each MUST be disabled where there is no such page.
+
+51.129 `pages`' `nav` part MUST carry `aria-label` naming `label`, `Pages` where none is given.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.
@@ -5932,6 +5946,19 @@ MUST close a run back along a `baseline` of one point per x by the curve those p
 
 52.105 `chart` MUST draw a series whose `kind` is `line` or `area` declaring `curve` by 52.104, and
 `sparkline` declaring `curve` MUST draw its line and its area by it.
+
+52.106 `meter`'s `meter` part MUST carry `role="meter"`, or `role="progressbar"` where `role` is
+`progressbar`, and `aria-valuenow`, `aria-valuemin` and `aria-valuemax` naming `value`, `min` and
+`max`, and `aria-label` naming `label` where one is given.
+
+52.107 A `meter` whose `value` is `undefined` MUST carry no `aria-valuenow` on its `meter` part, and
+MUST carry `data-indeterminate` there.
+
+52.108 `meter`'s `fill` part MUST be as wide, as a share of the meter, as `value` falls from `min` to
+`max`, kept from none to all of it.
+
+52.109 `meter`'s `meter` part MUST carry `data-level`, where `low` or `high` is given, as `low` where
+`value` is below `low`, `high` where it is above `high`, and `middle` otherwise.
 
 # 53. Keys, element behaviors and chat
 
