@@ -1,0 +1,20 @@
+<script>
+import { format, reactive, shrinkImage } from '@abide/abide'
+
+let kept = reactive<File | undefined>(undefined)
+
+async function keep(file: File) {
+    kept = await shrinkImage(file, { maxEdge: 256, maxBytes: 40_000 })
+}
+</script>
+
+<input
+    type="file"
+    accept="image/*"
+    aria-label="Contact photo"
+    onchange={(event) => {
+        const file = (event.currentTarget as HTMLInputElement).files?.[0]
+        if (file !== undefined) void keep(file)
+    }}
+ />
+{#if kept}<p class="status">{kept.name}, {format.bytes(kept.size)}</p>{/if}

@@ -1,0 +1,19 @@
+<script>
+import { download } from '@abide/abide'
+
+import { STAGES } from './STAGES.ts'
+
+const COUNTS: Record<string, number> = {
+    lead: 4,
+    qualified: 3,
+    proposal: 2,
+    won: 2,
+}
+
+function save() {
+    const rows = STAGES.map((stage) => `${stage},${COUNTS[stage] ?? 0}`)
+    download(['stage,deals', ...rows].join('\n'), 'pipeline.csv', 'text/csv')
+}
+</script>
+
+<button onclick={save}>Download pipeline.csv</button>

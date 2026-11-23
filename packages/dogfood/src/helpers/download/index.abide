@@ -1,0 +1,30 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ExportStages from './lib/ExportStages.abide'
+import exportStages from './lib/ExportStages.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/helpers/shrink-image']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/ExportPipeline.test.ts',
+            from: ["test('the pipeline is saved as a CSV named for it'"],
+        },
+        {
+            path: 'packages/abide/tests/helpers.test.ts',
+            from: ["test('download saves text or bytes under a name"],
+        },
+    ]}
+>
+    <Section level={3} title="Save what the page made as a file">
+        <p>Hand <code>download</code> text or a <code>Blob</code> and a name, and the browser
+            saves it as a click on a link to it would. For a file the server makes, link to its
+            handler with <code>download</code> instead; a server has no one to hand a file to, so
+            <code>download</code> throws there.</p>
+        <Example code={exportStages}><ExportStages /></Example>
+    </Section>
+</Doc>

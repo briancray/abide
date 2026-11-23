@@ -1,0 +1,34 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ShrinkPhoto from './lib/ShrinkPhoto.abide'
+import shrinkPhoto from './lib/ShrinkPhoto.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/behaviors/dropzone', '/helpers/download']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPhoto.test.ts',
+            from: ["test('a photo picked is shrunk before it is kept'"],
+        },
+        {
+            path: 'packages/abide/tests/helpers.test.ts',
+            from: [
+                "test('a picture over maxBytes is lowered in quality",
+                "test('a picture already within every bound is handed back as it is",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Shrink a contact's photo before it is sent">
+        <p>Hand <code>shrinkImage</code> a picked or dropped file. It answers one no larger than
+            <code>maxEdge</code> on its longer edge, and, given <code>maxBytes</code>, lowers its
+            quality and then its size until it fits. The same call runs on the server, through
+            <code>Bun.Image</code>, and in the browser, through a canvas; a file already within
+            every bound comes back as it is.</p>
+        <Example code={shrinkPhoto}><ShrinkPhoto /></Example>
+    </Section>
+</Doc>

@@ -1,0 +1,19 @@
+<script>
+import { highlight, reactive } from '@abide/abide'
+
+const CONTACTS = ['Ada Lovelace', 'Grace Hopper', 'Katherine Johnson']
+let query = reactive('')
+</script>
+
+<input aria-label="Find a contact" bind:value={query} />
+<ul>
+    {#for name of CONTACTS by name}
+        <li>
+            {#for run of highlight(name, query)}
+                {#if run.match}
+                    <mark {...run.match}>{run.text}</mark>
+                {:else}{run.text}{/if}
+            {/for}
+        </li>
+    {/for}
+</ul>

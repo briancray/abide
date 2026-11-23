@@ -1,0 +1,31 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import FindContact from './lib/FindContact.abide'
+import findContact from './lib/FindContact.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/combobox', '/headless/command-palette']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactFind.test.ts',
+            from: ["test('what is typed is marked in each name that holds it'"],
+        },
+        {
+            path: 'packages/abide/tests/helpers.test.ts',
+            from: ["test('highlight marks the first stretch holding the query"],
+        },
+    ]}
+>
+    <Section level={3} title="Mark what was typed in each contact's name">
+        <p>Walk the runs <code>highlight</code> answers: a run holding the query carries a
+            <code>match</code> part to spread on the element marking it. It is the matcher
+            <code>combobox</code> and <code>commandPalette</code> mark their own lists with, so
+            what a list keeps and what it marks agree. Give <code>words: true</code> to mark each
+            word of the query wherever it is.</p>
+        <Example code={findContact}><FindContact /></Example>
+    </Section>
+</Doc>

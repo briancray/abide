@@ -907,6 +907,25 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
 | `format.bytes` | `(value: unknown, options?: { digits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7 |
 
+## `highlight`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `highlight` | `(text: string, query: string, options?: { words?: boolean }) => readonly LabelRun[]` | A text cut into runs, each holding what was searched for carrying the `match` part to spread on the element marking it. | 52.110, 52.111, 49.3 |
+
+## `shrinkImage`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `shrinkImage` | `(file: Blob & { name?: string }, options?: ShrinkImageOptions) => Promise<File>` | A picture made no larger than an edge and a byte budget, the same call where Bun runs and in a browser. | 53.79, 53.80, 53.81 |
+| `ShrinkImageOptions` | `{ maxEdge?: number; maxBytes?: number; type?: 'image/jpeg' \| 'image/webp' \| 'image/png'; quality?: number }` | The most pixels its longer edge keeps, the most bytes it takes, what it is written as, and the quality it is written at first. | 53.79, 53.80 |
+
+## `download`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `download` | `(data: Blob \| string, name: string, type?: string) => void` | Text or bytes made in the page, saved as a file under a name. | 53.82, 53.83 |
+
 ## `sortBy`
 
 | Name | Signature | Meaning | Rules |

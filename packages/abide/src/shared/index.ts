@@ -226,6 +226,9 @@ export {
     inlineEdit,
 } from './inlineEdit.ts'
 export { type Meter, type MeterOptions, meter } from './meter.ts'
+export { highlight } from './highlight.ts'
+export { type ShrinkImageOptions, shrinkImage } from './shrinkImage.ts'
+export { download } from './download.ts'
 export { type Pages, type PagesOptions, pages } from './pages.ts'
 export { type Playback, type PlaybackOptions, playback } from './playback.ts'
 export { type Drawer, type DrawerOptions, drawer } from './drawer.ts'

@@ -1,0 +1,15 @@
+<script>
+import { download } from '@abide/abide'
+
+const STAGES = [
+    { stage: 'lead', deals: 4 },
+    { stage: 'won', deals: 2 },
+]
+
+function save() {
+    const rows = STAGES.map((row) => `${row.stage},${row.deals}`)
+    download(['stage,deals', ...rows].join('\n'), 'stages.csv', 'text/csv')
+}
+</script>
+
+<button onclick={save}>Download stages.csv</button>

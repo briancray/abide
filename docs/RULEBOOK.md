@@ -6044,6 +6044,12 @@ MUST carry `data-indeterminate` there.
 52.109 `meter`'s `meter` part MUST carry `data-level`, where `low` or `high` is given, as `low` where
 `value` is below `low`, `high` where it is above `high`, and `middle` otherwise.
 
+52.110 `highlight` MUST answer `text` cut into runs in order, the first stretch of it holding `query`,
+found ignoring case, carrying the `match` part — or, where `words` is set, the first stretch holding
+each word of `query` — stretches that overlap or touch carrying it as one run.
+
+52.111 `highlight` given a `query` that is blank MUST answer `text` as one run carrying no `match`.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are
@@ -6287,6 +6293,21 @@ what it was.
 53.78 `resizable`'s `handle` part MUST carry `role="separator"`, `aria-orientation` across `axis`,
 `aria-controls` naming the panel's id, `aria-valuenow`, `aria-valuemin` and `aria-valuemax` naming
 `size`, `min` and `max`, `tabindex="0"`, and `data-dragging` while a pointer drags it.
+
+53.79 `shrinkImage` MUST answer a `File` no larger than `maxEdge` on its longer edge, turned as its
+EXIF says, written as `type`, or as the file's own type where that is JPEG or WebP and as JPEG where
+it is not, under the file's name with that type's extension, alike where Bun runs and in a browser.
+
+53.80 `shrinkImage` given `maxBytes` MUST lower the quality it writes at and then its size until it
+takes no more than `maxBytes`, save for PNG, whose size it MUST NOT lower for bytes.
+
+53.81 `shrinkImage` MUST answer a file already within `maxEdge` and `maxBytes` and of `type` as it is,
+written again by nothing.
+
+53.82 `download` MUST save `data` as a file named `name`, as a click on a link to it with that
+`download` would, text written as `type`.
+
+53.83 `download` MUST throw where `isServer` is true.
 
 # 54. Guards, fetches and jobs
 

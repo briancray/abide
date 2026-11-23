@@ -1,0 +1,15 @@
+<script>
+import { format, reactive, shrinkImage } from '@abide/abide'
+
+let sizes = reactive('')
+
+async function picked(event: Event) {
+    const file = (event.currentTarget as HTMLInputElement).files?.[0]
+    if (file === undefined) return
+    const small = await shrinkImage(file, { maxEdge: 800, maxBytes: 200_000 })
+    sizes = `${format.bytes(file.size)} → ${format.bytes(small.size)}`
+}
+</script>
+
+<input type="file" accept="image/*" aria-label="Photo" onchange={picked} />
+<p>{sizes}</p>

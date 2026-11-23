@@ -711,6 +711,27 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
+                route: '/helpers/highlight',
+                title: '`highlight`',
+                description:
+                    'Mark where a search is in a text of your own, as runs you render, each match carrying a part to style.',
+                where: 'anywhere',
+            },
+            {
+                route: '/helpers/shrink-image',
+                title: '`shrinkImage`',
+                description:
+                    'Make a picture small enough to send, in pixels and in bytes, with the same call on the server and in the browser.',
+                where: 'anywhere',
+            },
+            {
+                route: '/helpers/download',
+                title: '`download`',
+                description:
+                    'Save text or bytes made in the page as a file under a name you choose.',
+                where: 'browser',
+            },
+            {
                 route: '/helpers/sort-by',
                 title: '`sortBy`',
                 description:
