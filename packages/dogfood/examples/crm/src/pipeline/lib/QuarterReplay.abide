@@ -1,0 +1,24 @@
+<script>
+import { format, playback } from '@abide/abide'
+
+// Won by the end of each week of the quarter.
+const WON = [
+    0, 8_500, 8_500, 20_500, 20_500, 24_500, 54_500, 54_500, 62_000, 74_000,
+    74_000, 98_000,
+]
+const replay = playback({ duration: WON.length * 1000, step: 1000 })
+const week = () => Math.min(WON.length - 1, Math.floor(replay.at() / 1000))
+</script>
+
+<div class="flex flex-col gap-snug" tabindex="0" {...replay.root}>
+    <div class="row">
+        <button {...replay.play}>{replay.playing() ? 'Pause' : 'Play'}</button>
+        <input {...replay.scrubber} />
+        <div {...replay.speed.group}>
+            {#for rate of ['0.5', '1', '2'] by rate}
+                <button {...replay.speed.item(rate)}>{rate}×</button>
+            {/for}
+        </div>
+    </div>
+    <p class="status">Week {week() + 1}: {format.money(WON[week()] ?? 0, { digits: 0 })} won</p>
+</div>

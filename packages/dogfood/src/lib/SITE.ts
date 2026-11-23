@@ -468,6 +468,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/playback',
+                title: '`playback`',
+                description:
+                    'Replay anything over time from a play button, a scrubber and speeds of your own, driven by one clock.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/tree',
                 title: '`tree`',
                 description:

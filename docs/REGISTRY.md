@@ -637,6 +637,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `PagesOptions` | `{ count: number \| (() => number); page?: Reactive<number>; around?: number \| (() => number); href?: (page: number) => string; label?: string \| (() => string) }` | How many pages there are, the one on, how many around it are listed, each page's address, and the nav's accessible name. | 51.125, 51.126, 51.129, 49.8, 49.10, 49.11 |
 | `Pages` | `{ readonly nav: Record<string, unknown>; get items(): readonly (number \| 'gap')[]; link(page: number): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly page: Reactive<number> }` | The nav's part, the pages listed, a page's link, the links before and after, and the page on. | 32.11, 51.125, 51.127, 51.128, 49.3, 49.8, 49.9 |
 
+## `playback`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `playback` | `(options: PlaybackOptions) => Playback` | A clock and its controls as parts an app spreads onto a play button, a scrubber, a row of speeds and a host for its keys, composed of `toggle`, `toggleGroup` and `hotkeys`. | 51.130, 51.131, 51.132, 51.133, 51.134, 51.135, 49.2, 49.4, 49.5, 49.6 |
+| `PlaybackOptions` | `{ duration: number \| (() => number); at?: Reactive<number>; playing?: Reactive<boolean>; rate?: Reactive<number>; rates?: readonly number[] \| (() => readonly number[]); loop?: boolean \| (() => boolean); step?: number \| (() => number) }` | How long it runs, where it is, whether and how fast it plays, the speeds offered, whether it starts over, and what an arrow key moves it by. | 51.130, 51.131, 51.134, 51.135, 49.8, 49.10, 49.11 |
+| `Playback` | `{ readonly root: Record<string, unknown>; readonly play: Record<string, unknown>; readonly scrubber: Record<string, unknown>; readonly speed: ToggleGroup; readonly at: Reactive<number>; readonly playing: Reactive<boolean>; readonly rate: Reactive<number> }` | The key host's part, the play button's, the scrubber's, the speeds, where it is, whether it plays, and how fast. | 32.11, 51.132, 51.133, 51.134, 49.3, 49.8, 49.9 |
+
 ## `tree`
 
 | Name | Signature | Meaning | Rules |

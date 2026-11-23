@@ -1,0 +1,110 @@
+// 51.130-51.135 — `playback`: its clock driven a frame at a time, the frame's time chosen here, and
+// its parts read and pressed as a template and a browser would.
+
+import { afterAll, beforeEach, expect, test } from 'bun:test'
+
+import { flushSync, playback, reactive } from '#shared'
+
+// The frames asked for, run when a test says, each handed the time it names.
+let queued: FrameRequestCallback[] = []
+const native = {
+    request: globalThis.requestAnimationFrame,
+    cancel: globalThis.cancelAnimationFrame,
+}
+beforeEach(() => {
+    queued = []
+    globalThis.requestAnimationFrame = (callback) => queued.push(callback)
+    globalThis.cancelAnimationFrame = () => {
+        queued = []
+    }
+})
+afterAll(() => {
+    globalThis.requestAnimationFrame = native.request
+    globalThis.cancelAnimationFrame = native.cancel
+})
+const frame = (time: number) => {
+    const due = queued
+    queued = []
+    for (const callback of due) callback(time)
+    flushSync()
+}
+const press = (part: Record<string, unknown>) => {
+    ;(part.onclick as () => void)()
+    flushSync()
+}
+const key = (part: Record<string, unknown>, name: string) => {
+    ;(part.onkeydown as (event: KeyboardEvent) => void)(
+        new KeyboardEvent('keydown', { key: name, cancelable: true }),
+    )
+    flushSync()
+}
+
+// THE REVERT: move `at` by the time passed alone, and a replay at twice the speed moves at real time.
+test('playing moves it by the time passed times its rate, and it stops at its end — 51.130, 51.131', () => {
+    const trip = playback({ duration: 1000, rate: reactive(2) })
+    press(trip.play)
+    frame(0)
+    frame(100)
+    expect(trip.at()).toBe(200)
+    frame(500)
+    expect([trip.at(), trip.playing()]).toEqual([1000, false])
+    expect(queued).toHaveLength(0)
+    const round = playback({ duration: 1000, loop: true })
+    press(round.play)
+    frame(0)
+    frame(1200)
+    expect([round.at(), round.playing()]).toEqual([0, true])
+})
+
+// THE REVERT: drop the start-over from `play`, and pressing it at the end plays nothing.
+test('its play button is a toggle over playing, and playing from the end starts over — 51.132', () => {
+    const at = reactive(1000)
+    const trip = playback({ duration: 1000, at })
+    expect([trip.play['aria-pressed'], trip.play['aria-label']]).toEqual([
+        'false',
+        'Play',
+    ])
+    press(trip.play)
+    expect([trip.playing(), trip.at(), trip.play['aria-pressed']]).toEqual([
+        true,
+        0,
+        'true',
+    ])
+    press(trip.play)
+    expect(trip.playing()).toBe(false)
+})
+
+// THE REVERT: write the scrubber's value to `at` unbounded, and a drag past its end runs past `duration`.
+test('the scrubber reads and moves where it is, and the speeds pick its rate — 51.133, 51.134', () => {
+    const trip = playback({ duration: 9000, rates: [1, 4] })
+    expect([
+        trip.scrubber.type,
+        trip.scrubber.max,
+        trip.scrubber.value,
+    ]).toEqual(['range', '9000', '0'])
+    const input = document.createElement('input')
+    input.value = '12000'
+    input.addEventListener('input', trip.scrubber.oninput as EventListener)
+    input.dispatchEvent(new Event('input'))
+    flushSync()
+    expect(trip.at()).toBe(9000)
+    press(trip.speed.item('4'))
+    expect([trip.rate(), trip.speed.item('4')['aria-checked']]).toEqual([
+        4,
+        'true',
+    ])
+})
+
+// THE REVERT: drop the arrow bindings from `root`, and the keys move nothing.
+test('Space plays and pauses, and the arrows move it by its step, kept to its length — 51.135', () => {
+    const trip = playback({ duration: 8000, step: 3000 })
+    key(trip.root, ' ')
+    expect(trip.playing()).toBe(true)
+    key(trip.root, ' ')
+    key(trip.root, 'ArrowRight')
+    key(trip.root, 'ArrowRight')
+    key(trip.root, 'ArrowRight')
+    expect(trip.at()).toBe(8000)
+    key(trip.root, 'ArrowLeft')
+    expect(trip.at()).toBe(5000)
+})

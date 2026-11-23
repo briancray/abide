@@ -1,0 +1,34 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ReplayQuarter from './lib/ReplayQuarter.abide'
+import replayQuarter from './lib/ReplayQuarter.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/toggle', '/headless/toggle-group', '/behaviors/hotkeys']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/QuarterReplay.test.ts',
+            from: [
+                "test('the keys and the scrubber move the replay, and the speeds pick its rate'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/playback.test.ts',
+            from: ["test('playing moves it by the time passed times its rate"],
+        },
+    ]}
+>
+    <Section level={3} title="Replay a quarter week by week">
+        <p>One clock moves <code>at</code> while <code>playing</code>, each frame by the time
+            passed times <code>rate</code>. Its parts are made of public ones: <code>play</code>
+            is a <code>toggle</code>'s button, <code>speed</code> a <code>toggleGroup</code> over
+            the rates, and the keys on <code>root</code> are <code>hotkeys</code> — Space plays
+            and pauses, the arrows step it. <code>scrubber</code> goes on an
+            <code>&lt;input&gt;</code>.</p>
+        <Example code={replayQuarter}><ReplayQuarter /></Example>
+    </Section>
+</Doc>

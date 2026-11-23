@@ -5641,6 +5641,24 @@ each MUST be disabled where there is no such page.
 
 51.129 `pages`' `nav` part MUST carry `aria-label` naming `label`, `Pages` where none is given.
 
+51.130 While `playing` holds, `playback` MUST move `at` forward each frame by the milliseconds since
+the frame before times `rate`, and MUST ask for no frame while it does not.
+
+51.131 `playback` reaching `duration` MUST set `at` to `0` and keep playing where `loop` holds, and
+otherwise MUST leave `at` at `duration` and write `false` to `playing`.
+
+51.132 `playback`'s `play` part MUST be a `toggle`'s `button` over `playing`, and pressing it to play
+where `at` is at `duration` MUST set `at` to `0` first.
+
+51.133 `playback`'s `scrubber` part MUST be an `<input type="range">` from `0` to `duration` whose
+value is `at`, and its `input` MUST move `at` to its value, kept from `0` to `duration`.
+
+51.134 `playback`'s `speed` MUST be a `toggleGroup` over `rates`, each key the rate as text, picking
+`rate`.
+
+51.135 On `playback`'s `root`, Space MUST press `play`, and ArrowLeft and ArrowRight MUST move `at`
+back and forward by `step`, kept from `0` to `duration`, as `hotkeys` binds them.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.
