@@ -1166,8 +1166,8 @@ type Reached = { readonly [REACHED]: true }
 | `format.number` | `(value: unknown, options?: { compact?: boolean; digits?: number; locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6 |
 | `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
 | `format.list` | `(value: unknown, options?: { conjunction?: 'and' \| 'or'; locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6 |
-| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36 |
-| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36 |
+| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.102 |
+| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.102 |
 | `format.timeZone` | `Reactive<string \| undefined>` | The zone the app pins every date to where its caller names none, or `undefined` for the visitor's own. | 52.3, 52.44, 52.45 |
 | `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
 | `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
@@ -1199,6 +1199,12 @@ type Reached = { readonly [REACHED]: true }
 | `CalendarMonth` | `{ readonly month: string; readonly label: string; readonly heading: Record<string, unknown>; readonly grid: Record<string, unknown>; readonly weeks: readonly (readonly CalendarDay[])[] }` | A month shown as `YYYY-MM`, its name in words, its heading's part, its grid's, and its weeks. | 52.83, 52.95, 52.97, 49.4 |
 | `CalendarWeekday` | `{ readonly day: number; readonly name: string; readonly short: string; readonly header: Record<string, unknown> }` | A weekday's number from Monday's `1`, its name in full and shortened, and its header cell. | 52.88, 49.4 |
 | `CalendarDay` | `{ readonly date: string; readonly day: number; readonly cell: Record<string, unknown> }` | A day of a grid as `YYYY-MM-DD`, its number in its month, and its cell. | 52.83, 52.85, 52.87, 52.96, 52.97, 52.99, 52.100, 49.4 |
+
+## `instantAt`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `instantAt` | `(wallClock: string, options?: { timeZone?: string }) => number \| undefined` | The epoch milliseconds at which a zone's clocks read a day and a time. | 52.103, 52.104 |
 
 ## `followBottom`
 

@@ -1,0 +1,15 @@
+<script>
+import { format } from '@abide/abide'
+
+const call = { at: Date.UTC(2026, 11, 15, 19, 30) }
+// `2026-12-15T14:30`: the day before the `T`, the time after it.
+const wallClock = format.date(call.at, {
+    style: 'input',
+    timeZone: 'America/New_York',
+})
+</script>
+
+<div class="fields">
+    <input type="date" value={wallClock.slice(0, 10)}>
+    <input type="time" value={wallClock.slice(11)}>
+</div>

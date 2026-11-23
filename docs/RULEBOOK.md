@@ -5894,6 +5894,17 @@ a grid, else to the day focused last, MUST carry `data-preview`, and no day MUST
 52.101 `calendar`'s `active` MUST be the day 52.87 puts in the tab order, and its `idOf` MUST answer
 the id of the cell 52.97 gives the day it is handed.
 
+52.102 `format.date`'s `'input'` style MUST write a time as the clocks of its zone read it, as
+`YYYY-MM-DDTHH:MM`, the same in every `locale`.
+
+52.103 `instantAt` MUST answer the epoch milliseconds at which the clocks of the zone its `timeZone`
+names — else the zone `format.date` writes in (52.3) — read the wall clock it is handed, a
+`YYYY-MM-DD` being its midnight, and MUST answer `undefined` for a string that is no `YYYY-MM-DD`,
+`YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS` on the calendar.
+
+52.104 Where the zone's clocks read a wall clock twice, `instantAt` MUST answer the earlier instant,
+and where they skip it, the instant the length of the skip later — `Temporal`'s `compatible`.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

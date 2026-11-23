@@ -7,6 +7,7 @@
 import { checkParts } from './checkParts.ts'
 import { cached } from './format/cached.ts'
 import { timeZone, visitorZone } from './format/timeZone.ts'
+import { wallClockOf } from './format/wallClockOf.ts'
 import { type Live, live } from './live.ts'
 import { LOCALE } from './LOCALE.ts'
 import { randomToken } from './randomToken.ts'
@@ -132,17 +133,7 @@ function monthsOn(date: string, months: number): string {
 
 /** The day `time` falls on in `zone`, as `YYYY-MM-DD`. */
 function dayIn(time: number, zone: string): string {
-    // `en-CA` writes a day as `YYYY-MM-DD`.
-    return cached(
-        `calendar today ${zone}`,
-        () =>
-            new Intl.DateTimeFormat('en-CA', {
-                timeZone: zone,
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-            }),
-    ).format(time)
+    return dateOf(wallClockOf(time, zone))
 }
 
 /** The day `locale`'s weeks start on, `1` for Monday to `7` for Sunday; Sunday where the engine does not say. */

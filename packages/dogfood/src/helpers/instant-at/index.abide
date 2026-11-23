@@ -1,0 +1,47 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import RescheduleCall from './lib/RescheduleCall.abide'
+import rescheduleCall from './lib/RescheduleCall.abide' with { type: 'text' }
+import ScheduleCall from './lib/ScheduleCall.abide'
+import scheduleCall from './lib/ScheduleCall.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/helpers/calendar', '/helpers/format', '/helpers/time']}
+    tests={[
+        {
+            path: 'packages/abide/tests/instantAt.test.ts',
+            from: [
+                "test('a skipped time lands the skip later, and a time read twice the earlier'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/instantAt.test.ts',
+            from: [
+                "test('a day or a time the calendar lacks, or any other string, is no instant'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/instantAt.test.ts',
+            from: [
+                'test("format.date\'s input style writes the zone\'s wall clock, and instantAt reads it back"',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Keep the moment a day and a time name">
+        <p>A day and a time are what a clock on a wall reads, and the same reading is a
+            different moment in every zone. Name the zone, and <code>instantAt</code> answers
+            the moment in epoch milliseconds, the one to keep.</p>
+        <Example code={scheduleCall}><ScheduleCall /></Example>
+    </Section>
+    <Section level={3} title="Fill a day and a time back from a moment kept">
+        <p><code>format.date</code>'s <code>'input'</code> style writes a moment as the zone's
+            clocks read it, <code>YYYY-MM-DDTHH:MM</code>: the day before the <code>T</code> for
+            a date field or <code>calendar</code>, the time after it for a time field.</p>
+        <Example code={rescheduleCall}><RescheduleCall /></Example>
+    </Section>
+</Doc>

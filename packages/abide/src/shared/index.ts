@@ -208,6 +208,8 @@ export {
     type CalendarWeekday,
     calendar,
 } from './calendar.ts'
+// 52.103, 52.104 — the instant a day and a time name in a zone.
+export { instantAt } from './instantAt.ts'
 export * as transcript from './transcript/index.ts'
 export * as outlet from './outlet.ts'
 export * as tooltip from './tooltip/index.ts'

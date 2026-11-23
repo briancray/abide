@@ -768,7 +768,13 @@ const WRITTEN: readonly {
                 route: '/helpers/calendar',
                 title: '`calendar`',
                 description:
-                    'Spread a month of days onto a grid of your own, picked by click or by the arrow keys and paged a month at a time.',
+                    'Spread months of days onto grids of your own, a day or a range picked by click or by the arrow keys.',
+            },
+            {
+                route: '/helpers/instant-at',
+                title: '`instantAt`',
+                description:
+                    'Turn a day and a time picked into the moment they name in a zone, the one to keep.',
             },
             {
                 route: '/helpers/follow-bottom',
