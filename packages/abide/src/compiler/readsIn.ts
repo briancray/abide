@@ -1420,7 +1420,8 @@ async function propsReads(
                 if (read === undefined) continue
                 read.local = binding.local
                 read.declaredAt = binding.declaredAt
-                if (read.shape !== 'value') {
+                // 31.3 — a shorthand member is a value standing where its member's type is due.
+                if (read.shape !== 'value' && read.shape !== 'shorthand') {
                     reads.push(read)
                     continue
                 }

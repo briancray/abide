@@ -27,8 +27,7 @@ const {
     } & Attributes<'section'>
 >()
 
-// `turns: turns`, not `{ turns }`: the shorthand hands `chat` the array rather than the binding.
-const talk = chat({ ask, permit, turns: turns })
+const talk = chat({ ask, permit, turns })
 </script>
 
 <section {...rest} {...talk.root} class="flex flex-col gap-snug">

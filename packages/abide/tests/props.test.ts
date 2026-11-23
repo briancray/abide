@@ -1040,3 +1040,39 @@ test('a read prop holds its Reactive where a name would — 33.27, 33.7', async 
     flushSync()
     expect(text('seen')).toBe('7')
 })
+
+// 33.27 OVER 31.3 — A SHORTHAND MEMBER HOLDS THE PROP'S `Reactive` as the longhand does, where the
+// parameter declares the member a `Reactive`: `chat({ turns })` binds the caller's conversation. THE
+// REVERT: have the props path in `readsIn` push a `shorthand` read without asking `holdsProp` — the
+// shorthand hands over the value, and `short` reads `value`.
+const HOLDS = `<script>
+import { isReactive, props, type Reactive } from '@abide/abide'
+
+const { n } = props<{ n: number }>()
+function hold(options: { n: Reactive<number> }) {
+    return isReactive(Object.values(options as Record<string, unknown>)[0]) ? 'held' : 'value'
+}
+const short = hold({ n })
+const long = hold({ n: n })
+</script>
+
+<b id="short">{short}</b><b id="long">{long}</b>`
+
+test('a shorthand member holds a read prop where its member is a Reactive — 33.27, 31.3', async () => {
+    const { mount } = await renderPage(
+        `<script>
+import { reactive } from '@abide/abide'
+import Holds from './Holds.abide'
+
+let count = reactive(1)
+</script>
+
+<Holds n={count}/>`,
+        { Holds: HOLDS },
+    )
+    mount()
+    flushSync()
+    const text = (id: string): string =>
+        (document.getElementById(id) as Element).textContent ?? ''
+    expect([text('short'), text('long')]).toEqual(['held', 'held'])
+})

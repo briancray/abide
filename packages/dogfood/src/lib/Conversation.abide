@@ -21,11 +21,10 @@ const {
     label?: string
 }>()
 
-// `turns: turns`, not `{ turns }`: the shorthand hands `chat` the array rather than the binding.
 const talk = chat({
     ask,
     permit,
-    turns: turns,
+    turns,
     label: () => label,
 })
 </script>

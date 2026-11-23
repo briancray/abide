@@ -829,6 +829,8 @@ export class Lowering {
             // AN OBJECT SHORTHAND IS A KEY AND A VALUE. `{ n }` means `{ n: n }`, so the key has
             // to stay `n` and only the value lowers — `{ n() }` is a method with no body.
             case 'shorthand':
+                // 33.27 — a held prop's shorthand hands over the cell, `n: heldProp(n)`.
+                if (read.held) return `${spelled}: ${name}`
                 return `${spelled}: ${this.valueOf(spelled, read, name)}`
             // 33.4 — the call IS the record of accessors the caller passed, so the pattern an
             // author wrote destructures that rather than a value nothing has. 33.6, 33.7 — a key
