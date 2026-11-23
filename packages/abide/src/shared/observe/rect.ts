@@ -1,3 +1,4 @@
+import { reactive } from '../reactive/index.ts'
 import type { Reactive } from '../reactive/Reactive.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { Measured } from './Measured.ts'
@@ -13,6 +14,17 @@ type Rect = {
     bottom: number
     width: number
     height: number
+}
+type RectObserved = {
+    readonly host: Record<string, unknown>
+    readonly x: number | undefined
+    readonly y: number | undefined
+    readonly top: number | undefined
+    readonly left: number | undefined
+    readonly right: number | undefined
+    readonly bottom: number | undefined
+    readonly width: number | undefined
+    readonly height: number | undefined
 }
 
 // 32.86 — ONE LISTENER SET FOR EVERY `observe.rect` IN THE DOCUMENT, added with the first and removed
@@ -69,8 +81,60 @@ class Placed extends Measured {
 export function rect(
     target: Reactive<unknown, Rect, unknown, unknown>,
 ): Record<string, unknown>
-export function rect(target: unknown): Record<string, unknown> {
-    return { 'data-observe': 'host', 'bind:element': rectBinding(target) }
+export function rect(target: (rect: Rect) => void): Record<string, unknown>
+/**
+ * 32.110 — the rectangle held for the reader: `host` to spread and each of the eight read by name,
+ * a value apiece, `undefined` until the first frame reads it (32.87).
+ */
+export function rect(): RectObserved
+export function rect(target?: unknown): Record<string, unknown> | RectObserved {
+    if (target !== undefined)
+        return { 'data-observe': 'host', 'bind:element': rectBinding(target) }
+    const x = reactive<number | undefined>(undefined)
+    const y = reactive<number | undefined>(undefined)
+    const top = reactive<number | undefined>(undefined)
+    const left = reactive<number | undefined>(undefined)
+    const right = reactive<number | undefined>(undefined)
+    const bottom = reactive<number | undefined>(undefined)
+    const width = reactive<number | undefined>(undefined)
+    const height = reactive<number | undefined>(undefined)
+    const write = (measured: Rect): void => {
+        x.set(measured.x)
+        y.set(measured.y)
+        top.set(measured.top)
+        left.set(measured.left)
+        right.set(measured.right)
+        bottom.set(measured.bottom)
+        width.set(measured.width)
+        height.set(measured.height)
+    }
+    return {
+        host: { 'data-observe': 'host', 'bind:element': rectBinding(write) },
+        get x() {
+            return x()
+        },
+        get y() {
+            return y()
+        },
+        get top() {
+            return top()
+        },
+        get left() {
+            return left()
+        },
+        get right() {
+            return right()
+        },
+        get bottom() {
+            return bottom()
+        },
+        get width() {
+            return width()
+        },
+        get height() {
+            return height()
+        },
+    }
 }
 
 // The binding the part carries.

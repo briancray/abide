@@ -197,6 +197,35 @@ test('twenty observe.rects share one listener set, and a burst of scrolls is one
     ).toBe(`2 frames, 20 reads, ${'r'.repeat(20)}${'w'.repeat(20)}`)
 })
 
+// 32.110 — GIVEN NO TARGET, THE RECTANGLE IS READ BY NAME OFF WHAT `observe.rect()` HANDS BACK, and
+// nothing before the first frame's read. A move down the page wakes no reader of the width.
+test('given no target, each of the eight is read by name — 32.110', async () => {
+    ;(globalThis as { __WIDE__?: number }).__WIDE__ = 0
+    const html = await mount(`<script>
+import { observe, reactive } from '@abide/abide'
+
+const placed = observe.rect()
+const wide = reactive(() => {
+    ;(globalThis as { __WIDE__?: number }).__WIDE__ = ((globalThis as { __WIDE__?: number }).__WIDE__ ?? 0) + 1
+    return placed.width ?? 'none'
+})
+</script>
+
+<div id="card" {...placed.host}></div>
+<p id="read">{placed.top ?? 'none'} {placed.left ?? 'none'} {wide}</p>`)
+    expect(html).toContain('<p id="read">none none none</p>')
+    runFrame()
+    expect(document.getElementById('read')?.textContent).toBe('10 5 40')
+    const before = (globalThis as { __WIDE__?: number }).__WIDE__ ?? 0
+    top = 30
+    window.dispatchEvent(new Event('scroll'))
+    runFrame()
+    expect(document.getElementById('read')?.textContent).toBe('30 5 40')
+    expect(
+        `width computed ${((globalThis as { __WIDE__?: number }).__WIDE__ ?? 0) - before} times`,
+    ).toBe('width computed 0 times')
+})
+
 // 32.86 — THE LAST ELEMENT TO LEAVE TAKES THE LISTENERS WITH IT. THE REVERT: drop the removal in the
 // `Disposer`; 0 of each are removed, and a scroll after the clear still asks for a frame.
 test('the last observe.rect to leave removes the listeners — 32.86', async () => {

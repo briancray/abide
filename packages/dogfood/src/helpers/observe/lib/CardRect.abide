@@ -1,10 +1,10 @@
 <script>
-import { observe, reactive } from '@abide/abide'
+import { observe } from '@abide/abide'
 
-let placed = reactive({ top: 0, left: 0, width: 0, height: 0 })
-let box = reactive({ width: 0, height: 0 })
+const placed = observe.rect()
+const box = observe.size()
 </script>
 
-<article {...observe.rect(placed)} {...observe.size(box)}>
-    {placed.top}px from the top, {box.width}px wide
+<article {...placed.host} {...box.host}>
+    {placed.top ?? 0}px from the top, {box.width ?? 0}px wide
 </article>

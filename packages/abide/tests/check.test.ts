@@ -1079,7 +1079,7 @@ let placed = reactive<{ top: number; left: number }>()
     ).toEqual([
         { line: 14, code: 2769 },
         { line: 15, code: 2769 },
-        { line: 16, code: 2345 },
+        { line: 16, code: 2769 },
         { line: 17, code: 2769 },
     ])
 }, 60_000)

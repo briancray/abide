@@ -1,11 +1,11 @@
 <script>
-import { observe, reactive } from '@abide/abide'
+import { observe } from '@abide/abide'
 
 import PipelineChart from './PipelineChart.abide'
 
-let box = reactive({ width: 0, height: 0 })
+const box = observe.size()
 </script>
 
-<section class="h-24 resize overflow-hidden" {...observe.size(box)}>
-    <PipelineChart width={box.width} height={box.height} />
+<section class="h-24 resize overflow-hidden" {...box.host}>
+    <PipelineChart width={box.width ?? 0} height={box.height ?? 0} />
 </section>

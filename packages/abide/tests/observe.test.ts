@@ -189,6 +189,40 @@ const area = reactive(() => {
     ).toBe('area computed 1 times')
 })
 
+// 32.110 — GIVEN NO TARGET, THE PART IS `host` AND EACH FIELD IS READ BY NAME, a value apiece, so a
+// height that moves wakes no reader of the width. THE REVERT: back `size`'s two getters with one
+// `reactive<Size>` — the width computed 1 time for a change of the height alone.
+test('given no target, host is spread and each field is a value of its own — 32.110', async () => {
+    ;(globalThis as { __WIDTHS__?: number }).__WIDTHS__ = 0
+    const { html } = await mountPage(`<script>
+import { observe, reactive } from '@abide/abide'
+
+const size = observe.size()
+const seen = observe.visible()
+const wide = reactive(() => {
+    ;(globalThis as { __WIDTHS__?: number }).__WIDTHS__ = ((globalThis as { __WIDTHS__?: number }).__WIDTHS__ ?? 0) + 1
+    return size.width ?? 'none'
+})
+</script>
+
+<div id="bare" {...size.host} {...seen.host}></div>
+<p id="read">{wide}x{size.height ?? 'none'} {seen.visible ?? 'none'}</p>`)
+    expect(html).toContain('<p id="read">nonexnone none</p>')
+    const bare = document.getElementById('bare') as Element
+    expect(bare.hasAttribute('width')).toBe(false)
+    resize.counts.deliver?.([sizeOf(bare, 320, 180)])
+    intersect.counts.deliver?.([{ target: bare, isIntersecting: true }])
+    flushSync()
+    expect(document.getElementById('read')?.textContent).toBe('320x180 true')
+    const widthsBefore = (globalThis as { __WIDTHS__?: number }).__WIDTHS__ ?? 0
+    resize.counts.deliver?.([sizeOf(bare, 320, 240)])
+    flushSync()
+    expect(document.getElementById('read')?.textContent).toBe('320x240 true')
+    expect(
+        `width computed ${((globalThis as { __WIDTHS__?: number }).__WIDTHS__ ?? 0) - widthsBefore} times`,
+    ).toBe('width computed 0 times')
+})
+
 // 32.91 — A MEASUREMENT WRITTEN AS AN ATTRIBUTE IS REFUSED, naming the part that is one. THE
 // REVERT: empty `MEASURED` in `classifyTemplate.ts`; every spelling below compiles, `bind:size`
 // refused only as a bind of nothing (32.74) and `visibleIn` written as an attribute.

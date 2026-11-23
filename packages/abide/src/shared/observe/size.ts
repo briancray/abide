@@ -1,3 +1,4 @@
+import { reactive } from '../reactive/index.ts'
 import { isReactive } from '../reactive/isReactive.ts'
 import type { Reactive } from '../reactive/Reactive.ts'
 import { type Disposer, watchTracked } from '../reactive/watch.ts'
@@ -7,6 +8,11 @@ import { resized } from './resized.ts'
 
 type Size = { width: number; height: number }
 type Box = 'content' | 'border'
+type SizeObserved = {
+    readonly host: Record<string, unknown>
+    readonly width: number | undefined
+    readonly height: number | undefined
+}
 
 // 32.92 — the elements an `observe.size` is bound to, so a second one throws.
 const bound = new WeakSet<Element>()
@@ -41,13 +47,45 @@ export function size(
     target: (size: Size) => void,
     options?: { box?: Box },
 ): Record<string, unknown>
+/**
+ * 32.110 — the size held for the reader: `host` to spread, and the width and the height read by
+ * name, each a value of its own so a reader of one sleeps through a change of the other only.
+ * `undefined` until the first observation (32.82).
+ */
+export function size(options?: {
+    box?: Reactive<Box, never, unknown, unknown>
+}): SizeObserved
+export function size(options?: { box?: Box }): SizeObserved
 export function size(
-    target: unknown,
+    target?: unknown,
     options?: { box?: unknown },
-): Record<string, unknown> {
+): Record<string, unknown> | SizeObserved {
+    // 1.6 — a `Reactive` is a function, so the brand needs no read ahead of this one.
+    if (typeof target === 'function')
+        return {
+            'data-observe': 'host',
+            'bind:element': sizeBinding(target, options),
+        }
+    const width = reactive<number | undefined>(undefined)
+    const height = reactive<number | undefined>(undefined)
+    const write = (measured: Size): void => {
+        width.set(measured.width)
+        height.set(measured.height)
+    }
     return {
-        'data-observe': 'host',
-        'bind:element': sizeBinding(target, options),
+        host: {
+            'data-observe': 'host',
+            'bind:element': sizeBinding(
+                write,
+                target as { box?: unknown } | undefined,
+            ),
+        },
+        get width() {
+            return width()
+        },
+        get height() {
+            return height()
+        },
     }
 }
 

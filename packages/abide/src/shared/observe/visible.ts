@@ -1,3 +1,4 @@
+import { reactive } from '../reactive/index.ts'
 import { isReactive } from '../reactive/isReactive.ts'
 import type { Reactive } from '../reactive/Reactive.ts'
 import { type Disposer, watchTracked } from '../reactive/watch.ts'
@@ -5,6 +6,10 @@ import { Measured } from './Measured.ts'
 import { observedTwice } from './observedTwice.ts'
 
 type Root = Element | Document
+type VisibleObserved = {
+    readonly host: Record<string, unknown>
+    readonly visible: boolean | undefined
+}
 
 const measuredBy = new WeakMap<Element, Seen>()
 // 32.81, 32.89, 32.98 — AN OBSERVER'S ROOT IS FIXED AT CONSTRUCTION, so each root — the viewport
@@ -73,13 +78,40 @@ export function visible(
     target: (visible: boolean) => void,
     options?: { in?: Root; once?: boolean },
 ): Record<string, unknown>
+/**
+ * 32.110 — whether it is in view, held for the reader: `host` to spread and `visible` read by
+ * name, `undefined` until the first observation (32.82).
+ */
+export function visible(options?: {
+    in?: Reactive<Root | null | undefined, never, unknown, unknown>
+    once?: boolean
+}): VisibleObserved
+export function visible(options?: {
+    in?: Root
+    once?: boolean
+}): VisibleObserved
 export function visible(
-    target: unknown,
+    target?: unknown,
     options?: { in?: unknown; once?: boolean },
-): Record<string, unknown> {
+): Record<string, unknown> | VisibleObserved {
+    // 1.6 — a `Reactive` is a function, so the brand needs no read ahead of this one.
+    if (typeof target === 'function')
+        return {
+            'data-observe': 'host',
+            'bind:element': visibleBinding(target, options),
+        }
+    const seen = reactive<boolean | undefined>(undefined)
     return {
-        'data-observe': 'host',
-        'bind:element': visibleBinding(target, options),
+        host: {
+            'data-observe': 'host',
+            'bind:element': visibleBinding(
+                seen,
+                target as { in?: unknown; once?: boolean } | undefined,
+            ),
+        },
+        get visible() {
+            return seen()
+        },
     }
 }
 

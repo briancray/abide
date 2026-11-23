@@ -2708,6 +2708,11 @@ remove its `data-scrollable`.
 32.109 Every `on<event>` listener an element carries, written or spread, MUST be added to it, none
 replacing another of its event: the written ones first, then each spread's in source order.
 
+32.110 An `observe` part called with no target MUST hand back `host`, the part to spread, beside each
+field of what it writes read by name — `visible`'s boolean as `visible` — each field `undefined`
+until the first write 32.79, 32.80 or 32.84 makes, and each a value of its own, so a write that
+changes one field MUST NOT wake a reader of only another.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

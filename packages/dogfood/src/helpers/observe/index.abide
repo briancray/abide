@@ -26,6 +26,12 @@ import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/observe.test.ts',
+            from: [
+                "test('given no target, host is spread and each field is a value of its own",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/observe.test.ts',
             from: ["test('fifty observed elements share one observer of each kind"],
         },
         {
@@ -35,22 +41,23 @@ import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Size a chart to its panel">
-        <p>Spread the part on the element, handed a reactive value. The browser writes
-            the size after each layout, and until the first one the value holds what you gave
-            it.</p>
+        <p>Call it with nothing and spread its <code>host</code> on the element, then read
+            <code>width</code> and <code>height</code> by name. The browser writes them after
+            each layout, and until the first one they are <code>undefined</code>.</p>
         <Example code={sizeToPanel}><SizeToPanel /></Example>
     </Section>
 
     <Section level={3} title="Read the older activity when the end of the feed scrolls into view">
-        <p><code>observe.visible</code> writes whether the element is in the viewport, or inside
-            the element <code>in</code> names. A function in place of the value is called with
-            each reading.</p>
+        <p>Hand a part a function and it is called with each reading instead.
+            <code>observe.visible</code> reads whether the element is in the viewport, or inside
+            the element <code>in</code> names.</p>
         <Example code={loadMore}><LoadMore /></Example>
     </Section>
 
     <Section level={3} title="Draw the pipeline trend the first time the report scrolls down to the chart">
-        <p>Pass <code>once: true</code> and the first <code>true</code> is the last thing
-            written. The element stops being observed, so what the value gates mounts once and
+        <p>Hand a part a reactive value and it writes there, holding what you gave it until
+            the first reading. Pass <code>once: true</code> and the first <code>true</code> is the
+            last thing written. The element stops being observed, so what the value gates mounts once and
             stays mounted when it scrolls away again.</p>
         <Code language="abide" caption="abide" code={`
             <script>
@@ -69,7 +76,7 @@ import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
 
     <Section level={3} title="Measure the size and the position of one card">
         <p>Spread two parts and each measures the element. <code>observe.rect</code>
-            writes the rectangle <code>getBoundingClientRect</code> reports, read again at most
+            reads the rectangle <code>getBoundingClientRect</code> reports, read again at most
             once a frame as the page scrolls or the card moves.</p>
         <Example code={cardRect}><CardRect /></Example>
     </Section>
