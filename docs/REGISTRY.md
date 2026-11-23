@@ -527,6 +527,21 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `PopoverParts` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly popover: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the popover's, and whether it is open. | 50.48, 50.59, 32.11, 49.3, 49.8, 49.9 |
 | `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
+## `drawer`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `drawer` | `(options?: DrawerOptions) => Drawer` | A `dialog` standing on an edge of the page, sized from a `resizable`'s handle on its inner edge, as parts an app spreads onto a `<dialog>` and a handle of its own. | 50.61, 50.62, 49.2, 49.4, 49.5, 49.6 |
+| `DrawerOptions` | `DialogOptions & { side?: 'start' \| 'end' \| 'top' \| 'bottom'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string) }` | How it opens, the edge it stands on, its size and the bounds of it, and the handle's accessible name. | 50.61, 50.62, 49.8, 49.10, 49.11 |
+| `Drawer` | `{ readonly drawer: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly open: Reactive<boolean>; readonly size: Reactive<number \| undefined> }` | The dialog's part, the handle's, whether it is showing, and its size. | 32.11, 50.61, 50.62, 49.3, 49.8, 49.9 |
+
+## `sheet`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `sheet` | `(options?: SheetOptions) => Drawer` | A `drawer` on the bottom edge whose handle, let go, settles it at the nearest of its stops. | 50.63, 50.64, 49.2, 49.4, 49.5, 49.6 |
+| `SheetOptions` | `Omit<DrawerOptions, 'side'> & { stops?: readonly number[] \| (() => readonly number[]) }` | How it opens, its size and the bounds of it, and the heights it settles at as shares of the viewport's. | 50.63, 50.64, 49.10, 49.11 |
+
 ## `commandPalette`
 
 | Name | Signature | Meaning | Rules |

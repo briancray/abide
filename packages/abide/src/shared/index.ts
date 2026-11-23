@@ -217,6 +217,8 @@ export {
 export { type Clamp, type ClampOptions, clamp } from './clamp.ts'
 export { type Meter, type MeterOptions, meter } from './meter.ts'
 export { type Pages, type PagesOptions, pages } from './pages.ts'
+export { type Drawer, type DrawerOptions, drawer } from './drawer.ts'
+export { type SheetOptions, sheet } from './sheet.ts'
 export {
     type Resizable,
     type ResizableOptions,

@@ -1,0 +1,14 @@
+<script>
+import { drawer, format } from '@abide/abide'
+
+const panel = drawer({ min: 280, max: 640, label: 'Deal panel width' })
+</script>
+
+<button onclick={() => (panel.open = true)}>Open Engine renewal</button>
+<dialog class="m-0 ml-auto h-dvh max-h-none p-4" {...panel.drawer}>
+    <div class="absolute inset-y-0 left-0 w-1 cursor-col-resize bg-rule" {...panel.handle}></div>
+    <ul class="fields">
+        <li><span>deal</span><strong>Engine renewal</strong></li>
+        <li><span>amount</span><strong>{format.money(12_000, { digits: 0 })}</strong></li>
+    </ul>
+</dialog>

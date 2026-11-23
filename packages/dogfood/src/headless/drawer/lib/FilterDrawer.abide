@@ -1,0 +1,15 @@
+<script>
+import { drawer } from '@abide/abide'
+
+const filters = drawer({ side: 'start', min: 200, max: 480 })
+</script>
+
+<button onclick={() => (filters.open = true)}>Filters</button>
+<dialog class="m-0 h-dvh max-h-none p-4" {...filters.drawer}>
+    <p>Only my deals</p>
+    <button onclick={() => (filters.open = false)}>Done</button>
+    <div
+        class="absolute inset-y-0 right-0 w-1 cursor-col-resize bg-rule"
+        {...filters.handle}
+    ></div>
+</dialog>

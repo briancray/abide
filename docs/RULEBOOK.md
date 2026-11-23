@@ -5244,6 +5244,19 @@ while it is open, or while it was open as the press began; its `anchor` MUST NOT
 and on a press outside it and outside its `trigger` or `anchor`, save where its `escape` or its
 `outside` is `false`.
 
+50.61 `drawer`'s `drawer` part MUST be `dialog`'s `dialog` part, given every option the drawer was,
+with a `resizable`'s `panel` part laid over it, and MUST carry `data-side` naming `side`, `end` where
+none is given.
+
+50.62 `drawer`'s `handle` part MUST be that `resizable`'s `handle`, sizing the drawer across `side`
+and growing it as the handle moves away from the edge `side` names.
+
+50.63 `sheet`'s parts MUST be a `drawer`'s whose `side` is `bottom`, given every option the sheet was.
+
+50.64 A pointer let go of `sheet`'s `handle` MUST set `size` to the one of `stops`, as shares of the
+viewport's height, nearest the height the drag would rest at carried on by its speed for 150
+milliseconds, and MUST write `false` to `open` where no stop is nearer that height than none.
+
 # 51. Lists and tables
 
 51.1 `listbox` MUST keep active the option whose key it last moved to, for as long as the options

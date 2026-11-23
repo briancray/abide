@@ -1,0 +1,33 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import FilterDrawer from './lib/FilterDrawer.abide'
+import filterDrawer from './lib/FilterDrawer.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/dialog', '/behaviors/resizable', '/headless/sheet']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealPanel.test.ts',
+            from: [
+                "test('the deal panel opens from the edge and sizes from its handle'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/drawer.test.ts',
+            from: ["test('a drawer opens as its dialog does"],
+        },
+    ]}
+>
+    <Section level={3} title="Open filters from the side of the page">
+        <p>A drawer is a <code>dialog</code> with a <code>resizable</code>'s panel laid over it.
+            Spread <code>drawer</code> on a <code>&lt;dialog&gt;</code> and
+            <code>handle</code> on its inner edge. It opens, closes and dismisses as a dialog
+            does, its handle sizes it as a resizable's does, and <code>data-side</code> tells
+            your CSS which edge it stands on.</p>
+        <Example code={filterDrawer}><FilterDrawer /></Example>
+    </Section>
+</Doc>
