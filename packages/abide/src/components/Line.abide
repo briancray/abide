@@ -5,14 +5,21 @@
 import { joinChart } from '#shared/chart/children.ts'
 import { props } from '#shared/props.ts'
 
-const { label, values, stack } = props<{
+const {
+    label,
+    values,
+    stack,
+    curve = false,
+} = props<{
     /** What the series is called, in the chart's readout: `'Won'`. */
     label: string
     /** One value per x position of the chart. `null` or `undefined` is a value missing there. */
     values: readonly (number | null | undefined)[]
     /** The stack it piles into with the series naming the same one, or `false` for none, where the chart's `stack` would put it in one (52.55). */
     stack?: string | false
+    /** Whether it is drawn as a curve through its values rather than straight from one to the next (52.98). `false` by default. */
+    curve?: boolean
 }>()
 
-joinChart(() => ({ label, values, stack, kind: 'line' }))
+joinChart(() => ({ label, values, stack, curve, kind: 'line' }))
 </script>

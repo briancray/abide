@@ -338,10 +338,12 @@ export function chart(options: ChartOptions): ChartParts {
             ysOf.push(ys)
             const bars: ChartBar[] = []
             let drawn = ''
-            if (kind === 'line') drawn = path(xs, ys)
+            const curve = each.curve === true
+            if (kind === 'line') drawn = path(xs, ys, { curve })
             else if (kind === 'area') {
                 // 52.52 — a stacked area closes onto the series under it, through a missing value too.
-                if (key === undefined) drawn = path(xs, ys, base)
+                if (key === undefined)
+                    drawn = path(xs, ys, { baseline: base, curve })
                 else {
                     const tops: number[] = []
                     const floors: number[] = []
@@ -349,7 +351,7 @@ export function chart(options: ChartOptions): ChartParts {
                         tops.push(toY(highs[index] ?? 0))
                         floors.push(toY(lows[index] ?? 0))
                     }
-                    drawn = path(xs, tops, floors)
+                    drawn = path(xs, tops, { baseline: floors, curve })
                 }
             } else {
                 const band =

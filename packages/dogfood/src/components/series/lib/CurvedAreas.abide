@@ -1,0 +1,9 @@
+<script>
+import Area from '@abide/abide/Area.abide'
+import Chart from '@abide/abide/Chart.abide'
+</script>
+
+<Chart label="Open pipeline by stage" stack>
+    <Area label="Proposals" values={[12_000, 18_000, 21_000, 19_000]} curve />
+    <Area label="Leads" values={[40_000, 52_000, 47_000, 61_000]} curve />
+</Chart>

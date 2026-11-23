@@ -25,10 +25,10 @@ let leads = reactive(true)
     class="block h-60 w-full overflow-visible text-chrome text-muted
         [&_[data-chart=area]]:opacity-30 [&_[data-chart=line]]:[stroke-dasharray:4_4]"
 >
-    <Area label="Proposals" values={PROPOSALS} />
-    <Area label="Qualified" values={QUALIFIED} />
+    <Area label="Proposals" values={PROPOSALS} curve />
+    <Area label="Qualified" values={QUALIFIED} curve />
     {#if leads}
-        <Area label="Leads" values={LEADS} />
+        <Area label="Leads" values={LEADS} curve />
     {/if}
     <Line label="Target" values={TARGET} stack={false} />
 </Chart>

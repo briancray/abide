@@ -36,20 +36,73 @@ test('path breaks where a value is missing — 52.21', () => {
 })
 
 test('path closes each run down to a baseline — 52.22', () => {
-    expect(path([0, 10], [1, 2], 50)).toBe('M0,1L10,2L10,50L0,50Z')
-    expect(path([0, 10, 20, 30], [1, null, 3, 4], 50)).toBe(
+    expect(path([0, 10], [1, 2], { baseline: 50 })).toBe(
+        'M0,1L10,2L10,50L0,50Z',
+    )
+    expect(path([0, 10, 20, 30], [1, null, 3, 4], { baseline: 50 })).toBe(
         'M0,1L0,50L0,50ZM20,3L30,4L30,50L20,50Z',
     )
 })
 
 // THE REVERT: close every run down to `baseline[runStart]` — the second run's floor is flat, 'L30,9L20,9Z'.
 test('path closes each run back along a baseline of one point per x — 52.22', () => {
-    expect(path([0, 10, 20], [1, 2, 3], [7, 8, 9])).toBe(
+    expect(path([0, 10, 20], [1, 2, 3], { baseline: [7, 8, 9] })).toBe(
         'M0,1L10,2L20,3L20,9L10,8L0,7Z',
     )
-    expect(path([0, 10, 20, 30], [1, null, 3, 4], [6, 7, 8, 9])).toBe(
-        'M0,1L0,6ZM20,3L30,4L30,9L20,8Z',
+    expect(
+        path([0, 10, 20, 30], [1, null, 3, 4], {
+            baseline: [6, 7, 8, 9],
+        }),
+    ).toBe('M0,1L0,6ZM20,3L30,4L30,9L20,8Z')
+})
+
+// THE REVERT: Catmull-Rom tangents, `(ys[i + 1] - ys[i - 1]) / (xs[i + 1] - xs[i - 1])` — the curve
+// leaves the plateau at 10 for 11.67 on its way to the next 10.
+test('a curved path passes through every point, never past the two values it joins — 52.97', () => {
+    const xs = [0, 10, 20, 30, 40, 50]
+    const ys = [0, 10, 10, 2, 9, 3]
+    const d = path(xs, ys, { curve: true })
+    const [start, ...cubics] = d.slice(1).split('C')
+    expect(start).toBe('0,0')
+    expect(cubics).toHaveLength(5)
+    for (let at = 0; at < cubics.length; at += 1) {
+        const [first = '', second = '', end = ''] = (
+            cubics[at] as string
+        ).split(' ')
+        expect(end).toBe(`${xs[at + 1]},${ys[at + 1]}`)
+        const from = ys[at] as number
+        const to = ys[at + 1] as number
+        for (const control of [first, second]) {
+            const y = Number(control.split(',')[1])
+            expect(y).toBeGreaterThanOrEqual(Math.min(from, to))
+            expect(y).toBeLessThanOrEqual(Math.max(from, to))
+        }
+    }
+    // A run of two is the straight segment between them, and a run of one still a dot.
+    expect(path([0, 10, 20, 30], [1, 2, null, 4], { curve: true })).toBe(
+        'M0,1L10,2M30,4Z',
     )
+})
+
+// THE REVERT: walk a curved run back along its baseline straight — the floor is 'L10,8L0,7Z' where
+// the curve of the series under it is due.
+test('a curved area closes back along the curve its baseline draws — 52.97', () => {
+    const xs = [0, 10, 20, 30]
+    const floors = [9, 4, 6, 1]
+    const under = path(xs, floors, { curve: true })
+    const over = path(xs, [0, 1, 2, 0], { baseline: floors, curve: true })
+    const back = over.slice(over.indexOf('L') + 1, -1)
+    // The way back is the curve of the series under it, walked from its far end.
+    const forward = under.slice(1).split('C')
+    const reversed = forward
+        .slice(1)
+        .map((segment, index) => {
+            const [first, second] = segment.split(' ')
+            return `C${second} ${first} ${forward[index]?.split(' ').at(-1)}`
+        })
+        .reverse()
+        .join('')
+    expect(back).toBe(`${forward.at(-1)?.split(' ').at(-1)}${reversed}`)
 })
 
 // THE REVERT: pile negatives on the one running total — the loss stands at 2..1, not 0..-1.

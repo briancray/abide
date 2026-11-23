@@ -5879,6 +5879,13 @@ be labelled by its `heading`.
 52.96 The selected day's cell MUST carry `data-selected` and an `aria-selected` of `true`, and every
 other day's cell an `aria-selected` of `false`.
 
+52.97 `chart.path` given `curve` MUST draw each run of three or more values as a curve through every
+one of its points that stays, between two neighbouring points, within the values of those two, and
+MUST close a run back along a `baseline` of one point per x by the curve those points draw.
+
+52.98 `Chart` MUST draw a `Line` or an `Area` declaring `curve` by 52.97, and `Sparkline` declaring
+`curve` MUST draw its line and its area by it.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

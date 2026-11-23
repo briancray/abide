@@ -8,13 +8,13 @@ import PipelineTrend from './PipelineTrend.abide'
 const chart = () => document.querySelector('svg') as SVGSVGElement
 const texts = (selector: string) =>
     [...document.querySelectorAll(selector)].map((node) => node.textContent)
-// The points of a path, in order.
+const d = (selector: string) =>
+    chart().querySelector(selector)?.getAttribute('d') ?? ''
+// The points a path passes through, in order: a curve's control points are not among them.
 function points(selector: string) {
-    const d = chart().querySelector(selector)?.getAttribute('d') ?? ''
-    return [...d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((match) => [
-        Number(match[1]),
-        Number(match[2]),
-    ])
+    return [...d(selector).matchAll(/(-?[\d.]+),(-?[\d.]+)(?=[MLCZ]|$)/g)].map(
+        (match) => [Number(match[1]), Number(match[2])],
+    )
 }
 
 // Laid out 600 wide: a DOM with no layout measures every box as empty.
@@ -36,6 +36,27 @@ test('each stage stacks on the one before it, through a month it has no value', 
     expect(qualifiedFloor).toEqual(proposalsTop)
     expect(qualified[2]).toEqual(proposalsTop[2] as number[])
     expect(proposals.slice(6).every(([, y]) => y === 216)).toBe(true)
+})
+
+// 52.98 — THE STAGES CURVE, each through its own months and each floor along the curve of the stage
+// under it. THE REVERT: drop `curve` from what `Chart` hands `chart.path` — every edge is straight,
+// and Proposals' top has no cubic in it.
+test('each stage curves through its months, on the curve of the one under it', async () => {
+    using _trend = await mount(PipelineTrend({}))
+    const proposals = d("[data-chart=area][data-series='0']")
+    const qualified = d("[data-chart=area][data-series='1']")
+    // Proposals' top, from its first month to its last: five cubics.
+    const top = proposals.slice(0, proposals.indexOf('L'))
+    expect(top.match(/C/g)).toHaveLength(5)
+    // Walked back, each cubic's two control points swap and it ends where it began.
+    const [start = '', ...cubics] = top.slice(1).split('C')
+    const ends = [start, ...cubics.map((cubic) => cubic.split(' ')[2])]
+    let back = ''
+    for (let at = cubics.length - 1; at >= 0; at -= 1) {
+        const [first, second] = (cubics[at] as string).split(' ')
+        back += `C${second} ${first} ${ends[at]}`
+    }
+    expect(qualified.endsWith(`${back}Z`)).toBe(true)
 })
 
 // 52.55, 52.62 — THE TARGET IS IN NO STACK, drawn at its own values on an axis the bounds fix at

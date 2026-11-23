@@ -118,7 +118,7 @@ import targetBand from './lib/TargetBand.abide' with { type: 'text' }
         <Code language="ts" caption="shared" code={`
             import { chart } from '@abide/abide'
 
-            chart.path([0, 10], [1, 2], 50) // 'M0,1L10,2L10,50L0,50Z'
+            chart.path([0, 10], [1, 2], { baseline: 50 }) // 'M0,1L10,2L10,50L0,50Z'
         `} />
     </Section>
 

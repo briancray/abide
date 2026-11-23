@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { chart } from '../src/shared/chart/chart.ts'
 import { pie } from '../src/shared/chart/pie.ts'
+import { sparkline } from '../src/shared/chart/sparkline.ts'
 import { reactive } from '../src/shared/reactive/index.ts'
 
 const press = (svg: Record<string, unknown>, key: string) =>
@@ -64,4 +65,19 @@ test("a slice's hint binding stands while its words do", () => {
     const after = ring.slices[0]?.circle
     expect(after?.['stroke-width']).not.toBe(before?.['stroke-width'])
     expect(after?.['bind:element']).toBe(before?.['bind:element'])
+})
+
+// THE REVERT: leave `curve` out of what `sparkline` hands `path` — the line and the area are straight,
+// four `L`s and no `C`.
+test('a sparkline declaring curve draws its line and its area curved — 52.98', () => {
+    const curved = reactive(true)
+    const trend = sparkline({
+        values: [3, 7, 4, 9, 6],
+        label: 'Won revenue',
+        curve: () => curved(),
+    })
+    expect(String(trend.line.d).match(/C/g)).toHaveLength(4)
+    expect(String(trend.area.d).match(/C/g)).toHaveLength(4)
+    curved.set(false)
+    expect(String(trend.line.d)).not.toContain('C')
 })

@@ -13,6 +13,7 @@ const {
     dot = false,
     zero = false,
     kind = 'line',
+    curve = false,
     ...rest
 } = props<
     {
@@ -28,6 +29,8 @@ const {
         zero?: boolean
         /** 52.33 — `'bar'` draws each value as a bar up from zero, as `data-sparkline="bar"`, in place of the line: a count. `'line'` by default. */
         kind?: 'line' | 'bar'
+        /** Whether the line and the area under it curve through the values (52.98). `false` by default. */
+        curve?: boolean
     } & Omit<Attributes<'svg'>, 'values'>
 >()
 
@@ -36,6 +39,7 @@ const trend = sparkline({
     label: () => label,
     zero: () => zero,
     kind: () => kind,
+    curve: () => curve,
 })
 </script>
 

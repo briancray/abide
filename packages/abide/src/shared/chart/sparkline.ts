@@ -16,6 +16,8 @@ export type SparklineOptions = {
     zero?: Live<boolean>
     /** 52.33 — `'bar'` scales the values from zero, as bars are read by their length. `'line'` by default. */
     kind?: Live<'line' | 'bar'>
+    /** Whether the line and the area under it curve through the values (52.98). `false` by default. */
+    curve?: Live<boolean>
 }
 
 /** The parts `sparkline` hands back, each spread onto an element of its own. */
@@ -45,6 +47,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
         const values = live(options.values)
         const zero = live(options.zero) === true
         const kind = live(options.kind) ?? 'line'
+        const curve = live(options.curve) === true
         let low = zero ? 0 : Number.POSITIVE_INFINITY
         let high = zero ? 0 : Number.NEGATIVE_INFINITY
         let first: number | undefined
@@ -100,8 +103,8 @@ export function sparkline(options: SparklineOptions): SparklineParts {
         }
         return {
             bars,
-            line: path(xs, ys),
-            area: path(xs, ys, SIZE),
+            line: path(xs, ys, { curve }),
+            area: path(xs, ys, { baseline: SIZE, curve }),
             end: last === undefined ? '' : `M${x(lastIndex)},${y(last)}Z`,
             trend:
                 first === undefined || last === undefined || last === first

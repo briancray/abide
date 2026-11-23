@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import ColumnsUnderLine from './lib/ColumnsUnderLine.abide'
 import columnsUnderLine from './lib/ColumnsUnderLine.abide' with { type: 'text' }
+import CurvedAreas from './lib/CurvedAreas.abide'
+import curvedAreas from './lib/CurvedAreas.abide' with { type: 'text' }
 import GroupedStacks from './lib/GroupedStacks.abide'
 import groupedStacks from './lib/GroupedStacks.abide' with { type: 'text' }
 import HideSeries from './lib/HideSeries.abide'
@@ -28,6 +30,12 @@ import targetOutOfStack from './lib/TargetOutOfStack.abide' with { type: 'text' 
             path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
             from: [
                 "test('each stage stacks on the one before it, through a month it has no value'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('each stage curves through its months, on the curve of the one under it'",
             ],
         },
         {
@@ -60,6 +68,13 @@ import targetOutOfStack from './lib/TargetOutOfStack.abide' with { type: 'text' 
         <p>Areas sharing a stack fill from the one written before them. A missing value
             counts as zero toward the stack, so the area above it carries on.</p>
         <Example code={stackedAreas}><StackedAreas /></Example>
+    </Section>
+
+    <Section level={3} title="Curve the stages through each month">
+        <p><code>curve</code> draws a line or an area as a curve through its values. It never
+            swings past the two values it joins, so a stage never reads higher than its month did,
+            and a stacked area follows the curve of the one under it.</p>
+        <Example code={curvedAreas}><CurvedAreas /></Example>
     </Section>
 
     <Section level={3} title="Keep a target line out of a stacked chart">
