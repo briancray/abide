@@ -476,6 +476,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/breadcrumbs',
+                title: '`breadcrumbs`',
+                description:
+                    'Show where a page stands as a trail of links of your own, the middle folded into a menu when it runs long.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/tree',
                 title: '`tree`',
                 description:

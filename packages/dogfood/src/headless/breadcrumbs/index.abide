@@ -1,0 +1,31 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import DealTrail from './lib/DealTrail.abide'
+import dealTrail from './lib/DealTrail.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/menu', '/headless/pages']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealCrumbs.test.ts',
+            from: ["test('a long trail folds its middle into a menu'"],
+        },
+        {
+            path: 'packages/abide/tests/breadcrumbs.test.ts',
+            from: ["test('past max, the first crumb and the last stay"],
+        },
+    ]}
+>
+    <Section level={3} title="Show where a deal stands, its middle folded">
+        <p>Walk <code>items</code>: a crumb gets <code>link(crumb)</code>, the last of them the
+            page itself, and an <code>overflow</code> stands where the middle folds past
+            <code>max</code>. The overflow is a <code>menu</code>: spread its
+            <code>trigger</code> there and its <code>menu</code> around the
+            <code>folded</code> crumbs, each a <code>menuItem</code>.</p>
+        <Example code={dealTrail}><DealTrail /></Example>
+    </Section>
+</Doc>

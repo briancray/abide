@@ -1,0 +1,30 @@
+<script>
+import { breadcrumbs } from '@abide/abide'
+
+const TRAIL = [
+    { name: 'Home', path: '#home' },
+    { name: 'Companies', path: '#companies' },
+    { name: 'Analytical Engines', path: '#analytical' },
+    { name: 'Engine renewal', path: '#engine-renewal' },
+]
+const crumbs = breadcrumbs({
+    trail: TRAIL,
+    href: (crumb) => crumb.path,
+    max: 3,
+})
+</script>
+
+<nav class="row" {...crumbs.nav}>
+    {#for item of crumbs.items}
+        {#if item === 'overflow'}
+            <button {...crumbs.overflow.trigger}>…</button>
+        {:else}
+            <a {...crumbs.link(item)}>{item.name}</a>
+        {/if}
+    {/for}
+</nav>
+<div {...crumbs.overflow.menu}>
+    {#for crumb of crumbs.folded by crumb.path}
+        <a {...crumbs.menuItem(crumb)}>{crumb.name}</a>
+    {/for}
+</div>

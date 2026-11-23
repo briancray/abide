@@ -5659,6 +5659,20 @@ value is `at`, and its `input` MUST move `at` to its value, kept from `0` to `du
 51.135 On `playback`'s `root`, Space MUST press `play`, and ArrowLeft and ArrowRight MUST move `at`
 back and forward by `step`, kept from `0` to `duration`, as `hotkeys` binds them.
 
+51.136 `breadcrumbs`' `items` MUST be every crumb of `trail`, in order, where it holds no more than
+`max`, and otherwise its first crumb, an `overflow`, and its last `max` less one.
+
+51.137 `breadcrumbs`' `folded` MUST be the crumbs of `trail` `items` leaves out, in order.
+
+51.138 `breadcrumbs`' `link` of a crumb MUST carry `href` naming the address `href` answers for it,
+and the link of the last crumb of `trail` MUST carry `aria-current="page"`.
+
+51.139 `breadcrumbs`' `overflow` MUST be a `menu`'s parts, and its `menuItem` of a crumb MUST carry
+`role="menuitem"` and `href` naming the crumb's address.
+
+51.140 `breadcrumbs`' `nav` part MUST carry `aria-label` naming `label`, `Breadcrumb` where none is
+given.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.
