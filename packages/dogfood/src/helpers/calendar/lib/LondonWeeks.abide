@@ -5,19 +5,21 @@ const dates = calendar({ locale: 'en-GB' })
 </script>
 
 <div class="calendar">
-    <h3 {...dates.heading}>{dates.label}</h3>
-    <div {...dates.grid}>
-        <div {...dates.header}>
-            {#for weekday of dates.weekdays by weekday.day}
-                <div {...weekday.header}>{weekday.short}</div>
-            {/for}
-        </div>
-        {#for week of dates.weeks by week[0]?.date}
-            <div {...dates.week}>
-                {#for day of week by day.date}
-                    <div {...day.cell}>{day.day}</div>
+    {#for shown of dates.months by shown.month}
+        <h3 {...shown.heading}>{shown.label}</h3>
+        <div {...shown.grid}>
+            <div {...dates.header}>
+                {#for weekday of dates.weekdays by weekday.day}
+                    <div {...weekday.header}>{weekday.short}</div>
                 {/for}
             </div>
-        {/for}
-    </div>
+            {#for week of shown.weeks by week[0]?.date}
+                <div {...dates.week}>
+                    {#for day of week by day.date}
+                        <div {...day.cell}>{day.day}</div>
+                    {/for}
+                </div>
+            {/for}
+        </div>
+    {/for}
 </div>

@@ -31,32 +31,34 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/carousel.test.ts',
             from: [
-                "test('what a scroll to an item passes on the way is not centred",
+                "test('what a scroll to an item passes on the way is not centered",
             ],
         },
         {
             path: 'packages/abide/tests/carousel.test.ts',
             from: [
-                "test('once the scroller reports a snap, the snap target alone sets centred",
+                "test('once the scroller reports a snap, the snap target alone sets centered",
             ],
         },
         {
             path: 'packages/abide/e2e/carousel.spec.ts',
-            from: ["test('a scroll moves centred to the item it snaps to"],
+            from: ["test('a scroll moves centered to the item it snaps to"],
         },
     ]}
 >
     <Section level={3} title="Rest a row of stages on the deal's own">
         <p>Spread <code>host</code> on the scroller and <code>item</code> on each stage. The
             page arrives scrolled to the stage <code>selected</code> names, and
-            <code>centred</code> follows the stage a swipe lands on. The snapping is your CSS:
-            give the scroller <code>snap-x</code> and each item <code>snap-center</code>.</p>
+            <code>centered</code> follows the stage a swipe lands on. The snapping is your CSS:
+            give the scroller <code>snap-x</code> and each item <code>snap-center</code>, and pad
+            the scroller by half of what an item leaves (<code>px-[12.5%]</code> beside
+            <code>basis-3/4</code>) so the first and last stages can reach the center too.</p>
         <Example code={restOnStage}><RestOnStage /></Example>
     </Section>
 
     <Section level={3} title="Step through stages with buttons, and go back to where it rests">
         <p>Spread <code>previous</code> and <code>next</code> on two buttons: each steps from
-            the centred stage and is disabled at its end. <code>reset</code> scrolls back to
+            the centered stage and is disabled at its end. <code>reset</code> scrolls back to
             the stage the carousel rests on, the first where nothing is selected.</p>
         <Example code={stepStages}><StepStages /></Example>
     </Section>

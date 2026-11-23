@@ -5032,7 +5032,7 @@ MUST take an optional argument that changes what it answers, or take none to ans
 49.12 Every option of a parts function that is a value — save a `Reactive` it binds, and one that
 takes a function of its own meaning — MUST take the value or a function answering it.
 
-49.13 A parts function MUST read each of its options where it uses it, save its `id`, a `multiple`,
+49.13 A parts function MUST read each of its options where it uses it, save its `id`, a `multiple`, a `range`,
 a `debounce`, a `rowHeight` and a size a measurement replaces, which it MUST read once.
 
 49.14 What `@abide/abide` does to an element an app writes MUST be handed out as a part, carrying
@@ -5042,6 +5042,10 @@ app hands `bind:element` itself.
 49.15 A listener a parts function hands back or takes for an element's event MUST be named `on`
 followed by that event's name, and every option, part key or component prop `@abide/abide` names
 beginning `on` MUST be lowercase.
+
+49.16 A parts function among whose parts is a popover, or a part inside one, MUST, in development,
+warn once on `abide:parts` where that popover is drawn while it is closed, and a build MUST NOT carry
+the check.
 
 # 50. Dialogs, toasts and popovers
 
@@ -5836,7 +5840,7 @@ changes.
 parts function hands back where an app spreads it, save 52.24 and 52.53, which hold of `Chart`'s
 children: `chart` draws the series its `series` answers, in that order.
 
-52.83 `calendar`'s `weeks` MUST be the whole weeks the month shown falls in, each seven consecutive
+52.83 Each of `calendar`'s `months` MUST hand back as its `weeks` the whole weeks its month falls in, each seven consecutive
 days from the week's first day, and a day of another month among them MUST carry `data-outside`.
 
 52.84 `calendar` MUST count its days the same in every zone the code runs in, dropping and repeating
@@ -5846,12 +5850,12 @@ none where a daylight-saving change falls in the month.
 none in the zone `format.date` writes in (52.3), and today's cell MUST carry `data-today` and an
 `aria-current` of `date`.
 
-52.86 The month `calendar` shows MUST be the `month` written where it is one, else the selected
-day's, else today's.
+52.86 The first month `calendar` shows MUST be the `month` written where it is one, else the
+selected day's or a range's start's, else today's.
 
 52.87 Exactly one of `calendar`'s day cells MUST be in the page's tab order: the active day's, being
-the day focused last, else the selected day, else today, whichever is first in the month shown, and
-the month's first day where none is; focus put on a day's cell by any means MUST make that day the
+the day focused last, else the selected day or a range's start, else today, whichever is first in a month shown, and
+the first month's first day where none is; focus put on a day's cell by any means MUST make that day the
 active one.
 
 52.88 `calendar`'s `weekdays` MUST be the seven days in the order a week runs, named in its `locale`,
@@ -5864,26 +5868,57 @@ ArrowUp a week on and back, and Home and End to the first and last day of the ac
 52.90 On `calendar`'s grid, PageDown and PageUp MUST move focus a month on and back, and a year with
 Shift, to the same day of the month where that month has it and its last day where it does not.
 
-52.91 A key moving `calendar`'s active day out of the month shown MUST show the month it moved into.
+52.91 A key moving `calendar`'s active day out of the months shown MUST show the month it moved into,
+paging the months shown by as few as do.
 
-52.92 Enter and Space on `calendar`'s grid MUST select the active day.
+52.92 Enter and Space on `calendar`'s grid MUST pick the active day, as 52.98 picks one in a range.
 
-52.93 A click on one of `calendar`'s day cells MUST select its day and make it the active one.
+52.93 A click on one of `calendar`'s day cells MUST pick its day, as 52.98 picks one in a range, and
+make it the active one.
 
-52.94 `calendar`'s `previous` and `next` MUST show the month before and after the one shown, and MUST
-NOT move focus.
+52.94 `calendar`'s `previous` and `next` MUST page the months shown a month back and on, MUST name
+every grid shown in their `aria-controls`, and MUST NOT move focus.
 
-52.95 `calendar`'s `label` MUST be the month shown and its year in its `locale`, and its grid MUST
-be labelled by its `heading`.
+52.95 Each of `calendar`'s `months` MUST hand back as its `label` its month and year in the
+calendar's `locale`, and its grid MUST be labelled by its `heading`.
 
-52.96 The selected day's cell MUST carry `data-selected` and an `aria-selected` of `true`, and every
+52.96 A selected day's cell MUST carry `data-selected` and an `aria-selected` of `true`, and every
 other day's cell an `aria-selected` of `false`.
 
-52.97 `chart.path` given `curve` MUST draw each run of three or more values as a curve through every
+52.97 `calendar` MUST show `months` months from the first shown, one after another and a grid each,
+and one where `months` is not given; a day of another month in one grid whose own month another grid
+shows MUST carry no `id` and no `tabindex` there.
+
+52.98 `calendar` given a `range` of `true` MUST hold what it picks as `[start, end]`: a pick while
+nothing is picked or while an end is MUST make its day the start with no end, and a pick while a
+start has no end MUST make the earlier of the two days the start and the later the end.
+
+52.99 In a range, every day from its start to its end MUST be selected as 52.96 states, its start
+alone while it has no end, its start's cell MUST carry `data-range-start` and its end's
+`data-range-end`, and every grid MUST carry an `aria-multiselectable` of `true`.
+
+52.100 While a range has a start and no end, every day from the start to the day last pointed at in
+a grid, else to the day focused last, MUST carry `data-preview`, and no day MUST otherwise.
+
+52.101 `calendar`'s `active` MUST be the day 52.87 puts in the tab order, and its `idOf` MUST answer
+the id of the cell 52.97 gives the day it is handed.
+
+52.102 `format.date`'s `'input'` style MUST write a time as the clocks of its zone read it, as
+`YYYY-MM-DDTHH:MM`, the same in every `locale`.
+
+52.103 `instantAt` MUST answer the epoch milliseconds at which the clocks of the zone its `timeZone`
+names — else the zone `format.date` writes in (52.3) — read the wall clock it is handed, a
+`YYYY-MM-DD` being its midnight, and MUST answer `undefined` for a string that is no `YYYY-MM-DD`,
+`YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS` on the calendar.
+
+52.104 Where the zone's clocks read a wall clock twice, `instantAt` MUST answer the earlier instant,
+and where they skip it, the instant the length of the skip later — `Temporal`'s `compatible`.
+
+52.105 `chart.path` given `curve` MUST draw each run of three or more values as a curve through every
 one of its points that stays, between two neighbouring points, within the values of those two, and
 MUST close a run back along a `baseline` of one point per x by the curve those points draw.
 
-52.98 `Chart` MUST draw a `Line` or an `Area` declaring `curve` by 52.97, and `Sparkline` declaring
+52.106 `Chart` MUST draw a `Line` or an `Area` declaring `curve` by 52.105, and `Sparkline` declaring
 `curve` MUST draw its line and its area by it.
 
 # 53. Keys, element behaviors and chat
@@ -6083,30 +6118,30 @@ set `following` to true.
 53.64 `carousel` MUST rest on the item `selected` names, and on its first item where `selected` names
 none of them.
 
-53.65 `carousel`'s `host` MUST scroll the item the carousel rests on to its centre at once when it is
+53.65 `carousel`'s `host` MUST scroll the item the carousel rests on to its center at once when it is
 bound, and as `behavior` names whenever the item it rests on changes after.
 
-53.66 `Carousel`'s `centred` MUST be the key of the item the carousel rests on, until a scroll of the
+53.66 `Carousel`'s `centered` MUST be the key of the item the carousel rests on, until a scroll of the
 `host`, `scrollTo` or `reset` sets it, and again whenever the item it rests on changes.
 
-53.67 A scroll of `carousel`'s `host` MUST set `centred` to the key of the item whose centre is nearest
-the host's centre, measured at most once a frame, save where 53.69 sets it.
+53.67 A scroll of `carousel`'s `host` MUST set `centered` to the key of the item whose center is nearest
+the host's center, measured at most once a frame, save where 53.69 sets it.
 
 53.68 While a scroll `scrollTo`, `reset` or a change of the item `carousel` rests on started is on its
-way, what the `host`'s scrolling passes MUST NOT set `centred`, until it reaches that item or a
+way, what the `host`'s scrolling passes MUST NOT set `centered`, until it reaches that item or a
 `scrollend` arrives.
 
 53.69 Once `carousel`'s `host` has dispatched a `scrollsnapchanging` or a `scrollsnapchange`,
-`centred` MUST be set from those events alone, to the key of the item whose element is, holds or is
+`centered` MUST be set from those events alone, to the key of the item whose element is, holds or is
 held by the event's snap target.
 
-53.70 `carousel`'s `previous` and `next` MUST scroll to the item before and the item after the centred
+53.70 `carousel`'s `previous` and `next` MUST scroll to the item before and the item after the centered
 one as `scrollTo` does, and MUST be disabled where there is no such item.
 
-53.71 `Carousel`'s `scrollTo` MUST set `centred` to the key it is handed and scroll that key's item to
-the `host`'s centre as `behavior` names, and `reset` MUST do so for the item the carousel rests on.
+53.71 `Carousel`'s `scrollTo` MUST set `centered` to the key it is handed and scroll that key's item to
+the `host`'s center as `behavior` names, and `reset` MUST do so for the item the carousel rests on.
 
-53.72 `carousel`'s `item` MUST carry `data-centred` while it is centred, and `data-selected` while
+53.72 `carousel`'s `item` MUST carry `data-centered` while it is centered, and `data-selected` while
 `selected` names it.
 
 53.73 `carousel`'s `host` MUST carry `role="region"` and `aria-roledescription="carousel"`, and its

@@ -69,7 +69,7 @@ test("a slice's hint binding stands while its words do", () => {
 
 // THE REVERT: leave `curve` out of what `sparkline` hands `path` — the line and the area are straight,
 // four `L`s and no `C`.
-test('a sparkline declaring curve draws its line and its area curved — 52.98', () => {
+test('a sparkline declaring curve draws its line and its area curved — 52.106', () => {
     const curved = reactive(true)
     const trend = sparkline({
         values: [3, 7, 4, 9, 6],

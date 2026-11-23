@@ -13,7 +13,7 @@ export type Series = {
     kind?: 'line' | 'column' | 'area'
     /** The stack it piles into with the series naming the same one, or `false` for none (52.55). */
     stack?: string | false
-    /** Whether a line or an area is drawn as a curve through its values (52.98). `false` by default. */
+    /** Whether a line or an area is drawn as a curve through its values (52.106). `false` by default. */
     curve?: boolean
 }
 
@@ -161,7 +161,7 @@ export function scale(
  * point alone between two gaps is a segment of no length, which a round line cap draws as a dot.
  * Given a `baseline`, each run is closed down to it instead, as an area to fill — back along its own
  * points where it is one per x, as a stacked area closes onto the series under it. Given `curve`,
- * each run is a monotone cubic through its points (52.97), and so is the way back along a baseline.
+ * each run is a monotone cubic through its points (52.105), and so is the way back along a baseline.
  */
 export function path(
     xs: readonly number[],
@@ -204,7 +204,7 @@ export function path(
 
 /**
  * The segments from the point at `first` to the one at `last`, the pen already at one end: straight,
- * or a monotone cubic (52.97). `ys` is read at `index + offset`, so a run's own copy of its baseline
+ * or a monotone cubic (52.105). `ys` is read at `index + offset`, so a run's own copy of its baseline
  * can be walked by the indices of `xs`; `backward` draws from `last` to `first`.
  */
 function run(

@@ -31,6 +31,9 @@ const REQUIRED_PARENT: Record<string, string> = {
     menuitemradio: 'menu',
 }
 
+const CLOSED_DRAWN =
+    "a closed popover is drawn: a display set on it outranks the browser's hiding of it, so set it behind :popover-open. RULEBOOK 49.16"
+
 // Ids are random per call, so a problem is warned once by what it is, not by which element has it.
 const warned = new Set<string>()
 
@@ -50,7 +53,7 @@ export function partsProblems(prefix: string, root: ParentNode): string[] {
                     element.ownerDocument.getElementById(id) === null
                 )
                     problems.add(
-                        `${attribute} names an element that is not there`,
+                        `${attribute} names an element that is not there. RULEBOOK 49.8`,
                     )
     for (const element of root.querySelectorAll(`[id^=${quoted}]`)) {
         const role = element.getAttribute('role') ?? ''
@@ -59,9 +62,43 @@ export function partsProblems(prefix: string, root: ParentNode): string[] {
             parent !== undefined &&
             element.parentElement?.closest(`[role=${parent}]`) === null
         )
-            problems.add(`a ${role} stands outside any ${parent}`)
+            problems.add(
+                `a ${role} stands outside any ${parent}. RULEBOOK 49.8`,
+            )
     }
+    for (const popover of popoversOf(prefix, root))
+        if (rendersClosed(popover)) problems.add(CLOSED_DRAWN)
     return [...problems]
+}
+
+// 49.16 — the popover each part written under `prefix` is or sits in.
+function popoversOf(prefix: string, root: ParentNode): Set<Element> {
+    const found = new Set<Element>()
+    for (const element of root.querySelectorAll(
+        `[id^=${JSON.stringify(prefix)}]`,
+    )) {
+        const popover = element.closest('[popover]')
+        if (popover !== null) found.add(popover)
+    }
+    return found
+}
+
+// An engine with no hiding of its own for a closed popover — a DOM emulator — draws every one, so
+// it is asked once, of a bare popover, before any is blamed.
+let enginesHide: boolean | undefined
+
+/** Whether `popover` is closed and drawn all the same. */
+function rendersClosed(popover: Element): boolean {
+    if (popover.matches(':popover-open') || !popover.checkVisibility())
+        return false
+    if (enginesHide === undefined) {
+        const bare = popover.ownerDocument.createElement('div')
+        bare.setAttribute('popover', 'manual')
+        popover.ownerDocument.body.append(bare)
+        enginesHide = !bare.checkVisibility()
+        bare.remove()
+    }
+    return enginesHide
 }
 
 /**
@@ -74,11 +111,24 @@ export function partsProblems(prefix: string, root: ParentNode): string[] {
 export function checkParts(name: string, prefix: string): void {
     if (typeof document === 'undefined') return
     setTimeout(() => {
-        for (const problem of partsProblems(prefix, document)) {
-            const message = `${name}: ${problem}. RULEBOOK 49.8.`
-            if (warned.has(message)) continue
-            warned.add(message)
-            PARTS_LOG.warning(message)
-        }
+        for (const problem of partsProblems(prefix, document))
+            warnOnce(name, problem)
     }, 0)
+}
+
+/**
+ * 49.16 — warns on `abide:parts`, once a turn after it is bound, where `popover` — a popover part the
+ * function holds by its element rather than by an id — is closed and drawn. Development only.
+ */
+export function checkPopover(name: string, popover: Element): void {
+    setTimeout(() => {
+        if (rendersClosed(popover)) warnOnce(name, CLOSED_DRAWN)
+    }, 0)
+}
+
+function warnOnce(name: string, problem: string): void {
+    const message = `${name}: ${problem}.`
+    if (warned.has(message)) return
+    warned.add(message)
+    PARTS_LOG.warning(message)
 }

@@ -38,7 +38,7 @@ test('each stage stacks on the one before it, through a month it has no value', 
     expect(proposals.slice(6).every(([, y]) => y === 216)).toBe(true)
 })
 
-// 52.98 — THE STAGES CURVE, each through its own months and each floor along the curve of the stage
+// 52.106 — THE STAGES CURVE, each through its own months and each floor along the curve of the stage
 // under it. THE REVERT: drop `curve` from what `Chart` hands `chart.path` — every edge is straight,
 // and Proposals' top has no cubic in it.
 test('each stage curves through its months, on the curve of the one under it', async () => {

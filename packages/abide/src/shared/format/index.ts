@@ -9,6 +9,7 @@ import { cached } from './cached.ts'
 import { instant } from './instant.ts'
 import { RELATIVE_UNITS } from './RELATIVE_UNITS.ts'
 import { timeZone, visitorZone } from './timeZone.ts'
+import { wallClockOf } from './wallClockOf.ts'
 
 export { timeZone } from './timeZone.ts'
 
@@ -175,9 +176,11 @@ type DateOptions = {
     /**
      * What of the time to write: `'day'` is `Nov 18, 2026`, `'monthDay'` is `Nov 18`, `'month'` is
      * `Nov 2026`, `'time'` is `3:04 PM`, `'hour'` is `3 PM`, and `'dateTime'` is
-     * `Nov 18, 2026, 3:04 PM`. `'day'` by default.
+     * `Nov 18, 2026, 3:04 PM`, and `'input'` is `2026-11-18T15:04`, what an
+     * `<input type="datetime-local">` takes, the same in every locale. `'day'` by default.
      */
-    style?: 'day' | 'monthDay' | 'month' | 'time' | 'hour' | 'dateTime'
+    style?:
+        'day' | 'monthDay' | 'month' | 'time' | 'hour' | 'dateTime' | 'input'
     /**
      * The IANA time zone the time is written in. By default the zone `format.timeZone` pins, and
      * where none is pinned the visitor's: UTC on a server and while a page hydrates, the browser's
@@ -213,6 +216,21 @@ export function dateParts(
         timeZone: zone = timeZone() ?? visitorZone(),
         locale = LOCALE,
     } = options
+    // 52.102 — the zone's wall clock as an `<input>` writes one, in no locale's words.
+    if (style === 'input') {
+        const written = new Date(wallClockOf(time, zone)).toISOString()
+        return [
+            { type: 'year', value: written.slice(0, 4) },
+            { type: 'literal', value: '-' },
+            { type: 'month', value: written.slice(5, 7) },
+            { type: 'literal', value: '-' },
+            { type: 'day', value: written.slice(8, 10) },
+            { type: 'literal', value: 'T' },
+            { type: 'hour', value: written.slice(11, 13) },
+            { type: 'literal', value: ':' },
+            { type: 'minute', value: written.slice(14, 16) },
+        ]
+    }
     // Two formatters joined rather than one asked for both: engines join a date and a time with
     // different words.
     if (style === 'dateTime')

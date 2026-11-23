@@ -627,7 +627,7 @@ const WRITTEN: readonly {
                 route: '/helpers/carousel',
                 title: '`carousel`',
                 description:
-                    'Swipe through records in a row that snaps to each one, resting on the one picked and saying which is centred as you scroll.',
+                    'Swipe through records in a row that snaps to each one, resting on the one picked and saying which is centered as you scroll.',
             },
             {
                 route: '/helpers/hotkeys',
@@ -768,7 +768,13 @@ const WRITTEN: readonly {
                 route: '/helpers/calendar',
                 title: '`calendar`',
                 description:
-                    'Spread a month of days onto a grid of your own, picked by click or by the arrow keys and paged a month at a time.',
+                    'Spread months of days onto grids of your own, a day or a range picked by click or by the arrow keys.',
+            },
+            {
+                route: '/helpers/instant-at',
+                title: '`instantAt`',
+                description:
+                    'Turn a day and a time picked into the moment they name in a zone, the one to keep.',
             },
             {
                 route: '/helpers/follow-bottom',

@@ -17,7 +17,7 @@ const {
     values: readonly (number | null | undefined)[]
     /** The stack it piles into with the series naming the same one, or `false` for none, where the chart's `stack` would put it in one (52.55). */
     stack?: string | false
-    /** Whether it is drawn as a curve through its values rather than straight from one to the next (52.98). `false` by default. */
+    /** Whether it is drawn as a curve through its values rather than straight from one to the next (52.106). `false` by default. */
     curve?: boolean
 }>()
 

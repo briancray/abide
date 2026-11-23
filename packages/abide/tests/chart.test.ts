@@ -58,7 +58,7 @@ test('path closes each run back along a baseline of one point per x — 52.22', 
 
 // THE REVERT: Catmull-Rom tangents, `(ys[i + 1] - ys[i - 1]) / (xs[i + 1] - xs[i - 1])` — the curve
 // leaves the plateau at 10 for 11.67 on its way to the next 10.
-test('a curved path passes through every point, never past the two values it joins — 52.97', () => {
+test('a curved path passes through every point, never past the two values it joins — 52.105', () => {
     const xs = [0, 10, 20, 30, 40, 50]
     const ys = [0, 10, 10, 2, 9, 3]
     const d = path(xs, ys, { curve: true })
@@ -86,7 +86,7 @@ test('a curved path passes through every point, never past the two values it joi
 
 // THE REVERT: walk a curved run back along its baseline straight — the floor is 'L10,8L0,7Z' where
 // the curve of the series under it is due.
-test('a curved area closes back along the curve its baseline draws — 52.97', () => {
+test('a curved area closes back along the curve its baseline draws — 52.105', () => {
     const xs = [0, 10, 20, 30]
     const floors = [9, 4, 6, 1]
     const under = path(xs, floors, { curve: true })

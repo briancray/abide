@@ -1,7 +1,7 @@
 // 53.64-53.73 — A SCROLL-SNAP CAROUSEL THAT RESTS ON A SELECTION, as parts an app spreads onto markup of
 // its own: the scroller, an item per entry, and a button either side. The snapping is the app's CSS;
-// the parts scroll to the selection, follow which item a scroll centres, and go back on `reset`. The
-// server writes the item it rests on as centred, since a page arrives resting.
+// the parts scroll to the selection, follow which item a scroll centers, and go back on `reset`. The
+// server writes the item it rests on as centered, since a page arrives resting.
 
 import { checkParts } from './checkParts.ts'
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
@@ -27,19 +27,19 @@ export type CarouselOptions<Item> = {
 export type Carousel<Item> = {
     /** The base its parts' ids are derived from. */
     readonly id: string
-    /** The scroller's part: what rests it on the selection and follows what a scroll centres. */
+    /** The scroller's part: what rests it on the selection and follows what a scroll centers. */
     readonly host: Record<string, unknown>
-    /** One item's part, carrying `data-centred` and `data-selected` while each holds. */
+    /** One item's part, carrying `data-centered` and `data-selected` while each holds. */
     item(item: Item): Record<string, unknown>
-    /** The button's part scrolling to the item before the centred one, disabled at the first. */
+    /** The button's part scrolling to the item before the centered one, disabled at the first. */
     readonly previous: Record<string, unknown>
-    /** The button's part scrolling to the item after the centred one, disabled at the last. */
+    /** The button's part scrolling to the item after the centered one, disabled at the last. */
     readonly next: Record<string, unknown>
-    /** The key of the item centred in the scroller. */
-    get centred(): string | undefined
+    /** The key of the item centered in the scroller. */
+    get centered(): string | undefined
     /** The key of the item the carousel rests on, read and set. */
     readonly selected: Reactive<string | undefined>
-    /** Scrolls the item a key names to the scroller's centre. */
+    /** Scrolls the item a key names to the scroller's center. */
     scrollTo(key: string): void
     /** Scrolls back to the item the carousel rests on. */
     reset(): void
@@ -73,7 +73,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             : listed[0]
     })
     // 53.66 — what a scroll writes, and replaced by the resting item whenever that moves.
-    const centred = reactive((): string | undefined => resting())
+    const centered = reactive((): string | undefined => resting())
     const base = options.id ?? `carousel-${randomToken(4, 'hex')}`
     if (process.env.NODE_ENV !== 'production') checkParts('carousel', base)
 
@@ -88,11 +88,11 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     })
     let scroller: Element | undefined
     // The key a scroll the parts made is on its way to: what the scroll passes on the way is not
-    // centred, until it arrives or the scrolling ends.
+    // centered, until it arrives or the scrolling ends.
     let heading: string | undefined
 
     // Every rect read before the one write.
-    const centre = (
+    const center = (
         key: string,
         target: Element,
         how: ScrollBehavior,
@@ -114,9 +114,9 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     }
 
     function scrollTo(key: string): void {
-        centred.set(key)
+        centered.set(key)
         const target = elements.get(key)
-        if (target !== undefined) centre(key, target, behavior())
+        if (target !== undefined) center(key, target, behavior())
     }
 
     function reset(): void {
@@ -124,7 +124,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         if (key !== undefined) scrollTo(key)
     }
 
-    // 53.67 — the item whose centre is nearest the scroller's.
+    // 53.67 — the item whose center is nearest the scroller's.
     const nearest = (element: Element): string | undefined => {
         const outer = element.getBoundingClientRect()
         const x = outer.left + outer.width / 2
@@ -156,14 +156,14 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         return undefined
     }
 
-    // 53.68 — what a scroll passes on its way to where the parts scrolled is not centred.
+    // 53.68 — what a scroll passes on its way to where the parts scrolled is not centered.
     const arrive = (key: string | undefined): void => {
         if (key === undefined) return
         if (heading !== undefined) {
             if (key !== heading) return
             heading = undefined
         }
-        if (key !== centred.peek()) centred.set(key)
+        if (key !== centered.peek()) centered.set(key)
     }
 
     const bindHost = (element: Element): Disposer => {
@@ -200,7 +200,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         const stop = watch(() => {
             const target = restingElement()
             if (target === undefined) return
-            centre(
+            center(
                 resting.peek() as string,
                 target,
                 rested ? behavior() : 'instant',
@@ -218,10 +218,10 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         }
     }
 
-    // 53.70 — the key `step` places from the centred one, where there is one.
+    // 53.70 — the key `step` places from the centered one, where there is one.
     const beside = (step: number): string | undefined => {
         const listed = keys()
-        const at = listed.indexOf(centred() as string)
+        const at = listed.indexOf(centered() as string)
         return at === -1 ? undefined : listed[at + step]
     }
     const stepper = (part: string, step: number) => ({
@@ -253,8 +253,8 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
                 'aria-roledescription': 'slide',
                 'aria-label': labelOf(item),
                 'data-carousel': 'item',
-                get 'data-centred'() {
-                    return centred() === key ? '' : undefined
+                get 'data-centered'() {
+                    return centered() === key ? '' : undefined
                 },
                 get 'data-selected'() {
                     return selected() === key ? '' : undefined
@@ -272,8 +272,8 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         },
         previous: stepper('previous', -1),
         next: stepper('next', 1),
-        get centred() {
-            return centred()
+        get centered() {
+            return centered()
         },
         selected,
         scrollTo,

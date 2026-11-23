@@ -17,7 +17,7 @@ const {
     values: readonly (number | null | undefined)[]
     /** The stack it piles into with the series naming the same one, or `false` for none, where the chart's `stack` would put it in one (52.55). */
     stack?: string | false
-    /** Taken as `Line` and `Area` take it, and nothing to a column, which has no line to curve (52.98). */
+    /** Taken as `Line` and `Area` take it, and nothing to a column, which has no line to curve (52.106). */
     curve?: boolean
 }>()
 

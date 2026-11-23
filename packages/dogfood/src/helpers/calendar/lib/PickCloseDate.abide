@@ -9,21 +9,27 @@ const dates = calendar({ selected: closes })
 <div class="calendar">
     <div data-bar>
         <button {...dates.previous}>‹</button>
-        <h3 {...dates.heading}>{dates.label}</h3>
         <button {...dates.next}>›</button>
     </div>
-    <div {...dates.grid}>
-        <div {...dates.header}>
-            {#for weekday of dates.weekdays by weekday.day}
-                <div {...weekday.header}>{weekday.short}</div>
-            {/for}
-        </div>
-        {#for week of dates.weeks by week[0]?.date}
-            <div {...dates.week}>
-                {#for day of week by day.date}
-                    <div {...day.cell}>{day.day}</div>
-                {/for}
-            </div>
+    <div data-months>
+        {#for shown of dates.months by shown.month}
+            <section>
+                <h3 {...shown.heading}>{shown.label}</h3>
+                <div {...shown.grid}>
+                    <div {...dates.header}>
+                        {#for weekday of dates.weekdays by weekday.day}
+                            <div {...weekday.header}>{weekday.short}</div>
+                        {/for}
+                    </div>
+                    {#for week of shown.weeks by week[0]?.date}
+                        <div {...dates.week}>
+                            {#for day of week by day.date}
+                                <div {...day.cell}>{day.day}</div>
+                            {/for}
+                        </div>
+                    {/for}
+                </div>
+            </section>
         {/for}
     </div>
 </div>

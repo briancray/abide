@@ -338,14 +338,19 @@ export function menu(options: MenuOptions = {}): Menu {
             listed[next]?.focus()
         },
         // 50.31, 50.39 — a pick closes the menu and hands focus back; a checkbox or radio item
-        // changes its state with the menu left open.
-        onclick: (event: MouseEvent) => {
-            if (!(event.target instanceof Element)) return
-            const item = event.target.closest(ITEM)
-            if (item === null) return
-            if (item.getAttribute('role') !== 'menuitem') return
-            hide()
-            triggerOf()?.focus()
+        // changes its state with the menu left open. CAPTURED, so the item is read as the click
+        // found it: an item's own handler can disable the item it picked — a stage moved to is
+        // the one no longer offered — and read after it, the pick is no item at all.
+        onclick: {
+            capture: true,
+            handleEvent: (event: MouseEvent) => {
+                if (!(event.target instanceof Element)) return
+                const item = event.target.closest(ITEM)
+                if (item === null) return
+                if (item.getAttribute('role') !== 'menuitem') return
+                hide()
+                triggerOf()?.focus()
+            },
         },
     }
 

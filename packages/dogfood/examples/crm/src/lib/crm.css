@@ -445,6 +445,12 @@
         border-radius: 8px;
     }
 
+    /* The `display` above outranks the UA's own hiding of a closed popover, which drew a shut menu
+       on the page. */
+    :is([role=menu], [role=listbox])[popover]:not(:popover-open) {
+        display: none;
+    }
+
     [role=menu] {
         box-shadow: 0 12px 32px -8px color-mix(in srgb, var(--color-ink) 24%, transparent),
             0 2px 6px color-mix(in srgb, var(--color-ink) 8%, transparent);
@@ -500,7 +506,7 @@
         box-shadow: 0 24px 64px -16px color-mix(in srgb, var(--color-ink) 36%, transparent);
     }
 
-    /* Preflight zeroes the margin the UA centres a modal with, which pinned it to the corner. */
+    /* Preflight zeroes the margin the UA centers a modal with, which pinned it to the corner. */
     dialog:modal {
         margin: auto;
     }
@@ -510,7 +516,7 @@
         backdrop-filter: blur(2px);
     }
 
-    /* A carousel is a row it scrolls along, a slide a card, the centred one lit. */
+    /* A carousel is a row it scrolls along, a slide a card, the centered one lit. */
     [aria-roledescription=carousel] {
         flex-direction: row;
         list-style: none;
@@ -523,7 +529,7 @@
         background: var(--color-raised);
     }
 
-    [aria-roledescription=slide][data-centred] {
+    [aria-roledescription=slide][data-centered] {
         border-color: var(--color-signal);
     }
 
@@ -732,7 +738,7 @@
     }
 }
 
-/* A command palette: the dialog centred, its input across the top, a command and its key a row. */
+/* A command palette: the dialog centered, its input across the top, a command and its key a row. */
 @utility palette {
     @apply m-auto w-full max-w-md rounded-lg border border-rule bg-raised p-0 text-ink shadow-sm;
 
@@ -826,13 +832,21 @@
     }
 }
 
-/* A calendar: the month between its paging buttons, a week a row of seven, today ringed, the days of
-   other months dimmed and the day picked lit. */
+/* A calendar: its paging buttons over the months shown side by side, each its heading over its
+   grid, a week a row of seven, today ringed, the days of other months dimmed and the day picked lit. */
 @utility calendar {
     @apply grid gap-1;
 
     & [data-bar] {
         @apply flex items-center justify-between;
+    }
+
+    & [data-months] {
+        @apply grid auto-cols-fr grid-flow-col gap-4;
+    }
+
+    & section {
+        @apply grid content-start gap-1;
     }
 
     & [role=row] {
@@ -861,6 +875,10 @@
 
     & [data-selected] {
         @apply bg-signal text-paper;
+    }
+
+    & [data-preview]:not([data-selected]) {
+        @apply bg-rule;
     }
 
     & [data-deal] {

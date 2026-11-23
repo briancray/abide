@@ -16,7 +16,7 @@ export type SparklineOptions = {
     zero?: Live<boolean>
     /** 52.33 — `'bar'` scales the values from zero, as bars are read by their length. `'line'` by default. */
     kind?: Live<'line' | 'bar'>
-    /** Whether the line and the area under it curve through the values (52.98). `false` by default. */
+    /** Whether the line and the area under it curve through the values (52.106). `false` by default. */
     curve?: Live<boolean>
 }
 

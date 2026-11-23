@@ -66,34 +66,34 @@ function laidOut(view: ReturnType<typeof carousel<string>>) {
 
 const frame = () => new Promise((done) => requestAnimationFrame(done))
 
-// THE REVERT: rest on `selected()` as it is, and a key no stage has centres nothing.
+// THE REVERT: rest on `selected()` as it is, and a key no stage has centers nothing.
 test('it rests on the selection, and on the first item where the selection names none — 53.64, 53.72', () => {
     const selected = reactive<string | undefined>('proposal')
     const view = carousel({ items: STAGES, selected })
-    expect(view.centred).toBe('proposal')
+    expect(view.centered).toBe('proposal')
     expect(view.item('proposal')['data-selected']).toBe('')
-    expect(view.item('proposal')['data-centred']).toBe('')
-    expect(view.item('lead')['data-centred']).toBeUndefined()
+    expect(view.item('proposal')['data-centered']).toBe('')
+    expect(view.item('lead')['data-centered']).toBeUndefined()
     selected.set('archived')
     flushSync()
-    expect(view.centred).toBe('lead')
+    expect(view.centered).toBe('lead')
     expect(view.item('lead')['data-selected']).toBeUndefined()
 })
 
 // THE REVERT: scroll with `behavior()` on the first run of the rest, and the page animates in.
-test('the scroller centres the resting item at once when bound, and smoothly when it changes — 53.65, 53.66', () => {
+test('the scroller centers the resting item at once when bound, and smoothly when it changes — 53.65, 53.66', () => {
     const selected = reactive<string | undefined>('qualified')
     const view = carousel({ items: STAGES, selected })
     const row = laidOut(view)
     expect(row.scrolls).toEqual([{ left: 100, top: 0, behavior: 'instant' }])
     selected.set('won')
     flushSync()
-    expect(view.centred).toBe('won')
+    expect(view.centered).toBe('won')
     expect(row.scrolls[1]).toEqual({ left: 200, top: 0, behavior: 'smooth' })
 })
 
 // THE REVERT: measure on every `scroll` rather than once a frame, and three scrolls measure three times.
-test('a scroll centres the nearest item, measured once a frame — 53.67', async () => {
+test('a scroll centers the nearest item, measured once a frame — 53.67', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
     let measured = 0
@@ -107,29 +107,29 @@ test('a scroll centres the nearest item, measured once a frame — 53.67', async
     row.scrollTo(210)
     await frame()
     expect(measured).toBe(1)
-    expect(view.centred).toBe('proposal')
-    expect(row.items.get('proposal')?.hasAttribute('data-centred')).toBe(true)
-    expect(row.items.get('lead')?.hasAttribute('data-centred')).toBe(false)
+    expect(view.centered).toBe('proposal')
+    expect(row.items.get('proposal')?.hasAttribute('data-centered')).toBe(true)
+    expect(row.items.get('lead')?.hasAttribute('data-centered')).toBe(false)
 })
 
-// THE REVERT: drop `heading` from `arrive`, and the stage a smooth scroll passes is centred on the
+// THE REVERT: drop `heading` from `arrive`, and the stage a smooth scroll passes is centered on the
 // way, so a second click of next steps from it rather than from where the first was going.
-test('what a scroll to an item passes on the way is not centred, until the scrolling ends — 53.68', async () => {
+test('what a scroll to an item passes on the way is not centered, until the scrolling ends — 53.68', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
     view.scrollTo('won')
     row.scrollTo(100)
     await frame()
-    expect(view.centred).toBe('won')
+    expect(view.centered).toBe('won')
     row.host.dispatchEvent(new Event('scrollend'))
     row.scrollTo(100)
     await frame()
-    expect(view.centred).toBe('qualified')
+    expect(view.centered).toBe('qualified')
 })
 
 // THE REVERT: keep measuring scrolls once a snap event has come, and the scroll after it moves
-// `centred` off the snap target.
-test('once the scroller reports a snap, the snap target alone sets centred — 53.69', async () => {
+// `centered` off the snap target.
+test('once the scroller reports a snap, the snap target alone sets centered — 53.69', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
     const inner = document.createElement('span')
@@ -139,27 +139,27 @@ test('once the scroller reports a snap, the snap target alone sets centred — 5
         snapTargetBlock: null,
     })
     row.host.dispatchEvent(snap)
-    expect(view.centred).toBe('won')
+    expect(view.centered).toBe('won')
     row.scrollTo(100)
     await frame()
-    expect(view.centred).toBe('won')
+    expect(view.centered).toBe('won')
 })
 
 // THE REVERT: drop `disabled` from `previous`, and it stays enabled at the first stage.
-test('previous and next step from the centred item, and are disabled at the ends — 53.70, 53.71', () => {
+test('previous and next step from the centered item, and are disabled at the ends — 53.70, 53.71', () => {
     const view = carousel({ items: STAGES, behavior: 'auto' })
     const row = laidOut(view)
     expect(view.previous.disabled).toBe(true)
     expect(view.next.disabled).toBe(false)
     ;(view.next.onclick as () => void)()
-    expect(view.centred).toBe('qualified')
+    expect(view.centered).toBe('qualified')
     expect(row.scrolls.at(-1)).toEqual({ left: 100, top: 0, behavior: 'auto' })
     view.scrollTo('won')
     expect(view.next.disabled).toBe(true)
     expect(view.previous.disabled).toBe(false)
 })
 
-// THE REVERT: make `reset` scroll to `centred`, and it stays on the stage the reader scrolled to.
+// THE REVERT: make `reset` scroll to `centered`, and it stays on the stage the reader scrolled to.
 test('reset scrolls back to the resting item — 53.71', async () => {
     const view = carousel({
         items: STAGES,
@@ -168,9 +168,9 @@ test('reset scrolls back to the resting item — 53.71', async () => {
     const row = laidOut(view)
     row.scrollTo(300)
     await frame()
-    expect(view.centred).toBe('won')
+    expect(view.centered).toBe('won')
     view.reset()
-    expect(view.centred).toBe('qualified')
+    expect(view.centered).toBe('qualified')
     expect(row.scrolls.at(-1)).toEqual({
         left: -200,
         top: 0,
