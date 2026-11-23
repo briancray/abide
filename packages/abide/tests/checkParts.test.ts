@@ -26,7 +26,12 @@ HTMLElement.prototype.checkVisibility = function (options) {
 function element(tag: string, parts: Record<string, unknown>): HTMLElement {
     const made = document.createElement(tag)
     for (const [name, value] of Object.entries(parts)) {
-        if (name.startsWith('on') || value === undefined || value === false)
+        if (
+            name.startsWith('on') ||
+            typeof value === 'function' ||
+            value === undefined ||
+            value === false
+        )
             continue
         made.setAttribute(name, value === true ? '' : String(value))
     }
@@ -117,7 +122,7 @@ test('a closed menu drawn by a display of its own warns', async () => {
         document.body.append(element('button', actions.trigger), list)
     })
     expect(warned).toEqual([
-        expect.stringContaining('menu: a closed popover is drawn'),
+        expect.stringContaining('popover: a closed popover is drawn'),
     ])
 })
 

@@ -1,8 +1,8 @@
 // 50.19-50.22, 50.26, 50.27, 50.48, 50.59, 50.60 — AN APP'S OWN OVERLAY HELD AGAINST AN ANCHOR, as
 // parts an app spreads onto elements of its own: a trigger that opens it and anchors it, or an anchor
-// that only anchors it, and the popover itself, in the anchored layer `tooltip` and `menu` open in.
+// that only anchors it, and the popover itself, in the anchored layer `tooltip` opens in. A `menu` handed one opens in it.
 //
-// THE PARTS FIND EACH OTHER BY ID, as `menu`'s do: what an app writes is two spreads, and no element
+// THE PARTS FIND EACH OTHER BY ID: what an app writes is two spreads, and no element
 // is handed from one to the other. The server writes every attribute, a manual popover included, so
 // the popover is shut before the page hydrates.
 

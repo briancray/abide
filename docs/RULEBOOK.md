@@ -5100,7 +5100,7 @@ role `status`.
 50.18 A notice's action MUST take the notice out of `toasts.list` and then call its `run`.
 
 50.19 An anchored layer — the element carrying `tooltip.host`'s `hint` part while it shows a hint,
-the menu of a `menu`, an element `popover` is bound to and the element carrying `combobox`'s `popup`
+an element `popover` is bound to and the element carrying `combobox`'s `popup`
 part — MUST sit on `side`, `offset` pixels from its anchor, lined up along it as `align` names.
 
 50.20 An anchored layer MUST take the side opposite `side` where `side` leaves less room than the
@@ -5123,18 +5123,18 @@ stack while it shows (53.14, 53.15), once it is unbound, when the pointer leaves
 when its element loses focus.
 
 50.26 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
-the menu of a `menu`, an element `popover` is bound to and the element carrying `combobox`'s `popup`
+an element `popover` is bound to and the element carrying `combobox`'s `popup`
 part MUST open in the top layer as a popover placed against their anchor as 50.19-50.21 state, and
 MUST be placed again while open whenever anything scrolls, the window resizes, or the anchor or the
 popover changes size — and for a change of size, before the frame that lays that size out is
 painted.
 
 50.27 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
-the menu of a `menu`, an element `popover` is bound to and the element carrying `combobox`'s `popup`
+an element `popover` is bound to and the element carrying `combobox`'s `popup`
 part MUST write the side it took as `data-side`, how far along its facing edge the anchor's middle
 falls as the `--arrow-offset` custom property, and the anchor's width as `--anchor-width`.
 
-50.28 A `menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
+50.28 A `menu` MUST focus its first menu item as it opens, or its last where ArrowUp on its trigger
 opened it.
 
 50.29 The menu items of a `menu` MUST be the descendants of its menu carrying `role="menuitem"`,
@@ -5144,9 +5144,9 @@ opened it.
 item, wrapping, and Home and End to the first and the last.
 
 50.31 Escape in an open `menu`, and a click on one of its items carrying `role="menuitem"`, MUST
-close it and return focus to its trigger.
+write `false` to its `open` and return focus to its trigger.
 
-50.32 A press on the trigger of an open `menu` MUST close it, and MUST NOT open it again.
+50.32 ArrowDown and ArrowUp on a `menu`'s trigger MUST open it.
 
 50.33 `prompts.prompt` MUST settle with the text in its input where its prompt closed by the
 confirming button, and `undefined` where it closed any other way.
@@ -5163,12 +5163,13 @@ of those standing, the others showing none, and a hint, a notice, a prompt or a 
 with none standing MUST warn once, on `abide:tooltip`, `abide:toasts`, `abide:prompts` and
 `abide:announce`.
 
-50.37 A `menu` MUST write every opening and every closing of its menu, however it happened, to its
-`open`, calling `onopen` or `onclose` after, and MUST open and close its menu as `open` is written.
+50.37 A `menu`'s parts MUST be a `popover`'s, given every option the `menu` was, with `align`
+`start` and `offset` `4` where none is given: its `trigger`, `anchor` and `menu` that popover's
+`trigger`, `anchor` and `popover`, and its `open` that popover's `open`.
 
 50.38 A `menu`'s parts MUST carry every attribute its trigger and its menu need as the server writes
-them: the menu `popover="auto"`, `role="menu"` and an `id`, named by its trigger's `aria-controls`,
-and the trigger `aria-haspopup="menu"` and the `id` the menu's `aria-labelledby` names.
+them: the menu `role="menu"` and an `aria-labelledby` naming its trigger's `id`, and the trigger
+`aria-haspopup="menu"`.
 
 50.39 A click on a menu item carrying `role="menuitemcheckbox"` or `role="menuitemradio"` MUST leave
 its `menu` open.

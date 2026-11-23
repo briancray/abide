@@ -11,6 +11,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { flushSync, listbox, reactive, tabs, tree } from '#shared'
 import { menu } from '#shared/menu.ts'
 
+import { bindPart } from './bindPart.ts'
+
 afterEach(() => document.body.replaceChildren())
 
 const ITEMS = ['a', 'b', 'c']
@@ -139,8 +141,8 @@ test('a key opens a shut list exactly where roving steps from no item', async ()
 test("a menu's trigger opens on the arrows openingEnd names, and at that end", () => {
     const parts = menu()
     const list = document.createElement('div')
-    list.id = parts.menu.id as string
-    list.setAttribute('popover', 'auto')
+    list.id = parts.id
+    list.setAttribute('popover', 'manual')
     list.addEventListener('toggle', parts.menu.ontoggle as EventListener)
     for (const text of ITEMS) {
         const item = document.createElement('button')
@@ -151,6 +153,8 @@ test("a menu's trigger opens on the arrows openingEnd names, and at that end", (
     const button = document.createElement('button')
     button.id = parts.trigger.id as string
     document.body.append(button, list)
+    // Let go at the end, or the open popover stays a layer on `dismissible`'s stack for the next file.
+    using _bound = { [Symbol.dispose]: bindPart(parts.menu, list) }
     const keydown = parts.trigger.onkeydown as (event: KeyboardEvent) => void
     press(keydown, 'Home')
     expect(parts.open()).toBe(false)

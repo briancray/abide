@@ -1,5 +1,5 @@
 // 50.19-50.22 — WHERE AN ANCHORED LAYER SITS BESIDE ITS ANCHOR: internal, under `anchored` and so under
-// `tooltip`, `menu`, `popover` and `combobox`'s list; an app reaches it through `popover`. It READS and
+// `tooltip`, `popover` and `combobox`'s list; an app reaches it through `popover`. It READS and
 // never writes (50.22), so a caller placing several reads every one before writing any, and one forced
 // layout pays for all of them.
 

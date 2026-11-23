@@ -80,7 +80,7 @@ test('typing moves focus to the item whose text starts with it', async () => {
 
 test('the server writes the menu shut, named by its trigger', async () => {
     using _actions = await mount(DealActions({}))
-    expect(menu().getAttribute('popover')).toBe('auto')
+    expect(menu().getAttribute('popover')).toBe('manual')
     expect(menu().getAttribute('aria-labelledby')).toBe(trigger().id)
     expect(trigger().getAttribute('aria-controls')).toBe(menu().id)
 })

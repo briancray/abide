@@ -181,8 +181,8 @@ export function combobox<Item, Multiple extends boolean = false>(
         }
     }
 
-    // 51.92 — a press opens a shut list and shuts an open one, as a press on a `menu`'s trigger does
-    // (50.32). A press is a click, never focus: Tab reaching the input opens nothing. A search opens
+    // 51.92 — a press opens a shut list and shuts an open one, as a press on a `popover`'s trigger does
+    // (50.59). A press is a click, never focus: Tab reaching the input opens nothing. A search opens
     // only once there is text to search for, since nothing has been searched yet.
     function press() {
         if (open.peek()) {

@@ -1,6 +1,6 @@
 // 50.26, 50.27, 50.47 — A POPOVER HELD AGAINST ITS ANCHOR: shown in the top layer, placed by `place`,
-// and placed again whenever anything could have moved it, until it is let go. What `tooltip`, `menu`
-// and `popover` are built on; an app reaches it through `popover`.
+// and placed again whenever anything could have moved it, until it is let go. What `tooltip`, `chart`'s
+// readout and `popover` are built on; an app reaches it through `popover`.
 
 import { resized } from './observe/resized.ts'
 import { place, type Placement, type PlaceOptions } from './place.ts'
@@ -51,8 +51,7 @@ export function anchored(
     // anchor whose leave closes the layer then closes it and opens it again as the pointer moves.
     const passesThrough = options.interactive === false
     if (passesThrough) floating.style.pointerEvents = 'none'
-    // A menu's `auto` popover is already open by the time it is anchored: the browser opened it.
-    if (!floating.matches(':popover-open')) floating.showPopover()
+    floating.showPopover()
     update()
     addEventListener('scroll', scheduled, { capture: true, passive: true })
     addEventListener('resize', scheduled, { passive: true })

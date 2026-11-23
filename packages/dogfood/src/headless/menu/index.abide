@@ -42,7 +42,9 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/menu.test.ts',
-            from: ["test('open written by the app opens and closes the menu"],
+            from: [
+                "test('open written by the app opens the menu at its first item",
+            ],
         },
         {
             path: 'packages/abide/tests/menu.test.ts',
@@ -57,14 +59,16 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
     <Section level={3} title="Move a deal to another stage from a menu">
         <p>Spread <code>trigger</code> on a button and <code>menu</code> on the element holding
             the items. Each child carrying <code>role="menuitem"</code> is an item. A disabled
-            one is passed over by the arrow keys, and a pick runs its own
-            <code>onclick</code>.</p>
+            one is passed over by the arrow keys, and a pick runs its own <code>onclick</code>,
+            closes the menu and hands focus back to the button.</p>
         <Example code={moveStage}><MoveStage /></Example>
     </Section>
 
     <Section level={3} title="Open a menu from an icon">
         <p>The trigger is your own element, so it holds anything, and its
-            <code>aria-label</code> names the menu.</p>
+            <code>aria-label</code> names the menu. <code>menu</code> takes the options a
+            <code>popover</code> does, so <code>align: 'end'</code> lines it up with the icon's
+            end.</p>
         <Example code={iconMenu}><IconMenu /></Example>
     </Section>
 
@@ -76,9 +80,9 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Open a menu from somewhere else">
-        <p>Hand <code>menu</code> a <code>Reactive</code> as <code>open</code>. Writing it opens
-            and closes the menu, and every way the menu closes writes it back.
-            <code>onopen</code> and <code>onclose</code> hear each.</p>
+        <p>Hand <code>menu</code> a <code>Reactive</code> as <code>open</code>, and spread its
+            <code>anchor</code> on what the menu opens against. Writing it opens and closes the
+            menu, and every way the menu closes writes it back.</p>
         <Example code={openElsewhere}><OpenElsewhere /></Example>
     </Section>
 
