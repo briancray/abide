@@ -1,11 +1,11 @@
 <script>
-import { format, reactive } from '@abide/abide'
+import { format, memo, reactive } from '@abide/abide'
 
 import listTargets from '../listTargets.handler.ts'
 import setTarget from '../setTarget.handler.ts'
 
 let next = reactive<number | undefined>(600_000)
-const targets = reactive(() => listTargets())
+const targets = memo(() => listTargets())
 
 async function record() {
     if (next === undefined) return

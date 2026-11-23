@@ -4,6 +4,7 @@
 // app already moved finds nothing left to move.
 
 import { withoutRestatedNotes } from './agentNotes.ts'
+import { toMemo } from './toMemo.ts'
 
 /** A file's text before and after `abide upgrade`. */
 export type Edit = { path: string; before: string; after: string }
@@ -11,14 +12,19 @@ export type Edit = { path: string; before: string; after: string }
 /**
  * One release's change to the app under `directory`: the text of each file it changes, by path
  * relative to `directory`. `read` answers what earlier migrations left of a file, and `undefined`
- * where there is none.
+ * where there is none; `sources` is every file of the app's own its code is written in.
  */
 type Migration = {
     version: string
     migrate: (
         read: (path: string) => Promise<string | undefined>,
+        sources: () => Promise<string[]>,
     ) => Promise<Record<string, string>>
 }
+
+// What an app's code is written in, outside what it installs or builds.
+const SOURCES = new Bun.Glob('**/*.{ts,tsx,js,mjs,abide,md}')
+const NOT_SOURCES = /(^|\/)(node_modules|\.abide|\.git|dist|build)\//
 
 // 38.198 — in the order of their versions.
 const MIGRATIONS: Migration[] = [
@@ -30,6 +36,20 @@ const MIGRATIONS: Migration[] = [
             return notes === undefined
                 ? {}
                 : { 'AGENTS.md': await withoutRestatedNotes(notes) }
+        },
+    },
+    {
+        // 38.215 — a body handed to `reactive` is handed to `memo`.
+        version: '0.143.0',
+        migrate: async (read, sources) => {
+            const changed: Record<string, string> = {}
+            for (const path of await sources()) {
+                const text = await read(path)
+                if (text === undefined || !text.includes('reactive')) continue
+                const migrated = toMemo(text, path).text
+                if (migrated !== text) changed[path] = migrated
+            }
+            return changed
         },
     },
 ]
@@ -56,6 +76,15 @@ export async function upgrade(
         }
         return before.get(path)
     }
+    let listed: string[] | undefined
+    const sources = async (): Promise<string[]> => {
+        if (listed !== undefined) return listed
+        listed = []
+        for await (const path of SOURCES.scan({ cwd: directory, dot: false }))
+            if (!NOT_SOURCES.test(path)) listed.push(path)
+        listed.sort()
+        return listed
+    }
     for (const migration of MIGRATIONS) {
         if (
             from !== undefined &&
@@ -63,7 +92,7 @@ export async function upgrade(
         )
             continue
         for (const [path, text] of Object.entries(
-            await migration.migrate(read),
+            await migration.migrate(read, sources),
         )) {
             await read(path)
             after.set(path, text)

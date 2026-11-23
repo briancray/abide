@@ -780,7 +780,7 @@ declare function ${ROWS_OF}<T>(subject: Iterable<T> | AsyncIterable<T> | null | 
  * names neither the page nor the line.
  *
  * DEPTH IS WHAT "TOP LEVEL" MEANS, and it is the whole of what this rule costs. An `await` inside a
- * handler, a `reactive` body or any other function in the block is that function's own and is
+ * handler, a `memo` body or any other function in the block is that function's own and is
  * untouched — which is where 31.3's `await` operand still does its work.
  */
 function refuseTopLevelAwait(source: string, block: string): void {

@@ -1,5 +1,5 @@
 <script>
-import { onRefusal, principal, reactive, watch } from '@abide/abide'
+import { memo, onRefusal, principal, reactive, watch } from '@abide/abide'
 
 import getCommission from '../getCommission.handler.ts'
 import SignInAs from './SignInAs.abide'
@@ -11,7 +11,7 @@ onRefusal((refusal) => {
     if (refusal.status === 401) signedOut = true
 })
 
-const commission = reactive(() => getCommission())
+const commission = memo(() => getCommission())
 
 watch(principal.resolved, () => {
     signedOut = false

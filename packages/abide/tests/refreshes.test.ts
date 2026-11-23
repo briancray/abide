@@ -5,22 +5,22 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, log, POST, principal, reactive, refuse, watch } from '#server'
+import { GET, log, memo, POST, principal, refuse, watch } from '#server'
 import type { BootedApp } from '#server/createApp.ts'
 import type { Selection } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
 const runs = { cars: 0, boats: 0, car1: 0, car2: 0 }
-const cars = reactive(async () => ++runs.cars, {
+const cars = memo(async () => ++runs.cars, {
     global: true,
     tags: ['refreshes:cars'],
 })
-const boats = reactive(async () => ++runs.boats, {
+const boats = memo(async () => ++runs.boats, {
     global: true,
     tags: ['refreshes:boats'],
 })
-const car = reactive(
+const car = memo(
     async ({ id }: { id: number }) => (id === 1 ? ++runs.car1 : ++runs.car2),
     { global: true, tags: ({ id }) => [`refreshes:car:${id}`] },
 )
@@ -188,7 +188,7 @@ test('a GET declared with refreshes is refused — 16.92', () => {
 // 1 1 0` is due; drop the thenable arm, and the promise is walked as a list, which fails (16.102) —
 // `ada +0; frames 0 0 0` where `ada +1; frames 1 1 0` is due.
 const boardRuns: Record<string, number> = { ada: 0, grace: 0 }
-const boards = reactive(
+const boards = memo(
     async ({ personId }: { personId: string }) => ({
         personId,
         run: ++boardRuns[personId]!,
@@ -312,7 +312,7 @@ test('a refreshes that fails answers the write as it returned, and warns once �
 // and the failure is still warned once (16.102). THE REVERT: drop the per-entry `try` in `refreshEach`
 // in `rpc.ts`; the throw leaves the loop, and `after +0` where `after +1` is due.
 let afterRuns = 0
-const after = reactive(async () => ++afterRuns, { global: true })
+const after = memo(async () => ++afterRuns, { global: true })
 const broken = {
     refresh() {
         throw new Error('this entry broke')

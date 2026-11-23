@@ -49,11 +49,11 @@ import Section from '#src/lib/Section.abide'
             a new stage, and keeps the owner it last read.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { reactive } from '@abide/abide'
+            import { memo, reactive } from '@abide/abide'
 
             let stage = reactive('lead')
             let owner = reactive('ada')
-            const label = reactive(() => \`\${stage} (\${owner.peek()})\`)
+            const label = memo(() => \`\${stage} (\${owner.peek()})\`)
             </script>
 
             <p>{label}</p>
@@ -65,12 +65,12 @@ import Section from '#src/lib/Section.abide'
             compiler warns on it.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { reactive } from '@abide/abide'
+            import { memo, reactive } from '@abide/abide'
             import getDeal from './getDeal.handler.ts'
 
             let owner = reactive('ada')
             let dealId = reactive('d2')
-            const deal = reactive(async () => {
+            const deal = memo(async () => {
                 const who = owner // before the await: followed
                 const found = await getDeal({ id: dealId }) // awaited: followed
                 return { ...found, owner: who }

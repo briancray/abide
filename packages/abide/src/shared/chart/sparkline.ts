@@ -3,7 +3,7 @@
 // keep their own width.
 
 import { type Live, live } from '../live.ts'
-import { reactive } from '../reactive/index.ts'
+import { memo } from '../reactive/index.ts'
 import { path, scale } from './index.ts'
 
 /** What `sparkline` draws. A value is read live where a function is given. */
@@ -43,7 +43,7 @@ const SIZE = 100
 
 /** A trend with no axes, stretched to its box, as parts to spread. */
 export function sparkline(options: SparklineOptions): SparklineParts {
-    const drawing = reactive(() => {
+    const drawing = memo(() => {
         const values = live(options.values)
         const zero = live(options.zero) === true
         const kind = live(options.kind) ?? 'line'

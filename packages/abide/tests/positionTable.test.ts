@@ -116,10 +116,10 @@ let one = reactive(1)
 test('a reactive body wrapped in a type still tracks — 14.16', async () => {
     expect(
         await deferred(`<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 let one = reactive(1)
-const later = reactive((() => setTimeout(() => one, 0)) satisfies () => unknown)
+const later = memo((() => setTimeout(() => one, 0)) satisfies () => unknown)
 </script>`),
     ).toEqual([5])
 })

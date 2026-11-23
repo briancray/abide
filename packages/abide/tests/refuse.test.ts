@@ -10,6 +10,7 @@ import {
     flushSync,
     isFailed,
     jsonSchema,
+    memo,
     reactive,
     refuse,
     watch,
@@ -356,14 +357,14 @@ test('a body that returns a refusal refuses — 15.5', async () => {
     const summary = (value: { error(): unknown; ready(): boolean }): string =>
         `error: ${isFailed(value.error()) ? (value.error() as Error).name : 'none'}, ready: ${value.ready()}`
 
-    const settled = reactive(() => refuse.notFound())
+    const settled = memo(() => refuse.notFound())
     expect(summary(settled)).toBe('error: NotFound, ready: false')
 
-    const loaded = reactive(async () => refuse.notFound())
+    const loaded = memo(async () => refuse.notFound())
     await loaded.catch(() => {})
     expect(summary(loaded)).toBe('error: NotFound, ready: false')
 
-    const keyed = reactive(async ({ id }: { id: string }) =>
+    const keyed = memo(async ({ id }: { id: string }) =>
         id === '42' ? { id } : refuse.notFound(),
     )
     const missing = keyed({ id: 'nope' })
@@ -381,9 +382,7 @@ test('a body that returns a refusal refuses — 15.5', async () => {
 // beside it, exactly as a recompute that threw does.
 test('a recompute that returns a refusal keeps serving what it had', () => {
     const id = reactive('42')
-    const invoice = reactive(() =>
-        id() === '42' ? 'INV-0042' : refuse.notFound(),
-    )
+    const invoice = memo(() => (id() === '42' ? 'INV-0042' : refuse.notFound()))
     const seen: string[] = []
     watch(() => {
         const error = invoice.error() as Error | undefined

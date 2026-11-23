@@ -14,7 +14,7 @@ import { type KeyOption, writtenBy } from './itemKey.ts'
 import { lastAtOrBefore } from './lastAtOrBefore.ts'
 import { type Live, live } from './live.ts'
 import { resized } from './observe/resized.ts'
-import { reactive } from './reactive/index.ts'
+import { memo, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 
 /** What `virtualList` lists, how an item is told apart and grouped, and how much is rendered first. */
@@ -109,7 +109,7 @@ export function virtualList<Item>(
     const fits = reactive(0)
     const measured = reactive(false)
 
-    const shown = reactive((): readonly VirtualListEntry<Item>[] => {
+    const shown = memo((): readonly VirtualListEntry<Item>[] => {
         const list = items()
         let from = 0
         let to = Math.min(list.length, initial)
@@ -131,7 +131,7 @@ export function virtualList<Item>(
     })
 
     // 51.62 — the rows before `shown` and after it, as the host's block padding.
-    const padding = reactive(() => {
+    const padding = memo(() => {
         const list = items()
         const entries = shown()
         const per = measured() ? perRow() : 1
@@ -292,7 +292,7 @@ export function virtualList<Item>(
         }
     }
 
-    const sectionList = reactive((): readonly VirtualListSection[] => {
+    const sectionList = memo((): readonly VirtualListSection[] => {
         const of = options.section
         if (of === undefined) return []
         const list = items()
@@ -312,7 +312,7 @@ export function virtualList<Item>(
         return all
     })
     // 51.64 — the section the first item in view stands in.
-    const current = reactive(() => {
+    const current = memo(() => {
         const listed: VirtualListSection[] = []
         for (const section of sectionList())
             if (section.index !== -1) listed.push(section)

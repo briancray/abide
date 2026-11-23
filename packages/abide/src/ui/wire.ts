@@ -34,7 +34,7 @@ import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { standForLoadCall, startingLoadCall } from '#shared/loadCall.ts'
 import { randomToken } from '#shared/randomToken.ts'
-import { reactive, structural } from '#shared/reactive/index.ts'
+import { memo, structural } from '#shared/reactive/index.ts'
 import {
     declareDefaults,
     type Defaults,
@@ -247,7 +247,7 @@ export function wire(
     // still free to abort. A mutation's is `declare`'s to make, which is where its `ttl` of 0 is.
     const value =
         method === 'GET'
-            ? reactive(
+            ? memo(
                   produce,
                   options === undefined ? undefined : copyOptions(options),
               )

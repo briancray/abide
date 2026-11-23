@@ -207,7 +207,14 @@ const WRITTEN: readonly {
                 route: '/reactive/reactive',
                 title: '`reactive`',
                 description:
-                    'Hold a value, derive one from others, or load or stream one from a handler, with reads, writes, probes and triggers on one type.',
+                    'Hold a value the page owns, a function included, with reads, writes, probes and triggers on one type.',
+                where: 'anywhere',
+            },
+            {
+                route: '/reactive/memo',
+                title: '`memo`',
+                description:
+                    'Derive a value from others, or load or stream one from a handler, keyed by args where the body takes them.',
                 where: 'anywhere',
             },
             {
@@ -284,7 +291,7 @@ const WRITTEN: readonly {
                 route: '/reactive/stop-signal',
                 title: '`stopSignal`',
                 description:
-                    "Read the signal a stopping app aborts, so a long job's run or its fetch ends early.",
+                    "Read the signal that says stop, so a memo's superseded run or a stopping app's job ends its fetch early.",
                 where: 'anywhere',
             },
             {

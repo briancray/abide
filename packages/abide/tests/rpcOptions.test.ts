@@ -8,12 +8,12 @@ import { rpcRequest } from '#shared/rpcRequest.ts'
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from '@abide/abide/server'
+const HANDLERS = `import { GET, jsonSchema, memo, POST, refuse } from '@abide/abide/server'
 
 const order: string[] = []
 let innerRuns = 0
 
-const lookup = reactive(async ({ id, flags }: { id: number; flags?: boolean[] }) => ({ id, type: typeof id, flags }), {
+const lookup = memo(async ({ id, flags }: { id: number; flags?: boolean[] }) => ({ id, type: typeof id, flags }), {
     args: jsonSchema({
         type: 'object',
         properties: { id: { type: 'integer' }, flags: { type: 'array', items: { type: 'boolean' } } },
@@ -39,7 +39,7 @@ export const guarded = GET(lookup, {
 export const seenOrder = GET(() => order)
 
 export const tagged = GET(
-    reactive(async ({ tags }: { tags: string[] }) => tags, {
+    memo(async ({ tags }: { tags: string[] }) => tags, {
         args: jsonSchema({
             type: 'object',
             properties: { tags: { type: 'array', items: { type: 'string' } } },
@@ -49,7 +49,7 @@ export const tagged = GET(
 )
 
 export const searched = GET(
-    reactive(async ({ q }: { q: string }) => q, {
+    memo(async ({ q }: { q: string }) => q, {
         args: jsonSchema({ type: 'object', properties: { q: { type: 'string' } }, required: ['q'] }),
     }),
 )
@@ -111,7 +111,7 @@ export const joinedStream = GET(async () => {
 })
 
 export const annotated = GET(
-    reactive(
+    memo(
         ({ id, kind, tags, page = 1 }: { id: number; kind: 'movie' | 'series'; tags?: string[]; page: number }) => ({
             id,
             type: typeof id,

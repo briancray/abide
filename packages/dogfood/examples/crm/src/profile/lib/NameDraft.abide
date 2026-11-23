@@ -1,10 +1,10 @@
 <script>
-import { props, reactive } from '@abide/abide'
+import { memo, props } from '@abide/abide'
 
 const { name } = props<{ name: string }>()
 
 // Follows the prop, and a write stands until the prop changes.
-let draft = reactive(() => name)
+let draft = memo(() => name)
 </script>
 
 <label>display name <input bind:value={draft}></label>

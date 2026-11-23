@@ -6,12 +6,12 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, jsonSchema, log, POST, reactive, refuse } from '@abide/abide/server'
+const HANDLERS = `import { GET, jsonSchema, log, memo, POST, refuse } from '@abide/abide/server'
 
 export const listInvoices = GET(() => [{ id: 1 }], { description: 'Every invoice.' })
 
 export const getInvoice = GET(
-    reactive(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
+    memo(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
         args: jsonSchema({ type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] }),
     }),
     { description: 'One invoice.' },

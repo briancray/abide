@@ -128,10 +128,10 @@ export default POST(() => {
 }
 
 const PAGE = `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.handler.ts'
 
-const invoice = reactive(() => getInvoice({ id: '4021' }))
+const invoice = memo(() => getInvoice({ id: '4021' }))
 </script>
 
 <main><p id="total">{invoice().total}</p></main>`
@@ -979,10 +979,10 @@ test('a handler with clients.ui false gets no browser wrapper — 20.4', async (
     }
     const refused = appFixture({
         'index.abide': `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import internal from '#src/staff/internal.handler.ts'
 
-const value = reactive(() => internal())
+const value = memo(() => internal())
 </script>
 
 <p>{value()}</p>`,
@@ -994,10 +994,10 @@ const value = reactive(() => internal())
 
     const allowed = appFixture({
         'index.abide': `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import open from '#src/staff/open.handler.ts'
 
-const value = reactive(() => open())
+const value = memo(() => open())
 </script>
 
 <p>{value()}</p>`,

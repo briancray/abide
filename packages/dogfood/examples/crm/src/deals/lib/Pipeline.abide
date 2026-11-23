@@ -1,11 +1,11 @@
 <script>
-import { format, reactive, refresh } from '@abide/abide'
+import { format, memo, refresh } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
-const deals = reactive(() => listDeals())
+const deals = memo(() => listDeals())
 
-const total = reactive(() => {
+const total = memo(() => {
     let sum = 0
     for (const deal of deals) if (deal.stage !== 'won') sum += deal.amount
     return sum

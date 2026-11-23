@@ -43,10 +43,10 @@ import Section from '#src/lib/Section.abide'
         <p>The refusal is typed on the handler's failures, so the page narrows it by name.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { reactive } from '@abide/abide'
+            import { memo } from '@abide/abide'
             import getCommission from './getCommission.handler.ts'
 
-            const commission = reactive(() => getCommission())
+            const commission = memo(() => getCommission())
             </script>
 
             {#if getCommission.isError(commission.error(), 'SignedOut')}

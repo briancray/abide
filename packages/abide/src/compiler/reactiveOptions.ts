@@ -43,9 +43,12 @@ export function inlineOptions(
         : undefined
 }
 
-/** Whether a call is `reactive(…)`, by the callee's spelling. */
+/** Whether a call is `reactive(…)` or `memo(…)`, by the callee's spelling. */
 export function isReactiveCall(call: Node & { expression: Node }): boolean {
-    return isIdentifier(call.expression) && call.expression.text === 'reactive'
+    return (
+        isIdentifier(call.expression) &&
+        (call.expression.text === 'reactive' || call.expression.text === 'memo')
+    )
 }
 
 /** The five handler declarers, by the spelling `isReactiveCall` reads `reactive` by. */

@@ -1,9 +1,9 @@
 <script>
-import { format, reactive } from '@abide/abide'
+import { format, memo } from '@abide/abide'
 
 import getForecast from '../getForecast.handler.ts'
 
-const forecast = reactive(() => getForecast())
+const forecast = memo(() => getForecast())
 </script>
 
 {#try}

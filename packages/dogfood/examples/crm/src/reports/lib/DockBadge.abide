@@ -1,9 +1,9 @@
 <script>
-import { reactive, watch } from '@abide/abide'
+import { memo, watch } from '@abide/abide'
 
 import getSummary from '../getSummary.handler.ts'
 
-const summary = reactive(() => getSummary())
+const summary = memo(() => getSummary())
 
 // The native app's Dock icon counts open deals; a browser may draw no badge.
 watch(() => {

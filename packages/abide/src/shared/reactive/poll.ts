@@ -87,11 +87,41 @@ const POLLED = new WeakSet<object>()
 let STOPPING = new AbortController()
 
 /**
- * The signal `App.stop` aborts before it waits on what is in flight — a job's run's way to be told to
- * stop. Never aborted where no app stops, a browser among them.
+ * The value whose body is running on this stack — its synchronous part, or a step of its stream —
+ * for `stopSignal` to answer that run's own signal (7.45). Set and restored around the call, so a
+ * body that reaches another value's body sees its own again once that one returns.
+ */
+export const BODY_RUN: { cell: Cell | null } = { cell: null }
+
+/**
+ * The signal that says stop to the work this is called in: inside a `memo` body, its run's own
+ * (7.45, 7.46); anywhere else, the one `App.stop` aborts before it waits on what is in flight (7.38).
+ * Never aborted where no app stops and no run is replaced, a browser among them.
  */
 export function stopSignal(): AbortSignal {
-    return STOPPING.signal
+    const cell = BODY_RUN.cell
+    if (cell === null) return STOPPING.signal
+    const standing = cell.runStop
+    if (standing !== null) return standing.signal
+    const run = new AbortController()
+    cell.runStop = run
+    // 7.46 — 7.38's abort reaches a run that asked, as it reaches the app's own signal.
+    const stopping = STOPPING.signal
+    if (stopping.aborted) run.abort(stopping.reason)
+    else
+        stopping.addEventListener('abort', () => run.abort(stopping.reason), {
+            once: true,
+            signal: run.signal,
+        })
+    return run.signal
+}
+
+/** 7.46 — ends the signal a value's run handed out, where one was asked for: the run is over. */
+export function endRunSignal(cell: Cell): void {
+    const run = cell.runStop
+    if (run === null) return
+    cell.runStop = null
+    run.abort()
 }
 
 /** 7.39 — a stop that has ended leaves a signal that does not already say stop. */

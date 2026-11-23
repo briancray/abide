@@ -1,9 +1,9 @@
 <script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 
 import olderActivity from '../olderActivity.handler.ts'
 
-const entries = reactive(() => olderActivity())
+const entries = memo(() => olderActivity())
 </script>
 
 <ul class="fields stacked">

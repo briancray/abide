@@ -18,7 +18,7 @@ import { essenceOf } from '#shared/framing.ts'
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
-import { type Reactive, reactive } from '#shared/reactive/index.ts'
+import { memo, type Reactive } from '#shared/reactive/index.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
@@ -211,7 +211,7 @@ function overTable<Built>(
 ): Reactive<Built> {
     let found = built.get(handlers)
     if (found === undefined) {
-        found = reactive(() => build(handlers), {
+        found = memo(() => build(handlers), {
             global: true,
         }) as unknown as Reactive<Built>
         built.set(handlers, found)

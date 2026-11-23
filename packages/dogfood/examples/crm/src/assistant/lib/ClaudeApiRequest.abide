@@ -1,12 +1,12 @@
 <script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 import askClaude from '../askClaude.handler.ts'
 
 const QUESTION = 'Which company is Ada at?'
 
 let asked = reactive(false)
-const events = reactive(() =>
+const events = memo(() =>
     asked ? askClaude({ messages: [{ role: 'user', content: QUESTION }] }) : [],
 )
 </script>

@@ -23,12 +23,12 @@ export default GET(async function* ({ n }: { n: string }) {
 `
 
 const PAGE = `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import ticks from '#src/data/ticks.handler.ts'
 
-const a = reactive(() => ticks({ n: 'a' }))
-const b = reactive(() => ticks({ n: 'b' }))
-const c = reactive(() => ticks({ n: 'c' }))
+const a = memo(() => ticks({ n: 'a' }))
+const b = memo(() => ticks({ n: 'b' }))
+const c = memo(() => ticks({ n: 'c' }))
 </script>
 
 <main>

@@ -24,7 +24,7 @@ import type { PositionKind, PositionTable } from './PositionTable.ts'
 // position here is a projection offset. Each is a warning rather than a refusal: the program is
 // valid, and a read that is not tracked is sometimes what was meant.
 //
-// A TRACKED BODY is an unkeyed `reactive` body (14.3), a `watch` effect (14.6), or a template
+// A TRACKED BODY is an unkeyed `memo` body (14.3), a `watch` effect (14.6), or a template
 // position (14.2) of a kind in `TRACKED`.
 
 // A callback these hand a function to runs it before they return, so a read inside it is the
@@ -50,7 +50,7 @@ const SYNCHRONOUS = new Set([
     'from',
 ])
 
-type Body = { node: Node; kind: 'reactive' | 'watch' | 'template' }
+type Body = { node: Node; kind: 'memo' | 'watch' | 'template' }
 
 /**
  * 14.2 — the template positions that track: what the template renders, tests or iterates, and what
@@ -95,8 +95,7 @@ function trackedKind(functionNode: Node): Body['kind'] | undefined {
         return undefined
     const name = calleeName(parent)
     // 14.4 — a body declaring a parameter is keyed, and does not track.
-    if (name === 'reactive' && functionNode.parameters.length === 0)
-        return 'reactive'
+    if (name === 'memo' && functionNode.parameters.length === 0) return 'memo'
     if (name === 'watch') return 'watch'
     return undefined
 }
@@ -239,12 +238,12 @@ export function trackingWarnings(
     // to run and each run re-subscribes them.
     if (
         decides !== undefined &&
-        body.kind === 'reactive' &&
+        body.kind === 'memo' &&
         decidesARead(decides.condition, decides.within, name, reads)
     )
         warnings.push({
             at,
-            message: `abide: \`${name}\` decides a condition in a reactive body, so which values the body reads changes from run to run, and every change re-subscribes them. Read what both branches need before deciding. RULEBOOK 14.15.`,
+            message: `abide: \`${name}\` decides a condition in a memo body, so which values the body reads changes from run to run, and every change re-subscribes them. Read what both branches need before deciding. RULEBOOK 14.15.`,
         })
     return warnings
 }

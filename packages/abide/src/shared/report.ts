@@ -12,7 +12,7 @@ import { isFailed } from './Failed.ts'
 import { log, type LogRecord, tsvLine } from './log.ts'
 import { mounted } from './mount.ts'
 import { randomToken } from './randomToken.ts'
-import { type Reactive, reactive } from './reactive/index.ts'
+import { memo, type Reactive, reactive } from './reactive/index.ts'
 import { rpcRequest } from './rpcRequest.ts'
 import { seededDocument } from './seededDocument.ts'
 
@@ -59,7 +59,7 @@ export class ReportDraft {
         this.traces = traces
         this.#context = REPORTING.context?.() ?? browserContext()
         this.lines = reactive(linesFor(traces))
-        this.markdown = reactive(() =>
+        this.markdown = memo(() =>
             markdownOf(
                 this.summary(),
                 this.description(),

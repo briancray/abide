@@ -1,5 +1,5 @@
 <script>
-import { type Column, reactive, sortableTable, url } from '@abide/abide'
+import { type Column, memo, sortableTable, url } from '@abide/abide'
 
 import listCompanies from '../listCompanies.handler.ts'
 
@@ -10,7 +10,7 @@ const COLUMNS: Column<Company>[] = [
     { key: 'city', label: 'City' },
 ]
 
-const companies = reactive(() => listCompanies())
+const companies = memo(() => listCompanies())
 const table = sortableTable({
     rows: () => companies,
     columns: COLUMNS,

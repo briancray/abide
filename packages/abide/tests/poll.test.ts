@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import type { App, BootedApp } from '#server/createApp.ts'
-import { log, reactive, refresh, stopSignal } from '#shared'
+import { log, memo, refresh, stopSignal } from '#shared'
 import { collectWatches } from '#shared/reactive/watch.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -36,7 +36,7 @@ function inSetup(build: () => void): () => void {
 test('poll runs the body on its interval and stops with the owner that built it — 7.20, 7.23', async () => {
     let runs = 0
     const end = inSetup(() => {
-        reactive(
+        memo(
             () => {
                 runs += 1
                 return runs
@@ -64,7 +64,7 @@ test('poll does not refresh a value whose load is still in flight — 7.21', asy
     let runs = 0
     let slowValue: { ready(): boolean } | undefined
     const end = inSetup(() => {
-        const slow = reactive(
+        const slow = memo(
             async () => {
                 runs += 1
                 await Bun.sleep(40)
@@ -88,7 +88,7 @@ test('poll does not refresh a value whose load is still in flight — 7.21', asy
 test('poll on a keyed value refreshes every entry it holds, and stops with it — 7.20, 7.23', async () => {
     const runs = new Map<number, number>()
     const end = inSetup(() => {
-        const row = reactive(
+        const row = memo(
             (args: { id: number }) => {
                 runs.set(args.id, (runs.get(args.id) ?? 0) + 1)
                 return args.id
@@ -111,12 +111,12 @@ test('poll on a keyed value refreshes every entry it holds, and stops with it �
 
 // 7.25: A POLL OF NOTHING IS A REFRESH PER TURN, and refused where the value is built.
 test('a poll that is not a positive number is refused at construction — 7.25', () => {
-    expect(() => reactive(() => 1, { poll: 0 })).toThrow(
+    expect(() => memo(() => 1, { poll: 0 })).toThrow(
         'A poll is a positive number of milliseconds',
     )
-    expect(() =>
-        reactive((args: { id: number }) => args.id, { poll: -1 }),
-    ).toThrow('A poll is a positive number of milliseconds')
+    expect(() => memo((args: { id: number }) => args.id, { poll: -1 })).toThrow(
+        'A poll is a positive number of milliseconds',
+    )
 })
 
 // 7.22: A POLLED VALUE NOBODY ENDS DOES NOT KEEP THE PROCESS ALIVE. A module-level value polls for
@@ -124,9 +124,9 @@ test('a poll that is not a positive number is refused at construction — 7.25',
 //
 // THE REVERT: drop the `unref` from `ownedPoll`, and the child never exits — `did not finish in 5000 ms`.
 test('a poll does not hold the process open — 7.22', async () => {
-    const source = `import { reactive } from '${import.meta.dir}/../src/shared/index.ts'
-reactive(() => 1, { poll: 50, global: true })()
-reactive((args: { id: number }) => args.id, { poll: 50 })({ id: 1 })()`
+    const source = `import { memo } from '${import.meta.dir}/../src/shared/index.ts'
+memo(() => 1, { poll: 50, global: true })()
+memo((args: { id: number }) => args.id, { poll: 50 })({ id: 1 })()`
     const ran = await spawned(['bun', '-e', source], { deadline: 5_000 })
     expect(`exit: ${ran.exitCode}`, ran.stderr).toBe('exit: 0')
 }, 10_000)
@@ -186,7 +186,7 @@ const ARMS: Record<string, (job: Job) => Promise<() => Promise<void>>> = {
         }, 10)
     },
     async abide(job) {
-        reactive(() => scrapeRun(job, 15), { global: true, poll: 10 })
+        memo(() => scrapeRun(job, 15), { global: true, poll: 10 })
         const app = await inMemoryApp({})
         serving(app)
         return () => app.stop()
@@ -231,7 +231,7 @@ for (const [arm, start] of Object.entries(ARMS))
 test('a keyed polled entry whose first run fails is warned on abide:reactive — 7.28', () => {
     const before = (log.records.peek() ?? []).length
     const end = inSetup(() => {
-        const row = reactive(
+        const row = memo(
             (args: { id: number }): number => {
                 throw new Error(`row ${args.id} could not be read`)
             },
@@ -256,7 +256,7 @@ test('a keyed polled entry whose first run fails is warned on abide:reactive —
 /** A job counting its runs, built where nothing owns it — as a module's is. */
 function countedJob(): { runs: () => number; value: { busy(): boolean } } {
     let runs = 0
-    const value = reactive(
+    const value = memo(
         async () => {
             runs += 1
             await Bun.sleep(5)
@@ -282,7 +282,7 @@ test('apps booted and stopped before anything reads a job never run it — 7.29,
 // the app opening runs it again — `after opening: 2`.
 test('a read before the app opens runs a job once, and the app opening does not run it again — 7.30', async () => {
     let runs = 0
-    const value = reactive(
+    const value = memo(
         async () => {
             runs += 1
             return runs
@@ -413,7 +413,7 @@ const SPACED_ARMS: Record<
         }
     },
     async abide(ledger, settings) {
-        reactive(() => scanRun(ledger, stopSignal(), settings), {
+        memo(() => scanRun(ledger, stopSignal(), settings), {
             global: true,
             poll: { every: EVERY, after: 'settle', delay: () => DELAY },
         })
@@ -493,7 +493,7 @@ for (const [arm, start] of Object.entries(SPACED_ARMS))
 // and `runs after the read: 4` where 1 is due — the clock the read started, ticking with no app.
 test('a refresh after the app stops runs no job, nor does the next stop, and a read after it starts no clock — 7.40, 7.41, 7.42', async () => {
     let runs = 0
-    const streamed = reactive(
+    const streamed = memo(
         async function* () {
             runs += 1
             await Bun.sleep(5)
@@ -518,7 +518,7 @@ test('a refresh after the app stops runs no job, nor does the next stop, and a r
     expect(`runs after a read: ${runs - atStop}`).toBe('runs after a read: 1')
 
     let held = 0
-    const job = reactive(
+    const job = memo(
         async () => {
             held += 1
             return held
@@ -546,7 +546,7 @@ test('a poll does not refresh while the document is hidden, and refreshes once o
     try {
         let runs = 0
         const end = inSetup(() => {
-            reactive(
+            memo(
                 () => {
                     runs += 1
                     return runs

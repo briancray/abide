@@ -52,10 +52,10 @@ async function reportedOnClose(
 
 /** The page's script and its close button, with `imports` added to the script. */
 const script = (imports = ''): string => `<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 ${imports}
 let page = reactive<{ kind: string } | undefined>({ kind: 'atlas' })
-const section = reactive(() => (page?.kind === 'atlas' ? page.kind : undefined))
+const section = memo(() => (page?.kind === 'atlas' ? page.kind : undefined))
 const rows = reactive(['a'])
 </script>
 <button id="close" onclick={() => (page = undefined)}>close</button>`

@@ -1,7 +1,7 @@
 <script>
 // ONE `show` BLOCK OF AN ANSWER, rendered from the same docs tool Claude read it with, so what the
 // reader sees is what the model was answered — never a description of it.
-import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
+import { memo, props, raw, type RouteLiteral, url } from '@abide/abide'
 
 import clause from '#src/ask/tools/clause.handler.ts'
 import name from '#src/ask/tools/name.handler.ts'
@@ -18,16 +18,16 @@ import { slice } from './slice.ts'
 
 const { show } = props<{ show: Show }>()
 
-const code = reactive(() =>
+const code = memo(() =>
     show.kind === 'code' ? source({ path: show.value }) : '',
 )
-const rows = reactive(() =>
+const rows = memo(() =>
     show.kind === 'name' ? name({ name: show.value }) : [],
 )
-const quoted = reactive(() =>
+const quoted = memo(() =>
     show.kind === 'clause' ? clause({ number: show.value }) : undefined,
 )
-const reported = reactive(() =>
+const reported = memo(() =>
     show.kind === 'results' ? results({ path: show.value }) : null,
 )
 const page =

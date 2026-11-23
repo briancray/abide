@@ -202,10 +202,10 @@ test('twenty observe.rects share one listener set, and a burst of scrolls is one
 test('given no target, each of the eight is read by name — 32.110', async () => {
     ;(globalThis as { __WIDE__?: number }).__WIDE__ = 0
     const html = await mount(`<script>
-import { observe, reactive } from '@abide/abide'
+import { memo, observe } from '@abide/abide'
 
 const placed = observe.rect()
-const wide = reactive(() => {
+const wide = memo(() => {
     ;(globalThis as { __WIDE__?: number }).__WIDE__ = ((globalThis as { __WIDE__?: number }).__WIDE__ ?? 0) + 1
     return placed.width ?? 'none'
 })
@@ -248,10 +248,10 @@ test('the last observe.rect to leave removes the listeners — 32.86', async () 
 test('a frame reading the rectangle already held wakes nobody — 32.84', async () => {
     ;(globalThis as { __TOPS__?: number }).__TOPS__ = 0
     await mount(`<script>
-import { observe, reactive } from '@abide/abide'
+import { memo, observe, reactive } from '@abide/abide'
 
 let rect = reactive<{ top: number } | undefined>(undefined)
-const shown = reactive(() => {
+const shown = memo(() => {
     ;(globalThis as { __TOPS__?: number }).__TOPS__ = ((globalThis as { __TOPS__?: number }).__TOPS__ ?? 0) + 1
     return rect === undefined ? 'unmeasured' : String(rect.top)
 })

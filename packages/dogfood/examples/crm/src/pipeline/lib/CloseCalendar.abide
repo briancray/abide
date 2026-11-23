@@ -1,11 +1,11 @@
 <script>
-import { calendar, reactive } from '@abide/abide'
+import { calendar, memo, reactive } from '@abide/abide'
 
 import listClosing from '../listClosing.handler.ts'
 
-const deals = reactive(() => listClosing())
+const deals = memo(() => listClosing())
 // The deals closing on each day, by the day.
-const closing = reactive(() => {
+const closing = memo(() => {
     const byDay = new Map<string, { id: string; name: string }[]>()
     for (const deal of deals)
         if (deal.closes !== undefined)

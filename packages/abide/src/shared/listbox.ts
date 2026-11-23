@@ -3,7 +3,7 @@ import { hotkeys } from './hotkeys.ts'
 import { type KeyOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { type Reactive, reactive } from './reactive/index.ts'
+import { memo, type Reactive, reactive } from './reactive/index.ts'
 import { roving } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
 
@@ -78,7 +78,7 @@ export function listbox<Option, Multiple extends boolean = false>(
     const selectAll = many
         ? hotkeys({ 'mod+a': () => selection.all(order) })
         : undefined
-    const active = reactive(() => {
+    const active = memo(() => {
         const wanted = chosen()
         let first: string | undefined
         for (const option of options()) {

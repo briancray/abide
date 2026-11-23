@@ -41,7 +41,7 @@ The one-sentence rule is what keeps the two documents apart. A second sentence i
 Slots one and two are the two ends of the arrow the name is, the end a reader came for written
 first. `Reactive<Stored, Accepted>` is a value read and then written,
 `Rpc<Value, Args>` is a call answered and then made, `reactive<Accepted, Shaped>` is the value form
-taking and then holding what its transform hands back, and `reactive<Computed, Args>` is a keyed body returning and then taking. Slot three is the
+taking and then holding what its transform hands back, and `memo<Computed, Args>` is a keyed body returning and then taking. Slot three is the
 second value type wherever the first two did not already carry it, which on `Keyed<Stored, Args,
 Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 `Produced`.
@@ -257,20 +257,19 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.4, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.64, 19.15 |
-| `reactive` | `<Value = never, Args = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>>(body: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate>) => ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>` | The body form, for a value `body` produces: keyed where it declares a parameter, and a stream where it hands back a generator. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 12.17, 19.24, 41.34, 41.35, 11.73, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 11.2, 11.4, 11.6, 11.23, 11.55 |
-| `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Held<Accepted> \| undefined, options?: Shaping<Accepted, Shaped, never, Gate>) => Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>` | The value form, for what the scope owns outright, opening at `initial`, at what a promise of it settles to, or at `undefined`. | 4.1, 4.2, 4.14, 4.15, 4.16 |
+| `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Held<Accepted> \| undefined, options?: Shaping<Accepted, Shaped, never, Gate>) => Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>` | The value form, for what the scope owns outright, opening at `initial`, at what a promise of it settles to, or at `undefined`. | 4.1, 4.2, 4.14, 4.15, 4.16, 4.20 |
 | `reactive` | `<Accepted>() => [Accepted extends Rpc<infer Value, infer Args, infer Failures, infer Produced> ? true : false] extends [true] ? Reactive<StoredOf<CallOf<Accepted>>, StoredOf<CallOf<Accepted>>, AdoptedFailures<CallOf<Accepted>>, AdoptedProduced<CallOf<Accepted>, StoredOf<CallOf<Accepted>>>> : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty form, for a value nothing has written yet. | 4.14, 4.19 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
 
-The aliases the body form reads what a body is through — its value, what it streams, and the value
-or keyed value it builds — the one the value form turns a body away with, those a transform's and a
-body's return are split through, the one that adds a declared `schema`'s refusal, and the two the
+The aliases `memo` reads what a body is through — its value, what it streams, and the value or
+keyed value it builds — the one the value form turns a `Reactive` away with, those a transform's and
+a body's return are split through, the one that adds a declared `schema`'s refusal, and the two the
 empty form reads each `Rpc`'s call through, are declared rather than listed, none of them being a
 name an app writes:
 ```ts
-type Held<Accepted> = [Accepted] extends [((...given: never[]) => unknown) | { invalidate: unknown }] ? never : Accepted | (PromiseLike<Accepted> & { invalidate?: never })
+type Held<Accepted> = [Accepted] extends [{ invalidate: unknown }] ? never : Accepted | (PromiseLike<Accepted> & { invalidate?: never })
 type BodyValue<Result> = Awaited<Result> extends AsyncGenerator<infer Chunk> ? Chunk[] : Awaited<Result>
 type BodyProduced<Result, Otherwise> = Awaited<Result> extends AsyncGenerator<infer Chunk> ? Chunk : AdoptedProduced<Result, Otherwise>
 type ReactiveOf<Args, Result, Shaped, Gate, ArgsGate> = [Args] extends [never] ? Reactive<Kept<Shaped>, BodyValue<Result>, AdoptedFailures<Result> | Refusals<Shaped, Gate, BodyValue<Result>>, BodyProduced<Result, Kept<Shaped>>> : Keyed<Kept<Shaped>, Args, BodyValue<Result>, AdoptedFailures<Result> | Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>, BodyProduced<Result, Kept<Shaped>>>
@@ -352,6 +351,12 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `k.synced` | `(pattern?: Partial<Args>) => boolean` | `synced` narrowed to matching entries. | 13.12, 13.18 |
 | `k.invalidate` | `(pattern?: Partial<Args>) => void` | `invalidate` narrowed to matching entries. | 7.2, 7.3, 13.4, 13.12 |
 | `k.refresh` | `(pattern?: Partial<Args>) => void` | `refresh` narrowed to matching entries. | 7.4, 7.5, 13.4, 13.12 |
+
+## `memo`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `memo` | `<Value = never, Args = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>>(body: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate>) => ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>` | A value `body` produces, keyed where it declares a parameter and a stream where it hands back a generator. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 12.17, 19.24, 41.34, 41.35, 11.73, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 11.2, 11.4, 11.6, 11.23, 11.55, 7.45, 7.46, 11.74 |
 
 ## `watch`
 
@@ -436,7 +441,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `stopSignal` | `() => AbortSignal` | The signal a stopping app aborts, which a job's run reads to be told to stop. | 7.38, 7.39 |
+| `stopSignal` | `() => AbortSignal` | The signal that says stop: inside a `memo` body its run's own, and elsewhere the one a stopping app aborts. | 7.38, 7.39, 7.45, 7.46 |
 
 ## `structural`
 
@@ -456,8 +461,8 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- |
 | template expression | The flow itself. | 14.1, 14.2, 14.11, 14.17, 14.19, 32.25, 32.57 |
 | branch-local `<script>` | An item's own setup scope. | 14.8, 34.7, 34.8, 34.9, 34.10, 34.32 |
-| `reactive` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16, 14.17, 14.19 |
-| `reactive` body, keyed | The keyed body's own scope. | 14.4 |
+| `memo` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16, 14.17, 14.19 |
+| `memo` body, keyed | The keyed body's own scope. | 14.4 |
 | block body binding | A live read, like a prop. | 14.5 |
 | `watch` effect, bare | The effect's own scope. | 14.6, 14.14, 14.16, 14.19 |
 | `watch` effect, over sources | The scope its sources narrow. | 12.3, 14.6 |
@@ -1802,7 +1807,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136, 38.181 |
 | `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 38.181, 38.182, 38.186, 38.187, 38.188, 38.189, 38.190, 38.191, 38.192, 38.193, 38.194, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
-| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203 |
+| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
 

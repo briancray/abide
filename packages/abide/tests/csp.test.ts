@@ -8,10 +8,10 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import getTotal from '#src/totals/getTotal.handler.ts'
 
-const total = reactive(() => getTotal())
+const total = memo(() => getTotal())
 </script>
 
 <main><p id="total">{total()}</p></main>`

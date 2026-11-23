@@ -1,13 +1,10 @@
-// THE ONE FACTORY, and the barrel it is the address of. `state`, `memo` and `channel`
-// collapsed into overloads on one name — a channel being a value over an array its `patch`
-// appends to — and the refusal behind that split survives rather than being reversed: what it
-// refused was ONE SIGNATURE WITH AN OPTIONAL PARAMETER, not one name, and overloads handing
-// back two result types is the shape its reason forces.
+// THE FACTORIES, and the barrel they are the address of. `reactive` holds what the scope owns and
+// `memo` runs a body (11.1, 11.2): two names for two contracts — what a write means differs between
+// them — over one `Reactive` type, whose reads, probes and triggers are the same on both.
 //
-// THE ORDER IS FORCED, and getting it wrong breaks the design silently: `() => C` is
-// assignable to `(args: A) => C` but not the reverse, so keyed-first swallows the
-// unkeyed form whole. Value last means a function argument never reaches it, so a
-// function the app wants to STORE rather than run goes inside a record.
+// SPLIT BY NAME, NOT BY WHAT IS PASSED. One name read its first argument's type to pick a form, and
+// that made a function unholdable: `reactive(fn)` ran it. Now `reactive(fn)` holds `fn` (4.20), and
+// `memo` is handed a body or throws (11.74).
 //
 // The factory lives in the folder's address rather than in a file of its own: `reactive`
 // and `Reactive` differ only in case, and a case-insensitive filesystem makes those one
@@ -186,15 +183,13 @@ type StoredOf<Calls> =
         ? Stored
         : never
 /**
- * What `reactive` holds rather than runs: anything but a function, which is a body, or a `Reactive` or
- * `Keyed`, which is called as one. The promise turns a `Reactive` away too, being one (1.4), and
- * `Accepted` read through it is the value it settles to. NOT DISTRIBUTED: `Held<number | undefined>`
- * spread over the union is `PromiseLike<number> | PromiseLike<undefined>`, and a
- * `Promise<number | undefined>` is neither.
+ * What `reactive` holds: anything but a `Reactive` or a `Keyed`, which it adopts rather than holds
+ * (11.61) — a plain function included (4.20). The promise turns a `Reactive` away too, being one
+ * (1.4), and `Accepted` read through it is the value it settles to. NOT DISTRIBUTED:
+ * `Held<number | undefined>` spread over the union is `PromiseLike<number> | PromiseLike<undefined>`,
+ * and a `Promise<number | undefined>` is neither.
  */
-export type Held<Accepted> = [Accepted] extends [
-    ((...given: never[]) => unknown) | { invalidate: unknown },
-]
+export type Held<Accepted> = [Accepted] extends [{ invalidate: unknown }]
     ? never
     : Accepted | (PromiseLike<Accepted> & { invalidate?: never })
 /** What a body's value is, read off what it returns: the chunks a generator yields where it streams (9.6), else what it settles to. */
@@ -207,7 +202,7 @@ export type BodyProduced<Result, Otherwise> =
     Awaited<Result> extends AsyncGenerator<infer Chunk>
         ? Chunk
         : AdoptedProduced<Result, Otherwise>
-/** What `reactive` builds from a body: a `Keyed` where it takes `Args`, a `Reactive` where it takes none. */
+/** What `memo` builds from a body: a `Keyed` where it takes `Args`, a `Reactive` where it takes none. */
 export type ReactiveOf<Args, Result, Shaped, Gate, ArgsGate> = [Args] extends [
     never,
 ]
@@ -229,13 +224,8 @@ export type ReactiveOf<Args, Result, Shaped, Gate, ArgsGate> = [Args] extends [
 /**
  * A value the scope owns outright, opening at `initial`, or at what a promise of it settles to.
  *
- * FIRST, AHEAD OF THE BODY: without `strictNullChecks` `undefined` is assignable to a function type,
- * so `reactive<User | undefined>(undefined)` behind the body typed a computed value. `Held` turns
- * every function away, so a body never stops here.
- *
  * REQUIRED: against an optional parameter the checker infers `Accepted` with `undefined` taken out,
- * so `reactive(maybe)` was a value that refused the `undefined` it opened with (4.15). A function to
- * STORE rather than run is wrapped — `reactive({ handler })` — since a function here is a body.
+ * so `reactive(maybe)` was a value that refused the `undefined` it opened with (4.15).
  */
 export function reactive<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
     // `undefined` WHATEVER `Accepted` IS: `reactive<User>(undefined)` opens a `User` at `undefined`
@@ -245,34 +235,6 @@ export function reactive<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
         Held<Accepted> | ([Accepted] extends [unknown] ? undefined : never),
     options?: Shaping<Accepted, Shaped, never, Gate>,
 ): Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>
-/**
- * A value `body` produces, run again when a value it read changes: keyed where it declares a
- * parameter, an optional one included (11.2), and a stream where it hands back a generator (9.6).
- *
- * ONE SIGNATURE FOR EVERY SHAPE OF BODY, read off `Args` and `Result` by `ReactiveOf`. `Args` is
- * inferred from the body's parameter — `X | undefined` for an optional one — or, unannotated, from the
- * `args` its options declare; a body declaring none infers nothing and takes the default, `never`,
- * which is what an unkeyed body is.
- *
- * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `reactive<number[]>(() => …)` names the value the
- * body produces, and with explicit type arguments the rest take their defaults. Inferred, it is
- * never read.
- *
- * 19.24 — `Result` IS READ OFF THE BODY ALONE, hence `NoInfer` in the options: the checker infers
- * through `Awaited`, so a `Schema<{ id: number }>` beside an async body put `{ id: number }` in it
- * and the body's promise no longer fit.
- */
-export function reactive<
-    Value = never,
-    Args = never,
-    Result = Value,
-    Shaped = BodyValue<Result>,
-    Gate = Schema<BodyValue<Result>>,
-    ArgsGate = Schema<Args>,
->(
-    body: (args: Args) => Result,
-    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>,
-): ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>
 /**
  * A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.9).
  *
@@ -305,18 +267,68 @@ export function reactive(
     // argument land nothing where 4.15 has `undefined` land `undefined`.
     //
     // `unknown` RATHER THAN A `ReactiveOptions`, and it is the overloads that force it: a
-    // spelling concrete enough to pass straight through — any of `<unknown, unknown>`,
-    // `<never, unknown, never>`, `<never, never, never>` — is one the overloads are
-    // not all assignable to, once `Failures` carries a bound. The implementation signature
-    // is the bridge nothing calls directly, so the casts below are where the
-    // overloads' promises are made good.
+    // spelling concrete enough to pass straight through is one the overloads are not all
+    // assignable to, once `Failures` carries a bound. The implementation signature is the bridge
+    // nothing calls directly, so the casts below are where the overloads' promises are made good.
     ...given: [first?: unknown, options?: unknown]
 ): unknown {
-    const keyed = isKeyedBody(given[0])
-    // 11.32 — ON A SERVER, OUTSIDE A REQUEST, THE VALUE IS FILED: a forwarder to one instance per
-    // request, and to the one built here where there is no request at all — or, for a value with a
-    // `store`, built where it is first reached (11.71). `global` is what keeps a value process-wide
-    // (11.34).
+    return filed(given, false, buildValue)
+}
+
+/**
+ * A value `body` produces, run again when a value it read changes: keyed where it declares a
+ * parameter, an optional one included (11.2), and a stream where it hands back a generator (9.6).
+ *
+ * ONE SIGNATURE FOR EVERY SHAPE OF BODY, read off `Args` and `Result` by `ReactiveOf`. `Args` is
+ * inferred from the body's parameter — `X | undefined` for an optional one — or, unannotated, from the
+ * `args` its options declare; a body declaring none infers nothing and takes the default, `never`,
+ * which is what an unkeyed body is.
+ *
+ * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `memo<number[]>(() => …)` names the value the
+ * body produces, and with explicit type arguments the rest take their defaults. Inferred, it is
+ * never read.
+ *
+ * 19.24 — `Result` IS READ OFF THE BODY ALONE, hence `NoInfer` in the options: the checker infers
+ * through `Awaited`, so a `Schema<{ id: number }>` beside an async body put `{ id: number }` in it
+ * and the body's promise no longer fit.
+ */
+export function memo<
+    Value = never,
+    Args = never,
+    Result = Value,
+    Shaped = BodyValue<Result>,
+    Gate = Schema<BodyValue<Result>>,
+    ArgsGate = Schema<Args>,
+>(
+    body: (args: Args) => Result,
+    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>,
+): ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>
+export function memo(body: unknown, options?: unknown): unknown {
+    // 11.74 — at construction, the earliest moment there is: a value handed where a body belongs
+    // would otherwise be read as one by every later call.
+    if (typeof body !== 'function' || isReactive(body) || isKeyed(body))
+        throw new TypeError(
+            'abide: memo takes a body, a function it runs. A value to hold is reactive(value). RULEBOOK 11.74.',
+        )
+    return filed([body, options], isKeyedBody(body), buildBody)
+}
+
+/**
+ * Builds the value `given` names, filed where it lives.
+ *
+ * 11.32 — ON A SERVER, OUTSIDE A REQUEST, THE VALUE IS FILED: a forwarder to one instance per
+ * request, and to the one built here where there is no request at all — or, for a value with a
+ * `store`, built where it is first reached (11.71). `global` is what keeps a value process-wide
+ * (11.34).
+ */
+function filed(
+    given: [first?: unknown, options?: unknown],
+    keyed: boolean,
+    build: (
+        given: [first?: unknown, options?: unknown],
+        keyed: boolean,
+    ) => unknown,
+): unknown {
     const options = given[1] as
         { global?: boolean; store?: unknown; tags?: string[] } | undefined
     let built: unknown
@@ -334,20 +346,23 @@ export function reactive(
 }
 
 /**
- * `reactive` for a framework ambient — `route`, `online` — filed per scope whatever the load order.
+ * `reactive` and `memo` for a framework ambient — `route`, `online` — filed per scope whatever the
+ * load order.
  *
- * `reactive` decides at construction, and a value abide itself builds at import can be built before
+ * A factory decides at construction, and a value abide itself builds at import can be built before
  * the server has installed its provider, which made it one value for every request in the process.
  * A forwarder resolves to its home wherever no scope is current, so in a browser this is the one
  * value it always was, behind one more call.
  */
-export const ambient = ((...given: [first?: unknown, options?: unknown]) => {
-    const keyed = isKeyedBody(given[0])
-    return scoped(() => build(given, keyed))
-}) as unknown as typeof reactive
+export const ambient = ((...given: [first?: unknown, options?: unknown]) =>
+    scoped(() => buildValue(given))) as unknown as typeof reactive
+export const ambientMemo = ((body: unknown, options?: unknown) =>
+    scoped(() =>
+        buildBody([body, options], isKeyedBody(body)),
+    )) as unknown as typeof memo
 
 /**
- * `reactive` over a handler's plain function or value, for `declare` — or the
+ * `memo` over a handler's plain function, or `reactive` over its value, for `declare` — or the
  * `Reactive` itself, where it is one already.
  *
  * 16.5 — THE ARM IS READ OFF A BRAND. A `Keyed` and a one-parameter plain function have the same
@@ -359,15 +374,16 @@ export const ambient = ((...given: [first?: unknown, options?: unknown]) => {
  */
 export function handlerValue(body: unknown, options: unknown): unknown {
     if (isReactive(body) || isKeyed(body)) return body
+    if (typeof body !== 'function') return reactive(body, options as undefined)
     const given: [unknown, unknown] = [body, options]
     const keyed = isKeyedBody(body)
     if (!keyed && outsideScope(false))
         return scoped(
-            () => build(given, keyed),
+            () => buildBody(given, keyed),
             true,
             (options as { global?: boolean } | undefined)?.global === true,
         )
-    return reactive(body as () => unknown, options as undefined)
+    return memo(body as () => unknown, options as undefined)
 }
 
 // The two body forms are told apart by WHETHER A PARAMETER IS DECLARED, which is the author saying
@@ -382,34 +398,35 @@ function isKeyedBody(first: unknown): boolean {
 
 // `keyed` is `isKeyedBody(first)`, decided once by the caller: a filed value is built again per
 // request from the same function, and the answer reads its source text.
-function build(
+function buildBody(
     given: [first?: unknown, options?: unknown],
     keyed: boolean,
 ): unknown {
     const [first, options] = given
-    if (typeof first === 'function' && !isReactive(first)) {
-        const body = first as (args?: unknown) => unknown
-        if (keyed)
-            return createKeyed(
-                'reactive',
-                body,
-                (options ?? undefined) as Parameters<typeof createKeyed>[2],
-            )
-        return createReactive(
-            'reactive',
-            body as (args: unknown) => unknown,
-            undefined,
-            undefined,
-            options as Parameters<typeof createReactive>[4],
+    const body = first as (args?: unknown) => unknown
+    if (keyed)
+        return createKeyed(
+            'memo',
+            body,
+            (options ?? undefined) as Parameters<typeof createKeyed>[2],
         )
-    }
+    return createReactive(
+        'memo',
+        body as (args: unknown) => unknown,
+        undefined,
+        undefined,
+        options as Parameters<typeof createReactive>[4],
+    )
+}
+
+function buildValue(given: [first?: unknown, options?: unknown]): unknown {
     return createReactive(
         'reactive',
         null,
         undefined,
         // 4.14 AGAINST 4.15: called with no argument is empty, and called with `undefined` is loaded.
-        given.length === 0 ? NO_INITIAL : first,
-        options as Parameters<typeof createReactive>[4],
+        given.length === 0 ? NO_INITIAL : given[0],
+        given[1] as Parameters<typeof createReactive>[4],
     )
 }
 

@@ -7,7 +7,7 @@ import { checkParts } from './checkParts.ts'
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { type Reactive, reactive, watch } from './reactive/index.ts'
+import { memo, type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 
 /** The items, how each is told apart and named, the one the carousel rests on, and how it scrolls. */
@@ -57,7 +57,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     const keyOf = (item: Item) => writtenBy(options.key, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
     const behavior = () => live(options.behavior) ?? 'smooth'
-    const keys = reactive((): readonly string[] => {
+    const keys = memo((): readonly string[] => {
         const items = live(options.items)
         const written: string[] = []
         for (const item of items) written.push(keyOf(item))
@@ -65,7 +65,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     })
     const selected = options.selected ?? reactive<string | undefined>(undefined)
     // 53.61 — a key no item has rests on the first.
-    const resting = reactive((): string | undefined => {
+    const resting = memo((): string | undefined => {
         const listed = keys()
         const wanted = selected()
         return wanted !== undefined && listed.includes(wanted)
@@ -73,7 +73,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             : listed[0]
     })
     // 53.63 — what a scroll writes, and replaced by the resting item whenever that moves.
-    const centered = reactive((): string | undefined => resting())
+    const centered = memo((): string | undefined => resting())
     const base = options.id ?? `carousel-${randomToken(4, 'hex')}`
     if (process.env.NODE_ENV !== 'production') checkParts('carousel', base)
 
@@ -81,7 +81,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     // Bumped as an item's element comes and goes, so the resting element is looked up again.
     let bindings = 0
     const bound = reactive(bindings)
-    const restingElement = reactive((): Element | undefined => {
+    const restingElement = memo((): Element | undefined => {
         bound()
         const key = resting()
         return key === undefined ? undefined : elements.get(key)

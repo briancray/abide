@@ -5,8 +5,14 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/reactive/reactive', '/reactive/refresh']}
+    seeAlso={['/reactive/memo', '/reactive/refresh']}
     tests={[
+        {
+            path: 'packages/abide/tests/stopSignal.test.ts',
+            from: [
+                "test('stopSignal in a memo body is its run’s own, ended by the next run — 7.45, 7.46'",
+            ],
+        },
         {
             path: 'packages/abide/tests/stopSignal.test.ts',
             from: [
@@ -21,14 +27,31 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
+    <Section level={3} title="Cancel a search the next keystroke replaces">
+        <p>Inside a <code>memo</code> body the signal is that run's own. The next run aborts it, so
+            the search a keystroke made obsolete stops rather than finishing for nobody.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { memo, reactive, stopSignal } from '@abide/abide'
+
+            let q = reactive('')
+            const found = memo(() =>
+                fetch(\`/search?q=\${q}\`, { signal: stopSignal() }).then((r) => r.json()),
+            )
+            </script>
+
+            <input bind:value={q}>
+        `} />
+    </Section>
+
     <Section level={3} title="End a follow-up sweep when the app stops">
         <p>A job on a clock can run for a while. Read <code>stopSignal()</code> in its run and
             stop early, rather than holding the shutdown until the sweep ends.</p>
         <Code language="ts" caption="server" code={`
-            import { reactive, stopSignal } from '@abide/abide'
+            import { memo, stopSignal } from '@abide/abide'
             import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
-            export const followUps = reactive(
+            export const followUps = memo(
                 async function* () {
                     const stopping = stopSignal()
                     for (const deal of DEALS) {

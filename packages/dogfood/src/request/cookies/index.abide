@@ -27,9 +27,9 @@ import Section from '#src/lib/Section.abide'
             off the request, so a reload paints compact with no flash of the default.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { cookies, reactive } from '@abide/abide'
+            import { cookies, memo } from '@abide/abide'
 
-            const density = reactive(
+            const density = memo(
                 () => cookies().get('density') ?? 'comfortable',
             )
             </script>

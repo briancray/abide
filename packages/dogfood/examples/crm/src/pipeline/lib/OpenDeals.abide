@@ -1,9 +1,9 @@
 <script>
-import { reactive, scrollEdges } from '@abide/abide'
+import { memo, scrollEdges } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
-const deals = reactive(() => listDeals())
+const deals = memo(() => listDeals())
 </script>
 
 <ol

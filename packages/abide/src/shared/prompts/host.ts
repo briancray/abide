@@ -6,7 +6,7 @@
 
 import { dialog } from '../dialog.ts'
 import { messageOf } from '../messageOf.ts'
-import { reactive, watch } from '../reactive/index.ts'
+import { memo, watch } from '../reactive/index.ts'
 import { withPart } from '../withPart.ts'
 import { asking, type Prompt, queue } from './queue.ts'
 
@@ -47,12 +47,12 @@ export type PromptsHost = {
 export function host(): PromptsHost {
     // 50.36 — this host, among the ones standing; the last shows the queue.
     const shows = asking.stand()
-    const current = reactive(() => (shows() ? queue()[0] : undefined))
+    const current = memo(() => (shows() ? queue()[0] : undefined))
     // Closing writes `false` here; the queue moving on computes it again.
-    const showing = reactive(() => shows() && queue().length > 0)
+    const showing = memo(() => shows() && queue().length > 0)
     // Each prompt starts from its own `value`; typing writes over it until the queue moves on.
-    const typed = reactive(() => current()?.value ?? '')
-    const typedRight = reactive(() => {
+    const typed = memo(() => current()?.value ?? '')
+    const typedRight = memo(() => {
         const asked = current()?.mustType
         return (
             asked === undefined ||
@@ -61,11 +61,11 @@ export function host(): PromptsHost {
     })
     // 50.45 — a confirm whose `run` is in flight, and what its last run failed with; each prompt starts
     // from neither. Each reads `current` alone so the queue moving on resets it, as `typed` is.
-    const busy = reactive((): boolean => {
+    const busy = memo((): boolean => {
         void current()
         return false
     })
-    const failure = reactive((): string | undefined => {
+    const failure = memo((): string | undefined => {
         void current()
         return undefined
     })

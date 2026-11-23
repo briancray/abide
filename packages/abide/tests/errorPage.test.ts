@@ -57,10 +57,10 @@ export default GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first r
 `
 
 const RECORD_PAGE = `<script>
-import { reactive, route } from '@abide/abide'
+import { memo, route } from '@abide/abide'
 import record from '#src/records/record.handler.ts'
 
-const found = reactive(() => record({ id: Number(route.params().id) }))
+const found = memo(() => record({ id: Number(route.params().id) }))
 </script>
 
 <head><title>{found.title}</title></head>

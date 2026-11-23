@@ -17,9 +17,9 @@ import {
     type RequestScope,
 } from '#server/requestScope.ts'
 import { response } from '#server/response.ts'
-import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
+import { flushSync, invalidate, memo, reactive, refresh, watch } from '#shared'
 import { cellOf } from '#shared/reactive/cellShape.ts'
-import { ambient } from '#shared/reactive/index.ts'
+import { ambient, ambientMemo } from '#shared/reactive/index.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { GET, POST } from '#shared/rpc.ts'
 
@@ -30,7 +30,7 @@ installServer()
 // reads the first one's `set` — 5 where 0 is due.
 test('a value built outside every request is one value per request — 11.32', async () => {
     let runs = 0
-    const visits = reactive(() => {
+    const visits = memo(() => {
         runs += 1
         return 0
     })
@@ -60,7 +60,7 @@ test('an ambient first built inside a request derives its home outside it — 11
     let doubled: (() => number) | undefined
     await inScope(new Request('http://app/a'), async () => {
         base.set(5)
-        doubled = ambient(() => base() * 2)
+        doubled = ambientMemo(() => base() * 2)
         expect(doubled()).toBe(10)
     })
     expect(doubled!()).toBe(2)
@@ -157,7 +157,7 @@ test("a value derived in a request lets go of a global at the request's teardown
     const level = reactive(0, { global: true })
     for (const path of ['a', 'b'])
         await inScope(new Request(`http://app/${path}`), async () => {
-            const plus = reactive(() => level() + 1)
+            const plus = memo(() => level() + 1)
             expect(plus()).toBe(1)
             releaseScope(currentRequestScope() as RequestScope)
         })
@@ -368,7 +368,7 @@ test('a value handler is one value per request, and one value under global — 1
 // entry and the body runs 1 time where 2 are due.
 test('a keyed load coalesces within a request and not across two — 11.38', async () => {
     let loads = 0
-    const invoice = reactive(async ({ id }: { id: string }) => {
+    const invoice = memo(async ({ id }: { id: string }) => {
         loads += 1
         return { id }
     })
@@ -410,7 +410,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
     const quantity = reactive(1)
     const totals: Record<string, number> = {}
     const derive = (name: string) => (): void => {
-        const total = reactive(() => quantity() * 10)
+        const total = memo(() => quantity() * 10)
         watch(() => {
             totals[name] = total()
         })
@@ -440,7 +440,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
 test('an effect a load aborted reruns under its own request, whichever request drained it — 11.63', async () => {
     const tenant = reactive('none')
     const opens: Record<string, (answer: string) => void> = {}
-    const profile = reactive(
+    const profile = memo(
         () =>
             new Promise<string>((open) => {
                 opens[new URL(request().url).pathname.slice(1)] = open
@@ -497,7 +497,7 @@ test('an effect a load aborted reruns under its own request, whichever request d
 // again for A's refresh — 2 loads where 1 is due.
 test('a refresh by tag reaches the request it was made in and no other — 13.8', async () => {
     let loads = 0
-    const stock = reactive(
+    const stock = memo(
         () => {
             loads += 1
             return 3
@@ -529,14 +529,14 @@ test('a refresh by tag reaches the request it was made in and no other — 13.8'
 // REVERT: drop `|| cell.global` from `carrying`; neither body runs again — 0 loads where 2 are due.
 test('a refresh by tag inside a request reaches a global value and its entries — 13.13', () => {
     let loads = 0
-    const prices = reactive(
+    const prices = memo(
         () => {
             loads += 1
             return 3
         },
         { tags: ['prices'], global: true },
     )
-    const price = reactive(
+    const price = memo(
         (args: { id: number }) => {
             loads += 1
             return args.id
@@ -557,7 +557,7 @@ test('a refresh by tag inside a request reaches a global value and its entries �
 // `inReach`'s bare branch; B's body runs again for A's refresh — 2 loads where 1 is due.
 test('a bare refresh reaches the request it was made in and no other — 13.8', async () => {
     let loads = 0
-    const stock = reactive(async () => {
+    const stock = memo(async () => {
         loads += 1
         return 3
     })
@@ -595,14 +595,14 @@ test('a bare refresh reaches the request it was made in and no other — 13.8', 
 // inside request B neither is reached — 0 loads where 2 are due.
 test('a bare invalidate and a bare refresh reach every global load in the process — 13.10', () => {
     let loads = 0
-    const rates = reactive(
+    const rates = memo(
         async () => {
             loads += 1
             return 3
         },
         { global: true },
     )
-    const rate = reactive(
+    const rate = memo(
         async (args: { id: number }) => {
             loads += 1
             return args.id
@@ -661,7 +661,7 @@ test('request and response read the request being served, and throw outside one 
 // the onion's center; the two spellings land on 1 entry rather than 2.
 test('a handler with rungs keys its value by the args as sent — 11.26, 11.68', async () => {
     const seen: string[] = []
-    const invoice = reactive(
+    const invoice = memo(
         (args: { id: string }) => {
             seen.push(args.id)
             return args.id
@@ -689,7 +689,7 @@ test('a handler with rungs keys its value by the args as sent — 11.26, 11.68',
 // outside every request, so it is `scoped`'s keyed face that carries the gate: dropped there, 0.
 test('a rung that caught the args refusal and asks again is refused again — 16.18, 16.19', async () => {
     const refusals: string[] = []
-    const invoice = reactive((args: { id: string }) => args.id, {
+    const invoice = memo((args: { id: string }) => args.id, {
         args: (given: unknown) => {
             if (typeof (given as { id: unknown }).id !== 'string')
                 throw new Error('id is text')

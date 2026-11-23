@@ -10,7 +10,7 @@ import { buildFiles } from '#server/appBuild.ts'
 import { BIN, builtStylesheet, handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from '@abide/abide/server'
+const HANDLERS = `import { GET, jsonSchema, memo, POST, refuse } from '@abide/abide/server'
 
 export const echo = GET((args: { id: string }) => ({ id: args.id }))
 
@@ -24,7 +24,7 @@ export const faulted = GET((): string => {
 
 // A gate whose schema declares what the annotation leaves open.
 export const kindOf = POST(
-    reactive((args: { n: unknown }) => typeof args.n, {
+    memo((args: { n: unknown }) => typeof args.n, {
         args: jsonSchema({ type: 'object', properties: { n: { type: 'number' } } }),
     }),
 )

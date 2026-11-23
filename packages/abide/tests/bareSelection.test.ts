@@ -13,6 +13,7 @@ import {
     busy,
     flushSync,
     invalidate,
+    memo,
     reactive,
     ready,
     refresh,
@@ -42,7 +43,7 @@ beforeAll(unfileProducers)
 // `runs before a read: 2`; and dropping the bare branch leaves the mark unmade — `runs after a read: 1`.
 test('a bare invalidate marks every load, starts none of them, and skips a value with no producer — 13.6, 7.3', async () => {
     let runs = 0
-    const loaded = reactive(async () => {
+    const loaded = memo(async () => {
         runs += 1
         return runs
     })
@@ -72,11 +73,11 @@ test('a bare invalidate marks every load, starts none of them, and skips a value
 test('a bare refresh reloads the subscribed loads and marks the rest — 13.7', async () => {
     let readRuns = 0
     let unreadRuns = 0
-    const read = reactive(async () => {
+    const read = memo(async () => {
         readRuns += 1
         return readRuns
     })
-    const unread = reactive(async () => {
+    const unread = memo(async () => {
         unreadRuns += 1
         return unreadRuns
     })
@@ -103,11 +104,11 @@ test('a bare refresh reloads the subscribed loads and marks the rest — 13.7', 
 test('a bare refresh reruns no synchronous derivation — 13.6', async () => {
     let loads = 0
     let derivationRuns = 0
-    const source = reactive(async () => {
+    const source = memo(async () => {
         loads += 1
         return 2
     })
-    const doubled = reactive(() => {
+    const doubled = memo(() => {
         derivationRuns += 1
         return source() * 2
     })
@@ -141,7 +142,7 @@ test('a guard over the bare selection subscribes once and wakes twice for n relo
     const loads = deferredLoads()
     const values = []
     for (let index = 0; index < 10; index += 1)
-        values.push(reactive(() => loads.load()))
+        values.push(memo(() => loads.load()))
     // The ten are in flight from construction; land them so the guards open on a settled scope.
     loads.settleAll(1)
     await Bun.sleep(1)
@@ -188,11 +189,11 @@ test('a guard over the bare selection subscribes once and wakes twice for n relo
 test('refreshing on reconnect reloads what is read and marks the rest', async () => {
     let ordersRuns = 0
     let unreadRuns = 0
-    const orders = reactive(async () => {
+    const orders = memo(async () => {
         ordersRuns += 1
         return ordersRuns
     })
-    const archive = reactive(async () => {
+    const archive = memo(async () => {
         unreadRuns += 1
         return unreadRuns
     })
@@ -233,7 +234,7 @@ test('refreshing on reconnect reloads what is read and marks the rest', async ()
 // `unread entry loads before a read: 2`.
 test('a bare refresh marks a keyed ttl entry nothing reads rather than reloading it — 13.7', async () => {
     let loads = 0
-    const keyed = reactive(
+    const keyed = memo(
         async (args: { id: number }) => {
             loads += 1
             return args.id * 10 + loads

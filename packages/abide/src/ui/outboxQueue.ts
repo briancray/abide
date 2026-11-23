@@ -25,7 +25,7 @@ import {
 } from '#shared/outbox.ts'
 import { OUTBOX_SENDING } from '#shared/OUTBOX_SENDING.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
-import { isReactive, type Reactive, reactive } from '#shared/reactive/index.ts'
+import { isReactive, memo, type Reactive } from '#shared/reactive/index.ts'
 import { produceInto, refuseInto, standIn } from '#shared/reactive/producer.ts'
 import { requested } from '#shared/requested.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
@@ -252,7 +252,7 @@ function valueStanding(kept: Kept): Reactive<unknown> {
     let value = VALUES.get(kept.id)
     if (value === undefined) {
         const settled = kept.standIn
-        value = reactive(() => standIn(settled)) as Reactive<unknown>
+        value = memo(() => standIn(settled)) as Reactive<unknown>
         // Landed now, so a refusal written below is not cleared by the body's first run (4.11).
         value.peek()
         if (kept.error !== undefined) refuseInto(value, failedFrom(kept.error))

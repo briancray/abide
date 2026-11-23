@@ -5,7 +5,12 @@
 
 import { log } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
-import { type Reactive, reactive, stopSignal } from '#shared/reactive/index.ts'
+import {
+    memo,
+    type Reactive,
+    reactive,
+    stopSignal,
+} from '#shared/reactive/index.ts'
 
 /** 54.22 — where a job stands, as a page reads it through a handler. */
 export type JobStatus = {
@@ -146,7 +151,7 @@ export function job(
         return write({ nextRun: null })
     }
 
-    reactive(look, {
+    memo(look, {
         global: true,
         poll: {
             every:

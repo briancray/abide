@@ -14,7 +14,7 @@ import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 let one = reactive(1)
 let two = reactive(2)
@@ -24,8 +24,8 @@ const find = async (id: number) => id
 async function* each(list: number[]) {
     yield* list
 }
-const operand = reactive(async () => (await find(one)) + two)
-const looped = reactive(async () => {
+const operand = memo(async () => (await find(one)) + two)
+const looped = memo(async () => {
     for await (const item of each(three)) return item + name
     return 0
 })

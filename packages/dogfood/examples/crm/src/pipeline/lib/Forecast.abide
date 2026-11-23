@@ -1,10 +1,10 @@
 <script>
-import { format, reactive } from '@abide/abide'
+import { format, memo } from '@abide/abide'
 
 import getForecast from '../getForecast.handler.ts'
 
-const forecast = reactive(() => getForecast())
-const reloading = reactive(() => forecast.busy() && forecast.ready())
+const forecast = memo(() => getForecast())
+const reloading = memo(() => forecast.busy() && forecast.ready())
 </script>
 
 {#if forecast.busy() && !forecast.ready()}

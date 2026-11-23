@@ -12,7 +12,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { job } from '#server'
 import { serveCompilation } from '#server/abideModules.ts'
 import { workerExports } from '#server/workerExports.ts'
-import { reactive } from '#shared'
+import { memo } from '#shared'
 import type { WorkerExport } from '#shared/worker/WorkerMessage.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -258,9 +258,9 @@ test('the app stopping aborts a call in flight — 55.8, 37.28', async () => {
 // THE REVERT: write every stand-in as `(...args)` — it declares a parameter whatever its export
 // declares, so `counted` reads as a keyed body, and `reactive` hands back a `Keyed` with no `error`.
 test('a reactive reads a stand-in as it reads the export: keyed where it declares a parameter, by its defaults — 55.14', async () => {
-    const unkeyed = reactive(thread.counted) as unknown as { error: unknown }
+    const unkeyed = memo(thread.counted) as unknown as { error: unknown }
     expect(typeof unkeyed.error).toBe('function')
-    const pages = reactive(thread.page) as unknown as (args: {
+    const pages = memo(thread.page) as unknown as (args: {
         at?: number
     }) => PromiseLike<number>
     expect(await pages({})).toBe(1)
