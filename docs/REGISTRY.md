@@ -1019,9 +1019,9 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centres, as parts an app spreads onto a scroller, its items and a button either side. | 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 53.71, 53.72, 53.73, 32.99, 49.4, 49.8 |
+| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centers, as parts an app spreads onto a scroller, its items and a button either side. | 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 53.71, 53.72, 53.73, 32.99, 49.4, 49.8 |
 | `CarouselOptions` | `<Item>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; label?: (item: Item) => string; selected?: Reactive<string \| undefined>; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how each is told apart and named, the key of the one the carousel rests on, and how a scroll to an item moves. | 53.64, 53.65, 53.71, 49.10, 49.12, 49.13 |
-| `Carousel` | `<Item>{ readonly id: string; readonly host: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; get centred(): string \| undefined; readonly selected: Reactive<string \| undefined>; scrollTo(key: string): void; reset(): void }` | The scroller's part, an item's part, the two buttons' parts, the key of the item centred, the key it rests on, and what scrolls to an item and back. | 53.66, 53.70, 53.71, 53.72, 49.4, 49.10, 49.11 |
+| `Carousel` | `<Item>{ readonly id: string; readonly host: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; get centered(): string \| undefined; readonly selected: Reactive<string \| undefined>; scrollTo(key: string): void; reset(): void }` | The scroller's part, an item's part, the two buttons' parts, the key of the item centered, the key it rests on, and what scrolls to an item and back. | 53.66, 53.70, 53.71, 53.72, 49.4, 49.10, 49.11 |
 
 ## `sortBy`
 

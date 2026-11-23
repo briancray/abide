@@ -627,7 +627,7 @@ const WRITTEN: readonly {
                 route: '/helpers/carousel',
                 title: '`carousel`',
                 description:
-                    'Swipe through records in a row that snaps to each one, resting on the one picked and saying which is centred as you scroll.',
+                    'Swipe through records in a row that snaps to each one, resting on the one picked and saying which is centered as you scroll.',
             },
             {
                 route: '/helpers/hotkeys',

@@ -506,7 +506,7 @@
         box-shadow: 0 24px 64px -16px color-mix(in srgb, var(--color-ink) 36%, transparent);
     }
 
-    /* Preflight zeroes the margin the UA centres a modal with, which pinned it to the corner. */
+    /* Preflight zeroes the margin the UA centers a modal with, which pinned it to the corner. */
     dialog:modal {
         margin: auto;
     }
@@ -516,7 +516,7 @@
         backdrop-filter: blur(2px);
     }
 
-    /* A carousel is a row it scrolls along, a slide a card, the centred one lit. */
+    /* A carousel is a row it scrolls along, a slide a card, the centered one lit. */
     [aria-roledescription=carousel] {
         flex-direction: row;
         list-style: none;
@@ -529,7 +529,7 @@
         background: var(--color-raised);
     }
 
-    [aria-roledescription=slide][data-centred] {
+    [aria-roledescription=slide][data-centered] {
         border-color: var(--color-signal);
     }
 
@@ -738,7 +738,7 @@
     }
 }
 
-/* A command palette: the dialog centred, its input across the top, a command and its key a row. */
+/* A command palette: the dialog centered, its input across the top, a command and its key a row. */
 @utility palette {
     @apply m-auto w-full max-w-md rounded-lg border border-rule bg-raised p-0 text-ink shadow-sm;
 

@@ -1,5 +1,5 @@
 // 53.64-53.71 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out and snaps
-// nothing, so where the scroller rests, and which item a scroll centres, is only a browser's to say —
+// nothing, so where the scroller rests, and which item a scroll centers, is only a browser's to say —
 // in both engines, since chromium reports its snaps (53.69) and webkit is measured once a frame (53.67).
 
 import { expect, type Page, test } from '@playwright/test'
@@ -28,7 +28,7 @@ const view = carousel({ items: STAGES, selected })
 </script>
 
 <main>
-    <p id="centred">{view.centred}</p>
+    <p id="centered">{view.centered}</p>
     <button id="previous" {...view.previous}>previous</button>
     <button id="next" {...view.next}>next</button>
     <button id="reset" onclick={view.reset}>reset</button>
@@ -60,8 +60,8 @@ test.afterAll(() => {
     server?.kill()
 })
 
-// How far an item's centre sits from the scroller's, in whole pixels.
-function offCentre(page: Page, id: string): Promise<number> {
+// How far an item's center sits from the scroller's, in whole pixels.
+function offCenter(page: Page, id: string): Promise<number> {
     return page.evaluate((id) => {
         const host = (
             document.getElementById('host') as Element
@@ -75,25 +75,25 @@ function offCentre(page: Page, id: string): Promise<number> {
     }, id)
 }
 
-// 53.64, 53.65 — THE SERVER WRITES THE RESTING ITEM CENTRED, AND THE BROWSER SCROLLS TO IT. THE
+// 53.64, 53.65 — THE SERVER WRITES THE RESTING ITEM CENTERED, AND THE BROWSER SCROLLS TO IT. THE
 // REVERT: drop the rest's `watch` from the host's binding; the scroller stays at `lead`.
-test('the page arrives resting on the selection, centred — 53.64, 53.65', async ({
+test('the page arrives resting on the selection, centered — 53.64, 53.65', async ({
     page,
 }) => {
     const served = await (await fetch(`${base}/`)).text()
-    expect(served).toMatch(/<li id="proposal"[^>]*data-centred/)
+    expect(served).toMatch(/<li id="proposal"[^>]*data-centered/)
     await page.goto(`${base}/`)
-    await expect.poll(() => offCentre(page, 'proposal')).toBe(0)
-    await expect(page.locator('#centred')).toHaveText('proposal')
+    await expect.poll(() => offCenter(page, 'proposal')).toBe(0)
+    await expect(page.locator('#centered')).toHaveText('proposal')
 })
 
-// 53.67, 53.69 — A SCROLL THE READER MAKES MOVES `centred` TO WHERE IT SNAPS. THE REVERT: listen for
-// neither `scroll` nor the snap events; `centred` stays at `proposal`.
-test('a scroll moves centred to the item it snaps to — 53.67, 53.69', async ({
+// 53.67, 53.69 — A SCROLL THE READER MAKES MOVES `centered` TO WHERE IT SNAPS. THE REVERT: listen for
+// neither `scroll` nor the snap events; `centered` stays at `proposal`.
+test('a scroll moves centered to the item it snaps to — 53.67, 53.69', async ({
     page,
 }) => {
     await page.goto(`${base}/`)
-    await expect.poll(() => offCentre(page, 'proposal')).toBe(0)
+    await expect.poll(() => offCenter(page, 'proposal')).toBe(0)
     // Chromium reports its snaps and webkit does not: each engine's path is the one it takes.
     const reports = await page.evaluate(() => {
         const host = document.getElementById('host') as Element
@@ -106,9 +106,9 @@ test('a scroll moves centred to the item it snaps to — 53.67, 53.69', async ({
     })
     await page.locator('#host').hover()
     await page.mouse.wheel(400, 0)
-    await expect(page.locator('#centred')).toHaveText('won')
-    await expect.poll(() => offCentre(page, 'won')).toBe(0)
-    await expect(page.locator('#won')).toHaveAttribute('data-centred', '')
+    await expect(page.locator('#centered')).toHaveText('won')
+    await expect.poll(() => offCenter(page, 'won')).toBe(0)
+    await expect(page.locator('#won')).toHaveAttribute('data-centered', '')
     const snaps = await page.evaluate(
         () => (globalThis as { __SNAPS__?: number }).__SNAPS__ ?? 0,
     )
@@ -116,29 +116,29 @@ test('a scroll moves centred to the item it snaps to — 53.67, 53.69', async ({
 })
 
 // 53.70, 53.71 — THE BUTTONS STEP, AND RESET COMES BACK. THE REVERT: make `reset` scroll to
-// `centred`; the scroller stays on `won`.
+// `centered`; the scroller stays on `won`.
 test('next steps to the item after, and reset scrolls back to the selection — 53.70, 53.71', async ({
     page,
 }) => {
     await page.goto(`${base}/`)
-    await expect.poll(() => offCentre(page, 'proposal')).toBe(0)
+    await expect.poll(() => offCenter(page, 'proposal')).toBe(0)
     await page.click('#next')
     await page.click('#next')
-    await expect(page.locator('#centred')).toHaveText('won')
+    await expect(page.locator('#centered')).toHaveText('won')
     await expect(page.locator('#next')).toBeDisabled()
-    await expect.poll(() => offCentre(page, 'won')).toBe(0)
+    await expect.poll(() => offCenter(page, 'won')).toBe(0)
     await page.click('#reset')
-    await expect.poll(() => offCentre(page, 'proposal')).toBe(0)
-    await expect(page.locator('#centred')).toHaveText('proposal')
+    await expect.poll(() => offCenter(page, 'proposal')).toBe(0)
+    await expect(page.locator('#centered')).toHaveText('proposal')
 })
 
 // 53.65 — A NEW SELECTION IS SCROLLED TO. THE REVERT: read `resting.peek()` in the rest's `watch`; the
 // scroller stays on `proposal`.
 test('a new selection scrolls the carousel to it — 53.65', async ({ page }) => {
     await page.goto(`${base}/`)
-    await expect.poll(() => offCentre(page, 'proposal')).toBe(0)
+    await expect.poll(() => offCenter(page, 'proposal')).toBe(0)
     await page.click('#pick')
-    await expect.poll(() => offCentre(page, 'lead')).toBe(0)
-    await expect(page.locator('#centred')).toHaveText('lead')
+    await expect.poll(() => offCenter(page, 'lead')).toBe(0)
+    await expect(page.locator('#centered')).toHaveText('lead')
     await expect(page.locator('#previous')).toBeDisabled()
 })
