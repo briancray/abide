@@ -7,6 +7,8 @@ import LondonWeeks from './lib/LondonWeeks.abide'
 import londonWeeks from './lib/LondonWeeks.abide' with { type: 'text' }
 import PickCloseDate from './lib/PickCloseDate.abide'
 import pickCloseDate from './lib/PickCloseDate.abide' with { type: 'text' }
+import TwoMonths from './lib/TwoMonths.abide'
+import twoMonths from './lib/TwoMonths.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -37,6 +39,12 @@ import pickCloseDate from './lib/PickCloseDate.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/calendar.test.ts',
             from: [
+                "test('two months share one tab stop, and the arrows cross between their grids'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/calendar.test.ts',
+            from: [
                 'test("a week starts on the locale\'s first day, or on the one given"',
             ],
         },
@@ -44,9 +52,15 @@ import pickCloseDate from './lib/PickCloseDate.abide' with { type: 'text' }
 >
     <Section level={3} title="Pick a deal's close date from a month of days">
         <p>Hand <code>calendar</code> the date you hold as <code>selected</code>, and spread its
-            parts on markup of your own: the grid, a row per week, a cell per day. A click or Enter
+            parts on markup of your own: a grid per month, a row per week, a cell per day. A click or Enter
             picks a day; the arrows, Page Up and Page Down move through the days and the months.</p>
         <Example code={pickCloseDate}><PickCloseDate /></Example>
+    </Section>
+    <Section level={3} title="Show two months side by side">
+        <p>Name how many <code>months</code> to show and spread each one's grid. They are one
+            calendar: one day in the tab order, and the arrows walk from one month into the
+            next.</p>
+        <Example code={twoMonths}><TwoMonths /></Example>
     </Section>
     <Section level={3} title="Start each week on the first day of your team's locale">
         <p>Name the <code>locale</code> and the week starts where that locale starts it, Monday in

@@ -1,6 +1,6 @@
-// 52.83-52.96 — WAI-ARIA's date grid, as parts an app spreads onto elements of its own: a month of
-// whole weeks, a header row of weekdays, a cell per day, the month's heading and the buttons paging
-// it. A day is a `YYYY-MM-DD` string and a month a `YYYY-MM` one, and every day is counted on UTC's
+// 52.83-52.97 — WAI-ARIA's date grid, as parts an app spreads onto elements of its own: a grid per
+// month shown, each of whole weeks under its heading, a header row of weekdays, a cell per day, and
+// the buttons paging them. One month is `months: 1`, not a case of its own. A day is a `YYYY-MM-DD` string and a month a `YYYY-MM` one, and every day is counted on UTC's
 // calendar, which has no daylight saving to drop or repeat one; a zone is read only for which day is
 // today. The server writes every attribute, so the page is the month as it stands before it hydrates.
 
@@ -18,10 +18,12 @@ import { roving, stepOf } from './roving.ts'
 export type CalendarOptions = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string
-    /** The month shown as `YYYY-MM`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `month`, where none is given. */
+    /** The first month shown as `YYYY-MM`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `month`, where none is given. */
     month?: Reactive<string | undefined>
     /** The day picked as `YYYY-MM-DD`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
     selected?: Reactive<string | undefined>
+    /** How many months are shown side by side, from the first. 1 by default. */
+    months?: Live<number | undefined>
     /** The day a week starts on, `1` for Monday to `7` for Sunday, as `Intl.Locale` numbers them. The locale's by default. */
     firstDay?: Live<number | undefined>
     /** The BCP 47 locale the month and the weekdays are written in. `'en-US'` by default. */
@@ -52,16 +54,26 @@ export type CalendarDay = {
     readonly cell: Record<string, unknown>
 }
 
+/** One month shown: its grid, its heading and its weeks. */
+export type CalendarMonth = {
+    /** The month as `YYYY-MM`. */
+    readonly month: string
+    /** The month in words: `November 2026`. */
+    readonly label: string
+    /** The attributes of the element the month's name is written in, which names its grid. */
+    readonly heading: Record<string, unknown>
+    /** The grid's attributes and its keyboard. */
+    readonly grid: Record<string, unknown>
+    /** The weeks the month falls in, whole, each its seven days. */
+    readonly weeks: readonly (readonly CalendarDay[])[]
+}
+
 /** The parts `calendar` hands back, each spread onto an element: `<td {...day.cell}>{day.day}</td>`. */
 export type Calendar = {
     /** The base its parts' ids are derived from. */
     readonly id: string
-    /** The grid's attributes and its keyboard. */
-    readonly grid: Record<string, unknown>
-    /** The attributes of the element the month's name is written in, which names the grid. */
-    readonly heading: Record<string, unknown>
-    /** The month shown, in words: `November 2026`. */
-    get label(): string
+    /** The months shown, in order, each a grid of its own. */
+    get months(): readonly CalendarMonth[]
     /** The attributes of the button showing the month before. */
     readonly previous: Record<string, unknown>
     /** The attributes of the button showing the month after. */
@@ -72,9 +84,7 @@ export type Calendar = {
     readonly week: Record<string, unknown>
     /** The weekdays in the order a week runs. */
     get weekdays(): readonly CalendarWeekday[]
-    /** The weeks the month falls in, whole, each its seven days. */
-    get weeks(): readonly (readonly CalendarDay[])[]
-    /** The month shown as `YYYY-MM`, read and set. */
+    /** The first month shown as `YYYY-MM`, read and set. */
     readonly month: Reactive<string | undefined>
     /** The day picked as `YYYY-MM-DD`, read and set. */
     readonly selected: Reactive<string | undefined>
@@ -146,7 +156,7 @@ type Shared = {
 /** One day's record. A function of its own, so the accessors keep only what it is handed alive. */
 function dayOf(
     shared: Shared,
-    id: string,
+    id: string | undefined,
     date: string,
     outside: boolean,
 ): CalendarDay {
@@ -157,8 +167,10 @@ function dayOf(
             role: 'gridcell',
             'data-calendar': 'day',
             id,
-            // 52.87 — only the active day is in the page's tab order.
+            // 52.87 — only the active day is in the page's tab order; 52.97 — a day another grid
+            // shown holds is that grid's to focus.
             get tabindex() {
+                if (id === undefined) return undefined
                 return shared.active() === date ? '0' : '-1'
             },
             get 'aria-selected'() {
@@ -178,14 +190,20 @@ function dayOf(
     }
 }
 
-/** WAI-ARIA's date grid: a month of days the keys move through and pick, as parts to spread. */
+/** `month`, a `YYYY-MM`, moved `months` on. */
+function monthOn(month: string, months: number): string {
+    return monthsOn(`${month}-01`, months).slice(0, 7)
+}
+
+/** WAI-ARIA's date grid: months of days the keys move through and pick, as parts to spread. */
 export function calendar(options: CalendarOptions = {}): Calendar {
     const selected = options.selected ?? reactive<string | undefined>(undefined)
     const picked = options.month ?? reactive<string | undefined>(undefined)
     const localeOf = () => live(options.locale) ?? LOCALE
     const base = options.id ?? `calendar-${randomToken(4, 'hex')}`
-    const gridId = `${base}-grid`
-    const headingId = `${base}-heading`
+    // A grid's and a heading's ids are by their place among the months shown, so paging keeps them.
+    const gridId = (index: number) => `${base}-grid-${index}`
+    const headingId = (index: number) => `${base}-heading-${index}`
     // The id of the day `date`'s cell: the base, then the date.
     const cellId = (date: string) => `${base}-${date}`
     if (process.env.NODE_ENV !== 'production') checkParts('calendar', base)
@@ -197,48 +215,195 @@ export function calendar(options: CalendarOptions = {}): Calendar {
             live(options.timeZone) ?? timeZone() ?? visitorZone(),
         ),
     )
-    // 52.86 — the month written, else the picked day's, else today's.
+    // 52.86 — the first month shown: the month written, else the picked day's, else today's.
     const shown = reactive((): string => {
         for (const wanted of [picked(), selected()])
             if (wanted !== undefined && MONTH.test(wanted))
                 return wanted.slice(0, 7)
         return today().slice(0, 7)
     })
+    // 52.97 — how many months are shown, and the last of them.
+    const count = reactive(() =>
+        Math.max(1, Math.trunc(live(options.months) ?? 1)),
+    )
+    const last = reactive(() => monthOn(shown(), count() - 1))
+    // Whether `date` falls in a month shown; `YYYY-MM` strings order as the months do.
+    const isShown = (date: string) => {
+        const month = date.slice(0, 7)
+        return MONTH.test(date) && month >= shown() && month <= last()
+    }
     const firstDay = reactive(
         () => live(options.firstDay) ?? firstDayIn(localeOf()),
     )
 
     // 52.87 — the active day: the one focused last, else the one picked, else today, while it is in
-    // the month shown, and the month's first day where none is.
+    // a month shown, and the first month's first day where none is.
     const focused = reactive<string | undefined>(undefined)
     const active = reactive((): string => {
-        const month = shown()
         for (const wanted of [focused(), selected(), today()])
-            if (wanted !== undefined && wanted.startsWith(`${month}-`))
-                return wanted
-        return `${month}-01`
+            if (wanted !== undefined && isShown(wanted)) return wanted
+        return `${shown()}-01`
     })
     const shared: Shared = { selected, active, today }
 
-    // 52.83, 52.84 — THE WEEKS, again only when the month or the week's first day changes.
-    const weeks = reactive(() => {
-        const month = shown()
-        const first = `${month}-01`
-        const start = timeOf(first)
-        const lead = (new Date(start).getUTCDay() - (firstDay() % 7) + 7) % 7
-        const length = new Date(timeOf(monthsOn(first, 1), -1)).getUTCDate()
+    // 52.83, 52.84 — `month`'s whole weeks from the week's `first` day. 52.97 — a day of another
+    // month that a grid shown holds is that grid's: its copy here carries no id.
+    const weeksOf = (
+        month: string,
+        first: number,
+        lowest: string,
+        highest: string,
+    ) => {
+        const start = timeOf(`${month}-01`)
+        const lead = (new Date(start).getUTCDay() - (first % 7) + 7) % 7
+        const length = new Date(
+            timeOf(monthsOn(`${month}-01`, 1), -1),
+        ).getUTCDate()
         const rows: CalendarDay[][] = []
         for (let index = 0; index < lead + length; index += 7) {
             const row: CalendarDay[] = []
             for (let column = 0; column < 7; column += 1) {
-                const date = dateOf(timeOf(first, index + column - lead))
+                const date = dateOf(
+                    timeOf(`${month}-01`, index + column - lead),
+                )
+                const outside = !date.startsWith(month)
+                const elsewhere =
+                    outside &&
+                    date.slice(0, 7) >= lowest &&
+                    date.slice(0, 7) <= highest
                 row.push(
-                    dayOf(shared, cellId(date), date, !date.startsWith(month)),
+                    dayOf(
+                        shared,
+                        elsewhere ? undefined : cellId(date),
+                        date,
+                        outside,
+                    ),
                 )
             }
             rows.push(row)
         }
         return rows
+    }
+
+    // 52.91 — a key moving the active day out of the months shown pages the fewest months that show it.
+    const moveTo = (date: string): void => {
+        focused.set(date)
+        const month = date.slice(0, 7)
+        if (month < (shown.peek() as string)) picked.set(month)
+        else if (month > (last.peek() as string))
+            picked.set(monthOn(month, 1 - (count.peek() as number)))
+        flushSync()
+        globalThis.document?.getElementById(cellId(date))?.focus()
+    }
+    // The date of the cell an event landed in, or `undefined` outside every cell with an id.
+    const dateAt = (event: Event): string | undefined => {
+        const cell = (event.target as Element | null)?.closest?.(
+            '[role=gridcell]',
+        )
+        if (cell === null || cell === undefined) return undefined
+        return cell.id.startsWith(`${base}-`)
+            ? cell.id.slice(base.length + 1)
+            : undefined
+    }
+
+    // Every grid's keyboard and pointer, one set of listeners shared by them all.
+    const onkeydown = (event: KeyboardEvent) => {
+        const from = active()
+        const across = stepOf(event.key, 'horizontal')
+        const down = stepOf(event.key, 'vertical')
+        let to: string | undefined
+        // 52.89 — the arrows step a day across and a week down; Home and End go to the week's ends.
+        if (across !== 0) to = dateOf(timeOf(from, across))
+        else if (down !== 0) to = dateOf(timeOf(from, down * 7))
+        else if (event.key === 'Home' || event.key === 'End') {
+            const column =
+                (new Date(timeOf(from)).getUTCDay() - (firstDay() % 7) + 7) % 7
+            const end = roving(
+                event.key,
+                'horizontal',
+                () => [column, 7],
+                false,
+            )
+            to = dateOf(timeOf(from, end - column))
+        }
+        // 52.90 — PageUp and PageDown step a month, a year with Shift.
+        else if (event.key === 'PageUp' || event.key === 'PageDown')
+            to = monthsOn(
+                from,
+                (event.key === 'PageUp' ? -1 : 1) * (event.shiftKey ? 12 : 1),
+            )
+        // 52.92 — Enter and Space pick the active day.
+        else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            selected.set(from)
+            return
+        } else return
+        event.preventDefault()
+        moveTo(to)
+    }
+    // 52.93 — a click picks the day it lands in, and makes it the active one.
+    const onclick = (event: MouseEvent) => {
+        const date = dateAt(event)
+        if (date === undefined) return
+        selected.set(date)
+        moveTo(date)
+    }
+    // 52.87 — focus put on a day by any means makes it the active one.
+    const onfocusin = (event: FocusEvent) => {
+        const date = dateAt(event)
+        if (date !== undefined) focused.set(date)
+    }
+
+    // A grid's part and its heading's, by place, made once each so paging hands back the same records.
+    const grids: Record<string, unknown>[] = []
+    const headings: Record<string, unknown>[] = []
+    const gridAt = (index: number) =>
+        (grids[index] ??= {
+            role: 'grid',
+            'data-calendar': 'grid',
+            id: gridId(index),
+            // 52.95 — each grid is labelled by its heading.
+            'aria-labelledby': headingId(index),
+            onkeydown,
+            onclick,
+            onfocusin,
+        })
+    const headingAt = (index: number) =>
+        (headings[index] ??= {
+            id: headingId(index),
+            'data-calendar': 'heading',
+            'aria-live': 'polite',
+        })
+
+    // 52.83, 52.95, 52.97 — THE MONTHS SHOWN, again only when the first, the count, the week's
+    // first day or the locale changes.
+    const months = reactive((): CalendarMonth[] => {
+        const lowest = shown()
+        const total = count()
+        const first = firstDay()
+        const locale = localeOf()
+        const highest = monthOn(lowest, total - 1)
+        const label = cached(
+            `calendar month ${locale}`,
+            () =>
+                new Intl.DateTimeFormat(locale, {
+                    month: 'long',
+                    year: 'numeric',
+                    timeZone: 'UTC',
+                }),
+        )
+        const list: CalendarMonth[] = []
+        for (let index = 0; index < total; index += 1) {
+            const month = monthOn(lowest, index)
+            list.push({
+                month,
+                label: label.format(timeOf(`${month}-01`)),
+                heading: headingAt(index),
+                grid: gridAt(index),
+                weeks: weeksOf(month, first, lowest, highest),
+            })
+        }
+        return list
     })
 
     // 52.88 — the weekdays in the order a week runs, named in the locale.
@@ -280,84 +445,15 @@ export function calendar(options: CalendarOptions = {}): Calendar {
         return days
     })
 
-    // 52.91 — a key moving the active day out of the month shows the month it moved into.
-    const moveTo = (date: string): void => {
-        focused.set(date)
-        if (!date.startsWith(`${shown.peek()}-`)) picked.set(date.slice(0, 7))
-        flushSync()
-        globalThis.document?.getElementById(cellId(date))?.focus()
-    }
-    // The date of the cell an event landed in, or `undefined` outside every cell.
-    const dateAt = (event: Event): string | undefined => {
-        const cell = (event.target as Element | null)?.closest?.(
-            '[role=gridcell]',
-        )
-        if (cell === null || cell === undefined) return undefined
-        return cell.id.startsWith(`${base}-`)
-            ? cell.id.slice(base.length + 1)
-            : undefined
-    }
-
-    const grid = {
-        role: 'grid',
-        'data-calendar': 'grid',
-        id: gridId,
-        'aria-labelledby': headingId,
-        onkeydown: (event: KeyboardEvent) => {
-            const from = active()
-            const across = stepOf(event.key, 'horizontal')
-            const down = stepOf(event.key, 'vertical')
-            let to: string | undefined
-            // 52.89 — the arrows step a day across and a week down; Home and End go to the week's ends.
-            if (across !== 0) to = dateOf(timeOf(from, across))
-            else if (down !== 0) to = dateOf(timeOf(from, down * 7))
-            else if (event.key === 'Home' || event.key === 'End') {
-                const column =
-                    (new Date(timeOf(from)).getUTCDay() -
-                        (firstDay() % 7) +
-                        7) %
-                    7
-                const end = roving(
-                    event.key,
-                    'horizontal',
-                    () => [column, 7],
-                    false,
-                )
-                to = dateOf(timeOf(from, end - column))
-            }
-            // 52.90 — PageUp and PageDown step a month, a year with Shift.
-            else if (event.key === 'PageUp' || event.key === 'PageDown')
-                to = monthsOn(
-                    from,
-                    (event.key === 'PageUp' ? -1 : 1) *
-                        (event.shiftKey ? 12 : 1),
-                )
-            // 52.92 — Enter and Space pick the active day.
-            else if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                selected.set(from)
-                return
-            } else return
-            event.preventDefault()
-            moveTo(to)
-        },
-        // 52.93 — a click picks the day it lands in, and makes it the active one.
-        onclick: (event: MouseEvent) => {
-            const date = dateAt(event)
-            if (date === undefined) return
-            selected.set(date)
-            moveTo(date)
-        },
-        // 52.87 — focus put on a day by any means makes it the active one.
-        onfocusin: (event: FocusEvent) => {
-            const date = dateAt(event)
-            if (date !== undefined) focused.set(date)
-        },
-    }
-
-    // 52.94 — the buttons page the month shown, and leave focus where it is.
+    // 52.94 — the buttons page the months shown by one, and leave focus where it is.
     const page = (months: number) => () =>
-        picked.set(monthsOn(`${shown.peek()}-01`, months).slice(0, 7))
+        picked.set(monthOn(shown.peek() as string, months))
+    // Every grid the buttons page, by id.
+    const controls = () => {
+        const ids: string[] = []
+        for (let index = 0; index < count(); index += 1) ids.push(gridId(index))
+        return ids.join(' ')
+    }
 
     const month = reactiveOver(
         () => shown() as string | undefined,
@@ -366,46 +462,31 @@ export function calendar(options: CalendarOptions = {}): Calendar {
 
     return {
         id: base,
-        grid,
-        heading: {
-            id: headingId,
-            'data-calendar': 'heading',
-            'aria-live': 'polite',
-        },
-        // 52.95 — the month in words, in the locale.
-        get label() {
-            const locale = localeOf()
-            return cached(
-                `calendar month ${locale}`,
-                () =>
-                    new Intl.DateTimeFormat(locale, {
-                        month: 'long',
-                        year: 'numeric',
-                        timeZone: 'UTC',
-                    }),
-            ).format(timeOf(`${shown()}-01`))
+        get months() {
+            return months()
         },
         previous: {
             type: 'button',
             'data-calendar': 'previous',
             'aria-label': 'Previous month',
-            'aria-controls': gridId,
+            get 'aria-controls'() {
+                return controls()
+            },
             onclick: page(-1),
         },
         next: {
             type: 'button',
             'data-calendar': 'next',
             'aria-label': 'Next month',
-            'aria-controls': gridId,
+            get 'aria-controls'() {
+                return controls()
+            },
             onclick: page(1),
         },
         header: { role: 'row', 'data-calendar': 'header' },
         week: { role: 'row', 'data-calendar': 'week' },
         get weekdays() {
             return weekdays()
-        },
-        get weeks() {
-            return weeks()
         },
         month,
         selected,

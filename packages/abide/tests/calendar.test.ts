@@ -1,4 +1,4 @@
-// 52.83-52.96 — `calendar`'s parts, spread by hand as 32.11 spreads them: an attribute per string read
+// 52.83-52.97 — `calendar`'s parts, spread by hand as 32.11 spreads them: an attribute per string read
 // at the spread, a listener per `on<event>`, and the weeks rendered again as they change. What a
 // template does with them is the CRM's tests'.
 
@@ -31,29 +31,36 @@ function spread(element: HTMLElement, part: Record<string, unknown>): void {
     })
 }
 
-// The grid as a page writes it: a cell per day, the rows rebuilt as the month changes.
+// The grids as a page writes them: a grid per month, a cell per day, all rebuilt as the months
+// change. Every grid's listeners are the same functions, so the root holds them once.
 function render(view: ReturnType<typeof calendar>): HTMLElement {
-    const grid = document.createElement('div')
-    spread(grid, view.grid)
-    document.body.append(grid)
+    const root = document.createElement('div')
+    document.body.append(root)
     watch(() => {
-        grid.replaceChildren()
-        for (const week of view.weeks) {
-            const row = document.createElement('div')
-            for (const day of week) {
-                const cell = document.createElement('div')
-                spread(cell, day.cell)
-                cell.textContent = String(day.day)
-                row.append(cell)
+        root.replaceChildren()
+        for (const shown of view.months) {
+            const grid = document.createElement('div')
+            spread(grid, shown.grid)
+            for (const week of shown.weeks) {
+                const row = document.createElement('div')
+                for (const day of week) {
+                    const cell = document.createElement('div')
+                    spread(cell, day.cell)
+                    cell.textContent = String(day.day)
+                    row.append(cell)
+                }
+                grid.append(row)
             }
-            grid.append(row)
+            root.append(grid)
         }
     })
-    return grid
+    return root
 }
 
+const weeksOf = (view: ReturnType<typeof calendar>, index = 0) =>
+    view.months[index]?.weeks ?? []
 const dates = (view: ReturnType<typeof calendar>) =>
-    view.weeks.flatMap((week) => week.map((day) => day.date))
+    weeksOf(view).flatMap((week) => week.map((day) => day.date))
 
 function press(key: string, shiftKey = false) {
     ;(document.activeElement as HTMLElement).dispatchEvent(
@@ -68,10 +75,10 @@ const focused = () => (document.activeElement as HTMLElement).id.slice(-10)
 // Monday, so en-US's grid is five weeks, the last six days December's.
 test('the weeks are whole, and the days of other months are marked outside', () => {
     const view = calendar({ month: reactive<string | undefined>('2026-11') })
-    expect(view.weeks).toHaveLength(5)
-    expect(view.weeks[0]?.[0]?.date).toBe('2026-11-01')
-    expect(view.weeks[4]?.[6]?.date).toBe('2026-12-05')
-    const outside = view.weeks
+    expect(weeksOf(view)).toHaveLength(5)
+    expect(weeksOf(view)[0]?.[0]?.date).toBe('2026-11-01')
+    expect(weeksOf(view)[4]?.[6]?.date).toBe('2026-12-05')
+    const outside = weeksOf(view)
         .flat()
         .filter((day) => day.cell['data-outside'] === '')
         .map((day) => day.date)
@@ -133,14 +140,14 @@ test("a week starts on the locale's first day, or on the one given", () => {
         'So',
     ])
     expect(german.weekdays[0]?.header.abbr).toBe('Montag')
-    expect(german.weeks[0]?.[0]?.date).toBe('2026-10-26')
-    expect(german.label).toBe('November 2026')
+    expect(weeksOf(german)[0]?.[0]?.date).toBe('2026-10-26')
+    expect(german.months[0]?.label).toBe('November 2026')
     const saturday = calendar({
         firstDay: 6,
         month: reactive<string | undefined>('2026-11'),
     })
     expect(saturday.weekdays[0]?.name).toBe('Saturday')
-    expect(saturday.weeks[0]?.[0]?.date).toBe('2026-10-31')
+    expect(weeksOf(saturday)[0]?.[0]?.date).toBe('2026-10-31')
 })
 
 // 52.85, 52.86 — TODAY IS THE ZONE'S. At 03:00 UTC on the 22nd it is still the 21st in Los Angeles,
@@ -149,7 +156,7 @@ test("today is the zone's day, and the month shown with none written", () => {
     setSystemTime(new Date('2026-11-01T03:00:00Z'))
     const view = calendar({ timeZone: 'America/Los_Angeles' })
     expect(view.month()).toBe('2026-10')
-    const today = view.weeks
+    const today = weeksOf(view)
         .flat()
         .filter((day) => day.cell['data-today'] === '')
     expect(today.map((day) => day.date)).toEqual(['2026-10-31'])
@@ -193,7 +200,7 @@ test("PageDown keeps the day where the month has it, and shows the day's month",
     press('ArrowRight')
     expect(focused()).toBe('2026-03-01')
     expect(view.month()).toBe('2026-03')
-    expect(view.label).toBe('March 2026')
+    expect(view.months[0]?.label).toBe('March 2026')
 })
 
 // 52.92, 52.93, 52.96 — ENTER PICKS THE ACTIVE DAY, a click the one it lands in.
@@ -231,5 +238,41 @@ test('previous and next show the month before and after, focus staying put', () 
     on.click()
     on.click()
     expect(view.month()).toBe('2026-02')
-    expect(back.getAttribute('aria-controls')).toBe(view.grid.id as string)
+    expect(back.getAttribute('aria-controls')).toBe(
+        view.months[0]?.grid.id as string,
+    )
+})
+
+// 52.97 — MONTHS SIDE BY SIDE ARE ONE CALENDAR: one day in the tab order across every grid, the arrows
+// crossing from one grid into the next without paging, and a day another grid holds focusable only
+// there. THE REVERT: give an outside copy its id, and December 1st has two cells by one id.
+test('two months share one tab stop, and the arrows cross between their grids', () => {
+    const selected = reactive<string | undefined>('2026-11-30')
+    const view = calendar({ selected, months: 2 })
+    expect(view.months.map((shown) => shown.label)).toEqual([
+        'November 2026',
+        'December 2026',
+    ])
+    const root = render(view)
+    expect(root.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
+    expect(root.querySelectorAll(`[id="${view.id}-2026-12-01"]`)).toHaveLength(
+        1,
+    )
+    const copy = weeksOf(view, 0)
+        .flat()
+        .find((day) => day.date === '2026-12-01')
+    expect(copy?.cell.id).toBeUndefined()
+    expect(copy?.cell.tabindex).toBeUndefined()
+    ;(root.querySelector('[tabindex="0"]') as HTMLElement).focus()
+    press('ArrowRight')
+    expect(focused()).toBe('2026-12-01')
+    expect(view.month()).toBe('2026-11')
+    expect(root.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
+    // 52.91 — out past the last month shown, the months page by the one month that shows it.
+    press('PageDown')
+    expect(focused()).toBe('2027-01-01')
+    expect(view.month()).toBe('2026-12')
+    expect(view.next['aria-controls']).toBe(
+        `${view.months[0]?.grid.id} ${view.months[1]?.grid.id}`,
+    )
 })
