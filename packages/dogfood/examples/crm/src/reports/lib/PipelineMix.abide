@@ -1,7 +1,7 @@
 <script>
-import { format, reactive } from '@abide/abide'
-import Pie from '@abide/abide/Pie.abide'
-import Tooltips from '@abide/abide/Tooltips.abide'
+import { format, pie, reactive } from '@abide/abide'
+
+import Tooltips from '#src/lib/Tooltips.abide'
 
 const STAGES = [
     { label: 'Lead', value: 66_000 },
@@ -12,19 +12,27 @@ const STAGES = [
 ]
 
 let picked = reactive<string | undefined>(undefined)
+
+const ring = pie({
+    slices: STAGES,
+    label: 'Open pipeline by stage',
+    inner: 0.6,
+    valueFormat: (amount) => format.money(amount, { compact: true }),
+    onpick: (index) => (picked = STAGES[index]?.label),
+    disabled: (index) => STAGES[index]?.label === 'Verbal',
+})
 </script>
 
-<Pie
-    slices={STAGES}
-    label="Open pipeline by stage"
-    inner={0.6}
-    valueFormat={(amount) => format.money(amount, { compact: true })}
-    onpick={(index) => (picked = STAGES[index]?.label)}
-    disabled={(index) => STAGES[index]?.label === 'Verbal'}
+<svg
+    {...ring.svg}
     class="size-40 text-muted [&_[data-series='0']]:text-signal
         [&_[data-pie=slice]]:transition-[stroke-dasharray,stroke-dashoffset]
         [&_[data-pie=slice]:hover]:opacity-80"
- />
+>
+    {#for slice of ring.slices by slice.index}
+        <circle {...slice.circle} />
+    {/for}
+</svg>
 {#if picked !== undefined}
     <p>Open deals at {picked}</p>
 {/if}

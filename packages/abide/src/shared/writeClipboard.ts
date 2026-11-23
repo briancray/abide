@@ -2,7 +2,7 @@
 export type Copyable = string | Record<string, string | Blob>
 
 /**
- * 53.57 — whether `value` reached the clipboard, as one item holding each type it names.
+ * 53.54 — whether `value` reached the clipboard, as one item holding each type it names.
  *
  * 53.22 — `navigator.clipboard` exists in a secure context alone, and refuses a type the browser
  * does not write, so the fallback copies through a selected textarea and lays every string type
@@ -36,7 +36,7 @@ export async function writeClipboard(value: Copyable): Promise<boolean> {
         strings.push([type, data])
         if (selected === undefined || type === 'text/plain') selected = data
     }
-    // 53.58.
+    // 53.55.
     if (selected === undefined) return false
     const carry = (event: ClipboardEvent): void => {
         if (event.clipboardData === null) return

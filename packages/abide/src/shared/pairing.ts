@@ -10,7 +10,8 @@
 // THE CLICK OPENS AN `abide-bridge:` LINK, and a browser cannot say whether a link of a scheme opened
 // anything. The app that opens it taking focus blurs the page, so a click that blurs nothing and pairs
 // nothing within `PAIR_WAIT` had no app to open it, and `step` offers the command that installs one
-// (44.71).
+// (44.71). `step` is the WHOLE of where the pairing stands — offline, unreachable, slow, paired — so a
+// page renders one arm per step and decides none of it (53.41).
 //
 // PURE at import, for `health`'s reason: an app that never names `pairing` does not ship it.
 
@@ -21,6 +22,7 @@ import type { Failed } from './Failed.ts'
 import { isServer } from './isServer.ts'
 import { mounted } from './mount.ts'
 import { MUX_FOLLOWS } from './MUX_FOLLOWS.ts'
+import { online } from './online.ts'
 import { onPrincipalRotated } from './principalRotated.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
@@ -32,6 +34,22 @@ import { writeClipboard } from './writeClipboard.ts'
 const PAIR_WAIT = 2500
 /** How long `copied` holds once the install command is on the clipboard. */
 const COPIED_FOR = 1200
+/** 53.48 — how long connecting lasts before the step is `slow`, where `slowAfter` is not given. */
+const SLOW_AFTER = 8000
+
+/** Where a pairing stands, as the one thing a page shows for it (53.41). */
+export type PairingStep =
+    | 'connecting'
+    | 'slow'
+    | 'offline'
+    | 'unavailable'
+    | 'click'
+    | 'waiting'
+    | 'install'
+    | 'paired'
+
+/** What the click offers while the bridge is reachable and not paired. */
+type Asked = 'click' | 'waiting' | 'install'
 
 /** What a read of `/__abide/pairing` fails with: it declares no refusal, so the transport's (16.8). */
 type PairingStatus = Reactive<
@@ -41,9 +59,14 @@ type PairingStatus = Reactive<
 >
 
 /** This browser's pairing with a Claude Code bridge, and the click that pairs one. */
-export function pairing(): {
+export function pairing(
+    options: {
+        /** 53.48 — milliseconds of connecting before the step is `slow`. `8000` by default. */
+        slowAfter?: number
+    } = {},
+): {
     status: PairingStatus
-    step: Reactive<'click' | 'waiting' | 'install'>
+    step: Reactive<PairingStep>
     copied: Reactive<boolean>
     start: () => void
     retry: () => void
@@ -63,11 +86,11 @@ export function pairing(): {
     const previous = read === undefined ? undefined : collectWatches(stops)
     let built: ReturnType<typeof setUp>
     try {
-        built = setUp(read)
+        built = setUp(read, options.slowAfter ?? SLOW_AFTER)
     } finally {
         if (read !== undefined) collectWatches(previous)
     }
-    const { status, step, copied } = built
+    const { status, step, asked, slow, copied } = built
     let waiting: ReturnType<typeof setTimeout> | undefined
     let onBlur: (() => void) | undefined
     const stopWaiting = (): void => {
@@ -94,7 +117,7 @@ export function pairing(): {
             const link = status.peek()?.link
             if (link === undefined || disposed) return
             stopWaiting()
-            step.set('waiting')
+            asked.set('waiting')
             let blurred = false
             const blur = (): void => {
                 blurred = true
@@ -105,11 +128,14 @@ export function pairing(): {
             waiting = setTimeout(() => {
                 stopWaiting()
                 // Paired already: a reconnect that opened no app leaves the old bridge answering.
-                step.set(blurred || status.peek()?.paired ? 'click' : 'install')
+                asked.set(
+                    blurred || status.peek()?.paired ? 'click' : 'install',
+                )
             }, PAIR_WAIT)
         },
         // 44.102 — the pairing asked for again, over a read in flight that is taking too long.
         retry() {
+            slow.set(false)
             read?.copy.refresh()
         },
         // 44.72.
@@ -126,9 +152,14 @@ export function pairing(): {
 }
 
 /** A pairing's values over `read`, the page's copy, or over nothing on a server. */
-function setUp(read: ReturnType<typeof readPairing> | undefined): {
+function setUp(
+    read: ReturnType<typeof readPairing> | undefined,
+    slowAfter: number,
+): {
     status: PairingStatus
-    step: Reactive<'click' | 'waiting' | 'install'>
+    step: Reactive<PairingStep>
+    asked: Reactive<Asked>
+    slow: Reactive<boolean>
     copied: Reactive<boolean>
 } {
     // 44.69 — A VALUE EACH READ OF THE COPY IS WRITTEN INTO, not a derivation of it. It opens on
@@ -152,14 +183,36 @@ function setUp(read: ReturnType<typeof readPairing> | undefined): {
             else if (copy.ready()) status.set(copy())
         })
     }
-    const step = reactive<'click' | 'waiting' | 'install'>('click')
+    const asked = reactive<Asked>('click')
     // 44.72 — 6.2 writes `false` back `COPIED_FOR` after a copy, and that is what ends the install
     // step.
     const copied = reactive(false, { ttl: COPIED_FOR })
     watch([copied], () => {
-        if (!copied.peek()) step.set('click')
+        if (!copied.peek()) asked.set('click')
     })
-    return { status, step, copied }
+    // 53.48 — connecting for longer than `slowAfter`. A server is never slow: it renders `connecting`.
+    const slow = reactive(false)
+    if (read !== undefined)
+        watch(() => {
+            const connecting = status() === undefined && !status.error()
+            if (!connecting) {
+                slow.set(false)
+                return
+            }
+            const timer = setTimeout(() => slow.set(true), slowAfter)
+            return () => clearTimeout(timer)
+        })
+    // 53.49 — no network is said before anything else, since nothing below it can change until it
+    // returns.
+    const step = reactive((): PairingStep => {
+        if (!online()) return 'offline'
+        if (status.error() !== undefined) return 'unavailable'
+        const value = status()
+        if (value === undefined) return slow() ? 'slow' : 'connecting'
+        if (value.paired) return 'paired'
+        return asked()
+    })
+    return { status, step, asked, slow, copied }
 }
 
 /** The page's one copy of its pairing, and how many `pairing` read it. */

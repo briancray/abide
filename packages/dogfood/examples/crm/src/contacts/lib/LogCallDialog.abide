@@ -1,23 +1,22 @@
 <script>
-import { reactive } from '@abide/abide'
-import Dialog from '@abide/abide/Dialog.abide'
+import { dialog, reactive } from '@abide/abide'
 
-let logging = reactive(false)
 let note = reactive('')
 let calls = reactive<string[]>([])
 
 // The button that closed the form is the dialog's `returnValue`.
-function closed(returnValue: string) {
-    if (returnValue === 'log' && note.trim() !== '') calls.push(note.trim())
-    note = ''
-}
+const logging = dialog({
+    onclose: (returnValue) => {
+        if (returnValue === 'log' && note.trim() !== '') calls.push(note.trim())
+        note = ''
+    },
+})
 </script>
 
-<button onclick={() => (logging = true)}>Log a call with Ada</button>
+<button onclick={() => (logging.open = true)}>Log a call with Ada</button>
 
-<Dialog
-    bind:open={logging}
-    onclose={closed}
+<dialog
+    {...logging.dialog}
     class="m-auto w-96 max-w-[calc(100%-2rem)] rounded-xl border border-rule
     bg-raised p-5 text-ink backdrop:bg-paper/70"
 >
@@ -30,7 +29,7 @@ function closed(returnValue: string) {
             <button value="cancel">Cancel</button>
         </div>
     </form>
-</Dialog>
+</dialog>
 
 <ul class="fields">
     {#for call of calls}

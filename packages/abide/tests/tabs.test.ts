@@ -1,4 +1,4 @@
-// 51.36-51.42 — `tabs`'s parts, spread by hand as 32.11 spreads them: an attribute per string or
+// 51.34-51.40 — `tabs`'s parts, spread by hand as 32.11 spreads them: an attribute per string or
 // boolean read at the spread, a listener per `on<event>`. What a template does with them is the
 // CRM's tests'.
 
@@ -25,7 +25,7 @@ function spread(element: HTMLElement, part: Record<string, unknown>): void {
 }
 
 // THE REVERT: drop the panel's `hidden`, and both panels show at once.
-test('a panel per tab is hidden while another is selected, and kept — 51.36, 51.42', () => {
+test('a panel per tab is hidden while another is selected, and kept — 51.34, 51.40', () => {
     const selected = reactive<string | undefined>('nowhere')
     const view = tabs({ keys: ['details', 'notes'], selected })
     const panels = new Map<string, HTMLElement>()

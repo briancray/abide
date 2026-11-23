@@ -23,7 +23,7 @@ const ERROR_TIMEOUT_MS = 10_000
 // A counter rather than `crypto.randomUUID`, which a page served over plain http does not have.
 let lastId = 0
 
-/** Shows a notice in the app's `Toasts`, handing back its id for `toasts.dismiss`. */
+/** Shows a notice where the app spreads `toasts.host`, handing back its id for `toasts.dismiss`. */
 export function notify(text: string, options: NotifyOptions = {}): number {
     if (isServer())
         throw new Error(

@@ -10,9 +10,9 @@ afterEach(() => {
     Element.prototype.animate = realAnimate
 })
 
-// THE REVERT: render the notice's own text, action and close in place of `Toast`, and there is no
-// "Won." and nothing that fades.
-test('a notice renders through Toast, and stays until its fade has finished', async () => {
+// THE REVERT: have `fadeOut` hand back nothing, and the closed notice leaves the page at once —
+// `isConnected` false while the fade runs.
+test('a notice renders in markup the app writes, and stays until its fade has finished', async () => {
     const fading = Promise.withResolvers<void>()
     Element.prototype.animate = (() => ({
         finished: fading.promise,

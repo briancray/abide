@@ -1,5 +1,5 @@
-// The `chart` namespace — RULEBOOK 52.19-52.23 and 52.54-52.58, the arithmetic `Chart`, `Pie` and
-// `Sparkline` draw with. What the components draw is the CRM's tests', which mount them.
+// The `chart` namespace — RULEBOOK 52.19-52.23 and 52.53-52.57, the arithmetic `chart`, `pie` and
+// `sparkline` draw with. What the CRM draws with them is the CRM's tests', which mount it.
 
 import { expect, test } from 'bun:test'
 
@@ -58,7 +58,7 @@ test('path closes each run back along a baseline of one point per x — 52.22', 
 
 // THE REVERT: Catmull-Rom tangents, `(ys[i + 1] - ys[i - 1]) / (xs[i + 1] - xs[i - 1])` — the curve
 // leaves the plateau at 10 for 11.67 on its way to the next 10.
-test('a curved path passes through every point, never past the two values it joins — 52.105', () => {
+test('a curved path passes through every point, never past the two values it joins — 52.104', () => {
     const xs = [0, 10, 20, 30, 40, 50]
     const ys = [0, 10, 10, 2, 9, 3]
     const d = path(xs, ys, { curve: true })
@@ -86,7 +86,7 @@ test('a curved path passes through every point, never past the two values it joi
 
 // THE REVERT: walk a curved run back along its baseline straight — the floor is 'L10,8L0,7Z' where
 // the curve of the series under it is due.
-test('a curved area closes back along the curve its baseline draws — 52.105', () => {
+test('a curved area closes back along the curve its baseline draws — 52.104', () => {
     const xs = [0, 10, 20, 30]
     const floors = [9, 4, 6, 1]
     const under = path(xs, floors, { curve: true })
@@ -106,7 +106,7 @@ test('a curved area closes back along the curve its baseline draws — 52.105', 
 })
 
 // THE REVERT: pile negatives on the one running total — the loss stands at 2..1, not 0..-1.
-test('a stack piles each x up from zero, positives up and negatives down — 52.54', () => {
+test('a stack piles each x up from zero, positives up and negatives down — 52.53', () => {
     const placed = stack([
         { label: 'Won', values: [2, 3], stack: 'deals' },
         { label: 'Lost', values: [-1, 4], stack: 'deals' },
@@ -129,7 +129,7 @@ test('a stack piles each x up from zero, positives up and negatives down — 52.
 })
 
 // THE REVERT: read `stack` before `false` — the target joins the stack, its low [3] where none is due.
-test('a series joins the one stack where stacking is on, and false keeps one out — 52.55', () => {
+test('a series joins the one stack where stacking is on, and false keeps one out — 52.54', () => {
     const series = [
         { label: 'Won', values: [3] },
         { label: 'Lost', values: [2] },
@@ -157,7 +157,7 @@ test('a series joins the one stack where stacking is on, and false keeps one out
 
 // THE REVERT: leave a missing value out of its stack — Lost reads nothing at the first x, where it
 // stands at 2..2 on top of Won.
-test('a missing value is zero toward its stack — 52.56', () => {
+test('a missing value is zero toward its stack — 52.55', () => {
     const placed = stack(
         [
             { label: 'Won', values: [2, 2] },
@@ -172,7 +172,7 @@ test('a missing value is zero toward its stack — 52.56', () => {
 
 // THE REVERT: divide by the signed sum — the x of 3 and -1 reads 1.5 and -0.5 where 0.75 and -0.25
 // are due, and the x summing to nothing reads NaN.
-test('normalize answers each value as its share of its stack, stacking on its own — 52.57, 52.58', () => {
+test('normalize answers each value as its share of its stack, stacking on its own — 52.56, 52.57', () => {
     const placed = stack(
         [
             { label: 'Won', values: [3, 0, 1] },

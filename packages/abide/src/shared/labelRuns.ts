@@ -1,4 +1,4 @@
-// 51.16, 51.73, 51.113, 51.114 — WHERE WHAT WAS TYPED IS IN A LABEL: the one matcher `combobox` and
+// 51.16, 51.66, 51.106, 51.107 — WHERE WHAT WAS TYPED IS IN A LABEL: the one matcher `combobox` and
 // `commandPalette` narrow their lists by and mark their labels with, so what is listed and what is
 // marked cannot disagree. A needle is a literal found ignoring case, by `RegExp` so a match's place is
 // its place in the label as written — lowering the label first can change its length.

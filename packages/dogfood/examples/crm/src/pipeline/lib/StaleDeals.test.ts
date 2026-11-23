@@ -22,7 +22,7 @@ function click(box: HTMLInputElement, shiftKey = false) {
     flushSync()
 }
 
-// 51.79, 51.80 — A CHECKBOX PER ROW, named by its first cell, picks it, and the row carries
+// 51.72, 51.73 — A CHECKBOX PER ROW, named by its first cell, picks it, and the row carries
 // `data-selected`. THE REVERT: drop `data-selected` from the row, and no row reads picked.
 test('a checked row is selected, and named by its deal', async () => {
     using _deals = await mount(StaleDeals({}))
@@ -32,7 +32,7 @@ test('a checked row is selected, and named by its deal', async () => {
     expect(marked()).toEqual(['Turing seats'])
 })
 
-// 51.81 — A SHIFT-CLICK RUNS FROM THE LAST ROW CLICKED, in the order the rows show. THE REVERT: drop
+// 51.74 — A SHIFT-CLICK RUNS FROM THE LAST ROW CLICKED, in the order the rows show. THE REVERT: drop
 // the anchor, and a Shift-click picks only its own row.
 test('a Shift-click picks every row from the last one clicked', async () => {
     using _deals = await mount(StaleDeals({}))
@@ -46,7 +46,7 @@ test('a Shift-click picks every row from the last one clicked', async () => {
     ])
 })
 
-// 51.82 — THE HEADER'S BOX IS MIXED while some rows are picked, checked once all are, and a click
+// 51.75 — THE HEADER'S BOX IS MIXED while some rows are picked, checked once all are, and a click
 // on it picks all or none. THE REVERT: never write `indeterminate`, and some reads as none.
 test('the header box is mixed for some, and picks every row or none', async () => {
     using _deals = await mount(StaleDeals({}))
@@ -63,7 +63,7 @@ test('the header box is mixed for some, and picks every row or none', async () =
     expect(status()).toBe('0 selected')
 })
 
-// 51.83 — A BULK ACTION reads the keys selected and writes the selection back. THE REVERT: bind
+// 51.76 — A BULK ACTION reads the keys selected and writes the selection back. THE REVERT: bind
 // `selected` one way, and the table never hands its pick to the page.
 test('marking the selected deals lost clears the pick', async () => {
     using _deals = await mount(StaleDeals({}))
@@ -78,7 +78,7 @@ test('marking the selected deals lost clears the pick', async () => {
     expect(stages).toEqual(['lost', 'proposal', 'proposal', 'lost'])
 })
 
-// 51.51, 51.53, 51.54 — THE PARTS SORT THE ROWS THE PAGE WRITES: a header's button sorts by its column,
+// 51.49, 51.50, 51.51 — THE PARTS SORT THE ROWS THE PAGE WRITES: a header's button sorts by its column,
 // a second press turns it round, and the header carries `aria-sort` while it is the one sorted by.
 // THE REVERT: have `sort`'s press always set the first direction, and the second press leaves the rows
 // ascending.

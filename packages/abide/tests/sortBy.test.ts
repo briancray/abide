@@ -1,5 +1,5 @@
-// `sortBy`, the order a list is in by a value of each item (RULEBOOK 51.45-51.48, 51.50), and the
-// order `sortableTable` reads a column's value in (51.49). What `SortableTable` renders from it is the
+// `sortBy`, the order a list is in by a value of each item (RULEBOOK 51.43-51.46, 51.48), and the
+// order `sortableTable` reads a column's value in (51.47). What the CRM's tables render from it is the
 // CRM's tests', which mount it.
 
 import { expect, test } from 'bun:test'
@@ -13,7 +13,7 @@ const names = (deals: readonly Deal[]) => deals.map((deal) => deal.name)
 const amount = (deal: Deal) => deal.amount
 
 // THE REVERT: drop the blank check from the comparator, and the blanks lead the descending order.
-test('a blank value sorts last in both directions — 51.47', () => {
+test('a blank value sorts last in both directions — 51.45', () => {
     const deals: Deal[] = [
         { name: 'a', amount: 3 },
         { name: 'none' },
@@ -41,7 +41,7 @@ test('a blank value sorts last in both directions — 51.47', () => {
 })
 
 // THE REVERT: compare every value as text, and 10 sorts before 9 and the dates by their words.
-test('numbers sort as numbers, dates by time and text by its words — 51.48', () => {
+test('numbers sort as numbers, dates by time and text by its words — 51.46', () => {
     const numbers: Deal[] = [
         { name: 'ten', amount: 10 },
         { name: 'nine', amount: 9 },
@@ -65,7 +65,7 @@ test('numbers sort as numbers, dates by time and text by its words — 51.48', (
 })
 
 // THE REVERT: sort descending by reversing the ascending order, and the ties come out reversed.
-test('items of equal value keep the order they came in — 51.46', () => {
+test('items of equal value keep the order they came in — 51.44', () => {
     const deals: Deal[] = [
         { name: 'first', amount: 5 },
         { name: 'low', amount: 1 },
@@ -81,7 +81,7 @@ test('items of equal value keep the order they came in — 51.46', () => {
 })
 
 // THE REVERT: sort `items` in place, and the list handed in comes back reordered.
-test('a sort is a new list, the one handed in left as it is — 51.50', () => {
+test('a sort is a new list, the one handed in left as it is — 51.48', () => {
     const deals: Deal[] = [
         { name: 'b', amount: 2 },
         { name: 'a', amount: 1 },
@@ -91,7 +91,7 @@ test('a sort is a new list, the one handed in left as it is — 51.50', () => {
     expect(names(deals)).toEqual(['b', 'a'])
 })
 
-test('a column’s `value` is what a table sorts by, and no sort keeps its rows — 51.49, 51.51', () => {
+test('a column’s `value` is what a table sorts by, and no sort keeps its rows — 51.47, 51.49', () => {
     const rows: Deal[] = [
         { name: 'proposal', amount: 1 },
         { name: 'lead', amount: 2 },

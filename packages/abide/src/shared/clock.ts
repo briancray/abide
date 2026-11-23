@@ -1,4 +1,4 @@
-// 52.73-52.77 — ONE CLOCK FOR EVERY `Time` ON THE PAGE. Each `Time` follows the instant it writes,
+// 52.72-52.76 — ONE CLOCK FOR EVERY `time` ON THE PAGE. Each `time` follows the instant it writes,
 // and the clock sets one timer for the soonest moment any of their labels next reads differently:
 // a label a minute old waits a minute, one a day old waits hours. No timer stands while nothing is
 // followed or while the page is hidden; coming back into view reads the time at once.
@@ -17,7 +17,7 @@ const MINUTE = 60_000
 
 /** The time every followed label is written against, in epoch milliseconds. */
 const current = /* @__PURE__ */ reactive(0)
-// The instants followed, one entry per `Time` standing.
+// The instants followed, one entry per `time` standing.
 const followed = /* @__PURE__ */ reactive<readonly number[]>([])
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -66,7 +66,7 @@ function tick(): void {
     schedule()
 }
 
-// 52.76 — hidden, the page sets no timer; shown again, it reads the time before it schedules.
+// 52.75 — hidden, the page sets no timer; shown again, it reads the time before it schedules.
 function shown(): void {
     if (document.visibilityState !== 'hidden') current.set(Date.now())
     schedule()

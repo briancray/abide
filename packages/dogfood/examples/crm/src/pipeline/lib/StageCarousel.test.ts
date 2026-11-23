@@ -20,7 +20,7 @@ function click(name: string) {
     flushSync()
 }
 
-// 53.64, 53.72, 53.73 — THE CAROUSEL RESTS ON THE DEAL'S STAGE, each stage a slide named for it. THE
+// 53.61, 53.69, 53.70 — THE CAROUSEL RESTS ON THE DEAL'S STAGE, each stage a slide named for it. THE
 // REVERT: rest on the first item whatever `selected` names, and lead is centered.
 test("the stages rest on the deal's own, each a slide named for its stage", async () => {
     using _stages = await mount(StageCarousel({}))
@@ -34,7 +34,7 @@ test("the stages rest on the deal's own, each a slide named for its stage", asyn
     expect(slide('qualified').hasAttribute('data-selected')).toBe(true)
 })
 
-// 53.70, 53.71 — THE BUTTONS STEP FROM THE CENTERED STAGE, AND RESET COMES BACK TO THE DEAL'S. THE
+// 53.67, 53.68 — THE BUTTONS STEP FROM THE CENTERED STAGE, AND RESET COMES BACK TO THE DEAL'S. THE
 // REVERT: step from `selected` rather than `centered`, and the second Next lands where the first did.
 test("next and previous step through the stages, and reset comes back to the deal's", async () => {
     using _stages = await mount(StageCarousel({}))
@@ -49,7 +49,7 @@ test("next and previous step through the stages, and reset comes back to the dea
     expect(button('Previous stage').disabled).toBe(true)
 })
 
-// 53.64, 53.66 — A NEW STAGE IS WHERE THE CAROUSEL RESTS. THE REVERT: hold `centered` apart from the
+// 53.61, 53.63 — A NEW STAGE IS WHERE THE CAROUSEL RESTS. THE REVERT: hold `centered` apart from the
 // resting item, and moving to proposal leaves qualified centered.
 test('moving the deal to a stage rests the carousel on it', async () => {
     using _stages = await mount(StageCarousel({}))

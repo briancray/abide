@@ -1,0 +1,53 @@
+<script>
+// The CRM's chart markup over `chart`'s parts: gridlines and their labels, the months, every series'
+// mark, the crosshair with its points, and the readout opened against it. `class` styles the `<svg>`.
+import { type Attributes, type ChartParts, props } from '@abide/abide'
+
+const { plot, ...rest } = props<
+    { plot: ChartParts } & Omit<Attributes<'svg'>, 'width' | 'height'>
+>()
+</script>
+
+<svg {...rest} {...plot.svg}>
+    {#for tick of plot.yTicks}
+        <line {...tick.grid} />
+        <text {...tick.text}>{tick.label}</text>
+    {/for}
+    {#if plot.zero}
+        <line {...plot.zero?.line} />
+    {/if}
+    {#for tick of plot.xTicks}
+        <text {...tick.text}>{tick.label}</text>
+    {/for}
+    {#for mark of plot.marks by mark.series}
+        {#if mark.kind === 'column'}
+            <g {...mark.columns}>
+                {#for bar of mark.bars by bar.index}
+                    <rect {...bar.rect} />
+                {/for}
+            </g>
+        {:else}
+            <path {...mark.path} />
+        {/if}
+    {/for}
+    {#if plot.readout}
+        <line {...plot.crosshair?.line} />
+        {#for point of plot.readout?.values ?? []}
+            {#if point.circle}
+                <circle {...point.circle} />
+            {/if}
+        {/for}
+    {/if}
+</svg>
+{#if plot.readout}
+    <span
+        {...plot.tip}
+        class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
+        text-chrome text-ink shadow-sm"
+    >
+        <span {...plot.readout?.heading} class="text-muted">{plot.readout?.label}</span>
+        {#for point of plot.readout?.values ?? []}
+            <span {...point.text}>{point.label}: {point.value}</span>
+        {/for}
+    </span>
+{/if}

@@ -9,7 +9,7 @@ import DealFlow from './DealFlow.abide'
 const chart = () => document.querySelector('svg') as SVGSVGElement
 const texts = (selector: string) =>
     [...document.querySelectorAll(selector)].map((node) => node.textContent)
-// A column's place and size, read off the transform that draws its unit rect (52.64).
+// A column's place and size, read off the transform that draws its unit rect (52.63).
 function bars(series: number) {
     return [
         ...chart().querySelectorAll(
@@ -36,7 +36,7 @@ function pointAt(clientX: number) {
     flushSync()
 }
 
-// 52.69 — THE Y LABELS STAND LEFT OF THE PLOT, and the first month's column starts right of where the
+// 52.68 — THE Y LABELS STAND LEFT OF THE PLOT, and the first month's column starts right of where the
 // gridlines do. THE REVERT: start the plot at 0 — the gridlines run under the labels from 0.
 test('no column is drawn over a y label', async () => {
     using _flow = await mount(DealFlow({}))
@@ -66,7 +66,7 @@ test('won and lost stand side by side in each month', async () => {
     expect(texts('[data-axis=y]')[0]).toBe('0')
 })
 
-// 52.59 — STACKED, LOST STANDS ON WON. THE REVERT: draw each column from zero whatever its stack —
+// 52.58 — STACKED, LOST STANDS ON WON. THE REVERT: draw each column from zero whatever its stack —
 // Lost's foot is at 216 where Won's top is due.
 test('stacked, lost stands on top of won in one column', async () => {
     using _flow = await mount(DealFlow({ stacked: true }))
@@ -80,7 +80,7 @@ test('stacked, lost stands on top of won in one column', async () => {
     }
 })
 
-// 52.60, 52.61 — AS SHARES, EVERY MONTH REACHES THE TOP, the axis reads percentages and the readout
+// 52.59, 52.60 — AS SHARES, EVERY MONTH REACHES THE TOP, the axis reads percentages and the readout
 // reads each count and its share. THE REVERT: write the ticks with `yFormat` — '0.5' where '50%'.
 test('as shares, every month fills the column and reads its share', async () => {
     using _flow = await mount(DealFlow({ shares: true }))
@@ -100,7 +100,7 @@ test('as shares, every month fills the column and reads its share', async () => 
     ])
 })
 
-// 52.63 — A TOGGLE MOVES THE COLUMNS IT HAS, so a CSS transition eases each from one place to the
+// 52.62 — A TOGGLE MOVES THE COLUMNS IT HAS, so a CSS transition eases each from one place to the
 // next: what it creates is the two gridlines the taller range needs, and no column. THE REVERT: key
 // the marks `by mark`, a record made fresh each run — 36 nodes where 12 are due, and not one column
 // is the element it was.
@@ -139,7 +139,7 @@ test('a click opens its month, and November takes no pick', async () => {
     ).toBe(true)
 })
 
-// 52.71 — ENTER PICKS THE MONTH THE CROSSHAIR STANDS AT, as a click on it does, save the one whose
+// 52.70 — ENTER PICKS THE MONTH THE CROSSHAIR STANDS AT, as a click on it does, save the one whose
 // books are open. THE REVERT: drop Enter from the chart's `keydown` — the arrows move the crosshair and
 // nothing is picked.
 test('Enter picks the month the crosshair stands at, and November takes no pick', async () => {

@@ -1,0 +1,11 @@
+<script>
+import { markdown, raw } from '@abide/abide'
+
+const note = '[Our deals](/deals) and [the spec](https://example.com/spec)'
+const linkTo = (address: string) =>
+    address.startsWith('/')
+        ? address
+        : { href: address, target: '_blank', rel: 'noopener' }
+</script>
+
+<div>{raw(markdown(note, { href: linkTo }))}</div>

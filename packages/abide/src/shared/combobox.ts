@@ -1,4 +1,4 @@
-// 51.13-51.29, 51.61, 51.62, 51.64, 51.113 — A FIELD THAT LISTS WHAT MATCHES AS IT IS TYPED IN, as parts an app
+// 51.13-51.29, 51.55, 51.56, 51.57, 51.106 — A FIELD THAT LISTS WHAT MATCHES AS IT IS TYPED IN, as parts an app
 // spreads onto an input, a popup and options of its own: WAI-ARIA's combobox with a list popup. Focus
 // stays in the input, which names the active option as its `aria-activedescendant`; the list is a
 // `listbox` the input's keys move through, opened in the top layer against the input as `popover`
@@ -31,14 +31,14 @@ export type ComboboxOptions<Item, Multiple extends boolean = false> = {
         | Reactive<readonly Item[], unknown, unknown, unknown>
     /** Milliseconds typing has to pause before `search` runs again. */
     debounce?: number
-    /** 51.61 — whether it picks many: a pick adds an item or takes it out again. `false` by default. */
+    /** 51.55 — whether it picks many: a pick adds an item or takes it out again. `false` by default. */
     multiple?: Multiple
     /** The pick, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
     value?: Reactive<Picked<Item, Multiple>>
 } & KeyOption<Item> &
     LabelOption<Item>
 
-/** A picked item's chip, where it picks many: the chip, and the button taking the item out (51.62). */
+/** A picked item's chip, where it picks many: the chip, and the button taking the item out (51.56). */
 export type ComboboxChip = {
     /** The chip's attributes. */
     readonly chip: Record<string, unknown>
@@ -56,7 +56,7 @@ export type ComboboxParts<Item, Multiple extends boolean = false> = {
     readonly input: Record<string, unknown>
     /** Whether the list is open, and so whether the popup is to be rendered; written, it opens or shuts it. */
     readonly open: Reactive<boolean>
-    /** The element holding the list and `empty`, opened in the top layer against the input (51.64). */
+    /** The element holding the list and `empty`, opened in the top layer against the input (51.57). */
     readonly popup: Record<string, unknown>
     /** The list: its `listbox` role and id, multi-selectable where it picks many. */
     readonly listbox: Record<string, unknown>
@@ -64,7 +64,7 @@ export type ComboboxParts<Item, Multiple extends boolean = false> = {
     get items(): readonly Item[]
     /** An item's option: its role, id, `aria-selected`, `data-active`, `data-selected`, and the press that picks it. */
     option(item: Item): Record<string, unknown>
-    /** An item's `label` in runs, each run of it the input's text is found in carrying the `match` part (51.113). */
+    /** An item's `label` in runs, each run of it the input's text is found in carrying the `match` part (51.106). */
     runs(item: Item): readonly LabelRun[]
     /** Whether nothing is listed with no search in flight: where `empty` is rendered. */
     get nothingFound(): boolean
@@ -76,14 +76,14 @@ export type ComboboxParts<Item, Multiple extends boolean = false> = {
     get picks(): readonly Item[] | undefined
     /** The element holding the chips, where it picks many. */
     readonly chips: Record<string, unknown>
-    /** A picked item's chip and the button taking it out (51.62). */
+    /** A picked item's chip and the button taking it out (51.56). */
     chip(item: Item): ComboboxChip
     /** Takes a picked item out, for a chip of one's own. */
     unpick(item: Item): void
 }
 
 const NOTHING: readonly never[] = []
-// 49.4 — the part a matched run of a label spreads.
+// 49.3 — the part a matched run of a label spreads.
 const MATCH = { 'data-combobox': 'match' }
 
 /** WAI-ARIA's combobox with a list popup, as parts to spread onto markup of one's own. */
@@ -92,7 +92,7 @@ export function combobox<Item, Multiple extends boolean = false>(
 ): ComboboxParts<Item, Multiple> {
     const { debounce } = options
     const id = options.id ?? `combobox-${randomToken(4, 'hex')}`
-    // 49.13 — read where they are used; the id, the debounce and whether it picks many are
+    // 49.11 — read where they are used; the id, the debounce and whether it picks many are
     // fixed for the life of the parts.
     const key = (item: Item) => writtenBy(options.key, item)
     const label = (item: Item) => writtenBy(options.label, item)
@@ -106,7 +106,7 @@ export function combobox<Item, Multiple extends boolean = false>(
 
     // What was typed since the last pick; the input shows the pick's label while nothing has been.
     const typed = reactive<string | undefined>(undefined)
-    // 51.61 — the items picked, where it picks many; `undefined` where it picks one.
+    // 51.55 — the items picked, where it picks many; `undefined` where it picks one.
     const picks = reactive((): readonly Item[] | undefined =>
         many ? ((value() ?? []) as readonly Item[]) : undefined,
     )
@@ -118,10 +118,10 @@ export function combobox<Item, Multiple extends boolean = false>(
             ? ''
             : label(one as Item)
     })
-    // 51.16, 51.113 — what the labels are narrowed by and marked with.
+    // 51.16, 51.106 — what the labels are narrowed by and marked with.
     const needles = reactive(() => needlesOf(query(), false))
     const open = reactive(false)
-    // 51.64 — what the open list is placed against.
+    // 51.57 — what the open list is placed against.
     const input = reactive<HTMLInputElement | undefined>(undefined)
 
     // Nothing is searched while the list is shut, and a search in flight keeps the last results listed.
@@ -176,12 +176,12 @@ export function combobox<Item, Multiple extends boolean = false>(
         if (open.peek()) open.set(false)
         else {
             typed.set(undefined)
-            // 51.61 — what is picked into an array is taken out one at a time, never by Escape.
+            // 51.55 — what is picked into an array is taken out one at a time, never by Escape.
             if (picks.peek() === undefined) value.set(undefined)
         }
     }
 
-    // 51.99 — a press opens a shut list and shuts an open one, as a press on a `menu`'s trigger does
+    // 51.92 — a press opens a shut list and shuts an open one, as a press on a `menu`'s trigger does
     // (50.32). A press is a click, never focus: Tab reaching the input opens nothing. A search opens
     // only once there is text to search for, since nothing has been searched yet.
     function press() {
@@ -196,7 +196,7 @@ export function combobox<Item, Multiple extends boolean = false>(
     function keydown(event: KeyboardEvent) {
         // Home and End move the caret in the text, not the active option.
         if (event.key === 'Home' || event.key === 'End') return
-        // 51.100 — Alt with an arrow opens or shuts the list and never steps its active option.
+        // 51.93 — Alt with an arrow opens or shuts the list and never steps its active option.
         if (
             event.altKey &&
             (event.key === 'ArrowDown' || event.key === 'ArrowUp')
@@ -210,7 +210,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         // `<dialog>` cancels only on an Escape no one prevented.
         if (event.key === 'Escape' && !open.peek() && query.peek() === '')
             return
-        // 51.62 — Backspace in an empty input takes out the last item picked.
+        // 51.56 — Backspace in an empty input takes out the last item picked.
         const held = picks.peek()
         if (
             event.key === 'Backspace' &&

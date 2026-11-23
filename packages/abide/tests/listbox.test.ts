@@ -1,4 +1,4 @@
-// `listbox`, the keyboard over a list of keyed options (RULEBOOK 51.1-51.12, 51.101, 51.105-51.112).
+// `listbox`, the keyboard over a list of keyed options (RULEBOOK 51.1-51.12, 51.94, 51.98-51.105).
 // What `Combobox` renders over it is the CRM's tests', which mount it.
 
 import { expect, test } from 'bun:test'
@@ -118,7 +118,7 @@ test('each key has its own id, and the active one’s is `activeId` — 51.10, 5
 
 // THE REVERT: read `data-active` off the key the part was built for rather than the active one, and
 // every option reads active.
-test('an option’s part carries its id and whether it is active, and a pointer on it activates it — 51.101', () => {
+test('an option’s part carries its id and whether it is active, and a pointer on it activates it — 51.94', () => {
     const list = listbox({ id: 'letters', options: () => ['a', 'b'] })
     const a = list.option('a')
     const b = list.option('b')
@@ -135,7 +135,7 @@ test('an option’s part carries its id and whether it is active, and a pointer 
     ])
     ;(b.onpointermove as () => void)()
     flushSync()
-    // Read again, not rebuilt: the part's getters answer what is active now (49.11).
+    // Read again, not rebuilt: the part's getters answer what is active now (49.9).
     expect([a['aria-selected'], b['aria-selected'], b['data-active']]).toEqual([
         'false',
         'true',
@@ -145,7 +145,7 @@ test('an option’s part carries its id and whether it is active, and a pointer 
 
 // THE REVERT: extend from the active option rather than the anchor, and Shift on `a` after Shift on `d`
 // selects `a`..`d` rather than the run from `c`, the option last toggled.
-test('a click selects one, `mod` toggles, and Shift selects the run from the anchor — 51.105, 51.106, 51.107', () => {
+test('a click selects one, `mod` toggles, and Shift selects the run from the anchor — 51.98, 51.99, 51.100', () => {
     const list = listbox({
         id: 'stages',
         options: () => ['a', 'b', 'c', 'd'],
@@ -171,7 +171,7 @@ test('a click selects one, `mod` toggles, and Shift selects the run from the anc
 })
 
 // THE REVERT: extend on every arrow rather than on a shifted one, and a bare ArrowDown selects `c`.
-test('Space toggles, Shift with an arrow extends, and `mod+a` selects all — 51.108, 51.109, 51.110', () => {
+test('Space toggles, Shift with an arrow extends, and `mod+a` selects all — 51.101, 51.102, 51.103', () => {
     const selected = reactive<readonly string[]>([])
     const list = listbox({
         id: 'stages',
@@ -196,7 +196,7 @@ test('Space toggles, Shift with an arrow extends, and `mod+a` selects all — 51
 
 // THE REVERT: hold the key moved to apart from `selected`, and the key written there makes nothing
 // active.
-test('selecting one, the selection is the key last moved to, and a click picks it — 51.111, 51.112', () => {
+test('selecting one, the selection is the key last moved to, and a click picks it — 51.104, 51.105', () => {
     const picked: string[] = []
     const selected = reactive<string | undefined>('c')
     const list = listbox({

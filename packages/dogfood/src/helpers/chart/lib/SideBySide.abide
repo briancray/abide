@@ -1,0 +1,17 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Deals closed by month',
+    series: [
+        { label: 'Won', values: [4, 6, 5, 8], kind: 'column' },
+        { label: 'Lost', values: [3, 2, 4, 3], kind: 'column' },
+    ],
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    {#for bar of plot.bars by bar.key}
+        <rect {...bar.rect} />
+    {/for}
+</svg>

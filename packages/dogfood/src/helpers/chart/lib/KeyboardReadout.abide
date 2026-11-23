@@ -1,0 +1,24 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Won revenue by month',
+    series: [{ label: 'Won', values: [18_000, 24_500, 31_000, 27_000] }],
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    {#for line of plot.lines by line.series}
+        <path {...line.path} />
+    {/for}
+    {#if plot.readout}
+        <line {...plot.crosshair?.line} />
+    {/if}
+</svg>
+{#if plot.readout}
+    <span {...plot.tip} class="m-0 rounded-md border px-3 py-2">
+        {#for point of plot.readout?.values ?? []}
+            <span {...point.text}>{point.label}: {point.value}</span>
+        {/for}
+    </span>
+{/if}

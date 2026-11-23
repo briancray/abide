@@ -10,7 +10,7 @@ const press = (svg: Record<string, unknown>, key: string) =>
         new KeyboardEvent('keydown', { key }),
     )
 
-// 52.79 — A POINT STANDS WHERE THE PLOT'S OWN SCALE PUTS ITS VALUE, one per present value, so a mark an
+// 52.78 — A POINT STANDS WHERE THE PLOT'S OWN SCALE PUTS ITS VALUE, one per present value, so a mark an
 // app draws with `plot.x` and `plot.y` lines up with the ones the parts hand back.
 // THE REVERT: push a point for a missing value too — four points where three are due.
 test("every present value is a point at the plot's own x and y", () => {
@@ -27,7 +27,7 @@ test("every present value is a point at the plot's own x and y", () => {
     }
 })
 
-// 52.80, 50.47 — THE CROSSHAIR IS BOUND ONCE, at every x, and the chart is described by its readout's
+// 52.79, 50.46 — THE CROSSHAIR IS BOUND ONCE, at every x, and the chart is described by its readout's
 // `tip` while the crosshair stands. THE REVERT: hand back a binding per x — the second month's is not
 // the first's, and a crosshair kept as one element is unbound and bound again at every move.
 test('the crosshair carries one binding at every x, and the chart is described by its tip', () => {
@@ -47,7 +47,7 @@ test('the crosshair carries one binding at every x, and the chart is described b
     expect(plot.tip.role).toBe('tooltip')
 })
 
-// 52.81 — A SLICE'S HINT IS BOUND ONCE WHILE ITS WORDS STAND: a sweep that eases rewrites the slice's
+// 52.80 — A SLICE'S HINT IS BOUND ONCE WHILE ITS WORDS STAND: a sweep that eases rewrites the slice's
 // style and binds nothing again.
 // THE REVERT: make the hint's binding afresh each time the slices are drawn — the hole moving binds again.
 test("a slice's hint binding stands while its words do", () => {
@@ -69,7 +69,7 @@ test("a slice's hint binding stands while its words do", () => {
 
 // THE REVERT: leave `curve` out of what `sparkline` hands `path` — the line and the area are straight,
 // four `L`s and no `C`.
-test('a sparkline declaring curve draws its line and its area curved — 52.106', () => {
+test('a sparkline declaring curve draws its line and its area curved — 52.105', () => {
     const curved = reactive(true)
     const trend = sparkline({
         values: [3, 7, 4, 9, 6],

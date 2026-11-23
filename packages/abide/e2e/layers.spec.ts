@@ -12,7 +12,9 @@ import { servedFixture } from './servedFixture.ts'
 test.describe.configure({ mode: 'default' })
 
 const LAYOUT = `<script>
-import Tooltips from '@abide/abide/Tooltips.abide'
+import { tooltip } from '@abide/abide'
+
+const shown = tooltip.host()
 </script>
 
 <html lang="en">
@@ -21,7 +23,7 @@ import Tooltips from '@abide/abide/Tooltips.abide'
 </head>
 <body>
     <slot/>
-    <Tooltips />
+    <span {...shown.hint}>{shown.text}</span>
 </body>
 </html>`
 

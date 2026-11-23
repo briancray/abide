@@ -1,6 +1,7 @@
 <script>
 import { tooltip } from '@abide/abide'
-import Tooltips from '@abide/abide/Tooltips.abide'
+
+import Tooltips from '#src/lib/Tooltips.abide'
 
 import { STAGES } from './STAGES.ts'
 

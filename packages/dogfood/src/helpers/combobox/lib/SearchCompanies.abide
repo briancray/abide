@@ -1,0 +1,43 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+type Company = { id: string; name: string }
+const COMPANIES: Company[] = [
+    { id: 'acme', name: 'Acme' },
+    { id: 'engines', name: 'Analytical Engines' },
+    { id: 'hopper', name: 'Hopper & Co' },
+]
+
+const searchCompanies = GET(({ q }: { q: string }) =>
+    COMPANIES.filter((each) =>
+        each.name.toLowerCase().includes(q.toLowerCase()),
+    ),
+)
+</script>
+
+<script>
+import { combobox } from '@abide/abide'
+
+const box = combobox({
+    id: 'works-at',
+    search: (q) => searchCompanies({ q }),
+    debounce: 200,
+    key: (found: Company) => found.id,
+    label: (found: Company) => found.name,
+})
+</script>
+
+<div {...box.root} class="picker">
+    <label for={box.id}>Works at</label>
+    <input {...box.input} placeholder="Search companies">
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for found of box.items by found.id}
+                    <li {...box.option(found)}>{found.name}</li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>
+<p>Works at: {box.value?.name ?? 'nowhere yet'}</p>

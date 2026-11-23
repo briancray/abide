@@ -1,0 +1,20 @@
+<script>
+import { sparkline } from '@abide/abide'
+
+const TRENDS = [
+    [12, 18, 24],
+    [30, 22, 15],
+].map((won) => sparkline({ values: won, label: 'Won revenue' }))
+</script>
+
+<div class="flex gap-4">
+    {#for trend of TRENDS}
+        <svg
+            {...trend.svg}
+            class="h-6 w-24 text-muted data-[trend=up]:text-good
+            data-[trend=down]:text-bad"
+        >
+            <path {...trend.line} />
+        </svg>
+    {/for}
+</div>

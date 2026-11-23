@@ -87,7 +87,7 @@ These are immutable. A change to them is a change to what this document is.
 - [46. Outbox](#46)
 - [47. Databases](#47)
 - [48. Problem reports](#48)
-- [49. Shipped components](#49)
+- [49. Parts functions](#49)
 - [50. Dialogs, toasts and popovers](#50)
 - [51. Lists and tables](#51)
 - [52. Formatting, markdown and charts](#52)
@@ -104,7 +104,6 @@ REGISTRY.md because none of them is a name an app author writes.
 | Term | Definition |
 | --- | --- |
 | read | A call to `s` or to `s.peek`. |
-| shipped component | A `.abide` file an entry of `@abide/abide`'s `exports` names. |
 | write | A call to `s.set` or to `s.patch`. |
 | gated | A production the `identity` comparison may collapse: one a write or a body mints, and not a chunk a stream lands. |
 | probe | Any of `s.busy`, `s.ready`, `s.error`, `s.issues`. |
@@ -140,6 +139,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | private handler | A handler a `<script server>` declares. |
 | menu bar extra | The item `menuBarExtra` puts in the platform's menu bar. |
 | example app | The app every `<Example>` is drawn from, kept whole so a reader can download it and run it. |
+| parts function | A function `@abide/abide` exports handing back parts an app spreads onto elements of its own. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
 **SHOULD**, **SHOULD NOT**, **MAY**.
@@ -4585,8 +4585,9 @@ set `step` to `waiting` and navigate the page to the status's `link`.
 44.71 2500 ms after `pairing`'s `start`, `step` MUST become `click` where the window blurred since,
 or `status` is paired, and `install` otherwise.
 
-44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard as 53.57 and 53.22 copy, and
-once written MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to `click`.
+44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard as 53.54 and 53.22
+copy, and once written MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to
+`click`.
 
 44.73 A `pairing` MUST, once its `stop` or its `[Symbol.dispose]` is called, or the component whose
 setup built it is disposed, stop reading and following `/__abide/pairing` where no other `pairing`
@@ -4981,77 +4982,67 @@ server mints.
 48.13 `ReportDraft.send` MUST settle the draft's `id`, and where a send of the draft is in flight or
 has settled it MUST settle that same `id` without handing the `Report` to any `onReport` again.
 
-# 49. Shipped components
+# 49. Parts functions
 
-49.1 A shipped component MUST spread every attribute its caller passes beyond its own props onto its
-root element.
+49.1 A parts function MUST write each state a caller can style an element by as a `data-` attribute on
+the part for the element the state is about, valued where the state has more than two values, and
+present only while it holds where it has two.
 
-49.2 A shipped component MUST write each state a caller can style it by as a `data-` attribute on
-the element the state is about, valued where the state has more than two values, and present only
-while it holds where it has two.
+49.2 A parts function MUST NOT write a `class`.
 
-49.3 A shipped component MUST NOT write a `class`.
-
-49.4 Every part a parts function hands back for an element MUST carry, naming the element, a `data-`
+49.3 Every part a parts function hands back for an element MUST carry, naming the element, a `data-`
 attribute named for the parts function — its name in kebab case, `data-sortable-table` for
-`sortableTable`, and its namespace's for a `host`, `data-toasts` for `toasts.host`. An element of a
-shipped component other than its root that a caller can style MUST carry the attribute the part
-spread on it writes, or, where no part is spread on it, one named for the component the same way,
-`data-chat` for `Chat`.
+`sortableTable`, and its namespace's for a `host`, `data-toasts` for `toasts.host`.
 
-49.5 `@abide/abide` MUST NOT ship a stylesheet for a shipped component.
+49.4 `@abide/abide` MUST NOT ship a stylesheet.
 
-49.6 A shipped component MUST write a `style` property only for a value it computes as it runs, or
-one a clause of its own requires.
+49.5 A parts function MUST write a `style` property only for a value it computes as it runs, or one a
+clause of its own requires.
 
-49.7 A shipped component rendering a widget WAI-ARIA gives a pattern for MUST carry the roles and
-the states that pattern names.
+49.6 A parts function for a widget WAI-ARIA gives a pattern for MUST carry the roles and the states
+that pattern names.
 
-49.8 A parts function MUST, in development, warn once on `abide:parts` for each attribute among its
+49.7 A parts function MUST, in development, warn once on `abide:parts` for each attribute among its
 parts that names by id an element the document does not hold, and for each of its parts whose role
 stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry the check.
 
-49.9 A shipped component for a widget a parts function also ships MUST render the widget through that
-parts function, and MUST NOT write a handler, a `role`, an `aria-` attribute, or the attribute 49.4
-names for its parts, of its own for it.
-
-49.10 Every option of a parts function an app binds — a `Reactive` the parts read and write — MUST be
+49.8 Every option of a parts function an app binds — a `Reactive` the parts read and write — MUST be
 optional, and the parts MUST hand back what they read and write as a `Reactive` member under the
 option's name, the app's where one is given and one of their own from its default where none is; an
 id a parts function writes MUST be optional with one made where none is given, and readable among its
 parts; and its `key` and `label` MUST be optional where an item is a string or a number, which is then
 its own key and label.
 
-49.11 A parts function MUST hand back an element there is one of as a member naming that element —
+49.9 A parts function MUST hand back an element there is one of as a member naming that element —
 save one whose parts are one element's alone, which MUST hand back that element's part itself — an
-item with one element as a function of the item answering that element's attributes, and an item with
-more than one element, or with data of its own, as a function of the item answering that item's parts
-and data together; what a part reads that changes MUST be a `get` accessor, and no function among the parts
-MUST take an optional argument that changes what it answers, or take none to answer a value.
+item with one element as a function of the item answering that element's attributes, and an item
+with more than one element, or with data of its own, as a function of the item answering that item's
+parts and data together; what a part reads that changes MUST be a `get` accessor, and no function
+among the parts MUST take an optional argument that changes what it answers, or take none to answer
+a value.
 
-49.12 Every option of a parts function that is a value — save a `Reactive` it binds, and one that
+49.10 Every option of a parts function that is a value — save a `Reactive` it binds, and one that
 takes a function of its own meaning — MUST take the value or a function answering it.
 
-49.13 A parts function MUST read each of its options where it uses it, save its `id`, a `multiple`, a `range`,
-a `debounce`, a `rowHeight` and a size a measurement replaces, which it MUST read once.
+49.11 A parts function MUST read each of its options where it uses it, save its `id`, a `multiple`,
+a `range`, a `debounce`, a `rowHeight` and a size a measurement replaces, which it MUST read once.
 
-49.14 What `@abide/abide` does to an element an app writes MUST be handed out as a part, carrying
+49.12 What `@abide/abide` does to an element an app writes MUST be handed out as a part, carrying
 under `bind:element` what needs the element in a browser (32.99), and MUST NOT be a function an
 app hands `bind:element` itself.
 
-49.15 A listener a parts function hands back or takes for an element's event MUST be named `on`
-followed by that event's name, and every option, part key or component prop `@abide/abide` names
-beginning `on` MUST be lowercase.
+49.13 A listener a parts function hands back or takes for an element's event MUST be named `on`
+followed by that event's name, and every option or part key `@abide/abide` names beginning `on`
+MUST be lowercase.
 
-49.16 A parts function among whose parts is a popover, or a part inside one, MUST, in development,
+49.14 A parts function among whose parts is a popover, or a part inside one, MUST, in development,
 warn once on `abide:parts` where that popover is drawn while it is closed, and a build MUST NOT carry
 the check.
 
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with
-`showModal`, or with `show` where `modal` is `false`, and closed while `open` is false; `Dialog` MUST
-render its `<dialog>` through it.
+`showModal`, or with `show` where `modal` is `false`, and closed while `open` is false.
 
 50.2 Every close of a `dialog`'s `<dialog>`, whatever closed it, MUST write `false` to `open` and then call
 `onclose` with the `returnValue` that close set, and `''` where it set none, save that a close
@@ -5065,9 +5056,8 @@ NOT where it is false.
 50.5 `prompts.confirm`, `prompts.alert` and `prompts.prompt` MUST queue their prompt behind every prompt not yet
 answered.
 
-50.6 `prompts.host` MUST show the first prompt of the queue through its `dialog` part, `dialog`'s part
-with the role `alertdialog`, and the next once that one is answered; `Prompts` MUST render its
-`<dialog>` through it.
+50.6 `prompts.host` MUST show the first prompt of the queue through its `dialog` part, `dialog`'s
+part with the role `alertdialog`, and the next once that one is answered.
 
 50.7 A string handed to `prompts.confirm`, `prompts.alert` or `prompts.prompt` MUST be the
 prompt's `body`.
@@ -5097,13 +5087,13 @@ MUST keep it there.
 50.16 `toasts.notify` MUST throw where `isServer` is true.
 
 50.17 `toasts.host`'s `notices` MUST be `toasts.list` in order, and its `region` part MUST carry the
-role `status`; `Toasts` MUST render them keyed by each notice's id inside it.
+role `status`.
 
 50.18 A notice's action MUST take the notice out of `toasts.list` and then call its `run`.
 
-50.19 An anchored layer — a `Tooltips` showing a hint, the menu of a `menu`, an element `popover` is
-bound to and a `Combobox`'s open list — MUST sit on `side`, `offset` pixels from its anchor, lined
-up along it as `align` names.
+50.19 An anchored layer — the element carrying `tooltip.host`'s `hint` part while it shows a hint,
+the menu of a `menu`, an element `popover` is bound to and the element carrying `combobox`'s `popup`
+part — MUST sit on `side`, `offset` pixels from its anchor, lined up along it as `align` names.
 
 50.20 An anchored layer MUST take the side opposite `side` where `side` leaves less room than the
 layer needs and the opposite side leaves more.
@@ -5125,15 +5115,16 @@ stack while it shows (53.14, 53.15), once it is unbound, when the pointer leaves
 when its element loses focus.
 
 50.26 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
-the menu of a `menu`, an element `popover` is bound to and a `Combobox`'s open list MUST open in the
-top layer as a popover placed against their anchor as 50.19-50.21 state, and MUST be placed again while
-open whenever anything scrolls, the window resizes, or the anchor or the popover changes size — and
-for a change of size, before the frame that lays that size out is painted.
+the menu of a `menu`, an element `popover` is bound to and the element carrying `combobox`'s `popup`
+part MUST open in the top layer as a popover placed against their anchor as 50.19-50.21 state, and
+MUST be placed again while open whenever anything scrolls, the window resizes, or the anchor or the
+popover changes size — and for a change of size, before the frame that lays that size out is
+painted.
 
 50.27 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
-the menu of a `menu`, an element `popover` is bound to and a `Combobox`'s open list MUST write the
-side it took as `data-side`, how far along its facing edge the anchor's middle falls as the
-`--arrow-offset` custom property, and the anchor's width as `--anchor-width`.
+the menu of a `menu`, an element `popover` is bound to and the element carrying `combobox`'s `popup`
+part MUST write the side it took as `data-side`, how far along its facing edge the anchor's middle
+falls as the `--arrow-offset` custom property, and the anchor's width as `--anchor-width`.
 
 50.28 A `menu` MUST open from its trigger focusing its first menu item, or its last where ArrowUp
 opened it.
@@ -5153,16 +5144,16 @@ close it and return focus to its trigger.
 confirming button, and `undefined` where it closed any other way.
 
 50.34 `prompts.host`'s `typing` MUST hold for a prompt asked by `prompts.prompt` or carrying
-`mustType`, and its `input` part MUST start from the prompt's `value`, and `''` where it has none;
-`Prompts` MUST render an input there.
+`mustType`, and its `input` part MUST start from the prompt's `value`, and `''` where it has none.
 
 50.35 An anchored layer MUST keep its `--arrow-offset` at least `arrowInset` pixels from each end of
 its facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
 
 50.36 One hint MUST show at a time. The hint, the notices, the prompts and the message `announce`
-gives MUST each show in the last `tooltip.host`, `toasts.host`, `prompts.host` and `Announcer` of those
-standing, the others showing none, and a hint, a notice, a prompt or a message asked for with none standing
-MUST warn once, on `abide:tooltip`, `abide:toasts`, `abide:prompts` and `abide:announce`.
+gives MUST each show in the last `tooltip.host`, `toasts.host`, `prompts.host` and `announce.host`
+of those standing, the others showing none, and a hint, a notice, a prompt or a message asked for
+with none standing MUST warn once, on `abide:tooltip`, `abide:toasts`, `abide:prompts` and
+`abide:announce`.
 
 50.37 A `menu` MUST write every opening and every closing of its menu, however it happened, to its
 `open`, calling `onopen` or `onclose` after, and MUST open and close its menu as `open` is written.
@@ -5177,8 +5168,8 @@ its `menu` open.
 50.40 A printable key in an open `menu` MUST move focus to the next menu item whose text starts with
 the keys typed within 500 milliseconds of each other.
 
-50.41 `Toasts` MUST write each attribute a notice's `attributes` names onto that notice's element,
-under its `data-toasts` and `data-tone`.
+50.41 `toasts.host`'s `toast` part of a notice MUST carry each attribute the notice's `attributes`
+names, under its `data-toasts` and `data-tone`.
 
 50.42 A notice's `onclose` MUST be called once, as the notice leaves `toasts.list`, with `timeout`
 where its timeout took it, `action` where its action did, and `dismissed` otherwise.
@@ -5187,66 +5178,60 @@ where its timeout took it, `action` where its action did, and `dismissed` otherw
 other than by the confirming button, and a prompt whose `signal` is aborted already MUST NOT be
 queued.
 
-50.44 `Prompts` MUST show a prompt whose `modal` is `false` in a `Dialog` whose `modal` is `false`.
+50.44 `prompts.host`'s `dialog` part MUST open a prompt whose `modal` is `false` as `dialog`'s part
+opens one whose `modal` is `false`.
 
 50.45 The confirming button of a prompt carrying `run` MUST call `run` with the text typed, and while
 that call is in flight MUST keep the prompt showing, disabled, with `data-busy` on the dialog; the
 prompt MUST settle as confirmed once the call resolves, and stay showing with the rejection's message
 in its `error` part once it rejects.
 
-50.46 `Toasts` MUST render a notice's content through `Toast` where it is given, handed the notice,
-what dismisses it and what runs its action, inside the element carrying the notice's attributes,
-`data-toasts="toast"` and `data-tone`, and as its text, action and close button otherwise.
-
-50.47 The element carrying a `chart`'s `tip` MUST open against the chart's crosshair for as long as
+50.46 The element carrying a `chart`'s `tip` MUST open against the chart's crosshair for as long as
 the crosshair stands, and the chart's `svg` part MUST name it in `aria-describedby` while it does.
 
-50.48 The element carrying `tooltip.host`'s `hint` part, and a `chart`'s `tip`, MUST NOT be the
+50.47 The element carrying `tooltip.host`'s `hint` part, and a `chart`'s `tip`, MUST NOT be the
 target of a pointer event, so a hint open over its anchor never takes the pointer from it.
 
-50.49 `popover`'s `popover` part MUST carry `popover="manual"` among its attributes, and MUST show
+50.48 `popover`'s `popover` part MUST carry `popover="manual"` among its attributes, and MUST show
 its element against the element its `trigger` or its `anchor` is spread on while `open` holds, and
 hide it once `open` does not or it is unbound.
 
-50.50 `announce` MUST make its text the one message `Announcer` holds, in place of the message before
-it, read `polite` unless its `politeness` says `assertive`.
+50.49 `announce` MUST make its text the one message `announce.host`'s `said` answers, in place of
+the message before it, read `polite` unless its `politeness` says `assertive`.
 
-50.51 `announce` MUST throw where `isServer` is true.
+50.50 `announce` MUST throw where `isServer` is true.
 
-50.52 `announce.host`'s `polite` and `assertive` parts MUST each be a live region of that politeness,
-and its `said` MUST answer the message for the region its politeness names and nothing for the
-other; `Announcer` MUST render both regions, standing and empty as it first renders.
+50.51 `announce.host`'s `polite` and `assertive` parts MUST each be a live region of that
+politeness, and its `said` MUST answer the message for the region its politeness names and nothing
+for the other.
 
-50.53 `Announcer` MUST render each message `said` answers as an element of its own, a message
-saying the words of the one before it among them.
+50.52 `announce.host`'s `said` MUST answer a message saying the words of the one before it as a
+message of its own.
 
-50.54 `tooltip.host`'s `hint` part MUST carry every attribute its element needs as the server writes
+50.53 `tooltip.host`'s `hint` part MUST carry every attribute its element needs as the server writes
 it: `role="tooltip"` and `popover="manual"`, with `data-open` present while a hint shows there.
 
-50.55 `tooltip.host`'s `text` MUST be the text of the hint showing in that host, and absent while none
+50.54 `tooltip.host`'s `text` MUST be the text of the hint showing in that host, and absent while none
 does.
 
-50.56 `Tooltips` MUST render one element carrying `tooltip.host`'s `hint` part whose content is its
-`text`.
-
-50.57 A `menu` given `openOnHover` MUST open once a mouse or a pen has rested on its trigger that many
+50.55 A `menu` given `openOnHover` MUST open once a mouse or a pen has rested on its trigger that many
 milliseconds, focusing nothing in its menu, and MUST NOT open from a touch's resting.
 
-50.58 A `menu` a pointer opened, given `closeOnLeave`, MUST close once the pointer has been off its
+50.56 A `menu` a pointer opened, given `closeOnLeave`, MUST close once the pointer has been off its
 trigger and its menu that many milliseconds, and a `menu` a key opened MUST NOT close for a leave.
 
-50.59 While a `menu` of a `group` is open, a pointer entering the trigger of another `menu` of that
+50.57 While a `menu` of a `group` is open, a pointer entering the trigger of another `menu` of that
 `group`, or ArrowLeft or ArrowRight in its menu, MUST close it and open the other — for the keys, the
 one before or after it in the document order of their triggers, going round.
 
-50.60 A `menu` a `group` switches to MUST carry `data-from` naming the side the one it switched from
+50.58 A `menu` a `group` switches to MUST carry `data-from` naming the side the one it switched from
 stands on, `start` or `end`, until it closes, and the one it switched from MUST carry `data-to` naming
 the side of the one it switched to, until it opens again.
 
-50.61 `popover`'s `trigger` MUST open the popover on a click while it is shut, and shut it on a click
+50.59 `popover`'s `trigger` MUST open the popover on a click while it is shut, and shut it on a click
 while it is open, or while it was open as the press began; its `anchor` MUST NOT open it.
 
-50.62 An open `popover` MUST be a layer `dismissible` stacks, writing `false` to `open` on an Escape
+50.60 An open `popover` MUST be a layer `dismissible` stacks, writing `false` to `open` on an Escape
 and on a press outside it and outside its `trigger` or `anchor`, save where its `escape` or its
 `outside` is `false`.
 
@@ -5322,274 +5307,244 @@ input is empty.
 
 51.29 `combobox` MUST shut its list when its input loses focus.
 
-51.30 `Combobox` MUST render an option's content through `Option` where it is given, and as the
-item's `label` otherwise.
+51.30 `combobox` MUST write `data-open` on its `root` part while its list is open.
 
-51.31 `Combobox` MUST render its children where `combobox`'s `nothingFound` holds: its list open,
-listing no item and waiting on no call of `search`.
+51.31 `combobox` MUST write `data-busy` on its `root` part while its open list waits on a call of
+`search`.
 
-51.32 `combobox` MUST write `data-open` on its `root` part while its list is open.
+51.32 `combobox` MUST write `data-active` on the active item's option.
 
-51.33 `combobox` MUST write `data-busy` on its `root` part while its open list waits on a call of `search`.
+51.33 `combobox` MUST write `data-selected` on the option of `value`.
 
-51.34 `combobox` MUST write `data-active` on the active item's option.
+51.34 `tabs` MUST select the first of `keys` where `selected` names none of them.
 
-51.35 `combobox` MUST write `data-selected` on the option of `value`.
+51.35 `tabs` MUST select a tab that is clicked, writing its key to `selected`.
 
-51.36 `tabs` MUST select the first of `keys` where `selected` names none of them.
-
-51.37 `tabs` MUST select a tab that is clicked, writing its key to `selected`.
-
-51.38 `tabs` MUST select the next tab on ArrowRight and the previous on ArrowLeft, going round the
+51.36 `tabs` MUST select the next tab on ArrowRight and the previous on ArrowLeft, going round the
 ends.
 
-51.39 `tabs` MUST select the first tab on Home, and the last on End.
+51.37 `tabs` MUST select the first tab on Home, and the last on End.
 
-51.40 `tabs` MUST move focus to a tab a key selects.
+51.38 `tabs` MUST move focus to a tab a key selects.
 
-51.41 `tabs` MUST give the selected tab a `tabindex` of `0`, and every other tab a `tabindex` of
+51.39 `tabs` MUST give the selected tab a `tabindex` of `0`, and every other tab a `tabindex` of
 `-1`.
 
-51.42 A tab's own panel `tabs` hands back MUST be hidden while another tab is selected and MUST keep
+51.40 A tab's own panel `tabs` hands back MUST be hidden while another tab is selected and MUST keep
 what it holds, and the one shared panel MUST take the id the selected tab's `aria-controls` names and
 be labelled by that tab; a tab MUST name its panel by `aria-controls` only while it is selected.
 
-51.43 `tabs`'s parts MUST carry every attribute its tabs and panels need as the server writes them,
+51.41 `tabs`'s parts MUST carry every attribute its tabs and panels need as the server writes them,
 `role`, `aria-selected`, `aria-controls` and `aria-labelledby` included.
 
-51.44 `tabs` MUST write `data-selected` on the selected tab.
+51.42 `tabs` MUST write `data-selected` on the selected tab.
 
-51.45 `sortBy` MUST order `items` by the value `value` answers for each, ascending unless
+51.43 `sortBy` MUST order `items` by the value `value` answers for each, ascending unless
 `direction` is `descending`.
 
-51.46 `sortBy` MUST keep items of equal value in the order `items` holds them, in either direction.
+51.44 `sortBy` MUST keep items of equal value in the order `items` holds them, in either direction.
 
-51.47 `sortBy` MUST put an item whose value is blank — `undefined`, `null`, `''`, `NaN` or an
+51.45 `sortBy` MUST put an item whose value is blank — `undefined`, `null`, `''`, `NaN` or an
 invalid `Date` — after every item whose value is not, in either direction.
 
-51.48 `sortBy` MUST compare two numbers, two bigints or two booleans by value, two dates by time,
+51.46 `sortBy` MUST compare two numbers, two bigints or two booleans by value, two dates by time,
 and any other pair as text in the `en-US` locale, the numerals in it compared by value.
 
-51.49 `sortableTable` MUST sort by a `Column`'s `value` where it has one, and by the row's field its
+51.47 `sortableTable` MUST sort by a `Column`'s `value` where it has one, and by the row's field its
 `key` names otherwise.
 
-51.50 `sortBy` MUST hand back a new array, and MUST leave `items` in the order it holds them.
+51.48 `sortBy` MUST hand back a new array, and MUST leave `items` in the order it holds them.
 
-51.51 `sortableTable`'s `rows` MUST answer, and `SortableTable` MUST render, its rows in the order
-`sortBy` hands back for the value of the column `sort` names, and in the order its `rows` hold them
-where `sort` is `undefined` or names no column.
+51.49 `sortableTable`'s `rows` MUST answer its rows in the order `sortBy` hands back for the value
+of the column `sort` names, and in the order its `rows` hold them where `sort` is `undefined` or
+names no column.
 
-51.52 `SortableTable` MUST render each header's `label` in a button that sorts by its column, save a
-`Column` whose `sortable` is `false`.
-
-51.53 A press on `sortableTable`'s `sort` part for a column MUST turn the direction round where `sort`
+51.50 A press on `sortableTable`'s `sort` part for a column MUST turn the direction round where `sort`
 names that column, and MUST otherwise sort by the column in its `firstDirection`, ascending where it
 has none.
 
-51.54 `sortableTable`'s `header` part MUST write the direction of `sort` as `aria-sort` on the sorted
+51.51 `sortableTable`'s `header` part MUST write the direction of `sort` as `aria-sort` on the sorted
 column's header, and on no other header.
 
-51.55 `sortableTable`'s `header` part MUST write the direction of `sort` as `data-sort` on the sorted
+51.52 `sortableTable`'s `header` part MUST write the direction of `sort` as `data-sort` on the sorted
 column's header, and on no other header.
 
-51.56 `SortableTable` MUST keep each row's element across a change of `sort`, keyed by `key`.
+51.53 `sortableTable`'s `text` MUST give as a cell's text what the column's `format` hands back
+where the column has one, and otherwise the value's own text, or none for a blank value.
 
-51.57 `SortableTable` MUST render a cell's content through `Cell` where it is given, and as the
-cell's text otherwise.
+51.54 `sortableTable`'s `header` and `cell` parts MUST write a `Column`'s `align` as `data-align`.
 
-51.58 `sortableTable`'s `text`, and `SortableTable` for a cell, MUST give as a cell's text what the
-column's `format` hands back where the column has one, and otherwise the value's own text, or none for
-a blank value.
-
-51.59 `sortableTable`'s `header` and `cell` parts MUST write a `Column`'s `align` as `data-align`.
-
-51.60 `SortableTable` MUST spread what `rowAttributes` hands back for a row onto that row's `<tr>`.
-
-51.61 A `combobox` whose `value` is an array MUST add an item picked to it, or take the item out
+51.55 A `combobox` whose `value` is an array MUST add an item picked to it, or take the item out
 where it holds it already, MUST keep its list open and clear the typed text on a pick, MUST write
 `data-selected` on the option of every item it holds, and MUST NOT clear it on Escape.
 
-51.62 A `Combobox` whose `value` is an array MUST render each item it holds through `Chip` where it
-is given, handed the item and what takes it out, and as its `label` beside `combobox`'s `remove`
-part otherwise, and Backspace in `combobox`'s empty input MUST take out the last item it holds.
+51.56 Backspace in the empty input of a `combobox` whose `value` is an array MUST take out the last
+item it holds.
 
-51.63 `SortableTable` given `Detail` MUST render, after each row, a row of its own whose
-`data-sortable-table` is `detail` and whose one cell spans every column and holds `Detail` handed that row.
+51.57 `combobox`'s `popup` part MUST open the element it is spread on against its input as `popover`
+opens one, and a press inside it MUST NOT take focus from its input.
 
-51.64 `combobox`'s `popup` part MUST open the element it is spread on against its input as `popover`
-opens one, and a press inside it MUST NOT take focus from its input, and `Combobox` MUST hold its open
-list, and the children 51.31 renders, in one `data-combobox="popup"` element carrying it.
-
-51.65 `virtualList`'s `shown` MUST be its `items` from `overscan` rows before the first row its
+51.58 `virtualList`'s `shown` MUST be its `items` from `overscan` rows before the first row its
 scroller shows to `overscan` rows past the last, each with the item, its index and its key.
 
-51.66 `virtualList` MUST take a row to hold as many items as fit across its `host` at the width of an
+51.59 `virtualList` MUST take a row to hold as many items as fit across its `host` at the width of an
 item measured, the host's column gap counted, and to be as tall as the items measured are on average,
 the host's row gap counted.
 
-51.67 `virtualList` MUST read nothing as its `host` is bound, and MUST answer its first `initial`
+51.60 `virtualList` MUST read nothing as its `host` is bound, and MUST answer its first `initial`
 items as `shown` until its first measurement, on a server as in a browser.
 
-51.68 `virtualList` MUST follow the nearest ancestor of its `host` whose overflow scrolls, or the
+51.61 `virtualList` MUST follow the nearest ancestor of its `host` whose overflow scrolls, or the
 window where none does.
 
-51.69 `virtualList`'s `host` MUST carry, as its block padding, the height of the rows before `shown`
+51.62 `virtualList`'s `host` MUST carry, as its block padding, the height of the rows before `shown`
 and of the rows after it.
 
-51.70 `virtualList`'s `scrollTo` MUST scroll the row holding `index` to the top of its scroller, past
+51.63 `virtualList`'s `scrollTo` MUST scroll the row holding `index` to the top of its scroller, past
 the scroller's scroll padding, and `shown` MUST hold that item before the scroll lands.
 
-51.71 `virtualList`'s `sections` MUST answer each label `section` writes, in the order its first item
+51.64 `virtualList`'s `sections` MUST answer each label `section` writes, in the order its first item
 stands, with that item's index — or, where `labels` is given, each of `labels` in order, with `-1` for
 one no item stands in — and MUST answer as `current` the label of the section the first item its
 scroller shows stands in.
 
-51.72 `commandPalette` MUST turn `open` on and off on `hotkey`, wherever focus is, its own input
-included; its `dialog` part MUST be `dialog`'s, opened modal by `open`, so `CommandPalette` opens as a
-modal `<dialog>` with focus in its input.
+51.65 `commandPalette` MUST turn `open` on and off on `hotkey`, wherever focus is, its own input
+included; its `dialog` part MUST be `dialog`'s, opened modal by `open`, with focus in its input.
 
-51.73 `commandPalette` MUST list each of `commands`, in the order given, whose `label` and `keywords`
-together hold every word typed in its input, ignoring case, and `CommandPalette` MUST render its
-children where none does.
+51.66 `commandPalette` MUST list each of `commands`, in the order given, whose `label` and
+`keywords` together hold every word typed in its input, ignoring case.
 
-51.74 `commandPalette` MUST keep and move its active command as a `listbox` over the commands it lists
+51.67 `commandPalette` MUST keep and move its active command as a `listbox` over the commands it lists
 does, its input naming the active command as its `aria-activedescendant`.
 
-51.75 `commandPalette` MUST run a command chosen by Enter or a click after turning `open` off, so focus
-is back where it stood when the palette opened before the command moves it.
+51.68 `commandPalette` MUST run a command chosen by Enter or a click after turning `open` off, so
+focus is back where it stood when the palette opened before the command moves it.
 
-51.76 `commandPalette`'s input MUST leave Escape to the dialog it is in, which shuts on it, and Home and
-End to its caret.
+51.69 `commandPalette`'s input MUST leave Escape to the dialog it is in, which shuts on it, and Home
+and End to its caret.
 
-51.77 `CommandPalette` MUST show a command's `key` beside its label as `keyLabel` writes it, and
-`commandPalette` MUST NOT bind it.
+51.70 `commandPalette` MUST NOT bind a command's `key`.
 
-51.78 `commandPalette` MUST list every command again, its input emptied, each time `open` turns on.
+51.71 `commandPalette` MUST list every command again, its input emptied, each time `open` turns on.
 
-51.79 `sortableTable`'s `select` part MUST be a checkbox named for its row by the first column's text
-and checked while `selected` holds the row's key, and its `row` part MUST write `data-selected` on such
-a row; `SortableTable` given `selected` MUST lead each row with that checkbox, and given none MUST
-render no checkbox.
+51.72 `sortableTable`'s `select` part MUST be a checkbox named for its row by the first column's
+text and checked while `selected` holds the row's key, and its `row` part MUST write `data-selected`
+on such a row.
 
-51.80 A press on `sortableTable`'s `select` part MUST add its row's key to `selected` or take it
+51.73 A press on `sortableTable`'s `select` part MUST add its row's key to `selected` or take it
 out, `selected` keeping the order of `rows`.
 
-51.81 A press with Shift on `sortableTable`'s `select` part MUST check or clear, as it turns, every
+51.74 A press with Shift on `sortableTable`'s `select` part MUST check or clear, as it turns, every
 row from the row whose checkbox was pressed last to it, in the order the rows show.
 
-51.82 `sortableTable`'s `selectAll` part MUST be a checkbox checked while every row is selected and
-mixed while some are, whose press selects every row or, where every row is, none, and
-`SortableTable` given `selected` MUST head its checkboxes with it.
+51.75 `sortableTable`'s `selectAll` part MUST be a checkbox checked while every row is selected and
+mixed while some are, whose press selects every row or, where every row is, none.
 
-51.83 `sortableTable` MUST write a change of the selection it makes to `selected`, and
-`SortableTable` back to a `selected` bound to it.
+51.76 `sortableTable` MUST write a change of the selection it makes to `selected`.
 
-51.84 `tree` MUST give its tree `role="tree"`, each node's item `role="treeitem"` with the node's depth
-as `aria-level` and its count and place among its siblings as `aria-setsize` and `aria-posinset`, and
-the element holding a node's children `role="group"`.
+51.77 `tree` MUST give its tree `role="tree"`, each node's item `role="treeitem"` with the node's
+depth as `aria-level` and its count and place among its siblings as `aria-setsize` and
+`aria-posinset`, and the element holding a node's children `role="group"`.
 
-51.85 `tree` MUST write `aria-expanded` on the item of a node with children, `true` while the node is
+51.78 `tree` MUST write `aria-expanded` on the item of a node with children, `true` while the node is
 expanded, and on no other item.
 
-51.86 `tree` MUST put exactly one item in the page's tab order: the one last focused while it shows,
+51.79 `tree` MUST put exactly one item in the page's tab order: the one last focused while it shows,
 else the first one selected that shows, else the first.
 
-51.87 `tree` MUST move focus on ArrowDown and ArrowUp to the next and the previous item that shows,
+51.80 `tree` MUST move focus on ArrowDown and ArrowUp to the next and the previous item that shows,
 stopping at the ends, and on Home and End to the first and the last.
 
-51.88 `tree` MUST, on ArrowRight, expand a collapsed node and move focus to an expanded one's first
+51.81 `tree` MUST, on ArrowRight, expand a collapsed node and move focus to an expanded one's first
 child, and, on ArrowLeft, collapse an expanded node and move focus to the parent of any other.
 
-51.89 `tree` MUST move focus on a printable key to an item that shows whose `label` starts with what
+51.82 `tree` MUST move focus on a printable key to an item that shows whose `label` starts with what
 was typed, as `menu` moves among its items (50.40).
 
-51.90 A click on an item of a `tree` not given `multiple` `true`, and Enter or Space on the one focused,
-MUST set `selected` to that item's node's key, and Enter on the focused item of one given `multiple`
-`true` MUST set `selected` to that key alone; a click MUST pick only the item it lands in, and `tree`
-MUST write `aria-selected` on each item and `data-selected` on each one selected.
+51.83 A click on an item of a `tree` not given `multiple` `true`, and Enter or Space on the one
+focused, MUST set `selected` to that item's node's key, and Enter on the focused item of one given
+`multiple` `true` MUST set `selected` to that key alone; a click MUST pick only the item it lands
+in, and `tree` MUST write `aria-selected` on each item and `data-selected` on each one selected.
 
-51.91 `tree` MUST hide the element holding a node's children while the node is collapsed.
+51.84 `tree` MUST hide the element holding a node's children while the node is collapsed.
 
-51.92 `range`'s parts MUST be a `role="group"` named by `label` and two thumbs, each `role="slider"`
+51.85 `range`'s parts MUST be a `role="group"` named by `label` and two thumbs, each `role="slider"`
 named by its entry of `labels`, with its value as `aria-valuenow`, what `format` writes for it as
 `aria-valuetext`, and the bounds the other thumb leaves it as `aria-valuemin` and `aria-valuemax`.
 
-51.93 `range` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
+51.86 `range` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
 low, each at a whole number of `step`s from `min`, within `min` and `max`.
 
-51.94 A thumb of a `range` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown and
-ArrowLeft, by a tenth of the way on Page Up and Page Down, and to the least and the greatest value it
-can take on Home and End, as a `Chart`'s crosshair steps (52.70).
+51.87 A thumb of a `range` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown
+and ArrowLeft, by a tenth of the way on Page Up and Page Down, and to the least and the greatest
+value it can take on Home and End, as a `chart`'s crosshair steps (52.69).
 
-51.95 A press on a `range`'s track MUST move the thumb nearer it to the value nearest the press and
+51.88 A press on a `range`'s track MUST move the thumb nearer it to the value nearest the press and
 focus it, and the thumb MUST follow the pointer until it lets go.
 
-51.96 `range` MUST write each change it makes to `value`, and `Range` each one back to a `value`
-bound to it.
+51.89 `range` MUST write each change it makes to `value`.
 
-51.97 `range` MUST write `data-dragging` on its root part while a pointer holds a thumb, and place its
+51.90 `range` MUST write `data-dragging` on its root part while a pointer holds a thumb, and place its
 thumbs, and the fill part between them, as `style`.
 
-51.98 `range` given `name` MUST submit its low and then its high value with a form its two field
+51.91 `range` given `name` MUST submit its low and then its high value with a form its two field
 parts are in, each as a field of that name.
 
-51.99 A press on `combobox`'s input MUST open its list where it is shut, save where `search` is given
+51.92 A press on `combobox`'s input MUST open its list where it is shut, save where `search` is given
 and the input holds no text, and MUST shut it where it is open; focus reaching the input MUST NOT open
 it.
 
-51.100 Alt+ArrowDown in `combobox`'s input MUST open its list where it is shut, and Alt+ArrowUp MUST
+51.93 Alt+ArrowDown in `combobox`'s input MUST open its list where it is shut, and Alt+ArrowUp MUST
 shut it where it is open, and each MUST leave its active item where it stands.
 
-51.101 `Listbox`'s `option` MUST answer the option of a key with the id `idOf` derives for it,
+51.94 `Listbox`'s `option` MUST answer the option of a key with the id `idOf` derives for it,
 `data-active` saying whether that key is the active one, `aria-selected` saying the same where
 `multiple` is not `true`, and a pointer moving over it making that key active.
 
-51.102 A jump `virtualList`'s `sections` hand back MUST scroll to its section's first item, and MUST
+51.95 A jump `virtualList`'s `sections` hand back MUST scroll to its section's first item, and MUST
 carry `aria-current` while its section is `current`.
 
-51.103 A jump `virtualList`'s `sections` hand back for a section no item stands in MUST be
+51.96 A jump `virtualList`'s `sections` hand back for a section no item stands in MUST be
 disabled.
 
-51.104 `virtualList` MUST stop following its scroller once its `host` is unbound.
+51.97 `virtualList` MUST stop following its scroller once its `host` is unbound.
 
-51.105 A `listbox` or a `tree` given `multiple` `true` MUST hold every key selected as `selected`,
+51.98 A `listbox` or a `tree` given `multiple` `true` MUST hold every key selected as `selected`,
 write `aria-multiselectable="true"` on its `listbox` or `tree` part, and write on each option or item
 `aria-selected` saying whether its key is in `selected`, and `data-selected` while it is.
 
-51.106 A click on an option of a `listbox`, or on an item of a `tree`, given `multiple` `true` MUST set
+51.99 A click on an option of a `listbox`, or on an item of a `tree`, given `multiple` `true` MUST set
 `selected` to its key alone, MUST instead add its key to `selected` or take it out where the key 53.3
-matches `mod` by is held, and MUST instead select the run 51.107 names to it where Shift is held.
+matches `mod` by is held, and MUST instead select the run 51.100 names to it where Shift is held.
 
-51.107 A run of a `listbox` or a `tree` MUST be every key from the anchor to the key it reaches, in the order the options or the
-items that show are listed, the anchor being the key the last pick or toggle of 51.106 or 51.109 landed
-on, or the active option's or the focused item's key where that key is not listed.
+51.100 A run of a `listbox` or a `tree` MUST be every key from the anchor to the key it reaches, in
+the order the options or the items that show are listed, the anchor being the key the last pick or
+toggle of 51.99 or 51.102 landed on, or the active option's or the focused item's key where that key
+is not listed.
 
-51.108 `mod+a`, as `hotkeys` matches it, in a `listbox` given `multiple` `true` MUST set `selected` to
+51.101 `mod+a`, as `hotkeys` matches it, in a `listbox` given `multiple` `true` MUST set `selected` to
 every option's key, and in a `tree` given `multiple` `true` to every node's key.
 
-51.109 Space in a `listbox` or a `tree` given `multiple` `true` MUST add the active option's or the
-focused item's key to `selected` or take it out, and Shift+Space MUST select the run 51.107 names to
+51.102 Space in a `listbox` or a `tree` given `multiple` `true` MUST add the active option's or the
+focused item's key to `selected` or take it out, and Shift+Space MUST select the run 51.100 names to
 it.
 
-51.110 ArrowDown, ArrowUp, Home or End with Shift held, in a `listbox` or a `tree` given `multiple`
-`true`, MUST select the run 51.107 names to the option or the item it moves to.
+51.103 ArrowDown, ArrowUp, Home or End with Shift held, in a `listbox` or a `tree` given `multiple`
+`true`, MUST select the run 51.100 names to the option or the item it moves to.
 
-51.111 A `listbox` not given `multiple` `true` MUST hold as `selected` the key 51.1 names as last
+51.104 A `listbox` not given `multiple` `true` MUST hold as `selected` the key 51.1 names as last
 moved to, and MUST take a key written to `selected` as that key.
 
-51.112 A click on an option of a `listbox` not given `multiple` `true` MUST make its key active and
+51.105 A click on an option of a `listbox` not given `multiple` `true` MUST make its key active and
 call `onpick` with its option.
 
-51.113 `combobox`'s `runs` MUST answer an item's `label` cut into runs in order, the first stretch of
+51.106 `combobox`'s `runs` MUST answer an item's `label` cut into runs in order, the first stretch of
 it holding the input's text as 51.16 finds it carrying the `match` part, whether or not `search` is
 given.
 
-51.114 `CommandParts`'s `runs` MUST answer the command's `label` cut into runs in order, the first
-stretch of it each word typed is found in as 51.73 finds it carrying the `match` part, stretches that
+51.107 `CommandParts`'s `runs` MUST answer the command's `label` cut into runs in order, the first
+stretch of it each word typed is found in as 51.66 finds it carrying the `match` part, stretches that
 overlap or touch carrying it as one run.
-
-51.115 `Combobox`, rendering an option as its `label`, and `CommandPalette`, rendering a command's
-label, MUST render each run carrying the `match` part as a `<mark>` it is spread on.
 
 # 52. Formatting, markdown and charts
 
@@ -5635,11 +5590,11 @@ element around them.
 52.16 `markdown` MUST render a heading of one `#` at the level `headingLevel` names, and each further
 `#` one level deeper, no deeper than 6.
 
-52.17 `Markdown` MUST render the markup `markdown` renders for its `source` and the options it is
-passed.
+52.17 Each section `markdown.incremental` answers that is not a block MUST carry as `html` the
+markup `markdown` renders for that section of `source`, given the options it is passed.
 
-52.18 `Markdown` MUST keep the nodes of every section of its `source` that text appended to the
-`source` leaves unchanged.
+52.18 `markdown.incremental` MUST answer the same object for every section of its `source` that text
+appended to the `source` leaves unchanged.
 
 52.19 `chart.ticks` MUST answer values a step of 1, 2 or 5 times a power of ten apart, the first at or
 below `min` and the last at or above `max`.
@@ -5654,34 +5609,33 @@ back along its points where `baseline` holds one per x.
 52.23 `chart.nearest` MUST answer the index of the position nearest `x`, the earlier of two equally
 near, and `-1` where there are no positions.
 
-52.24 `Chart` MUST draw the series of each `Line`, `Column` and `Area` among its children, in the
-order they were mounted with the first at the back, each mark carrying its series' index in that
-order as `data-series`.
+52.24 `chart` MUST draw the series `series` answers, in that order with the first at the back, each
+mark carrying its series' index in that order as `data-series`.
 
-52.25 `Chart` MUST draw a `data-chart="zero"` line at zero inside its plot, where `zero` is set.
+52.25 `chart` MUST draw a `data-chart="zero"` line at zero inside its plot, where `zero` is set.
 
-52.26 `Chart` MUST draw a crosshair at the x position nearest the pointer while a pointer is over it,
-and MUST open a readout of every series' value wherever its crosshair stands (50.47).
+52.26 `chart` MUST draw a crosshair at the x position nearest the pointer while a pointer is over it,
+and MUST open a readout of every series' value wherever its crosshair stands (50.46).
 
-52.27 `Chart` MUST open its readout on the side of the crosshair that has more of the plot.
+52.27 `chart` MUST open its readout on the side of the crosshair that has more of the plot.
 
-52.28 `Chart` MUST carry `data-hovering` on its root while its readout is open.
+52.28 `chart` MUST carry `data-hovering` on its root while its readout is open.
 
-52.29 `Chart`, `Pie` and `Sparkline` MUST carry `role="img"` and take their accessible name from
+52.29 `chart`, `pie` and `sparkline` MUST carry `role="img"` and take their accessible name from
 `label`.
 
-52.30 `Chart`, `Pie` and `Sparkline` MUST draw every mark in `currentColor`.
+52.30 `chart`, `pie` and `sparkline` MUST draw every mark in `currentColor`.
 
-52.31 `Sparkline` MUST carry `data-trend` on its root, `up`, `down` or `flat` by its last present value
-against its first.
+52.31 `sparkline` MUST carry `data-trend` on its root, `up`, `down` or `flat` by its last present
+value against its first.
 
 52.32 `format.relative` MUST write in the `style` its caller passes, and in `long` where it passes
 none.
 
-52.33 `Sparkline` given `kind: 'bar'` MUST draw each present value as a bar from zero, each in a
+52.33 `sparkline` given `kind: 'bar'` MUST draw each present value as a bar from zero, each in a
 band of equal width, with zero on its scale, and MUST draw no line, area or dot.
 
-52.34 `Chart` and `Sparkline` declaring `zero` MUST take zero into the range of their values, and
+52.34 `chart` and `sparkline` declaring `zero` MUST take zero into the range of their values, and
 MUST draw a series whose every present value is zero along the bottom of that range.
 
 52.35 `format.money` and `format.percent` declaring `signed` MUST write a negative value's sign as
@@ -5690,15 +5644,15 @@ MUST draw a series whose every present value is zero along the bottom of that ra
 52.36 `format.dateParts` MUST answer the pieces whose values joined in order are what `format.date`
 writes for the same value and options.
 
-52.37 `Chart` MUST draw a `Column` as a `data-chart="bar"` rect per present value, take zero into its
-range where it draws one, and stand the columns of an x side by side in its slot, one band per stack
-of columns and one per column in none.
+52.37 `chart` MUST draw a series whose `kind` is `column` as a `data-chart="bar"` rect per present
+value, take zero into its range where it draws one, and stand the columns of an x side by side in
+its slot, one band per stack of columns and one per column in none.
 
-52.38 A click on a `Chart` MUST call `onpick` with the index of the x position nearest it, and a click
-on a slice of a `Pie` with that slice's index, save where `disabled` holds for that index.
+52.38 A click on a `chart` MUST call `onpick` with the index of the x position nearest it, and a click
+on a slice of a `pie` with that slice's index, save where `disabled` holds for that index.
 
-52.39 `Chart` MUST write `data-disabled` on each bar, and on the readout, of an index `disabled`
-holds for, and `Pie` on each such slice.
+52.39 `chart` MUST write `data-disabled` on each bar, and on the readout, of an index `disabled`
+holds for, and `pie` on each such slice.
 
 52.40 `markdown` MUST write a link `href` answers with a `LinkTarget` with its `href` as the address,
 and its `target` and `rel`, where it carries them, as the link's attributes.
@@ -5711,9 +5665,9 @@ MUST render a definition as nothing.
 52.42 `markdown` MUST render a fenced block whose info starts with a name `blocks` holds as what that
 function answers for the block's source and the rest of its info, written as it is.
 
-52.43 `Markdown` MUST render a section that is one closed fenced block, and nothing else, whose info
-starts with a name `blocks` holds, as that component, handed the block's `source` and the rest of
-its `info`, and MUST render the block as code while its fence is open.
+52.43 `markdown.incremental` MUST answer a section that is one closed fenced block, and nothing else,
+whose info starts with a name `blocks` holds, as a `block` carrying that name, the block's `source`
+and the rest of its `info`, and MUST answer the block as code while its fence is open.
 
 52.44 `format.timeZone` MUST hold the zone the app pins, `undefined` until it pins one, one value per
 request on a server.
@@ -5736,190 +5690,189 @@ or `display`: `$…$`, `\(…\)`, `$$…$$` and `\[…\]` on a line, and lines o
 block a line of `$$` or `\]` alone closes; a `$` opens math only before a non-space and closes it only
 after a non-space and before no digit.
 
-52.50 `markdown` given `streaming` and `Markdown` given `streaming` MUST leave out the end of the last
-section a later chunk may still change, as far back as 160 characters of its last line: a closing
-fence half written, a last line that is a block's marker alone, a table's rows until the delimiter
-under its head is whole and its last row until the line ends, and the end of the last line from an
-opening of code, emphasis, a link or a tag nothing closes yet.
+52.50 `markdown` given `streaming` and `markdown.incremental` given `streaming` MUST leave out the end
+of the last section a later chunk may still change, as far back as 160 characters of its last line:
+a closing fence half written, a last line that is a block's marker alone, a table's rows until the
+delimiter under its head is whole and its last row until the line ends, and the end of the last line
+from an opening of code, emphasis, a link or a tag nothing closes yet.
 
-52.51 `Chart` MUST draw a `Line` as a `data-chart="line"` path through its present values.
+52.51 `chart` MUST draw a series whose `kind` is `line` as a `data-chart="line"` path through its
+present values.
 
-52.52 `Chart` MUST draw an `Area` as a `data-chart="area"` path closed onto the top of what is stacked
-under it, through a value it is missing, and, where it is in no stack, down to zero or the edge of the
-plot nearer zero.
+52.52 `chart` MUST draw a series whose `kind` is `area` as a `data-chart="area"` path closed onto
+the top of what is stacked under it, through a value it is missing, and, where it is in no stack,
+down to zero or the edge of the plot nearer zero.
 
-52.53 `Chart` MUST stop drawing a child's series once the child is removed.
-
-52.54 `chart.stack` MUST pile the values of the series sharing a stack up from zero at each x in
+52.53 `chart.stack` MUST pile the values of the series sharing a stack up from zero at each x in
 series order, a positive value up from the stack's positive total so far and a negative value down
 from its negative total so far.
 
-52.55 `chart.stack` MUST put a series whose `stack` is `false` in no stack, one naming a stack in that
+52.54 `chart.stack` MUST put a series whose `stack` is `false` in no stack, one naming a stack in that
 stack, and one naming none in a single stack shared with the others naming none where `stack` is set,
 and in no stack where it is not.
 
-52.56 `chart.stack` MUST count a missing value as zero toward its stack.
+52.55 `chart.stack` MUST count a missing value as zero toward its stack.
 
-52.57 `chart.stack` given `normalize` MUST answer each stacked value as its share of the sum of the
+52.56 `chart.stack` given `normalize` MUST answer each stacked value as its share of the sum of the
 magnitudes of its stack's values at that x, and as zero where that sum is zero.
 
-52.58 `chart.stack` given `normalize` MUST stack as it does given `stack`.
+52.57 `chart.stack` given `normalize` MUST stack as it does given `stack`.
 
-52.59 `Chart` MUST draw each series where `chart.stack` places it given the `Chart`'s own `stack` and
+52.58 `chart` MUST draw each series where `chart.stack` places it given its own `stack` and
 `normalize`.
 
-52.60 `Chart` declaring `normalize` MUST write its y ticks as percentages.
+52.59 `chart` declaring `normalize` MUST write its y ticks as percentages.
 
-52.61 `Chart` MUST read each series' own value in its readout, and, where `normalize` is set, a
+52.60 `chart` MUST read each series' own value in its readout, and, where `normalize` is set, a
 stacked value's share of its stack beside it.
 
-52.62 `Chart` MUST span each axis `bounds` gives a range for over that range, in place of the range
+52.61 `chart` MUST span each axis `bounds` gives a range for over that range, in place of the range
 of its values.
 
-52.63 `Chart` and `Pie` MUST keep each mark's element across a change of the values it draws.
+52.62 `chart` and `pie` MUST keep each mark's element across a change of the values it draws.
 
-52.64 `Chart` MUST write a column's place and size, and `Pie` a slice's sweep, as `style` properties.
+52.63 `chart` MUST write a column's place and size, and `pie` a slice's sweep, as `style` properties.
 
-52.65 `Pie` MUST draw each slice as a `data-pie="slice"` arc sweeping its value's share of the sum of
+52.64 `pie` MUST draw each slice as a `data-pie="slice"` arc sweeping its value's share of the sum of
 the slices' values, clockwise from the top in the order given, its index as `data-series`.
 
-52.66 `Pie` MUST draw no slice for a value that is missing, zero or negative.
+52.65 `pie` MUST draw no slice for a value that is missing, zero or negative.
 
-52.67 `Pie` MUST leave a hole at its center `inner` of its radius across.
+52.66 `pie` MUST leave a hole at its center `inner` of its radius across.
 
-52.68 `Pie` MUST open a hint for a slice as `tooltip` does, reading its label, its value and its
+52.67 `pie` MUST open a hint for a slice as `tooltip` does, reading its label, its value and its
 share, placed against the box of that slice's own arc rather than the whole ring's.
 
-52.69 `Chart` MUST draw its y ticks as `data-chart="tick"` labels left of its plot, and no mark over
+52.68 `chart` MUST draw its y ticks as `data-chart="tick"` labels left of its plot, and no mark over
 one.
 
-52.70 `Chart` MUST take focus, and while it has it, ArrowRight and ArrowLeft MUST move its crosshair
+52.69 `chart` MUST take focus, and while it has it, ArrowRight and ArrowLeft MUST move its crosshair
 one x position, from none to the first and the last, stopping at either end, and Home and End to the
 first and the last; an Escape no one prevented, and focus leaving the chart, MUST put the crosshair
 away.
 
-52.71 Enter on a `Chart` MUST call `onpick` with the index of the x position its crosshair stands at,
+52.70 Enter on a `chart` MUST call `onpick` with the index of the x position its crosshair stands at,
 save where `disabled` holds for that index.
 
-52.72 `Chart` MUST `announce` the x its crosshair stands at and every series' value there each time a
+52.71 `chart` MUST `announce` the x its crosshair stands at and every series' value there each time a
 key moves the crosshair, and MUST NOT for a move of the pointer.
 
-52.73 `time`'s `text` of a value MUST be `format.relative` of it, and its `time` part of a value MUST
-carry it as an ISO string as `datetime` and `format.date` of it in the `dateTime` style as `title`;
-where the value names no time, the text MUST be `—` and the part MUST carry neither attribute. `Time`
-MUST write them on a `<time>`.
+52.72 `time`'s `text` of a value MUST be `format.relative` of it, and its `time` part of a value
+MUST carry it as an ISO string as `datetime` and `format.date` of it in the `dateTime` style as
+`title`; where the value names no time, the text MUST be `—` and the part MUST carry neither
+attribute.
 
-52.74 Every `time` part bound to an element in a browser MUST be ticked by one timer, set for the
+52.73 Every `time` part bound to an element in a browser MUST be ticked by one timer, set for the
 soonest moment any of their labels next reads differently, and no timer MUST stand while none is
 bound.
 
-52.75 A `time`'s label MUST be ticked when `format.relative` next writes it differently: half a unit past
-where its rounded count stands, or where its unit turns, and, under a minute either side of now, once a
-minute has passed.
+52.74 A `time`'s label MUST be ticked when `format.relative` next writes it differently: half a unit
+past where its rounded count stands, or where its unit turns, and, under a minute either side of
+now, once a minute has passed.
 
-52.76 No `time`'s timer MUST stand while the page is hidden, and the time MUST be read again as the
+52.75 No `time`'s timer MUST stand while the page is hidden, and the time MUST be read again as the
 page is shown.
 
-52.77 A tick MUST write only the labels it changed.
+52.76 A tick MUST write only the labels it changed.
 
-52.78 A `time` MUST write its label from the time it renders at on a server and from the time it
+52.77 A `time` MUST write its label from the time it renders at on a server and from the time it
 hydrates at in a browser, a label a boundary passed between the two being written as changed text and
 not as a hydration mismatch.
 
-52.79 `chart` MUST hand back a point for each present value of each series, at the x `x` answers for
+52.78 `chart` MUST hand back a point for each present value of each series, at the x `x` answers for
 its index and the y `y` answers for the value it is drawn at, and none for a missing value.
 
-52.80 `chart`'s crosshair part MUST carry the same binding at every x position it stands at, and
+52.79 `chart`'s crosshair part MUST carry the same binding at every x position it stands at, and
 its `tip` MUST be placed again against the crosshair at each x the crosshair moves to.
 
-52.81 `pie` MUST keep a slice's hint binding while the slice's hint reads the same, however its sweep
+52.80 `pie` MUST keep a slice's hint binding while the slice's hint reads the same, however its sweep
 changes.
 
-52.82 `chart`, `pie` and `sparkline` MUST hand back as parts every mark, attribute and handler `Chart`,
-`Pie` and `Sparkline` draw with, and every clause naming one of those components MUST hold of what its
-parts function hands back where an app spreads it, save 52.24 and 52.53, which hold of `Chart`'s
-children: `chart` draws the series its `series` answers, in that order.
+52.81 `chart`, `pie` and `sparkline` MUST hand back as parts every mark, attribute and handler they
+draw with, and every clause saying what one of them draws MUST hold of what it hands back where an
+app spreads it.
 
-52.83 Each of `calendar`'s `months` MUST hand back as its `weeks` the whole weeks its month falls in, each seven consecutive
-days from the week's first day, and a day of another month among them MUST carry `data-outside`.
+52.82 Each of `calendar`'s `months` MUST hand back as its `weeks` the whole weeks its month falls
+in, each seven consecutive days from the week's first day, and a day of another month among them
+MUST carry `data-outside`.
 
-52.84 `calendar` MUST count its days the same in every zone the code runs in, dropping and repeating
+52.83 `calendar` MUST count its days the same in every zone the code runs in, dropping and repeating
 none where a daylight-saving change falls in the month.
 
-52.85 `calendar`'s today MUST be the day it is in the zone its `timeZone` names, and where it names
+52.84 `calendar`'s today MUST be the day it is in the zone its `timeZone` names, and where it names
 none in the zone `format.date` writes in (52.3), and today's cell MUST carry `data-today` and an
 `aria-current` of `date`.
 
-52.86 The first month `calendar` shows MUST be the `month` written where it is one, else the
+52.85 The first month `calendar` shows MUST be the `month` written where it is one, else the
 selected day's or a range's start's, else today's.
 
-52.87 Exactly one of `calendar`'s day cells MUST be in the page's tab order: the active day's, being
-the day focused last, else the selected day or a range's start, else today, whichever is first in a month shown, and
-the first month's first day where none is; focus put on a day's cell by any means MUST make that day the
-active one.
+52.86 Exactly one of `calendar`'s day cells MUST be in the page's tab order: the active day's, being
+the day focused last, else the selected day or a range's start, else today, whichever is first in a
+month shown, and the first month's first day where none is; focus put on a day's cell by any means
+MUST make that day the active one.
 
-52.88 `calendar`'s `weekdays` MUST be the seven days in the order a week runs, named in its `locale`,
+52.87 `calendar`'s `weekdays` MUST be the seven days in the order a week runs, named in its `locale`,
 and a week MUST start on the `firstDay` given, else on the day `Intl.Locale` gives for the locale,
 else on Sunday.
 
-52.89 On `calendar`'s grid, ArrowRight and ArrowLeft MUST move focus a day on and back, ArrowDown and
+52.88 On `calendar`'s grid, ArrowRight and ArrowLeft MUST move focus a day on and back, ArrowDown and
 ArrowUp a week on and back, and Home and End to the first and last day of the active day's week.
 
-52.90 On `calendar`'s grid, PageDown and PageUp MUST move focus a month on and back, and a year with
+52.89 On `calendar`'s grid, PageDown and PageUp MUST move focus a month on and back, and a year with
 Shift, to the same day of the month where that month has it and its last day where it does not.
 
-52.91 A key moving `calendar`'s active day out of the months shown MUST show the month it moved into,
+52.90 A key moving `calendar`'s active day out of the months shown MUST show the month it moved into,
 paging the months shown by as few as do.
 
-52.92 Enter and Space on `calendar`'s grid MUST pick the active day, as 52.98 picks one in a range.
+52.91 Enter and Space on `calendar`'s grid MUST pick the active day, as 52.97 picks one in a range.
 
-52.93 A click on one of `calendar`'s day cells MUST pick its day, as 52.98 picks one in a range, and
+52.92 A click on one of `calendar`'s day cells MUST pick its day, as 52.97 picks one in a range, and
 make it the active one.
 
-52.94 `calendar`'s `previous` and `next` MUST page the months shown a month back and on, MUST name
+52.93 `calendar`'s `previous` and `next` MUST page the months shown a month back and on, MUST name
 every grid shown in their `aria-controls`, and MUST NOT move focus.
 
-52.95 Each of `calendar`'s `months` MUST hand back as its `label` its month and year in the
+52.94 Each of `calendar`'s `months` MUST hand back as its `label` its month and year in the
 calendar's `locale`, and its grid MUST be labelled by its `heading`.
 
-52.96 A selected day's cell MUST carry `data-selected` and an `aria-selected` of `true`, and every
+52.95 A selected day's cell MUST carry `data-selected` and an `aria-selected` of `true`, and every
 other day's cell an `aria-selected` of `false`.
 
-52.97 `calendar` MUST show `months` months from the first shown, one after another and a grid each,
+52.96 `calendar` MUST show `months` months from the first shown, one after another and a grid each,
 and one where `months` is not given; a day of another month in one grid whose own month another grid
 shows MUST carry no `id` and no `tabindex` there.
 
-52.98 `calendar` given a `range` of `true` MUST hold what it picks as `[start, end]`: a pick while
+52.97 `calendar` given a `range` of `true` MUST hold what it picks as `[start, end]`: a pick while
 nothing is picked or while an end is MUST make its day the start with no end, and a pick while a
 start has no end MUST make the earlier of the two days the start and the later the end.
 
-52.99 In a range, every day from its start to its end MUST be selected as 52.96 states, its start
+52.98 In a range, every day from its start to its end MUST be selected as 52.95 states, its start
 alone while it has no end, its start's cell MUST carry `data-range-start` and its end's
 `data-range-end`, and every grid MUST carry an `aria-multiselectable` of `true`.
 
-52.100 While a range has a start and no end, every day from the start to the day last pointed at in
+52.99 While a range has a start and no end, every day from the start to the day last pointed at in
 a grid, else to the day focused last, MUST carry `data-preview`, and no day MUST otherwise.
 
-52.101 `calendar`'s `active` MUST be the day 52.87 puts in the tab order, and its `idOf` MUST answer
-the id of the cell 52.97 gives the day it is handed.
+52.100 `calendar`'s `active` MUST be the day 52.86 puts in the tab order, and its `idOf` MUST answer
+the id of the cell 52.96 gives the day it is handed.
 
-52.102 `format.date`'s `'input'` style MUST write a time as the clocks of its zone read it, as
+52.101 `format.date`'s `'input'` style MUST write a time as the clocks of its zone read it, as
 `YYYY-MM-DDTHH:MM`, the same in every `locale`.
 
-52.103 `instantAt` MUST answer the epoch milliseconds at which the clocks of the zone its `timeZone`
+52.102 `instantAt` MUST answer the epoch milliseconds at which the clocks of the zone its `timeZone`
 names — else the zone `format.date` writes in (52.3) — read the wall clock it is handed, a
 `YYYY-MM-DD` being its midnight, and MUST answer `undefined` for a string that is no `YYYY-MM-DD`,
 `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS` on the calendar.
 
-52.104 Where the zone's clocks read a wall clock twice, `instantAt` MUST answer the earlier instant,
+52.103 Where the zone's clocks read a wall clock twice, `instantAt` MUST answer the earlier instant,
 and where they skip it, the instant the length of the skip later — `Temporal`'s `compatible`.
 
-52.105 `chart.path` given `curve` MUST draw each run of three or more values as a curve through every
+52.104 `chart.path` given `curve` MUST draw each run of three or more values as a curve through every
 one of its points that stays, between two neighbouring points, within the values of those two, and
 MUST close a run back along a `baseline` of one point per x by the curve those points draw.
 
-52.106 `Chart` MUST draw a `Line` or an `Area` declaring `curve` by 52.105, and `Sparkline` declaring
-`curve` MUST draw its line and its area by it.
+52.105 `chart` MUST draw a series whose `kind` is `line` or `area` declaring `curve` by 52.104, and
+`sparkline` declaring `curve` MUST draw its line and its area by it.
 
 # 53. Keys, element behaviors and chat
 
@@ -6014,140 +5967,132 @@ turn's text parts alone.
 
 53.30 `transcript.turn` MUST set every field an `AssistantTurn` declares.
 
-53.31 `Chat` MUST call `ask` with what `transcript.messages` makes of the conversation, the new
+53.31 `chat` MUST call `ask` with what `transcript.messages` makes of the conversation, the new
 question included, and with a `signal` of its own.
 
-53.32 `Chat` MUST fold each event `ask` streams into the answering turn once, as it arrives.
+53.32 `chat` MUST fold each event `ask` streams into the answering turn once, as it arrives.
 
-53.33 `Chat`'s composer MUST send on Enter, and MUST NOT on Shift+Enter or on an Enter an input
+53.33 `chat`'s `input` part MUST send on Enter, and MUST NOT on Shift+Enter or on an Enter an input
 method is composing.
 
-53.34 `Chat` MUST NOT send while `disabled` is `true`, or with neither words nor an image to send,
+53.34 `chat` MUST NOT send while `disabled` is `true`, or with neither words nor an image to send,
 and what it is sent while an answer streams MUST be queued, shown in its composer until it is
 cancelled or the answer ends, and asked once the answer ends.
 
-53.35 `Chat`'s Stop MUST abort the `signal` it handed `ask`, keeping what arrived and setting the
-answer's `stop` to `stopped`.
+53.35 `chat`'s `stop` part MUST abort the `signal` it handed `ask`, keeping what arrived and setting
+the answer's `stop` to `stopped`.
 
-53.36 `Chat` MUST set an answer's `failed` to the message of what `ask` threw, save where Stop
-aborted it.
+53.36 `chat` MUST set an answer's `failed` to the message of what `ask` threw, save where its `stop`
+part aborted it.
 
-53.37 `Chat` MUST take an image `imageFiles` finds in a paste into or a drop on its composer as an
-image part `imagePiece` draws.
+53.37 `chat` MUST take an image `imageFiles` finds in a paste into or a drop on the element carrying
+its `composer` part as an image part `imagePiece` draws.
 
-53.38 `Chat` MUST answer a permission part through `permit` with the part's id and the visitor's
+53.38 `chat` MUST answer a permission part through `permit` with the part's id and the visitor's
 answer, and MUST disable the part's buttons where `permit` is absent or the part is answered.
 
-53.39 `Chat` MUST render an assistant's text part through `Text` where one is given, handed the
-text, the part and its turn, and as text where none is.
+53.39 `chat`'s `transcript` part MUST be `followBottom`'s `host`, and its `jump` part `followBottom`'s
+`jump`.
 
-53.40 `Chat`'s transcript MUST be `followBottom`'s `host`, and `Chat` MUST render its `jump` part.
+53.40 `chat`'s `transcript` part MUST carry `role="log"` and `aria-live="polite"`.
 
-53.41 `Chat`'s transcript MUST carry `role="log"` and `aria-live="polite"`.
+53.41 `pairing`'s `step` MUST be one of `connecting`, `slow`, `offline`, `unavailable`, `click`,
+`waiting`, `install` and `paired`.
 
-53.42 `Pairing` MUST write its step as `data-step`: `connecting`, `slow`, `offline`, `unavailable`,
-`click`, `waiting`, `install` or `paired`.
+53.42 `pairing`'s `step` MUST be `paired` once `status` reports the bridge paired, `unavailable` while
+`status` is failed, and `connecting` before `status` has landed.
 
-53.43 `Pairing` MUST render its children once `pairing` reports the bridge paired, and MUST NOT
-before.
-
-53.44 `copy` given `selector` MUST copy on a click inside its element on an element matching
+53.43 `copy` given `selector` MUST copy on a click inside its element on an element matching
 `selector`, handing that element to its function and writing `data-copied` on it, and MUST copy
 nothing for a click on no such element.
 
-53.45 `copy` MUST call `oncopied` once a click's copy has landed or failed, with whether it
+53.44 `copy` MUST call `oncopied` once a click's copy has landed or failed, with whether it
 landed and the element clicked.
 
-53.46 `dropzone` MUST hand `onreject`, and hold as `rejected`, the files a drop, a paste or a pick
+53.45 `dropzone` MUST hand `onreject`, and hold as `rejected`, the files a drop, a paste or a pick
 carries that it does not take,
 `accept` refusing them or `multiple` being `false`, and MUST NOT call it where it takes every one. A
 transfer whose `files` hold none carries the files in its `items`, for what it takes and turns away
 alike.
 
-53.47 `Chat` MUST render a tool part through `Tool` where one is given, handed the part and its
-turn, and as its name, its input and its result where none is.
+53.46 A `chat` turn's `retry` MUST drop the turn and every one after it and ask again for an answer
+to what is left.
 
-53.48 `Chat` MUST render `Actions` under each assistant turn that is not streaming, where it is
-given, handed the turn, its index and a `retry` that drops the turn and every one after it and asks
-again for an answer to what is left.
-
-53.49 `Chat` MUST show the turns `turns` holds, and MUST write every turn it adds and every part it
+53.47 `chat` MUST show the turns `turns` holds, and MUST write every turn it adds and every part it
 folds to `turns`.
 
-53.50 `Pairing` MUST take the step `slow` once it has been connecting for `slowAfter` milliseconds,
-offering a retry that calls `pairing`'s `retry`.
+53.48 `pairing`'s `step` MUST be `slow` once it has been connecting for `slowAfter` milliseconds, and
+`pairing`'s `retry` MUST take it back to `connecting`.
 
-53.51 `Pairing` MUST take the step `offline` while `online` is false, whatever its status.
+53.49 `pairing`'s `step` MUST be `offline` while `online` is false, whatever its status.
 
-53.52 `Pairing` MUST render a step's message through `Message` where one is given, handed the
-step, and in its own words where none is.
-
-53.53 `followBottom`'s `host` MUST keep the element it is spread on scrolled to its bottom as what the
+53.50 `followBottom`'s `host` MUST keep the element it is spread on scrolled to its bottom as what the
 element holds changes, while `following` is true.
 
-53.54 `keyLabel` writing for an Apple platform MUST write Enter as ↩, Escape as ⎋, Backspace as ⌫,
+53.51 `keyLabel` writing for an Apple platform MUST write Enter as ↩, Escape as ⎋, Backspace as ⌫,
 Delete as ⌦ and Tab as ⇥.
 
-53.55 `keyLabel.parts` MUST answer each modifier and the key `keyLabel` writes for the same binding
+53.52 `keyLabel.parts` MUST answer each modifier and the key `keyLabel` writes for the same binding
 and options, apart and in the order `keyLabel` writes them.
 
-53.56 `keyLabel` and `keyLabel.parts` MUST write for an Apple platform where `apple` is `true`, and
+53.53 `keyLabel` and `keyLabel.parts` MUST write for an Apple platform where `apple` is `true`, and
 for any other where it is `false`, whatever 53.3 reads.
 
-53.57 `copy` MUST write a string as `text/plain`, and a record as one clipboard item holding each
+53.54 `copy` MUST write a string as `text/plain`, and a record as one clipboard item holding each
 MIME type the record names.
 
-53.58 `copy` MUST report a value holding no string as not copied where 53.22 copies.
+53.55 `copy` MUST report a value holding no string as not copied where 53.22 copies.
 
-53.59 What a drop, a paste or a pick `dropzone` takes MUST replace its `files`, and one taking none
+53.56 What a drop, a paste or a pick `dropzone` takes MUST replace its `files`, and one taking none
 MUST leave them as they are.
 
-53.60 A pick through `dropzone`'s `input` MUST be taken as a drop is, a function `accept` handed a
+53.57 A pick through `dropzone`'s `input` MUST be taken as a drop is, a function `accept` handed a
 transfer of the files picked, and the input MUST be emptied after it.
 
-53.61 `followBottom` MUST set `following` to false when the reader scrolls its `host` further than
+53.58 `followBottom` MUST set `following` to false when the reader scrolls its `host` further than
 `threshold` pixels from the bottom, and to true when they scroll back within it.
 
-53.62 `followBottom`'s `jump` part MUST be hidden while `following` is true, and MUST carry
+53.59 `followBottom`'s `jump` part MUST be hidden while `following` is true, and MUST carry
 `data-unseen` once what the `host` holds changes while `following` is false, until `following` is
 true again.
 
-53.63 `FollowBottom`'s `toBottom` MUST scroll the `host` to its bottom as `behavior` names, and MUST
+53.60 `FollowBottom`'s `toBottom` MUST scroll the `host` to its bottom as `behavior` names, and MUST
 set `following` to true.
 
-53.64 `carousel` MUST rest on the item `selected` names, and on its first item where `selected` names
+53.61 `carousel` MUST rest on the item `selected` names, and on its first item where `selected` names
 none of them.
 
-53.65 `carousel`'s `host` MUST scroll the item the carousel rests on to its center at once when it is
+53.62 `carousel`'s `host` MUST scroll the item the carousel rests on to its center at once when it is
 bound, and as `behavior` names whenever the item it rests on changes after.
 
-53.66 `Carousel`'s `centered` MUST be the key of the item the carousel rests on, until a scroll of the
+53.63 `Carousel`'s `centered` MUST be the key of the item the carousel rests on, until a scroll of the
 `host`, `scrollTo` or `reset` sets it, and again whenever the item it rests on changes.
 
-53.67 A scroll of `carousel`'s `host` MUST set `centered` to the key of the item whose center is nearest
-the host's center, measured at most once a frame, save where 53.69 sets it.
+53.64 A scroll of `carousel`'s `host` MUST set `centered` to the key of the item whose center is
+nearest the host's center, measured at most once a frame, save where 53.66 sets it.
 
-53.68 While a scroll `scrollTo`, `reset` or a change of the item `carousel` rests on started is on its
+53.65 While a scroll `scrollTo`, `reset` or a change of the item `carousel` rests on started is on its
 way, what the `host`'s scrolling passes MUST NOT set `centered`, until it reaches that item or a
 `scrollend` arrives.
 
-53.69 Once `carousel`'s `host` has dispatched a `scrollsnapchanging` or a `scrollsnapchange`,
+53.66 Once `carousel`'s `host` has dispatched a `scrollsnapchanging` or a `scrollsnapchange`,
 `centered` MUST be set from those events alone, to the key of the item whose element is, holds or is
 held by the event's snap target.
 
-53.70 `carousel`'s `previous` and `next` MUST scroll to the item before and the item after the centered
-one as `scrollTo` does, and MUST be disabled where there is no such item.
+53.67 `carousel`'s `previous` and `next` MUST scroll to the item before and the item after the
+centered one as `scrollTo` does, and MUST be disabled where there is no such item.
 
-53.71 `Carousel`'s `scrollTo` MUST set `centered` to the key it is handed and scroll that key's item to
-the `host`'s center as `behavior` names, and `reset` MUST do so for the item the carousel rests on.
+53.68 `Carousel`'s `scrollTo` MUST set `centered` to the key it is handed and scroll that key's item
+to the `host`'s center as `behavior` names, and `reset` MUST do so for the item the carousel rests
+on.
 
-53.72 `carousel`'s `item` MUST carry `data-centered` while it is centered, and `data-selected` while
+53.69 `carousel`'s `item` MUST carry `data-centered` while it is centered, and `data-selected` while
 `selected` names it.
 
-53.73 `carousel`'s `host` MUST carry `role="region"` and `aria-roledescription="carousel"`, and its
+53.70 `carousel`'s `host` MUST carry `role="region"` and `aria-roledescription="carousel"`, and its
 `item` MUST carry `role="group"`, `aria-roledescription="slide"` and its label as `aria-label`.
 
-53.74 `copy` given no `value` MUST copy the element clicked as one item holding its `textContent` as
+53.71 `copy` given no `value` MUST copy the element clicked as one item holding its `textContent` as
 `text/plain` and its `innerHTML` as `text/html`.
 
 # 54. Guards, fetches and jobs

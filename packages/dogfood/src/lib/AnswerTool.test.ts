@@ -1,4 +1,4 @@
-// AN ANSWER AS IT STREAMS THROUGH `Chat`, the way `Ask.abide` hands it over: a docs tool read and
+// AN ANSWER AS IT STREAMS THROUGH `Conversation`, as `Ask.abide` mounts it: a docs tool read and
 // then answered, and words carrying a `show` block, each rendered by the docs' own pieces.
 
 import { expect, test } from 'bun:test'
@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test'
 import { type AssistantEvent, flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
-import ScriptedAnswer from './ScriptedAnswer.abide'
+import Conversation from './Conversation.abide'
 
 const NO_HANDLER = undefined
 
@@ -42,7 +42,7 @@ test('a docs tool reads as being read, then as read, and the words after it rend
         for (let turn = 0; turn < 5; turn += 1) await Bun.sleep(0)
         flushSync()
     }
-    using _chat = await mount(ScriptedAnswer({ ask }))
+    using _chat = await mount(Conversation({ ask }))
     const input = document.querySelector(
         '[data-chat=input]',
     ) as HTMLTextAreaElement
@@ -66,7 +66,7 @@ test('a docs tool reads as being read, then as read, and the words after it rend
     await settled()
 })
 
-// THE REVERT: drop `streaming` from `AnswerText`'s `Markdown` — the answer shows `Use **bo` mid-word.
+// THE REVERT: drop `streaming` from `AnswerText`'s `markdown.incremental` — the answer shows `Use **bo` mid-word.
 test('an answer leaves out what it is still writing until the turn ends — 52.50', async () => {
     const steps: (() => void)[] = []
     const step = () => new Promise<void>((go) => steps.push(go))
@@ -81,7 +81,7 @@ test('an answer leaves out what it is still writing until the turn ends — 52.5
         for (let turn = 0; turn < 5; turn += 1) await Bun.sleep(0)
         flushSync()
     }
-    using _chat = await mount(ScriptedAnswer({ ask }))
+    using _chat = await mount(Conversation({ ask }))
     const input = document.querySelector(
         '[data-chat=input]',
     ) as HTMLTextAreaElement

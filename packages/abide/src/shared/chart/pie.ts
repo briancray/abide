@@ -1,7 +1,7 @@
-// 52.29, 52.30, 52.38, 52.39, 52.63-52.68 — SHARES OF A WHOLE AS PARTS: slices of a ring, clockwise from
+// 52.29, 52.30, 52.38, 52.39, 52.62-52.67 — SHARES OF A WHOLE AS PARTS: slices of a ring, clockwise from
 // the top in the order given, each a stroke along one circle as long as its share of the circumference,
-// so a pie and a donut are one drawing. Each slice's part opens its hint in the page's `Tooltips` and
-// takes its pick. `Pie` is default markup over these parts (49.9).
+// so a pie and a donut are one drawing. Each slice's part opens its hint in the page's `tooltip.host` and
+// takes its pick.
 
 import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
@@ -25,7 +25,7 @@ export type PieOptions = {
     disabled?: (index: number) => boolean
 }
 
-/** One slice drawn: a value missing, zero or below it is none (52.66). */
+/** One slice drawn: a value missing, zero or below it is none (52.65). */
 export type PieSlice = {
     index: number
     label: string
@@ -34,7 +34,7 @@ export type PieSlice = {
     share: number
     /** Its label, value and share, as its hint reads them. */
     hint: string
-    /** `<circle {...slice.circle} />`: the stroke, its sweep as `style` (52.64), its hint and its pick. */
+    /** `<circle {...slice.circle} />`: the stroke, its sweep as `style` (52.63), its hint and its pick. */
     circle: Record<string, unknown>
 }
 
@@ -52,11 +52,11 @@ const CENTER = SIZE / 2
 
 /** Shares of a whole as the slices of a pie or a donut, as parts to spread. */
 export function pie(options: PieOptions): PieParts {
-    // 49.13 — read where it is used.
+    // 49.11 — read where it is used.
     const valueFormat = (value: number) =>
         (options.valueFormat ?? number)(value)
-    // 52.81 — a slice's hint binding, kept while its words stand, so a sweep that eases binds nothing
-    // again; its arc is what the latest drawing wrote, read as the hint is placed (52.68). Each drawing
+    // 52.80 — a slice's hint binding, kept while its words stand, so a sweep that eases binds nothing
+    // again; its arc is what the latest drawing wrote, read as the hint is placed (52.67). Each drawing
     // keeps only the words it drew, so values that move do not pile bindings up.
     let hints = new Map<string, Hinted>()
     let drawing = new Map<string, Hinted>()
@@ -111,7 +111,7 @@ export function pie(options: PieOptions): PieParts {
                     stroke: 'currentColor',
                     'stroke-width': CENTER - hole,
                     transform: `rotate(-90 ${CENTER} ${CENTER})`,
-                    // 52.64 — the sweep as `style` properties, which a CSS transition eases.
+                    // 52.63 — the sweep as `style` properties, which a CSS transition eases.
                     style: `stroke-dasharray: ${share * circumference} ${circumference}; stroke-dashoffset: ${-before * circumference}`,
                     // 50.23 — the hint describes the slice, as `tooltip.tip`'s describes its anchor.
                     'aria-description': hint,
@@ -160,7 +160,7 @@ class Hinted {
     }
 }
 
-// 52.68 — WHERE A SLICE'S HINT OPENS: the box of its own arc, on screen. Its element is a circle as
+// 52.67 — WHERE A SLICE'S HINT OPENS: the box of its own arc, on screen. Its element is a circle as
 // wide as the ring whatever its sweep, so against the element every slice's hint opens in one place.
 // `from` and `to` are fractions of a turn clockwise from the top; the arc spans the ring between `hole`
 // and the outer edge, and its box is its four corners and every axis it crosses on the outer edge.
@@ -203,7 +203,7 @@ function arcBox(
     })
 }
 
-// 52.66 — a value missing, zero or below it is no slice.
+// 52.65 — a value missing, zero or below it is no slice.
 function drawable(value: number | null | undefined): number {
     return value === null || value === undefined || !(value > 0) ? 0 : value
 }

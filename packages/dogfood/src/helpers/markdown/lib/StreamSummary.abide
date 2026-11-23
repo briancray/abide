@@ -1,0 +1,19 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const summarizeDeal = GET(async function* () {
+    for (const word of '**Acme** wants the annual plan.'.split(' ')) {
+        await Bun.sleep(150)
+        yield `${word} `
+    }
+})
+</script>
+
+<script>
+import { markdown, raw, reactive } from '@abide/abide'
+
+const summary = reactive(() => summarizeDeal())
+const doc = markdown.incremental({ source: () => summary.join('') })
+</script>
+
+<div>{#for section of doc.sections by section}{raw(section.html)}{/for}</div>

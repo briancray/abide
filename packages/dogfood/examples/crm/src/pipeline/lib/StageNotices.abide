@@ -1,6 +1,5 @@
 <script>
-import { reactive } from '@abide/abide'
-import { toasts } from '@abide/abide/Toasts.abide'
+import { reactive, toasts } from '@abide/abide'
 
 const shown = toasts.host({ label: 'Stage changes' })
 let stage = reactive('Proposal')

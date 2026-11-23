@@ -25,12 +25,12 @@ export type {
 export type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 // 33.23 — an element's attributes, typed as a component's props.
 export type { Attributes } from './Attributes.ts'
-// 53.64-53.73 — a scroll-snap carousel resting on a selection, as parts.
+// 53.61-53.70 — a scroll-snap carousel resting on a selection, as parts.
 export { type Carousel, type CarouselOptions, carousel } from './carousel.ts'
-// 51.31-51.43 — a sortable table's columns, its sort, and the order its rows are in.
+// 51.30-51.41 — a sortable table's columns, its sort, and the order its rows are in.
 export type { Column } from './Column.ts'
-// 52.19-52.23, 52.54-52.58 — a chart as parts, with the arithmetic under it as its members; and a pie
-// and a sparkline as parts. `Chart`, `Pie` and `Sparkline` are default markup over them (49.9).
+// 52.19-52.23, 52.53-52.57 — a chart as parts, with the arithmetic under it as its members; and a pie
+// and a sparkline as parts.
 export { type ChartOptions, type ChartParts, chart } from './chart/chart.ts'
 export { type PieOptions, type PieParts, pie } from './chart/pie.ts'
 export {
@@ -51,8 +51,15 @@ export {
     type CommandParts,
     commandPalette,
 } from './commandPalette.ts'
+// 53.31-53.40 — a conversation over an assistant handler, as parts.
+export {
+    type ChatOptions,
+    type ChatParts,
+    type ChatTurnParts,
+    chat,
+} from './chat.ts'
 export { type Cookies, cookies } from './cookies.ts'
-// 53.21-53.23, 53.57, 53.74 — the part copying on a click.
+// 53.21-53.23, 53.54, 53.71 — the part copying on a click.
 export { copy } from './copy.ts'
 export { csp } from './csp.ts'
 // 50.1-50.4 — a native modal as a part on a `<dialog>` of the app's own.
@@ -63,7 +70,7 @@ export {
     type DismissibleParts,
     dismissible,
 } from './dismissible.ts'
-// 53.53, 53.61-53.63 — a scrolling element kept at its bottom, and the button taking a reader back down.
+// 53.50, 53.58-53.60 — a scrolling element kept at its bottom, and the button taking a reader back down.
 export {
     type FollowBottom,
     type FollowBottomOptions,
@@ -99,7 +106,7 @@ export { type Health, health } from './health.ts'
 export { imageFiles, imagePiece } from './imagePiece.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
-// 51.1-51.8 — the keyboard over a list of keyed options, the one `Combobox.abide` runs on.
+// 51.1-51.8 — the keyboard over a list of keyed options, the one `combobox` runs on.
 export { type Listbox, type ListboxOptions, listbox } from './listbox.ts'
 export type { LabelRun } from './labelRuns.ts'
 export type { Picked } from './Selection.ts'
@@ -108,6 +115,7 @@ export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log, type Span } from './log.ts'
 // 52.8-52.16, 52.40-52.42 — markdown as markup safe to hand `raw`.
 export { markdown } from './markdown/markdown.ts'
+export type { MarkdownSection } from './markdown/markdownIncremental.ts'
 export type { LinkTarget } from './markdown/sections.ts'
 export { type Report, ReportDraft, report } from './report.ts'
 export type { Sort } from './Sort.ts'
@@ -144,7 +152,7 @@ export { outbox, type QueuedCall } from './outbox.ts'
 export { onError } from './onError.ts'
 export { onMenu } from './onMenu.ts'
 // 44.69 — this browser's pairing with a Claude Code bridge, and the click that pairs one.
-export { pairing } from './pairing.ts'
+export { type PairingStep, pairing } from './pairing.ts'
 // 37.22 — the browser's `onRefusal`, which has no server's.
 export { onRefusal } from './onRefusal.ts'
 // 50.19 — where a floating element sits beside its anchor.
@@ -196,9 +204,9 @@ export {
 } from './sortableTable.ts'
 export { type TabParts, type Tabs, type TabsOptions, tabs } from './tabs.ts'
 export { type Tree, type TreeNode, type TreeOptions, tree } from './tree.ts'
-// 52.73-52.78 — a time that stays current, as parts on a `<time>` of the app's own.
+// 52.72-52.77 — a time that stays current, as parts on a `<time>` of the app's own.
 export { type TimeAt, type TimeOptions, type TimeParts, time } from './time.ts'
-// 52.83-52.101 — months of days or a range the keys move through and pick, as parts on grids of the app's own.
+// 52.82-52.100 — months of days or a range the keys move through and pick, as parts on grids of the app's own.
 export {
     type Calendar,
     type CalendarDay,
@@ -208,11 +216,24 @@ export {
     type CalendarWeekday,
     calendar,
 } from './calendar.ts'
-// 52.103, 52.104 — the instant a day and a time name in a zone.
+// 52.102, 52.103 — the instant a day and a time name in a zone.
 export { instantAt } from './instantAt.ts'
 export * as transcript from './transcript/index.ts'
 export * as outlet from './outlet.ts'
 export * as tooltip from './tooltip/index.ts'
+// 50.5, 50.12 — the queued questions and the notices, each shown where its namespace's `host` is spread.
+export * as prompts from './prompts/index.ts'
+export type { PromptOptions } from './prompts/queue.ts'
+export * as toasts from './toasts/index.ts'
+export type { Toast } from './toasts/list.ts'
+export type { NotifyOptions } from './toasts/notify.ts'
+// 50.49 — words read out to a screen reader, from the live regions `announce.host` hands back.
+export {
+    type Announcement,
+    type AnnounceOptions,
+    type AnnouncerHost,
+    announce,
+} from './announce.ts'
 export { type TooltipOptions } from './tooltip/tips.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 // 8.22, 8.34, 8.37 — the `Store`s, as one namespace: `store.web`, `store.indexedDB`, `store.cookies`.

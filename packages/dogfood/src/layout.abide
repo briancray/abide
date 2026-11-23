@@ -22,11 +22,7 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 </script>
 
 <script>
-import { onMenu, url } from '@abide/abide'
-import Announcer from '@abide/abide/Announcer.abide'
-import Prompts from '@abide/abide/Prompts.abide'
-import Toasts from '@abide/abide/Toasts.abide'
-import Tooltips from '@abide/abide/Tooltips.abide'
+import { announce, onMenu, prompts, toasts, tooltip, url } from '@abide/abide'
 
 import DocsNav from '#src/lib/DocsNav.abide'
 import { MENUS } from '#src/lib/nativeMenus.ts'
@@ -36,6 +32,12 @@ import '#src/lib/app.css'
 
 // The native app's menu bar; in a browser, nothing reads it (38.88).
 onMenu(() => MENUS)
+
+// Where every example's announcements, notices, prompts and hints show.
+const regions = announce.host()
+const shown = toasts.host()
+const asked = prompts.host()
+const hints = tooltip.host()
 </script>
 
 <html lang="en">
@@ -67,15 +69,76 @@ onMenu(() => MENUS)
         focus:rounded-md focus:bg-raised focus:px-3 focus:py-2"
             href="#content"
         >Skip to content</a>
-<!-- Ahead of the page, so an example's own Announcer, standing after it, is the one that shows (50.36). -->
-<Announcer class="sr-only" />
+<!-- Ahead of the page, so an example's own announce.host, standing after it, is the one that shows (50.36). -->
+<div class="sr-only">
+            <div {...regions.polite}>
+                {#for message of regions.said('polite') by message.count}
+                    <span>{message.text}</span>
+                {/for}
+            </div>
+            <div {...regions.assertive}>
+                {#for message of regions.said('assertive') by message.count}
+                    <span>{message.text}</span>
+                {/for}
+            </div>
+        </div>
 <!-- The hosts an example's notices and prompts show in, ahead of the page for the same reason. -->
-<Toasts class="fixed right-5 bottom-5 z-10 flex flex-col gap-2 *:flex *:items-center *:gap-3 *:rounded-lg *:border *:border-rule *:bg-raised *:px-4 *:py-2 *:text-chrome *:shadow-sm *:data-[tone=error]:border-bad *:data-[tone=success]:border-good" />
-<Prompts class="m-auto w-96 rounded-xl border border-rule bg-raised p-5 text-ink backdrop:bg-ink/30 [&_[data-prompts=actions]]:mt-4 [&_[data-prompts=actions]]:flex [&_[data-prompts=actions]]:justify-end [&_[data-prompts=actions]]:gap-2 [&_[data-prompts=form]]:flex [&_[data-prompts=form]]:flex-col [&_[data-prompts=form]]:gap-2" />
+<div {...shown.region} class="fixed right-5 bottom-5 z-10 flex flex-col gap-2">
+            {#for toast of shown.notices by toast.id}
+                <div
+                    {...shown.toast(toast).toast}
+                    class="flex items-center gap-3 rounded-lg border border-rule bg-raised px-4 py-2
+            text-chrome shadow-sm data-[tone=error]:border-bad data-[tone=success]:border-good"
+                >
+                    <span {...shown.toast(toast).text}>{toast.text}</span>
+                    {#if toast.action}
+                        <button {...shown.toast(toast).action}>{toast.action.label}</button>
+                    {/if}
+                    <button {...shown.toast(toast).close}>×</button>
+                </div>
+            {/for}
+        </div>
+<dialog
+            {...asked.dialog}
+            class="group m-auto w-96 rounded-xl border border-rule bg-raised p-5 text-ink
+    backdrop:bg-ink/30"
+        >
+            {#if asked.current}
+                <form {...asked.form} class="flex flex-col gap-2">
+                    {#if asked.current?.title}
+                        <h2 {...asked.title}>{asked.current?.title}</h2>
+                    {/if}
+                    {#if asked.current?.body}
+                        <p {...asked.body}>{asked.current?.body}</p>
+                    {/if}
+                    {#if asked.typing}
+                        <label {...asked.field}>
+                            {#if asked.current?.mustType !== undefined}
+                                Type {asked.current?.mustType} to confirm
+                            {/if}
+                            <input {...asked.input}>
+                        </label>
+                    {/if}
+                    {#if asked.failed !== undefined}
+                        <p {...asked.error} class="text-bad">{asked.failed}</p>
+                    {/if}
+                    <div {...asked.actions} class="mt-4 flex justify-end gap-2">
+                        <button {...asked.confirm} class="group-data-[danger]:bg-bad">{asked.current?.confirm}</button>
+                        {#if asked.current?.kind !== 'alert'}
+                            <button {...asked.cancel}>{asked.current?.cancel}</button>
+                        {/if}
+                    </div>
+                </form>
+            {/if}
+        </dialog>
 <UpdateBanner />
 <SiteBar />
 <DocsNav />
 <slot />
-<Tooltips class="m-0 w-max max-w-60 rounded-md border border-rule bg-raised px-3 py-2 text-chrome text-ink shadow-sm" />
+<span
+            {...hints.hint}
+            class="m-0 w-max max-w-60 rounded-md border border-rule bg-raised px-3 py-2 text-chrome
+    text-ink shadow-sm"
+        >{hints.text}</span>
     </body>
 </html>

@@ -1,0 +1,43 @@
+<script>
+import { commandPalette, keyLabel, reactive } from '@abide/abide'
+
+let open = reactive(false)
+let ran = reactive('nothing yet')
+const palette = commandPalette({
+    id: 'jump-anywhere',
+    label: 'Jump anywhere',
+    commands: [
+        { label: 'Contacts', run: () => (ran = 'Contacts') },
+        { label: 'Deals', run: () => (ran = 'Deals') },
+        {
+            label: 'Add a deal',
+            keywords: ['new', 'create'],
+            key: 'n',
+            run: () => (ran = 'Add a deal'),
+        },
+    ],
+    open,
+    hotkey: 'mod+j',
+})
+</script>
+
+<button onclick={() => (open = true)}>Commands</button>
+<p>Press {keyLabel('mod+j')}, type "new", then Enter. Ran: {ran}.</p>
+<dialog {...palette.dialog} class="palette">
+    <input {...palette.input} placeholder="Type “zz”">
+    <ul {...palette.listbox}>
+        {#for command of palette.results by command.label}
+            <li {...palette.command(command).option}>
+                <span {...palette.command(command).label}>{command.label}</span>
+                {#if command.key}
+                    <kbd {...palette.command(command).key}>
+                        {keyLabel(command.key)}
+                    </kbd>
+                {/if}
+            </li>
+        {/for}
+    </ul>
+    {#if palette.results.length === 0}
+        <p {...palette.empty}>Nothing matches.</p>
+    {/if}
+</dialog>

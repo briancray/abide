@@ -1,4 +1,4 @@
-// 51.84-51.91, 51.105-51.110 — WAI-ARIA's tree, as parts an app spreads onto elements of its own: the tree, an item per
+// 51.77-51.84, 51.98-51.103 — WAI-ARIA's tree, as parts an app spreads onto elements of its own: the tree, an item per
 // node, and the group holding a node's children. The keys rove the items that show — a collapsed
 // node's children are not among them — and the server writes every attribute, so the page is the
 // tree as it stands before it hydrates.
@@ -22,7 +22,7 @@ export type TreeOptions<Node, Multiple extends boolean = false> = {
     children(node: Node): readonly Node[] | undefined
     /** The keys of the nodes expanded, where the app holds them: a `Reactive` to read and set. Held by the parts, none expanded, and handed back as `expanded`, where none is given. */
     expanded?: Reactive<readonly string[]>
-    /** 51.105 — whether it selects many, each press changing the selection rather than replacing it. `false` by default. */
+    /** 51.98 — whether it selects many, each press changing the selection rather than replacing it. `false` by default. */
     multiple?: Multiple
     /** The key of the node picked, or every key picked where it selects many, where the app holds them: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
     selected?: Reactive<Picked<string, Multiple>>
@@ -69,7 +69,7 @@ type Placed = {
 export function tree<Node, Multiple extends boolean = false>(
     options: TreeOptions<Node, Multiple>,
 ): Tree<Node, Multiple> {
-    // 49.13 — read where they are used; whether it selects many is fixed for the life of the parts.
+    // 49.11 — read where they are used; whether it selects many is fixed for the life of the parts.
     const children = (node: Node) => options.children(node)
     const key = (node: Node) => writtenBy(options.key, node)
     const label = (node: Node) => writtenBy(options.label, node)
@@ -117,7 +117,7 @@ export function tree<Node, Multiple extends boolean = false>(
         return { placed, shown, labels, open }
     })
 
-    // 51.86 — the item in the page's tab order: the one focused last, else the first one picked, else
+    // 51.79 — the item in the page's tab order: the one focused last, else the first one picked, else
     // the first.
     const focused = reactive<string | undefined>(undefined)
     const current = reactive((): string | undefined => {
@@ -129,7 +129,7 @@ export function tree<Node, Multiple extends boolean = false>(
         return shown[0]
     })
     const shownKeys = () => walked().shown
-    // 51.108 — every node, where it selects many.
+    // 51.101 — every node, where it selects many.
     const selectAll = many
         ? hotkeys({
               'mod+a': () => selection.all(() => [...walked().placed.keys()]),
@@ -166,17 +166,17 @@ export function tree<Node, Multiple extends boolean = false>(
                     : shown.findIndex((one) => itemId(one) === within.id)
             const each = shown[at]
             const place = each === undefined ? undefined : placed.get(each)
-            // 51.87 — Up and Down rove the items that show, stopping at the ends; Home and End.
+            // 51.80 — Up and Down rove the items that show, stopping at the ends; Home and End.
             let to = roving(
                 event.key,
                 'vertical',
                 () => [at, shown.length],
                 false,
             )
-            // 51.110 — Shift carries the selection along with a move of Up, Down, Home or End.
+            // 51.103 — Shift carries the selection along with a move of Up, Down, Home or End.
             const extending = many && event.shiftKey && to !== -1
             if (to === -1 && each !== undefined && place !== undefined) {
-                // 51.88 — Right opens a closed branch, then enters it; Left closes an open one, then
+                // 51.81 — Right opens a closed branch, then enters it; Left closes an open one, then
                 // climbs to its parent.
                 if (event.key === 'ArrowRight' && place.branch) {
                     if (!open.has(each)) setOpen(each, true)
@@ -186,14 +186,14 @@ export function tree<Node, Multiple extends boolean = false>(
                     else if (place.parent !== undefined)
                         to = shown.indexOf(place.parent)
                 } else if (event.key === 'Enter') selection.pick(each)
-                // 51.109 — Space toggles where it selects many, and Shift+Space selects the run to it.
+                // 51.102 — Space toggles where it selects many, and Shift+Space selects the run to it.
                 else if (event.key === ' ') {
                     if (!many) selection.pick(each)
                     else if (event.shiftKey)
                         selection.extend(each, each, shownKeys)
                     else selection.toggle(each)
                 }
-                // 51.89 — a printable key moves to the next item whose label starts with what was typed.
+                // 51.82 — a printable key moves to the next item whose label starts with what was typed.
                 else
                     to = typedTo(event, at, shown.length, (index) =>
                         String(labels[index]),
@@ -230,7 +230,7 @@ export function tree<Node, Multiple extends boolean = false>(
             get 'aria-posinset'() {
                 return place()?.posinset
             },
-            // 51.85 — a branch says whether it is open; a leaf says nothing.
+            // 51.78 — a branch says whether it is open; a leaf says nothing.
             get 'aria-expanded'() {
                 if (place()?.branch !== true) return undefined
                 return walked().open.has(each) ? 'true' : 'false'
@@ -244,9 +244,9 @@ export function tree<Node, Multiple extends boolean = false>(
             get 'data-selected'() {
                 return selection.has(each) ? '' : undefined
             },
-            // 51.86 — focus put on an item by any means makes it the one in the tab order.
+            // 51.79 — focus put on an item by any means makes it the one in the tab order.
             onfocus: () => focused.set(each),
-            // 51.90, 51.106 — a click picks the item it lands in, and not the branches holding it.
+            // 51.83, 51.99 — a click picks the item it lands in, and not the branches holding it.
             onclick: (event: MouseEvent) => {
                 const hit = (event.target as Element | null)?.closest?.(
                     '[role=treeitem]',
@@ -263,7 +263,7 @@ export function tree<Node, Multiple extends boolean = false>(
         }
     }
 
-    // 51.91 — a branch's children are hidden while it is collapsed.
+    // 51.84 — a branch's children are hidden while it is collapsed.
     const group = (node: Node): Record<string, unknown> => {
         const each = key(node)
         return {

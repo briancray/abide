@@ -31,7 +31,7 @@ test('Enter asks, and the answer streams in with its tool call', async () => {
             ).toEqual(['you', 'assistant'])
             expect(
                 document.querySelector('[data-chat=tool]')?.textContent,
-            ).toBe('looked up searchContacts')
+            ).toBe('used searchContacts')
             expect(turns[1]?.querySelector('p')?.textContent).toBe(
                 'Ada Lovelace is at Analytical Engines.',
             )

@@ -1,4 +1,4 @@
-// `markdown` — RULEBOOK 52.8-52.16, as a pure function. What the `Markdown` component renders as a
+// `markdown` — RULEBOOK 52.8-52.16, as a pure function. What `markdown.incremental` renders as a
 // stream lands, and what each chunk costs, is the CRM's tests', which mount it.
 
 import { expect, test } from 'bun:test'

@@ -8,10 +8,10 @@ import ProbabilityFilter from './ProbabilityFilter.abide'
 const listed = () =>
     [...document.querySelectorAll('li')].map((item) => item.textContent)
 
-// 49.9 — THE SHIPPED `Range` IS `range`'S MARKUP: a group named by `label`, a track holding the span and
-// two thumbs, each a slider whose keys write the bound value back. THE REVERT: drop `parts.root` from
-// `Range.abide`'s group, and it has no role or name.
-test('the shipped Range is a group holding the track, the span and two thumbs the keys move', async () => {
+// `range`'S PARTS on the filter's own markup: a group named by `label`, a track holding the span and
+// two thumbs, each a slider whose keys write the bound value back. THE REVERT: drop `probability.root`
+// from the filter's group, and it has no role or name.
+test('the range is a group holding the track, the span and two thumbs the keys move', async () => {
     using _filter = await mount(ProbabilityFilter({}))
     const group = document.querySelector('[role=group]') as HTMLElement
     expect(group.getAttribute('aria-label')).toBe('Win probability')

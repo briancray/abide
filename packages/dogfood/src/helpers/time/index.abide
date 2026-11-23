@@ -5,11 +5,25 @@ import Section from '#src/lib/Section.abide'
 
 import DueDates from './lib/DueDates.abide'
 import dueDates from './lib/DueDates.abide' with { type: 'text' }
+import LoggedCalls from './lib/LoggedCalls.abide'
+import loggedCalls from './lib/LoggedCalls.abide' with { type: 'text' }
+import ShortLabel from './lib/ShortLabel.abide'
+import shortLabel from './lib/ShortLabel.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/time', '/helpers/format']}
+    seeAlso={['/helpers/format', '/ambient/media']}
     tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/activity/lib/LastTouched.test.ts',
+            from: ["test('a touch reads how long ago it was, and a new call now'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/activity/lib/LastTouched.test.ts',
+            from: [
+                "test('one clock moves every label, writing only those that turned'",
+            ],
+        },
         {
             path: 'packages/dogfood/examples/crm/src/activity/lib/FollowUps.test.ts',
             from: [
@@ -24,11 +38,26 @@ import dueDates from './lib/DueDates.abide' with { type: 'text' }
         },
     ]}
 >
+    <Section level={3} title="Show how long ago each call was, kept current">
+        <p>Spread <code>at(value).time</code> onto a <code>&lt;time&gt;</code> for its
+            <code>datetime</code> and a <code>title</code> with the date in full, and write
+            <code>at(value).text</code> inside it, as <code>format.relative</code> writes it. Log a
+            call: it reads <code>now</code>, and a minute on it reads <code>1 minute ago</code>. One
+            clock ticks every time on the page, when the soonest label turns.</p>
+        <Example code={loggedCalls}><LoggedCalls /></Example>
+    </Section>
+
     <Section level={3} title="Write each row's due date on a time of your own">
         <p>One set of parts serves a whole list: spread <code>at(when).time</code> onto a
             <code>&lt;time&gt;</code> of your own for its <code>datetime</code> and its
             <code>title</code>, and write <code>at(when).text</code> inside it. Each time is kept
             current by the page's one clock for as long as it stands.</p>
         <Example code={dueDates}><DueDates /></Example>
+    </Section>
+
+    <Section level={3} title="Write the label short in a narrow column">
+        <p><code>style</code> takes <code>format.relative</code>'s styles, and
+            <code>timeZone</code> the zone its <code>title</code> writes the date in.</p>
+        <Example code={shortLabel}><ShortLabel /></Example>
     </Section>
 </Doc>

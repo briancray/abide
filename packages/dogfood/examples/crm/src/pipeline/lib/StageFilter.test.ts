@@ -14,7 +14,7 @@ const press = (target: Element) =>
         new PointerEvent('pointerdown', { bubbles: true, cancelable: true }),
     )
 
-// 50.49, 50.27, 50.61 — THE TRIGGER OPENS THE PANEL IN THE TOP LAYER, under the button and as the
+// 50.48, 50.27, 50.59 — THE TRIGGER OPENS THE PANEL IN THE TOP LAYER, under the button and as the
 // side it took says, and a pick that writes `open` back shuts it. THE REVERT: drop `anchored` from
 // the popover part's binding — `open` turns true and the panel never shows.
 test('the stage button opens its panel as a popover under it, and a pick shuts it', async () => {
@@ -36,7 +36,7 @@ test('the stage button opens its panel as a popover under it, and a pick shuts i
     expect(opener().textContent).toBe('Stage: Lead')
 })
 
-// 50.62, 53.15 — Escape and a press outside are the panel's, as a layer `dismissible` stacks, and a
+// 50.60, 53.15 — Escape and a press outside are the panel's, as a layer `dismissible` stacks, and a
 // press on its own button is the button's: it shuts the panel once, not shuts and reopens it.
 // THE REVERT: drop `inside: [at]` from the popover's dismissal — the press on the button shuts the
 // panel and the click opens it again.

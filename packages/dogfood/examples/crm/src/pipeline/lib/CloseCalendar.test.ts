@@ -16,7 +16,7 @@ function press(key: string) {
     flushSync()
 }
 
-// 52.83, 52.88 — A MONTH OF WHOLE WEEKS under a header row of weekdays, each deal on the day it
+// 52.82, 52.87 — A MONTH OF WHOLE WEEKS under a header row of weekdays, each deal on the day it
 // closes. December 2026 starts on a Tuesday, so its grid opens on November's last two days.
 test('the month is whole weeks, each deal on the day it closes', async () => {
     using _calendar = await mount(CloseCalendar({}))
@@ -46,7 +46,7 @@ test('the month is whole weeks, each deal on the day it closes', async () => {
     )
 })
 
-// 52.87, 52.89, 52.91, 52.92 — THE KEYS MOVE THE DAY, the month following it, and Enter picks it.
+// 52.86, 52.88, 52.90, 52.91 — THE KEYS MOVE THE DAY, the month following it, and Enter picks it.
 // THE REVERT: drop the month following the active day, and focus stays on December 29th.
 test('the arrows move the day focused into the next month, and Enter picks it', async () => {
     using _calendar = await mount(CloseCalendar({}))
@@ -74,7 +74,7 @@ test('the arrows move the day focused into the next month, and Enter picks it', 
     expect(status()).toBe('Nothing closes on 2027-01-19.')
 })
 
-// 52.93, 52.94, 52.96 — A CLICK PICKS A DAY, and the buttons page the month.
+// 52.92, 52.93, 52.95 — A CLICK PICKS A DAY, and the buttons page the month.
 test('a click picks a day, and the buttons page the month', async () => {
     using _calendar = await mount(CloseCalendar({}))
     await settled()

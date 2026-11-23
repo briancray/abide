@@ -16,7 +16,7 @@ import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
     seeAlso={[
         '/abide-files/by-name',
         '/helpers/popover',
-        '/components/chart',
+        '/helpers/chart',
         '/reactive/reactive',
     ]}
     tests={[

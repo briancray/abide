@@ -1,4 +1,4 @@
-// 50.30, 51.4-51.6, 51.38, 51.39 — ONE ROVING KEYBOARD under `listbox`, `menu` and `tabs`: the same
+// 50.30, 51.4-51.6, 51.36, 51.37 — ONE ROVING KEYBOARD under `listbox`, `menu` and `tabs`: the same
 // keys walked over three items land each of the three on the same item, step for step. The menu's own
 // step back once landed one short of the last from no focused item (menuKeys.test.ts); a copy per
 // widget is a copy that drifts.
@@ -93,7 +93,7 @@ function walkTabs(): string[] {
     return landed
 }
 
-test('listbox, menu and tabs land on the same item for the same keys — 50.30, 51.4-51.6, 51.38, 51.39', () => {
+test('listbox, menu and tabs land on the same item for the same keys — 50.30, 51.4-51.6, 51.36, 51.37', () => {
     // From the first item: on to b, c, round to a, back round to c, b, then the ends.
     const expected = ['b', 'c', 'a', 'c', 'b', 'c', 'a']
     expect(walkListbox()).toEqual(expected)
@@ -159,11 +159,11 @@ test("a menu's trigger opens on the arrows openingEnd names, and at that end", (
     expect(document.activeElement?.textContent).toBe('c')
 })
 
-// 50.40, 51.89 — ONE TYPE-AHEAD under `menu` and `tree`: a letter typed again walks the items that
+// 50.40, 51.82 — ONE TYPE-AHEAD under `menu` and `tree`: a letter typed again walks the items that
 // start with it, round the end, and letters typed together are one word. THE REVERT: give `menu` back
 // a type-ahead of its own that starts the search at the item on now rather than past it, and B typed
 // twice stays on the first B.
-test('a letter walks the items that start with it, in a menu as in a tree — 50.40, 51.89', () => {
+test('a letter walks the items that start with it, in a menu as in a tree — 50.40, 51.82', () => {
     const NAMES = ['Ada', 'Babbage', 'Byron', 'Boole']
     const parts = menu()
     const list = document.createElement('div')

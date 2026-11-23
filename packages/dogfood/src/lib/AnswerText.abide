@@ -1,34 +1,40 @@
 <script>
-// THE WORDS OF AN ANSWER, rendered as `Chat` hands them over: markdown a section at a time, so a
-// chunk re-renders only the section still growing (52.18), with what its end is still writing left
-// out while it streams (52.50); a fence as the docs' code, and a `show` fence as the live thing it
-// names (40.28).
-import { type AssistantTurn, props } from '@abide/abide'
-import Markdown from '@abide/abide/Markdown.abide'
+// THE WORDS OF AN ANSWER: markdown a section at a time, so a chunk re-renders only the section still
+// growing (52.18), with what its end is still writing left out while it streams (52.50); a fence as
+// the docs' code, and a `show` fence as the live thing it names (40.28).
+import { markdown, props, raw } from '@abide/abide'
 
 import AnswerCode from './AnswerCode.abide'
 import { answerHref } from './answerHref.ts'
 import ShowBlock from './ShowBlock.abide'
 
-const { text, turn } = props<{ text: string; turn?: AssistantTurn }>()
+const { text, streaming = false } = props<{
+    text: string
+    streaming?: boolean
+}>()
 
-// The languages the system prompt has the model fence code in, and the ones it reaches for besides.
-const blocks = {
-    show: ShowBlock,
-    abide: AnswerCode,
-    ts: AnswerCode,
-    typescript: AnswerCode,
-    js: AnswerCode,
-    javascript: AnswerCode,
-    tsx: AnswerCode,
-    json: AnswerCode,
-    html: AnswerCode,
-    css: AnswerCode,
-    sh: AnswerCode,
-    bash: AnswerCode,
-    shell: AnswerCode,
-}
+const answer = markdown.incremental({
+    source: () => text,
+    streaming: () => streaming,
+    href: answerHref,
+    // `show`, and the languages the system prompt has the model fence code in, and the ones it
+    // reaches for besides.
+    blocks: [
+        'show',
+        'abide',
+        'ts',
+        'typescript',
+        'js',
+        'javascript',
+        'tsx',
+        'json',
+        'html',
+        'css',
+        'sh',
+        'bash',
+        'shell',
+    ],
+})
 </script>
 
-<Markdown class="flow" source={text} href={answerHref} blocks={blocks}
-    streaming={turn !== undefined && turn.stop === undefined && turn.failed === undefined} />
+<div class="flow">{#for section of answer.sections by section}{#if section.block?.name === 'show'}<ShowBlock info={section.block.info} />{:else if section.block}<AnswerCode source={section.block.source} />{:else}{raw(section.html)}{/if}{/for}</div>

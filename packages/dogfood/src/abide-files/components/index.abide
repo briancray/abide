@@ -8,7 +8,6 @@ import Section from '#src/lib/Section.abide'
     seeAlso={[
         '/abide-files/props',
         '/abide-files/blocks',
-        '/components/sortable-table',
         '/abide-files/control-flow',
     ]}
     tests={[
@@ -70,26 +69,31 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Render a table's cells with your own markup">
+    <Section level={3} title="Hand a list component the markup of each row">
         <p>An inline component written between a component's tags is passed to it as the prop its
-            name spells.</p>
+            name spells. Here <code>DealList.abide</code> takes a <code>Row</code> and renders it
+            for each deal, and the page using it writes what a row holds.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { url } from '@abide/abide'
-            import SortableTable from '@abide/abide/SortableTable.abide'
+            import { props } from '@abide/abide'
+            const { deals, Row } = props<{
+                deals: Deal[]
+                Row(props: { deal: Deal }): unknown
+            }>()
             </script>
 
-            <SortableTable rows={companies} columns={COLUMNS} key={(c) => c.id}>
-                {#component Cell({ row, column, text }: CellProps)}
-                    {#if column.key === 'name'}
-                        <a href={url('/companies/[id=SLUG]', { id: row.id })}>
-                            {text}
-                        </a>
-                    {:else}
-                        {text}
-                    {/if}
+            <ul>
+                {#for deal of deals by deal.id}
+                    <li><Row deal={deal} /></li>
+                {/for}
+            </ul>
+        `} />
+        <Code language="abide" caption="abide" code={`
+            <DealList deals={deals}>
+                {#component Row({ deal }: { deal: Deal })}
+                    <strong>{deal.name}</strong> {deal.stage}
                 {/component}
-            </SortableTable>
+            </DealList>
         `} />
     </Section>
 </Doc>

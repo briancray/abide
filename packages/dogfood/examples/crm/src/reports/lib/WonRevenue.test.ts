@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { flushSync } from '@abide/abide'
-import { announce } from '@abide/abide/Announcer.abide'
+import { announce, flushSync } from '@abide/abide'
 import { measure, mount } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
 
@@ -44,7 +43,7 @@ test('won revenue is a line broken where a month has no total', async () => {
     ])
 })
 
-// 52.26, 52.27, 50.47 — THE READOUT OPENS IN THE CHART'S `tip` against the crosshair, beside it on the
+// 52.26, 52.27, 50.46 — THE READOUT OPENS IN THE CHART'S `tip` against the crosshair, beside it on the
 // side with more of the plot, and describes the chart. THE REVERTS: open it on the `'top'` side a hint
 // defaults to — `data-side` reads 'top' where 'right' is due; and drop the `tip`'s binding — the
 // popover never opens.
@@ -107,7 +106,7 @@ function press(key: string) {
     flushSync()
 }
 
-// 52.70, 50.47 — THE CHART READS FROM THE KEYBOARD: it takes focus, the arrows step the crosshair one
+// 52.69, 50.46 — THE CHART READS FROM THE KEYBOARD: it takes focus, the arrows step the crosshair one
 // month at a time and stop at the ends, Home and End go to the first and the last, the readout
 // describes the chart while it shows, and an Escape — or focus leaving — puts the crosshair away.
 // THE REVERTS: drop `onkeydown` from the chart — no arrow opens the readout; let `roving` wrap — the
@@ -144,9 +143,9 @@ test('the arrows step the crosshair month by month, and Escape puts it away', as
 const said = (part: 'polite' | 'assertive') =>
     document.querySelector(`[data-announce=${part}]`)?.textContent ?? ''
 
-// 52.72 — A MOVE THE KEYS MAKE IS READ OUT, and a pointer's is not: the keyboard's reader has no
+// 52.71 — A MOVE THE KEYS MAKE IS READ OUT, and a pointer's is not: the keyboard's reader has no
 // readout in front of them, and a pointer sweeping the plot would read every month it crossed.
-// THE REVERT: drop the `announce` from `Chart`'s key handler, and the region stays empty.
+// THE REVERT: drop the `announce` from `chart`'s key handler, and the region stays empty.
 test("a move the keys make is read out, and a pointer's is not", async () => {
     using _chart = await mount(WonRevenue({}))
     announce('Ready')
@@ -161,7 +160,7 @@ test("a move the keys make is read out, and a pointer's is not", async () => {
     expect(said('polite')).toBe('Nov 2026, Won: $42K, Target: $30K')
 })
 
-// 50.52, 50.53 — THE SAME WORDS SAID TWICE ARE READ TWICE, each landing as an element of its own, and a
+// 50.51, 50.52 — THE SAME WORDS SAID TWICE ARE READ TWICE, each landing as an element of its own, and a
 // message replaces the last rather than joining a log. THE REVERT: key the message by its text rather
 // than its count, and the second `Saved` lands on the element the first did — nothing for a screen
 // reader to read.
@@ -184,7 +183,7 @@ test('the same words said twice land twice, each replacing the last', async () =
     expect([said('polite'), said('assertive')]).toEqual(['', 'Connection lost'])
 })
 
-// 52.79 — AN APP'S OWN MARKS OVER `chart`'S PARTS: a dot at every month won, standing on the line the
+// 52.78 — AN APP'S OWN MARKS OVER `chart`'S PARTS: a dot at every month won, standing on the line the
 // parts draw, and none for August's open books.
 // THE REVERT: hand back a point for a missing value too — six dots where five are due.
 test('every month won is marked by a dot of its own, on the line', async () => {

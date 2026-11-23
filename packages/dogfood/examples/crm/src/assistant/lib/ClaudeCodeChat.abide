@@ -1,12 +1,60 @@
 <script>
-import Chat from '@abide/abide/Chat.abide'
-import Pairing from '@abide/abide/Pairing.abide'
+// The visitor's own Claude Code, paired with this page through `pairing`'s steps, and once paired
+// the CRM's conversation with it.
+import { copy, pairing, props } from '@abide/abide'
 
 import askClaudeCode from '../askClaudeCode.handler.ts'
 import permitClaudeCode from '../permitClaudeCode.handler.ts'
+import Chat from './Chat.abide'
+
+// Milliseconds of connecting before it offers to try again.
+const { slowAfter } = props<{ slowAfter?: number }>()
+
+const { status, step, copied, start, retry, copyInstall } = pairing({
+    slowAfter,
+})
+
+const command = () => status.peek()?.command ?? ''
+
+const WORDS = {
+    connecting: 'Connecting…',
+    slow: 'Still connecting to Claude Code.',
+    offline: 'You are offline. Pairing resumes once you are back.',
+    unavailable: 'Claude Code is unavailable here.',
+    click: 'Pair your Claude Code with this page with a click, or run this in a terminal:',
+    waiting:
+        'Pair your Claude Code with this page with a click, or run this in a terminal:',
+    install:
+        'No bridge app opened. Install it once, in a terminal, then pair again:',
+    paired: '',
+}
 </script>
 
-<Pairing class="flex flex-col gap-snug [&_[data-pairing=command]]:text-chrome">
-    <Chat ask={askClaudeCode} permit={permitClaudeCode}
-        placeholder="Which company is Grace at?" class="chat" />
-</Pairing>
+<section data-step={step} class="flex flex-col gap-snug">
+    {#if step !== 'paired'}
+        <p data-pairing="message">{WORDS[step]}</p>
+    {/if}
+    {#if step === 'slow'}
+        <button type="button" data-pairing="retry" onclick={retry}>Try again</button>
+    {:else if step === 'paired'}
+        {#if status?.missing.length}
+            <p data-pairing="missing">Claude Code here cannot use
+                {status.missing.join(', ')}.</p>
+        {/if}
+        <Chat ask={askClaudeCode} permit={permitClaudeCode}
+            placeholder="Which company is Grace at?" />
+        <button type="button" data-pairing="pair" onclick={start}>Reconnect</button>
+    {:else if step === 'install'}
+        <pre data-pairing="command" class="text-chrome">{status?.install}</pre>
+        <button type="button" data-pairing="copy" onclick={copyInstall}>
+            {copied ? 'Copied' : 'Copy'}</button>
+        <button type="button" data-pairing="pair" onclick={start}>Pair again</button>
+    {:else if step === 'click' || step === 'waiting'}
+        <pre data-pairing="command" class="text-chrome">{status?.command}</pre>
+        <button type="button" data-pairing="copy"
+            {...copy({ value: command })}>Copy</button>
+        <button type="button" data-pairing="pair" disabled={step === 'waiting'}
+            onclick={start}>
+            {step === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>
+    {/if}
+</section>

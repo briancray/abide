@@ -1,6 +1,6 @@
-// 50.19-50.22, 50.26, 50.27, 50.49, 50.61, 50.62 — AN APP'S OWN OVERLAY HELD AGAINST AN ANCHOR, as
+// 50.19-50.22, 50.26, 50.27, 50.48, 50.59, 50.60 — AN APP'S OWN OVERLAY HELD AGAINST AN ANCHOR, as
 // parts an app spreads onto elements of its own: a trigger that opens it and anchors it, or an anchor
-// that only anchors it, and the popover itself, in the anchored layer `Tooltips` and `menu` open in.
+// that only anchors it, and the popover itself, in the anchored layer `tooltip` and `menu` open in.
 //
 // THE PARTS FIND EACH OTHER BY ID, as `menu`'s do: what an app writes is two spreads, and no element
 // is handed from one to the other. The server writes every attribute, a manual popover included, so
@@ -14,15 +14,15 @@ import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 
-/** 50.19-50.21, 50.35, 50.61, 50.62 — where a popover opens, and what opens and closes it. */
+/** 50.19-50.21, 50.35, 50.59, 50.60 — where a popover opens, and what opens and closes it. */
 export type PopoverOptions = PlaceOptions & {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string
     /** Whether the popover is open: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. */
     open?: Reactive<boolean>
-    /** 50.62 — whether Escape closes it. `true` by default. */
+    /** 50.60 — whether Escape closes it. `true` by default. */
     escape?: boolean
-    /** 50.62 — whether a press outside it and its trigger or anchor closes it. `true` by default. */
+    /** 50.60 — whether a press outside it and its trigger or anchor closes it. `true` by default. */
     outside?: boolean
 }
 
@@ -54,7 +54,7 @@ export function popover(options: PopoverOptions = {}): PopoverParts {
     const anchorId = `${id}-anchor`
     if (process.env.NODE_ENV !== 'production') checkParts('popover', id)
     // Whether it was open as the trigger was pressed: the press outside closes it before the click
-    // lands, and the click must not open it again (50.61).
+    // lands, and the click must not open it again (50.59).
     let openAtPress = false
     const anchor = {
         id: anchorId,
@@ -97,7 +97,7 @@ export function popover(options: PopoverOptions = {}): PopoverParts {
                     const stop = anchored(at, floating, options, (placement) =>
                         floating.setAttribute('data-side', placement.side),
                     )
-                    // 50.62 — the trigger or the anchor is inside: pressing it again is its to answer.
+                    // 50.60 — the trigger or the anchor is inside: pressing it again is its to answer.
                     const unstack = dismissing(() => open.set(false), {
                         escape: options.escape ?? true,
                         outside: options.outside ?? true,
@@ -120,7 +120,7 @@ export function popoverOn(
 ): (element: Element) => Disposer {
     return (element) => {
         const floating = element as HTMLElement
-        // 50.49 — a manual popover, which no press elsewhere and no other popover closes: what opens
+        // 50.48 — a manual popover, which no press elsewhere and no other popover closes: what opens
         // and closes it is the binding.
         if (!floating.hasAttribute('popover'))
             floating.setAttribute('popover', 'manual')

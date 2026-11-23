@@ -1,0 +1,43 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+type Contact = { id: string; name: string }
+
+const listContacts = GET((): Contact[] => [
+    { id: 'ada', name: 'Ada Lovelace' },
+    { id: 'grace', name: 'Grace Hopper' },
+    { id: 'katherine', name: 'Katherine Johnson' },
+])
+</script>
+
+<script>
+import { combobox, reactive } from '@abide/abide'
+
+const contacts = reactive(() => listContacts())
+let contact = reactive<Contact | undefined>(undefined)
+const box = combobox({
+    id: 'deal-contact',
+    options: () => contacts,
+    key: (each) => each.id,
+    label: (each) => each.name,
+    value: contact,
+})
+</script>
+
+<div {...box.root} class="picker">
+    <label for={box.id}>Contact</label>
+    <input {...box.input} placeholder="Type “zz”">
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for each of box.items by each.id}
+                    <li {...box.option(each)}>{each.name}</li>
+                {/for}
+            </ul>
+            {#if box.nothingFound}
+                <p {...box.empty}>No contact matches</p>
+            {/if}
+        </div>
+    {/if}
+</div>
+<p>Contact: {contact?.name ?? 'none'}</p>

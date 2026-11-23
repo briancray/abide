@@ -15,11 +15,7 @@ import visitorTime from './lib/VisitorTime.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={[
-        '/components/sortable-table',
-        '/helpers/chart',
-        '/ambient/is-server',
-    ]}
+    seeAlso={['/helpers/sortable-table', '/helpers/chart', '/ambient/is-server']}
     tests={[
         {
             path: 'packages/abide/tests/format.test.ts',

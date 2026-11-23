@@ -1,5 +1,5 @@
-// 50.36, 52.24, 52.53, 53.15 — ONE ORDERED LIST OF WHAT IS STANDING under `dismissible`'s stack, the
-// `Tooltips` standing and a `Chart`'s children: an entry joins at the end and its own disposer takes
+// 50.36, 53.15 — ONE ORDERED LIST OF WHAT IS STANDING under `dismissible`'s stack and the hosts
+// standing: an entry joins at the end and its own disposer takes
 // out that entry alone, wherever it stands.
 
 import { expect, test } from 'bun:test'
@@ -22,7 +22,7 @@ test('a disposer takes out its own entry, and the rest keep their order', () => 
 })
 
 // A WATCH REGISTERING FROM ITS BODY SUBSCRIBES TO NOTHING, so a sibling joining after it does not run
-// it again — which would take its entry out and put it back at the end, and redraw a chart's series out
+// it again — which would take its entry out and put it back at the end, and reorder what stands out
 // of the order they were written. THE REVERT: read the list with `list()` rather than `peek`, and the
 // watches run again on each other's writes and their own, round after round. Each stops registering
 // past its third run, so the revert reads a count rather than looping forever.
@@ -44,8 +44,8 @@ test('a watch registering from its body is not run again by the next registratio
     expect(list()).toEqual([])
 })
 
-// 52.53, 50.36 — A JOINED ENTRY STANDS AS LONG AS THE SETUP THAT JOINED IT: a chart's child removed
-// takes its series off the chart, a `Tooltips` removed stops being a host. THE REVERT: have `join` call
+// 50.36 — A JOINED ENTRY STANDS AS LONG AS THE SETUP THAT JOINED IT: a component spreading
+// `tooltip.host` removed stops being a host. THE REVERT: have `join` call
 // `register` bare, with no watch for the setup to own, and the entry outlives its component.
 test('a joined entry leaves with the setup that joined it, and a sibling joining moves nothing', () => {
     const list = reactive<readonly string[]>([])

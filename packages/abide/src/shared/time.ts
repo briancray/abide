@@ -1,4 +1,4 @@
-// 52.73-52.78 — A TIME THAT STAYS CURRENT, as parts an app spreads onto a `<time>` of its own: how long
+// 52.72-52.77 — A TIME THAT STAYS CURRENT, as parts an app spreads onto a `<time>` of its own: how long
 // ago or how soon it is, as `format.relative` writes it, its `datetime` for a machine and its `title` the
 // date in full. One set of parts serves every time a list writes — `seen.time(row.at)` per row — and
 // each `<time>` is followed by the one clock (`clock.ts`) for as long as its element is bound, so the
@@ -66,7 +66,7 @@ export function time(options: TimeOptions = {}): TimeParts {
                 ...(timeZone === undefined ? {} : { timeZone }),
                 ...(locale === undefined ? {} : { locale }),
             }),
-            // 52.74 — followed for as long as it is bound, so the clock ticks when its label next changes.
+            // 52.73 — followed for as long as it is bound, so the clock ticks when its label next changes.
             'bind:element': () => follow(at),
         }
     }

@@ -4,7 +4,7 @@ import { list } from './list.ts'
 export type CloseReason = 'timeout' | 'dismissed' | 'action'
 
 // 50.42 — each notice's `onclose`, by its id, until the notice leaves. Off the `Toast`, which is what
-// `Toasts` renders and an app reads, and a callback is neither.
+// `toasts.host` shows and an app reads, and a callback is neither.
 export const CLOSERS = new Map<number, (reason: CloseReason) => void>()
 
 /** Takes a notice down before its timeout; a notice already gone leaves the list as it is (50.15). */

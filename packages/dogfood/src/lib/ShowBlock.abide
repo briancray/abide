@@ -1,12 +1,12 @@
 <script>
-// A `show` block of an answer, handed by `Markdown` once its fence closes: the live thing its info
+// A `show` block of an answer, handed by `AnswerText` once its fence closes: the live thing its info
 // names, or a note that it names none.
 import { props } from '@abide/abide'
 
 import { showOf } from './showFence.ts'
 import Shown from './Shown.abide'
 
-const { info } = props<{ source: string; info: string }>()
+const { info } = props<{ info: string }>()
 
 const show = showOf(info)
 </script>

@@ -1,0 +1,40 @@
+<script>
+// The dialog every `prompts` question on a CRM page shows in.
+import { prompts } from '@abide/abide'
+
+const asked = prompts.host()
+</script>
+
+<dialog
+    {...asked.dialog}
+    class="group m-auto w-96 max-w-[calc(100%-2rem)] rounded-xl border border-rule
+    bg-raised p-5 text-ink backdrop:bg-paper/70"
+>
+    {#if asked.current}
+        <form {...asked.form} class="flex flex-col gap-snug">
+            {#if asked.current?.title}
+                <h2 {...asked.title}>{asked.current?.title}</h2>
+            {/if}
+            {#if asked.current?.body}
+                <p {...asked.body}>{asked.current?.body}</p>
+            {/if}
+            {#if asked.typing}
+                <label {...asked.field}>
+                    {#if asked.current?.mustType !== undefined}
+                        Type {asked.current?.mustType} to confirm
+                    {/if}
+                    <input {...asked.input}>
+                </label>
+            {/if}
+            {#if asked.failed !== undefined}
+                <p {...asked.error} class="text-bad">{asked.failed}</p>
+            {/if}
+            <div {...asked.actions} class="row">
+                <button {...asked.confirm} class="group-data-[danger]:bg-bad">{asked.current?.confirm}</button>
+                {#if asked.current?.kind !== 'alert'}
+                    <button {...asked.cancel}>{asked.current?.cancel}</button>
+                {/if}
+            </div>
+        </form>
+    {/if}
+</dialog>

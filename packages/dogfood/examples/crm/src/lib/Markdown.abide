@@ -1,0 +1,32 @@
+<script>
+// THE CRM'S MARKDOWN: `markdown.incremental` rendered a section at a time, so a stream re-renders only
+// the section still growing, and a fenced `sh` block as the command with a Copy beside it.
+import {
+    type Attributes,
+    type LinkTarget,
+    markdown,
+    props,
+    raw,
+} from '@abide/abide'
+
+import CopyableCode from './CopyableCode.abide'
+
+const { source, streaming, headingLevel, href, ...rest } = props<
+    {
+        source: string
+        streaming?: boolean
+        headingLevel?: number
+        href?: (address: string) => string | LinkTarget | undefined
+    } & Attributes<'div'>
+>()
+
+const doc = markdown.incremental({
+    source: () => source,
+    streaming: () => streaming,
+    headingLevel: () => headingLevel,
+    href,
+    blocks: ['sh'],
+})
+</script>
+
+<div {...rest}>{#for section of doc.sections by section}{#if section.block}<CopyableCode source={section.block.source} />{:else}{raw(section.html)}{/if}{/for}</div>

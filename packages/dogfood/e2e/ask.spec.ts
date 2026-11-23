@@ -1,5 +1,5 @@
 // THE PROMPT AT THE TOP OF EVERY PAGE (`Ask.abide`), as a reader meets it unpaired: its key, the
-// label the server wrote for that key, the answers it opens, and the pairing `Pairing` shows there.
+// label the server wrote for that key, the answers it opens, and the pairing steps it shows there.
 
 import { expect, test } from '@playwright/test'
 
@@ -10,7 +10,7 @@ function underMount(address: string): string {
 
 // 53.3, 53.11 — the label is the platform's and the key is the one it names. THE REVERT: bind
 // `meta+k` in place of `mod+k`, and Ctrl+K on this Linux-agented page leaves the answers hidden.
-test('the prompt’s key is the one its label names, and its panel pairs — 53.42', async ({
+test('the prompt’s key is the one its label names, and its panel pairs — 53.41', async ({
     browser,
 }) => {
     const context = await browser.newContext({

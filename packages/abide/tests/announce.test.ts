@@ -1,6 +1,6 @@
-// 50.50, 50.51, 50.36 — WHAT A SCREEN READER IS TOLD: `announce` hands its words to the one `Announcer`
-// standing, never writes them inside a request, and warns once where no `Announcer` stands. What the
-// component renders is the CRM's tests', which mount it.
+// 50.49, 50.50, 50.36 — WHAT A SCREEN READER IS TOLD: `announce` hands its words to the one `announce.host`
+// standing, never writes them inside a request, and warns once where none stands. What the regions
+// render is the CRM's tests', which mount them.
 
 import { expect, test } from 'bun:test'
 
@@ -12,9 +12,9 @@ import { collectWatches } from '#shared/reactive/watch.ts'
 installServer()
 
 // FIRST IN THE FILE, since the warning is given once per process.
-// THE REVERT: drop `announcers.asked()` from `announce`, and a message with no `Announcer` is lost
+// THE REVERT: drop `announcers.asked()` from `announce`, and a message with no `announce.host` is lost
 // without a word.
-test('a message with no Announcer standing warns once — 50.36', async () => {
+test('a message with no announce.host standing warns once — 50.36', async () => {
     const warned: string[] = []
     const warn = console.warn
     console.warn = (...args: unknown[]): void => {
@@ -29,7 +29,7 @@ test('a message with no Announcer standing warns once — 50.36', async () => {
         console.warn = warn
     }
     expect(warned).toHaveLength(1)
-    expect(warned[0]).toContain('<Announcer />')
+    expect(warned[0]).toContain('announce.host()')
 })
 
 // Each message is a message of its own, though its words are not.
@@ -46,16 +46,16 @@ test('a message replaces the last, and the same words count as a new message', (
 
 // THE REVERT: drop the `isServer` check from `announce`, and a request writes a message no person is
 // there to hear.
-test('announce throws inside a request — 50.51', async () => {
+test('announce throws inside a request — 50.50', async () => {
     await inScope(new Request('http://app/'), async () => {
-        expect(() => announce('Saved')).toThrow('RULEBOOK 50.51')
+        expect(() => announce('Saved')).toThrow('RULEBOOK 50.50')
     })
 })
 
-// 50.52 — THE REGIONS AS PARTS: each a live region of its politeness, and the message in the region its
+// 50.51 — THE REGIONS AS PARTS: each a live region of its politeness, and the message in the region its
 // politeness names alone. THE REVERT: answer the message from `said` whatever its politeness -> the
 // assertive region holds the polite message too.
-test('announce.host hands back both live regions, and the message in its own region alone — 50.52', () => {
+test('announce.host hands back both live regions, and the message in its own region alone — 50.51', () => {
     // Stood as a component's setup stands it, and stopped after, so no host outlives the test.
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)

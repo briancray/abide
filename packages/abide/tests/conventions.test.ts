@@ -425,12 +425,12 @@ test('a published package depends on no workspace: protocol at run time', async 
     expect(unresolvable).toEqual([])
 })
 
-// 49.15 — A LISTENER IS NAMED `on<event>`, as the element it is spread on names it: a member named
+// 49.13 — A LISTENER IS NAMED `on<event>`, as the element it is spread on names it: a member named
 // for the bare event is one an app must wire by hand (`onkeydown={list.keydown}`), where `on<event>`
 // spreads and composes with the app's own (32.109). Read off REGISTRY's signatures: a member, an
 // option or a method taking an `Event`, named for an event the DOM fires. THE REVERT: name
 // `listbox`'s listener `keydown` again; `keydown` is reported.
-test('a listener the framework hands out or takes is named on<event> — 49.15', async () => {
+test('a listener the framework hands out or takes is named on<event> — 49.13', async () => {
     const events = new Set<string>()
     // happy-dom's `on<event>` properties are not enumerable: the chain is walked by name.
     for (
@@ -452,11 +452,11 @@ test('a listener the framework hands out or takes is named on<event> — 49.15',
     expect(offenders).toEqual([])
 })
 
-// 49.15 — AN `on` NAME AN ELEMENT OR A COMPONENT TAKES IS LOWERCASE, as `onclick` is: a key in a
+// 49.13 — AN `on` NAME AN ELEMENT OR A COMPONENT TAKES IS LOWERCASE, as `onclick` is: a key in a
 // REGISTRY signature's record — an option, a part's member — and a prop a `.abide` file declares.
 // A function an app calls by name (`onError`) and a positional parameter (`onSettled`) are neither,
 // and keep their case. THE REVERT: name `listbox`'s `onpick` option `onPick`; `onPick` is reported.
-test('an on name an element or a component takes is lowercase — 49.15', async () => {
+test('an on name an element or a component takes is lowercase — 49.13', async () => {
     const offenders: string[] = []
     const registry = await Bun.file(
         new URL('../docs/REGISTRY.md', PACKAGES),

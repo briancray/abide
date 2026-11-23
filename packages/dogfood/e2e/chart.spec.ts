@@ -1,4 +1,4 @@
-// 50.48 — A HINT NEVER TAKES THE POINTER: a chart's readout opens beside its crosshair, often right
+// 50.47 — A HINT NEVER TAKES THE POINTER: a chart's readout opens beside its crosshair, often right
 // under the pointer, and a readout the pointer could land on is a `pointerleave` on the chart that
 // closes it, a `pointerenter` that opens it again, and a flicker for as long as the pointer moves.
 //
@@ -11,10 +11,10 @@ function underMount(address: string): string {
     return `${base.endsWith('/') ? base : `${base}/`}${address}`
 }
 
-test("a pointer moving under a chart's readout keeps it open — 50.48", async ({
+test("a pointer moving under a chart's readout keeps it open — 50.47", async ({
     page,
 }) => {
-    await page.goto(underMount('components/chart'), {
+    await page.goto(underMount('helpers/chart'), {
         waitUntil: 'networkidle',
     })
     const chart = page

@@ -1,3 +1,4 @@
+import { markdownIncremental } from './markdownIncremental.ts'
 import {
     inline,
     type LinkTarget,
@@ -60,3 +61,7 @@ export function markdown(
         ? inline(streaming ? settled(text) : text, settings, false)
         : render(text, settings, streaming)
 }
+
+// 52.18 — the same document rendered incrementally: sections an app renders itself, each kept while
+// the text only grows.
+markdown.incremental = markdownIncremental

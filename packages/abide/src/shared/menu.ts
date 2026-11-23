@@ -50,7 +50,7 @@ export type Menu = {
     readonly open: Reactive<boolean>
 }
 
-// 50.57-50.59 — every menu standing, so a group finds its members: one list per request on a server, as
+// 50.55-50.57 — every menu standing, so a group finds its members: one list per request on a server, as
 // every `reactive` without `global` is (11.32), and a menu is a member for as long as its setup stands.
 type Member = {
     group(): string | undefined
@@ -89,7 +89,7 @@ const ITEM =
 
 /** WAI-ARIA's menu button: a trigger and the menu it opens, as two parts to spread. */
 export function menu(options: MenuOptions = {}): Menu {
-    // 49.13 — read where they are used: every placement option a `popover` takes, under a
+    // 49.11 — read where they are used: every placement option a `popover` takes, under a
     // menu's own defaults (50.19-50.21), at each placement.
     const side = () => live(options.side) ?? 'bottom'
     const placing = {
@@ -123,9 +123,9 @@ export function menu(options: MenuOptions = {}): Menu {
     // Which item takes focus as the menu opens: the last where ArrowUp opened it (50.28), none where a
     // pointer resting on the trigger opened it.
     let focusOnOpen: Focus = 'first'
-    // 50.58 — whether a pointer opened it, which alone a leave closes.
+    // 50.56 — whether a pointer opened it, which alone a leave closes.
     let byPointer = false
-    // 50.60 — the side the menu a group switched from stood on, and the side the one it switched to
+    // 50.58 — the side the menu a group switched from stood on, and the side the one it switched to
     // stands on, for a transition to read.
     const cameFrom = reactive<'start' | 'end' | undefined>(undefined)
     const goingTo = reactive<'start' | 'end' | undefined>(undefined)
@@ -143,7 +143,7 @@ export function menu(options: MenuOptions = {}): Menu {
         clearTimeout(leaving)
         leaving = undefined
     }
-    // 50.58 — a menu a pointer opened closes once the pointer has been off its trigger and its menu
+    // 50.56 — a menu a pointer opened closes once the pointer has been off its trigger and its menu
     // for `closeOnLeave` milliseconds; coming back onto either keeps it.
     const armLeave = (): void => {
         cancelLeave()
@@ -153,7 +153,7 @@ export function menu(options: MenuOptions = {}): Menu {
         leaving = setTimeout(hide, after)
     }
 
-    // 50.59 — this menu among its group's: what opens it from a groupmate, and what marks it leaving.
+    // 50.57 — this menu among its group's: what opens it from a groupmate, and what marks it leaving.
     const self: Member = {
         group: () => live(options.group),
         trigger: triggerOf,
@@ -240,7 +240,7 @@ export function menu(options: MenuOptions = {}): Menu {
             event.preventDefault()
             show(end, false)
         },
-        // 50.57, 50.59 — a groupmate open switches to this one at once; else a resting mouse or pen
+        // 50.55, 50.57 — a groupmate open switches to this one at once; else a resting mouse or pen
         // opens it after `openOnHover`. A touch has no hover, and a tap is a click.
         onpointerenter: (event: PointerEvent) => {
             cancelLeave()
@@ -301,7 +301,7 @@ export function menu(options: MenuOptions = {}): Menu {
                 return
             }
             if (event.key === 'Tab') return hide()
-            // 50.59 — ArrowLeft and ArrowRight open the groupmate before and after this one.
+            // 50.57 — ArrowLeft and ArrowRight open the groupmate before and after this one.
             const group = self.group()
             if (
                 group !== undefined &&

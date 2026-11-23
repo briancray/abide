@@ -36,10 +36,10 @@ afterEach(() => {
     })
 })
 
-// 52.75 — A LABEL WAITS UNTIL IT NEXT READS DIFFERENTLY: half a unit past where its count stands,
+// 52.74 — A LABEL WAITS UNTIL IT NEXT READS DIFFERENTLY: half a unit past where its count stands,
 // or where the unit itself turns. THE REVERT: wait a whole unit from now — "5 minutes ago" waits 60s
 // where it turns to 6 at 5½.
-test('a label waits until format.relative next writes it differently — 52.75', () => {
+test('a label waits until format.relative next writes it differently — 52.74', () => {
     const now = Date.now()
     // `now` until a minute has passed, either side.
     expect(nextChange(now - 20_000, now)).toBe(40_000)
@@ -56,9 +56,9 @@ test('a label waits until format.relative next writes it differently — 52.75',
     expect(nextChange(now + 61 * MINUTE, now)).toBe(MINUTE + 1)
 })
 
-// 52.74 — ONE TIMER FOR EVERY TIME FOLLOWED, set for the soonest change, and none once nothing is.
+// 52.73 — ONE TIMER FOR EVERY TIME FOLLOWED, set for the soonest change, and none once nothing is.
 // THE REVERT: drop the clear in `schedule` — three follows leave three timers standing.
-test('one timer stands for every time followed, at the soonest change — 52.74', () => {
+test('one timer stands for every time followed, at the soonest change — 52.73', () => {
     const now = Date.now()
     const leave = [
         follow(now - 3 * HOUR),
@@ -75,9 +75,9 @@ test('one timer stands for every time followed, at the soonest change — 52.74'
     expect(standing()).toHaveLength(0)
 })
 
-// 52.76 — A HIDDEN PAGE SETS NO TIMER, and shown again it schedules at once. THE REVERT: drop the
+// 52.75 — A HIDDEN PAGE SETS NO TIMER, and shown again it schedules at once. THE REVERT: drop the
 // visibility check — a timer stands while the page is hidden.
-test('a hidden page sets no timer, and schedules again once shown — 52.76', () => {
+test('a hidden page sets no timer, and schedules again once shown — 52.75', () => {
     Object.defineProperty(document, 'visibilityState', {
         value: 'hidden',
         configurable: true,

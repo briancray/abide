@@ -1,4 +1,4 @@
-// 53.24-53.30 — HOW A STREAMED ANSWER FOLDS INTO A TURN, and what a conversation sends. What `Chat`
+// 53.24-53.30 — HOW A STREAMED ANSWER FOLDS INTO A TURN, and what a conversation sends. What `chat`
 // renders from it is the CRM's tests', which mount it.
 
 import { expect, test } from 'bun:test'

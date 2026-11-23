@@ -1,4 +1,4 @@
-// 49.8 — A PARTS FUNCTION'S STRUCTURE, CHECKED WHILE DEVELOPING. Parts leave the markup to the app, so
+// 49.7 — A PARTS FUNCTION'S STRUCTURE, CHECKED WHILE DEVELOPING. Parts leave the markup to the app, so
 // what a component used to guarantee — an `aria-controls` naming an element that is there, an option
 // inside its listbox — is the app's to get right, and this names what it got wrong. Every part a parts
 // function writes an id on, or names one from, carries the function's own id prefix, so the check
@@ -32,7 +32,7 @@ const REQUIRED_PARENT: Record<string, string> = {
 }
 
 const CLOSED_DRAWN =
-    "a closed popover is drawn: a display set on it outranks the browser's hiding of it, so set it behind :popover-open. RULEBOOK 49.16"
+    "a closed popover is drawn: a display set on it outranks the browser's hiding of it, so set it behind :popover-open. RULEBOOK 49.14"
 
 // Ids are random per call, so a problem is warned once by what it is, not by which element has it.
 const warned = new Set<string>()
@@ -53,7 +53,7 @@ export function partsProblems(prefix: string, root: ParentNode): string[] {
                     element.ownerDocument.getElementById(id) === null
                 )
                     problems.add(
-                        `${attribute} names an element that is not there. RULEBOOK 49.8`,
+                        `${attribute} names an element that is not there. RULEBOOK 49.7`,
                     )
     for (const element of root.querySelectorAll(`[id^=${quoted}]`)) {
         const role = element.getAttribute('role') ?? ''
@@ -63,7 +63,7 @@ export function partsProblems(prefix: string, root: ParentNode): string[] {
             element.parentElement?.closest(`[role=${parent}]`) === null
         )
             problems.add(
-                `a ${role} stands outside any ${parent}. RULEBOOK 49.8`,
+                `a ${role} stands outside any ${parent}. RULEBOOK 49.7`,
             )
     }
     for (const popover of popoversOf(prefix, root))
@@ -71,7 +71,7 @@ export function partsProblems(prefix: string, root: ParentNode): string[] {
     return [...problems]
 }
 
-// 49.16 — the popover each part written under `prefix` is or sits in.
+// 49.14 — the popover each part written under `prefix` is or sits in.
 function popoversOf(prefix: string, root: ParentNode): Set<Element> {
     const found = new Set<Element>()
     for (const element of root.querySelectorAll(
@@ -117,7 +117,7 @@ export function checkParts(name: string, prefix: string): void {
 }
 
 /**
- * 49.16 — warns on `abide:parts`, once a turn after it is bound, where `popover` — a popover part the
+ * 49.14 — warns on `abide:parts`, once a turn after it is bound, where `popover` — a popover part the
  * function holds by its element rather than by an id — is closed and drawn. Development only.
  */
 export function checkPopover(name: string, popover: Element): void {

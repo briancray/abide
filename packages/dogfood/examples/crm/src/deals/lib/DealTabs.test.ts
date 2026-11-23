@@ -52,7 +52,7 @@ test('switching tabs rebuilds the panel, and none of the tabs', async () => {
         false,
     ])
     // The Value tab's one field, the four marks on each of two tabs (`aria-controls` among them, which
-    // only the selected tab writes), and the panel's id and label, which follow the tab selected (51.42)
+    // only the selected tab writes), and the panel's id and label, which follow the tab selected (51.40)
     atMost(work, { nodesCreated: 6, attributesSet: 10 })
 })
 

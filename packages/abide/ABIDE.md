@@ -209,40 +209,37 @@ affected code saying what it did, and tell the user.
 ## What abide ships before you write it
 
 Search this list before writing a dialog, a notice, a picker, a table, a chart, a formatter or a
-server helper. Each has a page in `docs/abide.md` with a working card, every prop, and a styling
+server helper. Each has a page in `docs/abide.md` with a working card, every option, and a styling
 table.
 
-- Components, each imported on its own — `import Dialog from '@abide/abide/Dialog.abide'`:
-  `Dialog`, `Prompts` (and `prompts.confirm` / `prompts.alert` / `prompts.prompt` beside it:
-  `import Prompts, { prompts } from '@abide/abide/Prompts.abide'`, and `prompts.host` for a dialog of
-  your own markup), `Toasts` (and `toasts.notify` beside it, and `toasts.host` for notices of your own
-  markup), `Tooltips`, `Announcer` (and `announce` beside it, a message read to a screen reader
-  with nothing shown), `Combobox`, `CommandPalette`, `Range`, `SortableTable`, `Markdown`, `Time`, `Chart` (with `Line`,
-  `Column` and `Area` children), `Pie`, `Sparkline`, `Chat`, `Pairing`.
 - From `@abide/abide`: `format` (money, percents, numbers, dates, durations, how long ago, the same
   on both sides), `form` (a `<form>` over a handler, checked against its args before the call),
-  `markdown`, `listbox`, `menu`, `tabs`, `tree`, `commandPalette`, `range`,
-  `sortableTable`, `combobox`, `time`, `dialog`, `dropzone` (a host to drop or paste files on, and a
-  file input to pick them with), `chart`, `pie` and `sparkline` (a widget's parts,
-  spread on markup of your own; `CommandPalette`, `Range`, `SortableTable`, `Combobox`, `Time`,
-  `Dialog`, `Chart`, `Pie` and `Sparkline` are default markup over the last nine, and `chart` carries
-  the arithmetic under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and
-  `chart.nearest`), `sortBy`, `virtualList`, `hotkeys` and `keyLabel`, and
-  `popover` (an app's own panel in the top layer, as a trigger or an anchor and the popover),
-  `dismissible` (a panel and what counts as inside it), `outlet.host` and `outlet.into` (a place a
-  layout leaves, filled by the page's own markup from below), and the one-element parts `copy`,
-  `scrollEdges` and `tooltip.tip` (shown by the root layout's `Tooltips`, or by `tooltip.host` on
-  markup of the app's own) beside `observe` — every behavior on an element is a part, spread as
-  `{...copy()}`, two elements' parts find each other with no element handed between them, and several
-  parts spread on one element each bind it.
+  `markdown` (and `markdown.incremental`, a document as sections that keep their nodes while a stream
+  grows it), `chat` (a conversation over an assistant handler: the transcript and the composer),
+  `pairing` (the visitor's Claude Code paired with the page, and the step it stands at), `listbox`,
+  `menu`, `tabs`, `tree`, `commandPalette`, `range`, `sortableTable`, `combobox`, `time`, `dialog`,
+  `dropzone` (a host to drop or paste files on, and a file input to pick them with), `chart`, `pie`
+  and `sparkline` (a widget's parts, spread on markup of your own; `chart` carries the arithmetic
+  under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and `chart.nearest`),
+  `sortBy`, `virtualList`, `hotkeys` and `keyLabel`, `prompts` (`prompts.confirm` /
+  `prompts.alert` / `prompts.prompt`), `toasts` (`toasts.notify`) and `announce` (a message read to a
+  screen reader with nothing shown) — each shown where the root layout spreads its `host`'s parts,
+  `prompts.host()`, `toasts.host()` and `announce.host()` — and `popover` (an app's own panel in the
+  top layer, as a trigger or an anchor and the popover), `dismissible` (a panel and what counts as
+  inside it), `outlet.host` and `outlet.into` (a place a layout leaves, filled by the page's own
+  markup from below), and the one-element parts `copy`, `scrollEdges` and `tooltip.tip` (shown where
+  the root layout spreads `tooltip.host()`) beside `observe` — every behavior on an element is a
+  part, spread as `{...copy()}`, two elements' parts find each other with no element handed between
+  them, and several parts spread on one element each bind it.
 - From `@abide/abide/server`: the rungs `signedIn`, `requireRole` and `readOnly`, `fetchJson` /
   `fetchText` (a deadline, retries worth retrying, a cache), and `job` (work on a schedule, one run at
   a time).
 
-A shipped component brings no stylesheet and writes no class. Pass `class` and any attribute and it
-lands on the root; style its states by the `data-` attributes it writes (`data-open`,
-`data-active`, `data-sort="ascending"`) and its inner pieces by the attribute named for its parts function (`data-combobox="option"`) — in
-Tailwind, `data-[open]:…` and `[&_[data-combobox=option]]:…` (RULEBOOK 49.1, 49.2, 49.4).
+abide ships no markup and no stylesheet for any of these: the parts land on elements you write, so
+`class` is yours. Style a widget's states by the `data-` attributes its parts write (`data-open`,
+`data-active`, `data-sort="ascending"`) and its inner pieces by the attribute named for its parts
+function (`data-combobox="option"`) — in Tailwind, `data-[open]:…` and `[&_[data-combobox=option]]:…`
+(RULEBOOK 49).
 
 ## The app's own notes
 

@@ -1,4 +1,4 @@
-// 52.83-52.101 — WAI-ARIA's date grid, as parts an app spreads onto elements of its own: a grid per
+// 52.82-52.100 — WAI-ARIA's date grid, as parts an app spreads onto elements of its own: a grid per
 // month shown, each of whole weeks under its heading, a header row of weekdays, a cell per day, and
 // the buttons paging them. One month is `months: 1`, not a case of its own. A day is a `YYYY-MM-DD` string and a month a `YYYY-MM` one, and every day is counted on UTC's
 // calendar, which has no daylight saving to drop or repeat one; a zone is read only for which day is
@@ -15,7 +15,7 @@ import { flushSync, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving, stepOf } from './roving.ts'
 
-/** 52.98 — what a calendar picks: a day, or a range's start and end where it picks a range. */
+/** 52.97 — what a calendar picks: a day, or a range's start and end where it picks a range. */
 export type CalendarPick<Range extends boolean> = Range extends true
     ? readonly [start: string, end: string | undefined] | undefined
     : string | undefined
@@ -26,7 +26,7 @@ export type CalendarOptions<Range extends boolean = false> = {
     id?: string
     /** The first month shown as `YYYY-MM`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `month`, where none is given. */
     month?: Reactive<string | undefined>
-    /** 52.98 — whether it picks a range of days rather than one. Read once. */
+    /** 52.97 — whether it picks a range of days rather than one. Read once. */
     range?: Range
     /** The day picked as `YYYY-MM-DD`, or the range as `[start, end]`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
     selected?: Reactive<CalendarPick<Range>>
@@ -80,9 +80,9 @@ export type CalendarMonth = {
 export type Calendar<Range extends boolean = false> = {
     /** The base its parts' ids are derived from. */
     readonly id: string
-    /** 52.101 — the day in the page's tab order, as `YYYY-MM-DD`. */
+    /** 52.100 — the day in the page's tab order, as `YYYY-MM-DD`. */
     get active(): string
-    /** 52.101 — the id of `date`'s cell. */
+    /** 52.100 — the id of `date`'s cell. */
     idOf(date: string): string
     /** The months shown, in order, each a grid of its own. */
     get months(): readonly CalendarMonth[]
@@ -154,7 +154,7 @@ type Shared = {
     // A day picked is its own start and end.
     start: () => string | undefined
     end: () => string | undefined
-    // 52.100 — the day pointed at or focused, while a range has a start and no end.
+    // 52.99 — the day pointed at or focused, while a range has a start and no end.
     preview: () => string | undefined
     active: () => string
     today: () => string
@@ -167,7 +167,7 @@ function between(date: string, one: string, other: string): boolean {
         : other <= date && date <= one
 }
 
-// 52.96, 52.99 — whether `date` is picked: the day, every day of a range, or a range's start alone.
+// 52.95, 52.98 — whether `date` is picked: the day, every day of a range, or a range's start alone.
 function isPicked(shared: Shared, date: string): boolean {
     const start = shared.start()
     if (start === undefined) return false
@@ -189,7 +189,7 @@ function dayOf(
             role: 'gridcell',
             'data-calendar': 'day',
             id,
-            // 52.87 — only the active day is in the page's tab order; 52.97 — a day another grid
+            // 52.86 — only the active day is in the page's tab order; 52.96 — a day another grid
             // shown holds is that grid's to focus.
             get tabindex() {
                 if (id === undefined) return undefined
@@ -204,14 +204,14 @@ function dayOf(
             get 'data-selected'() {
                 return isPicked(shared, date) ? '' : undefined
             },
-            // 52.99 — a range's ends.
+            // 52.98 — a range's ends.
             get 'data-range-start'() {
                 return shared.range && shared.start() === date ? '' : undefined
             },
             get 'data-range-end'() {
                 return shared.range && shared.end() === date ? '' : undefined
             },
-            // 52.100 — the range it would pick, while it has a start and no end.
+            // 52.99 — the range it would pick, while it has a start and no end.
             get 'data-preview'() {
                 const start =
                     shared.range && shared.end() === undefined
@@ -241,7 +241,7 @@ function monthOn(month: string, months: number): string {
 export function calendar<Range extends boolean = false>(
     options: CalendarOptions<Range> = {},
 ): Calendar<Range> {
-    // 49.13 — read once.
+    // 49.11 — read once.
     const range = options.range === true
     const selected = (options.selected ??
         reactive<CalendarPick<Range>>(undefined)) as Reactive<
@@ -257,7 +257,7 @@ export function calendar<Range extends boolean = false>(
     const cellId = (date: string) => `${base}-${date}`
     if (process.env.NODE_ENV !== 'production') checkParts('calendar', base)
 
-    // 52.85 — today is the day it is now in the zone named, else the one `format.date` writes in.
+    // 52.84 — today is the day it is now in the zone named, else the one `format.date` writes in.
     const today = reactive(() =>
         dayIn(
             Date.now(),
@@ -273,14 +273,14 @@ export function calendar<Range extends boolean = false>(
         const value = selected()
         return Array.isArray(value) ? value[1] : (value as string | undefined)
     })
-    // 52.86 — the first month shown: the month written, else the picked day's, else today's.
+    // 52.85 — the first month shown: the month written, else the picked day's, else today's.
     const shown = reactive((): string => {
         for (const wanted of [picked(), start()])
             if (wanted !== undefined && MONTH.test(wanted))
                 return wanted.slice(0, 7)
         return today().slice(0, 7)
     })
-    // 52.97 — how many months are shown, and the last of them.
+    // 52.96 — how many months are shown, and the last of them.
     const count = reactive(() =>
         Math.max(1, Math.trunc(live(options.months) ?? 1)),
     )
@@ -294,7 +294,7 @@ export function calendar<Range extends boolean = false>(
         () => live(options.firstDay) ?? firstDayIn(localeOf()),
     )
 
-    // 52.87 — the active day: the one focused last, else the one picked, else today, while it is in
+    // 52.86 — the active day: the one focused last, else the one picked, else today, while it is in
     // a month shown, and the first month's first day where none is.
     const focused = reactive<string | undefined>(undefined)
     const active = reactive((): string => {
@@ -302,7 +302,7 @@ export function calendar<Range extends boolean = false>(
             if (wanted !== undefined && isShown(wanted)) return wanted
         return `${shown()}-01`
     })
-    // 52.100 — the day last pointed at in a grid, while one is.
+    // 52.99 — the day last pointed at in a grid, while one is.
     const pointed = reactive<string | undefined>(undefined)
     const shared: Shared = {
         range,
@@ -312,7 +312,7 @@ export function calendar<Range extends boolean = false>(
         active,
         today,
     }
-    // 52.92, 52.93, 52.98 — a pick: the day, or a range's start, then its end.
+    // 52.91, 52.92, 52.97 — a pick: the day, or a range's start, then its end.
     const pick = (date: string): void => {
         if (!range) return selected.set(date)
         const from = start.peek()
@@ -321,7 +321,7 @@ export function calendar<Range extends boolean = false>(
         else selected.set(date < from ? [date, from] : [from, date])
     }
 
-    // 52.83, 52.84 — `month`'s whole weeks from the week's `first` day. 52.97 — a day of another
+    // 52.82, 52.83 — `month`'s whole weeks from the week's `first` day. 52.96 — a day of another
     // month that a grid shown holds is that grid's: its copy here carries no id.
     const weeksOf = (
         month: string,
@@ -360,7 +360,7 @@ export function calendar<Range extends boolean = false>(
         return rows
     }
 
-    // 52.91 — a key moving the active day out of the months shown pages the fewest months that show it.
+    // 52.90 — a key moving the active day out of the months shown pages the fewest months that show it.
     const moveTo = (date: string): void => {
         focused.set(date)
         const month = date.slice(0, 7)
@@ -387,7 +387,7 @@ export function calendar<Range extends boolean = false>(
         const across = stepOf(event.key, 'horizontal')
         const down = stepOf(event.key, 'vertical')
         let to: string | undefined
-        // 52.89 — the arrows step a day across and a week down; Home and End go to the week's ends.
+        // 52.88 — the arrows step a day across and a week down; Home and End go to the week's ends.
         if (across !== 0) to = dateOf(timeOf(from, across))
         else if (down !== 0) to = dateOf(timeOf(from, down * 7))
         else if (event.key === 'Home' || event.key === 'End') {
@@ -401,13 +401,13 @@ export function calendar<Range extends boolean = false>(
             )
             to = dateOf(timeOf(from, end - column))
         }
-        // 52.90 — PageUp and PageDown step a month, a year with Shift.
+        // 52.89 — PageUp and PageDown step a month, a year with Shift.
         else if (event.key === 'PageUp' || event.key === 'PageDown')
             to = monthsOn(
                 from,
                 (event.key === 'PageUp' ? -1 : 1) * (event.shiftKey ? 12 : 1),
             )
-        // 52.92 — Enter and Space pick the active day.
+        // 52.91 — Enter and Space pick the active day.
         else if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
             pick(from)
@@ -416,14 +416,14 @@ export function calendar<Range extends boolean = false>(
         event.preventDefault()
         moveTo(to)
     }
-    // 52.93 — a click picks the day it lands in, and makes it the active one.
+    // 52.92 — a click picks the day it lands in, and makes it the active one.
     const onclick = (event: MouseEvent) => {
         const date = dateAt(event)
         if (date === undefined) return
         pick(date)
         moveTo(date)
     }
-    // 52.87 — focus put on a day by any means makes it the active one.
+    // 52.86 — focus put on a day by any means makes it the active one.
     const onfocusin = (event: FocusEvent) => {
         const date = dateAt(event)
         if (date !== undefined) focused.set(date)
@@ -440,9 +440,9 @@ export function calendar<Range extends boolean = false>(
             role: 'grid',
             'data-calendar': 'grid',
             id: gridId(index),
-            // 52.95 — each grid is labelled by its heading.
+            // 52.94 — each grid is labelled by its heading.
             'aria-labelledby': headingId(index),
-            // 52.99 — a range is many days picked.
+            // 52.98 — a range is many days picked.
             'aria-multiselectable': range ? 'true' : undefined,
             onkeydown,
             onclick,
@@ -457,7 +457,7 @@ export function calendar<Range extends boolean = false>(
             'aria-live': 'polite',
         })
 
-    // 52.83, 52.95, 52.97 — THE MONTHS SHOWN, again only when the first, the count, the week's
+    // 52.82, 52.94, 52.96 — THE MONTHS SHOWN, again only when the first, the count, the week's
     // first day or the locale changes.
     const months = reactive((): CalendarMonth[] => {
         const lowest = shown()
@@ -488,7 +488,7 @@ export function calendar<Range extends boolean = false>(
         return list
     })
 
-    // 52.88 — the weekdays in the order a week runs, named in the locale.
+    // 52.87 — the weekdays in the order a week runs, named in the locale.
     const weekdays = reactive((): CalendarWeekday[] => {
         const locale = localeOf()
         const first = firstDay()
@@ -527,7 +527,7 @@ export function calendar<Range extends boolean = false>(
         return days
     })
 
-    // 52.94 — the buttons page the months shown by one, and leave focus where it is.
+    // 52.93 — the buttons page the months shown by one, and leave focus where it is.
     const page = (months: number) => () =>
         picked.set(monthOn(shown.peek() as string, months))
     // Every grid the buttons page, by id.
@@ -544,7 +544,7 @@ export function calendar<Range extends boolean = false>(
 
     return {
         id: base,
-        // 52.101
+        // 52.100
         get active() {
             return active()
         },

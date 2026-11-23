@@ -1,4 +1,4 @@
-// 51.105-51.110 — A LIST OR A TREE SELECTING MANY, pressed and clicked in a browser: the keys a real
+// 51.98-51.103 — A LIST OR A TREE SELECTING MANY, pressed and clicked in a browser: the keys a real
 // browser dispatches, and focus moved by them, which a DOM emulator only stands in for.
 //
 // THE REVERT: drop the run from Shift with an arrow in `tree` — focus reaches Babbage & Co with Europe
@@ -18,7 +18,7 @@ function underMount(address: string): string {
     return `${base.endsWith('/') ? base : `${base}/`}${address}`
 }
 
-test('a listbox selecting many takes a click, mod, Shift, Space and mod+a — 51.106-51.110', async ({
+test('a listbox selecting many takes a click, mod, Shift, Space and mod+a — 51.99-51.103', async ({
     page,
 }) => {
     await page.goto(underMount('helpers/listbox'), {
@@ -54,7 +54,7 @@ test('a listbox selecting many takes a click, mod, Shift, Space and mod+a — 51
     await expect.poll(selected).toHaveLength(3)
 })
 
-test('a tree selecting many keeps focus with the keys as Shift carries the run — 51.105, 51.110', async ({
+test('a tree selecting many keeps focus with the keys as Shift carries the run — 51.98, 51.103', async ({
     page,
 }) => {
     await page.goto(underMount('helpers/tree'), { waitUntil: 'networkidle' })

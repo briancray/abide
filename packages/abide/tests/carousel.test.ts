@@ -1,4 +1,4 @@
-// 53.64-53.73 — `carousel`'s parts, spread by hand as 32.11 spreads them, with every element's rect
+// 53.61-53.70 — `carousel`'s parts, spread by hand as 32.11 spreads them, with every element's rect
 // stubbed: the emulator lays nothing out, so a row of 100px items is written down rather than drawn.
 // Whether a real scroller snaps, and what a browser's snap events say, is `e2e/carousel.spec.ts`'s.
 
@@ -67,7 +67,7 @@ function laidOut(view: ReturnType<typeof carousel<string>>) {
 const frame = () => new Promise((done) => requestAnimationFrame(done))
 
 // THE REVERT: rest on `selected()` as it is, and a key no stage has centers nothing.
-test('it rests on the selection, and on the first item where the selection names none — 53.64, 53.72', () => {
+test('it rests on the selection, and on the first item where the selection names none — 53.61, 53.69', () => {
     const selected = reactive<string | undefined>('proposal')
     const view = carousel({ items: STAGES, selected })
     expect(view.centered).toBe('proposal')
@@ -81,7 +81,7 @@ test('it rests on the selection, and on the first item where the selection names
 })
 
 // THE REVERT: scroll with `behavior()` on the first run of the rest, and the page animates in.
-test('the scroller centers the resting item at once when bound, and smoothly when it changes — 53.65, 53.66', () => {
+test('the scroller centers the resting item at once when bound, and smoothly when it changes — 53.62, 53.63', () => {
     const selected = reactive<string | undefined>('qualified')
     const view = carousel({ items: STAGES, selected })
     const row = laidOut(view)
@@ -93,7 +93,7 @@ test('the scroller centers the resting item at once when bound, and smoothly whe
 })
 
 // THE REVERT: measure on every `scroll` rather than once a frame, and three scrolls measure three times.
-test('a scroll centers the nearest item, measured once a frame — 53.67', async () => {
+test('a scroll centers the nearest item, measured once a frame — 53.64', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
     let measured = 0
@@ -114,7 +114,7 @@ test('a scroll centers the nearest item, measured once a frame — 53.67', async
 
 // THE REVERT: drop `heading` from `arrive`, and the stage a smooth scroll passes is centered on the
 // way, so a second click of next steps from it rather than from where the first was going.
-test('what a scroll to an item passes on the way is not centered, until the scrolling ends — 53.68', async () => {
+test('what a scroll to an item passes on the way is not centered, until the scrolling ends — 53.65', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
     view.scrollTo('won')
@@ -129,7 +129,7 @@ test('what a scroll to an item passes on the way is not centered, until the scro
 
 // THE REVERT: keep measuring scrolls once a snap event has come, and the scroll after it moves
 // `centered` off the snap target.
-test('once the scroller reports a snap, the snap target alone sets centered — 53.69', async () => {
+test('once the scroller reports a snap, the snap target alone sets centered — 53.66', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
     const inner = document.createElement('span')
@@ -146,7 +146,7 @@ test('once the scroller reports a snap, the snap target alone sets centered — 
 })
 
 // THE REVERT: drop `disabled` from `previous`, and it stays enabled at the first stage.
-test('previous and next step from the centered item, and are disabled at the ends — 53.70, 53.71', () => {
+test('previous and next step from the centered item, and are disabled at the ends — 53.67, 53.68', () => {
     const view = carousel({ items: STAGES, behavior: 'auto' })
     const row = laidOut(view)
     expect(view.previous.disabled).toBe(true)
@@ -160,7 +160,7 @@ test('previous and next step from the centered item, and are disabled at the end
 })
 
 // THE REVERT: make `reset` scroll to `centered`, and it stays on the stage the reader scrolled to.
-test('reset scrolls back to the resting item — 53.71', async () => {
+test('reset scrolls back to the resting item — 53.68', async () => {
     const view = carousel({
         items: STAGES,
         selected: reactive<string | undefined>('qualified'),
@@ -178,7 +178,7 @@ test('reset scrolls back to the resting item — 53.71', async () => {
     })
 })
 
-test('the scroller is a carousel region, and each item a slide named by its label — 53.73', () => {
+test('the scroller is a carousel region, and each item a slide named by its label — 53.70', () => {
     const view = carousel({
         items: [{ id: 'd1', name: 'Acme renewal' }],
         key: (deal) => deal.id,

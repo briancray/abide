@@ -1,4 +1,4 @@
-// 51.65-51.71, 51.102-51.104 — THE ITEMS OF A LONG LIST THAT ARE IN VIEW, as parts spread on the app's
+// 51.58-51.64, 51.95-51.97 — THE ITEMS OF A LONG LIST THAT ARE IN VIEW, as parts spread on the app's
 // own markup: a list, a CSS grid, rows that wrap — laid out by the app's CSS, and measured rather than
 // described. The host's width and the items as they render say how many items a row holds and how tall
 // a row is, so a breakpoint, a layout switched or a font loaded re-derives both with nothing handed in.
@@ -94,7 +94,7 @@ function scrollerOf(host: Element): Scroller {
 export function virtualList<Item>(
     options: VirtualListOptions<Item>,
 ): VirtualList<Item> {
-    // 49.13 — read once: what renders before anything is measured.
+    // 49.11 — read once: what renders before anything is measured.
     const initial = options.initial ?? 40
     const estimate = options.estimate ?? 48
     const items = () => live(options.items)
@@ -130,7 +130,7 @@ export function virtualList<Item>(
         return entries
     })
 
-    // 51.69 — the rows before `shown` and after it, as the host's block padding.
+    // 51.62 — the rows before `shown` and after it, as the host's block padding.
     const padding = reactive(() => {
         const list = items()
         const entries = shown()
@@ -156,7 +156,7 @@ export function virtualList<Item>(
     // What each rendered item measured, its inline and its block size.
     const sizes = new Map<Element, { inline: number; block: number }>()
 
-    // 51.66 — a row holds what fits across the host beside the first item measured, gaps counted, and
+    // 51.59 — a row holds what fits across the host beside the first item measured, gaps counted, and
     // is as tall as the items measured are on average, its gap counted.
     // The last measure taken, kept for a resize of the host that lands while no item is measured.
     let itemInline = 0
@@ -184,7 +184,7 @@ export function virtualList<Item>(
         schedule()
     }
 
-    // 51.65, 51.68 — once a frame: where the view stands over the host, read after the browser's
+    // 51.58, 51.61 — once a frame: where the view stands over the host, read after the browser's
     // layout rather than in the scroll event that moved it.
     const read = (): void => {
         frame = 0
@@ -239,7 +239,7 @@ export function virtualList<Item>(
             viewTop +
             row * size -
             clearance
-        // 51.70 — in `shown` before the scroll lands.
+        // 51.63 — in `shown` before the scroll lands.
         firstRow.set(row)
         scroller.scrollTo({ top, behavior: live(options.behavior) ?? 'auto' })
     }
@@ -258,7 +258,7 @@ export function virtualList<Item>(
             const computed = getComputedStyle(element)
             columnGap = Number.parseFloat(computed.columnGap) || 0
             rowGap = Number.parseFloat(computed.rowGap) || 0
-            // 51.68 — found at the first delivery, never as it is bound.
+            // 51.61 — found at the first delivery, never as it is bound.
             if (scroller === undefined) {
                 const found = scrollerOf(element)
                 scroller = found
@@ -278,7 +278,7 @@ export function virtualList<Item>(
             }
             derive()
         })
-        // 51.104 — unbound, it follows nothing.
+        // 51.97 — unbound, it follows nothing.
         return () => {
             stopPadding()
             stopHost()
@@ -311,7 +311,7 @@ export function virtualList<Item>(
             all.push({ label, index: at.get(label) ?? -1 })
         return all
     })
-    // 51.71 — the section the first item in view stands in.
+    // 51.64 — the section the first item in view stands in.
     const current = reactive(() => {
         const listed: VirtualListSection[] = []
         for (const section of sectionList())
@@ -360,7 +360,7 @@ export function virtualList<Item>(
             get current() {
                 return current()
             },
-            // 51.102, 51.103
+            // 51.95, 51.96
             jump: (section) => ({
                 type: 'button',
                 'data-virtual-list': 'jump',

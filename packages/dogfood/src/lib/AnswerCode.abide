@@ -5,7 +5,7 @@ import { props } from '@abide/abide'
 
 import Code from './Code.abide'
 
-const { source } = props<{ source: string; info: string }>()
+const { source } = props<{ source: string }>()
 </script>
 
 <Code code={source} />

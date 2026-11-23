@@ -32,7 +32,7 @@ test("a rep's sparkline carries its trend, and redraws in place", async () => {
     atMost(work, { nodesCreated: 0 })
 })
 
-// THE REVERT: drop the `zero && low === high` widening in `Sparkline` — Joan's dot sits at 50, the
+// THE REVERT: drop the `zero && low === high` widening in `sparkline` — Joan's dot sits at 50, the
 // middle, where the bottom, 100, is due.
 test('a rep who has closed nothing lies along the bottom, not across the middle', async () => {
     using _trends = await mount(RepTrends({}))

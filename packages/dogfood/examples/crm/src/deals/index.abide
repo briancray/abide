@@ -14,6 +14,7 @@ import NewDeal from './lib/NewDeal.abide'
 import Pipeline from './lib/Pipeline.abide'
 import ProbabilityFilter from './lib/ProbabilityFilter.abide'
 import QuickDeal from './lib/QuickDeal.abide'
+import SignContract from './lib/SignContract.abide'
 </script>
 
 <head><title>Deals — CRM</title></head>
@@ -35,4 +36,5 @@ import QuickDeal from './lib/QuickDeal.abide'
     <DealCommands />
     <DeleteDeal />
     <ArchiveDeal />
+    <SignContract />
 </main>

@@ -11,11 +11,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={[
-        '/components/prompts',
-        '/components/dialog',
-        '/components/toasts-api',
-    ]}
+    seeAlso={['/helpers/dialog', '/components/toasts-api']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DeleteDeal.test.ts',
@@ -28,6 +24,18 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DeleteDeal.test.ts',
             from: ["test('a withdrawn prompt is declined"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DeleteDeal.test.ts',
+            from: ["test('the question names the deal and is marked danger'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DeleteDeal.test.ts',
+            from: ["test('Escape declines the question'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DeleteDeal.test.ts',
+            from: ["test('a question shows in one dialog where two Prompts stand'"],
         },
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/RenameDeal.test.ts',
@@ -65,7 +73,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
         <p>With <code>mustType</code>, the confirming button stays disabled until the word is
             typed, matched ignoring case.</p>
         <Code language="ts" caption="browser" code={`
-            import { prompts } from '@abide/abide/Prompts.abide'
+            import { prompts } from '@abide/abide'
 
             const sure = await prompts.confirm({
                 title: 'Delete Analytical Engines?',
@@ -86,7 +94,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
         <p>A string in place of the options is the body. <code>prompts.alert</code> settles once
             the person closes it.</p>
         <Code language="ts" caption="browser" code={`
-            import { prompts } from '@abide/abide/Prompts.abide'
+            import { prompts } from '@abide/abide'
 
             await prompts.alert('The import finished with 3 duplicate contacts.')
         `} />
@@ -97,7 +105,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
             <code>data-busy</code> while it runs, closes once it lands, and shows the refusal in its
             <code>error</code> part: here, that a closed deal does not move.</p>
         <Code language="ts" caption="browser" code={`
-            import { prompts } from '@abide/abide/Prompts.abide'
+            import { prompts } from '@abide/abide'
             import moveDeal from '../moveDeal.handler.ts'
 
             await prompts.confirm({
@@ -112,7 +120,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
         <p>Pass a <code>signal</code>, and aborting it takes the prompt down, or out of the
             queue, as declined.</p>
         <Code language="ts" caption="browser" code={`
-            import { prompts } from '@abide/abide/Prompts.abide'
+            import { prompts } from '@abide/abide'
 
             const leaving = new AbortController()
             const keep = prompts.confirm({ body: 'Keep editing?', signal: leaving.signal })
@@ -124,35 +132,63 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
         <p><code>modal: false</code> shows the prompt beside the page, which stays usable
             around it.</p>
         <Code language="ts" caption="browser" code={`
-            import { prompts } from '@abide/abide/Prompts.abide'
+            import { prompts } from '@abide/abide'
 
             await prompts.alert({ body: 'Saved as a draft.', modal: false })
         `} />
     </Section>
 
-    <Section level={3} title="Lay out the prompts on a dialog of your own">
-        <p>In place of <code>Prompts</code>, call <code>prompts.host</code> from your root
-            layout's script and spread its parts onto your own <code>&lt;dialog&gt;</code>: the
-            form, the field where <code>typing</code> holds, the error, and the two buttons.
-            The parts carry the queue, the role, the closing and the answer.</p>
+    <Section level={3} title="Show every prompt of the app in one dialog">
+        <p>Call <code>prompts.host</code> from your root layout's script and spread its parts onto
+            a <code>&lt;dialog&gt;</code> there: the form, the field where <code>typing</code>
+            holds, the error, and the two buttons. Every prompt on every page shows in it, one at a
+            time, in the order asked. The parts carry the queue, the role, the closing and the
+            answer; the markup and its classes are yours.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { prompts } from '@abide/abide/Prompts.abide'
+            import { prompts } from '@abide/abide'
 
             const asked = prompts.host()
             </script>
 
-            <dialog {...asked.dialog}>
+            <html lang="en">
+                <body>
+                    <slot />
+                    <dialog {...asked.dialog} class="m-auto w-96 rounded-xl p-5">
+                        {#if asked.current}
+                            <form {...asked.form}>
+                                <h2 {...asked.title}>{asked.current?.title}</h2>
+                                <p {...asked.body}>{asked.current?.body}</p>
+                                {#if asked.typing}<input {...asked.input} />{/if}
+                                {#if asked.failed}
+                                    <p {...asked.error}>{asked.failed}</p>
+                                {/if}
+                                <button {...asked.confirm}>
+                                    {asked.current?.confirm}
+                                </button>
+                                {#if asked.current?.kind !== 'alert'}
+                                    <button {...asked.cancel}>
+                                        {asked.current?.cancel}
+                                    </button>
+                                {/if}
+                            </form>
+                        {/if}
+                    </dialog>
+                </body>
+            </html>
+        `} />
+    </Section>
+
+    <Section level={3} title="Turn the confirm button red on a dangerous question">
+        <p>A prompt asked with <code>danger</code> writes <code>data-danger</code> on the dialog.
+            Mark the dialog a <code>group</code> and the confirm button reads it.</p>
+        <Code language="abide" caption="abide" code={`
+            <dialog {...asked.dialog} class="group">
                 {#if asked.current}
                     <form {...asked.form}>
-                        <header>{asked.current?.title}</header>
-                        <small>{asked.current?.body}</small>
-                        {#if asked.typing}<input {...asked.input} />{/if}
-                        {#if asked.failed}<p {...asked.error}>{asked.failed}</p>{/if}
-                        <button {...asked.confirm}>{asked.current?.confirm}</button>
-                        {#if asked.current?.kind !== 'alert'}
-                            <button {...asked.cancel}>{asked.current?.cancel}</button>
-                        {/if}
+                        <button {...asked.confirm} class="group-data-[danger]:bg-bad">
+                            {asked.current?.confirm}
+                        </button>
                     </form>
                 {/if}
             </dialog>

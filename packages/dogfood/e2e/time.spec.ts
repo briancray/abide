@@ -1,4 +1,4 @@
-// 52.74, 52.78 — A `Time` IN A BROWSER: its label turns as the page's clock passes a boundary, and a
+// 52.73, 52.77 — `time` IN A BROWSER: its label turns as the page's clock passes a boundary, and a
 // page whose clock reads differently from the server's writes its own label as it hydrates — changed
 // text, never a mismatch.
 //
@@ -11,11 +11,11 @@ function underMount(address: string): string {
     return `${base.endsWith('/') ? base : `${base}/`}${address}`
 }
 
-test('a logged call reads now, and a minute on reads 1 minute ago — 52.74', async ({
+test('a logged call reads now, and a minute on reads 1 minute ago — 52.73', async ({
     page,
 }) => {
     await page.clock.install()
-    await page.goto(underMount('components/time'), {
+    await page.goto(underMount('helpers/time'), {
         waitUntil: 'networkidle',
     })
     await page.getByRole('button', { name: 'Log a call' }).click()
@@ -25,7 +25,7 @@ test('a logged call reads now, and a minute on reads 1 minute ago — 52.74', as
     await expect(latest).toHaveText('Called 1 minute ago')
 })
 
-test('a page whose clock is a year on from the server writes its own label, with no mismatch — 52.78', async ({
+test('a page whose clock is a year on from the server writes its own label, with no mismatch — 52.77', async ({
     page,
 }) => {
     const warnings: string[] = []
@@ -34,16 +34,16 @@ test('a page whose clock is a year on from the server writes its own label, with
             warnings.push(message.text())
     })
     const served = await (
-        await page.request.get(underMount('components/time'))
+        await page.request.get(underMount('helpers/time'))
     ).text()
     const serverLabel = /Last touched <time[^>]*>([^<]*)</.exec(served)?.[1]
     // A year on always turns the label: a year more is a unit or a count more.
     await page.clock.install({ time: Date.now() + 365 * 86_400_000 })
-    await page.goto(underMount('components/time'), {
+    await page.goto(underMount('helpers/time'), {
         waitUntil: 'networkidle',
     })
     const label = page.locator('p', { hasText: 'Last touched' }).locator('time')
-    // What `format.relative` makes of the label's time against the page's own clock (52.75's units).
+    // What `format.relative` makes of the label's time against the page's own clock (52.74's units).
     const browserLabel = await label.evaluate((time) => {
         const UNITS = [
             ['year', 31_536_000_000],

@@ -4,12 +4,18 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import CopyCommands from './lib/CopyCommands.abide'
+import copyCommands from './lib/CopyCommands.abide' with { type: 'text' }
+import OutsideTab from './lib/OutsideTab.abide'
+import outsideTab from './lib/OutsideTab.abide' with { type: 'text' }
 import PastedNote from './lib/PastedNote.abide'
 import pastedNote from './lib/PastedNote.abide' with { type: 'text' }
+import StreamSummary from './lib/StreamSummary.abide'
+import streamSummary from './lib/StreamSummary.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/markdown', '/abide-files/raw', '/helpers/url']}
+    seeAlso={['/abide-files/raw', '/helpers/chat', '/helpers/url']}
     tests={[
         {
             path: 'packages/abide/tests/markdown.test.ts',
@@ -41,6 +47,32 @@ import pastedNote from './lib/PastedNote.abide' with { type: 'text' }
             path: 'packages/abide/tests/markdown.test.ts',
             from: [
                 "test('href may answer the address with the target and rel it opens with",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NotePreview.test.ts',
+            from: ["test('a note renders its markdown, and its HTML as text'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NotePreview.test.ts',
+            from: [
+                "test('a heading in a note renders at the level the page gives it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/DealSummary.test.ts',
+            from: ["test('a chunk renders only the section still growing'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NotePreview.test.ts',
+            from: [
+                "test('a fenced sh block renders as the code with a Copy beside it, and once closed only'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/NotePreview.test.ts',
+            from: [
+                "test('a reference link takes its address from a definition anywhere in the note, which shows nothing'",
             ],
         },
     ]}
@@ -86,6 +118,12 @@ import pastedNote from './lib/PastedNote.abide' with { type: 'text' }
         `} />
     </Section>
 
+    <Section level={3} title="Open a note's outside links in a tab of their own">
+        <p><code>href</code> may answer the address with the <code>target</code> and
+            <code>rel</code> the link opens with.</p>
+        <Example code={outsideTab}><OutsideTab /></Example>
+    </Section>
+
     <Section level={3} title="Draw bars from a fenced block in a report">
         <p><code>blocks</code> names a function per fence language, handed the block's source and
             the rest of its info. What it answers is written as it is, so escape what it
@@ -105,5 +143,23 @@ import pastedNote from './lib/PastedNote.abide' with { type: 'text' }
                 },
             })
         `} />
+    </Section>
+
+    <Section level={3} title="Render a summary as it streams in">
+        <p><code>markdown.incremental</code> takes the same options and hands back
+            <code>sections</code> to render one at a time. Hand <code>source</code> a function
+            reading the text received until now: a section the stream has moved past is the same
+            object on every later read, so a <code>for</code> keyed by the section keeps its nodes
+            and a chunk renders only the section still growing.</p>
+        <Example code={streamSummary}><StreamSummary /></Example>
+    </Section>
+
+    <Section level={3} title="Put a Copy button beside each shell command">
+        <p>Given to <code>markdown.incremental</code>, <code>blocks</code> is a list of fence
+            languages. A fenced block whose language is one of them is a section with a
+            <code>block</code> — its <code>name</code>, its <code>source</code> and the rest of its
+            <code>info</code> — once its fence closes, for you to render with a component of your
+            own.</p>
+        <Example code={copyCommands}><CopyCommands /></Example>
     </Section>
 </Doc>

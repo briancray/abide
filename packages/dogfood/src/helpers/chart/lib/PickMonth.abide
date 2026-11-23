@@ -1,0 +1,19 @@
+<script>
+import { chart, reactive } from '@abide/abide'
+
+const WON = [4, 6, null, 8]
+let picked = reactive<number | undefined>(undefined)
+const plot = chart({
+    label: 'Deals closed by month',
+    series: [{ label: 'Won', values: WON, kind: 'column' }],
+    onpick: (month) => (picked = month),
+    disabled: (month) => WON[month] === null,
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    {#for bar of plot.bars by bar.key}
+        <rect {...bar.rect} />
+    {/for}
+</svg>
+<p>{picked === undefined ? 'Click a month.' : `Picked month ${picked}.`}</p>

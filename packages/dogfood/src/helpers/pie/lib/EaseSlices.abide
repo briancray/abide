@@ -1,0 +1,29 @@
+<script>
+import { pie, reactive } from '@abide/abide'
+
+const SPRING = [
+    { label: 'Lead', value: 66_000 },
+    { label: 'Qualified', value: 34_000 },
+    { label: 'Proposal', value: 30_000 },
+]
+const SUMMER = [
+    { label: 'Lead', value: 30_000 },
+    { label: 'Qualified', value: 52_000 },
+    { label: 'Proposal', value: 48_000 },
+]
+let spring = reactive(true)
+const ring = pie({
+    label: 'Open pipeline by stage',
+    slices: () => (spring ? SPRING : SUMMER),
+})
+</script>
+
+<button onclick={() => (spring = !spring)}>Switch quarter</button>
+<svg {...ring.svg} class="size-40">
+    {#for slice of ring.slices by slice.index}
+        <circle
+            {...slice.circle}
+            class="transition-all motion-reduce:transition-none"
+         />
+    {/for}
+</svg>

@@ -1,0 +1,26 @@
+<script>
+import { combobox } from '@abide/abide'
+
+const box = combobox({
+    id: 'stage',
+    options: ['lead', 'qualified', 'proposal', 'won'],
+})
+</script>
+
+<div class="picker">
+    <label for={box.id}>Stage</label>
+    <input {...box.input} placeholder="Press ↓">
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for stage of box.items by stage}
+                    <li
+                        {...box.option(stage)}
+                        class="data-active:bg-ink data-active:text-paper
+                        data-selected:underline"
+                    >{stage}</li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>

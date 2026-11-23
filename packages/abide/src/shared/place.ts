@@ -1,5 +1,5 @@
 // 50.19-50.22 — WHERE AN ANCHORED LAYER SITS BESIDE ITS ANCHOR: internal, under `anchored` and so under
-// `Tooltips`, `menu`, `popover` and `Combobox`'s list; an app reaches it through `popover`. It READS and
+// `tooltip`, `menu`, `popover` and `combobox`'s list; an app reaches it through `popover`. It READS and
 // never writes (50.22), so a caller placing several reads every one before writing any, and one forced
 // layout pays for all of them.
 
@@ -50,7 +50,7 @@ export function place(
     floating: Element,
     options: PlaceOptions = {},
 ): Placement {
-    // 49.13 — read at each placement.
+    // 49.11 — read at each placement.
     const align = live(options.align) ?? 'center'
     const offset = live(options.offset) ?? 8
     const margin = live(options.margin) ?? 8

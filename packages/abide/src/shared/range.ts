@@ -1,4 +1,4 @@
-// 51.92-51.98 — A RANGE BETWEEN TWO THUMBS, which the native `<input type="range">` cannot hold:
+// 51.85-51.91 — A RANGE BETWEEN TWO THUMBS, which the native `<input type="range">` cannot hold:
 // WAI-ARIA's multi-thumb slider, as parts an app spreads onto elements of its own. Each thumb is a scrub
 // along the track (`scrub`) that keeps to its own side of the other, so the arrows, Home and End are the
 // crosshair's, and the pointer takes the thumb nearer it and drags it while held.
@@ -28,7 +28,7 @@ export type RangeOptions = {
     labels?: Live<readonly [string, string]>
     /** Writes a value for the thumb's `aria-valuetext`: `format.money`, say. `format.number` by default. */
     format?: (value: number) => string
-    /** The name each end is submitted under by `input`, low then high (51.98); a function is read live. */
+    /** The name each end is submitted under by `input`, low then high (51.91); a function is read live. */
     name?: Live<string | undefined>
 }
 
@@ -60,7 +60,7 @@ const DEFAULT_LABELS = ['Minimum', 'Maximum'] as const
 
 /** WAI-ARIA's multi-thumb slider: a low and a high value on one track, as parts to spread. */
 export function range(options: RangeOptions): RangeParts {
-    // 49.13 — read where they are used.
+    // 49.11 — read where they are used.
     const labelOf = (which: 0 | 1) =>
         (live(options.labels) ?? DEFAULT_LABELS)[which]
     const format = (each: number) => (options.format ?? number)(each)
@@ -77,7 +77,7 @@ export function range(options: RangeOptions): RangeParts {
     const indexOf = (each: number) =>
         Math.min(last(), Math.max(0, Math.round((each - min()) / step())))
     const valueOf = (index: number) => min() + index * step()
-    // 51.97 — where a value stands along the track, as the share of its width from the left edge.
+    // 51.90 — where a value stands along the track, as the share of its width from the left edge.
     const percent = (each: number) => {
         const span = max() - min()
         return `${span === 0 ? 0 : ((each - min()) / span) * 100}%`
@@ -86,7 +86,7 @@ export function range(options: RangeOptions): RangeParts {
     // The two ends as they stand, read without following them: `value` always holds both.
     const ends = () => value.peek() as readonly [number, number]
 
-    // 51.93 — a thumb stops at the other: the low one at most at the high, the high one at least at the low.
+    // 51.86 — a thumb stops at the other: the low one at most at the high, the high one at least at the low.
     function position(which: 0 | 1): ScrubPosition {
         return {
             peek: () => indexOf(ends()[which]),
@@ -133,7 +133,7 @@ export function range(options: RangeOptions): RangeParts {
     // The thumb a held pointer drags, or -1 while none is held.
     const dragging = reactive(-1)
 
-    // 51.95 — the pointer takes the thumb nearer it, the high one where the two stand together and it
+    // 51.88 — the pointer takes the thumb nearer it, the high one where the two stand together and it
     // is above them, and holds it until it lets go.
     function press(event: PointerEvent) {
         const index = scrubs[0].indexAt(event)
@@ -153,7 +153,7 @@ export function range(options: RangeOptions): RangeParts {
         document.getElementById(thumbId(which))?.focus()
     }
 
-    // 51.94 — Up and Right step up, Down and Left step down, Page Up and Page Down a tenth of the way.
+    // 51.87 — Up and Right step up, Down and Left step down, Page Up and Page Down a tenth of the way.
     function key(which: 0 | 1, event: KeyboardEvent) {
         const at = positions[which].peek() ?? 0
         const big = Math.max(1, Math.round(last() / 10))
@@ -199,7 +199,7 @@ export function range(options: RangeOptions): RangeParts {
         },
         fill: {
             'data-range': 'fill',
-            // 51.97 — the span between the thumbs, as the computed `left` and `right` placing it.
+            // 51.90 — the span between the thumbs, as the computed `left` and `right` placing it.
             get style() {
                 const [low, high] = value()
                 return `left: ${percent(low)}; right: ${percent(max() - high + min())}`
@@ -228,7 +228,7 @@ export function range(options: RangeOptions): RangeParts {
                     return format(value()[which])
                 },
                 'aria-orientation': 'horizontal',
-                // 51.97 — the thumb's computed `left` along the track.
+                // 51.90 — the thumb's computed `left` along the track.
                 get style() {
                     return `left: ${percent(value()[which])}`
                 },

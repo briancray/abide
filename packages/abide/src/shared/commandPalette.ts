@@ -1,4 +1,4 @@
-// 51.72-51.78, 51.114 — A MODAL SEARCH OVER WHAT AN APP CAN DO: WAI-ARIA's combobox inside a modal dialog, as
+// 51.65-51.71, 51.107 — A MODAL SEARCH OVER WHAT AN APP CAN DO: WAI-ARIA's combobox inside a modal dialog, as
 // parts an app spreads onto elements of its own. The dialog is `dialog`'s parts on the app's own
 // `<dialog>`, opened modal by the `open` handed here, so the page behind it is inert, Escape cancels it
 // and closing it hands focus back to what had it; the keys over the list are `listbox`'s, and the key that opens it is a `hotkeys` binding
@@ -46,7 +46,7 @@ export type CommandParts = {
     readonly option: Record<string, unknown>
     /** The element holding the command's label. */
     readonly label: Record<string, unknown>
-    /** The command's label in runs, each run of it a word typed is found in carrying the `match` part (51.114). */
+    /** The command's label in runs, each run of it a word typed is found in carrying the `match` part (51.107). */
     readonly runs: readonly LabelRun[]
     /** The element showing the command's key. */
     readonly key: Record<string, unknown>
@@ -72,7 +72,7 @@ export type CommandPaletteParts = {
     readonly open: Reactive<boolean>
 }
 
-// 49.4 — the part a matched run of a label spreads.
+// 49.3 — the part a matched run of a label spreads.
 const MATCH = { 'data-command-palette': 'match' }
 
 /** WAI-ARIA's combobox in a modal dialog, over the commands an app can run, as parts to spread. */
@@ -80,7 +80,7 @@ export function commandPalette(
     options: CommandPaletteOptions,
 ): CommandPaletteParts {
     const { commands, id = `palette-${randomToken(4, 'hex')}` } = options
-    // 49.13 — read where they are used; the id is the ids' base, fixed for the life of the parts.
+    // 49.11 — read where they are used; the id is the ids' base, fixed for the life of the parts.
     const label = () => live(options.label) ?? 'Commands'
     const open = options.open ?? reactive(false)
     const commandsOf = () => live(commands)
@@ -91,10 +91,10 @@ export function commandPalette(
 
     const query = reactive('')
 
-    // 51.73, 51.114 — what the commands are narrowed by and their labels marked with.
+    // 51.66, 51.107 — what the commands are narrowed by and their labels marked with.
     const needles = reactive(() => needlesOf(query(), true))
 
-    // 51.73 — a command is listed while every word typed is in its label or one of its keywords.
+    // 51.66 — a command is listed while every word typed is in its label or one of its keywords.
     const found = reactive(() => {
         const words = needles()
         const kept: Command[] = []
@@ -112,7 +112,7 @@ export function commandPalette(
         return kept
     })
 
-    // 51.75 — shut first, so focus is back where it was before the command moves it.
+    // 51.68 — shut first, so focus is back where it was before the command moves it.
     const run = (command: Command): void => {
         open.set(false)
         command.run()
@@ -125,7 +125,7 @@ export function commandPalette(
         onpick: run,
     })
 
-    // 51.72 — the binding toggles, so the key that opened the palette shuts it from inside its input.
+    // 51.65 — the binding toggles, so the key that opened the palette shuts it from inside its input.
     // Bound again where the hotkey handed in changes.
     watch(() => {
         if (typeof window === 'undefined') return
@@ -169,7 +169,7 @@ export function commandPalette(
             get 'aria-activedescendant'() {
                 return list.activeId
             },
-            // 51.78 — every command is listed again, the input emptied, each time the palette opens: the
+            // 51.71 — every command is listed again, the input emptied, each time the palette opens: the
             // field's own value too, which no attribute written to it would change once something was
             // typed in it.
             'bind:element': (field: HTMLInputElement) =>
@@ -180,7 +180,7 @@ export function commandPalette(
                 }),
             oninput: (event: Event) =>
                 query.set((event.currentTarget as HTMLInputElement).value),
-            // 51.76 — Escape is the dialog's to cancel, and Home and End move the caret in the text.
+            // 51.69 — Escape is the dialog's to cancel, and Home and End move the caret in the text.
             onkeydown: (event: KeyboardEvent) => {
                 if (
                     event.key === 'Escape' ||

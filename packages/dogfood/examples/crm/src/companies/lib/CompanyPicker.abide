@@ -1,29 +1,36 @@
 <script>
-import { reactive } from '@abide/abide'
-import Combobox from '@abide/abide/Combobox.abide'
+import { combobox, reactive } from '@abide/abide'
 
 import searchCompanies from '../searchCompanies.handler.ts'
 
 type Company = { id: string; name: string; city: string }
 
 let company = reactive<Company | undefined>(undefined)
+const box = combobox({
+    id: 'works-at',
+    search: (q) => searchCompanies({ q }),
+    key: (found: Company) => found.id,
+    label: (found: Company) => found.name,
+    value: company,
+})
 </script>
 
-<label for="works-at">Works at</label>
-<Combobox
-    id="works-at"
-    search={(q: string) => searchCompanies({ q })}
-    key={(found: Company) => found.id}
-    label={(found: Company) => found.name}
-    bind:value={company}
-    placeholder="Search companies"
-    class="picker"
->
-    {#component Option({ item }: { item: Company })}
-        {item.name} · {item.city}
-    {/component}
-    No company matches
-</Combobox>
+<label for={box.id}>Works at</label>
+<div {...box.root} class="picker">
+    <input {...box.input} placeholder="Search companies">
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for found of box.items by found.id}
+                    <li {...box.option(found)}>{found.name} · {found.city}</li>
+                {/for}
+            </ul>
+            {#if box.nothingFound}
+                <p {...box.empty}>No company matches</p>
+            {/if}
+        </div>
+    {/if}
+</div>
 
 <ul class="fields">
     <li><span>works at</span><strong>{company?.name ?? '—'}</strong></li>

@@ -1,6 +1,5 @@
 <script>
-import { chart, format, props } from '@abide/abide'
-import Announcer from '@abide/abide/Announcer.abide'
+import { announce, chart, format, props } from '@abide/abide'
 
 const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
 // August's books are not closed yet.
@@ -12,7 +11,10 @@ const { won = WON, target = TARGET } = props<{
     target?: readonly number[]
 }>()
 
-// Drawn over `chart`'s parts rather than by `Chart`, for a dot of its own at every month won.
+// Where a move the keys make is read out (50.49).
+const regions = announce.host()
+
+// Drawn over `chart`'s parts rather than by `ChartPlot`, for a dot of its own at every month won.
 const plot = chart({
     label: 'Won revenue against target, June to November',
     series: () => [
@@ -67,4 +69,15 @@ const plot = chart({
         {/for}
     </span>
 {/if}
-<Announcer class="sr-only" />
+<div class="sr-only">
+    <div {...regions.polite}>
+        {#for message of regions.said('polite') by message.count}
+            <span>{message.text}</span>
+        {/for}
+    </div>
+    <div {...regions.assertive}>
+        {#for message of regions.said('assertive') by message.count}
+            <span>{message.text}</span>
+        {/for}
+    </div>
+</div>

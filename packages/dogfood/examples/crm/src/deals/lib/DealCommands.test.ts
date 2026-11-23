@@ -20,10 +20,10 @@ function press(key: string, init: KeyboardEventInit = {}) {
     flushSync()
 }
 
-// 49.9 — THE SHIPPED `CommandPalette` IS `commandPalette`'S MARKUP: a `Dialog` holding the combobox
-// input, the list of options and the children where nothing matches, opened on its own `hotkey`.
-// THE REVERT: drop `palette.input` from `CommandPalette.abide`'s input, and it is no combobox.
-test('the shipped CommandPalette opens on its key, lists what is typed and runs it', async () => {
+// `commandPalette`'S PARTS on the CRM's own `<dialog>`: the combobox input, the list of options and
+// what shows where nothing matches, opened on its own `hotkey`.
+// THE REVERT: drop `palette.input` from `DealCommands.abide`'s input, and it is no combobox.
+test('the palette opens on its key, lists what is typed and runs it', async () => {
     using _commands = await mount(DealCommands({}))
     press('j', { ctrlKey: true })
     await Promise.resolve()

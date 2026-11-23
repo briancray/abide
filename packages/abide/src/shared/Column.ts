@@ -12,6 +12,6 @@ export type Column<Row> = {
     format?(value: unknown, row: Row): string
     /** `false` for a column whose header does not sort. */
     sortable?: boolean
-    /** 51.53 — the direction a first press of the header sorts in: `'descending'` for a count read most-first. `'ascending'` by default. */
+    /** 51.50 — the direction a first press of the header sorts in: `'descending'` for a count read most-first. `'ascending'` by default. */
     firstDirection?: 'ascending' | 'descending'
 }

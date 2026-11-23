@@ -1,5 +1,5 @@
 // The units `format.relative` writes a gap in, largest first, each with its length in milliseconds.
-// A leaf, so the clock that ticks a `Time` steps at the same boundaries the label is written at.
+// A leaf, so the clock that ticks a `time` steps at the same boundaries the label is written at.
 export const RELATIVE_UNITS = [
     ['year', 31_536_000_000],
     ['month', 2_592_000_000],

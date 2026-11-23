@@ -1,13 +1,14 @@
-// ABIDE'S CHAT, held to what a card cannot show: the keys the composer takes and refuses, Stop,
-// a permission prompt answered, and the work a streamed answer does per chunk. Each `ask` here is
-// a stream the test feeds, so no model and no app is in it.
+// THE CRM'S CONVERSATION over `chat`, held to what a card cannot show: the keys the composer takes
+// and refuses, Stop, a permission prompt answered, and the work a streamed answer does per chunk.
+// Each `ask` here is a stream the test feeds, so no model and no app is in it.
 
 import { expect, test } from 'bun:test'
 
 import type { AssistantEvent, AssistantMessage } from '@abide/abide'
 import { flushSync, reactive } from '@abide/abide'
-import Chat from '@abide/abide/Chat.abide'
 import { mount, settled } from '@abide/harness/abide'
+
+import Chat from './Chat.abide'
 
 /** A stream the test writes to: what the chat was asked, and each event as the test pushes it. */
 function fed() {
@@ -94,7 +95,7 @@ test('Enter sends; Shift+Enter and an input method composing do not', async () =
 // THE REVERT: hold the events in an array and fold all of them again per chunk (`answering.parts =
 // []; for (const each of seen) transcript.fold(answering, each)`), and the answer reads 1,275 events
 // for 50 chunks where folding each once reads 50.
-test('a streamed answer reads each event once, and a chunk rewrites one text node', async () => {
+test('a streamed answer reads each event once, and a chunk rewrites its answer alone', async () => {
     const stream = fed()
     using _chat = await mount(Chat({ ask: stream.ask }))
     type('Summarize the Ledger audit deal.')
@@ -129,13 +130,22 @@ test('a streamed answer reads each event once, and a chunk rewrites one text nod
     written.push(...watching.takeRecords())
     watching.disconnect()
     expect(reads).toBeLessThanOrEqual(CHUNKS)
-    // One text node rewritten per chunk, and nothing built, moved or reattributed.
-    const kinds = new Set(written.map((record) => record.type))
-    expect([...kinds]).toEqual(['characterData'])
-    expect(written.length).toBeLessThanOrEqual(CHUNKS - 1)
+    // Each chunk rewrites the answer's markdown alone: nothing outside it is built, moved or
+    // reattributed.
+    const answer = document.querySelectorAll('[data-chat=text]')[1]
+    const outside = written.filter(
+        (record) =>
+            record.type === 'attributes' || !answer?.contains(record.target),
+    )
+    expect(outside).toEqual([])
+    // And within it, the section still growing: one paragraph built per chunk.
+    let built = 0
+    for (const record of written)
+        for (const node of record.addedNodes)
+            if (node.nodeType === Node.ELEMENT_NODE) built += 1
+    expect(built).toBeLessThanOrEqual(CHUNKS - 1)
     stream.end()
     await settled()
-    const answer = document.querySelectorAll('[data-chat=text]')[1]
     expect(answer?.textContent).toBe(`${'word '.repeat(CHUNKS - 1)}end.`)
 })
 

@@ -1,7 +1,8 @@
 <script>
 // THE PROMPT AT THE TOP OF EVERY PAGE: a question to the visitor's own Claude Code, answered from the
 // docs' tools and rendered as it is written — prose, code, and the live things a `show` block names.
-// The bar opens the answers, and `Chat` is the conversation: its composer, its turns, its prompts.
+// The bar opens the answers, `pairing`'s step says what pairing still needs, and `Conversation` is
+// the conversation: its composer, its turns, its prompts.
 //
 // THE CONVERSATION OUTLIVES A NAVIGATION: the bar is the layout's, and a layout outlives the page it
 // wraps (41.11), so a `show open` block can move the page under an answer without ending it. The
@@ -11,6 +12,7 @@
 // text Claude wrote for it (44.4), and what was rendered from that text stays here.
 import {
     type AssistantTurn,
+    copy,
     flushSync,
     keyLabel,
     navigate,
@@ -20,19 +22,31 @@ import {
     url,
     watch,
 } from '@abide/abide'
-import Chat from '@abide/abide/Chat.abide'
-import Pairing from '@abide/abide/Pairing.abide'
 
 import answer from '#src/ask/answer.handler.ts'
 import permit from '#src/ask/permit.handler.ts'
 
-import AnswerText from './AnswerText.abide'
-import AnswerTool from './AnswerTool.abide'
+import Conversation from './Conversation.abide'
 import { ASK_ITEM } from './nativeMenus.ts'
 import { openedIn } from './showFence.ts'
 
-// Whether the composer can ask yet; `Pairing` shows the steps that get it there.
-const { status } = pairing()
+// Whether the composer can ask yet, and the steps that get it there.
+const { status, step, copied, start, retry, copyInstall } = pairing()
+
+const command = () => status.peek()?.command ?? ''
+
+const WORDS = {
+    connecting: 'Connecting…',
+    slow: 'Still connecting to Claude Code.',
+    offline: 'You are offline. Pairing resumes once you are back.',
+    unavailable: 'Claude Code is unavailable here.',
+    click: 'Pair your Claude Code with this page with a click, or run this in a terminal:',
+    waiting:
+        'Pair your Claude Code with this page with a click, or run this in a terminal:',
+    install:
+        'No bridge app opened. Install it once, in a terminal, then pair again:',
+    paired: '',
+}
 
 let open = reactive(false)
 let turns = reactive<AssistantTurn[]>([])
@@ -93,9 +107,33 @@ ASK_ITEM.on(show)
             native app is paired already, with full access.</p>
     {/if}
 
-    <Pairing class="pairing">
-        <Chat class="conversation" ask={answer} permit={permit} Text={AnswerText} Tool={AnswerTool}
-            bind:turns={turns} placeholder="Ask how to do anything in abide…"
-            label="Ask Claude about abide" disabled={!status?.paired} />
-    </Pairing>
+    <div class="pairing" data-step={step}>
+        {#if step !== 'paired'}
+            <p data-pairing="message">{WORDS[step]}</p>
+        {/if}
+        {#if step === 'slow'}
+            <button type="button" data-pairing="retry" onclick={retry}>Try again</button>
+        {:else if step === 'install'}
+            <pre data-pairing="command">{status?.install}</pre>
+            <button type="button" data-pairing="copy" onclick={copyInstall}>
+                {copied ? 'Copied' : 'Copy'}</button>
+            <button type="button" data-pairing="pair" onclick={start}>Pair again</button>
+        {:else if step === 'click' || step === 'waiting'}
+            <pre data-pairing="command">{status?.command}</pre>
+            <button type="button" data-pairing="copy"
+                {...copy({ value: command })}>Copy</button>
+            <button type="button" data-pairing="pair" disabled={step === 'waiting'}
+                onclick={start}>
+                {step === 'waiting' ? 'Pairing…' : 'Pair with a click'}</button>
+        {:else if step === 'paired'}
+            {#if status?.missing.length}
+                <p data-pairing="missing">Claude Code here cannot use
+                    {status.missing.join(', ')}.</p>
+            {/if}
+            <Conversation ask={answer} permit={permit} bind:turns={turns}
+                placeholder="Ask how to do anything in abide…"
+                label="Ask Claude about abide" />
+            <button type="button" data-pairing="pair" onclick={start}>Reconnect</button>
+        {/if}
+    </div>
 </section>

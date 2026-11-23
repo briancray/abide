@@ -15,7 +15,7 @@ import goToRow from './lib/GoToRow.abide' with { type: 'text' }
     seeAlso={[
         '/abide-files/control-flow',
         '/helpers/sort-by',
-        '/components/sortable-table',
+        '/helpers/sortable-table',
     ]}
     tests={[
         {

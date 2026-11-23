@@ -137,10 +137,10 @@ test('a floating element that changes size is placed again before paint — 50.2
     }
 })
 
-// 50.48 — A LAYER THAT IS NOT INTERACTIVE NEVER TAKES THE POINTER, for as long as it is held, and
+// 50.47 — A LAYER THAT IS NOT INTERACTIVE NEVER TAKES THE POINTER, for as long as it is held, and
 // gives its element back as it was; one that is takes it as any element does. THE REVERT: drop the
 // `pointer-events` write from `anchored`, and the hint's layer reads `''` while open.
-test('an anchored layer that is not interactive lets the pointer through while open — 50.48', () => {
+test('an anchored layer that is not interactive lets the pointer through while open — 50.47', () => {
     const anchor = box(100, 100, 40, 20)
     const hint = box(0, 0, 60, 30)
     const list = box(0, 0, 60, 30)

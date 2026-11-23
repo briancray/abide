@@ -11,7 +11,7 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/tooltips', '/components/menu', '/helpers/popover']}
+    seeAlso={['/components/menu', '/helpers/popover']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageHints.test.ts',
@@ -27,6 +27,12 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageHints.test.ts',
             from: ["test('a pointer resting on a stage opens its hint'"],
         },
+        {
+            path: 'packages/dogfood/e2e/chart.spec.ts',
+            from: [
+                'test("a pointer moving under a chart\'s readout keeps it open — 50.47"',
+            ],
+        },
     ]}
 >
     <Section level={3} title="Explain a pipeline stage on hover and on focus">
@@ -34,7 +40,8 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
             the first paint. Nothing is written beside it, so it
             works in a list, a table row or a flex row alike. Give the element a
             <code>tabindex</code> where it is not focusable, or a keyboard never reaches the
-            hint. The hint shows in the page's <code>Tooltips</code>.</p>
+            hint. The hint shows in the popover the root layout spreads <code>tooltip.host</code>
+            on.</p>
         <Example code={stageHint}><StageHint /></Example>
     </Section>
 
@@ -45,11 +52,11 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
         <Example code={starHint}><StarHint /></Example>
     </Section>
 
-    <Section level={3} title="Show hints in an element of your own">
-        <p>Call <code>tooltip.host</code> in the script of the one component that shows the hints,
-            spread its <code>hint</code> part onto an element, and write its <code>text</code>
-            inside. <code>Tooltips</code> is this at its plainest; write your own where a hint
-            needs more around its text.</p>
+    <Section level={3} title="Show every hint of the app in one popover">
+        <p>Call <code>tooltip.host</code> from your root layout's script, spread its
+            <code>hint</code> part onto an element there, and write its <code>text</code> inside.
+            Every <code>tooltip.tip</code> on every page opens in it, one at a time, in the top
+            layer, so no scroller clips it. The element and its classes are yours.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { tooltip } from '@abide/abide'
@@ -57,9 +64,31 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
             const hints = tooltip.host()
             </script>
 
-            <span {...hints.hint} class="rounded-md px-3 py-2">
-                <kbd>?</kbd> {hints.text()}
-            </span>
+            <html lang="en">
+                <body>
+                    <slot />
+                    <span {...hints.hint} class="m-0 w-max max-w-60 rounded-md px-3 py-2">
+                        {hints.text}
+                    </span>
+                </body>
+            </html>
+        `} />
+    </Section>
+
+    <Section level={3} title="Draw an arrow pointing at the anchor">
+        <p>The popover carries the side it took as <code>data-side</code>, and
+            <code>--arrow-offset</code> is where along that edge the anchor's middle falls.
+            <code>arrowInset</code> on a <code>tooltip.tip</code> keeps the arrow off the rounded
+            corners.</p>
+        <Code language="abide" caption="abide" code={`
+            <span
+                {...hints.hint}
+                class="m-0 overflow-visible rounded-md px-3 py-2
+                before:absolute before:left-(--arrow-offset) before:size-2
+                before:-translate-x-1/2 before:rotate-45 before:bg-raised
+                data-[side=top]:before:-bottom-1
+                data-[side=bottom]:before:-top-1"
+            >{hints.text}</span>
         `} />
     </Section>
 </Doc>

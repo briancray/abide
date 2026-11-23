@@ -1,7 +1,7 @@
 // AN ORDERED LIST OF WHAT IS STANDING: an entry is appended as it registers and taken out by the
 // disposer it is handed back, so the order is the order they registered — the last on top. What the
-// list MEANS is its reader's: `dismissible` walks it from the top (53.15), `Tooltips` shows in the
-// last (50.36), `Chart` draws in order (52.24). Membership is the only write, so a reader wakes on an
+// list MEANS is its reader's: `dismissible` walks it from the top (53.15), `tooltip.host` shows in
+// the last (50.36). Membership is the only write, so a reader wakes on an
 // entry arriving or leaving and on nothing else.
 
 import type { Reactive } from './reactive/Reactive.ts'
@@ -27,8 +27,8 @@ export function register<Entry>(
 
 /**
  * Registers `entry` on `list` for as long as the scope calling this stands — a component's setup, or
- * a watch's body — and takes it out at that scope's teardown (12.5): how a `Chart`'s child joins its
- * chart (52.24) and a `Tooltips` joins the hosts standing (50.36).
+ * a watch's body — and takes it out at that scope's teardown (12.5): how a `tooltip.host` joins the
+ * hosts standing (50.36).
  *
  * `register` reads with `peek`, so the watch reads nothing and runs once: a read of the list would run
  * it again on every sibling's arrival, taking the entry out and putting it back at the end.

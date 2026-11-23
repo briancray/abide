@@ -14,7 +14,7 @@ const NAMED: Record<string, string> = {
     arrowright: '→',
 }
 
-// 53.54 — the keys an Apple platform writes as a symbol, over `NAMED`.
+// 53.51 — the keys an Apple platform writes as a symbol, over `NAMED`.
 const APPLE_NAMED: Record<string, string> = {
     enter: '↩',
     escape: '⎋',
@@ -25,7 +25,7 @@ const APPLE_NAMED: Record<string, string> = {
 
 /** What `keyLabel` and `keyLabel.parts` take beside the binding. */
 type LabelOptions = {
-    /** 53.56 — whether to write the keys as an Apple platform does. The platform 53.3 reads by default. */
+    /** 53.53 — whether to write the keys as an Apple platform does. The platform 53.3 reads by default. */
     apple?: boolean
 }
 
@@ -42,7 +42,7 @@ export function keyLabel(binding: string, options: LabelOptions = {}): string {
 }
 
 /**
- * 53.55 — each key `keyLabel` writes, apart and in its order: `'mod+shift+k'` is `['⌘', '⇧', 'K']`
+ * 53.52 — each key `keyLabel` writes, apart and in its order: `'mod+shift+k'` is `['⌘', '⇧', 'K']`
  * on an Apple platform — one cap per key for a key hint.
  */
 keyLabel.parts = (binding: string, options: LabelOptions = {}): string[] =>

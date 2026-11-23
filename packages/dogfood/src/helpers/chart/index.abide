@@ -6,19 +6,46 @@ import Section from '#src/lib/Section.abide'
 
 import BarLabels from './lib/BarLabels.abide'
 import barLabels from './lib/BarLabels.abide' with { type: 'text' }
+import ColumnsUnderLine from './lib/ColumnsUnderLine.abide'
+import columnsUnderLine from './lib/ColumnsUnderLine.abide' with { type: 'text' }
+import CurvedAreas from './lib/CurvedAreas.abide'
+import curvedAreas from './lib/CurvedAreas.abide' with { type: 'text' }
+import DashedTarget from './lib/DashedTarget.abide'
+import dashedTarget from './lib/DashedTarget.abide' with { type: 'text' }
+import EaseColumns from './lib/EaseColumns.abide'
+import easeColumns from './lib/EaseColumns.abide' with { type: 'text' }
+import FillTheBox from './lib/FillTheBox.abide'
+import fillTheBox from './lib/FillTheBox.abide' with { type: 'text' }
+import FixedAxis from './lib/FixedAxis.abide'
+import fixedAxis from './lib/FixedAxis.abide' with { type: 'text' }
+import GroupedStacks from './lib/GroupedStacks.abide'
+import groupedStacks from './lib/GroupedStacks.abide' with { type: 'text' }
+import HideSeries from './lib/HideSeries.abide'
+import hideSeries from './lib/HideSeries.abide' with { type: 'text' }
+import KeyboardReadout from './lib/KeyboardReadout.abide'
+import keyboardReadout from './lib/KeyboardReadout.abide' with { type: 'text' }
+import PickMonth from './lib/PickMonth.abide'
+import pickMonth from './lib/PickMonth.abide' with { type: 'text' }
 import PointsOverLines from './lib/PointsOverLines.abide'
 import pointsOverLines from './lib/PointsOverLines.abide' with { type: 'text' }
+import SideBySide from './lib/SideBySide.abide'
+import sideBySide from './lib/SideBySide.abide' with { type: 'text' }
+import StackedAreas from './lib/StackedAreas.abide'
+import stackedAreas from './lib/StackedAreas.abide' with { type: 'text' }
+import StackWonLost from './lib/StackWonLost.abide'
+import stackWonLost from './lib/StackWonLost.abide' with { type: 'text' }
 import TargetBand from './lib/TargetBand.abide'
 import targetBand from './lib/TargetBand.abide' with { type: 'text' }
+import TargetOutOfStack from './lib/TargetOutOfStack.abide'
+import targetOutOfStack from './lib/TargetOutOfStack.abide' with { type: 'text' }
+import WinShares from './lib/WinShares.abide'
+import winShares from './lib/WinShares.abide' with { type: 'text' }
+import WonAgainstTarget from './lib/WonAgainstTarget.abide'
+import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={[
-        '/components/chart',
-        '/helpers/pie',
-        '/helpers/sparkline',
-        '/helpers/format',
-    ]}
+    seeAlso={['/helpers/pie', '/helpers/sparkline', '/helpers/format']}
     tests={[
         {
             path: 'packages/abide/tests/chartParts.test.ts',
@@ -36,6 +63,78 @@ import targetBand from './lib/TargetBand.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
             from: [
                 "test('every month won is marked by a dot of its own, on the line'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: [
+                "test('won revenue is a line broken where a month has no total'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: ["test('the crosshair reads each line at the nearest month'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
+            from: [
+                "test('the arrows step the crosshair month by month, and Escape puts it away'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: [
+                "test('Enter picks the month the crosshair stands at, and November takes no pick'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('won and lost stand side by side in each month'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('stacked, lost stands on top of won in one column'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: [
+                "test('as shares, every month fills the column and reads its share'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('stacking moves the columns rather than redrawing them'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('no column is drawn over a y label'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
+            from: ["test('a click opens its month, and November takes no pick'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('each stage stacks on the one before it, through a month it has no value'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('each stage curves through its months, on the curve of the one under it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('the target is drawn at its own values, on an axis fixed at $150K'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
+            from: [
+                "test('leads leave the chart when unchecked, and come back in their place'",
             ],
         },
         {
@@ -64,6 +163,27 @@ import targetBand from './lib/TargetBand.abide' with { type: 'text' }
         },
     ]}
 >
+    <Section level={3} title="Plot won revenue against target by month">
+        <p><code>chart</code> takes the series over one pair of axes and hands back parts to
+            spread on markup of your own. A pointer over the <code>svg</code> moves a crosshair to
+            the nearest month and opens every series' value there in the <code>tip</code>.</p>
+        <Example code={wonAgainstTarget}><WonAgainstTarget /></Example>
+    </Section>
+
+    <Section level={3} title="Read the chart from the keyboard">
+        <p>The <code>svg</code> takes focus. The arrows step its crosshair one x at a time and stop
+            at the ends, Home and End go to the first and the last, Enter picks the x it stands at,
+            and Escape puts it away. The readout describes the chart while it shows, and each step
+            is read out through <code>announce</code>.</p>
+        <Example code={keyboardReadout}><KeyboardReadout /></Example>
+    </Section>
+
+    <Section level={3} title="Fill the box a layout gives the chart">
+        <p>Size the <code>svg</code> with classes. It measures itself and redraws at the new size
+            whenever its box changes, so its labels are never stretched.</p>
+        <Example code={fillTheBox}><FillTheBox /></Example>
+    </Section>
+
     <Section level={3} title="Mark every point of a line with a dot of your own">
         <p><code>chart</code> hands back each mark as data with a part to spread, so the markup is
             yours: here a circle at every value <code>points</code> answers, over the lines.</p>
@@ -79,6 +199,87 @@ import targetBand from './lib/TargetBand.abide' with { type: 'text' }
         <p><code>y</code> maps a value onto the plot and <code>frame</code> answers its edges, so a
             drawing of your own lines up with the marks the parts draw.</p>
         <Example code={targetBand}><TargetBand /></Example>
+    </Section>
+
+    <Section level={3} title="Draw won revenue as columns under a target line">
+        <p>Each series' <code>kind</code> is how it is drawn: a line, a column per value or an
+            area. <code>marks</code> answers them all on one pair of axes, in the order given, the
+            first at the back.</p>
+        <Example code={columnsUnderLine}><ColumnsUnderLine /></Example>
+    </Section>
+
+    <Section level={3} title="Stand two columns side by side in each month">
+        <p>Columns in no stack share their month's slot, each up from zero.</p>
+        <Example code={sideBySide}><SideBySide /></Example>
+    </Section>
+
+    <Section level={3} title="Stack won and lost deals in one column per month">
+        <p><code>stack</code> piles every series that names no stack of its own into one stack,
+            each month's values in the order the series are given.</p>
+        <Example code={stackWonLost}><StackWonLost /></Example>
+    </Section>
+
+    <Section level={3} title="Read each month's wins as a share of the deals closed">
+        <p><code>normalize</code> draws each stack as shares of its total, so every month
+            reaches the top. The axis reads percentages, and the readout reads each count with
+            its share.</p>
+        <Example code={winShares}><WinShares /></Example>
+    </Section>
+
+    <Section level={3} title="Stack the pipeline's stages as areas">
+        <p>Areas sharing a stack fill from the one given before them. A missing value counts as
+            zero toward the stack, so the area above it carries on.</p>
+        <Example code={stackedAreas}><StackedAreas /></Example>
+    </Section>
+
+    <Section level={3} title="Curve the stages through each month">
+        <p>A series' <code>curve</code> draws its line or area as a curve through its values. It
+            never swings past the two values it joins, so a stage never reads higher than its month
+            did, and a stacked area follows the curve of the one under it.</p>
+        <Example code={curvedAreas}><CurvedAreas /></Example>
+    </Section>
+
+    <Section level={3} title="Keep a target line out of a stacked chart">
+        <p>A series' <code>stack: false</code> draws it at its own values when the chart stacks
+            every other.</p>
+        <Example code={targetOutOfStack}><TargetOutOfStack /></Example>
+    </Section>
+
+    <Section level={3} title="Group stacked columns, one group per team">
+        <p>Series naming the same <code>stack</code> pile together, and each stack takes a band
+            of its month's slot beside the others.</p>
+        <Example code={groupedStacks}><GroupedStacks /></Example>
+    </Section>
+
+    <Section level={3} title="Hide a series with a checkbox">
+        <p>Given as a function, <code>series</code> is read live: a series left out of the list
+            leaves the chart, and the rest redraw without it.</p>
+        <Example code={hideSeries}><HideSeries /></Example>
+    </Section>
+
+    <Section level={3} title="Compare two charts on one fixed axis">
+        <p><code>bounds</code> fixes an axis's range rather than fitting it to the values, so two
+            teams' charts read on the same scale.</p>
+        <Example code={fixedAxis}><FixedAxis /></Example>
+    </Section>
+
+    <Section level={3} title="Ease columns between stacked and side by side">
+        <p>A column is drawn by a CSS <code>transform</code> on the same element whatever its
+            values become, so a transition on it animates every change.</p>
+        <Example code={easeColumns}><EaseColumns /></Example>
+    </Section>
+
+    <Section level={3} title="Style the target as a dashed line">
+        <p>Every mark carries <code>data-series</code>, the index of its series in the list, and
+            draws in <code>currentColor</code>.</p>
+        <Example code={dashedTarget}><DashedTarget /></Example>
+    </Section>
+
+    <Section level={3} title="Pick a month from the chart">
+        <p><code>onpick</code> is called with the month nearest a click. A month
+            <code>disabled</code> holds for takes no pick, and its columns and readout carry
+            <code>data-disabled</code>.</p>
+        <Example code={pickMonth}><PickMonth /></Example>
     </Section>
 
     <Section level={3} title="Draw won revenue by month, with a gap for a month not closed">

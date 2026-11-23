@@ -12,7 +12,7 @@ import leadBatch from './lib/LeadBatch.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
-        '/components/combobox',
+        '/helpers/combobox',
         '/helpers/hotkeys',
         '/abide-files/control-flow',
     ]}

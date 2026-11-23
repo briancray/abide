@@ -2,7 +2,7 @@ import type { Column } from './Column.ts'
 import type { Sort } from './Sort.ts'
 import { isBlank, sortBy } from './sortBy.ts'
 
-// What `sortableTable` sorts and writes by a `Column`: internal, over `sortBy` (51.49-51.51).
+// What `sortableTable` sorts and writes by a `Column`: internal, over `sortBy` (51.47-51.49).
 
 /** A column's value for `row`: what `value` hands back, or the row's field named by `key`. */
 function valueOf<Row>(row: Row, column: Column<Row>): unknown {

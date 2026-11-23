@@ -18,7 +18,7 @@ import quickEdit from './lib/QuickEdit.abide' with { type: 'text' }
         '/helpers/observe',
         '/helpers/hotkeys',
         '/helpers/popover',
-        '/components/dialog',
+        '/helpers/dialog',
         '/components/menu',
     ]}
     tests={[

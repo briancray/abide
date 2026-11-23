@@ -5,7 +5,7 @@ const deleteDeal = POST(({ id }: { id: string }) => id)
 </script>
 
 <script>
-import { prompts } from '@abide/abide/Prompts.abide'
+import { prompts } from '@abide/abide'
 
 type Deal = { id: string; name: string }
 const deal: Deal = { id: 'acme', name: 'Acme renewal' }

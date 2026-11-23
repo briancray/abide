@@ -1,6 +1,5 @@
 <script>
-import { reactive } from '@abide/abide'
-import { prompts } from '@abide/abide/Prompts.abide'
+import { prompts, reactive } from '@abide/abide'
 
 const asked = prompts.host()
 let archived = reactive(false)

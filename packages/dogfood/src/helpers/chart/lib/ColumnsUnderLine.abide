@@ -1,0 +1,29 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Won revenue against target by month',
+    series: [
+        {
+            label: 'Won',
+            values: [18_000, 24_500, 31_000, 27_000],
+            kind: 'column',
+        },
+        { label: 'Target', values: [20_000, 22_000, 24_000, 26_000] },
+    ],
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    {#for mark of plot.marks by mark.series}
+        {#if mark.kind === 'column'}
+            <g {...mark.columns}>
+                {#for bar of mark.bars by bar.index}
+                    <rect {...bar.rect} />
+                {/for}
+            </g>
+        {:else}
+            <path {...mark.path} />
+        {/if}
+    {/for}
+</svg>

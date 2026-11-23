@@ -1,6 +1,6 @@
-// 53.64-53.71 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out and snaps
+// 53.61-53.68 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out and snaps
 // nothing, so where the scroller rests, and which item a scroll centers, is only a browser's to say —
-// in both engines, since chromium reports its snaps (53.69) and webkit is measured once a frame (53.67).
+// in both engines, since chromium reports its snaps (53.66) and webkit is measured once a frame (53.64).
 
 import { expect, type Page, test } from '@playwright/test'
 import type { Subprocess } from 'bun'
@@ -75,9 +75,9 @@ function offCenter(page: Page, id: string): Promise<number> {
     }, id)
 }
 
-// 53.64, 53.65 — THE SERVER WRITES THE RESTING ITEM CENTERED, AND THE BROWSER SCROLLS TO IT. THE
+// 53.61, 53.62 — THE SERVER WRITES THE RESTING ITEM CENTERED, AND THE BROWSER SCROLLS TO IT. THE
 // REVERT: drop the rest's `watch` from the host's binding; the scroller stays at `lead`.
-test('the page arrives resting on the selection, centered — 53.64, 53.65', async ({
+test('the page arrives resting on the selection, centered — 53.61, 53.62', async ({
     page,
 }) => {
     const served = await (await fetch(`${base}/`)).text()
@@ -87,9 +87,9 @@ test('the page arrives resting on the selection, centered — 53.64, 53.65', asy
     await expect(page.locator('#centered')).toHaveText('proposal')
 })
 
-// 53.67, 53.69 — A SCROLL THE READER MAKES MOVES `centered` TO WHERE IT SNAPS. THE REVERT: listen for
+// 53.64, 53.66 — A SCROLL THE READER MAKES MOVES `centered` TO WHERE IT SNAPS. THE REVERT: listen for
 // neither `scroll` nor the snap events; `centered` stays at `proposal`.
-test('a scroll moves centered to the item it snaps to — 53.67, 53.69', async ({
+test('a scroll moves centered to the item it snaps to — 53.64, 53.66', async ({
     page,
 }) => {
     await page.goto(`${base}/`)
@@ -115,9 +115,9 @@ test('a scroll moves centered to the item it snaps to — 53.67, 53.69', async (
     expect(snaps > 0).toBe(reports)
 })
 
-// 53.70, 53.71 — THE BUTTONS STEP, AND RESET COMES BACK. THE REVERT: make `reset` scroll to
+// 53.67, 53.68 — THE BUTTONS STEP, AND RESET COMES BACK. THE REVERT: make `reset` scroll to
 // `centered`; the scroller stays on `won`.
-test('next steps to the item after, and reset scrolls back to the selection — 53.70, 53.71', async ({
+test('next steps to the item after, and reset scrolls back to the selection — 53.67, 53.68', async ({
     page,
 }) => {
     await page.goto(`${base}/`)
@@ -132,9 +132,9 @@ test('next steps to the item after, and reset scrolls back to the selection — 
     await expect(page.locator('#centered')).toHaveText('proposal')
 })
 
-// 53.65 — A NEW SELECTION IS SCROLLED TO. THE REVERT: read `resting.peek()` in the rest's `watch`; the
+// 53.62 — A NEW SELECTION IS SCROLLED TO. THE REVERT: read `resting.peek()` in the rest's `watch`; the
 // scroller stays on `proposal`.
-test('a new selection scrolls the carousel to it — 53.65', async ({ page }) => {
+test('a new selection scrolls the carousel to it — 53.62', async ({ page }) => {
     await page.goto(`${base}/`)
     await expect.poll(() => offCenter(page, 'proposal')).toBe(0)
     await page.click('#pick')

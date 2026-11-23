@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test'
 
-import { flushSync } from '@abide/abide'
-import Toasts, { toasts } from '@abide/abide/Toasts.abide'
+import { flushSync, toasts } from '@abide/abide'
 import { measure, mount, settled } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
+
+import Toasts from '#src/lib/Toasts.abide'
 
 import SavePhone from './SavePhone.abide'
 
@@ -67,9 +68,9 @@ test('closing one notice leaves the others where they are', async () => {
 })
 
 // 50.41, 50.42 — A NOTICE CARRIES THE ATTRIBUTES IT WAS GIVEN, and its action tells `onclose` it was
-// the action that took it. THE REVERTS: drop the `{...toast.attributes}` spread in `Toasts` — the
-// notice carries no `data-track`; take the action through `dismiss` again — `dismissed` where `action`
-// is due.
+// the action that took it. THE REVERTS: drop the `...toast.attributes` spread from `toasts.host`'s
+// `toast` part — the notice carries no `data-track`; take the action through `dismiss` again —
+// `dismissed` where `action` is due.
 test('a notice carries its attributes, and its action tells onclose why it left', async () => {
     using _phone = await mount(SavePhone({}))
     await save('555 0100')
@@ -95,8 +96,8 @@ test('a notice carries its attributes, and its action tells onclose why it left'
 })
 
 // 50.36 — TWO `Toasts` STANDING SHOW EACH NOTICE ONCE: the last mounted renders the list, and the other
-// renders none rather than a second copy read out twice. THE REVERT: have `Toasts` render the list
-// whether or not it is the last standing, and the notice shows twice.
+// renders none rather than a second copy read out twice. THE REVERT: have `toasts.host` hand back the
+// notices whether or not it is the last standing, and the notice shows twice.
 test('a notice shows once where two Toasts stand', async () => {
     using _contact = await mount(SavePhone({}))
     using _second = await mount(Toasts({}))

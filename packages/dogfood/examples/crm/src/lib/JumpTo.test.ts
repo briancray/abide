@@ -32,7 +32,7 @@ function type(text: string) {
     flushSync()
 }
 
-// 51.72 — THE BINDING OPENS IT AND SHUTS IT, from the page and from its own input. THE REVERT: drop
+// 51.65 — THE BINDING OPENS IT AND SHUTS IT, from the page and from its own input. THE REVERT: drop
 // the `hotkeys` listener from `commandPalette` — Ctrl+K opens nothing.
 test('Ctrl+K opens the palette with its input focused, and shuts it again', async () => {
     using _jump = await mount(JumpTo({}))
@@ -52,7 +52,7 @@ test('Ctrl+K opens the palette with its input focused, and shuts it again', asyn
     expect(dialog().open).toBe(false)
 })
 
-// 51.73 — EVERY WORD TYPED IS IN THE LABEL OR A KEYWORD. THE REVERT: match the label alone —
+// 51.66 — EVERY WORD TYPED IS IN THE LABEL OR A KEYWORD. THE REVERT: match the label alone —
 // "forecast" lists nothing.
 test('typing lists the commands whose label or keywords hold every word', async () => {
     using _jump = await mount(JumpTo({}))
@@ -68,7 +68,7 @@ test('typing lists the commands whose label or keywords hold every word', async 
     )
 })
 
-// 51.74, 51.75 — THE ARROWS MOVE THE ACTIVE COMMAND AND ENTER RUNS IT, the palette shut first. THE
+// 51.67, 51.68 — THE ARROWS MOVE THE ACTIVE COMMAND AND ENTER RUNS IT, the palette shut first. THE
 // REVERT: run without shutting — the dialog stays open over the page it went to.
 test('an arrow and Enter run the command, and the palette shuts', async () => {
     const went: string[] = []
@@ -90,7 +90,7 @@ test('an arrow and Enter run the command, and the palette shuts', async () => {
     expect(input().value).toBe('')
 })
 
-// 51.76 — ESCAPE IS THE DIALOG'S: the input lets it through, and the dialog cancels on it.
+// 51.69 — ESCAPE IS THE DIALOG'S: the input lets it through, and the dialog cancels on it.
 test('Escape is left to the dialog', async () => {
     using _jump = await mount(JumpTo({}))
     press('k', { ctrlKey: true })
@@ -104,7 +104,7 @@ test('Escape is left to the dialog', async () => {
     expect(escape.defaultPrevented).toBe(false)
 })
 
-// 51.114 — THE WORDS TYPED ARE MARKED where the label holds them, and a word found in a keyword alone
+// 51.107 — THE WORDS TYPED ARE MARKED where the label holds them, and a word found in a keyword alone
 // marks nothing. THE REVERT: mark the query whole rather than each word apart from the filter's words — "deal ad" is in no label as
 // one run, and nothing is marked.
 test('each word typed is marked in the labels it is in', async () => {

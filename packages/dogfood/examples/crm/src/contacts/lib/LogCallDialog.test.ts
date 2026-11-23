@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { flushSync, reactive } from '@abide/abide'
-import Dialog from '@abide/abide/Dialog.abide'
+import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
 import LogCallDialog from './LogCallDialog.abide'
@@ -56,24 +55,6 @@ test('Escape closes it, and a click on the backdrop does too', async () => {
     // Reopened, so the button that opens it still works after a dismissal.
     open()
     expect(dialog().open).toBe(true)
-})
-
-// THE REVERT: drop the `dismissible` check, and Escape closes it.
-test('a dialog not dismissible stays open on Escape', async () => {
-    const open = reactive(true)
-    using _dialog = await mount(Dialog({ open, dismissible: false }))
-    flushSync()
-    expect(dialog().open).toBe(true)
-    const escape = new Event('cancel', { cancelable: true })
-    if (dialog().dispatchEvent(escape)) dialog().close()
-    dialog().dispatchEvent(
-        new MouseEvent('click', { bubbles: true, clientX: -5, clientY: -5 }),
-    )
-    flushSync()
-    expect(dialog().open).toBe(true)
-    open.set(false)
-    flushSync()
-    expect(dialog().open).toBe(false)
 })
 
 // 50.2 — A CLOSE REPORTED LATE DOES NOT SHUT A DIALOG THAT HAS OPENED AGAIN: `close` is a queued

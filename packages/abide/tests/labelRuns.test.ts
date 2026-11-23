@@ -1,5 +1,5 @@
-// 51.113, 51.114 — WHAT WAS TYPED, MARKED IN A LABEL by the matcher the list is narrowed by. What
-// `Combobox` and `CommandPalette` render of it is the CRM's tests', which mount them.
+// 51.106, 51.107 — WHAT WAS TYPED, MARKED IN A LABEL by the matcher the list is narrowed by. What
+// the CRM's pickers render of it is the CRM's tests', which mount them.
 
 import { expect, test } from 'bun:test'
 
@@ -20,7 +20,7 @@ const written = (runs: readonly LabelRun[]) =>
 
 // THE REVERT: find the text in the label lowered, and mark the label as written at that place — `İ`
 // lowers to two characters, and `İzmir Co` reads `İzmir C[o]`.
-test('an option’s label marks where the typed text is, as the list is narrowed by it — 51.16, 51.113', () => {
+test('an option’s label marks where the typed text is, as the list is narrowed by it — 51.16, 51.106', () => {
     const box = combobox({
         options: ['Hopper & Co', 'İzmir Co', 'Babbage Ltd'],
     })
@@ -39,7 +39,7 @@ test('an option’s label marks where the typed text is, as the list is narrowed
 })
 
 // THE REVERT: mark each word's run on its own, and `hop hopper` marks `Hop` and then `per` apart.
-test('a command’s label marks the first place each word typed is, runs that meet marked as one — 51.73, 51.114', () => {
+test('a command’s label marks the first place each word typed is, runs that meet marked as one — 51.66, 51.107', () => {
     const palette = commandPalette({
         commands: [
             { label: 'Open Hopper & Co', run: () => {} },

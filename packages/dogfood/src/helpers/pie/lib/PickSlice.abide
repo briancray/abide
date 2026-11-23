@@ -1,0 +1,24 @@
+<script>
+import { pie, reactive } from '@abide/abide'
+
+const STAGES = [
+    { label: 'Lead', value: 66_000 },
+    { label: 'Qualified', value: 34_000 },
+    { label: 'Verbal', value: 12_000 },
+    { label: 'Proposal', value: 30_000 },
+]
+let picked = reactive('')
+const ring = pie({
+    label: 'Open pipeline by stage',
+    slices: STAGES,
+    onpick: (index) => (picked = STAGES[index]?.label ?? ''),
+    disabled: (index) => STAGES[index]?.label === 'Verbal',
+})
+</script>
+
+<svg {...ring.svg} class="size-40">
+    {#for slice of ring.slices by slice.index}
+        <circle {...slice.circle} />
+    {/for}
+</svg>
+<p>{picked === '' ? 'Click a slice.' : `Picked ${picked}.`}</p>

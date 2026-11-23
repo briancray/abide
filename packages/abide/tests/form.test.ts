@@ -166,10 +166,10 @@ test('a field holding a file throws at the submit, naming it — 56.12', () => {
     ).toThrow("the field 'contract' holds a file")
 })
 
-// 49.11, 56.9 — A FIELD'S PARTS AND WHAT IS WRONG WITH IT ARE ONE GROUP: its message and whether it is
+// 49.9, 56.9 — A FIELD'S PARTS AND WHAT IS WRONG WITH IT ARE ONE GROUP: its message and whether it is
 // invalid read beside the attributes it spreads, live as the check changes them. THE REVERT: hand back
 // `message` as a value read once rather than an accessor — the field reads no message after the submit.
-test("a field's group carries its message and whether it is invalid — 49.11, 56.9", async () => {
+test("a field's group carries its message and whether it is invalid — 49.9, 56.9", async () => {
     const add = holding(
         POST((args: { company: string; amount: number }) => args),
     )

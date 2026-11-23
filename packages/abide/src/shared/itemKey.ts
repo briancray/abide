@@ -24,7 +24,7 @@ export type LabelOption<Item> = [Item] extends [string | number]
           label: (item: Item) => string
       }
 
-/** `item` as the function given writes it, or as itself where none is given — read each call (49.13). */
+/** `item` as the function given writes it, or as itself where none is given — read each call (49.11). */
 export function writtenBy<Item>(
     given: ((item: Item) => string) | undefined,
     item: Item,

@@ -1,11 +1,12 @@
-// ABIDE'S PAIRING, held to the steps a card cannot show: a connection that takes too long, and a
+// THE CRM'S PAIRING STEPS, held to what a card cannot show: a connection that takes too long, and a
 // visitor who goes offline. Each read of the pairing status is answered by the test.
 
 import { afterEach, expect, test } from 'bun:test'
 
 import { flushSync } from '@abide/abide'
-import Pairing from '@abide/abide/Pairing.abide'
 import { mount, settled } from '@abide/harness/abide'
+
+import ClaudeCodeChat from './ClaudeCodeChat.abide'
 
 const realFetch = globalThis.fetch
 afterEach(() => {
@@ -33,7 +34,7 @@ test('a connection that takes too long offers to try again, and trying again ask
             answer = resolve
         })
     }) as unknown as typeof fetch
-    using _pairing = await mount(Pairing({ slowAfter: 20 }))
+    using _pairing = await mount(ClaudeCodeChat({ slowAfter: 20 }))
     expect(step()).toBe('connecting')
     await Bun.sleep(40)
     flushSync()
@@ -53,7 +54,7 @@ test('a connection that takes too long offers to try again, and trying again ask
 test('a visitor offline is told so, and the step returns once they are back', async () => {
     globalThis.fetch = (async () =>
         Response.json(UNPAIRED)) as unknown as typeof fetch
-    using _pairing = await mount(Pairing({}))
+    using _pairing = await mount(ClaudeCodeChat({}))
     await settled()
     expect(step()).toBe('click')
     window.dispatchEvent(new Event('offline'))

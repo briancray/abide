@@ -1,4 +1,4 @@
-// 51.65-51.71, 51.102-51.104 — THE ITEMS OF A LONG LIST THAT ARE IN VIEW, measured from the markup they
+// 51.58-51.64, 51.95-51.97 — THE ITEMS OF A LONG LIST THAT ARE IN VIEW, measured from the markup they
 // sit in. The emulator lays nothing out, so the test is the browser: it delivers each resize the shared
 // observer would, runs each frame a browser would, and says where the host stands as the view scrolls.
 // What a keyed `{#for}` over `shown` renders is the CRM's tests', which mount one.
@@ -137,7 +137,7 @@ const indices = (list: ReturnType<typeof virtualList<number>>) =>
 
 // THE REVERT: read the host's size or the scroller as the host is bound, and the bind is a layout read
 // — or answer nothing until measured, and the server writes an empty list.
-test('the first items render until a measurement, on a server as in a browser — 51.67', () => {
+test('the first items render until a measurement, on a server as in a browser — 51.60', () => {
     const list = virtualList({ items: NUMBERS, initial: 10 })
     expect(indices(list)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     const { stop } = standing(list)
@@ -147,7 +147,7 @@ test('the first items render until a measurement, on a server as in a browser �
 
 // THE REVERT: take one item a row whatever the host's width, and the 400-pixel host lists 9 items in
 // view where 27 are due.
-test('rows hold what fits across the host and are as tall as the items measured, gaps counted — 51.65, 51.66, 51.68, 51.69', () => {
+test('rows hold what fits across the host and are as tall as the items measured, gaps counted — 51.58, 51.59, 51.61, 51.62', () => {
     const list = virtualList({ items: NUMBERS, initial: 10, overscan: 3 })
     const { host, layOut, render, scrolled, stop } = standing(list)
     layOut()
@@ -156,7 +156,7 @@ test('rows hold what fits across the host and are as tall as the items measured,
     scrolled(600)
     // Row 10 first in view: rows 7 to 19, items 21 to 56.
     expect([list.shown[0]?.index, list.shown.at(-1)?.index]).toEqual([21, 56])
-    // 51.69 — the rows left out are the host's block padding.
+    // 51.62 — the rows left out are the host's block padding.
     expect([host.style.paddingBlockStart, host.style.paddingBlockEnd]).toEqual([
         `${7 * 60}px`,
         `${(334 - 19) * 60}px`,
@@ -170,7 +170,7 @@ test('rows hold what fits across the host and are as tall as the items measured,
 })
 
 // THE REVERT: leave `firstRow` to the scroll event, and the item is not in `shown` until the scroll lands.
-test('scrollTo puts the item at the top of the view, and it is shown before the scroll lands — 51.70', () => {
+test('scrollTo puts the item at the top of the view, and it is shown before the scroll lands — 51.63', () => {
     const list = virtualList({ items: NUMBERS, initial: 10 })
     const { layOut, went, stop } = standing(list)
     layOut()
@@ -184,7 +184,7 @@ test('scrollTo puts the item at the top of the view, and it is shown before the 
 
 // THE REVERT: read `current` off the first item rendered rather than the first in view, and the
 // overscan above holds it in the section before.
-test('sections start where their first item does, the one in view is current, and an empty one is disabled — 51.71, 51.102, 51.103', () => {
+test('sections start where their first item does, the one in view is current, and an empty one is disabled — 51.64, 51.95, 51.96', () => {
     const list = virtualList({
         items: NUMBERS,
         initial: 10,
@@ -218,7 +218,7 @@ test('sections start where their first item does, the one in view is current, an
 
 // THE REVERT: keep the host and the scroll listener past the disposer, and a scroll after it moves the
 // list.
-test('an unbound host follows nothing — 51.104', () => {
+test('an unbound host follows nothing — 51.97', () => {
     const list = virtualList({ items: NUMBERS, initial: 10 })
     const { layOut, scrolled, stop } = standing(list)
     layOut()

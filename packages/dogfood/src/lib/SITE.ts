@@ -467,22 +467,10 @@ const WRITTEN: readonly {
             'Dialogs, prompts, toasts, tooltips and menus, and the placing and dismissing under them.',
         pages: [
             {
-                route: '/components/dialog',
-                title: '`Dialog`',
-                description:
-                    'Open a native modal dialog from a value you bind, and learn which button closed it.',
-            },
-            {
                 route: '/helpers/dialog',
                 title: '`dialog`',
                 description:
                     'Spread a native modal onto a `<dialog>` of your own, opened and closed by a value you hold.',
-            },
-            {
-                route: '/components/prompts',
-                title: '`Prompts`',
-                description:
-                    'Render once in the root layout to show every queued confirm, alert and text prompt, one at a time.',
             },
             {
                 route: '/components/prompts-api',
@@ -491,22 +479,10 @@ const WRITTEN: readonly {
                     'Ask a yes-or-no question, show a message or ask for a line of text, and await the answer.',
             },
             {
-                route: '/components/toasts',
-                title: '`Toasts`',
-                description:
-                    'Render once in the root layout as the live region where every notice shows and is read out.',
-            },
-            {
                 route: '/components/toasts-api',
                 title: '`toasts`',
                 description:
                     'Show a notice that takes itself down, offer one action on it, or dismiss it by its id.',
-            },
-            {
-                route: '/components/tooltips',
-                title: '`Tooltips`',
-                description:
-                    'Render once in the root layout as the one popover every hint on the page opens in.',
             },
             {
                 route: '/components/tooltip',
@@ -546,22 +522,10 @@ const WRITTEN: readonly {
                     'Check a form against the handler it submits to before calling it, show what is wrong beside each field, and mark what an edit changed.',
             },
             {
-                route: '/components/combobox',
-                title: '`Combobox`',
-                description:
-                    'Pick one item from a list narrowed or searched on the server as someone types.',
-            },
-            {
                 route: '/helpers/combobox',
                 title: '`combobox`',
                 description:
                     'Spread a field that lists what matches onto markup of your own, each option and chip written by you.',
-            },
-            {
-                route: '/components/command-palette',
-                title: '`CommandPalette`',
-                description:
-                    'Open a search over what the app can do on one key, and run the command picked.',
             },
             {
                 route: '/helpers/command-palette',
@@ -576,12 +540,6 @@ const WRITTEN: readonly {
                     'Switch between views from a row of tabs of your own that the arrow keys move along.',
             },
             {
-                route: '/components/range',
-                title: '`Range`',
-                description:
-                    'Pick a low and a high value on one track, by dragging either thumb or with the arrow keys.',
-            },
-            {
                 route: '/helpers/range',
                 title: '`range`',
                 description:
@@ -592,12 +550,6 @@ const WRITTEN: readonly {
                 title: '`tree`',
                 description:
                     'Show nested records as a tree of your own that the arrow keys open, close and move through.',
-            },
-            {
-                route: '/components/sortable-table',
-                title: '`SortableTable`',
-                description:
-                    'Show rows in a table whose headers sort them, moving rows rather than rebuilding them.',
             },
             {
                 route: '/helpers/sortable-table',
@@ -667,31 +619,6 @@ const WRITTEN: readonly {
             'Lines, columns, areas, pies and sparklines drawn in SVG, and the scales and paths under them.',
         pages: [
             {
-                route: '/components/chart',
-                title: '`Chart`',
-                description:
-                    'Plot lines, columns and areas over one pair of axes, stacked or as shares, with a crosshair that reads each one out.',
-            },
-            {
-                route: '/components/series',
-                title: '`Line`, `Column` and `Area`',
-                nav: 'Chart series',
-                description:
-                    'Declare the series a chart draws, each as a line, a column per value or a filled area, and the stack it piles into.',
-            },
-            {
-                route: '/components/pie',
-                title: '`Pie`',
-                description:
-                    'Show shares of a whole as the slices of a pie or a donut, each reading its value and share on hover.',
-            },
-            {
-                route: '/components/sparkline',
-                title: '`Sparkline`',
-                description:
-                    'Draw a trend with no axes into any box, marked by its direction for styling.',
-            },
-            {
                 route: '/helpers/chart',
                 title: '`chart`',
                 description:
@@ -717,28 +644,16 @@ const WRITTEN: readonly {
             'Markdown, a chat transcript, formatted values and messages read to a screen reader, and elements that follow what they hold or how big they are.',
         pages: [
             {
-                route: '/components/markdown',
-                title: '`Markdown`',
-                description:
-                    'Render markdown as safe markup, a section at a time, so a streamed source redraws only its growing end.',
-            },
-            {
                 route: '/helpers/markdown',
                 title: '`markdown`',
                 description:
                     'Turn markdown into HTML safe to hand `raw`, with its HTML escaped and unsafe links reduced to text.',
             },
             {
-                route: '/components/chat',
-                title: '`Chat`',
+                route: '/helpers/chat',
+                title: '`chat`',
                 description:
-                    'Put a streaming conversation with your assistant handler on a page, with a composer, Stop and tool permissions.',
-            },
-            {
-                route: '/components/announcer',
-                title: '`Announcer`',
-                description:
-                    'Render once in the root layout as the live regions a screen reader reads every announced message from.',
+                    'Spread a streaming conversation with your assistant handler onto markup of your own: turns, a composer, Stop and tool permissions.',
             },
             {
                 route: '/components/announce',
@@ -751,12 +666,6 @@ const WRITTEN: readonly {
                 title: '`format`',
                 description:
                     'Write money, percents, counts, lists, dates and durations the same on server and browser, with a dash for missing values.',
-            },
-            {
-                route: '/components/time',
-                title: '`Time`',
-                description:
-                    'Show how long ago or how soon a time is, kept current by one clock for the whole page.',
             },
             {
                 route: '/helpers/time',
@@ -928,12 +837,6 @@ const WRITTEN: readonly {
                 title: '`transcript`',
                 description:
                     'Fold a streamed answer into the turns a chat shows, and send them back as messages.',
-            },
-            {
-                route: '/components/pairing',
-                title: '`Pairing`',
-                description:
-                    "Pair the visitor's Claude Code with the page, and render what you put inside once it is paired.",
             },
         ],
     },

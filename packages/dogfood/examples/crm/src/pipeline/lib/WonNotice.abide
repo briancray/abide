@@ -1,5 +1,7 @@
 <script>
-import Toasts, { toasts } from '@abide/abide/Toasts.abide'
+import { toasts } from '@abide/abide'
+
+const shown = toasts.host()
 
 // The notice fades out, and stays in the page until it has (32.38).
 function fadeOut(element: Element) {
@@ -13,11 +15,13 @@ function fadeOut(element: Element) {
     Mark won
 </button>
 
-<Toasts class="fixed right-5 bottom-5 flex flex-col gap-tight">
-    {#component Toast({ toast, dismiss }: { toast: { text: string }; dismiss: () => void })}
-        <p class="row" bind:element={fadeOut}>
-            <strong>Won.</strong> {toast.text}
-            <button onclick={dismiss}>Close</button>
-        </p>
-    {/component}
-</Toasts>
+<div {...shown.region} class="fixed right-5 bottom-5 flex flex-col gap-tight">
+    {#for toast of shown.notices by toast.id}
+        <div {...shown.toast(toast).toast}>
+            <p class="row" bind:element={fadeOut}>
+                <strong>Won.</strong> {toast.text}
+                <button onclick={shown.toast(toast).dismiss}>Close</button>
+            </p>
+        </div>
+    {/for}
+</div>

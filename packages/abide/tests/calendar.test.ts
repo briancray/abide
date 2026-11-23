@@ -1,4 +1,4 @@
-// 52.83-52.101 — `calendar`'s parts, spread by hand as 32.11 spreads them: an attribute per string read
+// 52.82-52.100 — `calendar`'s parts, spread by hand as 32.11 spreads them: an attribute per string read
 // at the spread, a listener per `on<event>`, and the weeks rendered again as they change. What a
 // template does with them is the CRM's tests'.
 
@@ -71,7 +71,7 @@ function press(key: string, shiftKey = false) {
 
 const focused = () => (document.activeElement as HTMLElement).id.slice(-10)
 
-// 52.83 — WHOLE WEEKS FROM THE WEEK'S FIRST DAY. November 2026 starts on a Sunday and ends on a
+// 52.82 — WHOLE WEEKS FROM THE WEEK'S FIRST DAY. November 2026 starts on a Sunday and ends on a
 // Monday, so en-US's grid is five weeks, the last six days December's.
 test('the weeks are whole, and the days of other months are marked outside', () => {
     const view = calendar({ month: reactive<string | undefined>('2026-11') })
@@ -91,7 +91,7 @@ test('the weeks are whole, and the days of other months are marked outside', () 
     ])
 })
 
-// 52.84 — EVERY DAY ONCE, IN ANY ZONE. March 2026 springs forward in New York and London, and
+// 52.83 — EVERY DAY ONCE, IN ANY ZONE. March 2026 springs forward in New York and London, and
 // October falls back; a grid stepped in local milliseconds repeats or drops a day there. THE REVERT:
 // step `new Date(year, month, 1).getTime() + index * DAY`, and a fall-back month repeats a day.
 test('a daylight-saving change drops and repeats no day, in every zone', () => {
@@ -124,7 +124,7 @@ test('a daylight-saving change drops and repeats no day, in every zone', () => {
     }
 })
 
-// 52.88 — THE LOCALE'S WEEK. Germany's starts on Monday, and `firstDay` overrides any locale's.
+// 52.87 — THE LOCALE'S WEEK. Germany's starts on Monday, and `firstDay` overrides any locale's.
 test("a week starts on the locale's first day, or on the one given", () => {
     const german = calendar({
         locale: 'de-DE',
@@ -150,7 +150,7 @@ test("a week starts on the locale's first day, or on the one given", () => {
     expect(weeksOf(saturday)[0]?.[0]?.date).toBe('2026-10-31')
 })
 
-// 52.85, 52.86 — TODAY IS THE ZONE'S. At 03:00 UTC on the 22nd it is still the 21st in Los Angeles,
+// 52.84, 52.85 — TODAY IS THE ZONE'S. At 03:00 UTC on the 22nd it is still the 21st in Los Angeles,
 // and with no month written the grid shows today's.
 test("today is the zone's day, and the month shown with none written", () => {
     setSystemTime(new Date('2026-11-01T03:00:00Z'))
@@ -163,7 +163,7 @@ test("today is the zone's day, and the month shown with none written", () => {
     expect(today[0]?.cell['aria-current']).toBe('date')
 })
 
-// 52.87, 52.89 — ONE DAY IN THE TAB ORDER, and the arrows move it by a day and by a week; Home and End
+// 52.86, 52.88 — ONE DAY IN THE TAB ORDER, and the arrows move it by a day and by a week; Home and End
 // go to the ends of its week. THE REVERT: step ArrowDown by one day, and the 11th lands on the 12th.
 test('the arrows move a day and a week, Home and End to the ends of the week', () => {
     const selected = reactive<string | undefined>('2026-11-11')
@@ -185,7 +185,7 @@ test('the arrows move a day and a week, Home and End to the ends of the week', (
     expect(grid.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
 })
 
-// 52.90, 52.91 — PAGING BY KEY keeps the day where the month has it, and the month follows. THE
+// 52.89, 52.90 — PAGING BY KEY keeps the day where the month has it, and the month follows. THE
 // REVERT: drop the clamp, and January's 31st pages to March 3rd.
 test("PageDown keeps the day where the month has it, and shows the day's month", () => {
     const selected = reactive<string | undefined>('2027-01-31')
@@ -203,7 +203,7 @@ test("PageDown keeps the day where the month has it, and shows the day's month",
     expect(view.months[0]?.label).toBe('March 2026')
 })
 
-// 52.92, 52.93, 52.96 — ENTER PICKS THE ACTIVE DAY, a click the one it lands in.
+// 52.91, 52.92, 52.95 — ENTER PICKS THE ACTIVE DAY, a click the one it lands in.
 test('Enter picks the day focused, and a click the day clicked', () => {
     const selected = reactive<string | undefined>('2026-11-11')
     const view = calendar({ selected })
@@ -222,7 +222,7 @@ test('Enter picks the day focused, and a click the day clicked', () => {
     expect(focused()).toBe('2026-12-02')
 })
 
-// 52.94 — THE BUTTONS PAGE THE MONTH and leave focus on themselves.
+// 52.93 — THE BUTTONS PAGE THE MONTH and leave focus on themselves.
 test('previous and next show the month before and after, focus staying put', () => {
     const view = calendar({ month: reactive<string | undefined>('2026-01') })
     const back = document.createElement('button')
@@ -243,7 +243,7 @@ test('previous and next show the month before and after, focus staying put', () 
     )
 })
 
-// 52.97 — MONTHS SIDE BY SIDE ARE ONE CALENDAR: one day in the tab order across every grid, the arrows
+// 52.96 — MONTHS SIDE BY SIDE ARE ONE CALENDAR: one day in the tab order across every grid, the arrows
 // crossing from one grid into the next without paging, and a day another grid holds focusable only
 // there. THE REVERT: give an outside copy its id, and December 1st has two cells by one id.
 test('two months share one tab stop, and the arrows cross between their grids', () => {
@@ -268,7 +268,7 @@ test('two months share one tab stop, and the arrows cross between their grids', 
     expect(focused()).toBe('2026-12-01')
     expect(view.month()).toBe('2026-11')
     expect(root.querySelectorAll('[tabindex="0"]')).toHaveLength(1)
-    // 52.91 — out past the last month shown, the months page by the one month that shows it.
+    // 52.90 — out past the last month shown, the months page by the one month that shows it.
     press('PageDown')
     expect(focused()).toBe('2027-01-01')
     expect(view.month()).toBe('2026-12')
@@ -277,7 +277,7 @@ test('two months share one tab stop, and the arrows cross between their grids', 
     )
 })
 
-// 52.98, 52.99 — A RANGE: the first pick a start, the next its end, swapped where it falls before
+// 52.97, 52.98 — A RANGE: the first pick a start, the next its end, swapped where it falls before
 // the start, and a pick after that a start again. THE REVERT: drop the swap, and the end lands before
 // the start with no day between them picked.
 test('a range picks a start, then an end, swapped where it falls before the start', () => {
@@ -326,7 +326,7 @@ test('a range picks a start, then an end, swapped where it falls before the star
     expect(selected.peek()).toEqual(['2026-11-25', undefined])
 })
 
-// 52.100 — THE PREVIEW follows the keys while a range has a start and no end, and is gone once it
+// 52.99 — THE PREVIEW follows the keys while a range has a start and no end, and is gone once it
 // has one. THE REVERT: read the preview from the day picked rather than the day focused, and it
 // never leaves the start.
 test('while a range has no end, the days up to the one focused are previewed', () => {
@@ -348,7 +348,7 @@ test('while a range has no end, the days up to the one focused are previewed', (
     expect(previewed()).toEqual([])
 })
 
-// 52.101 — ACTIVE AND IDOF put focus on the day the keys move from, from outside the grid: what a
+// 52.100 — ACTIVE AND IDOF put focus on the day the keys move from, from outside the grid: what a
 // popover opening on the calendar does.
 test('active is the day in the tab order, and idOf its cell', () => {
     const view = calendar({

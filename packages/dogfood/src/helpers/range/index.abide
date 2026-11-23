@@ -5,13 +5,25 @@ import Section from '#src/lib/Section.abide'
 
 import LabelledThumbs from './lib/LabelledThumbs.abide'
 import labelledThumbs from './lib/LabelledThumbs.abide' with { type: 'text' }
+import PriceBand from './lib/PriceBand.abide'
+import priceBand from './lib/PriceBand.abide' with { type: 'text' }
 import SubmitBothEnds from './lib/SubmitBothEnds.abide'
 import submitBothEnds from './lib/SubmitBothEnds.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/range', '/helpers/form', '/components/tabs']}
+    seeAlso={['/helpers/form', '/helpers/format', '/components/tabs']}
     tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/ProbabilityFilter.test.ts',
+            from: [
+                "test('the range is a group holding the track, the span and two thumbs the keys move'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/e2e/range.spec.ts',
+            from: ["test('a thumb dragged takes the keys after it — 51.88'"],
+        },
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/AmountFilter.test.ts',
             from: [
@@ -36,11 +48,17 @@ import submitBothEnds from './lib/SubmitBothEnds.abide' with { type: 'text' }
         },
     ]}
 >
+    <Section level={3} title="Pick a band of prices with two thumbs">
+        <p>Spread the parts onto markup of your own: <code>root</code> onto the group, then the
+            track, the span between the thumbs, and each end's thumb, <code>end(0).thumb</code> and
+            <code>end(1).thumb</code>. Drag either thumb, or focus one and step it with the arrow
+            keys; neither passes the other.</p>
+        <Example code={priceBand}><PriceBand /></Example>
+    </Section>
+
     <Section level={3} title="Write each thumb as a tag showing its value">
-        <p>Spread the parts onto markup of your own: the group, the track, the span between the
-            thumbs, and each end's thumb, <code>end(0).thumb</code> and
-            <code>end(1).thumb</code>, which can hold anything. The parts carry the roles, the keys,
-            the dragging and the <code>style</code> placing the span and the thumbs.</p>
+        <p>A thumb can hold anything, here the value it stands at. The parts carry the roles, the
+            keys, the dragging and the <code>style</code> placing the span and the thumbs.</p>
         <Example code={labelledThumbs}><LabelledThumbs /></Example>
     </Section>
 

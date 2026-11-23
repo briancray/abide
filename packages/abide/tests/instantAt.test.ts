@@ -1,4 +1,4 @@
-// 52.102-52.104 — a wall clock and the instant it names, both ways, held to `Temporal` where the
+// 52.101-52.103 — a wall clock and the instant it names, both ways, held to `Temporal` where the
 // runtime has it: bun does, so every half hour of a year in zones whose clocks change at 2 a.m., at
 // midnight, by half an hour and not at all is checked against `compatible`, the answer `Temporal`
 // gives by default.
@@ -35,7 +35,7 @@ const HALF_HOUR = 1_800_000
 const YEAR_START = Date.UTC(2026, 0, 1)
 const YEAR_END = Date.UTC(2027, 0, 1)
 
-// 52.103, 52.104 — THE REVERT: answer the reading by the offset after it alone, and a skipped half
+// 52.102, 52.103 — THE REVERT: answer the reading by the offset after it alone, and a skipped half
 // hour in New York lands an hour early, and a repeated one on its later instant.
 test("every wall clock of a year names the instant Temporal's compatible names", () => {
     for (const zone of ZONES)
@@ -59,7 +59,7 @@ test("every wall clock of a year names the instant Temporal's compatible names",
         }
 })
 
-// 52.104 — THE TWO THE WHOLE YEAR COMES DOWN TO, said outright: New York skips 2:30 on March 8th
+// 52.103 — THE TWO THE WHOLE YEAR COMES DOWN TO, said outright: New York skips 2:30 on March 8th
 // and reads 1:30 twice on November 1st.
 test('a skipped time lands the skip later, and a time read twice the earlier', () => {
     const zone = { timeZone: 'America/New_York' }
@@ -74,7 +74,7 @@ test('a skipped time lands the skip later, and a time read twice the earlier', (
     )
 })
 
-// 52.103 — NO DAY OR TIME THE CALENDAR LACKS, and nothing else.
+// 52.102 — NO DAY OR TIME THE CALENDAR LACKS, and nothing else.
 test('a day or a time the calendar lacks, or any other string, is no instant', () => {
     for (const wallClock of [
         '2026-02-30',
@@ -92,7 +92,7 @@ test('a day or a time the calendar lacks, or any other string, is no instant', (
     )
 })
 
-// 52.102 — THE WAY BACK: `'input'` writes what the zone's clocks read, in every locale, and
+// 52.101 — THE WAY BACK: `'input'` writes what the zone's clocks read, in every locale, and
 // `instantAt` reads it to the same instant wherever the clocks read it once.
 test("format.date's input style writes the zone's wall clock, and instantAt reads it back", () => {
     for (const zone of ZONES)

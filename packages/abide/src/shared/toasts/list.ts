@@ -1,4 +1,4 @@
-// 50.12 — THE NOTICES SHOWING, oldest first, which `Toasts` renders. One per request on a server, as
+// 50.12 — THE NOTICES SHOWING, oldest first, which `toasts.host` shows. One per request on a server, as
 // every `reactive` without `global` is (11.32), and `notify` never writes it there (50.16): one
 // visitor's notice cannot reach another's page by either.
 
@@ -22,5 +22,5 @@ export type Toast = {
 /** The notices showing, oldest first. */
 export const list = reactive<Toast[]>([], { by: 'id' })
 
-// 50.36 — the `Toasts` standing: the last renders the notices.
-export const notices = standing('<Toasts />', 'abide:toasts')
+// 50.36 — the `toasts.host` standing: the last shows the notices.
+export const notices = standing('toasts.host()', 'abide:toasts')

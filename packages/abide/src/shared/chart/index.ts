@@ -1,6 +1,6 @@
 // The `chart` namespace: the arithmetic under a chart, apart from any one way of drawing it — round
 // ticks, a linear scale, a path that breaks where a value is missing, series piled into stacks, and
-// the point nearest the pointer. `Chart`, `Pie` and `Sparkline` draw with it, and so can a chart of
+// the point nearest the pointer. `chart`, `pie` and `sparkline` draw with it, and so can a chart of
 // your own.
 
 /** One series of a chart: what it is called, its values in x order, how it is drawn, and its stack. */
@@ -9,16 +9,16 @@ export type Series = {
     label: string
     /** One value per x position. `null` or `undefined` is a value missing there. */
     values: readonly (number | null | undefined)[]
-    /** How `Chart` draws it: a line, a column per value, or a filled area. `'line'` by default. */
+    /** How `chart` draws it: a line, a column per value, or a filled area. `'line'` by default. */
     kind?: 'line' | 'column' | 'area'
-    /** The stack it piles into with the series naming the same one, or `false` for none (52.55). */
+    /** The stack it piles into with the series naming the same one, or `false` for none (52.54). */
     stack?: string | false
-    /** Whether a line or an area is drawn as a curve through its values (52.106). `false` by default. */
+    /** Whether a line or an area is drawn as a curve through its values (52.105). `false` by default. */
     curve?: boolean
 }
 
 /**
- * 52.54-52.58 — where each series stands at each x once the stacks are piled: `high` is the value
+ * 52.53-52.57 — where each series stands at each x once the stacks are piled: `high` is the value
  * drawn, `low` the top of what is stacked under it, and both are shares of their stack's total under
  * `normalize`; `stack` is the stack it joined. A series in no stack keeps its own values, with `low`
  * absent; a missing value there is absent from `high` too.
@@ -35,8 +35,8 @@ export function stack<Each extends Pick<Series, 'values' | 'stack'>>(
     const stackAll = normalize || options.stack === true
     let length = 0
     for (const each of series) length = Math.max(length, each.values.length)
-    // A stack's running totals per x, the positive side and the negative one apart (52.54), and the
-    // sum of its magnitudes per x for 52.57.
+    // A stack's running totals per x, the positive side and the negative one apart (52.53), and the
+    // sum of its magnitudes per x for 52.56.
     const totals = new Map<
         string,
         { up: number[]; down: number[]; magnitude: number[] }
@@ -81,13 +81,13 @@ export function stack<Each extends Pick<Series, 'values' | 'stack'>>(
                 high.push(value)
                 continue
             }
-            // 52.56 — a missing value is zero toward its stack, standing on the positive side.
+            // 52.55 — a missing value is zero toward its stack, standing on the positive side.
             const amount = value ?? 0
             const side = amount < 0 ? total.down : total.up
             const from = side[index] as number
             const to = from + amount
             side[index] = to
-            // 52.57 — a share of the stack's magnitudes, zero where they sum to nothing.
+            // 52.56 — a share of the stack's magnitudes, zero where they sum to nothing.
             const sum = total.magnitude[index] as number
             const share = normalize ? (sum === 0 ? 0 : 1 / sum) : 1
             low.push(from * share)
@@ -161,7 +161,7 @@ export function scale(
  * point alone between two gaps is a segment of no length, which a round line cap draws as a dot.
  * Given a `baseline`, each run is closed down to it instead, as an area to fill — back along its own
  * points where it is one per x, as a stacked area closes onto the series under it. Given `curve`,
- * each run is a monotone cubic through its points (52.105), and so is the way back along a baseline.
+ * each run is a monotone cubic through its points (52.104), and so is the way back along a baseline.
  */
 export function path(
     xs: readonly number[],
@@ -204,7 +204,7 @@ export function path(
 
 /**
  * The segments from the point at `first` to the one at `last`, the pen already at one end: straight,
- * or a monotone cubic (52.105). `ys` is read at `index + offset`, so a run's own copy of its baseline
+ * or a monotone cubic (52.104). `ys` is read at `index + offset`, so a run's own copy of its baseline
  * can be walked by the indices of `xs`; `backward` draws from `last` to `first`.
  */
 function run(

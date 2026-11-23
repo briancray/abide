@@ -8,7 +8,7 @@ import PipelineMix from './PipelineMix.abide'
 const slices = () => [
     ...document.querySelectorAll<SVGCircleElement>('[data-pie=slice]'),
 ]
-// A slice's length along the ring and where it starts, both as shares of the ring (52.64).
+// A slice's length along the ring and where it starts, both as shares of the ring (52.63).
 function sweep(slice: SVGCircleElement) {
     const [length = 0, ring = 1] = slice.style.strokeDasharray
         .split(/[ ,]+/)
@@ -19,7 +19,7 @@ function sweep(slice: SVGCircleElement) {
     }
 }
 
-// 52.65, 52.66 — EACH STAGE IS ITS SHARE OF THE RING, clockwise in order, and a stage holding nothing
+// 52.64, 52.65 — EACH STAGE IS ITS SHARE OF THE RING, clockwise in order, and a stage holding nothing
 // is no slice. THE REVERT: count each slice from the top — every `from` reads 0.
 test('each stage sweeps its share of the ring, one after the other', async () => {
     using _mix = await mount(PipelineMix({}))
@@ -39,7 +39,7 @@ test('each stage sweeps its share of the ring, one after the other', async () =>
     }
 })
 
-// 52.67 — A DONUT'S HOLE IS `inner` OF THE RADIUS: 0.6 of 50 leaves a ring from 30 to 50, stroked 20
+// 52.66 — A DONUT'S HOLE IS `inner` OF THE RADIUS: 0.6 of 50 leaves a ring from 30 to 50, stroked 20
 // wide along its middle. THE REVERT: ignore `inner` — the stroke is 50 wide, a pie.
 test('the pie is a donut with a hole of 0.6 of its radius', async () => {
     using _mix = await mount(PipelineMix({}))
@@ -48,7 +48,7 @@ test('the pie is a donut with a hole of 0.6 of its radius', async () => {
     expect(first.getAttribute('stroke-width')).toBe('20')
 })
 
-// 52.68 — A SLICE IS DESCRIBED BY ITS HINT: label, value and share. THE REVERT: write the hint with
+// 52.67 — A SLICE IS DESCRIBED BY ITS HINT: label, value and share. THE REVERT: write the hint with
 // the value alone — 'Lead: $66K' where its share is due.
 test('a slice reads its stage, its value and its share', async () => {
     using _mix = await mount(PipelineMix({}))

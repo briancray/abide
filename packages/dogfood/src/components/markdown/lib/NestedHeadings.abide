@@ -1,8 +1,0 @@
-<script>
-import Markdown from '@abide/abide/Markdown.abide'
-
-const note = '# Call with Ada\n\nShe wants the annual plan.'
-</script>
-
-<h2>Notes</h2>
-<Markdown source={note} headingLevel={3} />

@@ -1,0 +1,8 @@
+<script>
+import { copy, props } from '@abide/abide'
+
+const { source } = props<{ source: string }>()
+</script>
+
+<pre class="row"><code>{source}</code><button type="button"
+    {...copy({ value: () => source })}>Copy</button></pre>

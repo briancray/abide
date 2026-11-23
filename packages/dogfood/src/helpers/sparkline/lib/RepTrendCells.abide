@@ -1,0 +1,29 @@
+<script>
+import { sparkline } from '@abide/abide'
+
+const REPS = [
+    { name: 'Ada', won: [12_000, 18_000, null, 24_000] },
+    { name: 'Grace', won: [30_000, 22_000, 19_000, 15_000] },
+].map((rep) => ({
+    name: rep.name,
+    trend: sparkline({ values: rep.won, label: `${rep.name}'s won revenue` }),
+}))
+</script>
+
+<table>
+    <tbody>
+        {#for rep of REPS by rep.name}
+            <tr>
+                <td>{rep.name}</td>
+                <td>
+                    <svg {...rep.trend.svg} class="h-6 w-24">
+                        <path {...rep.trend.line} />
+                        {#if rep.trend.ended}
+                            <path {...rep.trend.dot} />
+                        {/if}
+                    </svg>
+                </td>
+            </tr>
+        {/for}
+    </tbody>
+</table>

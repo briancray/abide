@@ -1,0 +1,40 @@
+<script>
+import { type Column, sortableTable } from '@abide/abide'
+
+type Company = { id: string; name: string; contact: string }
+
+const COMPANIES: Company[] = [
+    { id: 'hopper', name: 'Hopper & Co', contact: 'Grace Hopper' },
+    { id: 'acme', name: 'Acme', contact: 'Ada Lovelace' },
+]
+const COLUMNS: Column<Company>[] = [{ key: 'name', label: 'Company' }]
+const table = sortableTable({
+    rows: COMPANIES,
+    columns: COLUMNS,
+    key: (company) => company.id,
+})
+</script>
+
+<table>
+    <thead>
+        <tr>
+            {#for column of COLUMNS by column.key}
+                <th {...table.column(column).header}>
+                    <button {...table.column(column).sort}>
+                        {column.label}
+                    </button>
+                </th>
+            {/for}
+        </tr>
+    </thead>
+    <tbody>
+        {#for company of table.rows by company.id}
+            <tr {...table.row(company).row}>
+                <td>{company.name}</td>
+            </tr>
+            <tr {...table.row(company).detail}>
+                <td class="text-muted">Contact: {company.contact}</td>
+            </tr>
+        {/for}
+    </tbody>
+</table>

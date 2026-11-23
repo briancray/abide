@@ -1,0 +1,23 @@
+<script>
+import { chart, reactive } from '@abide/abide'
+
+let stacked = reactive(false)
+const plot = chart({
+    label: 'Deals closed by month',
+    series: [
+        { label: 'Won', values: [4, 6, 5, 8], kind: 'column' },
+        { label: 'Lost', values: [3, 2, 4, 3], kind: 'column' },
+    ],
+    stack: () => stacked,
+})
+</script>
+
+<label><input type="checkbox" bind:checked={stacked} /> Stack</label>
+<svg {...plot.svg} class="h-48 w-full">
+    {#for bar of plot.bars by bar.key}
+        <rect
+            {...bar.rect}
+            class="transition-transform motion-reduce:transition-none"
+         />
+    {/for}
+</svg>

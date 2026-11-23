@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test'
 
 import { flushSync, reactive } from '@abide/abide'
-import Markdown from '@abide/abide/Markdown.abide'
 import { measure, mount, settled } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
+
+import Markdown from '#src/lib/Markdown.abide'
 
 import summarizeDeal from '../summarizeDeal.handler.ts'
 import DealSummary from './DealSummary.abide'
@@ -39,6 +40,7 @@ test('a chunk renders only the section still growing', async () => {
         })
     // The heading closed with the first chunk, and is the node it was then.
     expect(heading?.isConnected).toBe(true)
-    // The last chunk opens a paragraph, and creates that paragraph alone.
-    atMost(last, { nodesCreated: 5 })
+    // The last chunk opens a paragraph, and creates that paragraph alone, with the comments
+    // marking its section's row and the branch choosing markup over a block.
+    atMost(last, { nodesCreated: 8 })
 })

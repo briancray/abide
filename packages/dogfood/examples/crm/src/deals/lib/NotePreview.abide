@@ -1,8 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
-import Markdown from '@abide/abide/Markdown.abide'
 
-import CopyableCode from './CopyableCode.abide'
+import Markdown from '#src/lib/Markdown.abide'
 
 let note = reactive(`**Ada** wants the annual plan. [Brief](https://x.co/b7)
 
@@ -27,7 +26,6 @@ function linkTo(address: string) {
     source={note}
     headingLevel={3}
     href={linkTo}
-    blocks={{ sh: CopyableCode }}
     aria-label="Preview"
     class="flex flex-col gap-tight"
  />

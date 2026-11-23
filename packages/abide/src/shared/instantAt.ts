@@ -1,4 +1,4 @@
-// 52.103, 52.104 — THE INSTANT A WALL CLOCK NAMES IN A ZONE, the way back from what `calendar` and
+// 52.102, 52.103 — THE INSTANT A WALL CLOCK NAMES IN A ZONE, the way back from what `calendar` and
 // `<input type="time">` hold to a time a server can keep. Read with `Intl` alone, since `Temporal`
 // is not in every engine abide runs in, and answering as `Temporal`'s `compatible` does, so moving
 // to it changes no answer.
@@ -37,7 +37,7 @@ export function instantAt(
     )
         return undefined
     const zone = options.timeZone ?? timeZone() ?? visitorZone()
-    // 52.104 — the reading by the offset a day before and a day after it: the same instant where no
+    // 52.103 — the reading by the offset a day before and a day after it: the same instant where no
     // change of offset falls between, two where the clocks read it twice, and none where they skip
     // it — and then the earlier offset's, which lands the length of the skip later.
     const byBefore =

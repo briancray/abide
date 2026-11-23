@@ -1,8 +1,8 @@
 <script>
-import { format, props, reactive } from '@abide/abide'
-import Chart from '@abide/abide/Chart.abide'
-import Column from '@abide/abide/Column.abide'
-import Tooltips from '@abide/abide/Tooltips.abide'
+import { chart, format, props, reactive } from '@abide/abide'
+
+import ChartPlot from '#src/lib/ChartPlot.abide'
+import Tooltips from '#src/lib/Tooltips.abide'
 
 const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
 const WON = [4, 6, 5, 8, 7, null]
@@ -15,27 +15,32 @@ const { stacked = false, shares = false } = props<{
 let stack = reactive(stacked)
 let normalize = reactive(shares)
 let picked = reactive<number | undefined>(undefined)
+
+const plot = chart({
+    label: 'Deals closed by month, June to November',
+    series: [
+        { label: 'Won', values: WON, kind: 'column' },
+        { label: 'Lost', values: LOST, kind: 'column' },
+    ],
+    x: MONTHS,
+    xFormat: (month) => format.date(month, { style: 'month' }),
+    stack: () => stack,
+    normalize: () => normalize,
+    onpick: (month) => (picked = month),
+    disabled: (month) => WON[month] === null,
+})
 </script>
 
 <div class="row">
     <label><input type="checkbox" bind:checked={stack} /> Stack</label>
     <label><input type="checkbox" bind:checked={normalize} /> Shares</label>
 </div>
-<Chart
-    x={MONTHS}
-    label="Deals closed by month, June to November"
-    xFormat={(month) => format.date(month, { style: 'month' })}
-    stack={stack}
-    normalize={normalize}
-    onpick={(month) => (picked = month)}
-    disabled={(month) => WON[month] === null}
+<ChartPlot
+    plot={plot}
     class="block h-60 w-full overflow-visible text-chrome text-muted
         [&_[data-series='0']]:text-signal [&_[data-chart=bar]]:transition-transform
         [&_[data-disabled]]:opacity-40"
->
-    <Column label="Won" values={WON} />
-    <Column label="Lost" values={LOST} />
-</Chart>
+ />
 {#if picked !== undefined}
     <p>Deals closed in {format.date(MONTHS[picked], { style: 'month' })}</p>
 {/if}

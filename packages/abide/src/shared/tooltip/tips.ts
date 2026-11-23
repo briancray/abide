@@ -22,11 +22,11 @@ export type OpenTip = {
     anchor: Element
     text: string
     options: TooltipOptions
-    /** 52.68 — the box the hint opens against, where it is not the anchor's own. */
+    /** 52.67 — the box the hint opens against, where it is not the anchor's own. */
     box: ((anchor: Element) => DOMRect) | undefined
 }
 
 export const shown = reactive<OpenTip | undefined>(undefined)
 
 // 50.36 — the hosts standing: the last shows the hint.
-export const hints = standing('<Tooltips />', 'abide:tooltip')
+export const hints = standing('tooltip.host()', 'abide:tooltip')

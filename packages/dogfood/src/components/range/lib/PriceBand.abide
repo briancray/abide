@@ -1,9 +1,0 @@
-<script>
-import { reactive } from '@abide/abide'
-import Range from '@abide/abide/Range.abide'
-
-let band = reactive<readonly [number, number]>([20, 80])
-</script>
-
-<Range bind:value={band} label="Price" class="range" />
-<p>{band[0]} to {band[1]}</p>

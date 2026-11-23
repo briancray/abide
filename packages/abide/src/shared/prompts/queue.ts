@@ -1,4 +1,4 @@
-// 50.5-50.11 — THE PROMPTS WAITING, the first showing: one queue, so `Prompts` shows one dialog at a
+// 50.5-50.11 — THE PROMPTS WAITING, the first showing: one queue, so `prompts.host` shows one dialog at a
 // time and a second `confirm` waits behind the first rather than stacking a modal over it.
 //
 // ONE PER REQUEST ON A SERVER, as every `reactive` without `global` is (11.32), and never written
@@ -54,13 +54,13 @@ export type Prompt = {
     resolve: (answer: string | undefined) => void
 }
 
-/** The prompts waiting, oldest first, the first of them showing in `Prompts`. */
+/** The prompts waiting, oldest first, the first of them showing in `prompts.host`. */
 export const queue = reactive<Prompt[]>([])
 
-// 50.36 — the `Prompts` standing: the last shows the queue.
-export const asking = standing('<Prompts />', 'abide:prompts')
+// 50.36 — the `prompts.host` standing: the last shows the queue.
+export const asking = standing('prompts.host()', 'abide:prompts')
 
-/** Queues a prompt for `Prompts` to show, settling with the text typed once it is confirmed and `undefined` once it is closed any other way. */
+/** Queues a prompt for `prompts.host` to show, settling with the text typed once it is confirmed and `undefined` once it is closed any other way. */
 export function queued(
     asked: string | PromptOptions,
     kind: Prompt['kind'],

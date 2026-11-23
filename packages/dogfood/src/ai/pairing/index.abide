@@ -5,13 +5,28 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={[
-        '/components/pairing',
-        '/ai/provider',
-        '/hooks/on-pairing',
-        '/cli/bridge',
-    ]}
+    seeAlso={['/helpers/chat', '/ai/provider', '/hooks/on-pairing', '/cli/bridge']}
     tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/ClaudeCodeChat.test.ts',
+            from: ["test('unpaired: the command and the click, and no chat yet'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/ClaudeCodeChat.test.ts',
+            from: ["test('paired: the chat, and the tools it cannot use'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Pairing.test.ts',
+            from: [
+                "test('a connection that takes too long offers to try again, and trying again asks again'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Pairing.test.ts',
+            from: [
+                "test('a visitor offline is told so, and the step returns once they are back'",
+            ],
+        },
         {
             path: 'packages/abide/tests/pairing.test.ts',
             from: [
@@ -34,20 +49,24 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Pair the visitor's Claude Code with a click">
         <p><code>start</code> opens the pairing link, and <code>status</code> follows the pairing
-            as it changes. The page writes no handler for either.</p>
+            as it changes. <code>step</code> is where it stands, one arm of the page per step:
+            <code>connecting</code>, <code>slow</code>, <code>offline</code>,
+            <code>unavailable</code>, <code>click</code>, <code>waiting</code>,
+            <code>install</code> or <code>paired</code>. The page writes no handler for any of
+            it.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { pairing } from '@abide/abide'
-            const { status, step, copied, start, copyInstall } = pairing()
+            const { status, step, start } = pairing()
             </script>
 
-            {#if !status}
-                <p>Connecting…</p>
-            {:else if status.paired}
+            {#if step === 'paired'}
                 <p>Your Claude Code is paired.</p>
-            {:else}
-                <pre>{status.command}</pre>
+            {:else if step === 'click' || step === 'waiting'}
+                <pre>{status?.command}</pre>
                 <button disabled={step === 'waiting'} onclick={start}>Pair</button>
+            {:else}
+                <p>{step}</p>
             {/if}
         `} />
     </Section>
@@ -64,6 +83,48 @@ import Section from '#src/lib/Section.abide'
             {#if step === 'install'}
                 <pre>{status?.install}</pre>
                 <button onclick={copyInstall}>{copied ? 'Copied' : 'Copy'}</button>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Show the chat once the visitor's Claude Code is paired">
+        <p>Render the conversation in the <code>paired</code> arm, and a Reconnect calling
+            <code>start</code> beside it. <code>status.missing</code> names the tools the visitor's
+            Claude Code cannot use here.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { pairing } from '@abide/abide'
+            import Chat from './Chat.abide'
+            import askClaudeCode from '../askClaudeCode.handler.ts'
+
+            const { status, step, start } = pairing()
+            </script>
+
+            {#if step === 'paired'}
+                {#if status?.missing.length}
+                    <p>Claude Code here cannot use {status.missing.join(', ')}.</p>
+                {/if}
+                <Chat ask={askClaudeCode} />
+                <button onclick={start}>Reconnect</button>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Offer a retry when connecting takes too long">
+        <p>After <code>slowAfter</code> milliseconds of connecting, the step is
+            <code>slow</code>, and <code>retry</code> reads the pairing again. A visitor with no
+            network is at <code>offline</code> until they are back, before any other step.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { pairing } from '@abide/abide'
+            const { step, retry } = pairing({ slowAfter: 5000 })
+            </script>
+
+            {#if step === 'slow'}
+                <p>Still connecting to Claude Code.</p>
+                <button onclick={retry}>Try again</button>
+            {:else if step === 'offline'}
+                <p>You are offline. Pairing resumes once you are back.</p>
             {/if}
         `} />
     </Section>

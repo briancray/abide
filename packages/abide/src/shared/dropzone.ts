@@ -1,4 +1,4 @@
-// 53.17-53.20, 53.46, 53.59, 53.60 — FILES DROPPED ON AN ELEMENT, pasted into it, or picked through a file
+// 53.17-53.20, 53.45, 53.56, 53.57 — FILES DROPPED ON AN ELEMENT, pasted into it, or picked through a file
 // input, filtered as a file input filters, as parts an app spreads onto a host and an input of its own.
 
 import { filesOf } from './filesOf.ts'
@@ -19,11 +19,11 @@ export type DropzoneOptions = {
     paste?: Live<boolean>
     /** Whether more than the first accepted file is taken. `true` by default; a function is read live. */
     multiple?: Live<boolean>
-    /** 49.10 — the files taken last, to read, clear or bind; one of the parts' own by default. */
+    /** 49.8 — the files taken last, to read, clear or bind; one of the parts' own by default. */
     files?: Reactive<readonly File[]>
     /** Handed the files a drop, a paste or a pick took, where it took any. */
     onfiles?: (files: File[], event: Event) => void
-    /** 53.46 — handed the files a drop, a paste or a pick carried that were not taken, where there are any. */
+    /** 53.45 — handed the files a drop, a paste or a pick carried that were not taken, where there are any. */
     onreject?: (files: File[], event: Event) => void
 }
 
@@ -46,7 +46,7 @@ export type DropzoneParts = {
  * @param options which files are taken, whether a paste is a drop, and what hears the files
  */
 export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
-    // 49.13 — read where they are used.
+    // 49.11 — read where they are used.
     const multiple = () => live(options.multiple) ?? true
     const taken = (data: DataTransfer | null): File[] => {
         const accept = options.accept ?? ''
@@ -62,7 +62,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
     // attribute stays until the drag has left them all.
     const entered = reactive(0)
 
-    // 53.59 — what a drop, a paste or a pick took replaces the files, as a file input's own pick does.
+    // 53.56 — what a drop, a paste or a pick took replaces the files, as a file input's own pick does.
     const took = (data: DataTransfer | null, event: Event): File[] => {
         const kept = taken(data)
         // Matched one for one, so the second of two identical files is turned away where one was taken.
@@ -118,7 +118,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
         'data-dropzone': 'host',
     }
 
-    // 53.60 — a pick through the input is taken as a drop is, and the input emptied after, so the
+    // 53.57 — a pick through the input is taken as a drop is, and the input emptied after, so the
     // same file picked again is a pick again and what shows is `files`.
     const input: Record<string, unknown> = {
         type: 'file',

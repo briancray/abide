@@ -87,8 +87,7 @@ import pickOrDrop from './lib/PickOrDrop.abide' with { type: 'text' }
         <p><code>onreject</code> is handed the files a drop, a paste or a pick carried that
             <code>accept</code> or <code>multiple</code> did not take.</p>
         <Code language="ts" caption="browser" code={`
-            import { dropzone } from '@abide/abide'
-            import { toasts } from '@abide/abide/Toasts.abide'
+            import { dropzone, toasts } from '@abide/abide'
 
             const drop = dropzone({
                 accept: '.pdf',

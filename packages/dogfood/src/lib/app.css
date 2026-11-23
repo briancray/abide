@@ -443,8 +443,8 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply overflow-x-auto rounded-md border border-rule bg-raised p-3 text-chrome;
     }
 
-    /* `Pairing` (`@abide/abide/Pairing.abide`) styled by what it writes: its step on the root and
-       a `data-pairing` on each piece. Until paired, the command and its buttons sit as one row under
+    /* The pairing in `Ask.abide`, styled by what it writes: `pairing`'s step on the root and a
+       `data-pairing` on each piece. Until paired, the command and its buttons sit as one row under
        the message; paired, it is the conversation, with Reconnect as quiet as the header's buttons. */
     .pairing {
         @apply flex flex-wrap items-center gap-snug;
@@ -462,7 +462,7 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply self-end border-0 bg-transparent px-2 py-1 text-chrome text-muted shadow-none hover:text-ink;
     }
 
-    /* `Chat` (`@abide/abide/Chat.abide`) styled by what it writes. The question is the visitor's
+    /* `Conversation.abide`, styled by what `chat`'s parts write. The question is the visitor's
        bubble; the answer is the page's own prose, with no speaker line, and says it is still
        thinking for as long as it streams. */
     .conversation {
@@ -477,7 +477,7 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply flex flex-col gap-flow;
     }
 
-    /* Shown only once the reader has scrolled the transcript up (53.62). */
+    /* Shown only once the reader has scrolled the transcript up (53.59). */
     .conversation [data-follow-bottom="jump"] {
         @apply self-center rounded-full border border-rule bg-raised px-3 py-1 text-chrome text-muted hover:text-ink;
     }

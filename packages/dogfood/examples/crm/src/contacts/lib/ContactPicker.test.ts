@@ -31,8 +31,8 @@ test('typing narrows the contacts, ignoring case', async () => {
     ).toBe('No contact matches')
 })
 
-// 51.113, 51.115 — WHAT WAS TYPED IS MARKED in each contact listed, where the narrowing found it.
-// THE REVERT: render the label whole in `Combobox` — no contact carries a mark.
+// 51.106 — WHAT WAS TYPED IS MARKED in each contact listed, where the narrowing found it.
+// THE REVERT: render the label whole in `ContactPicker` — no contact carries a mark.
 test('what was typed is marked in each contact it lists', async () => {
     using _picker = await mount(ContactPicker({}))
     await settled()
@@ -108,7 +108,7 @@ const shut = () => document.querySelector('[role=listbox]') === null
 const active = () =>
     document.querySelector('[role=option][data-active]')?.textContent
 
-// 51.99 — A PRESS ASKS FOR THE LIST, FOCUS DOES NOT: Tab reaching the field opens nothing, a click
+// 51.92 — A PRESS ASKS FOR THE LIST, FOCUS DOES NOT: Tab reaching the field opens nothing, a click
 // lists every contact, and a second click shuts it, as a press on a menu's trigger does. THE REVERT:
 // drop `onclick` from the input part — a click lists nothing; open on `focus` too — Tab opens it.
 test('a press lists every contact and a second shuts it, and focus opens nothing', async () => {
@@ -131,7 +131,7 @@ test('a press lists every contact and a second shuts it, and focus opens nothing
     expect(shut()).toBe(true)
 })
 
-// 51.100 — ALT WITH AN ARROW OPENS OR SHUTS, AND NEVER STEPS: Alt+ArrowDown opens the list, again on
+// 51.93 — ALT WITH AN ARROW OPENS OR SHUTS, AND NEVER STEPS: Alt+ArrowDown opens the list, again on
 // the open list it leaves the active contact where it stands, and Alt+ArrowUp shuts it. THE REVERT:
 // hand Alt+arrows to the list as plain arrows — the second Alt+ArrowDown steps to Grace, and
 // Alt+ArrowUp steps rather than shutting.

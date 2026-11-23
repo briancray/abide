@@ -24,7 +24,7 @@ function press(key: string) {
     flushSync()
 }
 
-// 51.84, 51.85, 51.91 — EACH ITEM SAYS WHERE IT STANDS: its depth, its siblings and its place among
+// 51.77, 51.78, 51.84 — EACH ITEM SAYS WHERE IT STANDS: its depth, its siblings and its place among
 // them, and a branch whether it is open; a shut branch's children are hidden. THE REVERT: write no
 // `aria-level`, and Grace reads none.
 test('an item says its depth and place, and a shut branch hides its children', async () => {
@@ -46,7 +46,7 @@ test('an item says its depth and place, and a shut branch hides its children', a
     ])
 })
 
-// 51.86, 51.87 — ONE ITEM IS IN THE TAB ORDER, and Up and Down rove the ones that show, stopping at
+// 51.79, 51.80 — ONE ITEM IS IN THE TAB ORDER, and Up and Down rove the ones that show, stopping at
 // the ends. THE REVERT: rove with wrap, and Down from Americas lands on Europe.
 test('Down and Up move through the items that show, and stop at the ends', async () => {
     using _tree = await mount(AccountTree({}))
@@ -63,7 +63,7 @@ test('Down and Up move through the items that show, and stop at the ends', async
     expect(focused()).toBe('Europe')
 })
 
-// 51.88 — RIGHT OPENS, then enters; LEFT shuts, then climbs. THE REVERT: drop the climb, and Left on
+// 51.81 — RIGHT OPENS, then enters; LEFT shuts, then climbs. THE REVERT: drop the climb, and Left on
 // Grace stays on Grace.
 test('Right opens a branch and enters it; Left shuts it and climbs to its parent', async () => {
     using _tree = await mount(AccountTree({}))
@@ -86,7 +86,7 @@ test('Right opens a branch and enters it; Left shuts it and climbs to its parent
     expect(focused()).toBe('Europe')
 })
 
-// 51.89, 50.40 — A LETTER MOVES TO THE NEXT ITEM IT STARTS, as a menu's does: the same type-ahead.
+// 51.82, 50.40 — A LETTER MOVES TO THE NEXT ITEM IT STARTS, as a menu's does: the same type-ahead.
 // THE REVERT: answer `-1` from `typeahead`, and B leaves focus on Europe.
 test('a letter moves to the next item whose name starts with it', async () => {
     using _tree = await mount(AccountTree({}))
@@ -95,7 +95,7 @@ test('a letter moves to the next item whose name starts with it', async () => {
     expect(focused()).toBe('Babbage & Co')
 })
 
-// 51.90 — A CLICK OR ENTER PICKS the item it lands in, not the branches around it. THE REVERT: drop
+// 51.83 — A CLICK OR ENTER PICKS the item it lands in, not the branches around it. THE REVERT: drop
 // the check for the item clicked, and a click on Grace picks Europe, the last branch it bubbles to.
 test('a click picks the item it lands in, and Enter picks the one focused', async () => {
     using _tree = await mount(AccountTree({}))

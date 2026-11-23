@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { flushSync } from '@abide/abide'
-import { prompts } from '@abide/abide/Prompts.abide'
+import { flushSync, prompts } from '@abide/abide'
 import { mount, settled } from '@abide/harness/abide'
 
 import DeleteDeal from './DeleteDeal.abide'
@@ -108,8 +107,8 @@ test('a withdrawn prompt is declined, and the next shows in its place', async ()
 })
 
 // 50.45 — A CONFIRM THAT IS A CALL stays up while the call runs, shows what it failed with, and
-// closes once it lands. THE REVERT: drop `onsubmit={submitted}` from `Prompts`' form — the dialog
-// closes on the first press, `open: false` where `true` is due.
+// closes once it lands. THE REVERT: drop `onsubmit: submitted` from `prompts.host`'s `form` part —
+// the dialog closes on the first press, `open: false` where `true` is due.
 test('a confirm that is a call stays up, busy, until it lands, and shows why it failed', async () => {
     using _deals = await mount(DeleteDeal({}))
     let attempts = 0
@@ -148,7 +147,7 @@ test('a confirm that is a call stays up, busy, until it lands, and shows why it 
 })
 
 // 50.44 — `modal: false` opens with `show`, leaving the page usable. THE REVERT: call `showModal`
-// whatever `modal` says in `Dialog` — `showModal` where `show` is due.
+// whatever `modal` says in `dialog` — `showModal` where `show` is due.
 test('a prompt that is not modal opens beside the page', async () => {
     using _deals = await mount(DeleteDeal({}))
     const opened: string[] = []
@@ -179,8 +178,8 @@ test('a prompt that is not modal opens beside the page', async () => {
 })
 
 // 50.36 — TWO `Prompts` STANDING SHOW ONE DIALOG: the last mounted shows the queue, and the other shows
-// nothing rather than a second modal over the first. THE REVERT: have `Prompts` show the queue whether
-// or not it is the last standing, and two dialogs open on one question.
+// nothing rather than a second modal over the first. THE REVERT: have `prompts.host` show the queue
+// whether or not it is the last standing, and two dialogs open on one question.
 test('a question shows in one dialog where two Prompts stand', async () => {
     using _deals = await mount(DeleteDeal({}))
     using _rename = await mount(RenameDeal({}))

@@ -1,6 +1,11 @@
 <script>
-import { type Column, format, reactive, type Sort } from '@abide/abide'
-import SortableTable from '@abide/abide/SortableTable.abide'
+import {
+    type Column,
+    format,
+    reactive,
+    type Sort,
+    sortableTable,
+} from '@abide/abide'
 
 import listClosing from '../listClosing.handler.ts'
 import { STAGES } from './STAGES.ts'
@@ -29,21 +34,51 @@ const COLUMNS: Column<Deal>[] = [
 const deals = reactive(() => listClosing())
 let sort = reactive<Sort | undefined>({ key: 'closes', direction: 'ascending' })
 let picked = reactive<string | undefined>(undefined)
+const table = sortableTable({
+    rows: () => deals,
+    columns: COLUMNS,
+    key: (deal) => deal.id,
+    sort,
+})
 </script>
 
 <p class="status">{picked ?? 'no deal picked'}</p>
-<SortableTable
-    rows={deals}
-    columns={COLUMNS}
-    key={(deal: Deal) => deal.id}
-    bind:sort={sort}
-    rowAttributes={(deal: Deal) => ({
-        'data-stage': deal.stage,
-        onclick: () => (picked = deal.name),
-    })}
+<table
+    {...table.table}
     class="[&_[data-align=end]]:text-right [&_[data-sort]_button]:text-signal
-        [&_th_button]:bg-transparent [&_th_button]:p-0 [&_th_button]:text-muted
-        [&_[data-sort=ascending]_button]:after:content-['_↑']
-        [&_[data-sort=descending]_button]:after:content-['_↓']
-        [&_[data-stage=won]]:font-semibold [&_tbody_tr]:cursor-pointer"
- />
+    [&_[data-sort=ascending]_button]:after:content-['_↑']
+    [&_[data-sort=descending]_button]:after:content-['_↓']"
+>
+    <thead>
+        <tr>
+            {#for column of COLUMNS by column.key}
+                <th {...table.column(column).header}>
+                    {#if column.sortable === false}
+                        {column.label}
+                    {:else}
+                        <button
+                            {...table.column(column).sort}
+                            class="bg-transparent p-0 text-muted"
+                        >{column.label}</button>
+                    {/if}
+                </th>
+            {/for}
+        </tr>
+    </thead>
+    <tbody>
+        {#for deal of table.rows by deal.id}
+            <tr
+                {...table.row(deal).row}
+                data-stage={deal.stage}
+                onclick={() => (picked = deal.name)}
+                class="cursor-pointer data-[stage=won]:font-semibold"
+            >
+                {#for column of COLUMNS by column.key}
+                    <td {...table.column(column).cell}>
+                        {table.text(deal, column)}
+                    </td>
+                {/for}
+            </tr>
+        {/for}
+    </tbody>
+</table>

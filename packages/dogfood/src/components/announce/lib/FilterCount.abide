@@ -1,6 +1,5 @@
 <script>
-import { reactive } from '@abide/abide'
-import Announcer, { announce } from '@abide/abide/Announcer.abide'
+import { announce, reactive } from '@abide/abide'
 
 const DEALS = ['Acme renewal', 'Hopper expansion', 'Initech pilot']
 let query = reactive('')
@@ -24,4 +23,3 @@ function filter(text: string) {
         <li>{deal}</li>
     {/for}
 </ul>
-<Announcer class="text-signal" />

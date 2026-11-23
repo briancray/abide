@@ -51,7 +51,7 @@ function pass(milliseconds: number) {
     flushSync()
 }
 
-// 52.73 — A TIME READS HOW LONG AGO IT WAS, in a `<time>` a machine reads and a title with the date.
+// 52.72 — A TIME READS HOW LONG AGO IT WAS, in a `<time>` a machine reads and a title with the date.
 test('a touch reads how long ago it was, and a new call now', async () => {
     using _touched = await mount(LastTouched({}))
     expect(said()).toEqual([
@@ -74,7 +74,7 @@ test('a touch reads how long ago it was, and a new call now', async () => {
     atMost(work, { dataWrites: 1 })
 })
 
-// 52.74, 52.77 — ONE CLOCK TICKS EVERY TIME, when the soonest label turns, and a tick writes only
+// 52.73, 52.76 — ONE CLOCK TICKS EVERY TIME, when the soonest label turns, and a tick writes only
 // the labels that turned. THE REVERT: read `Date.now()` in the label rather than the clock — the
 // labels never move.
 test('one clock moves every label, writing only those that turned', async () => {

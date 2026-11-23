@@ -1,4 +1,4 @@
-// 51.105-51.110 — WHAT A PICK DOES TO A SELECTION, of one key or of many: what `listbox` and `tree`
+// 51.98-51.103 — WHAT A PICK DOES TO A SELECTION, of one key or of many: what `listbox` and `tree`
 // share about it. Over many, a press picks its item alone, toggles it with the platform's `mod` held,
 // and with Shift selects the run of the list from the anchor — the item the last pick or toggle landed
 // on — to it.
@@ -19,7 +19,7 @@ export class Selection {
     readonly many: boolean
     // The keys selected as a set, read once per item an attribute asks about; only where it picks many.
     readonly keys: Reactive<ReadonlySet<string>>
-    // 51.107 — where a range runs from.
+    // 51.100 — where a range runs from.
     anchor: string | undefined = undefined
 
     constructor(
@@ -68,7 +68,7 @@ export class Selection {
         this.selected.set(kept.length === now.length ? [...now, key] : kept)
     }
 
-    /** 51.107 — selects the run of `order` from the anchor to `to`, the anchor being `from` where there is none listed. */
+    /** 51.100 — selects the run of `order` from the anchor to `to`, the anchor being `from` where there is none listed. */
     extend(
         from: string | undefined,
         to: string,
@@ -88,12 +88,12 @@ export class Selection {
         )
     }
 
-    /** 51.108 — selects every key of `order`, where it picks many. */
+    /** 51.101 — selects every key of `order`, where it picks many. */
     all(order: () => readonly string[]): void {
         if (this.many) this.selected.set([...order()])
     }
 
-    /** 51.106 — a press on `key`: Shift extends to it from `from`, `mod` toggles it, and a bare press picks it alone. */
+    /** 51.99 — a press on `key`: Shift extends to it from `from`, `mod` toggles it, and a bare press picks it alone. */
     press(
         key: string,
         event: MouseEvent,

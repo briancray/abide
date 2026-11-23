@@ -1,21 +1,6 @@
 <script>
-import Chat from '@abide/abide/Chat.abide'
-import Markdown from '@abide/abide/Markdown.abide'
-
 import askAssistant from '../askAssistant.handler.ts'
+import Chat from './Chat.abide'
 </script>
 
-<Chat ask={askAssistant} placeholder="Which company is Ada at?"
-    class="chat [&_[data-chat=transcript]]:flex
-        [&_[data-chat=transcript]]:flex-col [&_[data-chat=transcript]]:gap-snug
-        [&_[data-chat=transcript]]:p-0 [&_[data-chat=composer]]:row">
-    {#component Text({ text }: { text: string })}
-        <Markdown source={text} />
-    {/component}
-    {#component Tool({ part }: { part: { name: string } })}
-        <span class="status">looked up {part.name.split('_').at(-1)}</span>
-    {/component}
-    {#component Actions({ retry }: { retry: () => void })}
-        <button type="button" onclick={retry}>Ask again</button>
-    {/component}
-</Chat>
+<Chat ask={askAssistant} placeholder="Which company is Ada at?" />

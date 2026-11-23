@@ -1,4 +1,4 @@
-// 53.12-53.23, 53.53, 53.57, 53.58, 53.74 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
+// 53.12-53.23, 53.50, 53.54, 53.55, 53.71 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
 // element the way `bind:element` binds one: called with the node, and stopped by what it hands back.
 
 import { afterEach, expect, test } from 'bun:test'
@@ -265,7 +265,7 @@ test('a drop takes what accept takes, by type, extension or function — 53.18, 
 
 // THE REVERT: call `onreject` only where nothing was taken, and the photo past `multiple` and the
 // contract beside an accepted photo are turned away unheard.
-test('the files a drop carries and does not take are handed to onreject — 53.46', () => {
+test('the files a drop carries and does not take are handed to onreject — 53.45', () => {
     const zone = element()
     const turnedAway: string[][] = []
     const reject = (files: File[]) =>
@@ -306,7 +306,7 @@ test('a paste of files is a drop, and words pasted alone paste — 53.20', () =>
 // THE REVERT: walk `data.files` alone for what was turned away, and a paste carrying its files in
 // `items` alone reaches no `onreject` — this reports `[]`. `getAsFile` hands a new `File` per call,
 // as a browser's does, so the photo taken is matched only where the transfer is read once.
-test('a paste carrying its files in items alone takes and turns away as a drop does — 53.20, 53.46', () => {
+test('a paste carrying its files in items alone takes and turns away as a drop does — 53.20, 53.45', () => {
     const zone = element('textarea')
     const taken: string[][] = []
     const turnedAway: string[][] = []
@@ -355,10 +355,10 @@ function picked(
     return input
 }
 
-// 53.60 — A PICK THROUGH THE INPUT IS TAKEN AS A DROP IS: filtered by `accept`, a function's handed a
+// 53.57 — A PICK THROUGH THE INPUT IS TAKEN AS A DROP IS: filtered by `accept`, a function's handed a
 // transfer of the files picked, and the input emptied so the same file picked again is a pick again.
 // THE REVERT: write the picked files into `files` unfiltered — the contract lands beside the photo.
-test('a pick through the input lands in files, filtered as a drop is — 53.60', () => {
+test('a pick through the input lands in files, filtered as a drop is — 53.57', () => {
     const byType = dropzone({ accept: 'image/*' })
     const input = picked(byType, [CONTRACT, PHOTO])
     expect(byType.files().map((file) => file.name)).toEqual(['signing.png'])
@@ -373,9 +373,9 @@ test('a pick through the input lands in files, filtered as a drop is — 53.60',
     expect(byFunction.input.accept).toBeUndefined()
 })
 
-// 53.59 — WHAT A DROP TAKES REPLACES THE FILES, one under `multiple: false`, and a drop taking nothing
+// 53.56 — WHAT A DROP TAKES REPLACES THE FILES, one under `multiple: false`, and a drop taking nothing
 // leaves them. THE REVERT: append each take to `files` — the second drop reads three files.
-test('a drop replaces the files, keeps one under multiple false, and one taking none leaves them — 53.59', () => {
+test('a drop replaces the files, keeps one under multiple false, and one taking none leaves them — 53.56', () => {
     const zone = element()
     const drop = hosted(zone, dropzone({ accept: '.pdf,image/*' }))
     drag(zone, 'drop', [CONTRACT, PHOTO])
@@ -456,7 +456,7 @@ test('a click copies, marks the element copied, and the mark wears off — 53.21
 
 // THE REVERT: write `navigator.clipboard.writeText` with the plain text alone, as `copyText` did —
 // this reports `[["text/plain: Grace Hopper"]]`, and the html never reaches the clipboard.
-test('a record copies as one item holding each type it names — 53.57', async () => {
+test('a record copies as one item holding each type it names — 53.54', async () => {
     const written = clipboardWrites()
     const button = element('button')
     const stop = bindPart(
@@ -482,7 +482,7 @@ test('a record copies as one item holding each type it names — 53.57', async (
 
 // THE REVERT: copy from the element bound rather than the button clicked, and every copy is the
 // container's whole text, marked on the container.
-test('with a selector, a click on a button inside copies from that button, and nothing else does — 53.44, 53.45', async () => {
+test('with a selector, a click on a button inside copies from that button, and nothing else does — 53.43, 53.44', async () => {
     const written = clipboardWrites()
     const block = element()
     // Markup no template built, as a `raw` block holds it.
@@ -549,7 +549,7 @@ test('a page with no clipboard copies through a selected textarea, carrying ever
 
 // THE REVERT: drop the `selected === undefined` return — an empty textarea is selected and copied,
 // and this reports `["copy selecting "]` and `true`.
-test('a value holding no string reports not copied where there is no clipboard — 53.58', async () => {
+test('a value holding no string reports not copied where there is no clipboard — 53.55', async () => {
     const landed: string[] = []
     const restore = noClipboard(landed)
     try {
@@ -578,7 +578,7 @@ test('a value holding no string reports not copied where there is no clipboard �
 
 // THE REVERT: default `value` to the element's `textContent` alone — this reports
 // `[["text/plain: Grace Hopper, engines"]]`, and the markup never reaches the clipboard.
-test('with no value, a click copies the element clicked as its text and its markup — 53.74', async () => {
+test('with no value, a click copies the element clicked as its text and its markup — 53.71', async () => {
     const written = clipboardWrites()
     const card = element()
     card.innerHTML = '<strong>Grace Hopper</strong>, <em>engines</em>'
@@ -597,7 +597,7 @@ test('with no value, a click copies the element clicked as its text and its mark
 
 // THE REVERT: drop the `following` check in `followBottom`'s observer — the reader scrolled up to 0
 // is pulled back to 180 by the next line, and the jump never reads unseen.
-test('a scroller follows its bottom until the reader scrolls up, and the jump takes them back — 53.53, 53.61-53.63', async () => {
+test('a scroller follows its bottom until the reader scrolls up, and the jump takes them back — 53.50, 53.58-53.60', async () => {
     const log = element()
     // The emulator lays nothing out: the element is 100px tall and grows 40px a line.
     let height = 100
@@ -627,17 +627,17 @@ test('a scroller follows its bottom until the reader scrolls up, and the jump ta
         true,
         { hidden: true, unseen: undefined },
     ])
-    // 53.61 — scrolled up past the threshold, it stops following.
+    // 53.58 — scrolled up past the threshold, it stops following.
     log.scrollTop = 0
     log.dispatchEvent(new Event('scroll'))
     await line()
-    // 53.62 — and the line that landed meanwhile shows the jump, unseen.
+    // 53.59 — and the line that landed meanwhile shows the jump, unseen.
     expect([log.scrollTop, follow.following(), jump()]).toEqual([
         0,
         false,
         { hidden: false, unseen: '' },
     ])
-    // 53.63 — the jump takes the reader down and follows again.
+    // 53.60 — the jump takes the reader down and follows again.
     ;(follow.jump.onclick as () => void)()
     await line()
     expect([log.scrollTop, follow.following(), jump()]).toEqual([
@@ -645,7 +645,7 @@ test('a scroller follows its bottom until the reader scrolls up, and the jump ta
         true,
         { hidden: true, unseen: undefined },
     ])
-    // 53.61 — scrolled back within the threshold by the reader, it follows again too.
+    // 53.58 — scrolled back within the threshold by the reader, it follows again too.
     log.scrollTop = 0
     log.dispatchEvent(new Event('scroll'))
     log.scrollTop = height - 100

@@ -75,7 +75,7 @@ function scrollTo(top: number) {
     frame()
 }
 
-// 51.65, 51.67 — THE FIRST ROWS UNTIL IT IS MEASURED, THEN ONLY THE ROWS IN VIEW AND THREE PAST, each
+// 51.58, 51.60 — THE FIRST ROWS UNTIL IT IS MEASURED, THEN ONLY THE ROWS IN VIEW AND THREE PAST, each
 // saying where it stands in the whole trail. THE REVERT: render `AUDIT_TRAIL` whole, and 5,000 rows are
 // made where 20 are due.
 test('only the changes in view, and three past, are rows', async () => {
@@ -90,7 +90,7 @@ test('only the changes in view, and three past, are rows', async () => {
     expect(positions().at(-1)).toBe(116)
 })
 
-// 51.65, 51.69 — A SCROLL BY ONE ROW MAKES ONE ROW AND KEEPS THE REST, and a scroll inside a row writes
+// 51.58, 51.62 — A SCROLL BY ONE ROW MAKES ONE ROW AND KEEPS THE REST, and a scroll inside a row writes
 // nothing. THE REVERT: drop `by entry.key`, and every row is rewritten in place where one is made.
 test('scrolling by a row makes the row coming into view and keeps the others', async () => {
     using _trail = await mount(AuditTrail({}))

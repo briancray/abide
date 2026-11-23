@@ -1,0 +1,18 @@
+<script>
+import { markdown, raw } from '@abide/abide'
+
+import CopyableCode from './CopyableCode.abide'
+
+const note = 'Install it:\n\n```sh\nbun add @abide/abide\n```'
+const doc = markdown.incremental({ source: note, blocks: ['sh'] })
+</script>
+
+<div>
+    {#for section of doc.sections by section}
+        {#if section.block}
+            <CopyableCode source={section.block.source} />
+        {:else}
+            {raw(section.html)}
+        {/if}
+    {/for}
+</div>

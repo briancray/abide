@@ -8,7 +8,7 @@ import activityLog from './lib/ActivityLog.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/helpers/observe', '/components/chat']}
+    seeAlso={['/helpers/observe', '/helpers/chat']}
     tests={[
         {
             path: 'packages/abide/tests/elementBehaviors.test.ts',

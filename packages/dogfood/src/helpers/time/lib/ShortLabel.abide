@@ -1,0 +1,8 @@
+<script>
+import { time } from '@abide/abide'
+
+const TOUCHED = '2026-11-18T12:04:00Z'
+const touched = time({ style: 'narrow', timeZone: 'UTC' }).at(TOUCHED)
+</script>
+
+<p>Last touched <time {...touched.time}>{touched.text}</time></p>

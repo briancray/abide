@@ -1,9 +1,9 @@
-// 53.21-53.23, 53.44, 53.45, 53.57, 53.58, 53.74 — A CLICK THAT COPIES, and the element marked once the copy lands.
+// 53.21-53.23, 53.43, 53.44, 53.54, 53.55, 53.71 — A CLICK THAT COPIES, and the element marked once the copy lands.
 
 import type { Disposer } from './reactive/watch.ts'
 import { type Copyable, writeClipboard } from './writeClipboard.ts'
 
-/** 53.74 — the element clicked, as the text it reads and the markup it holds. */
+/** 53.71 — the element clicked, as the text it reads and the markup it holds. */
 const contentOf = (clicked: Element): Copyable => ({
     'text/plain': clicked.textContent ?? '',
     'text/html': clicked.innerHTML,
@@ -15,7 +15,7 @@ const contentOf = (clicked: Element): Copyable => ({
  * beside `text/plain`, `image/png`) — and writing `data-copied` on it for `copiedFor` milliseconds
  * once the copy landed.
  *
- * 53.44 — WITH `selector`, THE ELEMENT HOLDS THE BUTTONS RATHER THAN BEING ONE: a click inside it
+ * 53.43 — WITH `selector`, THE ELEMENT HOLDS THE BUTTONS RATHER THAN BEING ONE: a click inside it
  * on an element matching `selector` copies, and that element is marked. One listener reaches buttons
  * written by markup no template built, which is what a `raw` block holds.
  *
@@ -29,7 +29,7 @@ export function copy(
         copiedFor?: number
         /** The buttons inside the element a click copies from, in place of the element itself. */
         selector?: string
-        /** 53.45 — called once a click's copy has landed or failed, with whether it landed and the element clicked. */
+        /** 53.44 — called once a click's copy has landed or failed, with whether it landed and the element clicked. */
         oncopied?: (copied: boolean, clicked: Element) => void
     } = {},
 ): Record<string, unknown> {

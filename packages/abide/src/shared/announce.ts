@@ -1,8 +1,8 @@
-// 50.50-50.53 — WHAT A SCREEN READER IS TOLD, with nothing shown: the one message `Announcer` holds, read
-// out from its live region as it lands. A message replaces the last rather than joining a log, and each
+// 50.49-50.52 — WHAT A SCREEN READER IS TOLD, with nothing shown: the one message `announce.host`'s regions hold,
+// read out from its live region as it lands. A message replaces the last rather than joining a log, and each
 // lands as an element of its own, so the same words said twice are read twice.
 //
-// `Toasts` keeps its own region rather than announcing through this one: a notice is seen, and the
+// `toasts.host` keeps its own region rather than announcing through this one: a notice is seen, and the
 // region a screen reader reads it from is the element the reader can also see and act on, its action
 // button inside it. Said here as well, its words would be read twice.
 
@@ -16,7 +16,7 @@ export type AnnounceOptions = {
     politeness?: 'polite' | 'assertive'
 }
 
-/** The message `Announcer` holds: its words, how urgently they are read, and which message it is. */
+/** The message `announce.host`'s regions hold: its words, how urgently they are read, and which message it is. */
 export type Announcement = {
     text: string
     politeness: 'polite' | 'assertive'
@@ -25,19 +25,19 @@ export type Announcement = {
 }
 
 // One per request on a server, as every `reactive` without `global` is (11.32), and `announce` never
-// writes it there (50.51).
+// writes it there (50.50).
 export const said = reactive<Announcement | undefined>(undefined)
 
-// 50.36 — the `Announcer` standing: the last holds the message.
-export const announcers = standing('<Announcer />', 'abide:announce')
+// 50.36 — the `announce.host` standing: the last holds the message.
+export const announcers = standing('announce.host()', 'abide:announce')
 
 let count = 0
 
-/** Has a screen reader read `text` out, from the app's `Announcer`. */
+/** Has a screen reader read `text` out, from the regions the app spreads `announce.host` on. */
 export function announce(text: string, options: AnnounceOptions = {}): void {
     if (isServer())
         throw new Error(
-            'announce reads a message to a person, and a server has none to read it to. RULEBOOK 50.51.',
+            'announce reads a message to a person, and a server has none to read it to. RULEBOOK 50.50.',
         )
     announcers.asked()
     count += 1

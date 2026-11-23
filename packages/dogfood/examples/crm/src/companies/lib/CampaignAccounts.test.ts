@@ -41,7 +41,7 @@ function press(key: string, init: KeyboardEventInit = {}) {
     flushSync()
 }
 
-// 51.105, 51.106, 51.107 — A CLICK PICKS ONE, `mod` ADDS OR TAKES OUT, Shift TAKES THE RUN from the
+// 51.98, 51.99, 51.100 — A CLICK PICKS ONE, `mod` ADDS OR TAKES OUT, Shift TAKES THE RUN from the
 // last item picked to it, in the order the items show. THE REVERT: toggle on Shift as on `mod`, and
 // Shift on Turing Labs adds it alone rather than the run from Babbage & Co.
 test('a click picks one account, mod adds another, and Shift takes the run between', async () => {
@@ -63,7 +63,7 @@ test('a click picks one account, mod adds another, and Shift takes the run betwe
     expect(named('Hopper & Co').getAttribute('aria-selected')).toBe('false')
 })
 
-// 51.108, 51.109, 51.110 — Space ADDS OR TAKES OUT the item focused, Shift with an arrow carries the
+// 51.101, 51.102, 51.103 — Space ADDS OR TAKES OUT the item focused, Shift with an arrow carries the
 // run along, and `mod+a` takes every account. THE REVERT: drop the run from Shift with an arrow, and
 // focus moves to Babbage & Co with Hopper & Co alone picked.
 test('Space picks the account focused, Shift with an arrow extends, and mod+a takes all', async () => {

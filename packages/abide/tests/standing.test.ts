@@ -1,6 +1,6 @@
 // 50.36 — ONE HOST SHOWS, the last of those standing, and a request no host stands to show
-// warns once rather than being lost without a word. `Tooltips`, `Toasts` and `Prompts` each stand
-// through one.
+// warns once rather than being lost without a word. `tooltip.host`, `toasts.host` and `prompts.host`
+// each stand through one.
 
 import { expect, test } from 'bun:test'
 
@@ -24,7 +24,7 @@ function stand(through: ReturnType<typeof standing>) {
 // THE REVERT: have `stand` answer whether ANY host stands, and the first shows beside the second — two
 // copies of every notice, and a second modal over the first.
 test('the last host standing shows, and the one before it once the last is removed', () => {
-    const notices = standing('<Toasts />', 'abide:toasts')
+    const notices = standing('toasts.host()', 'abide:toasts')
     const first = stand(notices)
     expect(first.shows()).toBe(true)
     const second = stand(notices)
@@ -51,9 +51,9 @@ async function warnings(body: () => void): Promise<string[]> {
     return warned
 }
 
-// THE REVERT: drop the warning from `asked`, and a `confirm` with no `Prompts` waits forever unsaid.
+// THE REVERT: drop the warning from `asked`, and a `confirm` with no `prompts.host` waits forever unsaid.
 test('a request with no host standing warns once, and one with a host standing does not', async () => {
-    const asking = standing('<Prompts />', 'abide:prompts')
+    const asking = standing('prompts.host()', 'abide:prompts')
     const host = stand(asking)
     expect(await warnings(() => asking.asked())).toEqual([])
     host.leave()
@@ -62,14 +62,14 @@ test('a request with no host standing warns once, and one with a host standing d
         asking.asked()
     })
     expect(first).toHaveLength(1)
-    expect(first[0]).toContain('<Prompts />')
+    expect(first[0]).toContain('prompts.host()')
     expect(await warnings(() => asking.asked())).toEqual([])
 })
 
 // A host that stands later in the same mount than the request — a root layout's, after the page's
 // `<slot />` — is standing by the time the request is looked at.
 test('a host standing later in the same turn as the request is in time', async () => {
-    const asking = standing('<Prompts />', 'abide:prompts')
+    const asking = standing('prompts.host()', 'abide:prompts')
     let host: ReturnType<typeof stand> | undefined
     expect(
         await warnings(() => {

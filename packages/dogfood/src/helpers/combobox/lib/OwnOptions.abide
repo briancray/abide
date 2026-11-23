@@ -9,6 +9,7 @@ const CONTACTS: Contact[] = [
     { id: 'katherine', name: 'Katherine Johnson', company: 'Orbit Labs' },
 ]
 const box = combobox({
+    id: 'deal-owner',
     options: () => CONTACTS,
     key: (contact) => contact.id,
     label: (contact) => contact.name,

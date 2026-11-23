@@ -37,7 +37,7 @@ const said = () =>
         line.querySelector('strong')?.textContent?.trim(),
     )
 
-// 52.73 — A LIST WRITES ITS OWN `<time>` PER ROW from one set of parts: the label, a machine's
+// 52.72 — A LIST WRITES ITS OWN `<time>` PER ROW from one set of parts: the label, a machine's
 // `datetime` and the date in full as `title`.
 test('each follow-up reads how soon it is due, on a time of its own', async () => {
     using _due = await mount(FollowUps({}))
@@ -47,7 +47,7 @@ test('each follow-up reads how soon it is due, on a time of its own', async () =
     expect(time?.getAttribute('title')).toBe('Nov 20, 2026, 3:04 PM')
 })
 
-// 52.74 — A TIME IS FOLLOWED WHILE ITS ELEMENT IS BOUND: two rows, one timer; both marked done, none.
+// 52.73 — A TIME IS FOLLOWED WHILE ITS ELEMENT IS BOUND: two rows, one timer; both marked done, none.
 // THE REVERT: drop the disposer the `time` part's `bind:element` hands back — a timer stands for rows
 // that are gone.
 test('the clock follows a row while it stands, and stops with the last', async () => {

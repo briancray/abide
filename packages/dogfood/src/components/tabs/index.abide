@@ -17,7 +17,7 @@ import underlineSelected from './lib/UnderlineSelected.abide' with { type: 'text
     seeAlso={[
         '/abide-files/control-flow',
         '/abide-files/components',
-        '/components/combobox',
+        '/helpers/combobox',
     ]}
     tests={[
         {

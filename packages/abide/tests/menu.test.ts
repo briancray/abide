@@ -98,7 +98,7 @@ function standing(options: Parameters<typeof menu>[0]) {
 
 // THE REVERT: drop the `openOnHover` timer from the trigger's `pointerenter`, and a resting mouse opens
 // nothing.
-test('a mouse resting on the trigger opens the menu after openOnHover, and a touch does not — 50.57', async () => {
+test('a mouse resting on the trigger opens the menu after openOnHover, and a touch does not — 50.55', async () => {
     const hover = standing({ openOnHover: 5 })
     hover.enter(hover.trigger, 'touch')
     await Bun.sleep(15)
@@ -113,7 +113,7 @@ test('a mouse resting on the trigger opens the menu after openOnHover, and a tou
 
 // THE REVERT: arm the leave whatever opened the menu, and the one a key opened closes under a pointer
 // that left.
-test('a menu a pointer opened closes once the pointer has left trigger and menu, and comes back to keep it — 50.58', async () => {
+test('a menu a pointer opened closes once the pointer has left trigger and menu, and comes back to keep it — 50.56', async () => {
     const leaves = standing({ closeOnLeave: 5 })
     leaves.trigger.dispatchEvent(new MouseEvent('click', { detail: 1 }))
     expect(leaves.isOpen()).toBe(true)
@@ -133,7 +133,7 @@ test('a menu a pointer opened closes once the pointer has left trigger and menu,
 
 // THE REVERT: drop the open-groupmate switch from the trigger's `pointerenter`, and the second menu
 // waits for a click while the first stays open.
-test('a group switches to the menu whose trigger the pointer enters, and the arrows step between them — 50.59', () => {
+test('a group switches to the menu whose trigger the pointer enters, and the arrows step between them — 50.57', () => {
     const first = standing({ group: 'header' })
     const second = standing({ group: 'header' })
     first.trigger.dispatchEvent(new MouseEvent('click', { detail: 1 }))

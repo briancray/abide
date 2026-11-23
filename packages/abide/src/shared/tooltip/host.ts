@@ -1,4 +1,4 @@
-// 50.26, 50.27, 50.36, 50.48, 50.54 — WHERE `tooltip.tip` SHOWS, as parts an app spreads onto markup of
+// 50.26, 50.27, 50.36, 50.47, 50.53 — WHERE `tooltip.tip` SHOWS, as parts an app spreads onto markup of
 // its own: the one popover every hint on the page opens in, in the top layer, so no stacking context
 // covers it and no scroller clips it. Called from the script of the one component that shows the hints;
 // of several standing, the last shows them and the others show none.
@@ -38,7 +38,7 @@ export function host(): TooltipHost {
                 // tip's own and `place` reads past it.
                 ...tip.options,
                 side: tip.options.side ?? 'top',
-                // 50.48 — a hint is never the pointer's target.
+                // 50.47 — a hint is never the pointer's target.
                 interactive: false,
                 box: tip.box,
             },
@@ -47,7 +47,7 @@ export function host(): TooltipHost {
     })
 
     return {
-        // 50.54 — every attribute the popover needs is written by the server, so it is a closed popover
+        // 50.53 — every attribute the popover needs is written by the server, so it is a closed popover
         // before the page hydrates.
         hint: {
             role: 'tooltip',

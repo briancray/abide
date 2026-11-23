@@ -1,7 +1,7 @@
-// 52.26, 52.70, 51.92-51.97 — A POSITION ALONG AN AXIS, PICKED BY THE POINTER OR THE KEYBOARD: the
+// 52.26, 52.69, 51.85-51.90 — A POSITION ALONG AN AXIS, PICKED BY THE POINTER OR THE KEYBOARD: the
 // pointer takes the position nearest it, and the arrows step one position at a time, stopping at the
-// ends, with Home and End at the first and the last. Leaving picks none. What a `Chart`'s crosshair
-// stands at and where a `Range`'s thumb sits; each decides what standing there means.
+// ends, with Home and End at the first and the last. Leaving picks none. What a `chart`'s crosshair
+// stands at and where a `range`'s thumb sits; each decides what standing there means.
 
 import { roving } from './roving.ts'
 
@@ -36,7 +36,7 @@ export function scrub(at: ScrubPosition, axis: ScrubAxis) {
         leave(): void {
             at.set(-1)
         },
-        // 52.70, 51.94 — the arrows along the axis, and Home and End, with no going round the ends.
+        // 52.69, 51.87 — the arrows along the axis, and Home and End, with no going round the ends.
         key(event: KeyboardEvent): void {
             const to = roving(
                 event.key,

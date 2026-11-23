@@ -1,4 +1,4 @@
-// The `toasts` namespace: notices that take themselves down, shown in the app's `Toasts` (50.12).
+// The `toasts` namespace: notices that take themselves down, shown where the app spreads `toasts.host` (50.12).
 export { dismiss } from './dismiss.ts'
 export {
     host,

@@ -1,0 +1,47 @@
+<script>
+import { type Column, reactive, type Sort, sortableTable } from '@abide/abide'
+
+type Deal = { id: string; name: string; closes: string }
+
+const DEALS: Deal[] = [
+    { id: 'hopper', name: 'Hopper renewal', closes: '2026-12-15' },
+    { id: 'turing', name: 'Turing seats', closes: '2026-11-15' },
+]
+const COLUMNS: Column<Deal>[] = [
+    { key: 'name', label: 'Deal' },
+    { key: 'closes', label: 'Closes' },
+]
+let sort = reactive<Sort | undefined>({
+    key: 'closes',
+    direction: 'ascending',
+})
+const table = sortableTable({
+    rows: DEALS,
+    columns: COLUMNS,
+    key: (deal) => deal.id,
+    sort,
+})
+</script>
+
+<p>Sorted by {sort ? `${sort.key}, ${sort.direction}` : 'nothing'}</p>
+<table>
+    <thead>
+        <tr>
+            {#for column of COLUMNS by column.key}
+                <th {...table.column(column).header}>
+                    <button {...table.column(column).sort}>
+                        {column.label}
+                    </button>
+                </th>
+            {/for}
+        </tr>
+    </thead>
+    <tbody>
+        {#for deal of table.rows by deal.id}
+            <tr>
+                <td>{deal.name}</td>
+                <td>{deal.closes}</td>
+            </tr>
+        {/for}
+    </tbody>
+</table>

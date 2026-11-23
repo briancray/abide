@@ -1,4 +1,4 @@
-// 51.49-51.60, 51.79-51.83 — A TABLE SORTED BY ITS HEADERS AND PICKED BY ITS ROWS, as parts an app
+// 51.47-51.54, 51.72-51.76 — A TABLE SORTED BY ITS HEADERS AND PICKED BY ITS ROWS, as parts an app
 // spreads onto a `<table>` of its own: each header's `aria-sort` and the press that sorts by it, the rows
 // in the order the sort names, and a native checkbox per row with a Shift-click range and a header box
 // that is mixed while some rows are picked. The app writes every cell.
@@ -18,7 +18,7 @@ export type SortableTableOptions<Row> = {
     columns: Live<readonly Column<Row>[]>
     /** The column sorted by and its direction: hand it a `Reactive` to read and set the sort. */
     sort?: Reactive<Sort | undefined>
-    /** The keys of the rows picked: hand it a `Reactive` to read and set the selection (51.79). */
+    /** The keys of the rows picked: hand it a `Reactive` to read and set the selection (51.72). */
     selected?: Reactive<readonly string[] | undefined>
 } & KeyOption<Row>
 
@@ -26,7 +26,7 @@ export type SortableTableOptions<Row> = {
 export type SortableTableColumn = {
     /** The header cell: its `scope`, `aria-sort`, `data-sort` and `data-align`. */
     readonly header: Record<string, unknown>
-    /** The button in the header that sorts by the column (51.53). */
+    /** The button in the header that sorts by the column (51.50). */
     readonly sort: Record<string, unknown>
     /** A body cell of the column: its `data-align`. */
     readonly cell: Record<string, unknown>
@@ -38,7 +38,7 @@ export type SortableTableRow = {
     readonly row: Record<string, unknown>
     /** The cell holding the row's checkbox. */
     readonly select: Record<string, unknown>
-    /** The row's checkbox: checked while the row is picked, a Shift-click picking the run from the last (51.81). */
+    /** The row's checkbox: checked while the row is picked, a Shift-click picking the run from the last (51.74). */
     readonly checkbox: Record<string, unknown>
     /** A row of detail shown under it. */
     readonly detail: Record<string, unknown>
@@ -56,7 +56,7 @@ export type SortableTableParts<Row> = {
     row(row: Row): SortableTableRow
     /** The text a cell shows for a column: its `format`, or its value's own. */
     text(row: Row, column: Column<Row>): string
-    /** The header's cell holding the checkbox, and the checkbox: checked where every row is picked, mixed where some are (51.82). */
+    /** The header's cell holding the checkbox, and the checkbox: checked where every row is picked, mixed where some are (51.75). */
     readonly selectAll: {
         readonly select: Record<string, unknown>
         readonly checkbox: Record<string, unknown>
@@ -71,7 +71,7 @@ export type SortableTableParts<Row> = {
 export function sortableTable<Row>(
     options: SortableTableOptions<Row>,
 ): SortableTableParts<Row> {
-    // 49.13 — read where it is used.
+    // 49.11 — read where it is used.
     const key = (row: Row) => writtenBy(options.key, row)
     const sort = options.sort ?? reactive<Sort | undefined>(undefined)
     const selected =
@@ -81,7 +81,7 @@ export function sortableTable<Row>(
 
     const sorted = reactive(() => sortRows(rows(), columns(), sort()))
 
-    // 51.53 — a header pressed again turns its direction round; a new one sorts its first direction.
+    // 51.50 — a header pressed again turns its direction round; a new one sorts its first direction.
     function sortBy(column: Column<Row>) {
         const standing = sort.peek()
         sort.set(
@@ -104,7 +104,7 @@ export function sortableTable<Row>(
         return standing?.key === column.key ? standing.direction : undefined
     }
 
-    // 51.79-51.83 — ROWS PICKED BY NATIVE CHECKBOXES: a table is no grid, so each row's checkbox is in
+    // 51.72-51.76 — ROWS PICKED BY NATIVE CHECKBOXES: a table is no grid, so each row's checkbox is in
     // the page's tab order and Space toggles it as the browser does, with nothing to rove.
     const picked = reactive(() => new Set(selected()))
     // Read only where the header's box is spread, so a table with nothing selectable holds no value
@@ -113,7 +113,7 @@ export function sortableTable<Row>(
         sorted().length > 0 && sorted().every((row) => picked().has(key(row)))
     const some = () =>
         !every() && sorted().some((row) => picked().has(key(row)))
-    // The row a click last checked or cleared, which a Shift-click runs a range from (51.81).
+    // The row a click last checked or cleared, which a Shift-click runs a range from (51.74).
     let anchor: string | undefined
 
     function toggle(row: Row, event: MouseEvent) {
@@ -137,7 +137,7 @@ export function sortableTable<Row>(
             if (checked) next.add(each)
             else next.delete(each)
         }
-        // 51.80 — the selection keeps the rows' order.
+        // 51.73 — the selection keeps the rows' order.
         selected.set(
             rows()
                 .map(key)
@@ -201,7 +201,7 @@ export function sortableTable<Row>(
                 get checked() {
                     return every()
                 },
-                // 51.82 — the header's box, toggling every row.
+                // 51.75 — the header's box, toggling every row.
                 onclick: () => selected.set(every() ? [] : rows().map(key)),
                 // Mixed is a property with no attribute, so it is set on the element itself.
                 'bind:element': (input: HTMLInputElement) =>

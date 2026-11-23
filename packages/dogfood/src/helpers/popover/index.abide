@@ -12,7 +12,7 @@ import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/helpers/dismissible', '/components/menu', '/components/combobox']}
+    seeAlso={['/helpers/dismissible', '/components/menu', '/helpers/combobox']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageFilter.test.ts',

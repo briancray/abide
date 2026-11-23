@@ -1,4 +1,4 @@
-// 50.36, 50.54, 50.55 — `tooltip.host`'s parts: what its popover carries as the server writes it, and the
+// 50.36, 50.53, 50.54 — `tooltip.host`'s parts: what its popover carries as the server writes it, and the
 // text of the hint showing in the last host standing. Its part is read by hand here; what a template
 // does with it is the CRM's tests'.
 
@@ -37,7 +37,7 @@ async function opened(text: string): Promise<() => void> {
     return unbind
 }
 
-test('the hint part is a closed manual tooltip popover as written — 50.54', () => {
+test('the hint part is a closed manual tooltip popover as written — 50.53', () => {
     const shown = standing()
     expect(shown.parts.hint.role).toBe('tooltip')
     expect(shown.parts.hint.popover).toBe('manual')
@@ -47,7 +47,7 @@ test('the hint part is a closed manual tooltip popover as written — 50.54', ()
 })
 
 // THE REVERT: have `text` read the hint showing whatever host stands, and the first host writes it too.
-test('the hint shows in the last host standing alone, until it closes — 50.36, 50.55', async () => {
+test('the hint shows in the last host standing alone, until it closes — 50.36, 50.54', async () => {
     const first = standing()
     const last = standing()
     const unbind = await opened('Signed.')
@@ -94,11 +94,11 @@ test('a hint keeps the margin it is given from the viewport — 50.21', async ()
     shown.leave()
 })
 
-// 52.68 — A SLICE'S HINT OPENS AGAINST ITS OWN ARC, its element being a circle as wide as the ring
+// 52.67 — A SLICE'S HINT OPENS AGAINST ITS OWN ARC, its element being a circle as wide as the ring
 // whatever it sweeps. The last quarter of a ring 100 across at (0, 100) spans x 0-50, so a hint 20
 // wide centers at 25. THE REVERT: bind the slice with `tip(text)`, as `pie` once did, and the hint
 // centers on the whole ring — `40px`, where `15px` is due.
-test("a pie slice's hint opens against its own arc, not the ring — 52.68", async () => {
+test("a pie slice's hint opens against its own arc, not the ring — 52.67", async () => {
     for (const [name, value] of [
         ['clientWidth', 400],
         ['clientHeight', 300],

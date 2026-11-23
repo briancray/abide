@@ -1,0 +1,15 @@
+<script>
+import { range, reactive } from '@abide/abide'
+
+let band = reactive<readonly [number, number]>([20, 80])
+const price = range({ value: band, label: 'Price band' })
+</script>
+
+<div {...price.root} class="range">
+    <div {...price.track}>
+        <div {...price.fill} />
+        <span {...price.end(0).thumb} />
+        <span {...price.end(1).thumb} />
+    </div>
+</div>
+<p>{band[0]} to {band[1]}</p>

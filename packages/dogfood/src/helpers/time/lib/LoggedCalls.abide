@@ -1,0 +1,13 @@
+<script>
+import { reactive, time } from '@abide/abide'
+
+const ago = time()
+let calls = reactive<number[]>([Date.now() - 3 * 3_600_000])
+</script>
+
+<button onclick={() => (calls = [Date.now(), ...calls])}>Log a call</button>
+<ul>
+    {#for at of calls by at}
+        <li>Called <time {...ago.at(at).time}>{ago.at(at).text}</time></li>
+    {/for}
+</ul>

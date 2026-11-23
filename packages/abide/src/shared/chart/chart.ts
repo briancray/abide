@@ -1,8 +1,8 @@
-// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.53, 52.59-52.64, 52.69-52.72 — A CHART AS PARTS: series over
+// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
 // SVG elements of its own — `{#for point of plot.points()}<circle {...point.circle} r="3" />` — with the
 // `<svg>`'s part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
-// against the crosshair in an element of the app's own. `Chart` is default markup over these parts (49.9). Callable, with the
+// against the crosshair in an element of the app's own. Callable, with the
 // arithmetic it draws with as its members, as `reactive` carries `reactive.share`: `chart.ticks` and the
 // rest are what a chart of one's own draws with where even these parts are too much.
 
@@ -46,11 +46,11 @@ export type ChartOptions = {
     yTicks?: Live<number>
     /** Whether the y range takes in zero, with a line drawn there. `false` by default. */
     zero?: Live<boolean>
-    /** Whether a series with no `stack` of its own piles into one stack with the others (52.55). `false` by default. */
+    /** Whether a series with no `stack` of its own piles into one stack with the others (52.54). `false` by default. */
     stack?: Live<boolean>
-    /** Whether each stack is drawn as shares of its total at each x (52.57, 52.60). `false` by default. */
+    /** Whether each stack is drawn as shares of its total at each x (52.56, 52.59). `false` by default. */
     normalize?: Live<boolean>
-    /** The range each axis spans, in place of the range of the values (52.62). */
+    /** The range each axis spans, in place of the range of the values (52.61). */
     bounds?: Live<
         | {
               x?: readonly [number, number]
@@ -62,7 +62,7 @@ export type ChartOptions = {
     width?: number
     /** The height drawn at before the `<svg>` is measured. 240 by default. */
     height?: number
-    /** Called with the x position nearest a click, or the crosshair's on Enter, where `disabled` does not hold for it (52.38, 52.71). */
+    /** Called with the x position nearest a click, or the crosshair's on Enter, where `disabled` does not hold for it (52.38, 52.70). */
     onpick?: (index: number) => void
     /** Whether an x position takes no pick, written as `data-disabled` on its bars and the readout (52.39). */
     disabled?: (index: number) => boolean
@@ -107,7 +107,7 @@ export type ChartBar = {
     y: number
     width: number
     height: number
-    /** A unit rect placed and sized by its `style`'s transform (52.64): `<rect {...bar.rect} />`. */
+    /** A unit rect placed and sized by its `style`'s transform (52.63): `<rect {...bar.rect} />`. */
     rect: Record<string, unknown>
 }
 
@@ -164,7 +164,7 @@ export type ChartReadout = {
 export type ChartParts = {
     /** The base its parts' ids are derived from. */
     readonly id: string
-    /** The `<svg>`: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.70). */
+    /** The `<svg>`: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.69). */
     readonly svg: Record<string, unknown>
     /** The x of position `index`. */
     x(index: number): number
@@ -194,7 +194,7 @@ export type ChartParts = {
     get crosshair():
         { index: number; x: number; line: Record<string, unknown> } | undefined
     /**
-     * 50.47 — the readout's popover, spread onto an element of the app's own outside the `<svg>` and
+     * 50.46 — the readout's popover, spread onto an element of the app's own outside the `<svg>` and
      * rendered while `readout` stands: opened against the crosshair, describing the chart.
      */
     readonly tip: Record<string, unknown>
@@ -213,7 +213,7 @@ const BAND = 0.8
 
 /** A chart over one pair of axes, as its geometry and the parts to draw it with. */
 export function chart(options: ChartOptions): ChartParts {
-    // 49.13 — read where they are used.
+    // 49.11 — read where they are used.
     const xFormat = (value: number) => (options.xFormat ?? number)(value)
     const yFormat = (value: number) => (options.yFormat ?? number)(value)
     const size = reactive({
@@ -263,7 +263,7 @@ export function chart(options: ChartOptions): ChartParts {
             low = 0
             high = 1
         }
-        // 52.62 — bounds span the axis exactly, and the gridlines are the round values inside them.
+        // 52.61 — bounds span the axis exactly, and the gridlines are the round values inside them.
         const yBounds = bounds?.y
         let gridValues = ticks(
             yBounds?.[0] ?? low,
@@ -277,7 +277,7 @@ export function chart(options: ChartOptions): ChartParts {
         const floor = yBounds?.[0] ?? gridValues[0] ?? low
         const ceiling = yBounds?.[1] ?? gridValues.at(-1) ?? high
         const bottom = height - BOTTOM
-        // 52.60 — under `normalize` the axis is shares, whatever the values are written as.
+        // 52.59 — under `normalize` the axis is shares, whatever the values are written as.
         const gridLabels: string[] = []
         let longest = 0
         for (const value of gridValues) {
@@ -285,7 +285,7 @@ export function chart(options: ChartOptions): ChartParts {
             gridLabels.push(label)
             longest = Math.max(longest, label.length)
         }
-        // 52.69 — the plot starts right of the y labels, so no mark is drawn over one.
+        // 52.68 — the plot starts right of the y labels, so no mark is drawn over one.
         const left = longest === 0 ? 0 : longest * CHARACTER + GUTTER
         // Columns are centered on their x, so the first and last stand a half slot in from the edges.
         const slot = (width - left) / Math.max(1, length)
@@ -542,7 +542,7 @@ export function chart(options: ChartOptions): ChartParts {
                     options.disabled?.(index) === true ? '' : undefined,
                 width: '1',
                 height: '1',
-                // 52.64 — a unit rect placed and sized by a transform, which a CSS transition eases.
+                // 52.63 — a unit rect placed and sized by a transform, which a CSS transition eases.
                 style: `transform: translate(${x}px, ${y}px) scale(${width}, ${height})`,
                 fill: 'currentColor',
             },
@@ -562,7 +562,7 @@ export function chart(options: ChartOptions): ChartParts {
             const place = drawn.placed[line]
             let written =
                 value === null || value === undefined ? '—' : yFormat(value)
-            // 52.61 — a stacked value under `normalize` reads its share beside it.
+            // 52.60 — a stacked value under `normalize` reads its share beside it.
             if (normalize && place?.stack !== undefined && written !== '—')
                 written += ` (${percent(Math.abs((place.high[index] ?? 0) - (place.low[index] ?? 0)))})`
             const y = drawn.ysOf[line]?.[index]
@@ -595,7 +595,7 @@ export function chart(options: ChartOptions): ChartParts {
         }
     })
 
-    // 52.26, 52.70 — the crosshair's x, picked by the pointer or the arrows.
+    // 52.26, 52.69 — the crosshair's x, picked by the pointer or the arrows.
     const scrubbing = scrub(
         { peek: () => hovered.peek(), set: (index) => hovered.set(index) },
         {
@@ -605,7 +605,7 @@ export function chart(options: ChartOptions): ChartParts {
         },
     )
 
-    // 52.38, 52.71 — a click picks the x nearest it, read again from the click's own position, and Enter
+    // 52.38, 52.70 — a click picks the x nearest it, read again from the click's own position, and Enter
     // the x the crosshair stands at.
     function pick(index: number | undefined) {
         if (options.onpick === undefined) return
@@ -622,7 +622,7 @@ export function chart(options: ChartOptions): ChartParts {
         if (event.key === 'Enter') return pick(hovered.peek())
         const before = hovered.peek()
         scrubbing.key(event)
-        // 52.72 — a move the keys make is read out, its readout being nowhere the reader is: a pointer's
+        // 52.71 — a move the keys make is read out, its readout being nowhere the reader is: a pointer's
         // move is not, since the pointer's own readout is in front of it and a sweep would read every x.
         const read = readout.peek()
         if (hovered.peek() === before || read === undefined) return
@@ -637,7 +637,7 @@ export function chart(options: ChartOptions): ChartParts {
         return parts.join(', ')
     }
 
-    // 50.47 — THE READOUT SHOWS AGAINST THE CROSSHAIR: the line standing is held here, so a crosshair an
+    // 50.46 — THE READOUT SHOWS AGAINST THE CROSSHAIR: the line standing is held here, so a crosshair an
     // app keeps as one element and one keyed by its x both carry the readout along, and the readout's
     // own element is placed against whichever line stands.
     const line = reactive<Element | undefined>(undefined)
@@ -668,7 +668,7 @@ export function chart(options: ChartOptions): ChartParts {
                             ? 'left'
                             : 'right',
                     offset: 8,
-                    // 50.48 — a readout is never the pointer's target.
+                    // 50.47 — a readout is never the pointer's target.
                     interactive: false,
                 },
                 (placement) =>

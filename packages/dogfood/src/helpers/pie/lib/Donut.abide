@@ -1,0 +1,19 @@
+<script>
+import { pie } from '@abide/abide'
+
+const ring = pie({
+    label: 'Open pipeline by stage',
+    slices: [
+        { label: 'Lead', value: 66_000 },
+        { label: 'Qualified', value: 34_000 },
+        { label: 'Proposal', value: 30_000 },
+    ],
+    inner: 0.6,
+})
+</script>
+
+<svg {...ring.svg} class="size-40">
+    {#for slice of ring.slices by slice.index}
+        <circle {...slice.circle} />
+    {/for}
+</svg>

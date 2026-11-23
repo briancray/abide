@@ -1,0 +1,19 @@
+<script>
+import { chart, reactive } from '@abide/abide'
+
+const QUALIFIED = { label: 'Qualified', values: [22_000, 26_000, 31_000] }
+const LEADS = { label: 'Leads', values: [40_000, 52_000, 47_000] }
+let leads = reactive(true)
+const plot = chart({
+    label: 'Open pipeline by stage',
+    series: () => (leads ? [QUALIFIED, LEADS] : [QUALIFIED]),
+    stack: true,
+})
+</script>
+
+<label><input type="checkbox" bind:checked={leads} /> Leads</label>
+<svg {...plot.svg} class="h-48 w-full">
+    {#for line of plot.lines by line.series}
+        <path {...line.path} />
+    {/for}
+</svg>

@@ -1,4 +1,4 @@
-// 53.64-53.73 — A SCROLL-SNAP CAROUSEL THAT RESTS ON A SELECTION, as parts an app spreads onto markup of
+// 53.61-53.70 — A SCROLL-SNAP CAROUSEL THAT RESTS ON A SELECTION, as parts an app spreads onto markup of
 // its own: the scroller, an item per entry, and a button either side. The snapping is the app's CSS;
 // the parts scroll to the selection, follow which item a scroll centers, and go back on `reset`. The
 // server writes the item it rests on as centered, since a page arrives resting.
@@ -45,7 +45,7 @@ export type Carousel<Item> = {
     reset(): void
 }
 
-// What 53.69 reads off a snap event: the element the scroller snaps to, on either axis.
+// What 53.66 reads off a snap event: the element the scroller snaps to, on either axis.
 type SnapEvent = Event & {
     snapTargetInline?: Element | null
     snapTargetBlock?: Element | null
@@ -53,7 +53,7 @@ type SnapEvent = Event & {
 
 /** A scroll-snap carousel resting on a selection, as parts to spread. */
 export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
-    // 49.13 — read where they are used.
+    // 49.11 — read where they are used.
     const keyOf = (item: Item) => writtenBy(options.key, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
     const behavior = () => live(options.behavior) ?? 'smooth'
@@ -64,7 +64,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         return written
     })
     const selected = options.selected ?? reactive<string | undefined>(undefined)
-    // 53.64 — a key no item has rests on the first.
+    // 53.61 — a key no item has rests on the first.
     const resting = reactive((): string | undefined => {
         const listed = keys()
         const wanted = selected()
@@ -72,7 +72,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             ? wanted
             : listed[0]
     })
-    // 53.66 — what a scroll writes, and replaced by the resting item whenever that moves.
+    // 53.63 — what a scroll writes, and replaced by the resting item whenever that moves.
     const centered = reactive((): string | undefined => resting())
     const base = options.id ?? `carousel-${randomToken(4, 'hex')}`
     if (process.env.NODE_ENV !== 'production') checkParts('carousel', base)
@@ -124,7 +124,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         if (key !== undefined) scrollTo(key)
     }
 
-    // 53.67 — the item whose center is nearest the scroller's.
+    // 53.64 — the item whose center is nearest the scroller's.
     const nearest = (element: Element): string | undefined => {
         const outer = element.getBoundingClientRect()
         const x = outer.left + outer.width / 2
@@ -144,7 +144,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         return closest
     }
 
-    // 53.69 — the item the snap target is, holds, or sits inside.
+    // 53.66 — the item the snap target is, holds, or sits inside.
     const snapped = (target: Element): string | undefined => {
         for (const [key, item] of elements)
             if (
@@ -156,7 +156,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         return undefined
     }
 
-    // 53.68 — what a scroll passes on its way to where the parts scrolled is not centered.
+    // 53.65 — what a scroll passes on its way to where the parts scrolled is not centered.
     const arrive = (key: string | undefined): void => {
         if (key === undefined) return
         if (heading !== undefined) {
@@ -195,7 +195,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         element.addEventListener('scrollsnapchanging', snap)
         element.addEventListener('scrollsnapchange', snap)
         element.addEventListener('scrollend', ended)
-        // 53.65 — at once when bound, as `behavior` names after.
+        // 53.62 — at once when bound, as `behavior` names after.
         let rested = false
         const stop = watch(() => {
             const target = restingElement()
@@ -218,7 +218,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         }
     }
 
-    // 53.70 — the key `step` places from the centered one, where there is one.
+    // 53.67 — the key `step` places from the centered one, where there is one.
     const beside = (step: number): string | undefined => {
         const listed = keys()
         const at = listed.indexOf(centered() as string)

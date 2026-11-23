@@ -107,7 +107,7 @@ test('a search in flight keeps the last companies listed', async () => {
     )
 })
 
-// 51.99 — A SEARCH OPENS ON A PRESS ONLY ONCE THERE IS TEXT TO SEARCH FOR: nothing has been searched
+// 51.92 — A SEARCH OPENS ON A PRESS ONLY ONCE THERE IS TEXT TO SEARCH FOR: nothing has been searched
 // for an empty field. THE REVERT: open on a press whatever the field holds — an empty list opens.
 test('a press on an empty search field opens nothing, and with text lists what it finds', async () => {
     using _picker = await mount(CompanyPicker({}))

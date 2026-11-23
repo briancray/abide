@@ -1,0 +1,13 @@
+<script>
+import { dialog } from '@abide/abide'
+
+const logging = dialog()
+</script>
+
+<button onclick={() => (logging.open = true)}>Log a call</button>
+<dialog
+    {...logging.dialog}
+    class="m-auto w-96 rounded-xl p-5 backdrop:bg-paper/70"
+>
+    <form method="dialog"><button>Done</button></form>
+</dialog>

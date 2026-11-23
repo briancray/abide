@@ -1,8 +1,8 @@
-// 49.4, 49.10, 49.11 — EVERY PARTS FUNCTION IN ONE SHAPE, listed here so a new one is a decision rather
-// than an omission: each element's part names it under the attribute named for its function (49.4), each option an app binds is
-// optional and handed back (49.10), and the parts are a member per element there is one of and a
+// 49.3, 49.8, 49.9 — EVERY PARTS FUNCTION IN ONE SHAPE, listed here so a new one is a decision rather
+// than an omission: each element's part names it under the attribute named for its function (49.3), each option an app binds is
+// optional and handed back (49.8), and the parts are a member per element there is one of and a
 // function per item, never a reader taking no argument or an optional one that changes the answer
-// (49.11).
+// (49.9).
 
 import { afterEach, expect, test } from 'bun:test'
 
@@ -87,7 +87,7 @@ const COMMAND = { label: 'Open', run: () => {} }
 const ADD = POST((args: { name: string }) => args)
 addressed(ADD, '/deals/shape')
 
-// 49.11 — the members a parts type may not have: a function taking nothing that answers a value, or
+// 49.9 — the members a parts type may not have: a function taking nothing that answers a value, or
 // one whose first argument is optional, so calling it two ways answers two things. A `Reactive`
 // handed back is a value read by name, and a function answering nothing is an action.
 type Misshapen<Parts> = {
@@ -104,13 +104,13 @@ type Misshapen<Parts> = {
           : never
 }[keyof Parts]
 
-// Refused by the checker where `Parts` has a member 49.11 refuses, naming it.
+// Refused by the checker where `Parts` has a member 49.9 refuses, naming it.
 function shaped<Parts>(
     ..._: [Misshapen<Parts>] extends [never] ? [] : [Misshapen<Parts>]
 ): void {}
 
 // THE REVERT: type `Tabs`'s `panel` as `panel(key?: string)` again, and `bun run typecheck` names it.
-test('every part is a member, a function of its item, or an action — 49.11', () => {
+test('every part is a member, a function of its item, or an action — 49.9', () => {
     shaped<Tabs>()
     shaped<TabParts>()
     shaped<Menu>()
@@ -299,7 +299,7 @@ function elementParts(): Record<string, unknown> {
 
 // THE REVERT: write `tabs`'s list's `'data-tabs'` as `'data-part'` again, and `tabs.list` is named —
 // as is a `combobox` option that carried only the `data-listbox` of the `listbox` part it is built on.
-test('every element part names its element under the attribute its function is named for — 49.4', () => {
+test('every element part names its element under the attribute its function is named for — 49.3', () => {
     const unnamed: string[] = []
     for (const [name, part] of Object.entries(elementParts())) {
         const attribute = `data-${(name.split('.')[0] as string).replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`
@@ -319,7 +319,7 @@ const held = (value: unknown): boolean =>
     typeof (value as { set?: unknown }).set === 'function'
 
 // THE REVERT: hand back `combobox`'s parts without `value`, and `combobox.value` is named.
-test('every option an app binds is optional and handed back, and every id is made — 49.10', () => {
+test('every option an app binds is optional and handed back, and every id is made — 49.8', () => {
     const view = tabs({ keys: ['a', 'b'] })
     const opener = menu()
     const nodes = tree<string>({ roots: ['a'], children: () => undefined })
@@ -373,11 +373,11 @@ test('every option an app binds is optional and handed back, and every id is mad
     )
 })
 
-// 33.5, 49.13 — AN OPTION HANDED AS AN ACCESSOR STAYS LIVE: a shipped component hands its props over as
+// 33.5, 49.11 — AN OPTION HANDED AS AN ACCESSOR STAYS LIVE: a component hands its props over as
 // accessors, and the parts read them as they are used, so a prop that changes after mount reaches
 // the markup. THE REVERT: destructure `labels` in `range` (or `label` in `commandPalette`, or `key` in
 // `combobox`) at setup -> the old value stays.
-test('options handed as accessors are read as they are used — 33.5, 49.13', () => {
+test('options handed as accessors are read as they are used — 33.5, 49.11', () => {
     let labels: readonly [string, string] = ['Least', 'Most']
     let named = 'Commands'
     let keyOf = (item: string) => item
@@ -417,9 +417,9 @@ test('options handed as accessors are read as they are used — 33.5, 49.13', ()
     expect(after[2]).not.toBe(before[2])
 })
 
-// 49.10 — EVERY PARTS FUNCTION THAT WRITES IDS TAKES ONE, and hands it back. THE REVERT: make `menu`'s id
+// 49.8 — EVERY PARTS FUNCTION THAT WRITES IDS TAKES ONE, and hands it back. THE REVERT: make `menu`'s id
 // alone and ignore the option -> 'menu' answers its own id where 'given-menu' is due.
-test('every parts function that writes ids takes the id given and hands it back — 49.10', () => {
+test('every parts function that writes ids takes the id given and hands it back — 49.8', () => {
     const made: Record<string, { id: string }> = {
         listbox: listbox({ id: 'given-listbox', options: ['a'] }),
         combobox: combobox({ id: 'given-combobox', options: ['a'] }),
@@ -444,18 +444,18 @@ test('every parts function that writes ids takes the id given and hands it back 
     expect(wrong).toEqual([])
 })
 
-// 49.12 — A VALUE OPTION TAKES THE VALUE ITSELF as well as a function answering it: a list handed as a
+// 49.10 — A VALUE OPTION TAKES THE VALUE ITSELF as well as a function answering it: a list handed as a
 // constant is listed. THE REVERT: call `options` as a function in `listbox` -> it throws on the array.
-test('a value option takes the value itself or a function answering it — 49.12', () => {
+test('a value option takes the value itself or a function answering it — 49.10', () => {
     const constant = listbox({ options: ['a', 'b'] })
     const answered = listbox({ options: () => ['a', 'b'] })
     expect([constant.active, answered.active]).toEqual(['a', 'a'])
 })
 
-// 49.12 — A FUNCTION THAT ANSWERS NOTHING TAKES THE DEFAULT, as the option left out does: a component
+// 49.10 — A FUNCTION THAT ANSWERS NOTHING TAKES THE DEFAULT, as the option left out does: a component
 // hands an unset prop over as `() => prop`. THE REVERT: apply the default before the read
 // (`live(options.labels ?? DEFAULT_LABELS)`) -> the thumb's name throws on undefined.
-test('an option answering undefined takes its default, as one left out does — 49.12', () => {
+test('an option answering undefined takes its default, as one left out does — 49.10', () => {
     const unset = (): undefined => undefined
     const slider = range({
         label: 'Amount',

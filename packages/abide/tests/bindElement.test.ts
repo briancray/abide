@@ -353,11 +353,11 @@ const second = { 'bind:element': log('b') }
     expect((globalThis as { __ORDER__?: string }).__ORDER__).toBe('wab')
 })
 
-// 50.23, 50.49, 49.14 — WHAT A PART NEEDS IN THE MARKUP, THE SERVER WRITES: a hint's description and
+// 50.23, 50.48, 49.12 — WHAT A PART NEEDS IN THE MARKUP, THE SERVER WRITES: a hint's description and
 // a popover's `popover`, there before any script runs, and an attribute the element writes itself
 // beats the part's (33.12). THE REVERT: drop `aria-description` from `tip`'s part; the markup holds
 // only `data-tooltip`.
-test('the server writes a tip part’s aria-description and a popover part’s popover, and an explicit one wins — 50.23, 50.49', async () => {
+test('the server writes a tip part’s aria-description and a popover part’s popover, and an explicit one wins — 50.23, 50.48', async () => {
     const { html } = await mountPage(`<script>
 import { popover, tooltip } from '@abide/abide'
 </script>

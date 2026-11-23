@@ -12,7 +12,7 @@ import twoPlaces from './lib/TwoPlaces.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/pages/pages', '/components/tooltips']}
+    seeAlso={['/pages/pages', '/components/tooltip']}
     tests={[
         {
             path: 'packages/abide/tests/outlet.test.ts',

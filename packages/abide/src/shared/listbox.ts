@@ -15,9 +15,9 @@ export type ListboxOptions<Option, Multiple extends boolean = false> = {
     options: Live<readonly Option[]>
     /** Whether an arrow past either end goes round to the other end. `true` unless set; a function is read live. */
     wrap?: Live<boolean>
-    /** 51.105 — whether it selects many, each press changing the selection rather than moving it. `false` by default. */
+    /** 51.98 — whether it selects many, each press changing the selection rather than moving it. `false` by default. */
     multiple?: Multiple
-    /** The keys selected, where the app holds them: a `Reactive` to read and set. Where it selects one, the key last moved to (51.111). Held by the parts, and handed back as `selected`, where none is given. */
+    /** The keys selected, where the app holds them: a `Reactive` to read and set. Where it selects one, the key last moved to (51.104). Held by the parts, and handed back as `selected`, where none is given. */
     selected?: Reactive<Picked<string, Multiple>>
     /** Called with the active option when Enter is pressed, and with an option clicked where it selects one. */
     onpick?: (option: Option) => void
@@ -53,7 +53,7 @@ export type Listbox<Option, Multiple extends boolean = false> = {
 export function listbox<Option, Multiple extends boolean = false>(
     given: ListboxOptions<Option, Multiple>,
 ): Listbox<Option, Multiple> {
-    // 49.13 — read where they are used; the id and whether it selects many are fixed for the life of
+    // 49.11 — read where they are used; the id and whether it selects many are fixed for the life of
     // the parts.
     const options = () => live(given.options)
     const id = given.id ?? `listbox-${randomToken(4, 'hex')}`
@@ -65,7 +65,7 @@ export function listbox<Option, Multiple extends boolean = false>(
         many,
     )
     // The key last moved to; what is active is this key while it is listed, and the first otherwise.
-    // 51.111 — where it selects one, that key is the selection.
+    // 51.104 — where it selects one, that key is the selection.
     const chosen = many
         ? reactive<string | undefined>(undefined)
         : (selection.selected as Reactive<string | undefined>)
@@ -74,7 +74,7 @@ export function listbox<Option, Multiple extends boolean = false>(
         for (const option of options()) keys.push(key(option))
         return keys
     }
-    // 51.108 — `mod+a` as `hotkeys` reads it, only where it selects many.
+    // 51.101 — `mod+a` as `hotkeys` reads it, only where it selects many.
     const selectAll = many
         ? hotkeys({ 'mod+a': () => selection.all(order) })
         : undefined
@@ -110,7 +110,7 @@ export function listbox<Option, Multiple extends boolean = false>(
         const each = key(option)
         const from = active.peek()
         chosen.set(each)
-        // 51.110 — Shift carries the selection along with the move.
+        // 51.103 — Shift carries the selection along with the move.
         if (extend) selection.extend(from, each, order)
         // The active option kept in view as the arrows step through a list longer than its box.
         globalThis.document
@@ -139,7 +139,7 @@ export function listbox<Option, Multiple extends boolean = false>(
             return
         }
         switch (event.key) {
-            // 51.109.
+            // 51.102.
             case ' ': {
                 const current = active.peek()
                 if (!many || current === undefined) return
@@ -189,7 +189,7 @@ export function listbox<Option, Multiple extends boolean = false>(
             id: idOf(each),
             role: 'option',
             'data-listbox': 'option',
-            // 51.105 — where it selects one, the selection is the active option (51.111).
+            // 51.98 — where it selects one, the selection is the active option (51.104).
             get 'aria-selected'() {
                 return (many ? selection.has(each) : active() === each)
                     ? 'true'
@@ -202,7 +202,7 @@ export function listbox<Option, Multiple extends boolean = false>(
                 return many && selection.has(each) ? '' : undefined
             },
             onpointermove: () => chosen.set(each),
-            // 51.106, 51.112.
+            // 51.99, 51.105.
             onclick: (event: MouseEvent) => {
                 if (many) {
                     selection.press(each, event, active.peek(), order)

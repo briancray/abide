@@ -1,0 +1,23 @@
+<script>
+import { combobox } from '@abide/abide'
+
+const box = combobox({
+    id: 'clipped-name',
+    options: ['Ada Lovelace', 'Grace Hopper', 'Katherine Johnson'],
+})
+</script>
+
+<div class="h-14 overflow-hidden">
+    <div {...box.root}>
+        <input {...box.input} placeholder="Type a name">
+        {#if box.open}
+            <div {...box.popup} class="m-0 w-(--anchor-width)">
+                <ul {...box.listbox}>
+                    {#for name of box.items by name}
+                        <li {...box.option(name)}>{name}</li>
+                    {/for}
+                </ul>
+            </div>
+        {/if}
+    </div>
+</div>

@@ -1,7 +1,0 @@
-<script>
-import Time from '@abide/abide/Time.abide'
-
-const TOUCHED = '2026-11-18T12:04:00Z'
-</script>
-
-<p>Last touched <Time value={TOUCHED} style="narrow" timeZone="UTC" /></p>

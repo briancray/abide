@@ -216,7 +216,7 @@ export function dateParts(
         timeZone: zone = timeZone() ?? visitorZone(),
         locale = LOCALE,
     } = options
-    // 52.102 — the zone's wall clock as an `<input>` writes one, in no locale's words.
+    // 52.101 — the zone's wall clock as an `<input>` writes one, in no locale's words.
     if (style === 'input') {
         const written = new Date(wallClockOf(time, zone)).toISOString()
         return [

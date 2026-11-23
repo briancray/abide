@@ -1,9 +1,9 @@
 <script>
-import { reactive } from '@abide/abide'
-import Time from '@abide/abide/Time.abide'
+import { reactive, time } from '@abide/abide'
 
 const HOUR = 3_600_000
 const now = Date.now()
+const ago = time()
 
 let touches = reactive([
     { contact: 'Ada Lovelace', kind: 'Call', at: now - 3 * HOUR },
@@ -21,7 +21,7 @@ function logCall() {
 <ul class="fields">
     {#for touch of touches by touch.contact}
         <li><span>{touch.kind}</span>
-            <strong>{touch.contact}, <Time value={touch.at} /></strong></li>
+            <strong>{touch.contact}, <time {...ago.at(touch.at).time}>{ago.at(touch.at).text}</time></strong></li>
     {/for}
 </ul>
 <div class="row">

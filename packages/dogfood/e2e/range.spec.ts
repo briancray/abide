@@ -1,4 +1,4 @@
-// 51.95 — A THUMB PRESSED KEEPS FOCUS, so the keys step the thumb the pointer just moved: the
+// 51.88 — A THUMB PRESSED KEEPS FOCUS, so the keys step the thumb the pointer just moved: the
 // press's own focusing would put focus back on the page, a track being nothing that takes it.
 //
 // THE REVERT: drop the `preventDefault` from `range`'s press, and the arrows after a drag step nothing.
@@ -9,11 +9,11 @@ function underMount(address: string): string {
     return `${base.endsWith('/') ? base : `${base}/`}${address}`
 }
 
-test('a thumb dragged takes the keys after it — 51.95', async ({ page }) => {
-    await page.goto(underMount('components/range'), {
+test('a thumb dragged takes the keys after it — 51.88', async ({ page }) => {
+    await page.goto(underMount('helpers/range'), {
         waitUntil: 'networkidle',
     })
-    const frame = page.locator('.result').last()
+    const frame = page.locator('.result').first()
     await frame.scrollIntoViewIfNeeded()
     const track = frame.locator('[data-range=track]')
     const box = (await track.boundingBox()) as NonNullable<

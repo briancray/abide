@@ -32,7 +32,7 @@ export function tip(
 
 /**
  * `tip`, opening against `box` rather than the element's own box where one is given: what `pie` binds
- * a slice's hint with, its element being the whole ring (52.68). Not `tip`'s own option, so it is no
+ * a slice's hint with, its element being the whole ring (52.67). Not `tip`'s own option, so it is no
  * name an app writes. The binding alone: the part it is spread in writes the `aria-description`
  * (50.23), so the server writes it and an explicit one beats it (33.12).
  */

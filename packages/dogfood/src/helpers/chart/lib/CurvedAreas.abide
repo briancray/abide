@@ -1,0 +1,28 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Open pipeline by stage',
+    series: [
+        {
+            label: 'Proposals',
+            values: [12_000, 18_000, 21_000, 19_000],
+            kind: 'area',
+            curve: true,
+        },
+        {
+            label: 'Leads',
+            values: [40_000, 52_000, 47_000, 61_000],
+            kind: 'area',
+            curve: true,
+        },
+    ],
+    stack: true,
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    {#for area of plot.areas by area.series}
+        <path {...area.path} />
+    {/for}
+</svg>

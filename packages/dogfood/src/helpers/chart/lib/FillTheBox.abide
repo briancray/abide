@@ -1,0 +1,20 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Won revenue',
+    series: [{ label: 'Won', values: [18_000, 24_500, 31_000, 27_000] }],
+})
+</script>
+
+<div class="h-48 resize overflow-hidden">
+    <svg {...plot.svg} class="block h-full w-full">
+        {#for tick of plot.yTicks}
+            <line {...tick.grid} />
+            <text {...tick.text}>{tick.label}</text>
+        {/for}
+        {#for line of plot.lines by line.series}
+            <path {...line.path} />
+        {/for}
+    </svg>
+</div>

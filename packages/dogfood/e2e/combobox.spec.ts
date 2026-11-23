@@ -1,4 +1,4 @@
-// 51.64 — A COMBOBOX'S LIST OPENS IN THE TOP LAYER, so a box that clips its input does not clip the
+// 51.57 — A COMBOBOX'S LIST OPENS IN THE TOP LAYER, so a box that clips its input does not clip the
 // list: the list reaches past the box, and the point at an option's center is that option.
 //
 // THE REVERT: drop `popover` from the popup's binding and its `popover` attribute — the list stays
@@ -10,10 +10,10 @@ function underMount(address: string): string {
     return `${base.endsWith('/') ? base : `${base}/`}${address}`
 }
 
-test('a combobox in a box that clips it opens its list past the box — 51.64', async ({
+test('a combobox in a box that clips it opens its list past the box — 51.57', async ({
     page,
 }) => {
-    await page.goto(underMount('components/combobox'), {
+    await page.goto(underMount('helpers/combobox'), {
         waitUntil: 'networkidle',
     })
     const input = page.locator('#clipped-name')
@@ -46,18 +46,18 @@ test('a combobox in a box that clips it opens its list past the box — 51.64', 
     expect(listed).toBeGreaterThan(clip.y + clip.height)
 })
 
-// 51.99 — ONE PRESS IS ONE GESTURE: the mousedown that focuses the field and the click that follows
+// 51.92 — ONE PRESS IS ONE GESTURE: the mousedown that focuses the field and the click that follows
 // open the list once, and a second press shuts it. THE REVERT: open on the input's mousedown as well as
 // toggling on its click — the click shuts what the mousedown opened, and the list never shows.
-test('a press on the field opens its list once, and a second press shuts it — 51.99', async ({
+test('a press on the field opens its list once, and a second press shuts it — 51.92', async ({
     page,
 }) => {
-    await page.goto(underMount('components/combobox'), {
+    await page.goto(underMount('helpers/combobox'), {
         waitUntil: 'networkidle',
     })
-    const input = page.locator('#deal-team')
+    const input = page.locator('#deal-owner')
     await input.scrollIntoViewIfNeeded()
-    const options = page.locator('#deal-team-listbox [role=option]')
+    const options = page.locator('#deal-owner-listbox [role=option]')
     await input.click()
     await expect(options).toHaveCount(3)
     await page.waitForTimeout(200)

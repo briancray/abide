@@ -5,11 +5,34 @@ import Section from '#src/lib/Section.abide'
 
 import ArchiveDeal from './lib/ArchiveDeal.abide'
 import archiveDeal from './lib/ArchiveDeal.abide' with { type: 'text' }
+import DealDrawer from './lib/DealDrawer.abide'
+import dealDrawer from './lib/DealDrawer.abide' with { type: 'text' }
+import StyledDialog from './lib/StyledDialog.abide'
+import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/components/dialog', '/helpers/command-palette', '/helpers/form']}
+    seeAlso={[
+        '/components/prompts-api',
+        '/helpers/command-palette',
+        '/helpers/dismissible',
+        '/helpers/form',
+    ]}
     tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/LogCallDialog.test.ts',
+            from: ["test('Log call keeps the note, and Cancel drops it'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/SignContract.test.ts',
+            from: ["test('a dialog not dismissible stays open on Escape'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/LogCallDialog.test.ts',
+            from: [
+                "test('a dialog opened again before its close is reported stays open'",
+            ],
+        },
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealDrawer.test.ts',
             from: [
@@ -24,5 +47,18 @@ import archiveDeal from './lib/ArchiveDeal.abide' with { type: 'text' }
             and <code>onclose</code> hands you the <code>value</code> of the button that closed it.
             With <code>dismissible: false</code>, Escape and the backdrop leave it open.</p>
         <Example code={archiveDeal}><ArchiveDeal /></Example>
+    </Section>
+
+    <Section level={3} title="Style the dialog box and the veil behind the dialog">
+        <p>The <code>&lt;dialog&gt;</code> is yours, so its classes are too. The
+            <code>backdrop:</code> variant reaches the veil, and <code>data-open</code> is present
+            while it shows.</p>
+        <Example code={styledDialog}><StyledDialog /></Example>
+    </Section>
+
+    <Section level={3} title="Slide a deal's details in from the side">
+        <p>A drawer is a dialog laid out at an edge by its own classes: modal the same way, with
+            <code>open:</code> and <code>starting:</code> easing it in and out.</p>
+        <Example code={dealDrawer}><DealDrawer /></Example>
     </Section>
 </Doc>

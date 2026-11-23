@@ -1,0 +1,29 @@
+<script>
+import { dialog, reactive } from '@abide/abide'
+
+let signed = reactive(false)
+// Neither Escape nor the backdrop puts the contract away: only Sign or Not yet closes it.
+const signing = dialog({
+    dismissible: false,
+    onclose: (returnValue) => (signed = returnValue === 'sign'),
+})
+</script>
+
+<p class="row">
+    <span>contract</span><strong>{signed ? 'Signed' : 'Unsigned'}</strong>
+    <button onclick={() => (signing.open = true)}>Review the contract</button>
+</p>
+
+<dialog
+    {...signing.dialog}
+    class="m-auto w-96 max-w-[calc(100%-2rem)] rounded-xl border border-rule
+    bg-raised p-5 text-ink backdrop:bg-paper/70"
+>
+    <form method="dialog" class="flex flex-col gap-snug">
+        <h2>Hopper & Co renewal contract</h2>
+        <div class="row">
+            <button value="sign">Sign</button>
+            <button value="later">Not yet</button>
+        </div>
+    </form>
+</dialog>

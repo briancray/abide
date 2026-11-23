@@ -1,6 +1,6 @@
 // 52.29-52.31, 52.33, 52.34 — A TREND WITH NO AXES, AS PARTS: drawn in units of its own that stretch to
 // whatever box the caller gives the `<svg>`, with strokes that do not scale so the line and the end dot
-// keep their own width. `Sparkline` is default markup over these parts (49.9).
+// keep their own width.
 
 import { type Live, live } from '../live.ts'
 import { reactive } from '../reactive/index.ts'
@@ -16,7 +16,7 @@ export type SparklineOptions = {
     zero?: Live<boolean>
     /** 52.33 — `'bar'` scales the values from zero, as bars are read by their length. `'line'` by default. */
     kind?: Live<'line' | 'bar'>
-    /** Whether the line and the area under it curve through the values (52.106). `false` by default. */
+    /** Whether the line and the area under it curve through the values (52.105). `false` by default. */
     curve?: Live<boolean>
 }
 

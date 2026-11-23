@@ -38,8 +38,8 @@ test('each stage stacks on the one before it, through a month it has no value', 
     expect(proposals.slice(6).every(([, y]) => y === 216)).toBe(true)
 })
 
-// 52.106 — THE STAGES CURVE, each through its own months and each floor along the curve of the stage
-// under it. THE REVERT: drop `curve` from what `Chart` hands `chart.path` — every edge is straight,
+// 52.105 — THE STAGES CURVE, each through its own months and each floor along the curve of the stage
+// under it. THE REVERT: drop `curve` from what `chart` hands `chart.path` — every edge is straight,
 // and Proposals' top has no cubic in it.
 test('each stage curves through its months, on the curve of the one under it', async () => {
     using _trend = await mount(PipelineTrend({}))
@@ -59,21 +59,21 @@ test('each stage curves through its months, on the curve of the one under it', a
     expect(qualified.endsWith(`${back}Z`)).toBe(true)
 })
 
-// 52.55, 52.62 — THE TARGET IS IN NO STACK, drawn at its own values on an axis the bounds fix at
-// $0-$150K. THE REVERT: drop `stack={false}` — the target stands on the leads, its first point
-// above the plot.
+// 52.54, 52.61 — THE TARGET IS IN NO STACK, drawn at its own values on an axis the bounds fix at
+// $0-$150K. THE REVERT: drop the target's `stack: false` — the target stands on the leads, its first
+// point above the plot.
 test('the target is drawn at its own values, on an axis fixed at $150K', async () => {
     using _trend = await mount(PipelineTrend({}))
     expect(texts('[data-axis=y]')).toEqual(['$0', '$50K', '$100K', '$150K'])
     // $90K of $150K, up from the floor at 216 to the top at 16, right of the five characters of
-    // `$150K` at 7 apiece and the 8 between them and the plot (52.69).
+    // `$150K` at 7 apiece and the 8 between them and the plot (52.68).
     expect(points('[data-chart=line]')[0]).toEqual([43, 96])
 })
 
-// 52.24, 52.53 — A STAGE UNCHECKED IS NO LONGER DRAWN, and checked again it joins in the order it was
-// mounted: last, after the target. THE REVERT: drop the disposer `joinChart`'s watch returns —
-// unchecking leaves three areas.
-test('leads leave the chart when unchecked, and come back last', async () => {
+// 52.24 — A STAGE UNCHECKED IS NO LONGER DRAWN, and checked again it is drawn where the series list
+// puts it: on the stages, under the target. THE REVERT: hand `chart` the leads whatever the checkbox
+// says — unchecking leaves three areas.
+test('leads leave the chart when unchecked, and come back in their place', async () => {
     using _trend = await mount(PipelineTrend({}))
     expect(chart().querySelectorAll('[data-chart=area]')).toHaveLength(3)
     const leads = document.querySelector('input') as HTMLInputElement
@@ -87,7 +87,7 @@ test('leads leave the chart when unchecked, and come back last', async () => {
     expect(texts('[data-chart=readout-value]')).toEqual([
         'Proposals: $12K',
         'Qualified: $22K',
-        'Target: $90K',
         'Leads: $40K',
+        'Target: $90K',
     ])
 })

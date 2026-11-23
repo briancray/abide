@@ -1,0 +1,23 @@
+<script>
+// The corner every `toasts.notify` on a CRM page lands in.
+import { toasts } from '@abide/abide'
+
+const shown = toasts.host()
+</script>
+
+<div {...shown.region} class="fixed right-5 bottom-5 flex flex-col gap-tight">
+    {#for toast of shown.notices by toast.id}
+        <div
+            {...shown.toast(toast).toast}
+            class="flex items-center gap-snug rounded-lg border border-rule bg-raised
+            px-4 py-2 shadow-sm data-[tone=error]:border-bad
+            data-[tone=success]:border-good"
+        >
+            <span {...shown.toast(toast).text}>{toast.text}</span>
+            {#if toast.action}
+                <button {...shown.toast(toast).action}>{toast.action.label}</button>
+            {/if}
+            <button {...shown.toast(toast).close} class="bg-transparent text-muted">×</button>
+        </div>
+    {/for}
+</div>

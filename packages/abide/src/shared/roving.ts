@@ -1,4 +1,4 @@
-// 50.30, 51.4-51.6, 51.38, 51.39 — THE ITEM A KEY MOVES TO in a list the keyboard roves: the next and
+// 50.30, 51.4-51.6, 51.36, 51.37 — THE ITEM A KEY MOVES TO in a list the keyboard roves: the next and
 // the previous on the arrows along the list's orientation, going round the ends where it wraps, and
 // the first and the last on Home and End. What `listbox`, `menu` and `tabs` share; each does its own
 // thing with the index — an active option, focus, a selection.
@@ -58,7 +58,7 @@ export function roving(
 const TYPED_FOR = 500
 
 /**
- * 50.40, 51.89 — A LIST'S TYPE-AHEAD: the index a printable key moves to, the next item whose text
+ * 50.40, 51.82 — A LIST'S TYPE-AHEAD: the index a printable key moves to, the next item whose text
  * starts with what was typed, or `-1`. A letter typed again walks the items starting with it; letters
  * typed within half a second of each other are one word, found from the item on now. What `menu` and
  * `tree` share; each holds its own, since what was typed belongs to the one list it was typed in.

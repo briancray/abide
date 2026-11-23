@@ -1,6 +1,7 @@
 <script>
-import { reactive, report } from '@abide/abide'
-import Toasts, { toasts } from '@abide/abide/Toasts.abide'
+import { reactive, report, toasts } from '@abide/abide'
+
+import Toasts from '#src/lib/Toasts.abide'
 
 import savePhone from '../savePhone.handler.ts'
 
@@ -28,10 +29,4 @@ async function save() {
     <button onclick={save}>Save</button>
 </div>
 
-<Toasts
-    class="fixed right-5 bottom-5 flex flex-col gap-tight
-    *:flex *:items-center *:gap-snug *:rounded-lg *:border *:border-rule
-    *:bg-raised *:px-4 *:py-2 *:shadow-sm
-    *:data-[tone=error]:border-bad *:data-[tone=success]:border-good
-    [&_[data-toasts=close]]:bg-transparent [&_[data-toasts=close]]:text-muted"
- />
+<Toasts />

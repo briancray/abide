@@ -1,4 +1,4 @@
-// 53.53, 53.61-53.63 — A SCROLLING ELEMENT KEPT AT ITS BOTTOM, as `Chat`'s transcript is (53.40), as parts
+// 53.50, 53.58-53.60 — A SCROLLING ELEMENT KEPT AT ITS BOTTOM, as `chat`'s transcript is (53.39), as parts
 // an app spreads onto markup of its own: the scroller, and a button taking the reader back down once
 // they have scrolled up — which the server writes hidden, since a page arrives following.
 
@@ -36,7 +36,7 @@ export function followBottom(options: FollowBottomOptions = {}): FollowBottom {
     // Set while a smooth jump is under way: the scrolls it makes on the way down are not the reader's.
     let jumping = false
 
-    // 49.13 — read where it is used.
+    // 49.11 — read where it is used.
     const atBottom = (element: Element): boolean =>
         element.scrollHeight - element.scrollTop - element.clientHeight <=
         (live(options.threshold) ?? 2)

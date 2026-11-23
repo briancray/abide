@@ -1,0 +1,19 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Open pipeline against target',
+    series: [
+        { label: 'Qualified', values: [22_000, 26_000, 31_000], kind: 'area' },
+        { label: 'Leads', values: [40_000, 52_000, 47_000], kind: 'area' },
+        { label: 'Target', values: [70_000, 75_000, 80_000], stack: false },
+    ],
+    stack: true,
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    {#for mark of plot.marks by mark.series}
+        <path {...mark.path} />
+    {/for}
+</svg>
