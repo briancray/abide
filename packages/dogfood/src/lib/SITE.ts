@@ -683,6 +683,13 @@ const WRITTEN: readonly {
                 where: 'component',
             },
             {
+                route: '/behaviors/pan-zoom',
+                title: '`panZoom`',
+                description:
+                    'Move and magnify a map, a plan or a drawing of your own with the wheel, a drag, a pinch or the keys.',
+                where: 'component',
+            },
+            {
                 route: '/behaviors/observe',
                 title: '`observe`',
                 description:

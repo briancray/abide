@@ -6309,6 +6309,28 @@ written again by nothing.
 
 53.83 `download` MUST throw where `isServer` is true.
 
+53.84 `panZoom`'s `content` part MUST move its element by `view`'s `x` and `y` and magnify it by its
+`k`, about its top left corner.
+
+53.85 A wheel on `panZoom`'s `surface` with Ctrl or ⌘ held MUST magnify by the wheel about the
+pointer, the content under the pointer staying under it, and a wheel without MUST move it by the
+wheel's deltas; each MUST prevent the wheel's default.
+
+53.86 One pointer pressed on `panZoom`'s `surface` and moved MUST move it as far as the pointer moved,
+and two MUST magnify it by the change in the distance between them about their middle, and move it as
+their middle moved.
+
+53.87 `panZoom` MUST keep `view`'s `k` from `min` to `max`.
+
+53.88 On `panZoom`'s `surface`, `+` and `=` MUST magnify it a step and `-` shrink it a step about the
+surface's middle, the arrow keys MUST move it, and `0` MUST set `view` to no move and no
+magnification.
+
+53.89 `panZoom`'s `fit` MUST set `view` so the box it is handed fills the surface less `margin` on
+each side, centered, its magnification kept from `min` to `max`.
+
+53.90 A double click on `panZoom`'s `surface` MUST magnify it twice about the pointer.
+
 # 54. Guards, fetches and jobs
 
 ## Rungs

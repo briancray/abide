@@ -1,0 +1,33 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import TerritoryMap from './lib/TerritoryMap.abide'
+import territoryMap from './lib/TerritoryMap.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/behaviors/resizable', '/headless/chart']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/TerritoryMap.test.ts',
+            from: [
+                "test('the territories pan and zoom from the keys, and frame a region'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/panZoom.test.ts',
+            from: ["test('a wheel with Ctrl zooms about the pointer"],
+        },
+    ]}
+>
+    <Section level={3} title="Move around a map of territories">
+        <p>Spread <code>surface</code> on the element that clips and <code>content</code> on
+            what moves inside it. A wheel or a trackpad scroll pans; with Ctrl or ⌘ held, or a
+            pinch, it zooms about the pointer. A drag pans, two fingers pinch, a double click
+            zooms in, and the keys pan, zoom and go home with <code>0</code>.
+            <code>fit(box)</code> frames a region of the content.</p>
+        <Example code={territoryMap}><TerritoryMap /></Example>
+    </Section>
+</Doc>

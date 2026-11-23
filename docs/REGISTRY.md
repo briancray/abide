@@ -870,6 +870,15 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `ResizableOptions` | `{ id?: string; axis?: 'x' \| 'y'; edge?: 'start' \| 'end'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); keep?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The axis it sizes, the edge its handle stands on, its size, the bounds it keeps to, how far a key moves it, and the handle's accessible name. | 53.72, 53.73, 53.74, 53.75, 49.8, 49.10, 49.11 |
 | `Resizable` | `{ readonly id: string; readonly panel: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly size: Reactive<number \| undefined> }` | The base of its ids, the panel's part, the handle's, and the panel's size. | 32.11, 53.72, 53.78, 49.3, 49.8, 49.9 |
 
+## `panZoom`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `panZoom` | `(options?: PanZoomOptions) => PanZoom` | A surface moved and magnified by its wheel, its pointers and its keys, as parts an app spreads onto a surface and the content inside it. | 53.84, 53.85, 53.86, 53.87, 53.88, 53.89, 53.90, 32.99, 49.2, 49.4, 49.5, 49.6 |
+| `PanZoomOptions` | `{ view?: Reactive<PanZoomView>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string) }` | Where it stands, the bounds of its magnification, and the surface's accessible name. | 53.87, 49.8, 49.10, 49.11 |
+| `PanZoomView` | `{ readonly x: number; readonly y: number; readonly k: number }` | Where the content stands in the surface: moved by `x` and `y` pixels and magnified by `k`. | 53.84 |
+| `PanZoom` | `{ readonly surface: Record<string, unknown>; readonly content: Record<string, unknown>; readonly view: Reactive<PanZoomView>; zoomBy(factor: number, at?: { x: number; y: number }): void; fit(box: { x: number; y: number; width: number; height: number }, margin?: number): void }` | The surface's part, the content's, where it stands, and what magnifies it and frames a box of it from code. | 32.11, 53.84, 53.87, 53.89, 49.3, 49.8, 49.9 |
+
 ## `observe`
 
 | Name | Signature | Meaning | Rules |
