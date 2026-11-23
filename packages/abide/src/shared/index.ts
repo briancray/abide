@@ -232,6 +232,12 @@ export { type Drawer, type DrawerOptions, drawer } from './drawer.ts'
 export { type SheetOptions, sheet } from './sheet.ts'
 export { type Lightbox, type LightboxOptions, lightbox } from './lightbox.ts'
 export { type Stepper, type StepperOptions, stepper } from './stepper.ts'
+export {
+    type SortableItem,
+    type SortableList,
+    type SortableListOptions,
+    sortableList,
+} from './sortableList.ts'
 export { type Wizard, type WizardOptions, wizard } from './wizard.ts'
 export {
     type Resizable,

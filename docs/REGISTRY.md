@@ -677,6 +677,15 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `WizardOptions` | `{ steps: readonly string[] \| (() => readonly string[]); current?: Reactive<string \| undefined>; valid?: (step: string) => boolean }` | The steps in order, the one on, and whether one may be left forward. | 51.141, 51.142, 49.8, 49.10 |
 | `Wizard` | `{ step(key: string): Record<string, unknown>; readonly next: Record<string, unknown>; readonly previous: Record<string, unknown>; readonly progress: Meter; readonly current: Reactive<string \| undefined>; get last(): boolean }` | A step's marker, the buttons on and back, the meter of progress, the step on, and whether it is the last. | 32.11, 51.141, 51.142, 51.143, 51.144, 49.3, 49.8, 49.9 |
 
+## `sortableList`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `sortableList` | `<Item>(options: SortableListOptions<Item>) => SortableList<Item>` | A list put in order by hand, as parts an app spreads onto a list, its items and their handles: a handle dragged, or grabbed and moved with the keys, each step read out through `announce`. | 51.145, 51.146, 51.147, 51.148, 51.149, 32.99, 49.2, 49.4, 49.5, 49.6 |
+| `SortableListOptions` | `<Item>{ items: readonly Item[] \| (() => readonly Item[]); order?: Reactive<readonly string[]>; key?(item: Item): string; label?(item: Item): string }` | The items, the order of their keys, and how each is told apart and read out. | 51.145, 51.148, 49.8, 49.10 |
+| `SortableItem` | `{ readonly item: Record<string, unknown>; readonly handle: Record<string, unknown> }` | An item's part, and its handle's. | 51.146, 51.149, 49.3 |
+| `SortableList` | `<Item>{ readonly list: Record<string, unknown>; item(item: Item): SortableItem; get sorted(): readonly Item[]; readonly order: Reactive<readonly string[]> }` | The list's part, an item's parts, the items in the order put, and the order of their keys. | 32.11, 51.145, 49.3, 49.8, 49.9 |
+
 ## `tree`
 
 | Name | Signature | Meaning | Rules |

@@ -1,0 +1,15 @@
+<script>
+import { sortableList } from '@abide/abide'
+
+const DEALS = ['Engine renewal', 'Babbage pilot', 'Hopper expansion']
+const ranks = sortableList({ items: DEALS })
+</script>
+
+<ol class="flex flex-col gap-hair" {...ranks.list}>
+    {#for deal of ranks.sorted by deal}
+        <li class="row data-grabbed:bg-raised" {...ranks.item(deal).item}>
+            <button {...ranks.item(deal).handle}>⠿</button>
+            {deal}
+        </li>
+    {/for}
+</ol>

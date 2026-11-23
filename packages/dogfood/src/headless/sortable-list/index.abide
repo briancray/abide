@@ -1,0 +1,36 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import RankDeals from './lib/RankDeals.abide'
+import rankDeals from './lib/RankDeals.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/behaviors/announce', '/headless/sortable-table']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/DealPriorities.test.ts',
+            from: [
+                "test('the priorities move with the keys, and Escape puts them back'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/sortableList.test.ts',
+            from: [
+                "test('a handle dragged places its item among the others by the pointer",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Rank deals by dragging or with the keys">
+        <p>Walk <code>sorted</code>, and spread <code>item(entry).item</code> on each item and
+            <code>.handle</code> on a button in it. A handle dragged places its item among the
+            others by the pointer. Space grabs it, the arrow keys move it, Space drops it and
+            Escape puts every item back, each step read out through <code>announce</code>, so
+            stand an <code>announce.host</code> on the page. <code>order</code> holds the keys
+            in the order put.</p>
+        <Example code={rankDeals}><RankDeals /></Example>
+    </Section>
+</Doc>

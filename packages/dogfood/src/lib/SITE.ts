@@ -508,6 +508,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/sortable-list',
+                title: '`sortableList`',
+                description:
+                    'Put a list of your own in order by dragging a handle or with the keys, each move read out to a screen reader.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/tree',
                 title: '`tree`',
                 description:

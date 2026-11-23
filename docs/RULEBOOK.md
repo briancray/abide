@@ -5686,6 +5686,23 @@ disabled on the first.
 51.144 `wizard`'s `progress` MUST be a `meter` whose `value` is the place of the step on among
 `steps`, counted from one, and whose `max` is how many steps there are.
 
+51.145 `sortableList`'s `sorted` MUST be `items` in the order `order` names their keys, any item
+`order` does not name following, in the order given.
+
+51.146 A pointer pressed on an item's `handle` and moved MUST place the item's key in `order` after
+every other item whose middle, as it stood when the pointer was pressed, is above the pointer, and
+the item's `item` part MUST carry `data-grabbed` until the pointer is let go.
+
+51.147 Space or Enter on an item's `handle` MUST grab the item, and again drop it; while it is
+grabbed, ArrowUp and ArrowDown MUST move it one place, and Escape MUST put `order` back as it was
+when it was grabbed and drop it.
+
+51.148 `sortableList` grabbing, moving, dropping and putting back an item MUST `announce` the item's
+`label`, what was done, and its place among the items.
+
+51.149 An item's `handle` part MUST carry `aria-pressed` naming whether the item is grabbed, and
+`aria-label` naming the item's `label`.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.
