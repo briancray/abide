@@ -1,0 +1,16 @@
+<script>
+import { instantAt, reactive } from '@abide/abide'
+
+let day = reactive('2026-12-15')
+let time = reactive('14:30')
+// The moment to keep: the day and the time as New York's clocks read them.
+const at = reactive(() =>
+    instantAt(`${day}T${time}`, { timeZone: 'America/New_York' }),
+)
+</script>
+
+<div class="fields">
+    <input type="date" bind:value={day}>
+    <input type="time" step="900" bind:value={time}>
+</div>
+<p>Kept as {at === undefined ? 'no time' : new Date(at).toISOString()}</p>

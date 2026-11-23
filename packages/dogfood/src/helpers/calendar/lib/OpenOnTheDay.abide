@@ -1,0 +1,41 @@
+<script>
+import { calendar, popover, reactive, watch } from '@abide/abide'
+
+let closes = reactive<string | undefined>('2026-12-15')
+const picker = popover({ align: 'start' })
+const dates = calendar({ selected: closes })
+// Opening puts focus on the day the keys move from; a pick closes it.
+watch(picker.open, () => {
+    if (picker.open())
+        document.getElementById(dates.idOf(dates.active))?.focus()
+})
+watch(dates.selected, () => picker.open.set(false))
+</script>
+
+<button {...picker.trigger}>Closes {closes ?? 'on no day yet'}</button>
+<div
+    class="calendar m-0 rounded-md border border-rule bg-raised p-3"
+    {...picker.popover}
+>
+    {#for shown of dates.months by shown.month}
+        <div data-bar>
+            <button {...dates.previous}>‹</button>
+            <h3 {...shown.heading}>{shown.label}</h3>
+            <button {...dates.next}>›</button>
+        </div>
+        <div {...shown.grid}>
+            <div {...dates.header}>
+                {#for weekday of dates.weekdays by weekday.day}
+                    <div {...weekday.header}>{weekday.short}</div>
+                {/for}
+            </div>
+            {#for week of shown.weeks by week[0]?.date}
+                <div {...dates.week}>
+                    {#for day of week by day.date}
+                        <div {...day.cell}>{day.day}</div>
+                    {/for}
+                </div>
+            {/for}
+        </div>
+    {/for}
+</div>

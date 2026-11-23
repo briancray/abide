@@ -26,26 +26,32 @@ const view = calendar({ month, selected })
 <div class="calendar">
     <div data-bar>
         <button {...view.previous}>‹</button>
-        <h3 {...view.heading}>{view.label}</h3>
         <button {...view.next}>›</button>
     </div>
-    <div {...view.grid}>
-        <div {...view.header}>
-            {#for weekday of view.weekdays by weekday.day}
-                <div {...weekday.header}>{weekday.short}</div>
-            {/for}
-        </div>
-        {#for week of view.weeks by week[0]?.date}
-            <div {...view.week}>
-                {#for day of week by day.date}
-                    <div {...day.cell}>
-                        {day.day}
-                        {#for deal of closing.get(day.date) ?? [] by deal.id}
-                            <span data-deal>{deal.name}</span>
+    <div data-months>
+        {#for shown of view.months by shown.month}
+            <section>
+                <h3 {...shown.heading}>{shown.label}</h3>
+                <div {...shown.grid}>
+                    <div {...view.header}>
+                        {#for weekday of view.weekdays by weekday.day}
+                            <div {...weekday.header}>{weekday.short}</div>
                         {/for}
                     </div>
-                {/for}
-            </div>
+                    {#for week of shown.weeks by week[0]?.date}
+                        <div {...view.week}>
+                            {#for day of week by day.date}
+                                <div {...day.cell}>
+                                    {day.day}
+                                    {#for deal of closing.get(day.date) ?? [] by deal.id}
+                                        <span data-deal>{deal.name}</span>
+                                    {/for}
+                                </div>
+                            {/for}
+                        </div>
+                    {/for}
+                </div>
+            </section>
         {/for}
     </div>
 </div>

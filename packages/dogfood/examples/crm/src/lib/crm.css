@@ -832,13 +832,21 @@
     }
 }
 
-/* A calendar: the month between its paging buttons, a week a row of seven, today ringed, the days of
-   other months dimmed and the day picked lit. */
+/* A calendar: its paging buttons over the months shown side by side, each its heading over its
+   grid, a week a row of seven, today ringed, the days of other months dimmed and the day picked lit. */
 @utility calendar {
     @apply grid gap-1;
 
     & [data-bar] {
         @apply flex items-center justify-between;
+    }
+
+    & [data-months] {
+        @apply grid auto-cols-fr grid-flow-col gap-4;
+    }
+
+    & section {
+        @apply grid content-start gap-1;
     }
 
     & [role=row] {
@@ -867,6 +875,10 @@
 
     & [data-selected] {
         @apply bg-signal text-paper;
+    }
+
+    & [data-preview]:not([data-selected]) {
+        @apply bg-rule;
     }
 
     & [data-deal] {
