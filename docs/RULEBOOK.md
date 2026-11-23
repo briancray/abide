@@ -5043,6 +5043,10 @@ app hands `bind:element` itself.
 followed by that event's name, and every option, part key or component prop `@abide/abide` names
 beginning `on` MUST be lowercase.
 
+49.16 A parts function among whose parts is a popover, or a part inside one, MUST, in development,
+warn once on `abide:parts` where that popover is drawn while it is closed, and a build MUST NOT carry
+the check.
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with

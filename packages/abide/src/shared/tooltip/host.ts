@@ -4,6 +4,7 @@
 // of several standing, the last shows them and the others show none.
 
 import { anchored } from '../anchored.ts'
+import { checkPopover } from '../checkParts.ts'
 import type { Side } from '../place.ts'
 import { reactive, watch } from '../reactive/index.ts'
 import { hints, shown } from './tips.ts'
@@ -59,6 +60,8 @@ export function host(): TooltipHost {
                 return placed()
             },
             'bind:element': (popover: HTMLElement) => {
+                if (process.env.NODE_ENV !== 'production')
+                    checkPopover('tooltip.host', popover)
                 element.set(popover)
                 return () => element.set(undefined)
             },

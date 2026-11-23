@@ -445,6 +445,12 @@
         border-radius: 8px;
     }
 
+    /* The `display` above outranks the UA's own hiding of a closed popover, which drew a shut menu
+       on the page. */
+    :is([role=menu], [role=listbox])[popover]:not(:popover-open) {
+        display: none;
+    }
+
     [role=menu] {
         box-shadow: 0 12px 32px -8px color-mix(in srgb, var(--color-ink) 24%, transparent),
             0 2px 6px color-mix(in srgb, var(--color-ink) 8%, transparent);

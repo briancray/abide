@@ -11,8 +11,15 @@ afterEach(() => document.body.replaceChildren())
 function spread(element: HTMLElement, part: Record<string, unknown>): void {
     for (const name of Object.keys(part)) {
         const value = part[name]
+        // 32.95 — a listener object carries its own options.
         if (name.startsWith('on'))
-            element.addEventListener(name.slice(2), value as EventListener)
+            element.addEventListener(
+                name.slice(2),
+                value as EventListener,
+                typeof value === 'object'
+                    ? (value as AddEventListenerOptions)
+                    : undefined,
+            )
         else if (typeof value === 'string') element.setAttribute(name, value)
     }
 }
@@ -53,6 +60,21 @@ test('a pick closes the menu and writes false to open — 50.31, 50.37', () => {
     expect(list.matches(':popover-open')).toBe(false)
     expect(open.peek()).toBe(false)
     expect(heard).toEqual(['open', 'close'])
+})
+
+// THE REVERT: hear the pick as the click bubbles rather than as it is captured, and a pick whose own
+// handler disables it — the stage a deal moves to is no longer offered — leaves the menu open.
+test('a pick whose own handler disables it still closes the menu — 50.31', () => {
+    const { open, list } = built()
+    open.set(true)
+    flushSync()
+    const item = list.querySelector('[role=menuitem]') as HTMLButtonElement
+    item.addEventListener('click', () => {
+        item.disabled = true
+    })
+    item.click()
+    expect(list.matches(':popover-open')).toBe(false)
+    expect(open.peek()).toBe(false)
 })
 
 // A menu with its two parts spread, from `options`, the trigger and the menu in the document.
