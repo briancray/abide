@@ -1,0 +1,36 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ManyOpen from './lib/ManyOpen.abide'
+import manyOpen from './lib/ManyOpen.abide' with { type: 'text' }
+import OneOpen from './lib/OneOpen.abide'
+import oneOpen from './lib/OneOpen.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/disclosure', '/headless/tabs']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSections.test.ts',
+            from: ["test('opening a section closes the one open'"],
+        },
+        {
+            path: 'packages/abide/tests/disclosure.test.ts',
+            from: ["test('an accordion opens one key at a time"],
+        },
+    ]}
+>
+    <Section level={3} title="Open one section of a deal at a time">
+        <p>Each key's <code>item</code> is a <code>disclosure</code>: spread its
+            <code>button</code> and its <code>region</code> as you would one alone. Opening a
+            section closes the one open, and closing it leaves none.</p>
+        <Example code={oneOpen}><OneOpen /></Example>
+    </Section>
+
+    <Section level={3} title="Let several sections stay open">
+        <p>Give <code>multiple: true</code>, and <code>open</code> holds every key open.</p>
+        <Example code={manyOpen}><ManyOpen /></Example>
+    </Section>
+</Doc>

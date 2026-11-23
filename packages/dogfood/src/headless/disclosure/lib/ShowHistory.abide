@@ -1,0 +1,11 @@
+<script>
+import { disclosure } from '@abide/abide'
+
+const history = disclosure()
+</script>
+
+<button {...history.button}>Stage history</button>
+<ol {...history.region}>
+    <li>Mar 3 — lead</li>
+    <li>Apr 2 — proposal</li>
+</ol>

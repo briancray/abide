@@ -1,0 +1,33 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import ContactBio from './lib/ContactBio.abide'
+import contactBio from './lib/ContactBio.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/disclosure']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactBio.test.ts',
+            from: [
+                "test('a bio longer than its lines is cut, and its button shows the rest'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/disclosure.test.ts',
+            from: ["test('a clamp cuts its text to its lines"],
+        },
+    ]}
+>
+    <Section level={3} title="Cut a contact's bio to two lines">
+        <p>Spread <code>text</code> on the text and <code>button</code> on a button showing the
+            rest. <code>overflowing</code> says whether the text runs past its lines, measured as
+            it resizes, so show the button only where there is more. The button is a
+            <code>disclosure</code>'s, and the text is its region, cut short rather than
+            hidden.</p>
+        <Example code={contactBio}><ContactBio /></Example>
+    </Section>
+</Doc>

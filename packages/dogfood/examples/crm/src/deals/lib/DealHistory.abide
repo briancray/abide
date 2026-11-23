@@ -1,0 +1,21 @@
+<script>
+import { disclosure } from '@abide/abide'
+
+const MOVES = [
+    { at: 'Mar 3', stage: 'lead' },
+    { at: 'Mar 18', stage: 'qualified' },
+    { at: 'Apr 2', stage: 'proposal' },
+]
+const history = disclosure()
+</script>
+
+<div class="flex flex-col gap-snug">
+    <button {...history.button}>
+        {history.open() ? 'Hide' : 'Show'} stage history
+    </button>
+    <ol {...history.region}>
+        {#for move of MOVES by move.at}
+            <li>{move.at} — {move.stage}</li>
+        {/for}
+    </ol>
+</div>

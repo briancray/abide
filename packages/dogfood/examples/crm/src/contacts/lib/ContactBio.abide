@@ -1,0 +1,15 @@
+<script>
+import { clamp } from '@abide/abide'
+
+const bio = clamp({ lines: 2 })
+</script>
+
+<p {...bio.text}>
+    Ada leads procurement at Analytical Engines, where she has run the
+    renewal of every engine contract since the first pilot. She prefers a
+    written proposal before any call, reads every clause, and answers within
+    a day. Ask her about the difference engine before the analytical one.
+</p>
+{#if bio.overflowing || bio.open()}
+    <button {...bio.button}>{bio.open() ? 'Show less' : 'Show more'}</button>
+{/if}

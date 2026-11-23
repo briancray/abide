@@ -582,6 +582,30 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `ToggleGroupOptions` | `<Multiple extends boolean = false>{ id?: string; keys: readonly string[] \| (() => readonly string[]); multiple?: Multiple; value?: Reactive<Picked<string, Multiple>>; label?: string \| (() => string) }` | The keys in order, whether it picks many, what it picks, and its accessible name. | 51.110, 51.115, 49.8, 49.10, 49.11 |
 | `ToggleGroup` | `<Multiple extends boolean = false>{ readonly id: string; readonly group: Record<string, unknown>; item(key: string): Record<string, unknown>; readonly value: Reactive<Picked<string, Multiple>> }` | The group's part, a key's button, and what is picked. | 32.11, 51.110, 51.111, 49.3, 49.8, 49.9 |
 
+## `disclosure`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `disclosure` | `(options?: DisclosureOptions) => Disclosure` | WAI-ARIA's disclosure as parts an app spreads onto a button and a region of its own: the button shows and hides the region. | 51.116, 51.117, 51.118, 51.119, 49.2, 49.4, 49.5, 49.6 |
+| `DisclosureOptions` | `{ id?: string; open?: Reactive<boolean> }` | The base of its ids, and whether the region is open. | 51.116, 49.8 |
+| `Disclosure` | `{ readonly id: string; readonly button: Record<string, unknown>; readonly region: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the button's part, the region's, and whether the region is open. | 32.11, 51.116, 51.117, 49.3, 49.8, 49.9 |
+
+## `accordion`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `accordion` | `<Multiple extends boolean = false>(options?: AccordionOptions<Multiple>) => Accordion<Multiple>` | WAI-ARIA's accordion as a `disclosure` per key an app spreads onto a button and a region of its own, at most one open unless `multiple`. | 51.120, 51.121, 49.2, 49.4, 49.5, 49.6 |
+| `AccordionOptions` | `<Multiple extends boolean = false>{ id?: string; multiple?: Multiple; open?: Reactive<Picked<string, Multiple>> }` | The base of its ids, whether many may be open, and which are. | 51.121, 49.8 |
+| `Accordion` | `<Multiple extends boolean = false>{ readonly id: string; item(key: string): Disclosure; readonly open: Reactive<Picked<string, Multiple>> }` | The base of its ids, a key's disclosure, and which keys are open. | 32.11, 51.120, 49.3, 49.8, 49.9 |
+
+## `clamp`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `clamp` | `(options?: ClampOptions) => Clamp` | Text cut to a few lines and a `disclosure`'s button showing the rest, as parts an app spreads onto its own. | 51.122, 51.123, 51.124, 32.99, 49.2, 49.4, 49.5, 49.6 |
+| `ClampOptions` | `{ lines?: number \| (() => number); open?: Reactive<boolean>; id?: string }` | The lines shown while it is shut, whether all of it shows, and the base of its ids. | 51.122, 49.8, 49.10, 49.11 |
+| `Clamp` | `{ readonly text: Record<string, unknown>; readonly button: Record<string, unknown>; readonly open: Reactive<boolean>; get overflowing(): boolean }` | The text's part, the button's, whether all of it shows, and whether there is more than the lines show. | 32.11, 51.122, 51.123, 49.3, 49.8, 49.9 |
+
 ## `tree`
 
 | Name | Signature | Meaning | Rules |

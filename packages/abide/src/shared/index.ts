@@ -205,6 +205,17 @@ export {
 export { type TabParts, type Tabs, type TabsOptions, tabs } from './tabs.ts'
 export { type Toggle, type ToggleOptions, toggle } from './toggle.ts'
 export {
+    type Disclosure,
+    type DisclosureOptions,
+    disclosure,
+} from './disclosure.ts'
+export {
+    type Accordion,
+    type AccordionOptions,
+    accordion,
+} from './accordion.ts'
+export { type Clamp, type ClampOptions, clamp } from './clamp.ts'
+export {
     type ToggleGroup,
     type ToggleGroupOptions,
     toggleGroup,

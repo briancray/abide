@@ -1,0 +1,20 @@
+<script>
+import { accordion, format, reactive } from '@abide/abide'
+
+let open = reactive<string | undefined>('details')
+const sections = accordion({ open })
+</script>
+
+<div class="flex flex-col gap-snug">
+    <button {...sections.item('details').button}>Details</button>
+    <ul class="fields" {...sections.item('details').region}>
+        <li><span>deal</span><strong>Engine renewal</strong></li>
+        <li><span>amount</span>
+            <strong>{format.money(12_000, { digits: 0 })}</strong></li>
+    </ul>
+    <button {...sections.item('contacts').button}>Contacts</button>
+    <ul class="fields" {...sections.item('contacts').region}>
+        <li><span>owner</span><strong>Ada Lovelace</strong></li>
+    </ul>
+</div>
+<p class="status">Open: {open ?? 'none'}</p>

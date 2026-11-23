@@ -5581,6 +5581,30 @@ where `value` is no key, MUST be the only one in the page's tab order.
 51.115 `toggleGroup`'s `group` part MUST carry `role="radiogroup"`, or `role="group"` where it is
 `multiple`, and `aria-label` naming `label` where one is given.
 
+51.116 `disclosure`'s `button` part MUST flip `open` on a click, and MUST carry `aria-expanded`
+naming `open` and `aria-controls` naming its `region`'s id.
+
+51.117 `disclosure`'s `region` part MUST carry `hidden="until-found"` while `open` does not hold, and
+no `hidden` while it does.
+
+51.118 A `beforematch` on `disclosure`'s `region` MUST write `true` to `open`.
+
+51.119 `disclosure`'s `button` and `region` parts MUST carry `data-open` while `open` holds.
+
+51.120 `accordion`'s `item` MUST answer each key with a `disclosure`'s parts whose `open` holds while
+the accordion's `open` holds the key, and whose flip opens or closes that key.
+
+51.121 An `accordion` that is not `multiple` MUST hold at most one key open, opening one closing the
+one open, and closing it leaving `open` `undefined`.
+
+51.122 `clamp`'s `text` part MUST show at most `lines` lines while `open` does not hold, and all of
+its text while it does.
+
+51.123 `clamp`'s `overflowing` MUST hold where its text, cut to `lines` lines, has more than they
+show, measured as the text resizes while `open` does not hold.
+
+51.124 `clamp`'s `button` part MUST be a `disclosure`'s `button` over its `text`, flipping `open`.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

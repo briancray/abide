@@ -412,6 +412,30 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/disclosure',
+                title: '`disclosure`',
+                description:
+                    'Show and hide a region of your own from a button, the region still found by find in page.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/accordion',
+                title: '`accordion`',
+                description:
+                    'Stack sections of your own that open one at a time, or several at once, each a disclosure.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/clamp',
+                title: '`clamp`',
+                description:
+                    'Cut text of your own to a few lines, and show the rest from a button only where there is more.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/tree',
                 title: '`tree`',
                 description:
