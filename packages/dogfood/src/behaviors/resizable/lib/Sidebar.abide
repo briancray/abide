@@ -1,0 +1,11 @@
+<script>
+import { resizable } from '@abide/abide'
+
+const side = resizable({ min: 120, keep: 160, label: 'Resize the deal list' })
+</script>
+
+<div class="flex h-32 rounded-md border border-rule">
+    <aside class="shrink-0 overflow-auto p-2" {...side.panel}>Deals</aside>
+    <div class="w-1 cursor-col-resize bg-rule" {...side.handle}></div>
+    <main class="flex-1 p-2">Engine renewal</main>
+</div>

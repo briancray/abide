@@ -790,6 +790,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `scrollEdges` | `() => Record<string, unknown>` | The part marking the scrolling element it is spread on with the edges it can still scroll toward. | 32.99, 32.101, 32.102, 32.103, 32.104, 32.105, 32.106, 32.107, 32.108, 49.3, 49.12 |
 
+## `resizable`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `resizable` | `(options?: ResizableOptions) => Resizable` | WAI-ARIA's window splitter as parts an app spreads onto a panel and a handle of its own: dragging the handle, or its keys, sizes the panel. | 53.72, 53.73, 53.74, 53.75, 53.76, 53.77, 53.78, 49.2, 49.4, 49.5, 49.6 |
+| `ResizableOptions` | `{ id?: string; axis?: 'x' \| 'y'; edge?: 'start' \| 'end'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); keep?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The axis it sizes, the edge its handle stands on, its size, the bounds it keeps to, how far a key moves it, and the handle's accessible name. | 53.72, 53.73, 53.74, 53.75, 49.8, 49.10, 49.11 |
+| `Resizable` | `{ readonly id: string; readonly panel: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly size: Reactive<number \| undefined> }` | The base of its ids, the panel's part, the handle's, and the panel's size. | 32.11, 53.72, 53.78, 49.3, 49.8, 49.9 |
+
 ## `observe`
 
 | Name | Signature | Meaning | Rules |

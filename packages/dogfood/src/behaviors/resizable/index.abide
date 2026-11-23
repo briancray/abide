@@ -1,0 +1,54 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CornerGrip from './lib/CornerGrip.abide'
+import cornerGrip from './lib/CornerGrip.abide' with { type: 'text' }
+import RightPanel from './lib/RightPanel.abide'
+import rightPanel from './lib/RightPanel.abide' with { type: 'text' }
+import Sidebar from './lib/Sidebar.abide'
+import sidebar from './lib/Sidebar.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/behaviors/observe', '/headless/dialog']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSplit.test.ts',
+            from: ["test('the deal list sizes from its handle, within its bounds'"],
+        },
+        {
+            path: 'packages/abide/tests/resizable.test.ts',
+            from: [
+                "test('the panel keeps to min, max and what its parent leaves after keep",
+                "test('the arrows of its own axis step it",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Size a sidebar by dragging its edge">
+        <p>Spread <code>panel</code> on the panel and <code>handle</code> on the edge between it
+            and its neighbour. The panel keeps to <code>min</code> and <code>max</code>, and, given
+            <code>keep</code>, to its parent's room less the pixels left to what stands beside
+            it.
+            The arrow keys step it, Home and End take it to its bounds, Enter collapses it and
+            restores it, and a double click gives it back its own size.</p>
+        <Example code={sidebar}><Sidebar /></Example>
+    </Section>
+
+    <Section level={3} title="Size a panel on the right from its left edge">
+        <p>Give <code>edge: 'start'</code> where the handle stands before the panel: moving it
+            left grows the panel. Hand in <code>size</code> to keep it, in a store or anywhere
+            else.</p>
+        <Example code={rightPanel}><RightPanel /></Example>
+    </Section>
+
+    <Section level={3} title="Size a box from its corner">
+        <p>One <code>resizable</code> per axis, both handles spread on one grip. A drag moves
+            each along its own axis, and each answers only the arrow keys of its own. With no
+            <code>keep</code>, the box its height sizes grows with it rather than bounding
+            it.</p>
+        <Example code={cornerGrip}><CornerGrip /></Example>
+    </Section>
+</Doc>

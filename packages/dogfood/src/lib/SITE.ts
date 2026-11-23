@@ -604,6 +604,13 @@ const WRITTEN: readonly {
                 where: 'component',
             },
             {
+                route: '/behaviors/resizable',
+                title: '`resizable`',
+                description:
+                    'Size a panel of your own by dragging its edge or with the arrow keys, kept within the room its parent leaves.',
+                where: 'component',
+            },
+            {
                 route: '/behaviors/observe',
                 title: '`observe`',
                 description:

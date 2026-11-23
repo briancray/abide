@@ -1,0 +1,15 @@
+<script>
+import { resizable } from '@abide/abide'
+
+const across = resizable({ axis: 'x', min: 160, label: 'Width' })
+const down = resizable({ axis: 'y', min: 80, label: 'Height' })
+</script>
+
+<div class="relative rounded-md border border-rule p-2" {...across.panel}>
+    <div {...down.panel}>Drag the corner</div>
+    <div
+        class="absolute right-0 bottom-0 size-3 cursor-nwse-resize bg-rule"
+        {...across.handle}
+        {...down.handle}
+    ></div>
+</div>

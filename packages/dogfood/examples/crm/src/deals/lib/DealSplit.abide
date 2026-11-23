@@ -1,0 +1,19 @@
+<script>
+import { resizable } from '@abide/abide'
+
+const list = resizable({
+    min: 140,
+    max: 360,
+    keep: 200,
+    label: 'Deal list width',
+})
+</script>
+
+<div class="flex h-40 rounded-md border border-rule">
+    <ul class="shrink-0 overflow-auto p-2" {...list.panel}>
+        <li>Engine renewal</li>
+        <li>Babbage pilot</li>
+    </ul>
+    <div class="w-1 cursor-col-resize bg-rule" {...list.handle}></div>
+    <section class="flex-1 p-2">Engine renewal — proposal</section>
+</div>

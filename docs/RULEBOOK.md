@@ -6181,6 +6181,29 @@ on.
 53.71 `copy` given no `value` MUST copy the element clicked as one item holding its `textContent` as
 `text/plain` and its `innerHTML` as `text/html`.
 
+53.72 `resizable`'s `panel` part MUST be `size` pixels along `axis` where `size` is a number, and MUST
+write no size where it is `undefined`.
+
+53.73 A pointer pressed on `resizable`'s `handle` and moved MUST move `size` by as far as the pointer
+moved along `axis`, growing the panel as the handle moves away from it toward `edge`.
+
+53.74 `resizable` MUST keep `size` no less than `min`, no more than `max`, and, where `keep` is
+given, no more than the panel's parent holds along `axis` less `keep`, measured as a drag or a key
+begins.
+
+53.75 On `resizable`'s `handle`, the arrow keys along `axis` MUST move `size` by `step` as the handle
+would move, Home and End MUST set it to the least and the most 53.74 allows, and the arrow keys
+across `axis` MUST NOT move it.
+
+53.76 Enter on `resizable`'s `handle` MUST set `size` to `min`, and the next Enter MUST set it back to
+what it was.
+
+53.77 A double click on `resizable`'s `handle` MUST write `undefined` to `size`.
+
+53.78 `resizable`'s `handle` part MUST carry `role="separator"`, `aria-orientation` across `axis`,
+`aria-controls` naming the panel's id, `aria-valuenow`, `aria-valuemin` and `aria-valuemax` naming
+`size`, `min` and `max`, `tabindex="0"`, and `data-dragging` while a pointer drags it.
+
 # 54. Guards, fetches and jobs
 
 ## Rungs

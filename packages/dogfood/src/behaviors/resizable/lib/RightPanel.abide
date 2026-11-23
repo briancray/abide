@@ -1,0 +1,14 @@
+<script>
+import { reactive, resizable } from '@abide/abide'
+
+let width = reactive<number | undefined>(180)
+const notes = resizable({ edge: 'start', size: width, min: 120, max: 320 })
+</script>
+
+<div class="flex h-32 rounded-md border border-rule">
+    <main class="flex-1 p-2">Engine renewal</main>
+    <div class="w-1 cursor-col-resize bg-rule" {...notes.handle}></div>
+    <aside class="shrink-0 p-2" {...notes.panel}>
+        Notes, {width ?? 'own'}px
+    </aside>
+</div>
