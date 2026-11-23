@@ -1,0 +1,20 @@
+<script>
+import { format, reactive, stepper } from '@abide/abide'
+
+const PER_SEAT = 1_200
+let seats = reactive(10)
+const count = stepper({
+    value: seats,
+    min: 5,
+    max: 200,
+    step: 5,
+    label: 'Seats',
+})
+</script>
+
+<div class="row">
+    <button {...count.decrement}>−</button>
+    <input class="w-16 text-center" {...count.input} />
+    <button {...count.increment}>+</button>
+</div>
+<p class="status">{seats} seats, {format.money(seats * PER_SEAT, { digits: 0 })}</p>

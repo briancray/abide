@@ -1,0 +1,29 @@
+<script>
+import { reactive, wizard } from '@abide/abide'
+
+import { STAGES } from '#src/pipeline/lib/STAGES.ts'
+
+let name = reactive('')
+let stage = reactive('lead')
+const setup = wizard({
+    steps: ['name', 'stage', 'review'],
+    valid: (step) => step !== 'name' || name.trim() !== '',
+})
+</script>
+
+<ol class="row">
+    <li {...setup.step('name')}>Name</li>
+    <li {...setup.step('stage')}>Stage</li>
+    <li {...setup.step('review')}>Review</li>
+</ol>
+{#if setup.current() === 'name'}
+    <input aria-label="Deal name" bind:value={name} />
+{:else if setup.current() === 'stage'}
+    <select aria-label="Stage" bind:value={stage}>
+        {#for each of STAGES by each}<option>{each}</option>{/for}
+    </select>
+{:else}
+    <p class="status">{name} — {stage}</p>
+{/if}
+<button {...setup.previous}>Back</button>
+<button {...setup.next}>Next</button>

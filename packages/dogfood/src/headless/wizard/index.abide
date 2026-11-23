@@ -1,0 +1,34 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import NewDeal from './lib/NewDeal.abide'
+import newDeal from './lib/NewDeal.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/meter', '/headless/form']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSetup.test.ts',
+            from: [
+                "test('the setup goes on once a step is done, and back to any step done'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/stepper.test.ts',
+            from: [
+                'test("a wizard\'s progress is a meter of the step on among its steps',
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Set up a deal in steps">
+        <p>Spread <code>step(key)</code> on each step's marker: the one on carries
+            <code>aria-current="step"</code>, and those before it <code>data-done</code>, a click
+            going back to it. <code>next</code> waits on <code>valid</code> for the step on, and
+            <code>progress</code> is a <code>meter</code> of how far it has come.</p>
+        <Example code={newDeal}><NewDeal /></Example>
+    </Section>
+</Doc>

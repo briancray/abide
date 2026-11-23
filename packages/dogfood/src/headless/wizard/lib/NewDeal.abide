@@ -1,0 +1,23 @@
+<script>
+import { reactive, wizard } from '@abide/abide'
+
+let name = reactive('')
+const steps = wizard({
+    steps: ['name', 'stage', 'review'],
+    valid: (step) => step !== 'name' || name.trim() !== '',
+})
+</script>
+
+<ol class="row">
+    <li {...steps.step('name')}>Name</li>
+    <li {...steps.step('stage')}>Stage</li>
+    <li {...steps.step('review')}>Review</li>
+</ol>
+<div class="h-1 rounded-full bg-rule" {...steps.progress.meter}>
+    <div class="h-full rounded-full bg-signal" {...steps.progress.fill}></div>
+</div>
+{#if steps.current() === 'name'}
+    <input aria-label="Deal name" bind:value={name} />
+{:else}<p>{steps.current()} — {name}</p>{/if}
+<button {...steps.previous}>Back</button>
+<button {...steps.next}>Next</button>

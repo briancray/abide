@@ -412,6 +412,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/stepper',
+                title: '`stepper`',
+                description:
+                    'Step a number up and down from a field and two buttons of your own, kept to its bounds and its step.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/combobox',
                 title: '`combobox`',
                 description:
@@ -488,6 +496,14 @@ const WRITTEN: readonly {
                 title: '`breadcrumbs`',
                 description:
                     'Show where a page stands as a trail of links of your own, the middle folded into a menu when it runs long.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/wizard',
+                title: '`wizard`',
+                description:
+                    'Take a task in steps of your own, going on only once each is done, with a meter of how far it has come.',
                 where: 'component',
                 subgroup: 'Inputs',
             },

@@ -577,6 +577,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `InlineEditOptions` | `{ value?: Reactive<string>; save?: (text: string) => unknown }` | The value, and what saves an edit of it. | 56.25, 56.26, 49.8 |
 | `InlineEdit` | `{ readonly view: Record<string, unknown>; readonly input: Record<string, unknown>; readonly editing: Reactive<boolean>; readonly value: Reactive<string>; get busy(): boolean; get error(): string \| undefined }` | The button's part, the input's, whether it is being edited, the value, whether a save is in flight, and why the last one failed. | 32.11, 56.24, 56.26, 49.3, 49.8, 49.9 |
 
+## `stepper`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `stepper` | `(options?: StepperOptions) => Stepper` | WAI-ARIA's spin button as parts an app spreads onto a field and the buttons either side of it. | 56.29, 56.30, 56.31, 56.32, 49.2, 49.4, 49.5, 49.6 |
+| `StepperOptions` | `{ id?: string; value?: Reactive<number>; min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The base of its id, the number, its bounds, how far a step moves it, and its accessible name. | 56.29, 56.30, 56.32, 49.8, 49.10, 49.11 |
+| `Stepper` | `{ readonly input: Record<string, unknown>; readonly decrement: Record<string, unknown>; readonly increment: Record<string, unknown>; readonly value: Reactive<number> }` | The field's part, the buttons stepping it down and up, and the number. | 32.11, 56.29, 56.31, 49.3, 49.8, 49.9 |
+
 ## `combobox`
 
 | Name | Signature | Meaning | Rules |
@@ -660,6 +668,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `breadcrumbs` | `<Crumb>(options: BreadcrumbsOptions<Crumb>) => Breadcrumbs<Crumb>` | A trail of links to the page as parts an app spreads onto a nav and links of its own, its middle folded into a `menu` past `max`. | 51.136, 51.137, 51.138, 51.139, 51.140, 49.2, 49.4, 49.5, 49.6 |
 | `BreadcrumbsOptions` | `<Crumb>{ trail: readonly Crumb[] \| (() => readonly Crumb[]); href: (crumb: Crumb) => string; max?: number \| (() => number); label?: string \| (() => string) }` | The crumbs from the top down, where each leads, how many show before the middle folds, and the nav's accessible name. | 51.136, 51.138, 51.140, 49.10, 49.11 |
 | `Breadcrumbs` | `<Crumb>{ readonly nav: Record<string, unknown>; get items(): readonly (Crumb \| 'overflow')[]; get folded(): readonly Crumb[]; link(crumb: Crumb): Record<string, unknown>; readonly overflow: Menu; menuItem(crumb: Crumb): Record<string, unknown> }` | The nav's part, the crumbs shown, the crumbs folded, a crumb's link, the overflow's menu, and a folded crumb's menu item. | 32.11, 51.136, 51.137, 51.138, 51.139, 49.3, 49.9 |
+
+## `wizard`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `wizard` | `(options: WizardOptions) => Wizard` | A task taken in steps as parts an app spreads onto markup of its own: a marker per step, a button on and back, and a `meter` of progress. | 51.141, 51.142, 51.143, 51.144, 49.2, 49.4, 49.5, 49.6 |
+| `WizardOptions` | `{ steps: readonly string[] \| (() => readonly string[]); current?: Reactive<string \| undefined>; valid?: (step: string) => boolean }` | The steps in order, the one on, and whether one may be left forward. | 51.141, 51.142, 49.8, 49.10 |
+| `Wizard` | `{ step(key: string): Record<string, unknown>; readonly next: Record<string, unknown>; readonly previous: Record<string, unknown>; readonly progress: Meter; readonly current: Reactive<string \| undefined>; get last(): boolean }` | A step's marker, the buttons on and back, the meter of progress, the step on, and whether it is the last. | 32.11, 51.141, 51.142, 51.143, 51.144, 49.3, 49.8, 49.9 |
 
 ## `tree`
 

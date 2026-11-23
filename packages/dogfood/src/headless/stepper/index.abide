@@ -1,0 +1,33 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import DealSeats from './lib/DealSeats.abide'
+import dealSeats from './lib/DealSeats.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/range', '/headless/form']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/SeatCount.test.ts',
+            from: [
+                "test('the seats step with the keys and the buttons, kept to the plan'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/stepper.test.ts',
+            from: ["test('a number typed is kept to its bounds and its step"],
+        },
+    ]}
+>
+    <Section level={3} title="Choose a deal's seats">
+        <p>Spread <code>input</code> on a field, and <code>decrement</code> and
+            <code>increment</code> on the buttons beside it. The arrow keys step it, PageUp and
+            PageDown ten at a time, and Home and End to its bounds; a number typed is kept to
+            them and to <code>step</code>. The buttons stand outside the tab order, since the
+            field holds the keys.</p>
+        <Example code={dealSeats}><DealSeats /></Example>
+    </Section>
+</Doc>

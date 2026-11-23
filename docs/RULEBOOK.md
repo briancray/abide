@@ -5673,6 +5673,19 @@ and the link of the last crumb of `trail` MUST carry `aria-current="page"`.
 51.140 `breadcrumbs`' `nav` part MUST carry `aria-label` naming `label`, `Breadcrumb` where none is
 given.
 
+51.141 `wizard`'s `current` MUST be the key `current` was handed, or the first of `steps` where that is
+no step's.
+
+51.142 `wizard`'s `next` MUST move to the step after the one on, and MUST be disabled on the last and
+where `valid` answers `false` for the one on; its `previous` MUST move to the step before, and MUST be
+disabled on the first.
+
+51.143 `wizard`'s `step` of the step on MUST carry `aria-current="step"`, and of each step before it
+`data-done`, a click on which MUST move to that step; a click on a step after it MUST move nowhere.
+
+51.144 `wizard`'s `progress` MUST be a `meter` whose `value` is the place of the step on among
+`steps`, counted from one, and whose `max` is how many steps there are.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.
@@ -6497,3 +6510,17 @@ disabled.
 56.27 Escape in `inlineEdit`'s `input` MUST end the edit without calling `save` or writing `value`.
 
 56.28 An edit of `inlineEdit` ending MUST move focus to its `view`.
+
+56.29 `stepper`'s `input` part MUST carry `role="spinbutton"`, `aria-valuenow` naming `value`,
+`aria-valuemin` and `aria-valuemax` naming `min` and `max` where each is given, and `value` as its
+text.
+
+56.30 In `stepper`'s `input`, ArrowUp and ArrowDown MUST move `value` by `step`, PageUp and PageDown
+by ten steps, and Home and End to `min` and `max` where each is given, kept from `min` to `max`.
+
+56.31 `stepper`'s `increment` and `decrement` MUST move `value` by `step`, MUST stand outside the tab
+order, and MUST be disabled where `value` is at `max` and at `min`.
+
+56.32 A `change` of `stepper`'s `input` MUST set `value` to the number its text holds, kept from `min`
+to `max` and to a whole number of steps from `min`, or from `0` where `min` is not given, and MUST
+write `value` back as the input's text, a text that is no number leaving `value` as it was.
